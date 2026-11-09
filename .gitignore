@@ -38,3 +38,9 @@ npm-debug.log*
 
 # Qwen Code project state (local only)
 .qwen/
+
+# Claude Code 로컬 상태
+.claude/worktrees
+.claude/settings.local.json
+.claude/orchestrate-runs
+.claude/orchestrate-units
