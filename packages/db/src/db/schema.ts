@@ -85,6 +85,17 @@ export const playerCreationLogs = pgTable("player_creation_logs", {
   playerIdIndex: index("player_creation_logs_player_id_idx").on(table.playerId),
 }));
 
+/** 미연결 회원이 Auth 사용자와 자동 연결된 기록. 회원이 지워져도 남도록 FK를 두지 않는다. */
+export const playerAuthLinkLogs = pgTable("player_auth_link_logs", {
+  id: id("id").primaryKey(),
+  playerId: id("player_id").notNull(),
+  authUserId: uuid("auth_user_id").notNull(),
+  linkMethod: varchar("link_method", { length: 32 }).notNull(),
+  createdAt: unixTimestamp("created_at").notNull(),
+}, (table) => ({
+  playerIdIndex: index("player_auth_link_logs_player_id_idx").on(table.playerId),
+}));
+
 export const playerStatusChangeLogs = pgTable("player_status_change_logs", {
   id: id("id").primaryKey(),
   playerId: id("player_id").notNull(),

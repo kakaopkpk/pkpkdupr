@@ -7,6 +7,7 @@ import {
   MatchRepository,
   OfficialDuprAdjustmentLogRepository,
   PlayerAdminRepository,
+  PlayerAuthLinkLogRepository,
   PlayerCreationLogRepository,
   PlayerRatingChangeLogRepository,
   PlayerRatingChartProjectionRepository,
@@ -48,6 +49,7 @@ export const db: {
   playerAdmins: PlayerAdminRepository;
   inviteCodes: InviteCodeRepository;
   playerCreationLogs: PlayerCreationLogRepository;
+  playerAuthLinkLogs: PlayerAuthLinkLogRepository;
   playerStatusChangeLogs: PlayerStatusChangeLogRepository;
   playerRatingChangeLogs: PlayerRatingChangeLogRepository;
   playerRatingChartProjections: PlayerRatingChartProjectionRepository;
@@ -59,6 +61,7 @@ export const db: {
   playerAdmins: new PlayerAdminRepository(drizzleDb),
   inviteCodes: new InviteCodeRepository(drizzleDb),
   playerCreationLogs,
+  playerAuthLinkLogs: new PlayerAuthLinkLogRepository(drizzleDb),
   playerStatusChangeLogs,
   playerRatingChangeLogs: new PlayerRatingChangeLogRepository(drizzleDb),
   playerRatingChartProjections: new PlayerRatingChartProjectionRepository(

@@ -17,6 +17,12 @@ export {
   type CreatePlayerCreationLogInput,
 } from "./repositories/PlayerCreationLogRepository";
 export {
+  PlayerAuthLinkLogRepository,
+  type CreatePlayerAuthLinkLogInput,
+  type PlayerAuthLinkLog,
+  type PlayerAuthLinkMethod,
+} from "./repositories/PlayerAuthLinkLogRepository";
+export {
   PlayerStatusChangeLogRepository,
   type CreatePlayerStatusChangeLogInput,
 } from "./repositories/PlayerStatusChangeLogRepository";
