@@ -1,5 +1,5 @@
--- 기존 MySQL 스키마(13개 테이블)를 같은 테이블명·컬럼명·의미로 옮긴 초기 스키마.
--- - 타임스탬프는 Unix 초 BIGINT, JSON은 TEXT *_json 컬럼으로 저장한다(운영 MySQL 덤프를 변환 없이 이관).
+-- 초기 스키마(13개 테이블).
+-- - 타임스탬프는 Unix 초 BIGINT, JSON은 TEXT *_json 컬럼으로 저장한다.
 -- - 모든 테이블에 RLS를 켜고 정책은 두지 않는다. anon·authenticated 역할은 Data API로
 --   어떤 행도 읽거나 쓸 수 없고, DB 접근은 테이블 소유자(postgres)로 접속하는 서버만 한다.
 

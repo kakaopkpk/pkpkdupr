@@ -22,7 +22,6 @@ import { PLAYER_STATUS_MESSAGE_MAX_LENGTH } from "@pkpkdupr/shared/player";
  * 기준이며, 인덱스·제약 이름도 마이그레이션과 맞춘다.
  *
  * 타임스탬프는 Unix 초 BIGINT로 저장하고 저장소에는 Date로 노출한다.
- * 기존 MySQL 덤프를 변환 없이 옮길 수 있도록 저장 형식을 유지한다.
  */
 const unixTimestamp = customType<{ data: Date; driverData: number | string }>({
   dataType: () => "BIGINT",

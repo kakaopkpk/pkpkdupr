@@ -46,7 +46,7 @@ apps/web :8080 ── /api ──> apps/api :4000
 
 - 스키마의 기준은 `supabase/migrations/*.sql`입니다. 스키마를 바꿀 때는 기존 파일을 고치지 말고 `pnpm db:migration:new <이름>`으로 새 파일을 추가합니다.
 - `packages/db/src/db/schema.ts`(drizzle `pg-core`)는 쿼리 빌더용 정의입니다. 마이그레이션을 바꾸면 같은 변경을 여기에도 반영합니다.
-- 테이블·컬럼명과 타입은 기존 MySQL 스키마와 같습니다. 타임스탬프는 Unix 초 `BIGINT`, JSON은 `TEXT` `*_json` 컬럼입니다. 운영 MySQL 덤프를 변환 없이 옮기기 위해서입니다.
+- 테이블·컬럼명과 저장 형식(타임스탬프는 Unix 초 `BIGINT`, JSON은 `TEXT` `*_json` 컬럼)은 기존 MySQL 스키마와 같아서 운영 데이터의 값은 바꾸지 않고 옮길 수 있습니다. 다만 mysqldump 출력은 백틱 식별자·백슬래시 이스케이프·`is_first_login`의 0/1 정수 표현 때문에 그대로 넣을 수 없으며, 운영 데이터 이관 방법은 아직 정해지지 않았습니다.
 - raw SQL은 Postgres 위치 파라미터(`$1`, `$2`, ...)를 씁니다. 동적 목록은 `placeholders(count, start)`로 만듭니다.
 
 ## 원격 Supabase 프로젝트
