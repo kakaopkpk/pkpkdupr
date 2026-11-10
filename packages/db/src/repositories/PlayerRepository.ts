@@ -83,14 +83,20 @@ export class PlayerRepository {
   }
 
   /**
-   * 아직 연결되지 않은 회원에만 Auth 사용자를 연결한다.
-   * 동시 요청으로 이미 연결됐으면 false를 돌려준다.
+   * 아직 연결되지 않은 active 회원에만 Auth 사용자를 연결한다.
+   * 동시 요청으로 이미 연결됐거나 조회 후 inactive로 바뀌었으면 false를 돌려준다.
    */
   async linkAuthUser(id: string, authUserId: string): Promise<boolean> {
     const updated = await this.db
       .update(players)
       .set({ authUserId, updatedAt: new Date() })
-      .where(and(eq(players.id, id), isNull(players.authUserId)))
+      .where(
+        and(
+          eq(players.id, id),
+          isNull(players.authUserId),
+          eq(players.status, "active"),
+        ),
+      )
       .returning({ id: players.id });
     return updated.length > 0;
   }
