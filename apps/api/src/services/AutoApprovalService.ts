@@ -39,6 +39,8 @@ export class AutoApprovalService {
 
       for (const match of awaitingRating) {
         // 표시를 먼저 선점해, 동시에 실행된 다른 호출이 같은 경기를 중복 반영하지 못하게 합니다.
+        // 선점 후 반영 전에 프로세스가 중단되면 표시만 남아 자동 재시도되지 않으므로
+        // 관리자 평점 재계산으로 복구합니다.
         const claimed = await this.matchRepository.markAutoApprovalRatingApplied(
           match.id,
           now,

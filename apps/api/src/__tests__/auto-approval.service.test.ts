@@ -3,8 +3,12 @@ import { AutoApprovalService } from "../services/AutoApprovalService";
 
 const completedMatch = { id: "match-auto" } as any;
 
+type RepositoryMethod = keyof ConstructorParameters<
+  typeof AutoApprovalService
+>[0];
+
 const createRepository = (
-  overrides: Partial<Record<string, ReturnType<typeof vi.fn>>> = {},
+  overrides: Partial<Record<RepositoryMethod, ReturnType<typeof vi.fn>>> = {},
 ) => ({
   completeExpiredAutoApprovals: vi.fn().mockResolvedValue([]),
   findAutoApprovedMatchesAwaitingRating: vi
