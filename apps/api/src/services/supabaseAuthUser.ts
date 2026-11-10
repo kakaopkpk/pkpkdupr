@@ -56,11 +56,7 @@ export class SupabaseAuthUserVerifier {
       if (isAuthSessionMissingError(error)) {
         return null;
       }
-      if (
-        isAuthApiError(error) &&
-        error.code !== undefined &&
-        INVALID_TOKEN_ERROR_CODES.has(error.code)
-      ) {
+      if (isAuthApiError(error) && INVALID_TOKEN_ERROR_CODES.has(error.code ?? "")) {
         return null;
       }
       throw error;
