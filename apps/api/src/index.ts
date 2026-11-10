@@ -1772,8 +1772,12 @@ app.post("/api/me/avatar", async (req, res) => {
 
     res.json(player);
   } catch (err) {
-    const status = err instanceof AvatarValidationError ? 400 : 500;
-    res.status(status).json({ error: (err as Error).message });
+    if (err instanceof AvatarValidationError) {
+      return res.status(400).json({ error: err.message });
+    }
+    // Storage 응답 본문·서버 설정·DB 오류는 내부 정보이므로 로그로만 남긴다.
+    console.error("[Avatar] 업로드 실패", err);
+    res.status(500).json({ error: "프로필 이미지를 저장하지 못했습니다." });
   }
 });
 
@@ -1804,7 +1808,8 @@ app.delete("/api/me/avatar", async (req, res) => {
 
     res.json(player);
   } catch (err) {
-    res.status(500).json({ error: (err as Error).message });
+    console.error("[Avatar] 삭제 실패", err);
+    res.status(500).json({ error: "프로필 이미지를 삭제하지 못했습니다." });
   }
 });
 

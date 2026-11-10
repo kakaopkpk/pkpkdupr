@@ -1,6 +1,7 @@
 import { randomUUID } from "crypto";
 
 export const AVATAR_BUCKET = "avatars";
+// 버킷 file_size_limit(supabase/migrations/20261110020000_avatars_storage_bucket.sql)과 같은 값을 유지한다.
 export const AVATAR_MAX_BYTES = 1024 * 1024;
 const AVATAR_MIME_TO_EXT: Record<string, "jpg" | "png" | "webp"> = {
   "image/jpeg": "jpg",
@@ -188,7 +189,7 @@ export const deleteAvatarObject = async (objectPath: string) => {
   }
 };
 
-/** 응답 흐름을 막지 않도록 실패를 로그로만 남기는 삭제. 남은 파일은 경로가 추측 불가하므로 노출 위험이 낮다. */
+/** 삭제 실패를 응답 오류로 전파하지 않고 로그로만 남긴다. 남은 파일은 경로가 추측 불가하므로 노출 위험이 낮다. */
 export const deleteAvatarObjectQuietly = async (objectPath: string | null) => {
   if (!objectPath) {
     return;
