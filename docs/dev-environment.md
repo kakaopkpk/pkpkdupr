@@ -34,7 +34,9 @@ api는 `ALLOWED_EMAIL_DOMAIN`·`QR_TOTP_SECRET`·`SUPABASE_URL`·`SUPABASE_ANON_
 
 ## 로컬 로그인
 
-로컬 Supabase는 Google 없이 이메일 매직링크로 로그인합니다(`supabase/config.toml`의 `[auth.email]`). 메일은 실제로 보내지 않고 Mailpit에 쌓입니다.
+로컬 Supabase는 Google 없이 이메일 매직링크로 로그인합니다(`supabase/config.toml`의 `[auth.email]`). 메일은 실제로 보내지 않고 Mailpit에 쌓입니다. web·admin 로그인 화면의 매직링크 폼은 개발 서버(`import.meta.env.DEV`)에서만 보이고, 운영 빌드에는 Google 버튼만 있습니다.
+
+`pnpm dev`는 web·admin-web에 `VITE_SUPABASE_URL`·`VITE_SUPABASE_ANON_KEY`·`VITE_ALLOWED_EMAIL_DOMAIN`을 넣습니다. `pnpm dev:web`·`pnpm dev:admin`으로 따로 띄울 때는 각 앱의 `.env.example`을 참고해 같은 값을 넣습니다.
 
 1. web(`http://localhost:8080`) 로그인 화면에서 `dev_alice@kakaocorp.com` 같은 dev 계정 이메일로 매직링크를 요청합니다.
 2. Mailpit(`http://127.0.0.1:54324`)에서 메일을 열어 링크를 누릅니다.
