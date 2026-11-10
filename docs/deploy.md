@@ -69,7 +69,7 @@ gh variable set SUPABASE_PROJECT_REF --body <project-ref>
 | `DATABASE_URL` | 예 | 커넥션 풀러 transaction mode 주소(위 1-3). 없으면 Supabase가 주입하는 `SUPABASE_DB_URL`(직접 연결)로 대신하며 경고를 남깁니다. |
 | `CORS_ALLOWED_ORIGINS` | 예 | 허용 origin(쉼표 구분). 운영값 `https://kakaopkpk.github.io` |
 | `CRON_SECRET` | 예 | 자동 합의 cron 호출 인증값. Vault의 `cron_secret`과 같은 값 |
-| `JWT_SECRET` | 예 | api access token 서명 키. 없으면 개발용 기본값을 쓰므로 운영에서는 반드시 넣습니다. |
+| `JWT_SECRET` | 예 | api access token 서명 키. 없으면 함수가 기동하지 않습니다(로컬 `functions serve` 포함). |
 | `QR_TOTP_SECRET` | 아니오 | 플레이어 QR 토큰 서명 키. 없으면 `JWT_SECRET`을 씁니다. |
 | `API_ADMIN_USERNAME` | 아니오 | 보호 관리자 계정 이름(기본 `admin`) |
 
@@ -146,4 +146,4 @@ curl -s http://127.0.0.1:54321/functions/v1/api/players
 
 - api 소스를 바꾸면 `pnpm build:edge`로 번들을 다시 만들어야 함수에 반영됩니다.
 - dev mock 데이터는 `pnpm dev`(Node api)가 시작할 때 로컬 DB에 넣습니다. 함수는 시딩하지 않습니다.
-- 함수 secret은 `supabase/functions/.env`(커밋 금지)에 두거나 `--env-file`로 넘깁니다. 예: `CRON_SECRET`, `JWT_SECRET`.
+- 함수 secret은 `supabase/functions/.env`(커밋 금지)에 두거나 `--env-file`로 넘깁니다. `JWT_SECRET`은 필수이고, cron 경로를 호출하려면 `CRON_SECRET`도 넣습니다.

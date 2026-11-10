@@ -94,7 +94,7 @@ const allowedOrigins = new Set([
 app.use(
   cors({
     origin(origin, callback) {
-      // 허용되지 않은 origin은 에러(500) 대신 CORS 헤더 없이 응답해 브라우저가 차단하게 한다.
+      // 허용되지 않은 origin이면 CORS 헤더 없이 응답해 브라우저가 요청을 차단하게 한다.
       callback(null, !origin || allowedOrigins.has(origin));
     },
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
