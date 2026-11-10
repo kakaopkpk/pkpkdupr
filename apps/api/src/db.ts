@@ -17,11 +17,7 @@ import {
 } from "@pkpkdupr/db";
 import { isEdgeRuntime } from "./runtime";
 
-/**
- * Edge Function에서 DATABASE_URL이 없으면 Supabase가 주입하는 SUPABASE_DB_URL(직접 연결)로 대신한다.
- * 로컬 `supabase functions serve`가 별도 설정 없이 로컬 DB에 붙게 하려는 것이며,
- * 운영은 커넥션 풀러(transaction mode) 주소를 DATABASE_URL secret으로 넣는다.
- */
+// 연결 주소는 @pkpkdupr/db가 DATABASE_URL → SUPABASE_DB_URL 순으로 고른다.
 if (
   isEdgeRuntime() &&
   !process.env.DATABASE_URL?.trim() &&
@@ -30,7 +26,6 @@ if (
   console.warn(
     "[DB] DATABASE_URL이 없어 SUPABASE_DB_URL로 연결합니다. 운영에서는 풀러(transaction mode) 주소를 DATABASE_URL로 설정하세요.",
   );
-  process.env.DATABASE_URL = process.env.SUPABASE_DB_URL;
 }
 
 /**

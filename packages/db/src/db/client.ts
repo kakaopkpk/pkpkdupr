@@ -17,8 +17,13 @@ export interface RawQueryResult {
 
 type SqlExecutor = Pick<Sql, "unsafe">;
 
+/**
+ * DATABASE_URL을 우선 쓰고, 없으면 Supabase Edge Function이 주입하는 SUPABASE_DB_URL(직접 연결)을 쓴다.
+ * Edge 런타임은 환경 변수 쓰기를 막으므로(NotSupported) env를 고쳐 쓰지 않고 여기서 고른다.
+ */
 const resolveDatabaseUrl = () => {
-  const url = process.env.DATABASE_URL?.trim();
+  const url =
+    process.env.DATABASE_URL?.trim() || process.env.SUPABASE_DB_URL?.trim();
   if (!url) {
     throw new Error("DATABASE_URL 환경변수가 필요합니다.");
   }
