@@ -16,7 +16,7 @@ export class AvatarValidationError extends Error {}
 export class AvatarStorageError extends Error {}
 
 export type ParsedAvatar = {
-  bytes: Uint8Array;
+  bytes: Uint8Array<ArrayBuffer>;
   mime: string;
   ext: "jpg" | "png" | "webp";
 };
