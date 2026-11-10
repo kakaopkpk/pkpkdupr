@@ -45,18 +45,5 @@ export const buildApiUrl = (path: string) => {
   return apiUrl;
 };
 
-export const resolveAssetUrl = (value?: string | null) => {
-  if (!value) {
-    return value ?? undefined;
-  }
-
-  if (/^(?:https?:)?\/\//i.test(value) || value.startsWith("data:")) {
-    return value;
-  }
-
-  if (value.startsWith("/uploads/")) {
-    return buildApiUrl(value);
-  }
-
-  return value;
-};
+// 아바타는 Supabase Storage 공개 절대 URL로 저장되므로 값을 그대로 쓴다.
+export const resolveAssetUrl = (value?: string | null) => value || undefined;

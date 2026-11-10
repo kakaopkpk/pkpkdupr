@@ -1,8 +1,6 @@
 import cors from "cors";
 import express from "express";
-import fs from "fs/promises";
 import { createHash, randomUUID, timingSafeEqual } from "crypto";
-import path from "path";
 import {
   computeMatchStartsAt,
   DEFAULT_MATCH_MODE,
@@ -54,26 +52,21 @@ import {
   normalizeCourtName,
   normalizeCourtNames,
 } from "./services/SessionCourtSchedule";
+import {
+  AvatarValidationError,
+  buildAvatarObjectPath,
+  buildAvatarPublicUrl,
+  deleteAvatarObject,
+  deleteAvatarObjectQuietly,
+  getOwnedAvatarObjectPath,
+  parseAvatarDataUrl,
+  uploadAvatarObject,
+} from "./services/AvatarStorage";
 import { sensitiveResponseHeaders } from "./middleware/sensitiveResponseHeaders";
 import { isEdgeRuntime } from "./runtime";
 
 const app: express.Express = express();
 const PORT = process.env.PORT || 4000;
-const AVATAR_UPLOAD_ROUTE = "/uploads/avatars";
-const AVATAR_MAX_BYTES = 1024 * 1024;
-const AVATAR_MIME_TO_EXT: Record<string, "jpg" | "png" | "webp"> = {
-  "image/jpeg": "jpg",
-  "image/png": "png",
-  "image/webp": "webp",
-};
-const defaultAvatarUploadDir =
-  path.basename(process.cwd()) === "api" &&
-  path.basename(path.dirname(process.cwd())) === "apps"
-    ? path.resolve(process.cwd(), "../../data/uploads/avatars")
-    : path.resolve(process.cwd(), "data/uploads/avatars");
-const avatarUploadDir = process.env.AVATAR_UPLOAD_DIR
-  ? path.resolve(process.env.AVATAR_UPLOAD_DIR)
-  : defaultAvatarUploadDir;
 const PROTECTED_ADMIN_USERNAME = process.env.API_ADMIN_USERNAME || "admin";
 const INITIAL_ADMIN_CREATED_PASSWORD = "123qwe";
 // 운영 origin은 CORS_ALLOWED_ORIGINS(쉼표 구분)로 주입하고, localhost 개발 origin은 항상 허용한다.
@@ -103,7 +96,6 @@ app.use(
 );
 app.use(express.json({ limit: "2mb" }));
 app.use(sensitiveResponseHeaders);
-app.use(AVATAR_UPLOAD_ROUTE, express.static(avatarUploadDir));
 
 app.get("/api/health", (_req, res) => {
   res.json({
@@ -555,61 +547,6 @@ const normalizeMatchScores = (scores: unknown): MatchScore[] => {
 
     return { scoreA, scoreB };
   });
-};
-
-const parseAvatarDataUrl = (value: unknown) => {
-  if (typeof value !== "string") {
-    throw new Error("이미지 데이터가 필요합니다.");
-  }
-
-  const match = value.match(
-    /^data:(image\/(?:jpeg|png|webp));base64,([A-Za-z0-9+/]+={0,2})$/,
-  );
-  if (!match) {
-    throw new Error("지원하지 않는 이미지 형식입니다.");
-  }
-
-  const [, mime, base64] = match;
-  const ext = AVATAR_MIME_TO_EXT[mime];
-  if (!ext) {
-    throw new Error("지원하지 않는 이미지 형식입니다.");
-  }
-
-  const buffer = Buffer.from(base64, "base64");
-  if (!buffer.length) {
-    throw new Error("이미지 데이터가 비어 있습니다.");
-  }
-
-  if (buffer.length > AVATAR_MAX_BYTES) {
-    throw new Error("프로필 이미지는 1MB 이하만 업로드할 수 있습니다.");
-  }
-
-  return { buffer, ext };
-};
-
-const getLocalAvatarPath = (avatarUrl?: string | null) => {
-  if (!avatarUrl?.startsWith(`${AVATAR_UPLOAD_ROUTE}/`)) {
-    return null;
-  }
-
-  const fileName = path.basename(avatarUrl);
-  if (
-    !fileName ||
-    fileName !== avatarUrl.slice(AVATAR_UPLOAD_ROUTE.length + 1)
-  ) {
-    return null;
-  }
-
-  return path.join(avatarUploadDir, fileName);
-};
-
-const removeLocalAvatarIfExists = async (avatarUrl?: string | null) => {
-  const avatarPath = getLocalAvatarPath(avatarUrl);
-  if (!avatarPath) {
-    return;
-  }
-
-  await fs.unlink(avatarPath).catch(() => undefined);
 };
 
 const getBearerToken = (req: express.Request, res: express.Response) => {
@@ -1768,26 +1705,15 @@ app.patch("/api/me/profile", async (req, res) => {
 
     const input = req.body as Record<string, unknown>;
     const update: {
-      avatarUrl?: string | null;
       affiliations?: PlayerAffiliation[];
       statusMessage?: string | null;
       statusMessageBackgroundColor?: string | null;
     } = {};
-    const avatarUrl = input.avatarUrl;
-    if (
-      typeof avatarUrl === "string" &&
-      avatarUrl.trim().length > 0 &&
-      avatarUrl.trim().length > 2048
-    ) {
-      return res
-        .status(400)
-        .json({ error: "프로필 이미지 URL이 너무 깁니다." });
-    }
+    // 아바타는 서버가 Storage에 올린 URL만 저장하므로 /api/me/avatar로만 바꿀 수 있다.
     if (hasOwnProperty(input, "avatarUrl")) {
-      update.avatarUrl =
-        typeof avatarUrl === "string" && avatarUrl.trim()
-          ? avatarUrl.trim()
-          : null;
+      return res.status(400).json({
+        error: "프로필 이미지는 /api/me/avatar로만 변경할 수 있습니다.",
+      });
     }
     if (hasOwnProperty(input, "affiliations")) {
       update.affiliations = normalizeProfileAffiliations(input.affiliations);
@@ -1812,8 +1738,6 @@ app.patch("/api/me/profile", async (req, res) => {
 });
 
 app.post("/api/me/avatar", async (req, res) => {
-  let nextAvatarPath: string | null = null;
-
   try {
     const decoded = await getAuthPayload(req, res);
     if (!decoded) {
@@ -1826,25 +1750,34 @@ app.post("/api/me/avatar", async (req, res) => {
     }
 
     const { imageDataUrl } = req.body as { imageDataUrl?: unknown };
-    const { buffer, ext } = parseAvatarDataUrl(imageDataUrl);
-    const fileName = `${decoded.playerId}-${Date.now()}-${randomUUID()}.${ext}`;
-    const avatarUrl = `${AVATAR_UPLOAD_ROUTE}/${fileName}`;
-    nextAvatarPath = path.join(avatarUploadDir, fileName);
+    const avatar = parseAvatarDataUrl(imageDataUrl);
+    const objectPath = buildAvatarObjectPath(decoded.playerId, avatar.ext);
+    const avatarUrl = buildAvatarPublicUrl(objectPath);
 
-    await fs.mkdir(avatarUploadDir, { recursive: true });
-    await fs.writeFile(nextAvatarPath, buffer);
+    await uploadAvatarObject(objectPath, avatar);
 
-    const player = await authService.updatePlayerProfile(decoded.playerId, {
-      avatarUrl,
-    });
-    await removeLocalAvatarIfExists(previousPlayer.avatarUrl);
+    let player: Player;
+    try {
+      player = await authService.updatePlayerProfile(decoded.playerId, {
+        avatarUrl,
+      });
+    } catch (err) {
+      await deleteAvatarObjectQuietly(objectPath);
+      throw err;
+    }
+
+    await deleteAvatarObjectQuietly(
+      getOwnedAvatarObjectPath(decoded.playerId, previousPlayer.avatarUrl),
+    );
 
     res.json(player);
   } catch (err) {
-    if (nextAvatarPath) {
-      await fs.unlink(nextAvatarPath).catch(() => undefined);
+    if (err instanceof AvatarValidationError) {
+      return res.status(400).json({ error: err.message });
     }
-    res.status(400).json({ error: (err as Error).message });
+    // Storage 응답 본문·서버 설정·DB 오류는 내부 정보이므로 로그로만 남긴다.
+    console.error("[Avatar] 업로드 실패", err);
+    res.status(500).json({ error: "프로필 이미지를 저장하지 못했습니다." });
   }
 });
 
@@ -1860,14 +1793,23 @@ app.delete("/api/me/avatar", async (req, res) => {
       return res.status(404).json({ error: "사용자를 찾을 수 없습니다." });
     }
 
+    const previousObjectPath = getOwnedAvatarObjectPath(
+      decoded.playerId,
+      previousPlayer.avatarUrl,
+    );
+    // 객체를 먼저 지워 실패 시 avatar_url이 남아 다시 시도할 수 있게 한다.
+    if (previousObjectPath) {
+      await deleteAvatarObject(previousObjectPath);
+    }
+
     const player = await authService.updatePlayerProfile(decoded.playerId, {
       avatarUrl: null,
     });
-    await removeLocalAvatarIfExists(previousPlayer.avatarUrl);
 
     res.json(player);
   } catch (err) {
-    res.status(500).json({ error: (err as Error).message });
+    console.error("[Avatar] 삭제 실패", err);
+    res.status(500).json({ error: "프로필 이미지를 삭제하지 못했습니다." });
   }
 });
 

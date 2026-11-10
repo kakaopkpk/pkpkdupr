@@ -39,7 +39,6 @@ interface AuthContextType {
     newPassword: string,
   ) => Promise<void>;
   updateProfile: (input: {
-    avatarUrl?: string | null;
     affiliations?: PlayerAffiliation[];
     statusMessage?: string | null;
     statusMessageBackgroundColor?: string | null;
@@ -373,7 +372,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     setRequiresPasswordChange(false);
   };
 
-  const updateProfile = async (input: { avatarUrl?: string | null }) => {
+  const updateProfile: AuthContextType["updateProfile"] = async (input) => {
     if (!token) {
       throw new Error("로그인이 필요합니다.");
     }
