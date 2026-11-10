@@ -35,8 +35,9 @@ const setupAuthFixture = () => {
     token: string,
     email: string | null,
     emailConfirmed = true,
+    provider: string | null = "google",
   ): SupabaseAuthUser => {
-    const user = { id: `auth-${token}`, email, emailConfirmed };
+    const user = { id: `auth-${token}`, email, emailConfirmed, provider };
     authUsers.set(token, user);
     return user;
   };
@@ -240,6 +241,67 @@ describe("Supabase Auth 기반 인증", () => {
         expect(fixture.players.get("Palice01")?.authUserId).toBeNull();
       },
     );
+
+    it("허용 도메인·확인된 이메일이어도 기본 설정에서는 Google 외 provider를 DOMAIN_NOT_ALLOWED로 거부한다", async () => {
+      fixture.addPlayer("Palice01", "dev_alice");
+      fixture.addAuthUser("magic", "dev_alice@kakaocorp.com", true, "email");
+
+      const response = await request(app).get("/api/me").set(bearer("magic"));
+
+      expect(response.status).toBe(403);
+      expect(response.body.code).toBe("DOMAIN_NOT_ALLOWED");
+      expect(fixture.linkAuthUser).not.toHaveBeenCalled();
+      expect(fixture.players.get("Palice01")?.authUserId).toBeNull();
+    });
+
+    it("provider를 알 수 없는 토큰도 거부한다", async () => {
+      fixture.addPlayer("Palice01", "dev_alice");
+      fixture.addAuthUser("unknown", "dev_alice@kakaocorp.com", true, null);
+
+      const response = await request(app).get("/api/me").set(bearer("unknown"));
+
+      expect(response.status).toBe(403);
+      expect(response.body.code).toBe("DOMAIN_NOT_ALLOWED");
+    });
+
+    it("허용되지 않은 provider는 초대 코드 가입 전에 거부한다", async () => {
+      fixture.addAuthUser("magic", "newbie@kakaocorp.com", true, "email");
+
+      const response = await request(app)
+        .post("/api/auth/invite")
+        .set(bearer("magic"))
+        .send({ code: "ABCD2345", username: "newbie" });
+
+      expect(response.status).toBe(403);
+      expect(response.body.code).toBe("DOMAIN_NOT_ALLOWED");
+      expect(fixture.players.size).toBe(0);
+    });
+
+    it("ALLOWED_AUTH_PROVIDERS에 넣은 provider는 통과하고 기본값 google도 목록에 없으면 거부한다", async () => {
+      vi.stubEnv("ALLOWED_AUTH_PROVIDERS", " google , Email ");
+      fixture.addPlayer("Palice01", "dev_alice");
+      fixture.addAuthUser("magic", "dev_alice@kakaocorp.com", true, "email");
+
+      const allowed = await request(app).get("/api/me").set(bearer("magic"));
+      expect(allowed.status).toBe(200);
+
+      vi.stubEnv("ALLOWED_AUTH_PROVIDERS", "email");
+      fixture.addAuthUser("google", "dev_alice@kakaocorp.com", true, "google");
+      const denied = await request(app).get("/api/me").set(bearer("google"));
+      expect(denied.status).toBe(403);
+      expect(denied.body.code).toBe("DOMAIN_NOT_ALLOWED");
+    });
+
+    it("허용 provider여도 도메인이 다르면 거부한다", async () => {
+      vi.stubEnv("ALLOWED_AUTH_PROVIDERS", "google,email");
+      fixture.addPlayer("Palice01", "dev_alice");
+      fixture.addAuthUser("magic", "dev_alice@gmail.com", true, "email");
+
+      const response = await request(app).get("/api/me").set(bearer("magic"));
+
+      expect(response.status).toBe(403);
+      expect(response.body.code).toBe("DOMAIN_NOT_ALLOWED");
+    });
 
     it("ALLOWED_EMAIL_DOMAIN이 비어 있으면 모든 계정을 거부한다", async () => {
       vi.stubEnv("ALLOWED_EMAIL_DOMAIN", "");

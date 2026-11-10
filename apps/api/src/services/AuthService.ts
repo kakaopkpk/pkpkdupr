@@ -363,6 +363,15 @@ interface AllowedAuthUser {
   emailLocalPart: string;
 }
 
+/** `ALLOWED_AUTH_PROVIDERS`(쉼표 구분)의 허용 로그인 provider. 미설정이면 google만 허용한다. */
+const getAllowedAuthProviders = (): string[] => {
+  const configured = process.env.ALLOWED_AUTH_PROVIDERS?.trim();
+  return (configured || "google")
+    .split(",")
+    .map((provider) => provider.trim().toLowerCase())
+    .filter(Boolean);
+};
+
 /** 허용 도메인과 정확히 같고 확인된 이메일이면 앞부분을 돌려준다. */
 const getAllowedEmailLocalPart = (
   email: string | null,
@@ -615,8 +624,8 @@ export class AuthService {
   }
 
   /**
-   * Supabase Auth로 토큰을 확인하고 허용 도메인·이메일 확인 여부를 검사한다.
-   * 다른 도메인 계정은 회원 조회·연결 전에 거부해 앞부분이 같아도 남의 회원 기록에 닿지 못한다.
+   * Supabase Auth로 토큰을 확인하고 허용 provider·허용 도메인·이메일 확인 여부를 검사한다.
+   * 허용 목록에 없는 provider나 다른 도메인 계정은 회원 조회·연결 전에 거부해 앞부분이 같아도 남의 회원 기록에 닿지 못한다.
    */
   private async resolveAllowedAuthUser(
     accessToken: string,
@@ -624,6 +633,16 @@ export class AuthService {
     const user = await this.authUserVerifier.getUser(accessToken);
     if (!user) {
       throw new InvalidAccessTokenError("세션이 만료되었거나 유효하지 않습니다.");
+    }
+
+    if (
+      !user.provider ||
+      !getAllowedAuthProviders().includes(user.provider.toLowerCase())
+    ) {
+      throw new AuthError(
+        "DOMAIN_NOT_ALLOWED",
+        "허용된 회사 계정(Google)으로만 로그인할 수 있습니다.",
+      );
     }
 
     const emailLocalPart = getAllowedEmailLocalPart(
