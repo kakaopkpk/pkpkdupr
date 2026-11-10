@@ -157,6 +157,67 @@ describe("Supabase Auth 기반 인증", () => {
     });
   });
 
+  describe("Auth 서버 오류 분류", () => {
+    /** fixture의 getUser mock을 풀고, Auth 서버 HTTP 응답을 fetch stub으로 대신한다. */
+    const stubAuthServerError = (status: number, code: string) => {
+      vi.mocked(SupabaseAuthUserVerifier.prototype.getUser).mockRestore();
+      vi.stubEnv("SUPABASE_URL", "http://auth.test");
+      vi.stubEnv("SUPABASE_ANON_KEY", "anon-key");
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(
+          async () =>
+            new Response(JSON.stringify({ code, msg: code }), {
+              status,
+              // SDK는 이 헤더가 있어야 응답 본문의 code를 에러 코드로 읽는다(실제 Auth 서버는 항상 보낸다).
+              headers: {
+                "Content-Type": "application/json",
+                "X-Supabase-Api-Version": "2024-01-01",
+              },
+            }),
+        ),
+      );
+      vi.spyOn(console, "error").mockImplementation(() => undefined);
+    };
+
+    afterEach(() => {
+      vi.unstubAllGlobals();
+    });
+
+    it.each([
+      [403, "bad_jwt"],
+      [403, "session_not_found"],
+      [404, "user_not_found"],
+    ])(
+      "%i %s는 무효 토큰이므로 SESSION_INVALID로 401을 준다",
+      async (status, code) => {
+        stubAuthServerError(status, code);
+
+        const response = await request(app).get("/api/me").set(bearer("any"));
+
+        expect(response.status).toBe(401);
+        expect(response.body.code).toBe("SESSION_INVALID");
+      },
+    );
+
+    it.each([
+      [429, "over_request_rate_limit"],
+      [408, "request_timeout"],
+      [400, "validation_failed"],
+      [403, "unknown_forbidden"],
+    ])(
+      "%i %s는 토큰 유효성을 판단하지 못한 것이므로 SESSION_UNAVAILABLE로 503을 준다",
+      async (status, code) => {
+        stubAuthServerError(status, code);
+
+        const response = await request(app).get("/api/me").set(bearer("any"));
+
+        expect(response.status).toBe(503);
+        expect(response.body.code).toBe("SESSION_UNAVAILABLE");
+      },
+    );
+  });
+
   describe("허용 도메인", () => {
     it.each([
       ["다른 도메인", "dev_alice@gmail.com", true],
