@@ -174,7 +174,7 @@ const mockPlayers: CreateStoredPlayerInput[] = [
     username: "test1",
     gender: "F",
     status: "active",
-    affiliations: [{ name: "PKELO Gangnam", isPrimary: true }],
+    affiliations: [{ name: "Gangnam Club", isPrimary: true }],
     duprRating: createDupr(3.176),
     passwordHash: TEST_PASSWORD_HASH,
     isFirstLogin: false,
@@ -187,7 +187,7 @@ const mockPlayers: CreateStoredPlayerInput[] = [
     gender: "M",
     status: "active",
     affiliations: [
-      { name: "PKELO Jamsil", isPrimary: true },
+      { name: "Jamsil Club", isPrimary: true },
       { name: "Weekend Pickleball Club", isPrimary: false },
     ],
     duprRating: createDupr(3.482),
