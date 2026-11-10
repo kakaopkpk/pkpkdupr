@@ -69,15 +69,17 @@ export class PlayerRepository {
     return player ? this.hydrate(player) : undefined;
   }
 
-  /** username은 대소문자를 구분해 unique이므로 대소문자만 다른 회원이 여럿일 수 있다. */
-  async findAllByUsernameIgnoringCase(
+  /** username은 lower(username) 기준으로 unique이므로 대소문자 구분 없이 최대 한 명이다. */
+  async findByUsernameIgnoringCase(
     username: string,
-  ): Promise<StoredPlayerRecord[]> {
-    const records = await this.db
+  ): Promise<StoredPlayerRecord | undefined> {
+    const player = await this.db
       .select()
       .from(players)
-      .where(sql`lower(${players.username}) = lower(${username})`);
-    return records.map((record: any) => this.hydrate(record));
+      .where(sql`lower(${players.username}) = lower(${username})`)
+      .limit(1)
+      .then(firstRow);
+    return player ? this.hydrate(player) : undefined;
   }
 
   /**
