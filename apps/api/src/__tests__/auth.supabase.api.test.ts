@@ -176,6 +176,9 @@ describe("Supabase Auth 기반 인증", () => {
   });
 
   describe("Auth 서버 오류 분류", () => {
+    /** 응답 본문에 code를 넣지 않는 케이스. 테스트 이름에 그대로 출력된다. */
+    const NO_CODE = "(code 없음)";
+
     /** fixture의 getUser mock을 풀고, Auth 서버 HTTP 응답을 fetch stub으로 대신한다. */
     const stubAuthServerError = (status: number, code: string) => {
       vi.mocked(SupabaseAuthUserVerifier.prototype.getUser).mockRestore();
@@ -185,14 +188,17 @@ describe("Supabase Auth 기반 인증", () => {
         "fetch",
         vi.fn(
           async () =>
-            new Response(JSON.stringify({ code, msg: code }), {
-              status,
-              // SDK는 이 헤더가 있어야 응답 본문의 code를 에러 코드로 읽는다(실제 Auth 서버는 항상 보낸다).
-              headers: {
-                "Content-Type": "application/json",
-                "X-Supabase-Api-Version": "2024-01-01",
+            new Response(
+              JSON.stringify(code === NO_CODE ? { msg: "error" } : { code, msg: code }),
+              {
+                status,
+                // SDK는 이 헤더가 있어야 응답 본문의 code를 에러 코드로 읽는다(실제 Auth 서버는 항상 보낸다).
+                headers: {
+                  "Content-Type": "application/json",
+                  "X-Supabase-Api-Version": "2024-01-01",
+                },
               },
-            }),
+            ),
         ),
       );
       vi.spyOn(console, "error").mockImplementation(() => undefined);
@@ -206,6 +212,8 @@ describe("Supabase Auth 기반 인증", () => {
       [403, "bad_jwt"],
       [403, "session_not_found"],
       [404, "user_not_found"],
+      [403, "user_banned"],
+      [401, NO_CODE],
     ])(
       "%i %s는 무효 토큰이므로 SESSION_INVALID로 401을 준다",
       async (status, code) => {
@@ -223,6 +231,8 @@ describe("Supabase Auth 기반 인증", () => {
       [408, "request_timeout"],
       [400, "validation_failed"],
       [403, "unknown_forbidden"],
+      [500, "unexpected_failure"],
+      [503, NO_CODE],
     ])(
       "%i %s는 토큰 유효성을 판단하지 못한 것이므로 SESSION_UNAVAILABLE로 503을 준다",
       async (status, code) => {

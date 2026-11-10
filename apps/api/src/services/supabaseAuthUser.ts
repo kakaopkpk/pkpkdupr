@@ -17,11 +17,15 @@ export interface SupabaseAuthUser {
   provider: string | null;
 }
 
-/** 토큰·세션·사용자가 무효임을 뜻하는 Auth 에러 코드. 이 밖의 오류는 일시 장애로 본다. */
+/**
+ * 토큰·세션·사용자가 무효임을 뜻하는 Auth 에러 코드. 이 밖의 오류는 일시 장애로 본다.
+ * user_banned는 관리자가 정지를 풀기 전까지 재시도로 결과가 바뀌지 않는다.
+ */
 const INVALID_TOKEN_ERROR_CODES: ReadonlySet<string> = new Set([
   "bad_jwt",
   "session_not_found",
   "user_not_found",
+  "user_banned",
 ]);
 
 /**
@@ -50,9 +54,9 @@ export class SupabaseAuthUserVerifier {
   }
 
   /**
-   * 토큰이 무효·만료됐거나 사용자가 없을 때만 null을 돌려준다.
-   * 무효 여부는 HTTP 상태가 아니라 에러 코드로 판정한다. rate limit(429)·타임아웃(408) 등
-   * 토큰 유효성을 판단하지 못한 경우와 알 수 없는 오류는 모두 throw한다.
+   * 토큰이 무효·만료됐거나 사용자가 없거나 정지된 계정일 때만 null을 돌려준다.
+   * 무효 여부는 에러 코드로 판정하며, code를 받지 못한 401만 예외로 인증 거부로 본다.
+   * rate limit(429)·타임아웃(408) 등 토큰 유효성을 판단하지 못한 경우와 알 수 없는 오류는 모두 throw한다.
    */
   async getUser(accessToken: string): Promise<SupabaseAuthUser | null> {
     const { data, error } = await this.getClient().auth.getUser(accessToken);
@@ -61,8 +65,11 @@ export class SupabaseAuthUserVerifier {
       if (isAuthSessionMissingError(error)) {
         return null;
       }
-      if (isAuthApiError(error) && INVALID_TOKEN_ERROR_CODES.has(error.code ?? "")) {
-        return null;
+      if (isAuthApiError(error)) {
+        const code = error.code ?? "";
+        if (INVALID_TOKEN_ERROR_CODES.has(code) || (error.status === 401 && !code)) {
+          return null;
+        }
       }
       throw error;
     }
