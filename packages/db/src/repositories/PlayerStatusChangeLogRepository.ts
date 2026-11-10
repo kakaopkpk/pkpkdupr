@@ -1,6 +1,7 @@
 import type { PlayerStatus, PlayerStatusChangeLog } from "@pkpkdupr/shared/player";
 import { desc, eq } from "drizzle-orm";
 import { playerStatusChangeLogs } from "../db/schema";
+import { firstRow } from "../db/client";
 
 export interface CreatePlayerStatusChangeLogInput {
   id: string;
@@ -24,7 +25,8 @@ export class PlayerStatusChangeLogRepository {
       .select()
       .from(playerStatusChangeLogs)
       .where(eq(playerStatusChangeLogs.id, data.id))
-      .get();
+      .limit(1)
+      .then(firstRow);
 
     if (!created) {
       throw new Error("상태 변경 로그 저장에 실패했습니다.");
@@ -36,7 +38,6 @@ export class PlayerStatusChangeLogRepository {
     return await this.db
       .select()
       .from(playerStatusChangeLogs)
-      .orderBy(desc(playerStatusChangeLogs.changedAt))
-      .all();
+      .orderBy(desc(playerStatusChangeLogs.changedAt));
   }
 }

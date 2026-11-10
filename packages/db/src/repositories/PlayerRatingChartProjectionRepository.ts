@@ -39,9 +39,9 @@ export class PlayerRatingChartProjectionRepository {
     playerId: string,
   ): Promise<PlayerRatingChartProjection | null> {
     const projectionResult = await this.client.execute({
-      sql: `SELECT generated_at AS generatedAt
+      sql: `SELECT generated_at AS "generatedAt"
             FROM player_rating_chart_projections
-            WHERE player_id = ?`,
+            WHERE player_id = $1`,
       args: [playerId],
     });
     const projection = projectionResult.rows[0] as
@@ -50,9 +50,9 @@ export class PlayerRatingChartProjectionRepository {
     if (!projection) return null;
 
     const pointsResult = await this.client.execute({
-      sql: `SELECT category, rating, source, point_at AS pointAt
+      sql: `SELECT category, rating, source, point_at AS "pointAt"
             FROM player_rating_chart_points
-            WHERE player_id = ?
+            WHERE player_id = $1
             ORDER BY category ASC, point_at ASC, id ASC`,
       args: [playerId],
     });
@@ -89,7 +89,7 @@ export class PlayerRatingChartProjectionRepository {
 
     try {
       await transaction.execute({
-        sql: "DELETE FROM player_rating_chart_points WHERE player_id = ?",
+        sql: "DELETE FROM player_rating_chart_points WHERE player_id = $1",
         args: [playerId],
       });
 
@@ -107,7 +107,7 @@ export class PlayerRatingChartProjectionRepository {
           await transaction.execute({
             sql: `INSERT INTO player_rating_chart_points
                     (id, player_id, category, rating, source, point_at, generated_at)
-                  VALUES (?, ?, ?, ?, ?, ?, ?)`,
+                  VALUES ($1, $2, $3, $4, $5, $6, $7)`,
             args: [
               randomUUID(),
               playerId,
@@ -123,8 +123,8 @@ export class PlayerRatingChartProjectionRepository {
 
       await transaction.execute({
         sql: `INSERT INTO player_rating_chart_projections (player_id, generated_at)
-              VALUES (?, ?)
-              ON DUPLICATE KEY UPDATE generated_at = VALUES(generated_at)`,
+              VALUES ($1, $2)
+              ON CONFLICT (player_id) DO UPDATE SET generated_at = EXCLUDED.generated_at`,
         args: [playerId, generatedAtSeconds],
       });
       await transaction.commit();

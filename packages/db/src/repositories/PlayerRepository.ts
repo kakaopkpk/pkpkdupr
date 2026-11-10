@@ -11,6 +11,7 @@ import {
 import { desc, eq } from "drizzle-orm";
 import { isEntityId } from "@pkpkdupr/shared/entityId";
 import { players } from "../db/schema";
+import { firstRow } from "../db/client";
 
 export interface StoredPlayerRecord extends Player {
   passwordHash: string;
@@ -42,7 +43,8 @@ export class PlayerRepository {
       .select()
       .from(players)
       .where(eq(players.id, id))
-      .get();
+      .limit(1)
+      .then(firstRow);
     return player ? this.hydrate(player) : undefined;
   }
 
@@ -51,7 +53,8 @@ export class PlayerRepository {
       .select()
       .from(players)
       .where(eq(players.username, username))
-      .get();
+      .limit(1)
+      .then(firstRow);
     return player ? this.hydrate(player) : undefined;
   }
 
@@ -59,8 +62,7 @@ export class PlayerRepository {
     const records = await this.db
       .select()
       .from(players)
-      .orderBy(desc(players.createdAt))
-      .all();
+      .orderBy(desc(players.createdAt));
     return records.map((record: any) => this.hydrate(record));
   }
 

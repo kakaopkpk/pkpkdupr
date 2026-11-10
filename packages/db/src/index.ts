@@ -1,5 +1,4 @@
 export { getDb, getDbClient } from "./db/client";
-export { runMigrations } from "./db/migrate";
 export * from "./db/schema";
 export {
   PlayerRepository,

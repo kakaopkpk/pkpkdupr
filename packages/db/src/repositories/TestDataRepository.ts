@@ -16,6 +16,7 @@ import type { CreatePlayerStatusChangeLogInput } from "./PlayerStatusChangeLogRe
 import { PlayerStatusChangeLogRepository } from "./PlayerStatusChangeLogRepository";
 import type { CreateStoredPlayerInput } from "./PlayerRepository";
 import { PlayerRepository } from "./PlayerRepository";
+import { firstRow, placeholders } from "../db/client";
 
 const DEV_PASSWORD_HASH =
   "$2b$10$YwUchh/fxRAeCFxtLM5QW.YsBqK3BvgFBkEM2AxPHaaNnpaB62aEW"; // dev1234
@@ -1165,53 +1166,53 @@ export class TestDataRepository {
       for (const [legacyId, persistedId] of replacements) {
         for (const [table, column] of devMockPlayerReferenceColumns) {
           await transaction.execute({
-            sql: `UPDATE ${table} SET ${column} = ? WHERE ${column} = ?`,
+            sql: `UPDATE ${table} SET ${column} = $1 WHERE ${column} = $2`,
             args: [persistedId, legacyId],
           });
         }
         await transaction.execute({
           sql: `
-            DELETE legacy FROM match_participants AS legacy
-            INNER JOIN match_participants AS persisted
-              ON persisted.match_id = legacy.match_id
-             AND persisted.team_index = legacy.team_index
-             AND persisted.player_id = ?
-            WHERE legacy.player_id = ?
+            DELETE FROM match_participants AS legacy
+            USING match_participants AS persisted
+            WHERE persisted.match_id = legacy.match_id
+              AND persisted.team_index = legacy.team_index
+              AND persisted.player_id = $1
+              AND legacy.player_id = $2
           `,
           args: [persistedId, legacyId],
         });
         await transaction.execute({
-          sql: "UPDATE match_participants SET player_id = ? WHERE player_id = ?",
+          sql: "UPDATE match_participants SET player_id = $1 WHERE player_id = $2",
           args: [persistedId, legacyId],
         });
         await transaction.execute({
           sql: `
-            DELETE legacy FROM match_result_approvals AS legacy
-            INNER JOIN match_result_approvals AS persisted
-              ON persisted.match_id = legacy.match_id
-             AND persisted.player_id = ?
-            WHERE legacy.player_id = ?
+            DELETE FROM match_result_approvals AS legacy
+            USING match_result_approvals AS persisted
+            WHERE persisted.match_id = legacy.match_id
+              AND persisted.player_id = $1
+              AND legacy.player_id = $2
           `,
           args: [persistedId, legacyId],
         });
         await transaction.execute({
           sql:
-            "UPDATE match_result_approvals SET player_id = ? WHERE player_id = ?",
+            "UPDATE match_result_approvals SET player_id = $1 WHERE player_id = $2",
           args: [persistedId, legacyId],
         });
         await transaction.execute({
           sql: `
-            DELETE legacy FROM match_session_participants AS legacy
-            INNER JOIN match_session_participants AS persisted
-              ON persisted.session_id = legacy.session_id
-             AND persisted.player_id = ?
-            WHERE legacy.player_id = ?
+            DELETE FROM match_session_participants AS legacy
+            USING match_session_participants AS persisted
+            WHERE persisted.session_id = legacy.session_id
+              AND persisted.player_id = $1
+              AND legacy.player_id = $2
           `,
           args: [persistedId, legacyId],
         });
         await transaction.execute({
           sql:
-            "UPDATE match_session_participants SET player_id = ? WHERE player_id = ?",
+            "UPDATE match_session_participants SET player_id = $1 WHERE player_id = $2",
           args: [persistedId, legacyId],
         });
       }
@@ -1256,13 +1257,12 @@ export class TestDataRepository {
     const playerIds = Object.keys(TEST_PLAYER_RATINGS).map((playerId) =>
       this.resolveDevPlayerId(playerId),
     );
-    const matchPlaceholders = TEST_RATING_FIXTURE_MATCH_IDS.map(() => "?").join(
-      ", ",
+    const matchPlaceholders = placeholders(TEST_RATING_FIXTURE_MATCH_IDS.length);
+    const playerPlaceholders = placeholders(playerIds.length);
+    const sourceLogPlaceholders = placeholders(
+      TEST_RATING_FIXTURE_SOURCE_LOG_IDS.length,
+      playerIds.length + 1,
     );
-    const playerPlaceholders = playerIds.map(() => "?").join(", ");
-    const sourceLogPlaceholders = TEST_RATING_FIXTURE_SOURCE_LOG_IDS.map(
-      () => "?",
-    ).join(", ");
     const transaction = await this.client.transaction("write");
     let committed = false;
 
@@ -1392,14 +1392,16 @@ export class TestDataRepository {
           eq(matchSessions.date, data.date),
         ),
       )
-      .get();
+      .limit(1)
+      .then(firstRow);
     if (existingByMetadata) return existingByMetadata.id;
 
     const existingById = await this.db
       .select()
       .from(matchSessions)
       .where(eq(matchSessions.id, data.id))
-      .get();
+      .limit(1)
+      .then(firstRow);
     if (existingById) return existingById.id;
 
     await this.db.insert(matchSessions).values(data);
@@ -1411,7 +1413,8 @@ export class TestDataRepository {
       .select()
       .from(playerCreationLogs)
       .where(eq(playerCreationLogs.id, data.id))
-      .get();
+      .limit(1)
+      .then(firstRow);
     if (existing) {
       return;
     }
@@ -1432,7 +1435,8 @@ export class TestDataRepository {
       .select()
       .from(playerStatusChangeLogs)
       .where(eq(playerStatusChangeLogs.id, data.id))
-      .get();
+      .limit(1)
+      .then(firstRow);
     if (existing) {
       return;
     }
@@ -1451,7 +1455,8 @@ export class TestDataRepository {
       .select()
       .from(matches)
       .where(eq(matches.id, data.id))
-      .get();
+      .limit(1)
+      .then(firstRow);
     if (existing) {
       return;
     }
@@ -1472,7 +1477,8 @@ export class TestDataRepository {
       .select()
       .from(matchScores)
       .where(eq(matchScores.matchId, data.matchId))
-      .get();
+      .limit(1)
+      .then(firstRow);
     if (existing) {
       return;
     }
@@ -1488,7 +1494,7 @@ export class TestDataRepository {
 
   private async insertMatchScore(data: (typeof mockMatchScores)[number]) {
     await this.client.execute({
-      sql: "INSERT INTO match_scores (id, match_id, score_a, score_b) VALUES (?, ?, ?, ?)",
+      sql: "INSERT INTO match_scores (id, match_id, score_a, score_b) VALUES ($1, $2, $3, $4)",
       args: [data.id, data.matchId, data.scoreA, data.scoreB],
     });
   }
@@ -1500,7 +1506,8 @@ export class TestDataRepository {
       .select()
       .from(matchParticipants)
       .where(eq(matchParticipants.id, data.id))
-      .get();
+      .limit(1)
+      .then(firstRow);
     if (existingById) {
       return;
     }
@@ -1515,7 +1522,8 @@ export class TestDataRepository {
           eq(matchParticipants.playerId, data.playerId),
         ),
       )
-      .get();
+      .limit(1)
+      .then(firstRow);
     if (existingByParticipant) {
       return;
     }
@@ -1536,7 +1544,8 @@ export class TestDataRepository {
       .select()
       .from(matchResultApprovals)
       .where(eq(matchResultApprovals.id, data.id))
-      .get();
+      .limit(1)
+      .then(firstRow);
     if (existingById) {
       return;
     }
@@ -1550,7 +1559,8 @@ export class TestDataRepository {
           eq(matchResultApprovals.playerId, data.playerId),
         ),
       )
-      .get();
+      .limit(1)
+      .then(firstRow);
     if (existingByApproval) {
       return;
     }
@@ -1571,7 +1581,8 @@ export class TestDataRepository {
       .select()
       .from(playerRatingChangeLogs)
       .where(eq(playerRatingChangeLogs.id, data.id))
-      .get();
+      .limit(1)
+      .then(firstRow);
     if (existing) {
       return;
     }

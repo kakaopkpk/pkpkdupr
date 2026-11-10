@@ -27,8 +27,7 @@ export class OfficialDuprAdjustmentLogRepository {
     const rows = await this.db
       .select()
       .from(officialDuprAdjustmentLogs)
-      .orderBy(desc(officialDuprAdjustmentLogs.createdAt))
-      .all();
+      .orderBy(desc(officialDuprAdjustmentLogs.createdAt));
     return rows.map(hydrateLog);
   }
 

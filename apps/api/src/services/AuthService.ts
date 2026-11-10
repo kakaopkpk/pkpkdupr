@@ -348,8 +348,11 @@ const isActiveDevPlayer = (player: Player) =>
 
 const RETRYABLE_DB_CONNECTION_ERROR_CODES = new Set([
   "ECONNREFUSED",
-  "PROTOCOL_CONNECTION_LOST",
-  "ER_CON_COUNT_ERROR",
+  "CONNECTION_CLOSED",
+  "CONNECT_TIMEOUT",
+  // Postgres SQLSTATE: cannot_connect_now(기동 중), too_many_connections
+  "57P03",
+  "53300",
 ]);
 
 const hasRetryableConnectionCode = (value: unknown) =>
@@ -358,7 +361,7 @@ const hasRetryableConnectionCode = (value: unknown) =>
   "code" in value &&
   RETRYABLE_DB_CONNECTION_ERROR_CODES.has(String((value as { code?: unknown }).code));
 
-/** MySQL이 아직 연결을 받지 못하는 기동 직후 오류만 재시도 대상으로 본다. */
+/** Postgres가 아직 연결을 받지 못하는 기동 직후 오류만 재시도 대상으로 본다. */
 const isRetryableDbBootstrapError = (error: unknown) => {
   if (!(error instanceof Error)) {
     return false;

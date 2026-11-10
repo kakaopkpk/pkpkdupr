@@ -1,6 +1,7 @@
 import type { PlayerRatingChangeLog } from "@pkpkdupr/shared/player";
 import { and, desc, eq, like } from "drizzle-orm";
 import { playerRatingChangeLogs } from "../db/schema";
+import { firstRow } from "../db/client";
 
 export type CreatePlayerRatingChangeLogInput = PlayerRatingChangeLog;
 
@@ -37,7 +38,8 @@ export class PlayerRatingChangeLogRepository {
       .select()
       .from(playerRatingChangeLogs)
       .where(eq(playerRatingChangeLogs.id, data.id))
-      .get();
+      .limit(1)
+      .then(firstRow);
 
     if (!created) {
       throw new Error("점수 변동 로그 저장에 실패했습니다.");
@@ -81,8 +83,7 @@ export class PlayerRatingChangeLogRepository {
     const rows = await this.db
       .select()
       .from(playerRatingChangeLogs)
-      .orderBy(desc(playerRatingChangeLogs.createdAt))
-      .all();
+      .orderBy(desc(playerRatingChangeLogs.createdAt));
     return rows.map(hydrateLog);
   }
 
@@ -99,8 +100,7 @@ export class PlayerRatingChangeLogRepository {
           ),
         ),
       )
-      .orderBy(desc(playerRatingChangeLogs.createdAt))
-      .all();
+      .orderBy(desc(playerRatingChangeLogs.createdAt));
     return rows.map(hydrateLog);
   }
 
@@ -109,8 +109,7 @@ export class PlayerRatingChangeLogRepository {
       .select()
       .from(playerRatingChangeLogs)
       .where(eq(playerRatingChangeLogs.playerId, playerId))
-      .orderBy(desc(playerRatingChangeLogs.createdAt))
-      .all();
+      .orderBy(desc(playerRatingChangeLogs.createdAt));
     return rows.map(hydrateLog);
   }
 }
