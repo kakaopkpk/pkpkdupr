@@ -5,7 +5,13 @@ import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import path from "path";
 
-const basePath = process.env.VITE_BASE_PATH || "/";
+/** 배포 하위 경로(예: GitHub Pages `/pkpkdupr/admin/`). 앞뒤 `/`를 보장하고, 없으면 `/`. */
+const normalizeBasePath = (value: string | undefined) => {
+  const trimmed = value?.trim().replace(/^\/+|\/+$/g, "");
+  return trimmed ? `/${trimmed}/` : "/";
+};
+
+const basePath = normalizeBasePath(process.env.VITE_BASE_PATH);
 const fallbackAppVersion =
   (
     JSON.parse(

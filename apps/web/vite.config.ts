@@ -9,6 +9,21 @@ import path from "path";
 
 const configDir = path.dirname(fileURLToPath(import.meta.url));
 
+/** 배포 하위 경로(예: GitHub Pages `/pkpkdupr/`). 앞뒤 `/`를 보장하고, 없으면 `/`. */
+const normalizeBasePath = (value: string | undefined) => {
+  const trimmed = value?.trim().replace(/^\/+|\/+$/g, "");
+  return trimmed ? `/${trimmed}/` : "/";
+};
+
+const basePath = normalizeBasePath(process.env.VITE_BASE_PATH);
+
+const escapeRegExp = (value: string) =>
+  value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+// admin-web은 같은 Pages 사이트의 `<base>admin/`에 배포된다. web 서비스워커 scope 안이므로
+// 이 경로의 탐색 요청을 web index.html로 가로채지 않도록 navigateFallback에서 뺀다.
+const adminPathPattern = new RegExp(`^${escapeRegExp(basePath)}admin(?:/|$)`);
+
 const fallbackAppVersion =
   (
     JSON.parse(
@@ -35,6 +50,7 @@ export default defineConfig({
   define: {
     __APP_VERSION__: JSON.stringify(appVersion),
   },
+  base: basePath,
   plugins: [
     react(),
     tailwindcss(),
@@ -43,8 +59,11 @@ export default defineConfig({
       injectRegister: "auto",
       devOptions: {
         enabled: true,
-        navigateFallback: "/index.html",
-        navigateFallbackAllowlist: [/^\/$/, /^\/login$/],
+        navigateFallback: `${basePath}index.html`,
+        navigateFallbackAllowlist: [
+          new RegExp(`^${escapeRegExp(basePath)}$`),
+          new RegExp(`^${escapeRegExp(basePath)}login$`),
+        ],
       },
       includeAssets: [
         "favicon-v2.png",
@@ -56,26 +75,26 @@ export default defineConfig({
         name: "pkpkdupr",
         short_name: "pkpkdupr",
         description: "Pickleball Rating match and member app",
-        id: "/",
+        id: basePath,
         lang: "ko",
-        start_url: "/",
-        scope: "/",
+        start_url: basePath,
+        scope: basePath,
         display: "standalone",
         background_color: "#ffffff",
         theme_color: "#ffffff",
         icons: [
           {
-            src: "/pwa-192x192-v2.png",
+            src: `${basePath}pwa-192x192-v2.png`,
             sizes: "192x192",
             type: "image/png",
           },
           {
-            src: "/pwa-512x512-v2.png",
+            src: `${basePath}pwa-512x512-v2.png`,
             sizes: "512x512",
             type: "image/png",
           },
           {
-            src: "/pwa-maskable-512x512-v2.png",
+            src: `${basePath}pwa-maskable-512x512-v2.png`,
             sizes: "512x512",
             type: "image/png",
             purpose: "maskable",
@@ -85,12 +104,10 @@ export default defineConfig({
       workbox: {
         cleanupOutdatedCaches: true,
         inlineWorkboxRuntime: true,
-        importScripts: ["/cleanup-outdated-caches.js"],
+        importScripts: [`${basePath}cleanup-outdated-caches.js`],
         globPatterns: ["**/*.{js,css,html,ico,png,svg,webmanifest}"],
-        navigateFallback: "/index.html",
-        navigateFallbackDenylist: [
-          /^\/api\//,
-        ],
+        navigateFallback: `${basePath}index.html`,
+        navigateFallbackDenylist: [/^\/api\//, adminPathPattern],
         runtimeCaching: [
           {
             urlPattern:
