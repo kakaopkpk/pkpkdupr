@@ -1,7 +1,7 @@
 import cors from "cors";
 import express from "express";
 import fs from "fs/promises";
-import { randomUUID } from "crypto";
+import { createHash, randomUUID, timingSafeEqual } from "crypto";
 import path from "path";
 import {
   computeMatchStartsAt,
@@ -55,6 +55,7 @@ import {
   normalizeCourtNames,
 } from "./services/SessionCourtSchedule";
 import { sensitiveResponseHeaders } from "./middleware/sensitiveResponseHeaders";
+import { isEdgeRuntime } from "./runtime";
 
 const app: express.Express = express();
 const PORT = process.env.PORT || 4000;
@@ -93,11 +94,8 @@ const allowedOrigins = new Set([
 app.use(
   cors({
     origin(origin, callback) {
-      if (!origin || allowedOrigins.has(origin)) {
-        callback(null, true);
-        return;
-      }
-      callback(new Error(`허용되지 않은 Origin입니다: ${origin}`));
+      // 허용되지 않은 origin이면 CORS 헤더 없이 응답해 브라우저가 요청을 차단하게 한다.
+      callback(null, !origin || allowedOrigins.has(origin));
     },
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allowedHeaders: ["Authorization", "Content-Type"],
@@ -2107,10 +2105,39 @@ app.post("/api/admin/register", requireAdmin, async (req, res) => {
   }
 });
 
-export { app };
-
 export const processAutoApprovals = (now: Date = new Date()) =>
   autoApprovalService.process(now);
+
+const hashCronSecret = (value: string) =>
+  createHash("sha256").update(value).digest();
+
+/** 길이가 달라도 비교 시간이 같도록 해시끼리 비교한다. */
+const isValidCronSecret = (received: string | undefined) => {
+  const expected = process.env.CRON_SECRET;
+  if (!expected || !received) return false;
+  return timingSafeEqual(hashCronSecret(received), hashCronSecret(expected));
+};
+
+// Supabase Cron(pg_cron + pg_net)이 주기적으로 호출한다. 로컬 Node 개발에서는 interval이 같은 처리를 한다.
+app.post("/api/internal/cron/auto-approvals", async (req, res) => {
+  if (!isValidCronSecret(req.header("x-cron-secret"))) {
+    return res.status(401).json({ error: "인증되지 않은 요청입니다." });
+  }
+
+  try {
+    const { completedMatches, appliedRatingCount } =
+      await processAutoApprovals();
+    res.json({
+      completedMatchCount: completedMatches.length,
+      appliedRatingCount,
+    });
+  } catch (error) {
+    console.error("[AUTO_APPROVAL] 자동 합의 처리 실패", error);
+    res.status(500).json({ error: (error as Error).message });
+  }
+});
+
+export { app };
 
 const startAutoApprovalScheduler = () => {
   if (autoApprovalInterval) return;
@@ -2138,7 +2165,12 @@ export const startServer = async () => {
   });
 };
 
-if (process.env.NODE_ENV !== "test" && process.env.VITEST !== "true") {
+// Edge Runtime은 supabase/functions/api 진입점이 app을 서비스하므로 Node 부팅(시딩·관리자 동기화·interval·listen)을 건너뛴다.
+if (
+  process.env.NODE_ENV !== "test" &&
+  process.env.VITEST !== "true" &&
+  !isEdgeRuntime()
+) {
   startServer().catch((error) => {
     console.error("[API] Failed to start", error);
     process.exit(1);

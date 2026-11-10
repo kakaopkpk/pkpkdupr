@@ -1,0 +1,83 @@
+name: supabase-deploy
+
+# 원격 Supabase 프로젝트에 마이그레이션을 적용하고 Edge Function `api`를 배포한다.
+# 필요한 GitHub secrets·variables와 함수 secrets는 docs/deploy.md를 따른다.
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "supabase/**"
+      - "apps/api/**"
+      - "packages/**"
+      # 번들이 npm 패키지를 설치 버전으로 고정하므로 의존성 변경도 배포한다.
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - ".github/workflows/supabase-deploy.yml"
+  workflow_dispatch:
+
+# 배포가 겹쳐 마이그레이션이 동시에 적용되지 않도록 한 번에 하나만 실행한다.
+concurrency:
+  group: supabase-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    # 배포 secret은 의존성 설치·빌드 단계에 노출되지 않도록 필요한 step env에만 넣는다.
+    env:
+      SUPABASE_PROJECT_REF: ${{ vars.SUPABASE_PROJECT_REF }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check Supabase settings
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: |
+          missing=()
+          [ -n "$SUPABASE_ACCESS_TOKEN" ] || missing+=("secrets.SUPABASE_ACCESS_TOKEN")
+          [ -n "$SUPABASE_DB_PASSWORD" ] || missing+=("secrets.SUPABASE_DB_PASSWORD")
+          [ -n "$SUPABASE_PROJECT_REF" ] || missing+=("vars.SUPABASE_PROJECT_REF")
+          if [ ${#missing[@]} -gt 0 ]; then
+            echo "::error::GitHub 설정이 없습니다: ${missing[*]} (docs/deploy.md 참고)"
+            exit 1
+          fi
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Enable corepack pnpm
+        run: |
+          corepack enable
+          corepack prepare pnpm@11.7.0 --activate
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build edge bundle
+        run: pnpm build:edge
+
+      - name: Link Supabase project
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: pnpm exec supabase link --project-ref "$SUPABASE_PROJECT_REF"
+
+      - name: Apply migrations
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: pnpm exec supabase db push
+
+      # Docker 없이 Supabase 서버에서 함수를 번들링한다.
+      - name: Deploy Edge Function api
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: pnpm exec supabase functions deploy api --project-ref "$SUPABASE_PROJECT_REF" --use-api

@@ -389,6 +389,12 @@ deno_version = 2
 # [edge_runtime.secrets]
 # secret_key = "env(SECRET_VALUE)"
 
+# apps/api의 Express app을 서비스하는 함수. 인증은 Express 미들웨어(자체 JWT)가 하므로 게이트웨이 JWT 검증을 끈다.
+[functions.api]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/api/index.ts"
+
 [analytics]
 enabled = true
 port = 54327
