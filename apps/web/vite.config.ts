@@ -90,7 +90,6 @@ export default defineConfig({
         navigateFallback: "/index.html",
         navigateFallbackDenylist: [
           /^\/api\//,
-          /^\/uploads\//,
         ],
         runtimeCaching: [
           {
@@ -109,7 +108,8 @@ export default defineConfig({
             },
           },
           {
-            urlPattern: /^https?:\/\/[^/]+\/uploads\/avatars\/.+$/,
+            urlPattern:
+              /^https?:\/\/[^/]+\/storage\/v1\/object\/public\/avatars\/.+$/,
             handler: "StaleWhileRevalidate",
             options: {
               cacheName: "pkpkdupr-avatar-v1",
@@ -117,8 +117,9 @@ export default defineConfig({
                 maxEntries: 100,
                 maxAgeSeconds: 30 * 24 * 60 * 60,
               },
+              // Storage는 다른 origin이라 crossorigin 없는 <img> 요청의 응답이 opaque(status 0)로 온다.
               cacheableResponse: {
-                statuses: [200],
+                statuses: [0, 200],
               },
             },
           },
@@ -137,10 +138,6 @@ export default defineConfig({
     port: 8080,
     proxy: {
       "/api": {
-        target: "http://localhost:4000",
-        changeOrigin: true,
-      },
-      "/uploads": {
         target: "http://localhost:4000",
         changeOrigin: true,
       },
