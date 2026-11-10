@@ -1,14 +1,10 @@
 {
-   "name": "pkpkdupr",
+    "name": "pkpkdupr",
     "version": "0.0.1",
     "private": true,
     "description": "Pickleball DUPR System - Monorepo with pnpm",
     "scripts": {
         "dev": "bash scripts/dev-app.sh",
-        "dev:db": "bash scripts/dev-db.sh",
-        "dev:db:down": "docker compose -f docker-compose.yml -f docker-compose.dev.yml stop mysql",
-        "dev:db-browser": "docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --remove-orphans --force-recreate adminer",
-        "dev:db-browser:down": "docker compose -f docker-compose.yml -f docker-compose.dev.yml stop adminer",
         "dev:web": "pnpm --filter @pkpkdupr/web dev",
         "dev:api": "pnpm --filter @pkpkdupr/api dev",
         "dev:admin": "pnpm --filter @pkpkdupr/admin-web dev",
@@ -17,16 +13,26 @@
         "build:web": "pnpm --filter @pkpkdupr/web build",
         "build:api": "pnpm --filter @pkpkdupr/api build",
         "build:admin": "pnpm --filter @pkpkdupr/admin-web build",
+        "build:edge": "pnpm --filter @pkpkdupr/api build:edge",
         "verify:pre-push": "pnpm build",
         "lint": "pnpm -r lint",
         "clean": "pnpm -r --parallel clean",
-        "db:migrate": "pnpm --filter @pkpkdupr/db-server exec tsx src/db/migrate.ts",
-        "db:import-sqlite": "pnpm --filter @pkpkdupr/db-server exec tsx src/db/importSqlite.ts"
+        "supabase": "supabase",
+        "db:start": "supabase start",
+        "db:stop": "supabase stop",
+        "db:status": "supabase status",
+        "db:migrate": "supabase migration up --local",
+        "db:reset": "supabase db reset --local",
+        "db:migration:new": "supabase migration new",
+        "supabase:link": "supabase link",
+        "db:push": "supabase db push",
+        "functions:serve": "pnpm build:edge && supabase functions serve api"
     },
     "devDependencies": {
+        "supabase": "^2.122.1",
         "typescript": "^5.3.3"
-   },
+    },
     "engines": {
-       "pnpm": ">=8.0.0"
-   }
+        "pnpm": ">=8.0.0"
+    }
 }

@@ -1,0 +1,34 @@
+name: db-keepalive
+
+# Supabase 무료 플랜은 DB 활동이 일주일 가까이 없으면 프로젝트를 일시정지한다.
+# 3일마다 가벼운 조회를 실행해 정지 기준(7일)보다 충분히 짧은 주기로 활동을 만든다.
+on:
+  schedule:
+    - cron: "17 18 */3 * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  keepalive:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Query players count
+        env:
+          # GitHub Actions 러너는 IPv4만 지원하므로 Session pooler 접속 문자열을 넣어야 한다.
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "${SUPABASE_DB_URL}" ]; then
+            echo "::error::secret SUPABASE_DB_URL이 설정되지 않았습니다."
+            exit 1
+          fi
+
+          # 조회 실패(접속 불가·일시정지 등)는 psql 종료 코드로 workflow 실패가 된다.
+          count="$(psql "${SUPABASE_DB_URL}" --no-psqlrc --tuples-only --no-align \
+            --set ON_ERROR_STOP=1 --command "SELECT count(*) FROM public.players")"
+          echo "players: ${count}"

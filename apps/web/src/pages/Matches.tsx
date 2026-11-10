@@ -19,15 +19,17 @@ import { useAuth } from "@/context/AuthContext";
 import { useTabNavigation } from "@/context/TabNavigationContext";
 import { useMinimumLoading } from "@/hooks/useMinimumLoading";
 import { useOnlineStatus } from "@/hooks/useOnlineStatus";
-import { buildApiUrl } from "@/lib/api";
+import { apiFetch } from "@/lib/api";
 import { isTabRefreshDue } from "@/lib/tabRefresh";
+import {
+  CACHED_MATCH_FEED_KEY,
+  CACHED_MY_MATCH_FEED_KEY,
+} from "@/lib/userCache";
 
 interface MatchesProps {
   reloadKey?: number;
 }
 
-const CACHED_MATCH_FEED_KEY = "pkpkdupr:matches:v3-session-feed";
-const CACHED_MY_MATCH_FEED_KEY = `${CACHED_MATCH_FEED_KEY}:my`;
 const LEGACY_CACHED_MATCH_KEYS = [
   "pkpkdupr:matches",
   "pkpkdupr:matches:v2-public-dupr",
@@ -148,7 +150,7 @@ const isSameSession = (
 const noop = () => {};
 
 const Matches: React.FC<MatchesProps> = ({ reloadKey = 0 }) => {
-  const { player, token } = useAuth();
+  const { player, isAuthenticated } = useAuth();
   const isOnline = useOnlineStatus();
   const {
     depthStacks,
@@ -210,7 +212,7 @@ const Matches: React.FC<MatchesProps> = ({ reloadKey = 0 }) => {
       preserveVisibleData = false,
       throwOnError = false,
     ) => {
-      if (!token) {
+      if (!isAuthenticated) {
         latestRequestIdRef.current += 1;
         setFeedItems([]);
         setTotal(0);
@@ -246,10 +248,7 @@ const Matches: React.FC<MatchesProps> = ({ reloadKey = 0 }) => {
           searchParams.set("playerId", player.id);
         }
 
-        const res = await fetch(
-          buildApiUrl(`/api/match-feed?${searchParams.toString()}`),
-          { headers: { Authorization: `Bearer ${token}` } },
-        );
+        const res = await apiFetch(`/api/match-feed?${searchParams.toString()}`);
         if (!res.ok) {
           const errorData = await res.json().catch(() => ({}));
           throw new Error(
@@ -310,16 +309,14 @@ const Matches: React.FC<MatchesProps> = ({ reloadKey = 0 }) => {
         }
       }
     },
-    [isMyMatchOnly, isOnline, player?.id, token],
+    [isMyMatchOnly, isOnline, player?.id, isAuthenticated],
   );
 
   const loadSelectedMatch = useCallback(
     async (matchId: string) => {
-      if (!token) throw new Error("로그인이 필요해요.");
+      if (!isAuthenticated) throw new Error("로그인이 필요해요.");
 
-      const res = await fetch(buildApiUrl(`/api/matches/${matchId}`), {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const res = await apiFetch(`/api/matches/${matchId}`);
       if (!res.ok) {
         const errorData = await res.json().catch(() => ({}));
         throw new Error(errorData.error || "매치를 불러오지 못했습니다.");
@@ -340,7 +337,7 @@ const Matches: React.FC<MatchesProps> = ({ reloadKey = 0 }) => {
         ),
       );
     },
-    [token],
+    [isAuthenticated],
   );
 
   const loadMatchDetail = useCallback(
@@ -367,7 +364,7 @@ const Matches: React.FC<MatchesProps> = ({ reloadKey = 0 }) => {
       preserveVisibleData = false,
       throwOnError = false,
     ) => {
-      if (!token) {
+      if (!isAuthenticated) {
         const nextError = "로그인이 필요해요.";
         setSessionError(nextError);
         if (throwOnError) throw new Error(nextError);
@@ -386,10 +383,7 @@ const Matches: React.FC<MatchesProps> = ({ reloadKey = 0 }) => {
           setIsLoadingSession(true);
           setSessionError(null);
         }
-        const res = await fetch(
-          buildApiUrl(`/api/match-sessions/${session.id}/matches`),
-          { headers: { Authorization: `Bearer ${token}` } },
-        );
+        const res = await apiFetch(`/api/match-sessions/${session.id}/matches`);
         if (!res.ok) {
           const errorData = await res.json().catch(() => ({}));
           throw new Error(
@@ -408,7 +402,7 @@ const Matches: React.FC<MatchesProps> = ({ reloadKey = 0 }) => {
         setIsLoadingSession(false);
       }
     },
-    [isOnline, token],
+    [isOnline, isAuthenticated],
   );
 
   useEffect(() => {
@@ -507,7 +501,7 @@ const Matches: React.FC<MatchesProps> = ({ reloadKey = 0 }) => {
 
   const handleSubmitResult = useCallback(
     async (matchId: string, scores: MatchScore[]) => {
-      if (!token) throw new Error("로그인이 필요해요.");
+      if (!isAuthenticated) throw new Error("로그인이 필요해요.");
       if (!isOnline) {
         throw new Error(
           "오프라인에서는 결과를 입력할 수 없습니다. 온라인 연결이 필요합니다.",
@@ -516,10 +510,9 @@ const Matches: React.FC<MatchesProps> = ({ reloadKey = 0 }) => {
 
       try {
         setPendingMatchAction({ matchId, type: "submit-result" });
-        const res = await fetch(buildApiUrl(`/api/matches/${matchId}/result`), {
+        const res = await apiFetch(`/api/matches/${matchId}/result`, {
           method: "POST",
           headers: {
-            Authorization: `Bearer ${token}`,
             "Content-Type": "application/json",
           },
           body: JSON.stringify({ scores }),
@@ -533,12 +526,12 @@ const Matches: React.FC<MatchesProps> = ({ reloadKey = 0 }) => {
         setPendingMatchAction(null);
       }
     },
-    [isOnline, refreshFeedAndSession, token],
+    [isOnline, refreshFeedAndSession, isAuthenticated],
   );
 
   const handleApproveResult = useCallback(
     async (matchId: string) => {
-      if (!token) throw new Error("로그인이 필요해요.");
+      if (!isAuthenticated) throw new Error("로그인이 필요해요.");
       if (!isOnline) {
         throw new Error(
           "오프라인에서는 결과를 승인할 수 없습니다. 온라인 연결이 필요합니다.",
@@ -547,9 +540,9 @@ const Matches: React.FC<MatchesProps> = ({ reloadKey = 0 }) => {
 
       try {
         setPendingMatchAction({ matchId, type: "approve-result" });
-        const res = await fetch(
-          buildApiUrl(`/api/matches/${matchId}/approval`),
-          { method: "POST", headers: { Authorization: `Bearer ${token}` } },
+        const res = await apiFetch(
+          `/api/matches/${matchId}/approval`,
+          { method: "POST" },
         );
         if (!res.ok) {
           const errorData = await res.json().catch(() => ({}));
@@ -560,12 +553,12 @@ const Matches: React.FC<MatchesProps> = ({ reloadKey = 0 }) => {
         setPendingMatchAction(null);
       }
     },
-    [isOnline, refreshFeedAndSession, token],
+    [isOnline, refreshFeedAndSession, isAuthenticated],
   );
 
   const handleCancelApproval = useCallback(
     async (matchId: string) => {
-      if (!token) throw new Error("로그인이 필요해요.");
+      if (!isAuthenticated) throw new Error("로그인이 필요해요.");
       if (!isOnline) {
         throw new Error(
           "오프라인에서는 합의를 취소할 수 없습니다. 온라인 연결이 필요합니다.",
@@ -574,9 +567,9 @@ const Matches: React.FC<MatchesProps> = ({ reloadKey = 0 }) => {
 
       try {
         setPendingMatchAction({ matchId, type: "cancel-approval" });
-        const res = await fetch(
-          buildApiUrl(`/api/matches/${matchId}/approval`),
-          { method: "DELETE", headers: { Authorization: `Bearer ${token}` } },
+        const res = await apiFetch(
+          `/api/matches/${matchId}/approval`,
+          { method: "DELETE" },
         );
         if (!res.ok) {
           const errorData = await res.json().catch(() => ({}));
@@ -587,12 +580,12 @@ const Matches: React.FC<MatchesProps> = ({ reloadKey = 0 }) => {
         setPendingMatchAction(null);
       }
     },
-    [isOnline, refreshFeedAndSession, token],
+    [isOnline, refreshFeedAndSession, isAuthenticated],
   );
 
   const handleRejectResult = useCallback(
     async (matchId: string) => {
-      if (!token) throw new Error("로그인이 필요해요.");
+      if (!isAuthenticated) throw new Error("로그인이 필요해요.");
       if (!isOnline) {
         throw new Error(
           "오프라인에서는 결과를 거부할 수 없습니다. 온라인 연결이 필요합니다.",
@@ -601,9 +594,9 @@ const Matches: React.FC<MatchesProps> = ({ reloadKey = 0 }) => {
 
       try {
         setPendingMatchAction({ matchId, type: "reject-result" });
-        const res = await fetch(
-          buildApiUrl(`/api/matches/${matchId}/rejection`),
-          { method: "POST", headers: { Authorization: `Bearer ${token}` } },
+        const res = await apiFetch(
+          `/api/matches/${matchId}/rejection`,
+          { method: "POST" },
         );
         if (!res.ok) {
           const errorData = await res.json().catch(() => ({}));
@@ -614,7 +607,7 @@ const Matches: React.FC<MatchesProps> = ({ reloadKey = 0 }) => {
         setPendingMatchAction(null);
       }
     },
-    [isOnline, refreshFeedAndSession, token],
+    [isOnline, refreshFeedAndSession, isAuthenticated],
   );
 
   const completeMatchDetailClose = useCallback(() => {

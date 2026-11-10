@@ -52,7 +52,7 @@ import {
   PULL_TO_REFRESH_MIN_RESISTANCE,
   PULL_TO_REFRESH_THRESHOLD,
 } from "@/hooks/usePullToRefresh";
-import { buildApiUrl } from "@/lib/api";
+import { apiFetch } from "@/lib/api";
 import { triggerHapticFeedback } from "@/lib/haptics";
 import { DEFAULT_THEME_COLOR, DIMMED_THEME_COLOR } from "@/lib/themeColor";
 import Matches from "@/pages/Matches";
@@ -119,7 +119,7 @@ const isTabDepthHistoryState = (
 };
 
 const BottomNav: React.FC = () => {
-  const { token, logout, player } = useAuth();
+  const { isAuthenticated, logout, player } = useAuth();
   const isOnline = useOnlineStatus();
   const [selectedTab, setSelectedTab] = useState<TabKey>("me");
   const [visitedTabs, setVisitedTabs] =
@@ -618,7 +618,7 @@ const BottomNav: React.FC = () => {
       return;
     }
 
-    if (!token) {
+    if (!isAuthenticated) {
       setQrToken(null);
       setQrError("로그인이 필요합니다.");
       setQrRemainingSeconds(0);
@@ -629,9 +629,7 @@ const BottomNav: React.FC = () => {
       setIsQrLoading(true);
       setQrError(null);
 
-      const res = await fetch(buildApiUrl("/api/player-qr-token"), {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const res = await apiFetch("/api/player-qr-token");
 
       if (!res.ok) {
         const errorData = await res.json().catch(() => ({}));
@@ -648,7 +646,7 @@ const BottomNav: React.FC = () => {
     } finally {
       setIsQrLoading(false);
     }
-  }, [isOnline, token]);
+  }, [isOnline, isAuthenticated]);
 
   const handleRefreshPlayerQrToken = useCallback(() => {
     if (qrToken && qrRemainingSeconds > 60) {
@@ -747,7 +745,7 @@ const BottomNav: React.FC = () => {
 
   const handleLogout = useCallback(() => {
     const action = () => {
-      logout();
+      void logout();
     };
 
     if (!closeDepth(globalMenuTabKey, "global-menu", action)) {

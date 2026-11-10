@@ -5,25 +5,33 @@ import type {
   PlayerRatingChangeLog,
   StoredPlayerDupr,
 } from "@pkpkdupr/shared/player";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+  type MockInstance,
+} from "vitest";
 import {
   AuthService,
   getOfficialDuprRecencyWeight,
 } from "../services/AuthService";
 import type { RatingServiceContract } from "../services/RatingService";
+import { db } from "../db";
 
 const NOW = new Date("2026-07-23T12:00:00.000Z");
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 const players = ["anchor", "partner", "opponent-a", "opponent-b", "admin"].map(
-  (id): Player & { passwordHash: string; isFirstLogin: boolean } => ({
+  (id): Player & { authUserId: string | null } => ({
     id,
     username: id,
     gender: "M",
     status: "active",
     duprRating: null,
-    passwordHash: "hash",
-    isFirstLogin: false,
+    authUserId: null,
     createdAt: NOW,
     updatedAt: NOW,
   }),
@@ -68,11 +76,20 @@ const buildMatch = (completedAt: Date): Match => ({
   updatedAt: completedAt,
 });
 
-const jsonResponse = (body: unknown) =>
-  new Response(JSON.stringify(body), {
-    status: 200,
-    headers: { "Content-Type": "application/json" },
-  });
+const writeSpies: MockInstance<(...args: any[]) => any>[] = [];
+
+/** 미리보기는 저장소 쓰기 없이 조회만 해야 한다. */
+const expectNoRepositoryWrites = () => {
+  for (const spy of writeSpies) {
+    expect(spy).not.toHaveBeenCalled();
+  }
+};
+
+const clearRepositoryWrites = () => {
+  for (const spy of writeSpies) {
+    spy.mockClear();
+  }
+};
 
 describe("official DUPR recency propagation", () => {
   beforeEach(() => {
@@ -84,79 +101,55 @@ describe("official DUPR recency propagation", () => {
     );
     persistedDuprStateByPlayerId = new Map();
     replacedMatchCompletedLogs = [];
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
-        const url =
-          typeof input === "string"
-            ? input
-            : input instanceof URL
-              ? input.toString()
-              : input.url;
-        const path = new URL(url).pathname;
 
-        if (path === "/internal/players") {
-          return jsonResponse([...storedPlayerById.values()]);
-        }
-        if (path === "/internal/official-dupr-adjustment-logs") {
-          if (init?.method === "POST") {
-            const log = JSON.parse(String(init.body));
-            storedOfficialLogs.push(log);
-            return jsonResponse(log);
-          }
-          return jsonResponse(storedOfficialLogs);
-        }
-        if (
-          path === "/internal/matches/participant-dupr-snapshots" &&
-          init?.method === "PATCH"
-        ) {
-          return jsonResponse({
-            updatedParticipantCount: 0,
-            updatedMatchCount: 0,
-          });
-        }
-        if (
-          path === "/internal/player-rating-change-logs" &&
-          init?.method === "POST"
-        ) {
-          return jsonResponse(JSON.parse(String(init.body)));
-        }
-        if (
-          path === "/internal/player-rating-change-logs/match-completed" &&
-          init?.method === "PUT"
-        ) {
-          replacedMatchCompletedLogs = JSON.parse(String(init.body));
-          return jsonResponse(replacedMatchCompletedLogs);
-        }
-        if (
-          path.endsWith("/dupr-state") &&
-          path.startsWith("/internal/players/") &&
-          init?.method === "PATCH"
-        ) {
-          const playerId = decodeURIComponent(path.split("/").at(-2)!);
-          const { duprState } = JSON.parse(String(init.body)) as {
-            duprState: StoredPlayerDupr;
-          };
+    vi.spyOn(db.players, "findAll").mockImplementation(
+      async () => [...storedPlayerById.values()] as any,
+    );
+    vi.spyOn(db.players, "findById").mockImplementation(
+      async (playerId) => storedPlayerById.get(playerId) as any,
+    );
+    vi.spyOn(db.officialDuprAdjustmentLogs, "findAll").mockImplementation(
+      async () => [...storedOfficialLogs],
+    );
+    writeSpies.length = 0;
+    writeSpies.push(
+      vi
+        .spyOn(db.officialDuprAdjustmentLogs, "create")
+        .mockImplementation(async (log) => {
+          storedOfficialLogs.push(log);
+          return log;
+        }),
+      vi
+        .spyOn(db.matches, "fillMissingParticipantDuprSnapshots")
+        .mockResolvedValue({
+          updatedParticipantCount: 0,
+          updatedMatchCount: 0,
+        }),
+      vi
+        .spyOn(db.playerRatingChangeLogs, "create")
+        .mockImplementation(async (log) => log),
+      vi
+        .spyOn(db.playerRatingChangeLogs, "replaceMatchCompleted")
+        .mockImplementation(async (logs) => {
+          replacedMatchCompletedLogs = logs;
+          return logs;
+        }),
+      vi
+        .spyOn(db.players, "updateDuprState")
+        .mockImplementation(async (playerId, duprState) => {
           const updated = {
             ...storedPlayerById.get(playerId),
             duprRating: duprState,
           };
           storedPlayerById.set(playerId, updated);
           persistedDuprStateByPlayerId.set(playerId, duprState);
-          return jsonResponse(updated);
-        }
-        if (path.startsWith("/internal/players/")) {
-          const playerId = decodeURIComponent(path.split("/").at(-1)!);
-          return jsonResponse(storedPlayerById.get(playerId));
-        }
-
-        throw new Error(`Unexpected request: ${path}`);
-      }),
+          return updated as any;
+        }),
     );
   });
 
   afterEach(() => {
-    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
     vi.useRealTimers();
   });
 
@@ -217,9 +210,7 @@ describe("official DUPR recency propagation", () => {
         .doubles,
     ).toBe(4);
 
-    expect(
-      vi.mocked(fetch).mock.calls.every(([, init]) => !init?.method),
-    ).toBe(true);
+    expectNoRepositoryWrites();
   });
 
   it("공식 반영 이후 경기는 공식값에서 시작해 다시 레이팅을 변경한다", async () => {
@@ -308,11 +299,9 @@ describe("official DUPR recency propagation", () => {
       input,
       completedMatches,
     );
-    expect(
-      vi.mocked(fetch).mock.calls.every(([, init]) => !init?.method),
-    ).toBe(true);
+    expectNoRepositoryWrites();
 
-    vi.mocked(fetch).mockClear();
+    clearRepositoryWrites();
     const applied = await service.applyOfficialDuprAdjustment(
       input,
       completedMatches,

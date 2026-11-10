@@ -7,7 +7,7 @@ on:
       - main
 
 jobs:
-  docker-validate:
+  build-test:
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -16,7 +16,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          fetch-tags: true
+          # git describe가 HEAD 조상의 태그를 찾도록 전체 history와 태그를 받는다.
+          fetch-depth: 0
 
       - name: Resolve app version
         run: |
@@ -33,8 +34,14 @@ jobs:
           corepack enable
           corepack prepare pnpm@11.7.0 --activate
 
-      - name: Docker Compose config
-        run: docker compose -f docker-compose.yml -f docker-compose.build.yml config
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
 
-      - name: Docker build
-        run: docker compose -f docker-compose.yml -f docker-compose.build.yml build web admin-web api db-server
+      - name: Build
+        run: pnpm build
+
+      - name: Test api
+        run: pnpm --filter @pkpkdupr/api test
+
+      - name: Test shared
+        run: pnpm --filter @pkpkdupr/shared test

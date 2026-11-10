@@ -6,6 +6,8 @@ import type {
 } from "@pkpkdupr/shared/match";
 import request from "supertest";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { SessionHasMatchesError } from "@pkpkdupr/db";
+import { db } from "../db";
 import { app } from "../index";
 import { MatchRepository } from "../repositories/MatchRepository";
 import {
@@ -26,7 +28,6 @@ const admin: Player = {
 const adminSession: AuthenticatedSession = {
   payload: { playerId: admin.id, isAdmin: true },
   player: admin,
-  isFirstLogin: false,
 };
 const participants: Player[] = Array.from({ length: 4 }, (_, index) => ({
   id: `player-${index + 1}`,
@@ -54,7 +55,6 @@ describe("admin match sessions", () => {
       AuthService.prototype,
       "authenticateAccessToken",
     ).mockResolvedValue(adminSession);
-    vi.spyOn(AuthService.prototype, "initAdmin").mockResolvedValue(admin);
   });
 
   afterEach(() => {
@@ -124,23 +124,43 @@ describe("admin match sessions", () => {
     expect(deleteSession).toHaveBeenCalledWith(managedSession.id);
   });
 
-  it("DB 서버의 204 빈 응답을 세션 삭제 성공으로 처리한다", async () => {
-    const fetchSpy = vi
-      .spyOn(globalThis, "fetch")
-      .mockResolvedValue(new Response(null, { status: 204 }));
+  it("저장소가 세션을 삭제하면 성공으로 처리한다", async () => {
+    const deleteSession = vi
+      .spyOn(db.matches, "deleteSession")
+      .mockResolvedValue(true);
     const repository = new MatchRepository();
 
     await expect(repository.deleteSession(managedSession.id)).resolves.toBeUndefined();
-    expect(fetchSpy).toHaveBeenCalledWith(
-      expect.stringContaining(`/internal/match-sessions/${managedSession.id}`),
-      expect.objectContaining({ method: "DELETE" }),
+    expect(deleteSession).toHaveBeenCalledWith(managedSession.id);
+  });
+
+  it("저장소의 세션 삭제 결과와 예외를 공개 API 상태 코드로 변환한다", async () => {
+    const repository = new MatchRepository();
+
+    vi.spyOn(db.matches, "deleteSession").mockResolvedValueOnce(false);
+    await expect(repository.deleteSession(managedSession.id)).rejects.toMatchObject({
+      status: 404,
+      message: "세션을 찾을 수 없습니다.",
+    });
+
+    vi.spyOn(db.matches, "deleteSession").mockRejectedValueOnce(
+      new SessionHasMatchesError(),
     );
+    await expect(repository.deleteSession(managedSession.id)).rejects.toMatchObject({
+      status: 409,
+      message: "연결된 경기가 있는 세션은 삭제할 수 없습니다.",
+    });
+
+    await expect(repository.deleteSession("invalid-session")).rejects.toMatchObject({
+      status: 400,
+      message: "유효한 세션 ID가 필요합니다.",
+    });
   });
 
   it("연결된 경기가 있는 세션 삭제의 409 응답을 전달한다", async () => {
-    const { DbRequestError } = await import("../repositories/MatchRepository");
+    const { MatchRepositoryError } = await import("../repositories/MatchRepository");
     vi.spyOn(MatchRepository.prototype, "deleteSession").mockRejectedValue(
-      new DbRequestError("연결된 경기가 있는 세션은 삭제할 수 없습니다.", 409),
+      new MatchRepositoryError("연결된 경기가 있는 세션은 삭제할 수 없습니다.", 409),
     );
 
     const response = await request(app)
@@ -415,9 +435,6 @@ describe("admin match sessions", () => {
   });
 
   it("관리자가 세션 경기를 삭제하고 남은 완료 경기를 재계산한다", async () => {
-    const verifyAdminPassword = vi
-      .spyOn(AuthService.prototype, "verifyAdminPassword")
-      .mockResolvedValue(true);
     const deleteMatch = vi
       .spyOn(MatchRepository.prototype, "delete")
       .mockResolvedValue(undefined);
@@ -438,14 +455,9 @@ describe("admin match sessions", () => {
 
     const response = await request(app)
       .delete("/api/admin/matches/Mmatch01")
-      .set("Authorization", "Bearer admin-token")
-      .send({ adminPassword: "admin-password" });
+      .set("Authorization", "Bearer admin-token");
 
     expect(response.status).toBe(200);
-    expect(verifyAdminPassword).toHaveBeenCalledWith(
-      admin.id,
-      "admin-password",
-    );
     expect(deleteMatch).toHaveBeenCalledWith("Mmatch01");
     expect(recalculate).toHaveBeenCalledWith(
       [],
@@ -454,20 +466,21 @@ describe("admin match sessions", () => {
     expect(response.body.deletedMatchId).toBe("Mmatch01");
   });
 
-  it("admin 비밀번호가 틀리면 세션 경기를 삭제하지 않는다", async () => {
-    vi.spyOn(AuthService.prototype, "verifyAdminPassword").mockResolvedValue(
-      false,
-    );
+  it("관리자가 아니면 세션 경기를 삭제하지 않는다", async () => {
+    vi.spyOn(AuthService.prototype, "authenticateAccessToken").mockResolvedValue({
+      ...adminSession,
+      payload: { playerId: admin.id, isAdmin: false },
+    });
     const deleteMatch = vi.spyOn(MatchRepository.prototype, "delete");
 
     const response = await request(app)
       .delete("/api/admin/matches/Mmatch01")
-      .set("Authorization", "Bearer admin-token")
-      .send({ adminPassword: "wrong-password" });
+      .set("Authorization", "Bearer member-token");
 
-    expect(response.status).toBe(400);
+    expect(response.status).toBe(403);
     expect(response.body).toEqual({
-      error: "admin 비밀번호가 올바르지 않습니다.",
+      error: "관리자 권한이 필요합니다.",
+      code: "FORBIDDEN",
     });
     expect(deleteMatch).not.toHaveBeenCalled();
   });

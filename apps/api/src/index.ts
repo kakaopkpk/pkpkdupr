@@ -1,8 +1,6 @@
 import cors from "cors";
 import express from "express";
-import fs from "fs/promises";
-import { randomUUID } from "crypto";
-import path from "path";
+import { createHash, randomUUID, timingSafeEqual } from "crypto";
 import {
   computeMatchStartsAt,
   DEFAULT_MATCH_MODE,
@@ -32,13 +30,22 @@ import type {
   PlayerStatus,
 } from "@pkpkdupr/shared/player";
 import type { VerifyPlayerQrTokenRequest } from "@pkpkdupr/shared/qr";
+import type {
+  AdminRegisterPlayerRequest,
+  AuthErrorCode,
+  AuthErrorResponse,
+  MeResponse,
+  RedeemInviteRequest,
+} from "@pkpkdupr/shared/auth";
+import { assertRequiredEnv } from "./config/env";
+import { initDatabase } from "./db";
 import {
-  DbRequestError,
   MatchRepository,
+  MatchRepositoryError,
 } from "./repositories/MatchRepository";
 import {
+  AuthError,
   AuthService,
-  InvalidAccessTokenError,
   type AuthenticatedSession,
 } from "./services/AuthService";
 import { AutoApprovalService } from "./services/AutoApprovalService";
@@ -53,67 +60,53 @@ import {
   normalizeCourtName,
   normalizeCourtNames,
 } from "./services/SessionCourtSchedule";
+import {
+  AvatarValidationError,
+  buildAvatarObjectPath,
+  buildAvatarPublicUrl,
+  deleteAvatarObject,
+  deleteAvatarObjectQuietly,
+  getOwnedAvatarObjectPath,
+  parseAvatarDataUrl,
+  uploadAvatarObject,
+} from "./services/AvatarStorage";
 import { sensitiveResponseHeaders } from "./middleware/sensitiveResponseHeaders";
+import { isEdgeRuntime } from "./runtime";
 
 const app: express.Express = express();
 const PORT = process.env.PORT || 4000;
-const AVATAR_UPLOAD_ROUTE = "/uploads/avatars";
-const AVATAR_MAX_BYTES = 1024 * 1024;
-const AVATAR_MIME_TO_EXT: Record<string, "jpg" | "png" | "webp"> = {
-  "image/jpeg": "jpg",
-  "image/png": "png",
-  "image/webp": "webp",
-};
-const defaultAvatarUploadDir =
-  path.basename(process.cwd()) === "api" &&
-  path.basename(path.dirname(process.cwd())) === "apps"
-    ? path.resolve(process.cwd(), "../../data/uploads/avatars")
-    : path.resolve(process.cwd(), "data/uploads/avatars");
-const avatarUploadDir = process.env.AVATAR_UPLOAD_DIR
-  ? path.resolve(process.env.AVATAR_UPLOAD_DIR)
-  : defaultAvatarUploadDir;
-const PROTECTED_ADMIN_USERNAME = process.env.API_ADMIN_USERNAME || "admin";
-const INITIAL_ADMIN_CREATED_PASSWORD = "123qwe";
-const domain = process.env.DOMAIN || "pkpkdupr.duckdns.org";
-const webPublicPort = process.env.WEB_PUBLIC_PORT || "443";
-const adminStackPort =
-  process.env.ADMIN_STACK_PORT || process.env.PROXY_PORT || "3333";
-const webOrigin =
-  webPublicPort === "443"
-    ? `https://${domain}`
-    : `https://${domain}:${webPublicPort}`;
-const adminStackOrigin = `https://${domain}:${adminStackPort}`;
-const allowedOrigins = new Set([
-  webOrigin,
-  adminStackOrigin,
-  "https://neiz-office.fedev.kakao.com",
+// 운영 origin은 CORS_ALLOWED_ORIGINS(쉼표 구분)로 주입하고, localhost 개발 origin은 항상 허용한다.
+const DEV_ALLOWED_ORIGINS = [
   "http://localhost:8080",
   "http://127.0.0.1:8080",
   "http://localhost:3100",
   "http://127.0.0.1:3100",
+];
+const allowedOrigins = new Set([
+  ...DEV_ALLOWED_ORIGINS,
+  ...(process.env.CORS_ALLOWED_ORIGINS ?? "")
+    .split(",")
+    .map((origin) => origin.trim())
+    .filter(Boolean),
 ]);
 
 app.use(
   cors({
     origin(origin, callback) {
-      if (!origin || allowedOrigins.has(origin)) {
-        callback(null, true);
-        return;
-      }
-      callback(new Error(`허용되지 않은 Origin입니다: ${origin}`));
+      // 허용되지 않은 origin이면 CORS 헤더 없이 응답해 브라우저가 요청을 차단하게 한다.
+      callback(null, !origin || allowedOrigins.has(origin));
     },
-    methods: ["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allowedHeaders: ["Authorization", "Content-Type"],
   }),
 );
 app.use(express.json({ limit: "2mb" }));
 app.use(sensitiveResponseHeaders);
-app.use(AVATAR_UPLOAD_ROUTE, express.static(avatarUploadDir));
 
 app.get("/api/health", (_req, res) => {
   res.json({
     status: "ok",
-    message: "PKELO API is running!",
+    message: "pkpkdupr API is running!",
     timestamp: new Date().toISOString(),
   });
 });
@@ -322,6 +315,10 @@ const parseAdminMatchMetadataUpdate = (
 
 const isMatchType = (value: unknown): value is MatchType =>
   typeof value === "string" && matchTypeValues.includes(value as MatchType);
+
+const isPlayerGender = (value: unknown): value is Player["gender"] =>
+  typeof value === "string" &&
+  playerGenders.includes(value as Player["gender"]);
 
 const isMatchMode = (value: unknown): value is MatchMode =>
   typeof value === "string" && matchModeValues.includes(value as MatchMode);
@@ -562,83 +559,76 @@ const normalizeMatchScores = (scores: unknown): MatchScore[] => {
   });
 };
 
-const parseAvatarDataUrl = (value: unknown) => {
-  if (typeof value !== "string") {
-    throw new Error("이미지 데이터가 필요합니다.");
-  }
+const authErrorStatus: Record<AuthErrorCode, number> = {
+  SESSION_INVALID: 401,
+  SESSION_UNAVAILABLE: 503,
+  DOMAIN_NOT_ALLOWED: 403,
+  ACCOUNT_NOT_LINKED: 403,
+  INVITE_INVALID: 400,
+  ALREADY_LINKED: 409,
+  FORBIDDEN: 403,
+};
 
-  const match = value.match(
-    /^data:(image\/(?:jpeg|png|webp));base64,([A-Za-z0-9+/]+={0,2})$/,
+const sendAuthError = (
+  res: express.Response,
+  code: AuthErrorCode,
+  error: string,
+) => {
+  const body: AuthErrorResponse = { error, code };
+  res.status(authErrorStatus[code]).json(body);
+};
+
+/** AuthError는 code대로, 그 밖의 오류(Auth 서버·DB 장애)는 세션을 확인하지 못한 것으로 응답한다. */
+const handleAuthFailure = (res: express.Response, error: unknown) => {
+  if (error instanceof AuthError) {
+    return sendAuthError(res, error.code, error.message);
+  }
+  console.error("[AUTH] Failed to verify session", error);
+  sendAuthError(
+    res,
+    "SESSION_UNAVAILABLE",
+    "세션을 일시적으로 확인하지 못했습니다.",
   );
-  if (!match) {
-    throw new Error("지원하지 않는 이미지 형식입니다.");
-  }
-
-  const [, mime, base64] = match;
-  const ext = AVATAR_MIME_TO_EXT[mime];
-  if (!ext) {
-    throw new Error("지원하지 않는 이미지 형식입니다.");
-  }
-
-  const buffer = Buffer.from(base64, "base64");
-  if (!buffer.length) {
-    throw new Error("이미지 데이터가 비어 있습니다.");
-  }
-
-  if (buffer.length > AVATAR_MAX_BYTES) {
-    throw new Error("프로필 이미지는 1MB 이하만 업로드할 수 있습니다.");
-  }
-
-  return { buffer, ext };
 };
 
-const getLocalAvatarPath = (avatarUrl?: string | null) => {
-  if (!avatarUrl?.startsWith(`${AVATAR_UPLOAD_ROUTE}/`)) {
-    return null;
-  }
-
-  const fileName = path.basename(avatarUrl);
-  if (
-    !fileName ||
-    fileName !== avatarUrl.slice(AVATAR_UPLOAD_ROUTE.length + 1)
-  ) {
-    return null;
-  }
-
-  return path.join(avatarUploadDir, fileName);
-};
-
-const removeLocalAvatarIfExists = async (avatarUrl?: string | null) => {
-  const avatarPath = getLocalAvatarPath(avatarUrl);
-  if (!avatarPath) {
-    return;
-  }
-
-  await fs.unlink(avatarPath).catch(() => undefined);
-};
+const BEARER_PREFIX = "Bearer ";
 
 const getBearerToken = (req: express.Request, res: express.Response) => {
   const header = req.headers.authorization;
-  if (!header?.startsWith("Bearer ")) {
-    res.status(401).json({ error: "토큰이 필요합니다." });
+  const token = header?.startsWith(BEARER_PREFIX)
+    ? header.slice(BEARER_PREFIX.length).trim()
+    : "";
+  if (!token) {
+    sendAuthError(res, "SESSION_INVALID", "로그인이 필요합니다.");
     return null;
   }
-  return header.split(" ")[1];
+  return token;
 };
 
+/**
+ * 요청자 세션을 확인한다. requireAdmin과 라우트가 같은 요청에서 다시 부르면
+ * Auth 서버를 한 번만 호출하도록 res.locals에 담아 둔다.
+ */
 const getAuthSession = async (
   req: express.Request,
   res: express.Response,
 ): Promise<AuthenticatedSession | null> => {
+  const cached = res.locals.authSession as AuthenticatedSession | undefined;
+  if (cached) {
+    return cached;
+  }
+
   const token = getBearerToken(req, res);
   if (!token) {
     return null;
   }
 
   try {
-    return await authService.authenticateAccessToken(token);
+    const session = await authService.authenticateAccessToken(token);
+    res.locals.authSession = session;
+    return session;
   } catch (err) {
-    res.status(403).json({ error: (err as Error).message });
+    handleAuthFailure(res, err);
     return null;
   }
 };
@@ -658,77 +648,48 @@ const requireAdmin = async (
     return;
   }
   if (!session.payload.isAdmin) {
-    return res.status(403).json({ error: "관리자 권한이 필요합니다." });
+    return sendAuthError(res, "FORBIDDEN", "관리자 권한이 필요합니다.");
   }
   next();
 };
 
-app.post("/api/register", async (req, res) => {
-  try {
-    const { username, password, gender } = req.body;
-    if (!username || !password || !gender) {
-      return res
-        .status(400)
-        .json({ error: "username, password, gender는 필수입니다." });
-    }
-    const player = await authService.register({ username, password, gender });
-    res.json(player);
-  } catch (err) {
-    res.status(500).json({ error: (err as Error).message });
-  }
-});
-
-app.post("/api/login", async (req, res) => {
-  try {
-    const { username, password, rememberMe } = req.body;
-    if (!username || !password) {
-      return res
-        .status(400)
-        .json({ error: "username과 password는 필수입니다." });
-    }
-    const result = await authService.login(
-      username,
-      password,
-      rememberMe === true,
-    );
-    res.json(result);
-  } catch (err) {
-    res.status(500).json({ error: (err as Error).message });
-  }
+const toMeResponse = (session: AuthenticatedSession): MeResponse => ({
+  ...session.player,
+  isAdmin: session.payload.isAdmin,
 });
 
 app.get("/api/me", async (req, res) => {
-  const header = req.headers.authorization;
-  const token = header?.startsWith("Bearer ") ? header.split(" ")[1] : null;
-
+  const token = getBearerToken(req, res);
   if (!token) {
-    return res.status(401).json({
-      error: "로그인이 필요합니다.",
-      code: "SESSION_INVALID",
-    });
+    return;
   }
 
   try {
-    const session = await authService.authenticateAccessToken(token);
-    res.json({
-      ...session.player,
-      isFirstLogin: session.isFirstLogin,
-      isAdmin: session.payload.isAdmin === true,
-      accessToken: session.refreshedAccessToken,
+    const session = await authService.authenticateAccessToken(token, {
+      autoLink: true,
     });
+    res.json(toMeResponse(session));
   } catch (error) {
-    if (error instanceof InvalidAccessTokenError) {
-      return res.status(401).json({
-        error: "세션이 만료되었거나 유효하지 않습니다.",
-        code: "SESSION_INVALID",
-      });
-    }
+    handleAuthFailure(res, error);
+  }
+});
 
-    console.error("[AUTH] Failed to verify session", error);
-    res.status(503).json({
-      error: "세션을 일시적으로 확인하지 못했습니다.",
-      code: "SESSION_UNAVAILABLE",
-    });
+app.post("/api/auth/invite", async (req, res) => {
+  const token = getBearerToken(req, res);
+  if (!token) {
+    return;
+  }
+
+  const { code } = (req.body ?? {}) as Partial<RedeemInviteRequest>;
+  if (typeof code !== "string" || !code.trim()) {
+    return sendAuthError(res, "INVITE_INVALID", "초대 코드를 입력해주세요.");
+  }
+
+  try {
+    const session = await authService.redeemInviteCode(token, code);
+    res.status(201).json(toMeResponse(session));
+  } catch (error) {
+    handleAuthFailure(res, error);
   }
 });
 
@@ -907,11 +868,7 @@ app.post("/api/matches", async (req, res) => {
     }
 
     const creator = await authService.getPlayerById(decoded.playerId);
-    if (
-      !creator ||
-      creator.status !== "active" ||
-      creator.username === PROTECTED_ADMIN_USERNAME
-    ) {
+    if (!creator || creator.status !== "active") {
       return res
         .status(403)
         .json({ error: "매치를 생성할 수 없는 계정입니다." });
@@ -1009,10 +966,10 @@ app.delete(
       await matchRepository.deleteSession(req.params.sessionId);
       res.status(204).send();
     } catch (err) {
-      if (err instanceof DbRequestError && err.status === 404) {
+      if (err instanceof MatchRepositoryError && err.status === 404) {
         return res.status(404).json({ error: err.message });
       }
-      if (err instanceof DbRequestError && err.status === 409) {
+      if (err instanceof MatchRepositoryError && err.status === 409) {
         return res.status(409).json({ error: err.message });
       }
       res.status(400).json({ error: (err as Error).message });
@@ -1039,11 +996,7 @@ app.put(
 
       const availablePlayerIds = new Set(
         (await authService.getAllPlayers())
-          .filter(
-            (player) =>
-              player.status === "active" &&
-              player.username !== PROTECTED_ADMIN_USERNAME,
-          )
+          .filter((player) => player.status === "active")
           .map((player) => player.id),
       );
       if (
@@ -1064,7 +1017,7 @@ app.put(
       );
     } catch (err) {
       const status =
-        err instanceof DbRequestError && err.status === 404 ? 404 : 400;
+        err instanceof MatchRepositoryError && err.status === 404 ? 404 : 400;
       res.status(status).json({ error: (err as Error).message });
     }
   },
@@ -1310,9 +1263,7 @@ app.post("/api/admin/matches/batch", requireAdmin, async (req, res) => {
 
     const allPlayers = await authService.getAllPlayers();
     const availablePlayers = allPlayers.filter(
-      (candidate) =>
-        candidate.status === "active" &&
-        candidate.username !== PROTECTED_ADMIN_USERNAME,
+      (candidate) => candidate.status === "active",
     );
     const playersById = new Map<string, Player>(
       availablePlayers.map((player) => [player.id, player]),
@@ -1395,43 +1346,10 @@ app.post("/api/admin/matches/batch", requireAdmin, async (req, res) => {
       };
     });
 
-    const recordBatchAttributes = async (
-      attributes: Record<string, string | number | boolean>,
-    ) => {
-      // 테스트와 로컬 개발에서는 New Relic agent를 시작하지 않는다. 운영에서는
-      // start.cjs가 이미 agent를 preload하므로 dynamic import는 기존 agent를 재사용한다.
-      if (!process.env.NEW_RELIC_APP_NAME) return;
-      const { default: newrelic } = await import("newrelic");
-      newrelic.addCustomAttributes(attributes);
-    };
-    const measureBatchStage = async <T>(name: string, operation: () => Promise<T>) => {
-      const startedAt = performance.now();
-      try {
-        return await operation();
-      } finally {
-        await recordBatchAttributes({
-          [`adminMatchBatch.${name}Ms`]: Math.round(performance.now() - startedAt),
-        });
-      }
-    };
-    const uniquePlayerCount = new Set(
-      matchesToCreate.flatMap((match) =>
-        match.teams.flatMap((team) => team.players.map((player) => player.id)),
-      ),
-    ).size;
-    await recordBatchAttributes({
-      "adminMatchBatch.matchCount": matchesToCreate.length,
-      "adminMatchBatch.uniquePlayerCount": uniquePlayerCount,
-    });
-
-    const createdMatches = await measureBatchStage("commitBatch", async () =>
-      commonSession
-        ? await matchRepository.createCompletedBatch(matchesToCreate)
-        : await Promise.all(matchesToCreate.map((match) => matchRepository.create(match))),
-    );
-    const ratingResult = await measureBatchStage("ratingAndProjection", async () =>
-      authService.applyMatchResultsToRatings(createdMatches),
-    );
+    const createdMatches = commonSession
+      ? await matchRepository.createCompletedBatch(matchesToCreate)
+      : await Promise.all(matchesToCreate.map((match) => matchRepository.create(match)));
+    const ratingResult = await authService.applyMatchResultsToRatings(createdMatches);
     const { ratingChangeLogs, changedPlayerCount } = ratingResult;
 
     res.status(201).json({
@@ -1491,7 +1409,7 @@ app.patch("/api/admin/matches/bulk-metadata", requireAdmin, async (req, res) => 
 
     res.json({ matches });
   } catch (err) {
-    if (err instanceof DbRequestError && err.status === 404) {
+    if (err instanceof MatchRepositoryError && err.status === 404) {
       return res.status(404).json({ error: err.message });
     }
     res.status(400).json({ error: (err as Error).message });
@@ -1511,7 +1429,7 @@ app.patch(
 
       res.json(match);
     } catch (err) {
-      if (err instanceof DbRequestError && err.status === 404) {
+      if (err instanceof MatchRepositoryError && err.status === 404) {
         return res.status(404).json({ error: err.message });
       }
       res.status(400).json({ error: (err as Error).message });
@@ -1573,7 +1491,7 @@ app.post("/api/matches/:matchId/result", async (req, res) => {
 
     res.json(match);
   } catch (err) {
-    if (err instanceof DbRequestError && err.status === 409) {
+    if (err instanceof MatchRepositoryError && err.status === 409) {
       return res.status(409).json({ error: err.message });
     }
     res.status(400).json({ error: (err as Error).message });
@@ -1602,7 +1520,7 @@ app.post(
 
       res.json({ match, ...ratingResult });
     } catch (err) {
-      if (err instanceof DbRequestError && err.status === 409) {
+      if (err instanceof MatchRepositoryError && err.status === 409) {
         return res.status(409).json({ error: err.message });
       }
       res.status(400).json({ error: (err as Error).message });
@@ -1615,20 +1533,6 @@ app.delete(
   requireAdmin,
   async (req, res) => {
     try {
-      const decoded = await getAuthPayload(req, res);
-      if (!decoded) {
-        return;
-      }
-      const isValidAdminPassword = await authService.verifyAdminPassword(
-        decoded.playerId,
-        req.body?.adminPassword,
-      );
-      if (!isValidAdminPassword) {
-        return res
-          .status(400)
-          .json({ error: "admin 비밀번호가 올바르지 않습니다." });
-      }
-
       await matchRepository.delete(req.params.matchId);
       const { matches } = await matchRepository.findAll(0, 10000);
       const recalculation = await authService.recalculateDuprRatings(
@@ -1642,7 +1546,7 @@ app.delete(
 
       res.json({ deletedMatchId: req.params.matchId, ...recalculation });
     } catch (err) {
-      if (err instanceof DbRequestError && err.status === 404) {
+      if (err instanceof MatchRepositoryError && err.status === 404) {
         return res.status(404).json({ error: err.message });
       }
       res.status(400).json({ error: (err as Error).message });
@@ -1686,7 +1590,7 @@ app.delete("/api/matches/:matchId/approval", async (req, res) => {
 
     res.json(match);
   } catch (err) {
-    if (err instanceof DbRequestError && err.status === 409) {
+    if (err instanceof MatchRepositoryError && err.status === 409) {
       return res.status(409).json({ error: err.message });
     }
     res.status(400).json({ error: (err as Error).message });
@@ -1703,29 +1607,6 @@ app.post("/api/matches/:matchId/rejection", async (req, res) => {
     res.json(
       await matchRepository.rejectResult(req.params.matchId, decoded.playerId),
     );
-  } catch (err) {
-    res.status(400).json({ error: (err as Error).message });
-  }
-});
-
-app.post("/api/change-password", async (req, res) => {
-  try {
-    const decoded = await getAuthPayload(req, res);
-    if (!decoded) {
-      return;
-    }
-    const { currentPassword, newPassword } = req.body;
-    if (!newPassword || newPassword.length < 6) {
-      return res
-        .status(400)
-        .json({ error: "비밀번호는 6자 이상이어야 합니다." });
-    }
-    await authService.changePassword(
-      decoded.playerId,
-      typeof currentPassword === "string" ? currentPassword : undefined,
-      newPassword,
-    );
-    res.json({ message: "비밀번호가 변경되었습니다." });
   } catch (err) {
     res.status(400).json({ error: (err as Error).message });
   }
@@ -1806,26 +1687,15 @@ app.patch("/api/me/profile", async (req, res) => {
 
     const input = req.body as Record<string, unknown>;
     const update: {
-      avatarUrl?: string | null;
       affiliations?: PlayerAffiliation[];
       statusMessage?: string | null;
       statusMessageBackgroundColor?: string | null;
     } = {};
-    const avatarUrl = input.avatarUrl;
-    if (
-      typeof avatarUrl === "string" &&
-      avatarUrl.trim().length > 0 &&
-      avatarUrl.trim().length > 2048
-    ) {
-      return res
-        .status(400)
-        .json({ error: "프로필 이미지 URL이 너무 깁니다." });
-    }
+    // 아바타는 서버가 Storage에 올린 URL만 저장하므로 /api/me/avatar로만 바꿀 수 있다.
     if (hasOwnProperty(input, "avatarUrl")) {
-      update.avatarUrl =
-        typeof avatarUrl === "string" && avatarUrl.trim()
-          ? avatarUrl.trim()
-          : null;
+      return res.status(400).json({
+        error: "프로필 이미지는 /api/me/avatar로만 변경할 수 있습니다.",
+      });
     }
     if (hasOwnProperty(input, "affiliations")) {
       update.affiliations = normalizeProfileAffiliations(input.affiliations);
@@ -1850,8 +1720,6 @@ app.patch("/api/me/profile", async (req, res) => {
 });
 
 app.post("/api/me/avatar", async (req, res) => {
-  let nextAvatarPath: string | null = null;
-
   try {
     const decoded = await getAuthPayload(req, res);
     if (!decoded) {
@@ -1864,25 +1732,34 @@ app.post("/api/me/avatar", async (req, res) => {
     }
 
     const { imageDataUrl } = req.body as { imageDataUrl?: unknown };
-    const { buffer, ext } = parseAvatarDataUrl(imageDataUrl);
-    const fileName = `${decoded.playerId}-${Date.now()}-${randomUUID()}.${ext}`;
-    const avatarUrl = `${AVATAR_UPLOAD_ROUTE}/${fileName}`;
-    nextAvatarPath = path.join(avatarUploadDir, fileName);
+    const avatar = parseAvatarDataUrl(imageDataUrl);
+    const objectPath = buildAvatarObjectPath(decoded.playerId, avatar.ext);
+    const avatarUrl = buildAvatarPublicUrl(objectPath);
 
-    await fs.mkdir(avatarUploadDir, { recursive: true });
-    await fs.writeFile(nextAvatarPath, buffer);
+    await uploadAvatarObject(objectPath, avatar);
 
-    const player = await authService.updatePlayerProfile(decoded.playerId, {
-      avatarUrl,
-    });
-    await removeLocalAvatarIfExists(previousPlayer.avatarUrl);
+    let player: Player;
+    try {
+      player = await authService.updatePlayerProfile(decoded.playerId, {
+        avatarUrl,
+      });
+    } catch (err) {
+      await deleteAvatarObjectQuietly(objectPath);
+      throw err;
+    }
+
+    await deleteAvatarObjectQuietly(
+      getOwnedAvatarObjectPath(decoded.playerId, previousPlayer.avatarUrl),
+    );
 
     res.json(player);
   } catch (err) {
-    if (nextAvatarPath) {
-      await fs.unlink(nextAvatarPath).catch(() => undefined);
+    if (err instanceof AvatarValidationError) {
+      return res.status(400).json({ error: err.message });
     }
-    res.status(400).json({ error: (err as Error).message });
+    // Storage 응답 본문·서버 설정·DB 오류는 내부 정보이므로 로그로만 남긴다.
+    console.error("[Avatar] 업로드 실패", err);
+    res.status(500).json({ error: "프로필 이미지를 저장하지 못했습니다." });
   }
 });
 
@@ -1898,14 +1775,23 @@ app.delete("/api/me/avatar", async (req, res) => {
       return res.status(404).json({ error: "사용자를 찾을 수 없습니다." });
     }
 
+    const previousObjectPath = getOwnedAvatarObjectPath(
+      decoded.playerId,
+      previousPlayer.avatarUrl,
+    );
+    // 객체를 먼저 지워 실패 시 avatar_url이 남아 다시 시도할 수 있게 한다.
+    if (previousObjectPath) {
+      await deleteAvatarObject(previousObjectPath);
+    }
+
     const player = await authService.updatePlayerProfile(decoded.playerId, {
       avatarUrl: null,
     });
-    await removeLocalAvatarIfExists(previousPlayer.avatarUrl);
 
     res.json(player);
   } catch (err) {
-    res.status(500).json({ error: (err as Error).message });
+    console.error("[Avatar] 삭제 실패", err);
+    res.status(500).json({ error: "프로필 이미지를 삭제하지 못했습니다." });
   }
 });
 
@@ -1992,36 +1878,6 @@ app.patch(
       res.json(result);
     } catch (err) {
       res.status(500).json({ error: (err as Error).message });
-    }
-  },
-);
-
-app.post(
-  "/api/admin/players/:playerId/password-reset",
-  requireAdmin,
-  async (req, res) => {
-    try {
-      const decoded = await getAuthPayload(req, res);
-      if (!decoded) {
-        return;
-      }
-
-      const { password } = req.body as { password?: unknown };
-      if (typeof password !== "string" || password.length < 6) {
-        return res
-          .status(400)
-          .json({ error: "임시 비밀번호는 6자 이상이어야 합니다." });
-      }
-
-      const player = await authService.resetPlayerPassword(
-        req.params.playerId,
-        password,
-        decoded.playerId,
-      );
-
-      res.json({ player });
-    } catch (err) {
-      res.status(400).json({ error: (err as Error).message });
     }
   },
 );
@@ -2129,12 +1985,16 @@ app.post("/api/admin/register", requireAdmin, async (req, res) => {
       return;
     }
 
-    const { username, gender } = req.body;
-    if (!username || !gender) {
+    const { username, gender } = (req.body ?? {}) as Partial<
+      Record<keyof AdminRegisterPlayerRequest, unknown>
+    >;
+    const normalizedUsername =
+      typeof username === "string" ? username.trim() : "";
+    if (!normalizedUsername || !isPlayerGender(gender)) {
       return res.status(400).json({ error: "username, gender는 필수입니다." });
     }
     const player = await authService.registerAdmin(
-      { username, password: INITIAL_ADMIN_CREATED_PASSWORD, gender },
+      { username: normalizedUsername, gender },
       decoded.playerId,
     );
     res.json(player);
@@ -2143,10 +2003,60 @@ app.post("/api/admin/register", requireAdmin, async (req, res) => {
   }
 });
 
-export { app };
+app.post("/api/admin/invite-codes", requireAdmin, async (req, res) => {
+  try {
+    const decoded = await getAuthPayload(req, res);
+    if (!decoded) {
+      return;
+    }
+
+    res.status(201).json(await authService.createInviteCode(decoded.playerId));
+  } catch (err) {
+    res.status(500).json({ error: (err as Error).message });
+  }
+});
+
+app.get("/api/admin/invite-codes", requireAdmin, async (_req, res) => {
+  try {
+    res.json(await authService.getInviteCodes());
+  } catch (err) {
+    res.status(500).json({ error: (err as Error).message });
+  }
+});
 
 export const processAutoApprovals = (now: Date = new Date()) =>
   autoApprovalService.process(now);
+
+const hashCronSecret = (value: string) =>
+  createHash("sha256").update(value).digest();
+
+/** 길이가 달라도 비교 시간이 같도록 해시끼리 비교한다. */
+const isValidCronSecret = (received: string | undefined) => {
+  const expected = process.env.CRON_SECRET;
+  if (!expected || !received) return false;
+  return timingSafeEqual(hashCronSecret(received), hashCronSecret(expected));
+};
+
+// Supabase Cron(pg_cron + pg_net)이 주기적으로 호출한다. 로컬 Node 개발에서는 interval이 같은 처리를 한다.
+app.post("/api/internal/cron/auto-approvals", async (req, res) => {
+  if (!isValidCronSecret(req.header("x-cron-secret"))) {
+    return res.status(401).json({ error: "인증되지 않은 요청입니다." });
+  }
+
+  try {
+    const { completedMatches, appliedRatingCount } =
+      await processAutoApprovals();
+    res.json({
+      completedMatchCount: completedMatches.length,
+      appliedRatingCount,
+    });
+  } catch (error) {
+    console.error("[AUTO_APPROVAL] 자동 합의 처리 실패", error);
+    res.status(500).json({ error: (error as Error).message });
+  }
+});
+
+export { app };
 
 const startAutoApprovalScheduler = () => {
   if (autoApprovalInterval) return;
@@ -2163,16 +2073,22 @@ const startAutoApprovalScheduler = () => {
 };
 
 export const startServer = async () => {
-  await authService.initAdmin();
+  assertRequiredEnv();
+  await initDatabase();
   startAutoApprovalScheduler();
   return (app as any).listen(PORT, () => {
     console.log(`🚀 API Server running on http://localhost:${PORT}`);
-    console.log(
-      `👤 Admin 계정 동기화 (${process.env.API_ADMIN_USERNAME || "admin"} / ${process.env.API_ADMIN_PASSWORD || "admin123qwe"})`,
-    );
   });
 };
 
-if (process.env.NODE_ENV !== "test" && process.env.VITEST !== "true") {
-  void startServer();
+// Edge Runtime은 supabase/functions/api 진입점이 app을 서비스하므로 Node 부팅(시딩·interval·listen)을 건너뛴다.
+if (
+  process.env.NODE_ENV !== "test" &&
+  process.env.VITEST !== "true" &&
+  !isEdgeRuntime()
+) {
+  startServer().catch((error) => {
+    console.error("[API] Failed to start", error);
+    process.exit(1);
+  });
 }

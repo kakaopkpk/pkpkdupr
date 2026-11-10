@@ -80,7 +80,6 @@ const buildSession = (player: Player = creator): AuthenticatedSession => ({
     isAdmin: false,
   },
   player,
-  isFirstLogin: false,
 });
 
 const buildCreatedMatch = (
@@ -108,7 +107,6 @@ describe("POST /api/matches", () => {
     vi.spyOn(AuthService.prototype, "getPublicPlayers").mockResolvedValue(
       players,
     );
-    vi.spyOn(AuthService.prototype, "initAdmin").mockResolvedValue(creator);
     vi.spyOn(MatchRepository.prototype, "create").mockImplementation(
       async (input) => {
         capturedCreatePayload = input;

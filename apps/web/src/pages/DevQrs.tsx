@@ -8,7 +8,7 @@ import type { Player } from "@pkpkdupr/shared/player";
 import CreateMatchTeamGrid from "@/components/CreateMatchTeamGrid";
 import type { MatchTeams } from "@/components/CreateMatchDrawerBody.utils";
 import UserChip from "@/components/UserChip";
-import { buildApiUrl } from "@/lib/api";
+import { apiFetch } from "@/lib/api";
 
 const devUserChipPreviewPlayers = {
   me: {
@@ -209,7 +209,7 @@ const DevQrs: React.FC = () => {
         setIsLoading(true);
         setError(null);
 
-        const res = await fetch(buildApiUrl("/api/dev/player-qr-tokens"));
+        const res = await apiFetch("/api/dev/player-qr-tokens");
         if (!res.ok) {
           const errorData = await res.json().catch(() => ({}));
           throw new Error(

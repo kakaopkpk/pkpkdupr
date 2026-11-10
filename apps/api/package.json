@@ -6,25 +6,23 @@
     "scripts": {
         "dev": "tsx watch src/index.ts",
         "build": "tsc",
-        "start": "node dist/apps/api/src/index.js",
+        "build:edge": "node scripts/build-edge.mjs",
         "lint": "eslint .",
         "test": "vitest run",
         "test:watch": "vitest"
     },
     "dependencies": {
+        "@pkpkdupr/db": "workspace:*",
         "@pkpkdupr/shared": "workspace:*",
-        "bcryptjs": "^3.0.3",
+        "@supabase/supabase-js": "^2.119.0",
         "cors": "^2.8.5",
-        "express": "^4.18.2",
-        "jsonwebtoken": "^9.0.3",
-        "newrelic": "^14.3.5"
+        "express": "^4.18.2"
     },
     "devDependencies": {
-        "@types/bcryptjs": "^3.0.0",
         "@types/cors": "^2.8.17",
         "@types/express": "^4.17.21",
-        "@types/jsonwebtoken": "^9.0.10",
         "@types/supertest": "^6.0.3",
+        "esbuild": "^0.28.1",
         "supertest": "^7.1.4",
         "tsx": "^4.7.0",
         "typescript": "^5.3.3",

@@ -1,16 +1,16 @@
-# PKELO 프로젝트 가이드
+# pkpkdupr 프로젝트 가이드
 
 ## 개요
 
-- 제품명은 **PKELO**이며, 저장소/패키지 식별자는 기존의 `pkpkdupr`를 유지합니다.
+- 제품명과 저장소/패키지 식별자는 모두 `pkpkdupr`입니다.
 - 피클볼 플레이어, 경기 기록, DUPR 유사 평점과 관리자 운영 도구를 관리하는 pnpm 모노레포입니다.
-- 변경은 공유 계약(`packages/shared`)부터 API, DB 서버, web/admin 소비처까지 한 흐름으로 확인합니다.
+- 변경은 공유 계약(`packages/shared`)부터 API, `packages/db`, web/admin 소비처까지 한 흐름으로 확인합니다.
 
 ## 아키텍처
 
 ```text
 apps/web (:8080) ─┐
-apps/admin-web (:3100) ─┼─> apps/api (:4000) ─internal HTTP─> apps/db-server (:5001)
+apps/admin-web (:3100) ─┼─> apps/api (:4000) ─함수 호출─> packages/db (@pkpkdupr/db) ─> Supabase Postgres
                        │
                        └─> packages/shared (player, match, qr domain types)
 ```
@@ -19,8 +19,9 @@ apps/admin-web (:3100) ─┼─> apps/api (:4000) ─internal HTTP─> apps/db-
 | --- | --- |
 | `apps/web` | React 19 사용자 앱. 인증, Match / Members / Me 탭, QR, PWA를 담당합니다. |
 | `apps/admin-web` | React 18 관리자 로그인과 회원·경기·평점 운영 화면을 담당합니다. |
-| `apps/api` | Express 공개 API, JWT 인증, 관리자 권한 검사, DB 서버 오케스트레이션을 담당합니다. |
-| `apps/db-server` | libSQL + Drizzle 저장 계층, 스키마 초기화와 내부 `/internal/*` API를 담당합니다. |
+| `apps/api` | Express 공개 API, JWT 인증, 관리자 권한 검사를 담당합니다. 같은 `app`을 로컬 Node(`index.ts`가 listen)와 Supabase Edge Function `api`(`edge.ts` 번들)가 서비스합니다. Node 시작 시에만 `initDatabase()`(dev mock 시딩)·관리자 동기화·자동 합의 interval을 실행하고(스키마는 Supabase CLI가 적용), 저장소 인스턴스는 `apps/api/src/db.ts`에서만 만듭니다. 저장소 예외를 공개 API 상태 코드로 바꾸는 처리도 api가 맡습니다. |
+| `packages/db` | `@pkpkdupr/db` 워크스페이스 라이브러리. postgres.js + Drizzle(`pg-core`) 기반 저장소와 dev mock 데이터를 제공합니다. 연결은 env `DATABASE_URL`로 정하며 없으면 기동 시 오류가 납니다. 단, Edge 런타임에서는 `apps/api/src/db.ts`가 `DATABASE_URL`이 없을 때 `SUPABASE_DB_URL`로 대체합니다. Node·Deno 모두에서 동작합니다. HTTP 서버는 없습니다. |
+| `supabase/` | Supabase CLI 프로젝트(`config.toml`). 스키마는 `supabase/migrations/*.sql`이 기준이며, 변경은 새 마이그레이션 파일로 추가합니다. `functions/api/`는 Edge Function 진입점이고 번들(`dist/`)은 `pnpm build:edge`로 만들며 커밋하지 않습니다. |
 | `packages/shared` | `player.ts`, `match.ts`, `qr.ts`의 공통 도메인 계약을 제공합니다. |
 
 ## 개발 명령
@@ -31,25 +32,31 @@ pnpm dev                         # dev mock data와 전체 워크스페이스 �
 pnpm dev:web                     # Vite web :8080
 pnpm dev:api                     # API :4000
 pnpm dev:admin                   # admin Vite :3100
-pnpm --filter @pkpkdupr/db-server dev  # DB server :5001
+pnpm db:start / db:stop          # 로컬 Supabase 스택 (Docker 필요, Studio :54323)
+pnpm db:migrate                  # 미적용 마이그레이션을 로컬 DB에 적용
+pnpm db:reset                    # 로컬 DB 초기화 후 마이그레이션 재적용
+pnpm db:migration:new <이름>     # 새 마이그레이션 파일 생성
+pnpm supabase:link / db:push     # 원격 프로젝트 연결 / 원격 DB에 마이그레이션 적용
+pnpm build:edge                  # api를 Edge Function 번들로 빌드 (supabase/functions/api/dist/)
+pnpm functions:serve             # build:edge 후 로컬 Edge Function api 실행 (Docker 필요)
 
 pnpm build
 pnpm build:web
 pnpm build:api
 pnpm build:admin
 pnpm lint
-
-pnpm dev:db                     # MySQL :3306
-pnpm dev:db-browser             # Adminer :3301
 ```
 
-- 루트 `pnpm dev`는 Docker MySQL을 준비한 뒤 `ENABLE_DEV_MOCK_DATA=true`와 `DB_HOST=127.0.0.1`을 사용합니다.
-- web Vite proxy는 `/api`, `/uploads`, `/db`를 각각 API 또는 Adminer 개발 도구로 연결합니다.
+- 루트 `pnpm dev`는 `supabase start`와 미적용 마이그레이션 적용을 마친 뒤 `ENABLE_DEV_MOCK_DATA=true`와 로컬 `DATABASE_URL`로 실행합니다. 세부 내용과 RLS 확인 방법은 `docs/dev-environment.md`를 따릅니다.
+- api 실행 경로는 두 가지뿐입니다. 로컬은 `pnpm dev`(`dev:api`, tsx)로, 운영은 `pnpm build:edge`로 만든 Edge Function 번들을 배포합니다. `apps/api`에는 `start` 스크립트가 없으며, `build`(tsc)는 타입 검사·산출물용이고 Node로 직접 실행하지 않습니다.
+- Supabase CLI는 루트 devDependency이므로 전역 설치 없이 `pnpm exec supabase ...`(또는 `pnpm supabase ...`)로 씁니다.
+- web Vite proxy는 `/api`를 API로 연결합니다. 아바타는 Supabase Storage 공개 URL에서 직접 받습니다. DB 조회는 Supabase Studio를 씁니다.
 - `apps/web/dist/`는 빌드 산출물이므로 커밋하지 않습니다.
 
 ## Web 규칙
 
-- 전역 라우트는 `/`, `/login`, `/force-change-password`, 개발 전용 `/dev/qrs`입니다.
+- 전역 라우트는 `/`, `/login`, `/invite`(연결 회원이 없을 때 초대 코드 입력), 개발 전용 `/dev/qrs`입니다. 인증 상태(`AuthContext`의 `status`)에 따라 접근 가능한 라우트가 정해집니다.
+- 로그인은 Supabase Auth(Google, 로컬 개발은 매직링크 병행)이며, API 호출은 `lib/api.ts`의 `apiFetch`로 해서 access token을 붙입니다. 컴포넌트가 `Authorization` 헤더를 직접 만들지 않습니다.
 - 로그인 뒤의 Match / Members / Me는 `BottomNav.tsx`의 keep-alive 탭 셸이 소유합니다. 탭 상태와 URL 라우트를 무분별하게 중복하지 않습니다.
 - `apps/web/AGENTS.md`의 모바일·PWA·UI 세부 규칙을 함께 따릅니다.
 - 모바일 고정 하단 UI는 `env(safe-area-inset-bottom)`과 `--app-keyboard-offset`을 고려합니다. 스크롤 소유자는 `app-tab-panel-scroll-area`입니다.
@@ -63,20 +70,23 @@ pnpm dev:db-browser             # Adminer :3301
 - 인증/프로필: `POST /api/register`, `POST /api/login`, `GET /api/me`, `POST /api/change-password`, `PATCH /api/me/profile`, avatar API
 - 플레이어/QR: `GET /api/players`, `GET /api/player-qr-token`, `POST /api/player-qr-token/verify`
 - 경기: `GET|POST /api/matches`, 경기 결과·승인 API, `GET /api/match-feed`, 세션 조회 API
-- 관리자: 선수/감사 로그, 경기 일괄 등록·메타데이터, 비밀번호 초기화, 평점 재계산, 공식 DUPR 조정 API
+- 관리자: 선수/감사 로그, 초대 코드 발급·목록, 경기 일괄 등록·메타데이터, 평점 재계산, 공식 DUPR 조정 API
 
 도메인 규칙:
 
 - `Player.duprRating`은 단일 숫자가 아니라 singles/doubles 분류와 metric을 포함하는 상태입니다. `null`인 NR 값도 허용합니다.
-- API와 DB 서버 사이의 `Date`는 JSON에서 문자열이므로 서비스 계층에서 hydrate 합니다.
+- api 저장소 어댑터(`apps/api/src/repositories/MatchRepository.ts`, `AuthService`)는 `@pkpkdupr/db` 결과를 공개 계약 형태로 hydrate 합니다.
 - 경기 타입·스코어·세션 계약은 `packages/shared/src/match.ts`가 기준입니다.
-- `packages/shared` 변경 시 web, admin-web, api, db-server 전체 소비처를 같은 변경 단위에서 점검합니다.
+- `packages/shared` 변경 시 web, admin-web, api, db 전체 소비처를 같은 변경 단위에서 점검합니다.
 
 ## 운영과 배포
 
-- GitHub Actions는 GHCR 이미지 빌드/푸시만 담당합니다.
-- 서버 반영, SWAG/TLS 및 운영 env 관리는 `/opt/pkpkdupr`의 `infra` 브랜치 checkout에서 수행합니다. 이 앱 소스 브랜치의 `scripts/`에는 서버 배포 스크립트를 두지 않습니다.
-- 운영 배포 명령과 대상 스택 선택은 `infra` 브랜치의 `docs/deploy-workflows.md`를 기준으로 합니다.
+- 운영·배포는 Supabase(DB·Auth·Storage·Edge Functions) + GitHub Pages로 이전 중입니다. 범위와 순서는 이슈 #1~#10을 따릅니다.
+- DB는 Supabase Postgres입니다. 모든 테이블은 RLS on·정책 없음(기본 거부)이며, DB 접근은 서버만 합니다. Docker는 로컬 Supabase 스택에만 씁니다.
+- GitHub Actions `ci.yml`은 PR과 main push에서 설치·빌드·api/shared 테스트를 실행합니다.
+- api는 Supabase Edge Function `api`로 배포합니다(base URL `https://<project-ref>.supabase.co/functions/v1`, 경로 `/api/...`). main push에서 `supabase-deploy.yml`이 `supabase db push`와 함수 배포를 실행합니다. Supabase 프로젝트 준비, GitHub secrets·variables, 함수 secrets는 `docs/deploy.md`가 기준이며, 새 함수 secret·설정이 생기면 이 문서에 추가합니다.
+- 자동 합의는 Supabase Cron이 5분마다 `POST /api/internal/cron/auto-approvals`(헤더 `x-cron-secret` = env `CRON_SECRET`)를 호출해 처리합니다. 로컬 Node 개발에서는 60초 interval로 처리합니다.
+- api의 CORS 허용 origin은 env `CORS_ALLOWED_ORIGINS`(쉼표 구분)와 localhost 개발 origin(8080, 3100)입니다.
 
 ## 작업 및 커밋 규칙
 

@@ -14,7 +14,7 @@ import ProfileSettingsSheetBody from "@/components/ProfileSettingsSheetBody";
 import TabPanelHeader from "@/components/TabPanelHeader";
 import { useAuth } from "@/context/AuthContext";
 import { useTabNavigation } from "@/context/TabNavigationContext";
-import { buildApiUrl } from "@/lib/api";
+import { apiFetch } from "@/lib/api";
 import { isTabRefreshDue } from "@/lib/tabRefresh";
 import {
   buildProfileMatchList,
@@ -30,7 +30,7 @@ const MATCH_HISTORY_DEPTH_ID = "me-match-history";
 const MATCH_HISTORY_PAGE_SIZE = 20;
 
 const Me: React.FC = () => {
-  const { player, token, refreshMe } = useAuth();
+  const { player, isAuthenticated, refreshMe } = useAuth();
   const {
     closeDepth,
     depthStacks,
@@ -68,7 +68,7 @@ const Me: React.FC = () => {
       preserveVisibleData = false,
       throwOnError = false,
     ) => {
-      if (!token || !playerId) {
+      if (!isAuthenticated || !playerId) {
         lastSuccessfulLoadAtRef.current = null;
         setMatchStats(createEmptyMatchStats());
         setRatingDelta(createEmptyRatingDelta());
@@ -83,12 +83,9 @@ const Me: React.FC = () => {
       }
 
       try {
-        const res = await fetch(
-          buildApiUrl(`/api/players/${encodeURIComponent(playerId)}/profile-summary`),
-          {
-            headers: { Authorization: `Bearer ${token}` },
-            signal,
-          },
+        const res = await apiFetch(
+          `/api/players/${encodeURIComponent(playerId)}/profile-summary`,
+          { signal },
         );
 
         if (!res.ok) {
@@ -122,12 +119,12 @@ const Me: React.FC = () => {
         }
       }
   },
-    [playerId, token],
+    [playerId, isAuthenticated],
   );
 
   const loadMatchHistory = useCallback(
     async (page: number, append = false) => {
-      if (!token || !playerId) return;
+      if (!isAuthenticated || !playerId) return;
 
       setIsMatchHistoryLoading(true);
       try {
@@ -136,10 +133,7 @@ const Me: React.FC = () => {
           page: String(page),
           limit: String(MATCH_HISTORY_PAGE_SIZE),
         });
-        const res = await fetch(
-          buildApiUrl(`/api/matches?${searchParams.toString()}`),
-          { headers: { Authorization: `Bearer ${token}` } },
-        );
+        const res = await apiFetch(`/api/matches?${searchParams.toString()}`);
         if (!res.ok) throw new Error("매치 목록을 불러오지 못했습니다.");
 
         const data = (await res.json()) as MatchListResponse;
@@ -154,7 +148,7 @@ const Me: React.FC = () => {
         setIsMatchHistoryLoading(false);
       }
     },
-    [playerId, token],
+    [playerId, isAuthenticated],
   );
 
   useEffect(() => {
@@ -184,7 +178,7 @@ const Me: React.FC = () => {
   }, [loadMatchStats, selectedTab]);
 
   useEffect(() => {
-    if (!token || !playerId) {
+    if (!isAuthenticated || !playerId) {
       lastSuccessfulLoadAtRef.current = null;
       setMatchStats(createEmptyMatchStats());
       setRatingDelta(createEmptyRatingDelta());
@@ -192,7 +186,7 @@ const Me: React.FC = () => {
       setProfileMatches([]);
       setIsMatchStatsLoading(false);
     }
-  }, [playerId, token]);
+  }, [playerId, isAuthenticated]);
 
   useEffect(
     () =>

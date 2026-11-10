@@ -12,7 +12,8 @@ export const PLAYER_STATUS_MESSAGE_MAX_LENGTH = 20;
 export type PlayerCreationSource =
   | "self_register"
   | "admin_register"
-  | "bootstrap";
+  | "bootstrap"
+  | "invite";
 
 export interface PlayerDupr {
   singles: number;

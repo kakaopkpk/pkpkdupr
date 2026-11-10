@@ -58,7 +58,7 @@ type InstallPrompt =
 
 const PwaInstallPrompt: React.FC = () => {
   const location = useLocation();
-  const { isAuthenticated, isLoading, requiresPasswordChange } = useAuth();
+  const { isAuthenticated, isLoading } = useAuth();
   const [deferredPrompt, setDeferredPrompt] =
     useState<BeforeInstallPromptEvent | null>(null);
   const [isInstalled, setIsInstalled] = useState(() =>
@@ -128,15 +128,11 @@ const PwaInstallPrompt: React.FC = () => {
 
   const isFullWidthDevPage =
     import.meta.env.DEV && location.pathname === "/dev/qrs";
-  const isForcedPasswordChangePage =
-    location.pathname === "/force-change-password";
 
   if (
     isLoading ||
     !isAuthenticated ||
-    requiresPasswordChange ||
     isFullWidthDevPage ||
-    isForcedPasswordChangePage ||
     isInstalled ||
     isDismissed ||
     !installPrompt

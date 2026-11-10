@@ -12,6 +12,7 @@
     "dependencies": {
         "@heroui/react": "^3.0.0",
         "@heroui/styles": "^3.0.0",
+        "@supabase/supabase-js": "^2.119.0",
         "@zxing/browser": "^0.2.0",
         "chart.js": "^4.5.1",
         "chartjs-plugin-datalabels": "^2.2.0",

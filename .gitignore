@@ -6,8 +6,9 @@ dist/
 build/
 .out/
 apps/web/dev-dist/
+.pages-dist/
 data/
-apps/db-server/db.sqlite
+packages/db/db.sqlite
 
 # Environment files
 .env

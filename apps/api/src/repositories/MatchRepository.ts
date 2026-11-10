@@ -8,23 +8,62 @@ import type {
   Session,
 } from "@pkpkdupr/shared/match";
 import { DEFAULT_MATCH_MODE } from "@pkpkdupr/shared/match";
-import { generateEntityId } from "@pkpkdupr/shared/entityId";
+import { generateEntityId, isEntityId } from "@pkpkdupr/shared/entityId";
 import type {
   PlayerRatingChangeLog,
   PlayerRatingHistory,
 } from "@pkpkdupr/shared/player";
+import {
+  CompletedMatchApprovalCancelError,
+  CompletedMatchResultEditError,
+  SessionHasMatchesError,
+  type CreateMatchInput,
+  type UpdateMatchMetadataInput,
+} from "@pkpkdupr/db";
+import { db } from "../db";
 
-const DB_SERVER_URL = process.env.DB_SERVER_URL || "http://localhost:5001";
-
-export class DbRequestError extends Error {
+/**
+ * 저장소 호출 실패를 공개 API가 응답할 HTTP 상태와 함께 전달한다.
+ * status는 라우트가 404·409 등을 구분해 응답하는 데 쓴다.
+ */
+export class MatchRepositoryError extends Error {
   constructor(
     message: string,
     readonly status: number,
   ) {
     super(message);
-    this.name = "DbRequestError";
+    this.name = "MatchRepositoryError";
   }
 }
+
+const isUniqueViolation = (error: unknown) => {
+  const message = (error as Error).message ?? "";
+  return message.includes("UNIQUE") || message.includes("unique");
+};
+
+const toRepositoryError = (error: unknown, status: number) =>
+  error instanceof MatchRepositoryError
+    ? error
+    : new MatchRepositoryError((error as Error).message, status);
+
+/** 키 존재 여부로 갱신 필드를 판단하는 저장소에 값이 없는 키를 넘기지 않는다. */
+const omitUndefined = <T extends object>(value: T): T =>
+  Object.fromEntries(
+    Object.entries(value).filter(([, entry]) => entry !== undefined),
+  ) as T;
+
+type NewMatchInput = Omit<Match, "id" | "createdAt" | "updatedAt"> & {
+  id?: string;
+};
+
+const toCreateMatchInput = (match: NewMatchInput): CreateMatchInput =>
+  ({
+    ...match,
+    id: match.id ?? generateEntityId("match"),
+    resultSubmittedByPlayerId: match.resultSubmittedByPlayerId ?? null,
+    resultSubmittedAt: match.resultSubmittedAt ?? null,
+    approvals: match.approvals ?? [],
+  }) as CreateMatchInput;
 
 export interface TimestampUnitAudit {
   legacyMatchStartsAtCount: number;
@@ -181,48 +220,44 @@ const hydrateMatchFeedItem = (record: any): MatchFeedItem =>
     : { kind: "match", match: hydrateMatch(record.match) };
 
 /**
- * MatchRepository - API 서버에서 DB 서버의 match 저장소를 호출합니다.
+ * MatchRepository - API 서버에서 `@pkpkdupr/db`의 match 저장소를 호출하고,
+ * 저장소 예외를 공개 API 상태 코드(MatchRepositoryError.status)로 변환합니다.
  */
 export class MatchRepository {
-  private async dbRequest<T>(
-    path: string,
-    options: RequestInit = {},
+  /**
+   * 저장소 호출을 실행하고 실패를 status가 담긴 MatchRepositoryError로 바꾼다.
+   * resolveStatus가 없으면 fallbackStatus를 쓴다.
+   */
+  private async run<T>(
+    operation: () => Promise<T>,
+    fallbackStatus: number,
+    resolveStatus?: (error: unknown) => number | undefined,
   ): Promise<T> {
-    const res = await fetch(`${DB_SERVER_URL}${path}`, {
-      ...options,
-      headers: {
-        "Content-Type": "application/json",
-        ...(options.headers ?? {}),
-      },
-    });
-
-    if (!res.ok) {
-      const errorData = await res.json().catch(() => ({}));
-      throw new DbRequestError(
-        errorData.error || `DB 서버 요청 실패: ${res.status}`,
-        res.status,
+    try {
+      return await operation();
+    } catch (error) {
+      throw toRepositoryError(
+        error,
+        resolveStatus?.(error) ?? fallbackStatus,
       );
     }
-
-    if (res.status === 204) {
-      return undefined as T;
-    }
-
-    return (await res.json()) as T;
   }
 
-  /** ID로 단일 경기 조회 */
-  async findById(matchId: string): Promise<Match | undefined> {
+  private async findStoredMatch(matchId: string): Promise<Match | undefined> {
     try {
-      return hydrateMatch(
-        await this.dbRequest<any>(`/internal/matches/${matchId}`),
-      );
+      return await this.run(() => db.matches.findById(matchId), 500);
     } catch (error) {
       if ((error as Error).message.includes("찾을 수 없습니다")) {
         return undefined;
       }
       throw error;
     }
+  }
+
+  /** ID로 단일 경기 조회 */
+  async findById(matchId: string): Promise<Match | undefined> {
+    const match = await this.findStoredMatch(matchId);
+    return match ? hydrateMatch(match) : undefined;
   }
 
   /** ID로 단일 경기 조회 + 이 경기에 의한 DUPR 변동 로그 함께 반환 */
@@ -231,49 +266,35 @@ export class MatchRepository {
   ): Promise<
     { match: Match; ratingChanges: PlayerRatingChangeLog[] } | undefined
   > {
-    try {
-      const [match, ratingChangeRecords] = await Promise.all([
-        this.dbRequest<any>(`/internal/matches/${matchId}`),
-        this.dbRequest<any[]>(
-          `/internal/matches/${matchId}/rating-change-logs`,
-        ),
-      ]);
-
-      return {
-        match: hydrateMatch(match),
-        ratingChanges: (ratingChangeRecords ?? []).map(hydrateRatingChangeLog),
-      };
-    } catch (error) {
-      if ((error as Error).message.includes("찾을 수 없습니다")) {
-        return undefined;
-      }
-      throw error;
+    const [match, ratingChangeRecords] = await Promise.all([
+      this.findStoredMatch(matchId),
+      this.run(() => db.playerRatingChangeLogs.findByMatchId(matchId), 500),
+    ]);
+    if (!match) {
+      return undefined;
     }
+
+    return {
+      match: hydrateMatch(match),
+      ratingChanges: (ratingChangeRecords ?? []).map(hydrateRatingChangeLog),
+    };
   }
 
   /** 신규 경기 추가 */
-  async create(
-    match: Omit<Match, "id" | "createdAt" | "updatedAt"> & { id?: string },
-  ): Promise<Match> {
+  async create(match: NewMatchInput): Promise<Match> {
     for (let attempt = 0; attempt < 8; attempt += 1) {
-      const id = match.id ?? generateEntityId("match");
       try {
-        const created = await this.dbRequest<any>("/internal/matches", {
-          method: "POST",
-          body: JSON.stringify({
-            id,
-            ...match,
-            resultSubmittedByPlayerId: match.resultSubmittedByPlayerId ?? null,
-            resultSubmittedAt: match.resultSubmittedAt ?? null,
-            approvals: match.approvals ?? [],
-          }),
-        });
+        const created = await this.run(
+          () => db.matches.create(toCreateMatchInput(match)),
+          500,
+          (error) => (isUniqueViolation(error) ? 409 : undefined),
+        );
         return hydrateMatch(created);
       } catch (error) {
         if (
           match.id ||
           attempt === 7 ||
-          !(error instanceof DbRequestError) ||
+          !(error instanceof MatchRepositoryError) ||
           error.status !== 409
         ) {
           throw error;
@@ -284,60 +305,51 @@ export class MatchRepository {
     throw new Error("매치 ID 생성에 실패했습니다.");
   }
 
-  async createScheduledBatch(
-    matches: Array<
-      Omit<Match, "id" | "createdAt" | "updatedAt"> & { id?: string }
-    >,
+  private async createBatch(
+    matches: NewMatchInput[],
+    allowCompleted: boolean,
   ): Promise<Match[]> {
-    const inputs = matches.map((match) => ({
-      id: match.id ?? generateEntityId("match"),
-      ...match,
-      resultSubmittedByPlayerId: match.resultSubmittedByPlayerId ?? null,
-      resultSubmittedAt: match.resultSubmittedAt ?? null,
-      approvals: match.approvals ?? [],
-    }));
-    const created = await this.dbRequest<any[]>("/internal/matches/batch", {
-      method: "POST",
-      body: JSON.stringify({ matches: inputs }),
-    });
+    const inputs = matches.map(toCreateMatchInput);
+    if (inputs.length === 0) {
+      throw new MatchRepositoryError(
+        "한 개 이상의 예정 경기가 필요합니다.",
+        400,
+      );
+    }
+    const created = await this.run(
+      () => db.matches.createScheduledBatch(inputs, { allowCompleted }),
+      400,
+      (error) => (isUniqueViolation(error) ? 409 : undefined),
+    );
     return created.map(hydrateMatch);
   }
 
-  /** 세션이 지정된 완료 경기를 DB 서버의 단일 transaction으로 생성한다. */
-  async createCompletedBatch(
-    matches: Array<
-      Omit<Match, "id" | "createdAt" | "updatedAt"> & { id?: string }
-    >,
-  ): Promise<Match[]> {
-    const inputs = matches.map((match) => ({
-      id: match.id ?? generateEntityId("match"),
-      ...match,
-      resultSubmittedByPlayerId: match.resultSubmittedByPlayerId ?? null,
-      resultSubmittedAt: match.resultSubmittedAt ?? null,
-      approvals: match.approvals ?? [],
-    }));
-    const created = await this.dbRequest<any[]>("/internal/matches/batch", {
-      method: "POST",
-      body: JSON.stringify({ matches: inputs, allowCompleted: true }),
-    });
-    return created.map(hydrateMatch);
+  async createScheduledBatch(matches: NewMatchInput[]): Promise<Match[]> {
+    return await this.createBatch(matches, false);
+  }
+
+  /** 세션이 지정된 완료 경기를 저장소의 단일 transaction으로 생성한다. */
+  async createCompletedBatch(matches: NewMatchInput[]): Promise<Match[]> {
+    return await this.createBatch(matches, true);
   }
 
   async createSession(
     session: Omit<Session, "id"> & { id?: string },
   ): Promise<Session> {
-    const created = await this.dbRequest<any>("/internal/match-sessions", {
-      method: "POST",
-      body: JSON.stringify({
-        ...session,
-        id: session.id ?? generateEntityId("session"),
-      }),
-    });
+    const created = await this.run(
+      () =>
+        db.matches.createSession({
+          ...session,
+          id: session.id ?? generateEntityId("session"),
+          date: new Date(session.date),
+        }),
+      400,
+    );
     return hydrateStandaloneSession(created);
   }
 
   async findSessions(): Promise<ManagedMatchSession[]> {
-    const records = await this.dbRequest<any[]>("/internal/match-sessions");
+    const records = await this.run(() => db.matches.findSessions(), 500);
     return records.map(hydrateManagedSession);
   }
 
@@ -349,23 +361,36 @@ export class MatchRepository {
   }
 
   async deleteSession(sessionId: string): Promise<void> {
-    await this.dbRequest<void>(
-      `/internal/match-sessions/${encodeURIComponent(sessionId)}`,
-      { method: "DELETE" },
+    if (!isEntityId(sessionId, "session")) {
+      throw new MatchRepositoryError("유효한 세션 ID가 필요합니다.", 400);
+    }
+    const deleted = await this.run(
+      () => db.matches.deleteSession(sessionId),
+      400,
+      (error) => (error instanceof SessionHasMatchesError ? 409 : undefined),
     );
+    if (!deleted) {
+      throw new MatchRepositoryError("세션을 찾을 수 없습니다.", 404);
+    }
   }
 
   async replaceSessionParticipants(
     sessionId: string,
     playerIds: string[],
   ): Promise<ManagedMatchSession> {
-    const updated = await this.dbRequest<any>(
-      `/internal/match-sessions/${encodeURIComponent(sessionId)}/participants`,
-      {
-        method: "PUT",
-        body: JSON.stringify({ playerIds }),
-      },
+    const validPlayerIds = Array.isArray(playerIds)
+      ? playerIds.filter(
+          (playerId: unknown): playerId is string =>
+            typeof playerId === "string",
+        )
+      : [];
+    const updated = await this.run(
+      () => db.matches.replaceSessionParticipants(sessionId, validPlayerIds),
+      400,
     );
+    if (!updated) {
+      throw new MatchRepositoryError("세션을 찾을 수 없습니다.", 404);
+    }
     return hydrateManagedSession(updated);
   }
 
@@ -374,17 +399,18 @@ export class MatchRepository {
     submittedByPlayerId: string,
     scores: MatchScore[],
   ): Promise<Match> {
-    const updated = await this.dbRequest<any>(
-      `/internal/matches/${matchId}/result`,
-      {
-        method: "POST",
-        body: JSON.stringify({
+    const updated = await this.run(
+      () =>
+        db.matches.submitResult(
+          matchId,
           submittedByPlayerId,
           scores,
-          approvalId: `${matchId}-approval-${submittedByPlayerId}`,
-          submittedAt: new Date(),
-        }),
-      },
+          `${matchId}-approval-${submittedByPlayerId}`,
+          new Date(),
+        ),
+      400,
+      (error) =>
+        error instanceof CompletedMatchResultEditError ? 409 : undefined,
     );
 
     return hydrateMatch(updated);
@@ -395,79 +421,88 @@ export class MatchRepository {
     submittedByPlayerId: string,
     scores: MatchScore[],
   ): Promise<Match> {
-    const updated = await this.dbRequest<any>(
-      `/internal/matches/${matchId}/admin-result`,
-      {
-        method: "POST",
-        body: JSON.stringify({
+    const updated = await this.run(
+      () =>
+        db.matches.recordAdminResult(
+          matchId,
           submittedByPlayerId,
           scores,
-          completedAt: new Date(),
-        }),
-      },
+          new Date(),
+        ),
+      400,
+      (error) =>
+        error instanceof CompletedMatchResultEditError ? 409 : undefined,
     );
 
     return hydrateMatch(updated);
   }
 
   async delete(matchId: string): Promise<void> {
-    await this.dbRequest<void>(`/internal/matches/${matchId}`, {
-      method: "DELETE",
-    });
+    try {
+      await db.matches.delete(matchId);
+    } catch (error) {
+      if ((error as Error).message === "MATCH_NOT_FOUND") {
+        throw new MatchRepositoryError("매치를 찾을 수 없습니다.", 404);
+      }
+      throw toRepositoryError(error, 400);
+    }
   }
 
   async approveResult(matchId: string, playerId: string): Promise<Match> {
-    const updated = await this.dbRequest<any>(
-      `/internal/matches/${matchId}/approvals`,
-      {
-        method: "POST",
-        body: JSON.stringify({
+    const updated = await this.run(
+      () =>
+        db.matches.approveResult(
+          matchId,
           playerId,
-          approvalId: `${matchId}-approval-${playerId}`,
-          approvedAt: new Date(),
-        }),
-      },
+          `${matchId}-approval-${playerId}`,
+          new Date(),
+        ),
+      400,
     );
 
     return hydrateMatch(updated);
   }
 
   async cancelApproval(matchId: string, playerId: string): Promise<Match> {
-    const updated = await this.dbRequest<any>(
-      `/internal/matches/${matchId}/approvals/${playerId}`,
-      { method: "DELETE" },
+    const updated = await this.run(
+      () => db.matches.cancelApproval(matchId, playerId),
+      400,
+      (error) =>
+        error instanceof CompletedMatchApprovalCancelError ? 409 : undefined,
     );
 
     return hydrateMatch(updated);
   }
 
   async rejectResult(matchId: string, playerId: string): Promise<Match> {
-    const updated = await this.dbRequest<any>(
-      `/internal/matches/${matchId}/rejection`,
-      {
-        method: "POST",
-        body: JSON.stringify({ playerId }),
-      },
+    const updated = await this.run(
+      () => db.matches.rejectResult(matchId, playerId),
+      400,
     );
 
     return hydrateMatch(updated);
   }
 
   async completeExpiredAutoApprovals(now: Date): Promise<Match[]> {
-    const records = await this.dbRequest<any[]>(
-      "/internal/matches/auto-approvals/complete-expired",
-      {
-        method: "POST",
-        body: JSON.stringify({ now }),
-      },
+    const at = now ? new Date(now) : new Date();
+    if (Number.isNaN(at.getTime())) {
+      throw new MatchRepositoryError(
+        "유효한 자동 합의 처리 시각이 필요합니다.",
+        400,
+      );
+    }
+    const records = await this.run(
+      () => db.matches.completeExpiredAutoApprovals(at),
+      400,
     );
 
     return records.map(hydrateMatch);
   }
 
   async findAutoApprovedMatchesAwaitingRating(): Promise<Match[]> {
-    const records = await this.dbRequest<any[]>(
-      "/internal/matches/auto-approvals/awaiting-rating",
+    const records = await this.run(
+      () => db.matches.findAutoApprovedMatchesAwaitingRating(),
+      400,
     );
     return records.map(hydrateMatch);
   }
@@ -475,13 +510,21 @@ export class MatchRepository {
   async markAutoApprovalRatingApplied(
     matchId: string,
     appliedAt: Date,
-  ): Promise<void> {
-    await this.dbRequest<void>(
-      `/internal/matches/${matchId}/auto-approval-rating-applied`,
-      {
-        method: "POST",
-        body: JSON.stringify({ appliedAt }),
-      },
+  ): Promise<boolean> {
+    const at = appliedAt ? new Date(appliedAt) : new Date();
+    if (Number.isNaN(at.getTime())) {
+      throw new MatchRepositoryError("유효한 평점 반영 시각이 필요합니다.", 400);
+    }
+    return await this.run(
+      () => db.matches.markAutoApprovalRatingApplied(matchId, at),
+      400,
+    );
+  }
+
+  async clearAutoApprovalRatingApplied(matchId: string): Promise<void> {
+    await this.run(
+      () => db.matches.clearAutoApprovalRatingApplied(matchId),
+      400,
     );
   }
 
@@ -489,8 +532,9 @@ export class MatchRepository {
   async getPlayerRatingChangeLogs(
     playerId: string,
   ): Promise<PlayerRatingChangeLog[]> {
-    const records = await this.dbRequest<any[]>(
-      `/internal/player-rating-change-logs/by-player/${playerId}`,
+    const records = await this.run(
+      () => db.playerRatingChangeLogs.findByPlayerId(playerId),
+      500,
     );
     return (records ?? []).map(hydrateRatingChangeLog);
   }
@@ -498,36 +542,55 @@ export class MatchRepository {
   async getPlayerRatingChartProjection(
     playerId: string,
   ): Promise<PlayerRatingChartProjection | null> {
-    try {
-      const record = await this.dbRequest<any>(
-        `/internal/player-rating-chart-projections/${encodeURIComponent(playerId)}`,
-      );
-      const generatedAt = new Date(record.generatedAt);
-      if (Number.isNaN(generatedAt.getTime())) {
-        throw new Error("평점 차트 projection 생성 시각이 유효하지 않습니다.");
-      }
-      return {
-        history: hydrateRatingHistory(record.history),
-        generatedAt,
-      };
-    } catch (error) {
-      if (error instanceof DbRequestError && error.status === 404) {
-        return null;
-      }
-      throw error;
+    const record = await this.run(
+      () => db.playerRatingChartProjections.findByPlayerId(playerId),
+      500,
+    );
+    if (!record) {
+      return null;
     }
+    const generatedAt = new Date(record.generatedAt);
+    if (Number.isNaN(generatedAt.getTime())) {
+      throw new Error("평점 차트 projection 생성 시각이 유효하지 않습니다.");
+    }
+    return {
+      history: hydrateRatingHistory(record.history),
+      generatedAt,
+    };
   }
 
   async replacePlayerRatingChartProjection(
     playerId: string,
     projection: PlayerRatingChartProjection,
   ): Promise<PlayerRatingChartProjection> {
-    const record = await this.dbRequest<any>(
-      `/internal/player-rating-chart-projections/${encodeURIComponent(playerId)}`,
-      {
-        method: "PUT",
-        body: JSON.stringify(projection),
-      },
+    if (
+      !projection.history ||
+      !Array.isArray(projection.history.singles) ||
+      !Array.isArray(projection.history.doubles)
+    ) {
+      throw new MatchRepositoryError(
+        "평점 차트 projection 이력이 필요합니다.",
+        400,
+      );
+    }
+    const generatedAt = projection.generatedAt
+      ? new Date(projection.generatedAt)
+      : new Date();
+    if (Number.isNaN(generatedAt.getTime())) {
+      throw new MatchRepositoryError(
+        "유효한 projection 생성 시각이 필요합니다.",
+        400,
+      );
+    }
+
+    const record = await this.run(
+      () =>
+        db.playerRatingChartProjections.replace(
+          playerId,
+          projection.history,
+          generatedAt,
+        ),
+      500,
     );
     return {
       history: hydrateRatingHistory(record.history),
@@ -545,8 +608,9 @@ export class MatchRepository {
   }
 
   async getLastPlayedAtByPlayerId(): Promise<Record<string, Date>> {
-    const records = await this.dbRequest<Record<string, string | Date>>(
-      "/internal/matches/last-played",
+    const records = await this.run(
+      () => db.matches.findLastPlayedAtByPlayerId(),
+      500,
     );
 
     return Object.fromEntries(
@@ -558,9 +622,7 @@ export class MatchRepository {
   }
 
   async getTimestampUnitAudit(): Promise<TimestampUnitAudit> {
-    return await this.dbRequest<TimestampUnitAudit>(
-      "/internal/matches/timestamp-unit-audit",
-    );
+    return await this.run(() => db.matches.getTimestampUnitAudit(), 500);
   }
 
   /** 모든 경기 목록 */
@@ -569,16 +631,9 @@ export class MatchRepository {
     limit: number = 20,
     playerId?: string,
   ): Promise<{ matches: Match[]; total: number }> {
-    const params = new URLSearchParams({
-      page: String(page),
-      limit: String(limit),
-    });
-    if (playerId) {
-      params.set("playerId", playerId);
-    }
-
-    const result = await this.dbRequest<{ matches: any[]; total: number }>(
-      `/internal/matches?${params.toString()}`,
+    const result = await this.run(
+      () => db.matches.findAll(page, limit, playerId || undefined),
+      500,
     );
 
     return {
@@ -592,16 +647,9 @@ export class MatchRepository {
     limit: number = 20,
     playerId?: string,
   ): Promise<{ items: MatchFeedItem[]; total: number }> {
-    const params = new URLSearchParams({
-      page: String(page),
-      limit: String(limit),
-    });
-    if (playerId) {
-      params.set("playerId", playerId);
-    }
-
-    const result = await this.dbRequest<{ items: any[]; total: number }>(
-      `/internal/match-feed?${params.toString()}`,
+    const result = await this.run(
+      () => db.matches.findFeed(page, limit, playerId || undefined),
+      500,
     );
     return {
       items: result.items.map(hydrateMatchFeedItem),
@@ -610,8 +658,12 @@ export class MatchRepository {
   }
 
   async findBySession(sessionId: string): Promise<Match[]> {
-    const records = await this.dbRequest<any[]>(
-      `/internal/match-sessions/${encodeURIComponent(sessionId)}/matches`,
+    if (!isEntityId(sessionId, "session")) {
+      throw new MatchRepositoryError("유효한 세션 ID가 필요합니다.", 400);
+    }
+    const records = await this.run(
+      () => db.matches.findBySession(sessionId),
+      500,
     );
     return records.map(hydrateMatch);
   }
@@ -626,13 +678,17 @@ export class MatchRepository {
       matchStartsAt?: string;
     },
   ): Promise<Match> {
-    const updated = await this.dbRequest<any>(
-      `/internal/matches/${matchId}/metadata`,
-      {
-        method: "PATCH",
-        body: JSON.stringify(input),
-      },
+    const updated = await this.run(
+      () =>
+        db.matches.updateMetadata(
+          matchId,
+          omitUndefined(input) as UpdateMatchMetadataInput,
+        ),
+      400,
     );
+    if (!updated) {
+      throw new MatchRepositoryError("매치를 찾을 수 없습니다.", 404);
+    }
 
     return hydrateMatch(updated);
   }

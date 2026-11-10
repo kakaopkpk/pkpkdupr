@@ -26,8 +26,10 @@ import {
   type MatchType,
 } from "@pkpkdupr/shared/match";
 import { rememberRecentInputValue } from "@pkpkdupr/shared/recentInputHistory";
+import type { AdminRegisterPlayerRequest } from "@pkpkdupr/shared/auth";
 import { useAuth } from "../context/AuthContext";
-import { useNavigate } from "react-router-dom";
+import { apiFetch } from "../lib/api";
+import AdminInviteCodePanel from "../components/AdminInviteCodePanel";
 import AdminMatchBatchForm, {
   type AdminBatchMatchSubmitPayload,
 } from "../components/AdminMatchBatchForm";
@@ -171,12 +173,8 @@ const creationSourceLabelMap: Record<PlayerCreationSource, string> = {
   self_register: "일반 가입",
   admin_register: "관리자 생성",
   bootstrap: "초기 관리자 생성",
+  invite: "초대 코드 가입",
 };
-
-const PROTECTED_ADMIN_USERNAME =
-  (import.meta.env.VITE_PROTECTED_ADMIN_USERNAME as string | undefined) ??
-  "admin";
-const INITIAL_ADMIN_CREATED_PASSWORD = "123qwe";
 
 const formatDupr = (value?: number | null) =>
   typeof value === "number" ? value.toFixed(3) : "NR";
@@ -250,8 +248,7 @@ const getTeamLabel = (team: MatchTeamInfo, matchType: MatchType) =>
 const normalizeDraftValue = (value: string) => value.trim();
 
 const AdminDashboard: React.FC = () => {
-  const { player, isAdmin, logout, token } = useAuth();
-  const navigate = useNavigate();
+  const { player, isAdmin, logout } = useAuth();
   const [activeSection, setActiveSection] =
     useState<AdminSection>("members");
   const [players, setPlayers] = useState<PlayerInfo[]>([]);
@@ -275,9 +272,6 @@ const AdminDashboard: React.FC = () => {
   const [statusDrafts, setStatusDrafts] = useState<
     Record<string, PlayerStatus>
   >({});
-  const [passwordDrafts, setPasswordDrafts] = useState<Record<string, string>>(
-    {},
-  );
   const [matchNameDrafts, setMatchNameDrafts] = useState<
     Record<string, string>
   >({});
@@ -300,9 +294,6 @@ const AdminDashboard: React.FC = () => {
   >([]);
   const [isSavingBulkMatchMetadata, setIsSavingBulkMatchMetadata] =
     useState(false);
-  const [resettingPasswordPlayerId, setResettingPasswordPlayerId] = useState<
-    string | null
-  >(null);
   const [newUsername, setNewUsername] = useState("");
   const [gender, setGender] = useState<"M" | "F">("M");
   const [officialPlayerId, setOfficialPlayerId] = useState("");
@@ -325,20 +316,6 @@ const AdminDashboard: React.FC = () => {
   const [adminMatchFormResetKey, setAdminMatchFormResetKey] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!token) {
-      navigate("/login");
-    }
-  }, [token, navigate]);
-
-  useEffect(() => {
-    if (token && player && !isAdmin) {
-      alert("관리자 권한이 필요합니다.");
-      logout();
-      navigate("/login");
-    }
-  }, [token, player, isAdmin, logout, navigate]);
 
   const syncGenderDrafts = (loadedPlayers: PlayerInfo[]) => {
     setGenderDrafts((prev) => {
@@ -394,9 +371,7 @@ const AdminDashboard: React.FC = () => {
   };
 
   const loadPlayers = async () => {
-    const res = await fetch("/api/admin/players", {
-      headers: { Authorization: `Bearer ${token}` },
-    });
+    const res = await apiFetch("/api/admin/players");
     if (!res.ok) {
       throw new Error("회원 목록을 불러오지 못했습니다.");
     }
@@ -408,9 +383,7 @@ const AdminDashboard: React.FC = () => {
   };
 
   const loadCreationLogs = async () => {
-    const res = await fetch("/api/admin/player-creation-logs", {
-      headers: { Authorization: `Bearer ${token}` },
-    });
+    const res = await apiFetch("/api/admin/player-creation-logs");
     if (!res.ok) {
       throw new Error("계정 생성 로그를 불러오지 못했습니다.");
     }
@@ -420,9 +393,7 @@ const AdminDashboard: React.FC = () => {
   };
 
   const loadStatusLogs = async () => {
-    const res = await fetch("/api/admin/player-status-logs", {
-      headers: { Authorization: `Bearer ${token}` },
-    });
+    const res = await apiFetch("/api/admin/player-status-logs");
     if (!res.ok) {
       throw new Error("상태 변경 로그를 불러오지 못했습니다.");
     }
@@ -432,9 +403,7 @@ const AdminDashboard: React.FC = () => {
   };
 
   const loadMatches = async () => {
-    const res = await fetch("/api/admin/matches", {
-      headers: { Authorization: `Bearer ${token}` },
-    });
+    const res = await apiFetch("/api/admin/matches");
     if (!res.ok) {
       throw new Error("매치 목록을 불러오지 못했습니다.");
     }
@@ -445,9 +414,7 @@ const AdminDashboard: React.FC = () => {
   };
 
   const loadSessions = async () => {
-    const res = await fetch("/api/admin/match-sessions", {
-      headers: { Authorization: `Bearer ${token}` },
-    });
+    const res = await apiFetch("/api/admin/match-sessions");
     if (!res.ok) {
       throw new Error("세션 목록을 불러오지 못했습니다.");
     }
@@ -458,9 +425,7 @@ const AdminDashboard: React.FC = () => {
     try {
       setIsLoadingRatingComparison(true);
       setRatingComparisonError(null);
-      const res = await fetch("/api/admin/ratings/comparison", {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const res = await apiFetch("/api/admin/ratings/comparison");
       if (!res.ok) {
         const errorData = await res.json().catch(() => ({}));
         throw new Error(
@@ -493,13 +458,13 @@ const AdminDashboard: React.FC = () => {
   };
 
   useEffect(() => {
-    if (token && isAdmin) {
+    if (isAdmin) {
       loadDashboardData();
     }
-  }, [token, isAdmin]);
+  }, [isAdmin]);
 
   useEffect(() => {
-    if (token && isAdmin && activeSection === "matches") {
+    if (isAdmin && activeSection === "matches") {
       void loadSessions().catch((loadError) => {
         setError(
           loadError instanceof Error
@@ -508,11 +473,10 @@ const AdminDashboard: React.FC = () => {
         );
       });
     }
-  }, [activeSection, token, isAdmin]);
+  }, [activeSection, isAdmin]);
 
   useEffect(() => {
     if (
-      token &&
       isAdmin &&
       activeSection === "ratings" &&
       !ratingComparison &&
@@ -522,7 +486,6 @@ const AdminDashboard: React.FC = () => {
       void loadRatingComparison();
     }
   }, [
-    token,
     isAdmin,
     activeSection,
     ratingComparison,
@@ -535,24 +498,22 @@ const AdminDashboard: React.FC = () => {
     setError(null);
     setSuccess(null);
     try {
-      const res = await fetch("/api/admin/register", {
+      const res = await apiFetch("/api/admin/register", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
-          username: newUsername,
-          password: INITIAL_ADMIN_CREATED_PASSWORD,
+          username: newUsername.trim(),
           gender,
-        }),
+        } satisfies AdminRegisterPlayerRequest),
       });
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}));
         throw new Error(errData.error || "회원 추가 실패");
       }
       setSuccess(
-        `${newUsername} 회원이 추가되었습니다. 초기 비밀번호는 ${INITIAL_ADMIN_CREATED_PASSWORD} 이며, 첫 로그인 시 비밀번호 변경이 필요합니다.`,
+        `${newUsername.trim()} 회원이 추가되었습니다. 이메일 앞부분이 아이디와 같은 회사 Google 계정으로 로그인하면 자동으로 연결됩니다.`,
       );
       setNewUsername("");
       await loadDashboardData();
@@ -562,13 +523,6 @@ const AdminDashboard: React.FC = () => {
   };
 
   const handleGenderChange = async (playerId: string) => {
-    const targetPlayer = players.find((item) => item.id === playerId);
-    if (targetPlayer?.username === PROTECTED_ADMIN_USERNAME) {
-      setError("admin 계정 성별은 변경할 수 없습니다.");
-      setSuccess(null);
-      return;
-    }
-
     const nextGender = genderDrafts[playerId];
     if (!nextGender) {
       return;
@@ -579,11 +533,10 @@ const AdminDashboard: React.FC = () => {
       setError(null);
       setSuccess(null);
 
-      const res = await fetch(`/api/admin/players/${playerId}/gender`, {
+      const res = await apiFetch(`/api/admin/players/${playerId}/gender`, {
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({ gender: nextGender }),
       });
@@ -615,13 +568,6 @@ const AdminDashboard: React.FC = () => {
   };
 
   const handleStatusChange = async (playerId: string) => {
-    const targetPlayer = players.find((item) => item.id === playerId);
-    if (targetPlayer?.username === PROTECTED_ADMIN_USERNAME) {
-      setError("admin 계정의 상태는 변경할 수 없습니다.");
-      setSuccess(null);
-      return;
-    }
-
     const nextStatus = statusDrafts[playerId];
     if (!nextStatus) {
       return;
@@ -632,11 +578,10 @@ const AdminDashboard: React.FC = () => {
       setError(null);
       setSuccess(null);
 
-      const res = await fetch(`/api/admin/players/${playerId}/status`, {
+      const res = await apiFetch(`/api/admin/players/${playerId}/status`, {
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({ status: nextStatus }),
       });
@@ -675,64 +620,14 @@ const AdminDashboard: React.FC = () => {
     }
   };
 
-  const handlePasswordReset = async (playerId: string) => {
-    const targetPlayer = players.find((item) => item.id === playerId);
-    if (targetPlayer?.username === PROTECTED_ADMIN_USERNAME) {
-      setError("admin 계정 비밀번호는 이 화면에서 초기화할 수 없습니다.");
-      setSuccess(null);
-      return;
-    }
-
-    const password = passwordDrafts[playerId] ?? "";
-    if (password.length < 6) {
-      setError("임시 비밀번호는 6자 이상이어야 합니다.");
-      setSuccess(null);
-      return;
-    }
-
-    try {
-      setResettingPasswordPlayerId(playerId);
-      setError(null);
-      setSuccess(null);
-
-      const res = await fetch(`/api/admin/players/${playerId}/password-reset`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ password }),
-      });
-
-      if (!res.ok) {
-        const errData = await res.json().catch(() => ({}));
-        throw new Error(errData.error || "비밀번호 초기화 실패");
-      }
-
-      const data = (await res.json()) as { player: PlayerInfo };
-      setPlayers((prev) =>
-        prev.map((item) => (item.id === data.player.id ? data.player : item)),
-      );
-      setPasswordDrafts((prev) => ({ ...prev, [playerId]: "" }));
-      setSuccess(
-        `${data.player.username} 회원의 비밀번호가 초기화되었습니다. 임시 비밀번호로 첫 로그인 시 비밀번호 변경이 필요합니다.`,
-      );
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "알 수 없는 오류");
-    } finally {
-      setResettingPasswordPlayerId(null);
-    }
-  };
-
   const handleRecalculateRatings = async () => {
     try {
       setIsRecalculatingRatings(true);
       setError(null);
       setSuccess(null);
 
-      const res = await fetch("/api/admin/ratings/recalculate", {
+      const res = await apiFetch("/api/admin/ratings/recalculate", {
         method: "POST",
-        headers: { Authorization: `Bearer ${token}` },
       });
 
       if (!res.ok) {
@@ -769,11 +664,10 @@ const AdminDashboard: React.FC = () => {
       setError(null);
       setSuccess(null);
 
-      const res = await fetch("/api/admin/matches/batch", {
+      const res = await apiFetch("/api/admin/matches/batch", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify(payload),
       });
@@ -850,11 +744,10 @@ const AdminDashboard: React.FC = () => {
       setError(null);
       setSuccess(null);
 
-      const res = await fetch(`/api/admin/matches/${matchId}/metadata`, {
+      const res = await apiFetch(`/api/admin/matches/${matchId}/metadata`, {
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
           ...(isNameChanged ? { name: nextName } : {}),
@@ -948,11 +841,10 @@ const AdminDashboard: React.FC = () => {
       setError(null);
       setSuccess(null);
 
-      const res = await fetch("/api/admin/matches/bulk-metadata", {
+      const res = await apiFetch("/api/admin/matches/bulk-metadata", {
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
           matchIds: matchesToUpdate.map((match) => match.id),
@@ -1051,11 +943,10 @@ const AdminDashboard: React.FC = () => {
       ]);
       setError(null);
       setSuccess(null);
-      const res = await fetch("/api/admin/matches/bulk-metadata", {
+      const res = await apiFetch("/api/admin/matches/bulk-metadata", {
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
           matchIds: matchesToUpdate.map((match) => match.id),
@@ -1129,11 +1020,10 @@ const AdminDashboard: React.FC = () => {
       setError(null);
       setSuccess(null);
 
-      const res = await fetch("/api/admin/matches/bulk-metadata", {
+      const res = await apiFetch("/api/admin/matches/bulk-metadata", {
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
           matchIds: matchesToUpdate.map((match) => match.id),
@@ -1188,11 +1078,10 @@ const AdminDashboard: React.FC = () => {
       setSavingMatchMetadataIds((prev) => [
         ...new Set([...prev, ...matchesToUpdate.map((match) => match.id)]),
       ]);
-      const res = await fetch("/api/admin/matches/bulk-metadata", {
+      const res = await apiFetch("/api/admin/matches/bulk-metadata", {
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
           matchIds: matchesToUpdate.map((match) => match.id),
@@ -1267,13 +1156,12 @@ const AdminDashboard: React.FC = () => {
 
     try {
       setIsPreviewingOfficialDupr(true);
-      const res = await fetch(
+      const res = await apiFetch(
         `/api/admin/players/${officialPlayerId}/official-dupr/preview`,
         {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
           },
           body: JSON.stringify(buildOfficialDuprPayload()),
         },
@@ -1309,13 +1197,12 @@ const AdminDashboard: React.FC = () => {
 
     try {
       setIsApplyingOfficialDupr(true);
-      const res = await fetch(
+      const res = await apiFetch(
         `/api/admin/players/${officialPlayerId}/official-dupr`,
         {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
           },
           body: JSON.stringify(buildOfficialDuprPayload()),
         },
@@ -1346,7 +1233,7 @@ const AdminDashboard: React.FC = () => {
     }
   };
 
-  if (!token || !isAdmin) return null;
+  if (!isAdmin) return null;
 
   const genderLabel = player?.gender === "M" ? "남" : "여";
   const nowPlaying = () => new Date().toLocaleString("ko-KR");
@@ -1360,10 +1247,7 @@ const AdminDashboard: React.FC = () => {
             {player?.username} ({genderLabel}) / 관리자
           </span>
           <button
-            onClick={() => {
-              logout();
-              navigate("/login");
-            }}
+            onClick={() => void logout()}
             className="text-sm text-red-500 hover:text-red-700 font-medium"
           >
             로그아웃
@@ -1420,14 +1304,6 @@ const AdminDashboard: React.FC = () => {
                 className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                초기 비밀번호
-              </label>
-              <div className="w-full rounded-lg border bg-slate-50 px-4 py-2 text-sm font-semibold text-slate-700">
-                {INITIAL_ADMIN_CREATED_PASSWORD}
-              </div>
-            </div>
             <div className="col-span-2 flex gap-6 items-center">
               <label className="flex items-center gap-2 cursor-pointer">
                 <input
@@ -1461,6 +1337,8 @@ const AdminDashboard: React.FC = () => {
           </form>
         </section>
         ) : null}
+
+        {activeSection === "members" ? <AdminInviteCodePanel /> : null}
 
         {activeSection === "ratings" ? (
           <RatingComparisonPanel
@@ -1499,7 +1377,6 @@ const AdminDashboard: React.FC = () => {
         <AdminMatchBatchForm
           players={players}
           isSubmitting={isSavingAdminMatches}
-          protectedAdminUsername={PROTECTED_ADMIN_USERNAME}
           resetKey={adminMatchFormResetKey}
           onSubmit={handleAdminMatchBatchSubmit}
         />
@@ -1507,9 +1384,7 @@ const AdminDashboard: React.FC = () => {
 
         {activeSection === "sessions" ? (
         <AdminSessionManager
-          token={token}
           players={players}
-          protectedAdminUsername={PROTECTED_ADMIN_USERNAME}
           onMatchResultSaved={handleSessionMatchResultSaved}
         />
         ) : null}
@@ -1815,7 +1690,7 @@ const AdminDashboard: React.FC = () => {
                     <input
                       value={bulkMatchLocation}
                       onChange={(e) => setBulkMatchLocation(e.target.value)}
-                      placeholder="예: PKELO Court A"
+                      placeholder="예: Court A"
                       className="w-full rounded-lg border px-3 py-2"
                     />
                   </div>
@@ -2090,9 +1965,6 @@ const AdminDashboard: React.FC = () => {
                     <th className="px-4 py-3 whitespace-nowrap">성별</th>
                     <th className="px-4 py-3 whitespace-nowrap">현재 상태</th>
                     <th className="px-4 py-3 whitespace-nowrap">상태 변경</th>
-                    <th className="px-4 py-3 whitespace-nowrap">
-                      비밀번호 초기화
-                    </th>
                     <th className="px-4 py-3 whitespace-nowrap">생성 로그</th>
                     <th className="px-4 py-3 whitespace-nowrap">상태 로그</th>
                   </tr>
@@ -2106,13 +1978,8 @@ const AdminDashboard: React.FC = () => {
                     const draftStatus = statusDrafts[p.id] ?? p.status;
                     const isSavingGender = savingGenderPlayerId === p.id;
                     const isSaving = savingPlayerId === p.id;
-                    const isResettingPassword =
-                      resettingPasswordPlayerId === p.id;
-                    const passwordDraft = passwordDrafts[p.id] ?? "";
                     const isGenderDirty = draftGender !== p.gender;
                     const isDirty = draftStatus !== p.status;
-                    const isProtectedAdminAccount =
-                      p.username === PROTECTED_ADMIN_USERNAME;
                     const singlesRating = getCompositeSinglesRating(
                       p.duprRating,
                     );
@@ -2150,7 +2017,6 @@ const AdminDashboard: React.FC = () => {
                           <div className="flex items-center gap-2">
                             <select
                               value={draftGender}
-                              disabled={isProtectedAdminAccount}
                               onChange={(e) =>
                                 setGenderDrafts((prev) => ({
                                   ...prev,
@@ -2164,21 +2030,12 @@ const AdminDashboard: React.FC = () => {
                             </select>
                             <button
                               type="button"
-                              disabled={
-                                isProtectedAdminAccount ||
-                                !isGenderDirty ||
-                                isSavingGender
-                              }
+                              disabled={!isGenderDirty || isSavingGender}
                               onClick={() => void handleGenderChange(p.id)}
                               className="px-3 py-2 rounded-lg bg-slate-800 text-white disabled:bg-slate-300"
                             >
                               {isSavingGender ? "저장 중..." : "저장"}
                             </button>
-                            {isProtectedAdminAccount ? (
-                              <span className="text-xs text-slate-500">
-                                admin 계정은 변경 불가
-                              </span>
-                            ) : null}
                           </div>
                           <p className="mt-1 text-xs text-slate-500">
                             현재: {genderLabelMap[p.gender]}
@@ -2195,7 +2052,6 @@ const AdminDashboard: React.FC = () => {
                           <div className="flex items-center gap-2">
                             <select
                               value={draftStatus}
-                              disabled={isProtectedAdminAccount}
                               onChange={(e) =>
                                 setStatusDrafts((prev) => ({
                                   ...prev,
@@ -2209,59 +2065,13 @@ const AdminDashboard: React.FC = () => {
                             </select>
                             <button
                               type="button"
-                              disabled={
-                                isProtectedAdminAccount || !isDirty || isSaving
-                              }
+                              disabled={!isDirty || isSaving}
                               onClick={() => handleStatusChange(p.id)}
                               className="px-3 py-2 rounded-lg bg-slate-800 text-white disabled:bg-slate-300"
                             >
                               {isSaving ? "저장 중..." : "저장"}
                             </button>
-                            {isProtectedAdminAccount ? (
-                              <span className="text-xs text-slate-500">
-                                admin 계정은 변경 불가
-                              </span>
-                            ) : null}
                           </div>
-                        </td>
-                        <td className="px-4 py-4 min-w-[280px]">
-                          <div className="flex items-center gap-2">
-                            <input
-                              type="password"
-                              minLength={6}
-                              placeholder="임시 비밀번호"
-                              value={passwordDraft}
-                              disabled={isProtectedAdminAccount}
-                              onChange={(e) =>
-                                setPasswordDrafts((prev) => ({
-                                  ...prev,
-                                  [p.id]: e.target.value,
-                                }))
-                              }
-                              className="w-32 border rounded-lg px-3 py-2 bg-white disabled:bg-slate-100 disabled:text-slate-400"
-                            />
-                            <button
-                              type="button"
-                              disabled={
-                                isProtectedAdminAccount ||
-                                isResettingPassword ||
-                                passwordDraft.length < 6
-                              }
-                              onClick={() => void handlePasswordReset(p.id)}
-                              className="px-3 py-2 rounded-lg bg-orange-600 text-white disabled:bg-slate-300"
-                            >
-                              {isResettingPassword ? "초기화 중..." : "초기화"}
-                            </button>
-                          </div>
-                          {isProtectedAdminAccount ? (
-                            <p className="mt-1 text-xs text-slate-500">
-                              admin 계정은 변경 불가
-                            </p>
-                          ) : (
-                            <p className="mt-1 text-xs text-gray-400">
-                              초기화 후 첫 로그인 상태가 됩니다.
-                            </p>
-                          )}
                         </td>
                         <td className="px-4 py-4 min-w-[240px] text-xs text-gray-600">
                           {!latestCreationLog ? (

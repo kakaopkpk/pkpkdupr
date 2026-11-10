@@ -8,7 +8,7 @@ import PwaUpdatePrompt from "./components/PwaUpdatePrompt";
 import { AppUpdateProvider } from "./context/AppUpdateContext";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import DevQrs from "./pages/DevQrs";
-import ForceChangePassword from "./pages/ForceChangePassword";
+import InviteCode from "./pages/InviteCode";
 import Login from "./pages/Login";
 
 const KEYBOARD_INPUT_TYPES = new Set([
@@ -57,10 +57,9 @@ const isKeyboardInputElement = (
 };
 
 function AppRoutes() {
-  const { isAuthenticated, isLoading, requiresPasswordChange } = useAuth();
-  const authenticatedHome = requiresPasswordChange ? "/force-change-password" : "/";
+  const { status } = useAuth();
 
-  if (isLoading) {
+  if (status === "loading") {
     return (
       <div className="flex h-full w-full items-center justify-center overflow-hidden">
         <Spinner
@@ -73,60 +72,29 @@ function AppRoutes() {
     );
   }
 
+  if (status === "signedOut") {
+    return (
+      <Routes>
+        <Route path="/login" element={<Login />} />
+        <Route path="*" element={<Navigate to="/login" replace />} />
+      </Routes>
+    );
+  }
+
+  if (status === "needsInvite") {
+    return (
+      <Routes>
+        <Route path="/invite" element={<InviteCode />} />
+        <Route path="*" element={<Navigate to="/invite" replace />} />
+      </Routes>
+    );
+  }
+
   return (
     <Routes>
-      <Route
-        path="/dev/qrs"
-        element={
-          import.meta.env.DEV ? (
-            !isAuthenticated ? (
-              <Navigate to="/login" replace />
-            ) : requiresPasswordChange ? (
-              <Navigate to="/force-change-password" replace />
-            ) : (
-              <DevQrs />
-            )
-          ) : (
-            <Navigate to={authenticatedHome} replace />
-          )
-        }
-      />
-      <Route
-        path="/"
-        element={
-          !isAuthenticated ? (
-            <Navigate to="/login" replace />
-          ) : requiresPasswordChange ? (
-            <Navigate to="/force-change-password" replace />
-          ) : (
-            <BottomNav />
-          )
-        }
-      />
-      <Route
-        path="/login"
-        element={
-          isAuthenticated ? <Navigate to={authenticatedHome} replace /> : <Login />
-        }
-      />
-      <Route
-        path="/force-change-password"
-        element={
-          !isAuthenticated ? (
-            <Navigate to="/login" replace />
-          ) : requiresPasswordChange ? (
-            <ForceChangePassword />
-          ) : (
-            <Navigate to="/" replace />
-          )
-        }
-      />
-      <Route
-        path="*"
-        element={
-          <Navigate to={isAuthenticated ? authenticatedHome : "/login"} replace />
-        }
-      />
+      {import.meta.env.DEV && <Route path="/dev/qrs" element={<DevQrs />} />}
+      <Route path="/" element={<BottomNav />} />
+      <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
 }

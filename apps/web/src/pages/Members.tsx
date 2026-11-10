@@ -25,8 +25,9 @@ import { useAuth } from "@/context/AuthContext";
 import { useTabNavigation } from "@/context/TabNavigationContext";
 import { useMinimumLoading } from "@/hooks/useMinimumLoading";
 import { useOnlineStatus } from "@/hooks/useOnlineStatus";
-import { buildApiUrl } from "@/lib/api";
+import { apiFetch } from "@/lib/api";
 import { isTabRefreshDue } from "@/lib/tabRefresh";
+import { CACHED_MEMBERS_KEY } from "@/lib/userCache";
 import {
   formatRating,
   getCompositeDoublesRating,
@@ -40,7 +41,6 @@ import {
   createEmptyRatingHistory,
 } from "@/utils/matchStats";
 
-const CACHED_MEMBERS_KEY = "pkpkdupr:members";
 const OFFLINE_FALLBACK_MESSAGE =
   "최신 정보를 불러오지 못해 저장된 멤버 목록을 표시합니다.";
 
@@ -126,7 +126,7 @@ const readCachedMembers = (): MemberListPlayerInfo[] | null => {
 };
 
 const Members: React.FC = () => {
-  const { player, token, updateProfile } = useAuth();
+  const { player, isAuthenticated, updateProfile } = useAuth();
   const isOnline = useOnlineStatus();
   const {
     depthStacks,
@@ -172,7 +172,7 @@ const Members: React.FC = () => {
 
   const loadMembers = useCallback(
     async (preserveVisibleData = false, throwOnError = false) => {
-      if (!token) {
+      if (!isAuthenticated) {
         setMembers([]);
         setIsLoading(false);
         lastSuccessfulLoadAtRef.current = null;
@@ -186,9 +186,7 @@ const Members: React.FC = () => {
           setNotice(null);
         }
 
-        const res = await fetch(buildApiUrl("/api/players"), {
-          headers: { Authorization: `Bearer ${token}` },
-        });
+        const res = await apiFetch("/api/players");
 
         if (!res.ok) {
           const errorData = await res.json().catch(() => ({}));
@@ -233,7 +231,7 @@ const Members: React.FC = () => {
         }
       }
     },
-    [isOnline, token],
+    [isOnline, isAuthenticated],
   );
 
   const loadSelectedMemberMatchStats = useCallback(
@@ -242,7 +240,7 @@ const Members: React.FC = () => {
       preserveVisibleData = false,
       throwOnError = false,
     ) => {
-      if (!token) {
+      if (!isAuthenticated) {
         setSelectedMemberMatchStats(createEmptyMatchStats());
         setSelectedMemberRatingDelta(createEmptyRatingDelta());
         setSelectedMemberRatingHistory(createEmptyRatingHistory());
@@ -260,11 +258,8 @@ const Members: React.FC = () => {
       }
 
       try {
-        const res = await fetch(
-          buildApiUrl(
-            `/api/players/${encodeURIComponent(memberId)}/profile-summary`,
-          ),
-          { headers: { Authorization: `Bearer ${token}` } },
+        const res = await apiFetch(
+          `/api/players/${encodeURIComponent(memberId)}/profile-summary`,
         );
 
         if (!res.ok) {
@@ -294,12 +289,12 @@ const Members: React.FC = () => {
         }
       }
     },
-    [token],
+    [isAuthenticated],
   );
 
   const loadSelectedMemberMatchHistory = useCallback(
     async (memberId: string, page: number, append = false) => {
-      if (!token) return;
+      if (!isAuthenticated) return;
 
       setIsSelectedMemberMatchHistoryLoading(true);
       try {
@@ -308,10 +303,7 @@ const Members: React.FC = () => {
           page: String(page),
           limit: String(MEMBER_MATCH_HISTORY_PAGE_SIZE),
         });
-        const res = await fetch(
-          buildApiUrl(`/api/matches?${searchParams.toString()}`),
-          { headers: { Authorization: `Bearer ${token}` } },
-        );
+        const res = await apiFetch(`/api/matches?${searchParams.toString()}`);
         if (!res.ok) throw new Error("매치 목록을 불러오지 못했습니다.");
 
         const data = (await res.json()) as MatchListResponse;
@@ -326,7 +318,7 @@ const Members: React.FC = () => {
         setIsSelectedMemberMatchHistoryLoading(false);
       }
     },
-    [token],
+    [isAuthenticated],
   );
 
   useEffect(() => {
@@ -345,7 +337,7 @@ const Members: React.FC = () => {
   }, [loadMembers, members.length, selectedTab]);
 
   useEffect(() => {
-    if (!token || !selectedMemberId) {
+    if (!isAuthenticated || !selectedMemberId) {
       setSelectedMemberMatchStats(createEmptyMatchStats());
       setSelectedMemberRatingDelta(createEmptyRatingDelta());
       setSelectedMemberRatingHistory(createEmptyRatingHistory());
@@ -355,7 +347,7 @@ const Members: React.FC = () => {
     }
 
     void loadSelectedMemberMatchStats(selectedMemberId);
-  }, [loadSelectedMemberMatchStats, selectedMemberId, token]);
+  }, [loadSelectedMemberMatchStats, selectedMemberId, isAuthenticated]);
 
   useEffect(
     () =>

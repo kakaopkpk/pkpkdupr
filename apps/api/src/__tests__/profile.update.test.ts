@@ -20,7 +20,6 @@ const player: Player = {
 const session: AuthenticatedSession = {
   payload: { playerId: player.id, isAdmin: false },
   player,
-  isFirstLogin: false,
 };
 
 describe("PATCH /api/me/profile", () => {
@@ -28,7 +27,6 @@ describe("PATCH /api/me/profile", () => {
     vi.spyOn(AuthService.prototype, "authenticateAccessToken").mockResolvedValue(
       session,
     );
-    vi.spyOn(AuthService.prototype, "initAdmin").mockResolvedValue(player);
   });
 
   afterEach(() => {
@@ -86,6 +84,18 @@ describe("PATCH /api/me/profile", () => {
 
     expect(response.status).toBe(400);
     expect(response.body.error).toBe("대표 소속을 하나 지정해 주세요.");
+    expect(updateProfile).not.toHaveBeenCalled();
+  });
+
+  it("임의의 avatarUrl 문자열을 받지 않는다", async () => {
+    const updateProfile = vi.spyOn(AuthService.prototype, "updatePlayerProfile");
+
+    const response = await request(app)
+      .patch("/api/me/profile")
+      .set("Authorization", "Bearer test-token")
+      .send({ avatarUrl: "https://evil.example/avatar.png" });
+
+    expect(response.status).toBe(400);
     expect(updateProfile).not.toHaveBeenCalled();
   });
 });

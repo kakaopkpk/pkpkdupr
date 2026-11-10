@@ -26,7 +26,6 @@ const playerWithoutCompletedMatch: Player = {
 const session: AuthenticatedSession = {
   payload: { playerId: player.id, isAdmin: false },
   player,
-  isFirstLogin: false,
 };
 
 describe("GET /api/players", () => {
@@ -35,7 +34,6 @@ describe("GET /api/players", () => {
       AuthService.prototype,
       "authenticateAccessToken",
     ).mockResolvedValue(session);
-    vi.spyOn(AuthService.prototype, "initAdmin").mockResolvedValue(player);
   });
 
   afterEach(() => {

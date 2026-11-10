@@ -34,17 +34,15 @@ import type {
   PlayerQrTokenResponse,
   VerifyPlayerQrTokenResponse,
 } from "@pkpkdupr/shared/qr";
-import bcrypt from "bcryptjs";
-import { createHmac, randomUUID } from "crypto";
+import type {
+  AdminRegisterPlayerRequest,
+  AuthErrorCode,
+  CreatedInviteCode,
+  InviteCodeSummary,
+} from "@pkpkdupr/shared/auth";
+import { createHash, randomInt, randomUUID } from "crypto";
 import { generateEntityId } from "@pkpkdupr/shared/entityId";
-import {
-  ACCESS_TOKEN_EXPIRES_IN,
-  createAccessToken,
-  decodeToken,
-  JWT_SECRET,
-  REMEMBER_ME_ACCESS_TOKEN_EXPIRES_IN,
-  type JwtPayload,
-} from "../config/jwt";
+import { SupabaseAuthUserVerifier } from "./supabaseAuthUser";
 import {
   createDevPlayerQrPayload,
   createPlayerQrToken as createPlayerQrTokenPayload,
@@ -59,43 +57,50 @@ import {
 } from "./RatingService";
 import { ScorePerformanceRatingService } from "./ScorePerformanceRatingService";
 import { matchTypeValues, type Match, type MatchType } from "@pkpkdupr/shared/match";
+import type { CreateStoredPlayerInput } from "@pkpkdupr/db";
+import { db } from "../db";
 
-const SALT_ROUNDS = 10;
-const DB_SERVER_URL = process.env.DB_SERVER_URL || "http://localhost:5001";
 const DEV_MOCK_DATA_ENABLED = process.env.ENABLE_DEV_MOCK_DATA === "true";
-const API_ADMIN_USERNAME = process.env.API_ADMIN_USERNAME || "admin";
-const API_ADMIN_PASSWORD = process.env.API_ADMIN_PASSWORD || "admin123qwe";
+
+const INVITE_CODE_LENGTH = 8;
+/** 0/O, 1/I/L처럼 옮겨 적을 때 헷갈리는 문자를 뺀 영문 대문자·숫자. */
+const INVITE_CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
+const INVITE_CODE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+/** 초대 가입 요청에는 성별이 없으므로 기본값으로 만들고, 관리자가 회원 성별 변경 API로 고친다. */
+const INVITED_PLAYER_DEFAULT_GENDER: Player["gender"] = "M";
 
 interface StoredPlayerRecord extends Player {
-  passwordHash: string;
-  isFirstLogin: boolean;
+  authUserId: string | null;
   duprMetrics: PlayerDuprMetrics;
   duprState: StoredPlayerDupr;
 }
 
-interface DbRequestOptions extends RequestInit {
-  retries?: number;
-}
-
-interface RetryOperationOptions {
-  retries: number;
-  baseDelayMs?: number;
-}
-
 export interface AuthenticatedSession {
-  payload: JwtPayload;
+  payload: {
+    playerId: string;
+    isAdmin: boolean;
+  };
   player: Player;
-  isFirstLogin: boolean;
-  refreshedAccessToken?: string;
+}
+
+/** 인증·가입 실패. index.ts가 code에 맞는 HTTP 상태로 응답한다. */
+export class AuthError extends Error {
+  constructor(
+    readonly code: AuthErrorCode,
+    message: string,
+  ) {
+    super(message);
+    this.name = "AuthError";
+  }
 }
 
 /**
- * 세션 자체가 더 이상 유효하지 않은 경우에만 사용합니다. DB 연결 같은
+ * 세션 자체가 더 이상 유효하지 않은 경우에만 사용합니다. Auth 서버·DB 연결 같은
  * 일시적인 인프라 오류와 구분해 클라이언트가 저장된 세션을 보존할 수 있게 합니다.
  */
-export class InvalidAccessTokenError extends Error {
+export class InvalidAccessTokenError extends AuthError {
   constructor(message: string) {
-    super(message);
+    super("SESSION_INVALID", message);
     this.name = "InvalidAccessTokenError";
   }
 }
@@ -104,19 +109,12 @@ export interface AdminPlayer extends Player {
   duprMetrics: PlayerDuprMetrics;
 }
 
-export interface UserCredentials {
-  username: string;
-  password: string;
-  gender: "M" | "F";
-}
-
 const buildId = (prefix: string) =>
   `${prefix}-${randomUUID()}`;
 
-const createPasswordFingerprint = (passwordHash: string) =>
-  createHmac("sha256", JWT_SECRET).update(passwordHash).digest("hex");
-
-const createPlayer = (input: Pick<Player, "username" | "gender">): Player => {
+const createPlayer = (
+  input: Pick<Player, "username" | "gender">,
+): Player & { duprRating: null } => {
   const now = new Date();
 
   return {
@@ -322,8 +320,7 @@ const groupByPlayerId = <T extends { playerId: string }>(items: T[]) =>
 
 const toPublicPlayer = (stored: StoredPlayerRecord): Player => {
   const {
-    passwordHash: _passwordHash,
-    isFirstLogin: _isFirstLogin,
+    authUserId: _authUserId,
     duprMetrics: _duprMetrics,
     duprState: _duprState,
     ...player
@@ -347,22 +344,66 @@ const toPlayerQrPublicPlayer = (player: Player): PlayerQrPublicPlayer => ({
 const isActiveDevPlayer = (player: Player) =>
   player.status === "active" && player.username.startsWith("dev_");
 
-const isRetryableDbBootstrapError = (error: unknown) => {
-  if (!(error instanceof Error)) {
-    return false;
-  }
+const hashInviteCode = (code: string) =>
+  createHash("sha256").update(code).digest("hex");
 
-  const cause = (error as Error & { cause?: unknown }).cause;
-  if (
-    typeof cause === "object" &&
-    cause !== null &&
-    "code" in cause &&
-    (cause as { code?: string }).code === "ECONNREFUSED"
-  ) {
+const generateInviteCode = () =>
+  Array.from(
+    { length: INVITE_CODE_LENGTH },
+    () => INVITE_CODE_ALPHABET[randomInt(INVITE_CODE_ALPHABET.length)],
+  ).join("");
+
+/** 사용자가 소문자·앞뒤 공백·하이픈을 섞어 입력해도 같은 코드로 본다. */
+const normalizeInviteCode = (code: string) =>
+  code.trim().toUpperCase().replace(/[\s-]/g, "");
+
+interface AllowedAuthUser {
+  id: string;
+  /** 이메일 앞부분(@ 앞). 대소문자는 원래 값 그대로다. */
+  emailLocalPart: string;
+}
+
+/** `ALLOWED_AUTH_PROVIDERS`(쉼표 구분)의 허용 로그인 provider. 미설정이면 google만 허용한다. */
+const getAllowedAuthProviders = (): string[] => {
+  const configured = process.env.ALLOWED_AUTH_PROVIDERS?.trim();
+  return (configured || "google")
+    .split(",")
+    .map((provider) => provider.trim().toLowerCase())
+    .filter(Boolean);
+};
+
+/** 허용 도메인과 정확히 같고 확인된 이메일이면 앞부분을 돌려준다. */
+const getAllowedEmailLocalPart = (
+  email: string | null,
+  emailConfirmed: boolean,
+): string | null => {
+  const allowedDomain = process.env.ALLOWED_EMAIL_DOMAIN?.trim().toLowerCase();
+  if (!allowedDomain || !email || !emailConfirmed) {
+    return null;
+  }
+  const atIndex = email.lastIndexOf("@");
+  if (atIndex <= 0) {
+    return null;
+  }
+  const domain = email.slice(atIndex + 1).toLowerCase();
+  return domain === allowedDomain ? email.slice(0, atIndex) : null;
+};
+
+/** Postgres unique_violation(23505). 표현식 유니크 인덱스(lower(username)) 위반도 같은 코드다. */
+const isUniqueViolation = (error: unknown) => {
+  if ((error as { code?: unknown })?.code === "23505") {
     return true;
   }
+  const message = (error as Error)?.message ?? "";
+  return message.includes("UNIQUE") || message.includes("unique");
+};
 
-  return error.message.includes("fetch failed");
+/** 갱신 대상 플레이어가 없을 때 기존 공개 API와 같은 메시지로 실패시킨다. */
+const requireStoredPlayer = <T>(player: T | undefined): T => {
+  if (!player) {
+    throw new Error("사용자를 찾을 수 없습니다.");
+  }
+  return player;
 };
 
 type OfficialDuprRatingPatch = NonNullable<
@@ -533,6 +574,7 @@ export class AuthService {
   constructor(
     private readonly ratingService: RatingServiceContract =
       new ScorePerformanceRatingService(),
+    private readonly authUserVerifier = new SupabaseAuthUserVerifier(),
   ) {}
 
   setPlayerRatingChartProjectionRefresher(
@@ -564,163 +606,238 @@ export class AuthService {
     }
   }
 
-  private shouldRequirePasswordChange(
-    stored: Pick<StoredPlayerRecord, "username" | "isFirstLogin">,
-  ): boolean {
-    return stored.username !== API_ADMIN_USERNAME && stored.isFirstLogin;
-  }
-
-  private async retryOperation<T>(
-    operation: () => Promise<T>,
-    options: RetryOperationOptions,
-  ): Promise<T> {
-    const { retries, baseDelayMs = 300 } = options;
-
-    for (let attempt = 0; attempt <= retries; attempt += 1) {
-      try {
-        return await operation();
-      } catch (error) {
-        if (!isRetryableDbBootstrapError(error) || attempt === retries) {
-          throw error;
-        }
-
-        await new Promise((resolve) =>
-          setTimeout(resolve, baseDelayMs * (attempt + 1)),
-        );
-      }
-    }
-
-    throw new Error("DB 서버 요청 실패");
-  }
-
-  private async dbRequest<T>(
-    path: string,
-    init?: DbRequestOptions,
-  ): Promise<T> {
-    const retries = init?.retries ?? 0;
-
-    for (let attempt = 0; attempt <= retries; attempt += 1) {
-      try {
-        const res = await fetch(`${DB_SERVER_URL}${path}`, {
-          ...init,
-          headers: {
-            "Content-Type": "application/json",
-            ...(init?.headers ?? {}),
-          },
-        });
-
-        if (!res.ok) {
-          const errorData = await res.json().catch(() => ({}));
-          throw new Error(
-            errorData.error || `DB 서버 요청 실패: ${res.status}`,
-          );
-        }
-
-        if (res.status === 204) {
-          return undefined as T;
-        }
-
-        return (await res.json()) as T;
-      } catch (error) {
-        if (attempt === retries) {
-          throw error;
-        }
-        await new Promise((resolve) =>
-          setTimeout(resolve, 300 * (attempt + 1)),
-        );
-      }
-    }
-
-    throw new Error("DB 서버 요청 실패");
-  }
-
-  private async getStoredPlayerById(
-    playerId: string,
-  ): Promise<StoredPlayerRecord | undefined> {
+  /** username unique 위반은 공개 API가 기대하는 중복 메시지로 바꾼다. */
+  private async createStoredPlayer(
+    input: CreateStoredPlayerInput,
+  ): ReturnType<typeof db.players.create> {
     try {
-      const player = await this.dbRequest<any>(`/internal/players/${playerId}`);
-      return hydratePlayer(player);
+      return await db.players.create(input);
     } catch (error) {
-      if ((error as Error).message.includes("사용자를 찾을 수 없습니다")) {
-        return undefined;
+      if (isUniqueViolation(error)) {
+        throw new Error("중복된 사용자명입니다.");
       }
       throw error;
     }
   }
 
-  private createAccessTokenForPlayer(
-    stored: StoredPlayerRecord,
-    rememberMe = false,
-  ): string {
-    return createAccessToken(
-      {
-        playerId: stored.id,
-        isAdmin: stored.username === API_ADMIN_USERNAME,
-        rememberMe,
-        passwordFingerprint: createPasswordFingerprint(stored.passwordHash),
-      },
-      {
-        expiresIn: rememberMe
-          ? REMEMBER_ME_ACCESS_TOKEN_EXPIRES_IN
-          : ACCESS_TOKEN_EXPIRES_IN,
-      },
-    );
+  private async getStoredPlayerById(
+    playerId: string,
+  ): Promise<StoredPlayerRecord | undefined> {
+    const player = await db.players.findById(playerId);
+    return player ? hydratePlayer(player) : undefined;
   }
 
-  async authenticateAccessToken(
+  /**
+   * Supabase Auth로 토큰을 확인하고 허용 provider·허용 도메인·이메일 확인 여부를 검사한다.
+   * 허용 목록에 없는 provider나 다른 도메인 계정은 회원 조회·연결 전에 거부해 앞부분이 같아도 남의 회원 기록에 닿지 못한다.
+   */
+  private async resolveAllowedAuthUser(
     accessToken: string,
-  ): Promise<AuthenticatedSession> {
-    const decoded = decodeToken(accessToken);
-    if (!decoded?.playerId) {
-      throw new InvalidAccessTokenError("유효하지 않거나 만료된 토큰입니다.");
+  ): Promise<AllowedAuthUser> {
+    const user = await this.authUserVerifier.getUser(accessToken);
+    if (!user) {
+      throw new InvalidAccessTokenError("세션이 만료되었거나 유효하지 않습니다.");
     }
 
-    const stored = await this.getStoredPlayerById(decoded.playerId);
-    if (!stored) {
-      throw new InvalidAccessTokenError("사용자를 찾을 수 없습니다.");
+    if (
+      !user.provider ||
+      !getAllowedAuthProviders().includes(user.provider.toLowerCase())
+    ) {
+      throw new AuthError(
+        "DOMAIN_NOT_ALLOWED",
+        "허용된 회사 계정(Google)으로만 로그인할 수 있습니다.",
+      );
     }
+
+    const emailLocalPart = getAllowedEmailLocalPart(
+      user.email,
+      user.emailConfirmed,
+    );
+    if (!emailLocalPart) {
+      throw new AuthError(
+        "DOMAIN_NOT_ALLOWED",
+        "허용된 회사 계정(Google)으로만 로그인할 수 있습니다.",
+      );
+    }
+
+    return { id: user.id, emailLocalPart };
+  }
+
+  /**
+   * 이메일 앞부분과 대소문자 구분 없이 같은 username의 active 미연결 회원을 요청자와 연결한다.
+   * 이 요청이 실제로 연결했을 때만 감사 로그를 남긴다.
+   */
+  private async autoLinkByEmailLocalPart(
+    authUser: AllowedAuthUser,
+  ): Promise<StoredPlayerRecord | undefined> {
+    const candidate = await db.players.findByUsernameIgnoringCase(
+      authUser.emailLocalPart,
+    );
+    if (
+      !candidate ||
+      candidate.authUserId ||
+      candidate.status !== "active"
+    ) {
+      return undefined;
+    }
+
+    let linkedNow = false;
+    try {
+      linkedNow = await db.players.linkAuthUser(candidate.id, authUser.id);
+    } catch (error) {
+      if (!isUniqueViolation(error)) {
+        throw error;
+      }
+    }
+    if (linkedNow) {
+      await db.playerAuthLinkLogs.create({
+        id: buildId("player-auth-link-log"),
+        playerId: candidate.id,
+        authUserId: authUser.id,
+        linkMethod: "email_local_part",
+        createdAt: new Date(),
+      });
+    }
+    // 동시 요청이 먼저 연결했을 수 있으므로 연결 결과는 요청자 기준으로 다시 읽는다.
+    const linked = await db.players.findByAuthUserId(authUser.id);
+    return linked ? hydratePlayer(linked) : undefined;
+  }
+
+  private async buildSession(
+    stored: StoredPlayerRecord,
+  ): Promise<AuthenticatedSession> {
     if (stored.status === "inactive") {
       throw new InvalidAccessTokenError(
         "비활성 계정입니다. 관리자에게 문의해주세요.",
       );
     }
 
-    const expectedFingerprint = createPasswordFingerprint(stored.passwordHash);
-    if (decoded.passwordFingerprint !== expectedFingerprint) {
-      throw new InvalidAccessTokenError(
-        "비밀번호가 변경되어 다시 로그인해야 합니다.",
-      );
-    }
-
-    const rememberMe = decoded.rememberMe === true;
     return {
       payload: {
-        ...decoded,
-        isAdmin: stored.username === API_ADMIN_USERNAME,
-        rememberMe,
+        playerId: stored.id,
+        isAdmin: await db.playerAdmins.isAdmin(stored.id),
       },
       player: toPublicPlayer(stored),
-      isFirstLogin: this.shouldRequirePasswordChange(stored),
-      refreshedAccessToken: rememberMe
-        ? this.createAccessTokenForPlayer(stored, true)
-        : undefined,
     };
   }
 
-  private async getStoredPlayerByUsername(
-    username: string,
-  ): Promise<StoredPlayerRecord | undefined> {
-    try {
-      const player = await this.dbRequest<any>(
-        `/internal/players/by-username/${encodeURIComponent(username)}`,
+  /**
+   * 요청자와 연결된 회원 세션을 만든다. 연결된 회원이 없으면 ACCOUNT_NOT_LINKED로 거부한다.
+   * autoLink는 GET /api/me에서만 켜며, 이메일 앞부분과 같은 username의 active 미연결 회원을 연결한다.
+   */
+  async authenticateAccessToken(
+    accessToken: string,
+    options: { autoLink?: boolean } = {},
+  ): Promise<AuthenticatedSession> {
+    const authUser = await this.resolveAllowedAuthUser(accessToken);
+    const linked = await db.players.findByAuthUserId(authUser.id);
+    const stored = linked
+      ? hydratePlayer(linked)
+      : options.autoLink
+        ? await this.autoLinkByEmailLocalPart(authUser)
+        : undefined;
+    if (!stored) {
+      throw new AuthError(
+        "ACCOUNT_NOT_LINKED",
+        "연결된 회원이 없습니다. 관리자에게 받은 초대 코드로 가입해주세요.",
       );
-      return hydratePlayer(player);
+    }
+
+    return await this.buildSession(stored);
+  }
+
+  /**
+   * 초대 코드로 username이 이메일 앞부분(소문자)인 회원을 만들고 요청자와 연결한다.
+   * 같은 username의 active 미연결 회원이 있으면 코드를 쓰지 않고 그 회원과 연결한다.
+   */
+  async redeemInviteCode(
+    accessToken: string,
+    code: string,
+  ): Promise<AuthenticatedSession> {
+    const authUser = await this.resolveAllowedAuthUser(accessToken);
+    const alreadyLinkedError = () =>
+      new AuthError("ALREADY_LINKED", "이미 회원과 연결된 계정입니다.");
+
+    if (await db.players.findByAuthUserId(authUser.id)) {
+      throw alreadyLinkedError();
+    }
+
+    const autoLinked = await this.autoLinkByEmailLocalPart(authUser);
+    if (autoLinked) {
+      return await this.buildSession(autoLinked);
+    }
+
+    const username = authUser.emailLocalPart.toLowerCase();
+    // 자동 연결되지 않았는데 같은 username이 있으면 다른 Auth 사용자에게 연결됐거나 inactive인 회원이다.
+    if (await db.players.findByUsernameIgnoringCase(username)) {
+      throw alreadyLinkedError();
+    }
+
+    const playerId = generateEntityId("player");
+    let redeemed: boolean;
+    try {
+      redeemed = await db.inviteCodes.redeemForNewPlayer({
+        codeHash: hashInviteCode(normalizeInviteCode(code)),
+        usedAt: new Date(),
+        player: {
+          id: playerId,
+          username,
+          gender: INVITED_PLAYER_DEFAULT_GENDER,
+          authUserId: authUser.id,
+        },
+        creationLogId: buildId("player-creation-log"),
+      });
     } catch (error) {
-      if ((error as Error).message.includes("사용자를 찾을 수 없습니다.")) {
-        return undefined;
+      // 같은 요청자이거나 대소문자 구분 없이 같은 username으로 동시에 가입한 경우. 트랜잭션이 롤백돼 코드는 그대로 남는다.
+      if (isUniqueViolation(error)) {
+        throw alreadyLinkedError();
       }
       throw error;
     }
+    if (!redeemed) {
+      throw new AuthError(
+        "INVITE_INVALID",
+        "초대 코드가 없거나 만료되었거나 이미 사용되었습니다.",
+      );
+    }
+
+    const created = await this.getStoredPlayerById(playerId);
+    return await this.buildSession(requireStoredPlayer(created));
+  }
+
+  async createInviteCode(createdByPlayerId: string): Promise<CreatedInviteCode> {
+    const createdAt = new Date();
+    const expiresAt = new Date(createdAt.getTime() + INVITE_CODE_TTL_MS);
+    // 31^8 공간이라 해시 충돌은 사실상 없지만, unique 위반이면 새 코드로 다시 만든다.
+    for (let attempt = 0; ; attempt += 1) {
+      const code = generateInviteCode();
+      try {
+        await db.inviteCodes.create({
+          id: buildId("invite-code"),
+          codeHash: hashInviteCode(code),
+          createdByPlayerId,
+          createdAt,
+          expiresAt,
+        });
+        return { code, expiresAt: expiresAt.toISOString() };
+      } catch (error) {
+        if (!isUniqueViolation(error) || attempt >= 2) {
+          throw error;
+        }
+      }
+    }
+  }
+
+  async getInviteCodes(): Promise<InviteCodeSummary[]> {
+    const codes = await db.inviteCodes.findAllSummaries();
+    return codes.map((code) => ({
+      id: code.id,
+      createdByUsername: code.createdByUsername,
+      createdAt: toDate(code.createdAt).toISOString(),
+      expiresAt: toDate(code.expiresAt).toISOString(),
+      usedByUsername: code.usedByUsername ?? null,
+      usedAt: code.usedAt ? toDate(code.usedAt).toISOString() : null,
+    }));
   }
 
   private async insertCreationLog(input: {
@@ -730,12 +847,9 @@ export class AuthService {
     creationSource: PlayerCreationSource;
     createdAt: Date;
   }): Promise<PlayerCreationLog> {
-    const log = await this.dbRequest<any>("/internal/player-creation-logs", {
-      method: "POST",
-      body: JSON.stringify({
-        id: buildId("player-creation-log"),
-        ...input,
-      }),
+    const log = await db.playerCreationLogs.create({
+      id: buildId("player-creation-log"),
+      ...input,
     });
     return hydrateCreationLog(log);
   }
@@ -748,32 +862,20 @@ export class AuthService {
     changedByUsername: string;
     changedAt: Date;
   }): Promise<PlayerStatusChangeLog> {
-    const log = await this.dbRequest<any>(
-      "/internal/player-status-change-logs",
-      {
-        method: "POST",
-        body: JSON.stringify({
-          id: buildId("player-status-log"),
-          ...input,
-        }),
-      },
-    );
+    const log = await db.playerStatusChangeLogs.create({
+      id: buildId("player-status-log"),
+      ...input,
+    });
     return hydrateStatusChangeLog(log);
   }
 
   private async insertPlayerRatingChangeLog(
     input: Omit<PlayerRatingChangeLog, "id">,
   ): Promise<PlayerRatingChangeLog> {
-    const log = await this.dbRequest<any>(
-      "/internal/player-rating-change-logs",
-      {
-        method: "POST",
-        body: JSON.stringify({
-          id: buildId("player-rating-change-log"),
-          ...input,
-        }),
-      },
-    );
+    const log = await db.playerRatingChangeLogs.create({
+      id: buildId("player-rating-change-log"),
+      ...input,
+    });
     return hydratePlayerRatingChangeLog(log);
   }
 
@@ -802,90 +904,9 @@ export class AuthService {
         );
     });
 
-    await this.dbRequest("/internal/player-rating-change-logs/match-completed", {
-      method: "PUT",
-      body: JSON.stringify(logs),
-    });
+    await db.playerRatingChangeLogs.replaceMatchCompleted(logs);
 
     return logs;
-  }
-
-  async register({
-    username,
-    password,
-    gender,
-  }: UserCredentials): Promise<
-    Player & { accessToken: string; isFirstLogin: boolean }
-  > {
-    const duplicate = await this.getStoredPlayerByUsername(username);
-    if (duplicate) {
-      throw new Error("중복된 사용자명입니다.");
-    }
-
-    const hashedPassword = await bcrypt.hash(password, SALT_ROUNDS);
-    const isAdmin = username === API_ADMIN_USERNAME;
-    let created: any;
-    for (let attempt = 0; attempt < 8; attempt += 1) {
-      const player = createPlayer({ username, gender });
-      try {
-        created = await this.dbRequest<any>("/internal/players", {
-          method: "POST",
-          body: JSON.stringify({
-            ...player,
-            passwordHash: hashedPassword,
-            isFirstLogin: true,
-          }),
-        });
-        break;
-      } catch (error) {
-        if (attempt === 7) throw error;
-      }
-    }
-    if (!created) {
-      throw new Error("플레이어 ID 생성에 실패했습니다.");
-    }
-
-    const hydratedPlayer = hydratePlayer(created);
-    await this.insertCreationLog({
-      playerId: hydratedPlayer.id,
-      createdByPlayerId: hydratedPlayer.id,
-      createdByUsername: hydratedPlayer.username,
-      creationSource: "self_register",
-      createdAt: hydratedPlayer.createdAt,
-    });
-
-    const accessToken = this.createAccessTokenForPlayer(hydratedPlayer);
-    return {
-      ...toPublicPlayer(hydratedPlayer),
-      accessToken,
-      isFirstLogin: this.shouldRequirePasswordChange(hydratedPlayer),
-      isAdmin,
-    } as any;
-  }
-
-  async login(
-    username: string,
-    password: string,
-    rememberMe = false,
-  ): Promise<{ accessToken: string; isFirstLogin: boolean; isAdmin: boolean }> {
-    const stored = await this.getStoredPlayerByUsername(username);
-    if (!stored) {
-      throw new Error("아이디 또는 비밀번호가 틀렸습니다.");
-    }
-    if (stored.status === "inactive") {
-      throw new Error("비활성 계정입니다. 관리자에게 문의해주세요.");
-    }
-    const isValidPassword = await bcrypt.compare(password, stored.passwordHash);
-    if (!isValidPassword) {
-      throw new Error("아이디 또는 비밀번호가 틀렸습니다.");
-    }
-    const isAdmin = stored.username === API_ADMIN_USERNAME;
-    const accessToken = this.createAccessTokenForPlayer(stored, rememberMe);
-    return {
-      accessToken,
-      isFirstLogin: this.shouldRequirePasswordChange(stored),
-      isAdmin,
-    };
   }
 
   async getPlayerById(playerId: string): Promise<Player | undefined> {
@@ -901,7 +922,7 @@ export class AuthService {
     if (!stored) {
       throw new Error("사용자를 찾을 수 없습니다.");
     }
-    if (stored.status !== "active" || stored.username === "admin") {
+    if (stored.status !== "active") {
       throw new Error("QR 코드를 생성할 수 없는 계정입니다.");
     }
 
@@ -921,7 +942,6 @@ export class AuthService {
     }
     if (
       stored.status !== "active" ||
-      stored.username === "admin" ||
       (isDevPlayerQrPayload(payload) && !isActiveDevPlayer(stored))
     ) {
       throw new Error("유효하지 않은 플레이어 QR 코드입니다.");
@@ -950,89 +970,6 @@ export class AuthService {
         payload: createDevPlayerQrPayload(player.id),
       })),
     };
-  }
-
-  async changePassword(
-    playerId: string,
-    currentPassword: string | undefined,
-    newPassword: string,
-  ): Promise<void> {
-    const stored = await this.getStoredPlayerById(playerId);
-    if (!stored) {
-      throw new Error("사용자를 찾을 수 없습니다.");
-    }
-
-    if (!this.shouldRequirePasswordChange(stored)) {
-      if (!currentPassword) {
-        throw new Error("현재 패스워드를 입력해주세요.");
-      }
-
-      const isValidCurrentPassword = await bcrypt.compare(
-        currentPassword,
-        stored.passwordHash,
-      );
-      if (!isValidCurrentPassword) {
-        throw new Error("현재 패스워드가 올바르지 않습니다.");
-      }
-    }
-
-    const passwordHash = await bcrypt.hash(newPassword, SALT_ROUNDS);
-    await this.dbRequest(`/internal/players/${playerId}/password`, {
-      method: "PATCH",
-      body: JSON.stringify({ passwordHash, isFirstLogin: false }),
-    });
-  }
-
-  async verifyAdminPassword(
-    playerId: string,
-    password: string | undefined,
-  ): Promise<boolean> {
-    if (!password) {
-      return false;
-    }
-
-    const stored = await this.getStoredPlayerById(playerId);
-    if (!stored || stored.username !== API_ADMIN_USERNAME) {
-      return false;
-    }
-
-    return await bcrypt.compare(password, stored.passwordHash);
-  }
-
-  async resetPlayerPassword(
-    playerId: string,
-    newPassword: string,
-    resetByPlayerId: string,
-  ): Promise<Player> {
-    const stored = await this.getStoredPlayerById(playerId);
-    if (!stored) {
-      throw new Error("사용자를 찾을 수 없습니다.");
-    }
-
-    const resetBy = await this.getStoredPlayerById(resetByPlayerId);
-    if (!resetBy) {
-      throw new Error("비밀번호 초기화 요청자를 찾을 수 없습니다.");
-    }
-
-    if (stored.username === "admin") {
-      throw new Error(
-        "기본 관리자 계정 비밀번호는 이 기능으로 초기화할 수 없습니다.",
-      );
-    }
-
-    if (typeof newPassword !== "string" || newPassword.length < 6) {
-      throw new Error("임시 비밀번호는 6자 이상이어야 합니다.");
-    }
-
-    const passwordHash = await bcrypt.hash(newPassword, SALT_ROUNDS);
-    const updated = hydratePlayer(
-      await this.dbRequest<any>(`/internal/players/${playerId}/password`, {
-        method: "PATCH",
-        body: JSON.stringify({ passwordHash, isFirstLogin: true }),
-      }),
-    );
-
-    return toPublicPlayer(updated);
   }
 
   async updatePlayerProfile(
@@ -1073,30 +1010,25 @@ export class AuthService {
     }
 
     const updated = hydratePlayer(
-      await this.dbRequest<any>(`/internal/players/${playerId}/profile`, {
-        method: "PATCH",
-        body: JSON.stringify(profilePatch),
-      }),
+      requireStoredPlayer(await db.players.updateProfile(playerId, profilePatch)),
     );
 
     return toPublicPlayer(updated);
   }
 
   async getAllPlayers(): Promise<Player[]> {
-    const players = await this.dbRequest<any[]>("/internal/players");
+    const players = await db.players.findAll();
     return players.map((record) => toPublicPlayer(hydratePlayer(record)));
   }
 
   async getAdminPlayers(): Promise<AdminPlayer[]> {
-    const players = await this.dbRequest<any[]>("/internal/players");
+    const players = await db.players.findAll();
     return players.map((record) => toAdminPlayer(hydratePlayer(record)));
   }
 
   async getPublicPlayers(): Promise<Player[]> {
     const players = await this.getAllPlayers();
-    return players.filter(
-      (player) => player.status === "active" && player.username !== "admin",
-    );
+    return players.filter((player) => player.status === "active");
   }
 
   async updatePlayerGender(
@@ -1114,21 +1046,12 @@ export class AuthService {
       throw new Error("성별 변경 요청자를 찾을 수 없습니다.");
     }
 
-    if (stored.username === API_ADMIN_USERNAME) {
-      throw new Error(
-        "기본 관리자 계정 성별은 이 기능으로 변경할 수 없습니다.",
-      );
-    }
-
     if (stored.gender === nextGender) {
       return { player: toPublicPlayer(stored), changed: false };
     }
 
     const updated = hydratePlayer(
-      await this.dbRequest<any>(`/internal/players/${playerId}/gender`, {
-        method: "PATCH",
-        body: JSON.stringify({ gender: nextGender }),
-      }),
+      requireStoredPlayer(await db.players.updateGender(playerId, nextGender)),
     );
 
     return { player: toPublicPlayer(updated), changed: true };
@@ -1149,19 +1072,12 @@ export class AuthService {
       throw new Error("상태 변경 요청자를 찾을 수 없습니다.");
     }
 
-    if (stored.username === "admin" && nextStatus === "inactive") {
-      throw new Error("기본 관리자 계정은 inactive 상태로 변경할 수 없습니다.");
-    }
-
     if (stored.status === nextStatus) {
       return { player: toPublicPlayer(stored), log: null };
     }
 
     const updated = hydratePlayer(
-      await this.dbRequest<any>(`/internal/players/${playerId}/status`, {
-        method: "PATCH",
-        body: JSON.stringify({ status: nextStatus }),
-      }),
+      requireStoredPlayer(await db.players.updateStatus(playerId, nextStatus)),
     );
 
     const log = await this.insertStatusChangeLog({
@@ -1177,23 +1093,19 @@ export class AuthService {
   }
 
   async getPlayerCreationLogs(): Promise<Record<string, PlayerCreationLog[]>> {
-    const logs = await this.dbRequest<any[]>("/internal/player-creation-logs");
+    const logs = await db.playerCreationLogs.findAll();
     return groupByPlayerId(logs.map(hydrateCreationLog));
   }
 
   async getPlayerStatusLogs(): Promise<
     Record<string, PlayerStatusChangeLog[]>
   > {
-    const logs = await this.dbRequest<any[]>(
-      "/internal/player-status-change-logs",
-    );
+    const logs = await db.playerStatusChangeLogs.findAll();
     return groupByPlayerId(logs.map(hydrateStatusChangeLog));
   }
 
   async getOfficialDuprAdjustmentLogs(): Promise<OfficialDuprAdjustmentLog[]> {
-    const logs = await this.dbRequest<any[]>(
-      "/internal/official-dupr-adjustment-logs",
-    );
+    const logs = await db.officialDuprAdjustmentLogs.findAll();
     return logs.map(hydrateOfficialDuprAdjustmentLog);
   }
 
@@ -1202,10 +1114,7 @@ export class AuthService {
     duprState: StoredPlayerDupr,
   ): Promise<StoredPlayerRecord> {
     return hydratePlayer(
-      await this.dbRequest<any>(`/internal/players/${playerId}/dupr-state`, {
-        method: "PATCH",
-        body: JSON.stringify({ duprState }),
-      }),
+      requireStoredPlayer(await db.players.updateDuprState(playerId, duprState)),
     );
   }
 
@@ -1305,9 +1214,7 @@ export class AuthService {
     additionalLogs: OfficialDuprAdjustmentLog[] = [],
     ratingService: RatingServiceContract = this.ratingService,
   ): Promise<DuprRecalculationResult> {
-    const players = (await this.dbRequest<any[]>("/internal/players")).map(
-      hydratePlayer,
-    );
+    const players = (await db.players.findAll()).map(hydratePlayer);
     const storedLogs = await this.getOfficialDuprAdjustmentLogs();
     const logs = [...storedLogs, ...additionalLogs].sort(
       (a, b) =>
@@ -1691,13 +1598,7 @@ export class AuthService {
       return { updatedParticipantCount: 0, updatedMatchCount: 0 };
     }
 
-    return await this.dbRequest<{
-      updatedParticipantCount: number;
-      updatedMatchCount: number;
-    }>("/internal/matches/participant-dupr-snapshots", {
-      method: "PATCH",
-      body: JSON.stringify({ snapshots }),
-    });
+    return await db.matches.fillMissingParticipantDuprSnapshots(snapshots);
   }
 
   /**
@@ -1712,10 +1613,11 @@ export class AuthService {
     const matchTypes = matchTypeValues.filter(
       (matchType) => getDuprCategoryForMatchType(matchType) === category,
     ) as MatchType[];
-    const result = await this.dbRequest<{ completedAt: string | null }>(
-      `/internal/matches/previous-completed-at?playerId=${encodeURIComponent(playerId)}&before=${encodeURIComponent(currentMatch.completedAt!.toISOString())}&types=${encodeURIComponent(matchTypes.join(","))}`,
+    return await db.matches.findPreviousCompletedAt(
+      playerId,
+      matchTypes,
+      new Date(currentMatch.completedAt!),
     );
-    return result.completedAt ? new Date(result.completedAt) : null;
   }
 
   private buildOfficialDuprImpacts(
@@ -1838,10 +1740,9 @@ export class AuthService {
       reason: input.reason,
     });
     const log = hydrateOfficialDuprAdjustmentLog(
-      await this.dbRequest<any>("/internal/official-dupr-adjustment-logs", {
-        method: "POST",
-        body: JSON.stringify(pendingLog satisfies OfficialDuprAdjustmentLog),
-      }),
+      await db.officialDuprAdjustmentLogs.create(
+        pendingLog satisfies OfficialDuprAdjustmentLog,
+      ),
     );
 
     const recalculation =
@@ -1963,9 +1864,7 @@ export class AuthService {
     }
 
     const existingLogs = (
-      await this.dbRequest<any[]>(
-        `/internal/matches/${encodeURIComponent(match.id)}/rating-change-logs`,
-      )
+      await db.playerRatingChangeLogs.findByMatchId(match.id)
     ).map(hydratePlayerRatingChangeLog);
     if (existingLogs.length > 0) {
       if (options.refreshProjection !== false) {
@@ -2128,69 +2027,13 @@ export class AuthService {
     };
   }
 
-  async initAdmin(): Promise<Player> {
-    const existing = await this.retryOperation(
-      () => this.getStoredPlayerByUsername(API_ADMIN_USERNAME),
-      { retries: 20 },
-    );
-    if (existing) {
-      const passwordHash = await bcrypt.hash(API_ADMIN_PASSWORD, SALT_ROUNDS);
-      const updated = hydratePlayer(
-        await this.retryOperation(
-          () =>
-            this.dbRequest<any>(`/internal/players/${existing.id}/password`, {
-              method: "PATCH",
-              body: JSON.stringify({
-                passwordHash,
-                isFirstLogin: false,
-              }),
-              retries: 10,
-            }),
-          { retries: 20 },
-        ),
-      );
-
-      return toPublicPlayer(updated);
-    }
-
-    const passwordHash = await bcrypt.hash(API_ADMIN_PASSWORD, SALT_ROUNDS);
-    const player = createPlayer({ username: API_ADMIN_USERNAME, gender: "M" });
-
-    const created = hydratePlayer(
-      await this.retryOperation(
-        () =>
-          this.dbRequest<any>("/internal/players/init-admin", {
-            method: "POST",
-            body: JSON.stringify({
-              ...player,
-              passwordHash,
-              isFirstLogin: true,
-            }),
-            retries: 10,
-          }),
-        { retries: 20 },
-      ),
-    );
-
-    await this.insertCreationLog({
-      playerId: created.id,
-      createdByPlayerId: created.id,
-      createdByUsername: created.username,
-      creationSource: "bootstrap",
-      createdAt: created.createdAt,
-    }).catch(() => undefined);
-
-    return toPublicPlayer(created);
-  }
-
+  /** 아직 로그인하지 않은 회원을 미리 만든다. 그 회원이 Google로 로그인하면 GET /api/me가 자동 연결한다. */
   async registerAdmin(
-    credentials: UserCredentials,
+    input: AdminRegisterPlayerRequest,
     createdByPlayerId: string,
   ): Promise<Player> {
-    const duplicate = await this.getStoredPlayerByUsername(
-      credentials.username,
-    );
-    if (duplicate) {
+    // username은 대소문자 구분 없이 unique다. 동시 요청은 createStoredPlayer가 유니크 위반으로 걸러낸다.
+    if (await db.players.findByUsernameIgnoringCase(input.username)) {
       throw new Error("중복된 사용자명입니다.");
     }
 
@@ -2199,21 +2042,13 @@ export class AuthService {
       throw new Error("계정 생성 요청자를 찾을 수 없습니다.");
     }
 
-    const passwordHash = await bcrypt.hash(credentials.password, SALT_ROUNDS);
     const player = createPlayer({
-      username: credentials.username,
-      gender: credentials.gender,
+      username: input.username,
+      gender: input.gender,
     });
 
     const created = hydratePlayer(
-      await this.dbRequest<any>("/internal/players", {
-        method: "POST",
-        body: JSON.stringify({
-          ...player,
-          passwordHash,
-          isFirstLogin: true,
-        }),
-      }),
+      await this.createStoredPlayer({ ...player, authUserId: null }),
     );
 
     await this.insertCreationLog({
