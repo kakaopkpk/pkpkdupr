@@ -23,7 +23,6 @@ const admin: Player = {
 const adminSession: AuthenticatedSession = {
   payload: { playerId: admin.id, isAdmin: true },
   player: admin,
-  isFirstLogin: false,
 };
 
 describe("GET /api/admin/ratings/comparison", () => {
@@ -32,7 +31,6 @@ describe("GET /api/admin/ratings/comparison", () => {
       AuthService.prototype,
       "authenticateAccessToken",
     ).mockResolvedValue(adminSession);
-    vi.spyOn(AuthService.prototype, "initAdmin").mockResolvedValue(admin);
   });
 
   afterEach(() => {
@@ -106,13 +104,11 @@ describe("GET /api/admin/ratings/comparison", () => {
           gender: "M",
           status: "active",
           duprRating: { singles: 3, doubles },
-          passwordHash: "hash",
-          isFirstLogin: false,
+          authUserId: null,
           createdAt: now,
           updatedAt: now,
         }) satisfies Player & {
-          passwordHash: string;
-          isFirstLogin: boolean;
+          authUserId: string | null;
         },
     );
     const playerById = new Map(

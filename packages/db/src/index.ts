@@ -5,6 +5,13 @@ export {
   type CreateStoredPlayerInput,
   type StoredPlayerRecord,
 } from "./repositories/PlayerRepository";
+export { PlayerAdminRepository } from "./repositories/PlayerAdminRepository";
+export {
+  InviteCodeRepository,
+  type CreateInviteCodeInput,
+  type RedeemInviteCodeInput,
+  type StoredInviteCodeSummary,
+} from "./repositories/InviteCodeRepository";
 export {
   PlayerCreationLogRepository,
   type CreatePlayerCreationLogInput,

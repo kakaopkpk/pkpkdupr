@@ -1,5 +1,4 @@
 import {
-  boolean,
   customType,
   doublePrecision,
   integer,
@@ -7,6 +6,7 @@ import {
   pgTable,
   text,
   uniqueIndex,
+  uuid,
   varchar,
 } from "drizzle-orm/pg-core";
 import {
@@ -47,11 +47,32 @@ export const players = pgTable("players", {
   statusMessageBackgroundColor: varchar("status_message_background_color", {
     length: 32,
   }),
-  passwordHash: varchar("password_hash", { length: 255 }).notNull(),
-  isFirstLogin: boolean("is_first_login").notNull(),
+  /** Supabase Auth 사용자(auth.users.id). 아직 로그인해 연결되지 않은 회원은 null이다. */
+  authUserId: uuid("auth_user_id").unique("players_auth_user_id_unique"),
   createdAt: unixTimestamp("created_at").notNull(),
   updatedAt: unixTimestamp("updated_at").notNull(),
 });
+
+/** 관리자 권한이 있는 회원. 관리자도 일반 회원으로 경기에 참여한다. */
+export const playerAdmins = pgTable("player_admins", {
+  playerId: id("player_id").primaryKey(),
+  createdAt: unixTimestamp("created_at").notNull(),
+});
+
+/** 1회용 초대 코드. 평문은 저장하지 않고 SHA-256 hex만 둔다. */
+export const inviteCodes = pgTable("invite_codes", {
+  id: id("id").primaryKey(),
+  codeHash: varchar("code_hash", { length: 64 })
+    .notNull()
+    .unique("invite_codes_code_hash_unique"),
+  createdByPlayerId: id("created_by_player_id").notNull(),
+  createdAt: unixTimestamp("created_at").notNull(),
+  expiresAt: unixTimestamp("expires_at").notNull(),
+  usedByPlayerId: id("used_by_player_id"),
+  usedAt: unixTimestamp("used_at"),
+}, (table) => ({
+  createdAtIndex: index("invite_codes_created_at_idx").on(table.createdAt),
+}));
 
 export const playerCreationLogs = pgTable("player_creation_logs", {
   id: id("id").primaryKey(),

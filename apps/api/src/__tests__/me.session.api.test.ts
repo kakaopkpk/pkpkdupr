@@ -19,10 +19,8 @@ const player: Player = {
 };
 
 const session: AuthenticatedSession = {
-  payload: { playerId: player.id },
+  payload: { playerId: player.id, isAdmin: true },
   player,
-  isFirstLogin: false,
-  refreshedAccessToken: "refreshed-token",
 };
 
 describe("GET /api/me session contract", () => {
@@ -30,25 +28,35 @@ describe("GET /api/me session contract", () => {
     vi.restoreAllMocks();
   });
 
-  it("유효한 세션은 플레이어 정보와 갱신 토큰을 반환한다", async () => {
-    vi.spyOn(AuthService.prototype, "authenticateAccessToken").mockResolvedValue(
-      session,
-    );
+  it("유효한 세션은 플레이어 정보와 관리자 여부만 반환한다", async () => {
+    const authenticate = vi
+      .spyOn(AuthService.prototype, "authenticateAccessToken")
+      .mockResolvedValue(session);
 
     const response = await request(app)
       .get("/api/me")
       .set("Authorization", "Bearer valid-token");
 
     expect(response.status).toBe(200);
-    expect(response.body).toMatchObject({
-      id: player.id,
-      accessToken: "refreshed-token",
+    expect(response.body).toMatchObject({ id: player.id, isAdmin: true });
+    expect(response.body).not.toHaveProperty("accessToken");
+    expect(response.body).not.toHaveProperty("isFirstLogin");
+    expect(authenticate).toHaveBeenCalledWith("valid-token", { autoLink: true });
+  });
+
+  it("Authorization 헤더가 없으면 SESSION_INVALID와 함께 401을 반환한다", async () => {
+    const response = await request(app).get("/api/me");
+
+    expect(response.status).toBe(401);
+    expect(response.body).toEqual({
+      error: "로그인이 필요합니다.",
+      code: "SESSION_INVALID",
     });
   });
 
   it("실제 무효 세션만 SESSION_INVALID와 함께 401을 반환한다", async () => {
     vi.spyOn(AuthService.prototype, "authenticateAccessToken").mockRejectedValue(
-      new InvalidAccessTokenError("유효하지 않거나 만료된 토큰입니다."),
+      new InvalidAccessTokenError("세션이 만료되었거나 유효하지 않습니다."),
     );
 
     const response = await request(app)
@@ -64,7 +72,7 @@ describe("GET /api/me session contract", () => {
 
   it("저장소 장애는 SESSION_UNAVAILABLE과 함께 503을 반환한다", async () => {
     vi.spyOn(AuthService.prototype, "authenticateAccessToken").mockRejectedValue(
-      new Error("DB 서버 요청 실패: 503"),
+      new Error("Auth 서버 요청 실패"),
     );
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
 

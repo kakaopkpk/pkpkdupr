@@ -30,14 +30,22 @@ import type {
   PlayerStatus,
 } from "@pkpkdupr/shared/player";
 import type { VerifyPlayerQrTokenRequest } from "@pkpkdupr/shared/qr";
+import type {
+  AdminRegisterPlayerRequest,
+  AuthErrorCode,
+  AuthErrorResponse,
+  MeResponse,
+  RedeemInviteRequest,
+} from "@pkpkdupr/shared/auth";
+import { assertRequiredEnv } from "./config/env";
 import { initDatabase } from "./db";
 import {
   MatchRepository,
   MatchRepositoryError,
 } from "./repositories/MatchRepository";
 import {
+  AuthError,
   AuthService,
-  InvalidAccessTokenError,
   type AuthenticatedSession,
 } from "./services/AuthService";
 import { AutoApprovalService } from "./services/AutoApprovalService";
@@ -67,8 +75,6 @@ import { isEdgeRuntime } from "./runtime";
 
 const app: express.Express = express();
 const PORT = process.env.PORT || 4000;
-const PROTECTED_ADMIN_USERNAME = process.env.API_ADMIN_USERNAME || "admin";
-const INITIAL_ADMIN_CREATED_PASSWORD = "123qwe";
 // 운영 origin은 CORS_ALLOWED_ORIGINS(쉼표 구분)로 주입하고, localhost 개발 origin은 항상 허용한다.
 const DEV_ALLOWED_ORIGINS = [
   "http://localhost:8080",
@@ -310,6 +316,10 @@ const parseAdminMatchMetadataUpdate = (
 const isMatchType = (value: unknown): value is MatchType =>
   typeof value === "string" && matchTypeValues.includes(value as MatchType);
 
+const isPlayerGender = (value: unknown): value is Player["gender"] =>
+  typeof value === "string" &&
+  playerGenders.includes(value as Player["gender"]);
+
 const isMatchMode = (value: unknown): value is MatchMode =>
   typeof value === "string" && matchModeValues.includes(value as MatchMode);
 
@@ -549,28 +559,72 @@ const normalizeMatchScores = (scores: unknown): MatchScore[] => {
   });
 };
 
-const getBearerToken = (req: express.Request, res: express.Response) => {
-  const header = req.headers.authorization;
-  if (!header?.startsWith("Bearer ")) {
-    res.status(401).json({ error: "토큰이 필요합니다." });
-    return null;
-  }
-  return header.split(" ")[1];
+const authErrorStatus: Record<AuthErrorCode, number> = {
+  SESSION_INVALID: 401,
+  SESSION_UNAVAILABLE: 503,
+  DOMAIN_NOT_ALLOWED: 403,
+  ACCOUNT_NOT_LINKED: 403,
+  INVITE_INVALID: 400,
+  ALREADY_LINKED: 409,
+  FORBIDDEN: 403,
 };
 
+const sendAuthError = (
+  res: express.Response,
+  code: AuthErrorCode,
+  error: string,
+) => {
+  const body: AuthErrorResponse = { error, code };
+  res.status(authErrorStatus[code]).json(body);
+};
+
+/** AuthError는 code대로, 그 밖의 오류(Auth 서버·DB 장애)는 세션을 확인하지 못한 것으로 응답한다. */
+const handleAuthFailure = (res: express.Response, error: unknown) => {
+  if (error instanceof AuthError) {
+    return sendAuthError(res, error.code, error.message);
+  }
+  console.error("[AUTH] Failed to verify session", error);
+  sendAuthError(
+    res,
+    "SESSION_UNAVAILABLE",
+    "세션을 일시적으로 확인하지 못했습니다.",
+  );
+};
+
+const getBearerToken = (req: express.Request, res: express.Response) => {
+  const header = req.headers.authorization;
+  const token = header?.startsWith("Bearer ") ? header.slice(7).trim() : "";
+  if (!token) {
+    sendAuthError(res, "SESSION_INVALID", "로그인이 필요합니다.");
+    return null;
+  }
+  return token;
+};
+
+/**
+ * 요청자 세션을 확인한다. requireAdmin과 라우트가 같은 요청에서 다시 부르면
+ * Auth 서버를 한 번만 호출하도록 res.locals에 담아 둔다.
+ */
 const getAuthSession = async (
   req: express.Request,
   res: express.Response,
 ): Promise<AuthenticatedSession | null> => {
+  const cached = res.locals.authSession as AuthenticatedSession | undefined;
+  if (cached) {
+    return cached;
+  }
+
   const token = getBearerToken(req, res);
   if (!token) {
     return null;
   }
 
   try {
-    return await authService.authenticateAccessToken(token);
+    const session = await authService.authenticateAccessToken(token);
+    res.locals.authSession = session;
+    return session;
   } catch (err) {
-    res.status(403).json({ error: (err as Error).message });
+    handleAuthFailure(res, err);
     return null;
   }
 };
@@ -590,77 +644,48 @@ const requireAdmin = async (
     return;
   }
   if (!session.payload.isAdmin) {
-    return res.status(403).json({ error: "관리자 권한이 필요합니다." });
+    return sendAuthError(res, "FORBIDDEN", "관리자 권한이 필요합니다.");
   }
   next();
 };
 
-app.post("/api/register", async (req, res) => {
-  try {
-    const { username, password, gender } = req.body;
-    if (!username || !password || !gender) {
-      return res
-        .status(400)
-        .json({ error: "username, password, gender는 필수입니다." });
-    }
-    const player = await authService.register({ username, password, gender });
-    res.json(player);
-  } catch (err) {
-    res.status(500).json({ error: (err as Error).message });
-  }
-});
-
-app.post("/api/login", async (req, res) => {
-  try {
-    const { username, password, rememberMe } = req.body;
-    if (!username || !password) {
-      return res
-        .status(400)
-        .json({ error: "username과 password는 필수입니다." });
-    }
-    const result = await authService.login(
-      username,
-      password,
-      rememberMe === true,
-    );
-    res.json(result);
-  } catch (err) {
-    res.status(500).json({ error: (err as Error).message });
-  }
+const toMeResponse = (session: AuthenticatedSession): MeResponse => ({
+  ...session.player,
+  isAdmin: session.payload.isAdmin,
 });
 
 app.get("/api/me", async (req, res) => {
-  const header = req.headers.authorization;
-  const token = header?.startsWith("Bearer ") ? header.split(" ")[1] : null;
-
+  const token = getBearerToken(req, res);
   if (!token) {
-    return res.status(401).json({
-      error: "로그인이 필요합니다.",
-      code: "SESSION_INVALID",
-    });
+    return;
   }
 
   try {
-    const session = await authService.authenticateAccessToken(token);
-    res.json({
-      ...session.player,
-      isFirstLogin: session.isFirstLogin,
-      isAdmin: session.payload.isAdmin === true,
-      accessToken: session.refreshedAccessToken,
+    const session = await authService.authenticateAccessToken(token, {
+      autoLink: true,
     });
+    res.json(toMeResponse(session));
   } catch (error) {
-    if (error instanceof InvalidAccessTokenError) {
-      return res.status(401).json({
-        error: "세션이 만료되었거나 유효하지 않습니다.",
-        code: "SESSION_INVALID",
-      });
-    }
+    handleAuthFailure(res, error);
+  }
+});
 
-    console.error("[AUTH] Failed to verify session", error);
-    res.status(503).json({
-      error: "세션을 일시적으로 확인하지 못했습니다.",
-      code: "SESSION_UNAVAILABLE",
-    });
+app.post("/api/auth/invite", async (req, res) => {
+  const token = getBearerToken(req, res);
+  if (!token) {
+    return;
+  }
+
+  const { code } = (req.body ?? {}) as Partial<RedeemInviteRequest>;
+  if (typeof code !== "string" || !code.trim()) {
+    return sendAuthError(res, "INVITE_INVALID", "초대 코드를 입력해주세요.");
+  }
+
+  try {
+    const session = await authService.redeemInviteCode(token, code);
+    res.status(201).json(toMeResponse(session));
+  } catch (error) {
+    handleAuthFailure(res, error);
   }
 });
 
@@ -839,11 +864,7 @@ app.post("/api/matches", async (req, res) => {
     }
 
     const creator = await authService.getPlayerById(decoded.playerId);
-    if (
-      !creator ||
-      creator.status !== "active" ||
-      creator.username === PROTECTED_ADMIN_USERNAME
-    ) {
+    if (!creator || creator.status !== "active") {
       return res
         .status(403)
         .json({ error: "매치를 생성할 수 없는 계정입니다." });
@@ -971,11 +992,7 @@ app.put(
 
       const availablePlayerIds = new Set(
         (await authService.getAllPlayers())
-          .filter(
-            (player) =>
-              player.status === "active" &&
-              player.username !== PROTECTED_ADMIN_USERNAME,
-          )
+          .filter((player) => player.status === "active")
           .map((player) => player.id),
       );
       if (
@@ -1242,9 +1259,7 @@ app.post("/api/admin/matches/batch", requireAdmin, async (req, res) => {
 
     const allPlayers = await authService.getAllPlayers();
     const availablePlayers = allPlayers.filter(
-      (candidate) =>
-        candidate.status === "active" &&
-        candidate.username !== PROTECTED_ADMIN_USERNAME,
+      (candidate) => candidate.status === "active",
     );
     const playersById = new Map<string, Player>(
       availablePlayers.map((player) => [player.id, player]),
@@ -1514,20 +1529,6 @@ app.delete(
   requireAdmin,
   async (req, res) => {
     try {
-      const decoded = await getAuthPayload(req, res);
-      if (!decoded) {
-        return;
-      }
-      const isValidAdminPassword = await authService.verifyAdminPassword(
-        decoded.playerId,
-        req.body?.adminPassword,
-      );
-      if (!isValidAdminPassword) {
-        return res
-          .status(400)
-          .json({ error: "admin 비밀번호가 올바르지 않습니다." });
-      }
-
       await matchRepository.delete(req.params.matchId);
       const { matches } = await matchRepository.findAll(0, 10000);
       const recalculation = await authService.recalculateDuprRatings(
@@ -1602,29 +1603,6 @@ app.post("/api/matches/:matchId/rejection", async (req, res) => {
     res.json(
       await matchRepository.rejectResult(req.params.matchId, decoded.playerId),
     );
-  } catch (err) {
-    res.status(400).json({ error: (err as Error).message });
-  }
-});
-
-app.post("/api/change-password", async (req, res) => {
-  try {
-    const decoded = await getAuthPayload(req, res);
-    if (!decoded) {
-      return;
-    }
-    const { currentPassword, newPassword } = req.body;
-    if (!newPassword || newPassword.length < 6) {
-      return res
-        .status(400)
-        .json({ error: "비밀번호는 6자 이상이어야 합니다." });
-    }
-    await authService.changePassword(
-      decoded.playerId,
-      typeof currentPassword === "string" ? currentPassword : undefined,
-      newPassword,
-    );
-    res.json({ message: "비밀번호가 변경되었습니다." });
   } catch (err) {
     res.status(400).json({ error: (err as Error).message });
   }
@@ -1900,36 +1878,6 @@ app.patch(
   },
 );
 
-app.post(
-  "/api/admin/players/:playerId/password-reset",
-  requireAdmin,
-  async (req, res) => {
-    try {
-      const decoded = await getAuthPayload(req, res);
-      if (!decoded) {
-        return;
-      }
-
-      const { password } = req.body as { password?: unknown };
-      if (typeof password !== "string" || password.length < 6) {
-        return res
-          .status(400)
-          .json({ error: "임시 비밀번호는 6자 이상이어야 합니다." });
-      }
-
-      const player = await authService.resetPlayerPassword(
-        req.params.playerId,
-        password,
-        decoded.playerId,
-      );
-
-      res.json({ player });
-    } catch (err) {
-      res.status(400).json({ error: (err as Error).message });
-    }
-  },
-);
-
 app.post("/api/admin/ratings/recalculate", requireAdmin, async (_req, res) => {
   try {
     const { matches } = await matchRepository.findAll(0, 10000);
@@ -2033,15 +1981,40 @@ app.post("/api/admin/register", requireAdmin, async (req, res) => {
       return;
     }
 
-    const { username, gender } = req.body;
-    if (!username || !gender) {
+    const { username, gender } = (req.body ?? {}) as Partial<
+      Record<keyof AdminRegisterPlayerRequest, unknown>
+    >;
+    const normalizedUsername =
+      typeof username === "string" ? username.trim() : "";
+    if (!normalizedUsername || !isPlayerGender(gender)) {
       return res.status(400).json({ error: "username, gender는 필수입니다." });
     }
     const player = await authService.registerAdmin(
-      { username, password: INITIAL_ADMIN_CREATED_PASSWORD, gender },
+      { username: normalizedUsername, gender },
       decoded.playerId,
     );
     res.json(player);
+  } catch (err) {
+    res.status(500).json({ error: (err as Error).message });
+  }
+});
+
+app.post("/api/admin/invite-codes", requireAdmin, async (req, res) => {
+  try {
+    const decoded = await getAuthPayload(req, res);
+    if (!decoded) {
+      return;
+    }
+
+    res.status(201).json(await authService.createInviteCode(decoded.playerId));
+  } catch (err) {
+    res.status(500).json({ error: (err as Error).message });
+  }
+});
+
+app.get("/api/admin/invite-codes", requireAdmin, async (_req, res) => {
+  try {
+    res.json(await authService.getInviteCodes());
   } catch (err) {
     res.status(500).json({ error: (err as Error).message });
   }
@@ -2096,18 +2069,15 @@ const startAutoApprovalScheduler = () => {
 };
 
 export const startServer = async () => {
+  assertRequiredEnv();
   await initDatabase();
-  await authService.initAdmin();
   startAutoApprovalScheduler();
   return (app as any).listen(PORT, () => {
     console.log(`🚀 API Server running on http://localhost:${PORT}`);
-    console.log(
-      `👤 Admin 계정 동기화 (${process.env.API_ADMIN_USERNAME || "admin"} / ${process.env.API_ADMIN_PASSWORD || "admin123qwe"})`,
-    );
   });
 };
 
-// Edge Runtime은 supabase/functions/api 진입점이 app을 서비스하므로 Node 부팅(시딩·관리자 동기화·interval·listen)을 건너뛴다.
+// Edge Runtime은 supabase/functions/api 진입점이 app을 서비스하므로 Node 부팅(시딩·interval·listen)을 건너뛴다.
 if (
   process.env.NODE_ENV !== "test" &&
   process.env.VITEST !== "true" &&

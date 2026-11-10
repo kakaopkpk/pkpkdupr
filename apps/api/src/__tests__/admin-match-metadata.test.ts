@@ -20,10 +20,8 @@ const admin: Player = {
   updatedAt: now,
 };
 const adminSession: AuthenticatedSession = {
-  payload: { playerId: admin.id, isAdmin: true, rememberMe: true },
+  payload: { playerId: admin.id, isAdmin: true },
   player: admin,
-  isFirstLogin: false,
-  refreshedAccessToken: "refreshed-admin-token",
 };
 
 const buildMatch = (id: string): Match => ({
@@ -54,7 +52,6 @@ describe("admin match metadata", () => {
       AuthService.prototype,
       "authenticateAccessToken",
     ).mockResolvedValue(adminSession);
-    vi.spyOn(AuthService.prototype, "initAdmin").mockResolvedValue(admin);
   });
 
   afterEach(() => {
@@ -224,7 +221,7 @@ describe("admin match metadata", () => {
     expect(updateMetadata).not.toHaveBeenCalled();
   });
 
-  it("관리자 세션 조회 시 권한과 갱신 토큰을 함께 반환한다", async () => {
+  it("관리자 세션 조회 시 관리자 여부를 함께 반환한다", async () => {
     const response = await request(app)
       .get("/api/me")
       .set("Authorization", "Bearer admin-token");
@@ -233,7 +230,7 @@ describe("admin match metadata", () => {
     expect(response.body).toMatchObject({
       id: admin.id,
       isAdmin: true,
-      accessToken: "refreshed-admin-token",
     });
+    expect(response.body).not.toHaveProperty("accessToken");
   });
 });

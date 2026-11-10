@@ -25,14 +25,13 @@ const NOW = new Date("2026-07-23T12:00:00.000Z");
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 const players = ["anchor", "partner", "opponent-a", "opponent-b", "admin"].map(
-  (id): Player & { passwordHash: string; isFirstLogin: boolean } => ({
+  (id): Player & { authUserId: string | null } => ({
     id,
     username: id,
     gender: "M",
     status: "active",
     duprRating: null,
-    passwordHash: "hash",
-    isFirstLogin: false,
+    authUserId: null,
     createdAt: NOW,
     updatedAt: NOW,
   }),
