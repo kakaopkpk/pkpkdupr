@@ -20,7 +20,7 @@ import {
   DOMAIN_NOT_ALLOWED_NOTICE,
   INVITE_INVALID_MESSAGE,
 } from "@/lib/authMessages";
-import { signOut, supabase } from "@/lib/supabase";
+import { getAccessToken, signOut, supabase } from "@/lib/supabase";
 
 export interface PlayerInfo {
   id: string;
@@ -151,6 +151,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     const isCurrentSession = () => sessionUserIdRef.current === userId;
 
     try {
+      // 토큰 갱신이 일시적으로 실패하면 세션은 남고 토큰만 없다. 이때는 401로 로그아웃하지 않고 다시 시도한다.
+      if (!(await getAccessToken())) {
+        return { status: "unavailable" };
+      }
       const res = await apiFetch("/api/me");
       if (!isCurrentSession()) {
         return { status: "stale" };

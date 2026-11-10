@@ -9,7 +9,12 @@ import React, {
 import type { AuthErrorResponse, MeResponse } from "@pkpkdupr/shared/auth";
 import type { Player } from "@pkpkdupr/shared/player";
 import { apiFetch } from "../lib/api";
-import { ALLOWED_EMAIL_DOMAIN, signOut, supabase } from "../lib/supabase";
+import {
+  ALLOWED_EMAIL_DOMAIN,
+  getAccessToken,
+  signOut,
+  supabase,
+} from "../lib/supabase";
 
 type PlayerInfo = Pick<
   Player,
@@ -101,6 +106,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
 
     validationInFlightRef.current = true;
     try {
+      // 토큰 갱신이 일시적으로 실패하면 세션은 남고 토큰만 없다. 이때는 401로 로그아웃하지 않고 다시 시도한다.
+      if (!(await getAccessToken())) {
+        if (isCurrentSession()) {
+          scheduleRetry();
+        }
+        return;
+      }
       const res = await apiFetch("/api/me");
       if (!isCurrentSession()) {
         return;
