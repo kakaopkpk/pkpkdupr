@@ -83,7 +83,9 @@ const setupAuthFixture = () => {
     .spyOn(db.players, "linkAuthUser")
     .mockImplementation(async (id, authUserId) => {
       const player = players.get(id);
-      if (!player || player.authUserId) return false;
+      if (!player || player.authUserId || player.status !== "active") {
+        return false;
+      }
       player.authUserId = authUserId;
       return true;
     });
@@ -367,6 +369,28 @@ describe("Supabase Auth 기반 인증", () => {
       expect(response.status).toBe(403);
       expect(response.body.code).toBe("ACCOUNT_NOT_LINKED");
       expect(fixture.linkAuthUser).not.toHaveBeenCalled();
+      expect(fixture.players.get("Palice01")?.authUserId).toBeNull();
+      expect(fixture.authLinkLogs).toHaveLength(0);
+    });
+
+    it("조회 후 inactive로 바뀐 회원은 연결·감사 로그 없이 ACCOUNT_NOT_LINKED를 준다", async () => {
+      const player = fixture.addPlayer("Palice01", "dev_alice");
+      fixture.addAuthUser("alice", "dev_alice@kakaocorp.com");
+      const findByUsername = vi.mocked(db.players.findByUsernameIgnoringCase);
+      const lookup = findByUsername.getMockImplementation()!;
+      findByUsername.mockImplementationOnce(async (username) => {
+        // 조회 시점에는 active였다가 연결 직전에 관리자가 inactive로 바꾼 상황.
+        const found = await lookup(username);
+        const snapshot = found && { ...found };
+        player.status = "inactive";
+        return snapshot;
+      });
+
+      const response = await request(app).get("/api/me").set(bearer("alice"));
+
+      expect(response.status).toBe(403);
+      expect(response.body.code).toBe("ACCOUNT_NOT_LINKED");
+      expect(fixture.linkAuthUser).toHaveBeenCalledTimes(1);
       expect(fixture.players.get("Palice01")?.authUserId).toBeNull();
       expect(fixture.authLinkLogs).toHaveLength(0);
     });
