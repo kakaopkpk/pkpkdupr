@@ -60,7 +60,10 @@ export default defineConfig({
       devOptions: {
         enabled: true,
         navigateFallback: `${basePath}index.html`,
-        navigateFallbackAllowlist: [/^\/$/, /^\/login$/],
+        navigateFallbackAllowlist: [
+          new RegExp(`^${escapeRegExp(basePath)}$`),
+          new RegExp(`^${escapeRegExp(basePath)}login$`),
+        ],
       },
       includeAssets: [
         "favicon-v2.png",

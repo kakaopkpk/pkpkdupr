@@ -15,7 +15,8 @@
         var path = window.location.pathname;
         var target = null;
 
-        if (path.indexOf(adminBase) === 0) {
+        // 슬래시 없는 `<base>admin`도 admin으로 본다.
+        if (path === webBase + "admin" || path.indexOf(adminBase) === 0) {
           target = adminBase;
         } else if (path.indexOf(webBase) === 0) {
           target = webBase;
