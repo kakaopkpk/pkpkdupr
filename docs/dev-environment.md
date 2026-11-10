@@ -31,7 +31,7 @@ QR_TOTP_SECRET=local-dev-qr-totp-secret   # .env에 있으면 그 값
 
 api는 `ALLOWED_EMAIL_DOMAIN`·`QR_TOTP_SECRET`·`SUPABASE_URL`·`SUPABASE_ANON_KEY`가 없으면 시작하지 않습니다. `ALLOWED_AUTH_PROVIDERS`는 api가 받아들일 로그인 provider(쉼표 구분)이며 없으면 `google`만 허용합니다. `pnpm dev`는 로컬 매직링크 로그인(provider `email`)이 되도록 `google,email`을 넣습니다. `SUPABASE_SERVICE_ROLE_KEY`는 아바타 업로드가 로컬 Storage(`avatars` 버킷)를 쓰는 데 필요합니다. `pnpm dev:api`로 따로 띄울 때는 `ALLOWED_AUTH_PROVIDERS=google,email`을 포함해 위 값을 직접 넣습니다(`pnpm db:status -o env`로 확인). `ALLOWED_AUTH_PROVIDERS`를 빠뜨리면 매직링크 로그인이 403 `DOMAIN_NOT_ALLOWED`로 거부됩니다.
 
-`pnpm dev:api`처럼 api를 따로 띄울 때 `DATABASE_URL`이 없으면 위 로컬 주소를 씁니다. `NODE_ENV=production`에서는 `DATABASE_URL`이 필수입니다.
+`DATABASE_URL`은 `NODE_ENV`와 무관하게 필수입니다. 없으면 api는 `DATABASE_URL 환경변수가 필요합니다.` 오류로 시작하지 않습니다. 예외로 Edge 런타임(`supabase functions serve`, 배포된 함수)에서는 `apps/api/src/db.ts`가 `DATABASE_URL`이 없을 때 Supabase가 주입하는 `SUPABASE_DB_URL`로 대체하고 경고 로그만 남깁니다. `pnpm dev`는 위 로컬 주소를 주입하고, `pnpm dev:api`처럼 api를 따로 띄울 때는 직접 지정해야 합니다. 로컬 값은 `pnpm db:status -o env`의 `DB_URL`로 확인합니다. api 테스트(vitest)는 `apps/api/vitest.setup.ts`가 로컬 주소를 채우며 실제 연결은 만들지 않습니다.
 
 ## 로컬 로그인
 
