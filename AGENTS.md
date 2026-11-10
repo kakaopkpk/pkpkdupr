@@ -54,7 +54,8 @@ pnpm lint
 
 ## Web 규칙
 
-- 전역 라우트는 `/`, `/login`, `/force-change-password`, 개발 전용 `/dev/qrs`입니다.
+- 전역 라우트는 `/`, `/login`, `/invite`(연결 회원이 없을 때 초대 코드 입력), 개발 전용 `/dev/qrs`입니다. 인증 상태(`AuthContext`의 `status`)에 따라 접근 가능한 라우트가 정해집니다.
+- 로그인은 Supabase Auth(Google, 로컬 개발은 매직링크 병행)이며, API 호출은 `lib/api.ts`의 `apiFetch`로 해서 access token을 붙입니다. 컴포넌트가 `Authorization` 헤더를 직접 만들지 않습니다.
 - 로그인 뒤의 Match / Members / Me는 `BottomNav.tsx`의 keep-alive 탭 셸이 소유합니다. 탭 상태와 URL 라우트를 무분별하게 중복하지 않습니다.
 - `apps/web/AGENTS.md`의 모바일·PWA·UI 세부 규칙을 함께 따릅니다.
 - 모바일 고정 하단 UI는 `env(safe-area-inset-bottom)`과 `--app-keyboard-offset`을 고려합니다. 스크롤 소유자는 `app-tab-panel-scroll-area`입니다.
@@ -68,7 +69,7 @@ pnpm lint
 - 인증/프로필: `POST /api/register`, `POST /api/login`, `GET /api/me`, `POST /api/change-password`, `PATCH /api/me/profile`, avatar API
 - 플레이어/QR: `GET /api/players`, `GET /api/player-qr-token`, `POST /api/player-qr-token/verify`
 - 경기: `GET|POST /api/matches`, 경기 결과·승인 API, `GET /api/match-feed`, 세션 조회 API
-- 관리자: 선수/감사 로그, 경기 일괄 등록·메타데이터, 비밀번호 초기화, 평점 재계산, 공식 DUPR 조정 API
+- 관리자: 선수/감사 로그, 초대 코드 발급·목록, 경기 일괄 등록·메타데이터, 평점 재계산, 공식 DUPR 조정 API
 
 도메인 규칙:
 

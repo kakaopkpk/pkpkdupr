@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { BrowserQRCodeReader, type IScannerControls } from "@zxing/browser";
 import type { VerifyPlayerQrTokenResponse } from "@pkpkdupr/shared/qr";
-import { buildApiUrl } from "@/lib/api";
+import { apiFetch } from "@/lib/api";
 import { triggerHapticFeedback } from "@/lib/haptics";
 import {
   getCameraErrorMessage,
@@ -11,7 +11,7 @@ import {
 } from "./CreateMatchDrawerBody.utils";
 
 interface UseCreateMatchQrScannerParams {
-  token: string | null;
+  isAuthenticated: boolean;
   isOnline?: boolean;
   selectedMatchMembersRef: React.RefObject<MatchMember[]>;
   onQrScannerOpenChange?: (isOpen: boolean) => void;
@@ -21,7 +21,7 @@ interface UseCreateMatchQrScannerParams {
 const MAX_MATCH_MEMBER_COUNT = 4;
 
 const useCreateMatchQrScanner = ({
-  token,
+  isAuthenticated,
   isOnline = true,
   selectedMatchMembersRef,
   onQrScannerOpenChange,
@@ -76,7 +76,7 @@ const useCreateMatchQrScanner = ({
 
   const verifyScannedQrPayload = useCallback(
     async (payload: string) => {
-      if (!token) {
+      if (!isAuthenticated) {
         showQrScannerError("로그인이 필요해요.");
         return;
       }
@@ -97,10 +97,9 @@ const useCreateMatchQrScanner = ({
         setQrScannerError(null);
         setPendingQrMember(null);
 
-        const res = await fetch(buildApiUrl("/api/player-qr-token/verify"), {
+        const res = await apiFetch("/api/player-qr-token/verify", {
           method: "POST",
           headers: {
-            Authorization: `Bearer ${token}`,
             "Content-Type": "application/json",
           },
           body: JSON.stringify({ payload }),
@@ -141,7 +140,7 @@ const useCreateMatchQrScanner = ({
         );
       }
     },
-    [isOnline, selectedMatchMembersRef, showQrScannerError, token],
+    [isOnline, selectedMatchMembersRef, showQrScannerError, isAuthenticated],
   );
 
   useEffect(() => {
@@ -242,7 +241,7 @@ const useCreateMatchQrScanner = ({
   }, [closeQrScanner, closeQrScannerRequestKey, isQrScannerOpen]);
 
   const openQrScanner = useCallback(() => {
-    if (!token || selectedMatchMembersRef.current.length >= MAX_MATCH_MEMBER_COUNT) {
+    if (!isAuthenticated || selectedMatchMembersRef.current.length >= MAX_MATCH_MEMBER_COUNT) {
       return;
     }
 
@@ -259,7 +258,7 @@ const useCreateMatchQrScanner = ({
     onQrScannerOpenChange,
     selectedMatchMembersRef,
     stopQrScanner,
-    token,
+    isAuthenticated,
   ]);
 
   const retryQrScan = useCallback(() => {

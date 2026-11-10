@@ -15,6 +15,7 @@ import {
 } from "@pkpkdupr/shared/match";
 import type { Player } from "@pkpkdupr/shared/player";
 import { rememberRecentInputValue } from "@pkpkdupr/shared/recentInputHistory";
+import { apiFetch } from "../lib/api";
 import RecentValueComboBox from "./RecentValueComboBox";
 
 type ManagedSessionInfo = Omit<
@@ -237,9 +238,7 @@ const buildAutoMatchDrafts = (
 };
 
 interface AdminSessionManagerProps {
-  token: string;
   players: Array<Pick<Player, "id" | "username" | "gender" | "status">>;
-  protectedAdminUsername?: string;
   onMatchResultSaved?: (match: SavedSessionMatchResult) => void;
 }
 
@@ -283,9 +282,7 @@ const createEmptyTeams = (type: MatchType): [string[], string[]] => {
 };
 
 const AdminSessionManager: React.FC<AdminSessionManagerProps> = ({
-  token,
   players,
-  protectedAdminUsername = "admin",
   onMatchResultSaved,
 }) => {
   const [sessions, setSessions] = useState<ManagedSessionInfo[]>([]);
@@ -336,7 +333,6 @@ const AdminSessionManager: React.FC<AdminSessionManagerProps> = ({
   );
   const [deleteConfirmationMatch, setDeleteConfirmationMatch] =
     useState<SessionMatchInfo | null>(null);
-  const [deleteAdminPassword, setDeleteAdminPassword] = useState("");
   const [scoreDrafts, setScoreDrafts] = useState<Record<string, ScoreDraft[]>>(
     {},
   );
@@ -348,12 +344,8 @@ const AdminSessionManager: React.FC<AdminSessionManagerProps> = ({
 
   const selectablePlayers = useMemo(
     () =>
-      players.filter(
-        (player) =>
-          player.status === "active" &&
-          player.username !== protectedAdminUsername,
-      ),
-    [players, protectedAdminUsername],
+      players.filter((player) => player.status === "active"),
+    [players],
   );
   const selectablePlayerById = useMemo(
     () => new Map(selectablePlayers.map((player) => [player.id, player])),
@@ -382,9 +374,7 @@ const AdminSessionManager: React.FC<AdminSessionManagerProps> = ({
   );
 
   const loadSessions = async (preferredSessionId?: string) => {
-    const response = await fetch("/api/admin/match-sessions", {
-      headers: { Authorization: `Bearer ${token}` },
-    });
+    const response = await apiFetch("/api/admin/match-sessions");
     if (!response.ok) {
       const data = await response.json().catch(() => ({}));
       throw new Error(data.error || "세션 목록을 불러오지 못했습니다.");
@@ -400,11 +390,8 @@ const AdminSessionManager: React.FC<AdminSessionManagerProps> = ({
   };
 
   const loadSessionMatches = async (sessionId: string) => {
-    const response = await fetch(
+    const response = await apiFetch(
       `/api/match-sessions/${encodeURIComponent(sessionId)}/matches`,
-      {
-        headers: { Authorization: `Bearer ${token}` },
-      },
     );
     if (!response.ok) {
       const data = await response.json().catch(() => ({}));
@@ -472,7 +459,7 @@ const AdminSessionManager: React.FC<AdminSessionManagerProps> = ({
         setIsLoading(false);
       }
     })();
-  }, [token]);
+  }, []);
 
   useEffect(
     () => () => {
@@ -526,7 +513,7 @@ const AdminSessionManager: React.FC<AdminSessionManagerProps> = ({
     return () => {
       isCurrentSession = false;
     };
-  }, [selectedSessionId, token]);
+  }, [selectedSessionId]);
 
   const handleCreateSession = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -535,11 +522,10 @@ const AdminSessionManager: React.FC<AdminSessionManagerProps> = ({
 
     try {
       setIsCreatingSession(true);
-      const response = await fetch("/api/admin/match-sessions", {
+      const response = await apiFetch("/api/admin/match-sessions", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
           name: sessionName.trim(),
@@ -593,13 +579,12 @@ const AdminSessionManager: React.FC<AdminSessionManagerProps> = ({
 
     try {
       setIsSavingParticipants(true);
-      const response = await fetch(
+      const response = await apiFetch(
         `/api/admin/match-sessions/${selectedSession.id}/participants`,
         {
           method: "PUT",
           headers: {
             "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
           },
           body: JSON.stringify({ playerIds: participantIds }),
         },
@@ -657,13 +642,12 @@ const AdminSessionManager: React.FC<AdminSessionManagerProps> = ({
 
     try {
       setIsCreatingMatch(true);
-      const response = await fetch(
+      const response = await apiFetch(
         `/api/admin/match-sessions/${selectedSession.id}/matches`,
         {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
           },
           body: JSON.stringify({
             name: matchName.trim() || undefined,
@@ -738,13 +722,12 @@ const AdminSessionManager: React.FC<AdminSessionManagerProps> = ({
 
     try {
       setCreatingAutoMatchKind(kind);
-      const response = await fetch(
+      const response = await apiFetch(
         `/api/admin/match-sessions/${selectedSession.id}/matches/schedule-preview`,
         {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
           },
           body: JSON.stringify({
             courts: courtNames,
@@ -825,13 +808,12 @@ const AdminSessionManager: React.FC<AdminSessionManagerProps> = ({
     setSuccess(null);
     try {
       setIsConfirmingAutoSchedule(true);
-      const response = await fetch(
+      const response = await apiFetch(
         `/api/admin/match-sessions/${selectedSession.id}/matches/scheduled-batch`,
         {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
           },
           body: JSON.stringify({
             courts: courtNames,
@@ -910,11 +892,10 @@ const AdminSessionManager: React.FC<AdminSessionManagerProps> = ({
     setSuccess(null);
     try {
       setSavingScheduleMatchId(match.id);
-      const response = await fetch(`/api/admin/matches/${match.id}/metadata`, {
+      const response = await apiFetch(`/api/admin/matches/${match.id}/metadata`, {
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
           courtName,
@@ -996,11 +977,10 @@ const AdminSessionManager: React.FC<AdminSessionManagerProps> = ({
     setSuccess(null);
     try {
       setSavingResultMatchId(match.id);
-      const response = await fetch(`/api/admin/matches/${match.id}/result`, {
+      const response = await apiFetch(`/api/admin/matches/${match.id}/result`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({ scores }),
       });
@@ -1051,7 +1031,6 @@ const AdminSessionManager: React.FC<AdminSessionManagerProps> = ({
     deleteHoldTimeoutRef.current = setTimeout(() => {
       deleteHoldTimeoutRef.current = null;
       setDeleteHoldMatchId(null);
-      setDeleteAdminPassword("");
       setDeleteConfirmationMatch(match);
     }, DELETE_HOLD_DURATION_MS);
   };
@@ -1061,13 +1040,8 @@ const AdminSessionManager: React.FC<AdminSessionManagerProps> = ({
     setSuccess(null);
     try {
       setDeletingMatchId(match.id);
-      const response = await fetch(`/api/admin/matches/${match.id}`, {
+      const response = await apiFetch(`/api/admin/matches/${match.id}`, {
         method: "DELETE",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ adminPassword: deleteAdminPassword }),
       });
       if (!response.ok) {
         const data = await response.json().catch(() => ({}));
@@ -1081,7 +1055,6 @@ const AdminSessionManager: React.FC<AdminSessionManagerProps> = ({
       setLoadedSessionMatches(matches);
       setSuccess("경기를 삭제하고 레이팅을 재계산했습니다.");
       setDeleteConfirmationMatch(null);
-      setDeleteAdminPassword("");
     } catch (deleteError) {
       setError(
         deleteError instanceof Error
@@ -1112,11 +1085,10 @@ const AdminSessionManager: React.FC<AdminSessionManagerProps> = ({
       setDeletingSessionId(selectedSession.id);
       setError(null);
       setSuccess(null);
-      const response = await fetch(
+      const response = await apiFetch(
         `/api/admin/match-sessions/${selectedSession.id}`,
         {
           method: "DELETE",
-          headers: { Authorization: `Bearer ${token}` },
         },
       );
       if (!response.ok) {
@@ -2012,37 +1984,20 @@ const AdminSessionManager: React.FC<AdminSessionManagerProps> = ({
                 완료 경기라면 레이팅도 다시 계산됩니다.
               </p>
             </div>
-            <div>
-              <label className="mb-1 block text-sm font-medium text-slate-700">
-                admin 비밀번호
-              </label>
-              <input
-                type="password"
-                required
-                autoFocus
-                value={deleteAdminPassword}
-                onChange={(event) => setDeleteAdminPassword(event.target.value)}
-                className="w-full rounded-lg border px-3 py-2"
-              />
-            </div>
             <div className="flex justify-end gap-2">
               <button
                 type="button"
                 disabled={deletingMatchId === deleteConfirmationMatch.id}
-                onClick={() => {
-                  setDeleteConfirmationMatch(null);
-                  setDeleteAdminPassword("");
-                }}
+                onClick={() => setDeleteConfirmationMatch(null)}
+                // 파괴적 동작이므로 Enter 한 번에 삭제되지 않게 취소 버튼에 포커스를 둔다.
+                autoFocus
                 className="rounded-lg px-4 py-2 text-sm font-medium text-slate-600"
               >
                 취소
               </button>
               <button
                 type="submit"
-                disabled={
-                  !deleteAdminPassword ||
-                  deletingMatchId === deleteConfirmationMatch.id
-                }
+                disabled={deletingMatchId === deleteConfirmationMatch.id}
                 className="rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white disabled:bg-red-300"
               >
                 {deletingMatchId === deleteConfirmationMatch.id

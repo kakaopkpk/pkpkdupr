@@ -43,7 +43,6 @@ export interface AdminBatchMatchSubmitPayload {
 interface AdminMatchBatchFormProps {
   players: Array<Pick<Player, "id" | "username" | "gender" | "status">>;
   isSubmitting: boolean;
-  protectedAdminUsername?: string;
   resetKey?: number;
   onSubmit: (payload: AdminBatchMatchSubmitPayload) => Promise<void>;
 }
@@ -267,7 +266,6 @@ const parseImportedDateToIso = (
 const buildImportedPreview = (
   rawText: string,
   players: Array<Pick<Player, "id" | "username" | "gender" | "status">>,
-  protectedAdminUsername: string,
 ): ImportedPreview | null => {
   if (!rawText.trim()) {
     return null;
@@ -339,10 +337,6 @@ const buildImportedPreview = (
       if (!matchedPlayer) {
         issues.push(`존재하지 않는 사용자입니다: ${username}`);
         return;
-      }
-
-      if (matchedPlayer.username === protectedAdminUsername) {
-        issues.push(`관리자 계정은 참가자로 사용할 수 없습니다: ${username}`);
       }
 
       if (matchedPlayer.status !== "active") {
@@ -479,7 +473,6 @@ const buildImportedPreview = (
 const AdminMatchBatchForm: React.FC<AdminMatchBatchFormProps> = ({
   players,
   isSubmitting,
-  protectedAdminUsername = "admin",
   resetKey = 0,
   onSubmit,
 }) => {
@@ -509,16 +502,12 @@ const AdminMatchBatchForm: React.FC<AdminMatchBatchFormProps> = ({
   );
   const selectablePlayers = useMemo(
     () =>
-      players.filter(
-        (player) =>
-          player.status === "active" &&
-          player.username !== protectedAdminUsername,
-      ),
-    [players, protectedAdminUsername],
+      players.filter((player) => player.status === "active"),
+    [players],
   );
   const importedPreview = useMemo(
-    () => buildImportedPreview(pastedText, players, protectedAdminUsername),
-    [pastedText, players, protectedAdminUsername],
+    () => buildImportedPreview(pastedText, players),
+    [pastedText, players],
   );
   const normalizedSessionName = normalizeOptionalText(sessionName);
   const normalizedSessionDate = normalizeOptionalText(sessionDate);

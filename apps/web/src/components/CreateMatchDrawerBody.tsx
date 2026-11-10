@@ -14,7 +14,7 @@ import {
   DEFAULT_MATCH_MODE,
 } from "@pkpkdupr/shared/match";
 import { useAuth } from "@/context/AuthContext";
-import { buildApiUrl } from "@/lib/api";
+import { apiFetch } from "@/lib/api";
 import CreateMatchModeSelector from "./CreateMatchModeSelector";
 import CreateMatchQrScannerPanel from "./CreateMatchQrScannerPanel";
 import BottomSheet from "./BottomSheet";
@@ -53,7 +53,7 @@ const CreateMatchDrawerBody: React.FC<CreateMatchDrawerBodyProps> = ({
   isOnline = true,
   closeQrScannerRequestKey = 0,
 }) => {
-  const { player, token } = useAuth();
+  const { player, isAuthenticated } = useAuth();
   const [selectedMatchMembers, setSelectedMatchMembers] = useState<
     MatchMember[]
   >([]);
@@ -90,7 +90,7 @@ const CreateMatchDrawerBody: React.FC<CreateMatchDrawerBodyProps> = ({
     !isManualMatchNameEmpty &&
     !!trimmedLocation;
   const canAddMatchMember =
-    isOnline && !!token && selectedMatchMembers.length < 4;
+    isOnline && isAuthenticated && selectedMatchMembers.length < 4;
   const previewTeams = useMemo(
     () => buildPreviewTeams(selectedMatchMembers, teams, selectedMatchType),
     [selectedMatchMembers, selectedMatchType, teams],
@@ -142,7 +142,7 @@ const CreateMatchDrawerBody: React.FC<CreateMatchDrawerBodyProps> = ({
     retryQrScan,
     closeQrScanner,
   } = useCreateMatchQrScanner({
-    token,
+    isAuthenticated,
     isOnline,
     selectedMatchMembersRef,
     onQrScannerOpenChange,
@@ -239,7 +239,7 @@ const CreateMatchDrawerBody: React.FC<CreateMatchDrawerBodyProps> = ({
   };
 
   const handleCreateMatchPress = async () => {
-    if (!token) {
+    if (!isAuthenticated) {
       setCreateMatchError("로그인이 필요해요.");
       return;
     }
@@ -259,10 +259,9 @@ const CreateMatchDrawerBody: React.FC<CreateMatchDrawerBodyProps> = ({
       setIsCreatingMatch(true);
       setCreateMatchError(null);
 
-      const res = await fetch(buildApiUrl("/api/matches"), {
+      const res = await apiFetch("/api/matches", {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${token}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({

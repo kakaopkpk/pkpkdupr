@@ -23,6 +23,9 @@ importers:
       '@heroui/styles':
         specifier: ^3.0.0
         version: 3.2.1(tailwind-merge@3.4.0)(tailwindcss@4.3.1)
+      '@supabase/supabase-js':
+        specifier: ^2.119.0
+        version: 2.119.0
       react:
         specifier: ^19.1.0
         version: 19.2.7
@@ -109,6 +112,9 @@ importers:
       '@heroui/styles':
         specifier: ^3.0.0
         version: 3.2.1(tailwind-merge@3.4.0)(tailwindcss@4.3.1)
+      '@supabase/supabase-js':
+        specifier: ^2.119.0
+        version: 2.119.0
       '@zxing/browser':
         specifier: ^0.2.0
         version: 0.2.0(@zxing/library@0.22.0)
