@@ -1011,7 +1011,8 @@ export class TestDataRepository {
 
   async seedDevMockData() {
     for (const player of mockPlayers) {
-      const existing = await this.playerRepository.findByUsername(
+      // username 유니크 인덱스가 lower(username) 기준이라 대소문자만 다른 회원도 기존 회원으로 본다.
+      const existing = await this.playerRepository.findByUsernameIgnoringCase(
         player.username,
       );
       const persistedPlayer =
