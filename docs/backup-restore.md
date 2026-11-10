@@ -4,10 +4,10 @@ Supabase 무료 플랜은 일주일 가까이 DB 활동이 없으면 프로젝�
 
 | workflow | 주기 | 하는 일 |
 | --- | --- | --- |
-| `.github/workflows/db-keepalive.yml` | 3일마다(UTC 18:17) + 수동 | 운영 DB에서 `players` 수를 조회한다. 실패하면 workflow가 실패해 org 알림으로 드러난다 |
+| `.github/workflows/db-keepalive.yml` | 3일마다(UTC 18:17) + 수동 | 운영 DB에서 `players` 수를 조회한다. 실패하면 workflow가 실패로 표시된다(알림 대상은 아래 "주의" 참고) |
 | `.github/workflows/db-backup.yml` | 매일 1회(UTC 18:23, KST 03:23) + 수동 | `pg_dump` → `gzip` → `age` 암호화 → 비공개 저장소 `kakaopkpk/pkpkdupr-backup`의 `backups/YYYY-MM-DD.sql.gz.age`로 push. 30일 지난 파일은 삭제한다 |
 
-- 백업 대상은 `public` 스키마(앱 데이터 13개 테이블)입니다. Supabase가 관리하는 `auth`·`storage` 스키마는 포함하지 않습니다.
+- 백업 대상은 `public` 스키마(`supabase/migrations/`로 만든 앱 테이블)입니다. Supabase가 관리하는 `auth`·`storage` 스키마는 포함하지 않습니다.
 - 덤프 평문은 파이프로만 흘러 디스크·로그·artifact에 남지 않습니다. 저장소에는 암호화된 파일만 올라갑니다.
 - `pg_dump` 클라이언트 메이저 버전은 `db-backup.yml`의 `PG_MAJOR`이며 `supabase/config.toml`의 `[db] major_version`과 같게 유지합니다. Supabase 프로젝트의 Postgres 메이저가 바뀌면 둘을 함께 올립니다.
 - 파일명 날짜는 UTC 기준입니다.
@@ -51,6 +51,7 @@ ssh-keygen -t ed25519 -N "" -C "pkpkdupr-backup-deploy" -f ./backup-deploy-key
 
 - Supabase 대시보드 → Connect → **Session pooler** 접속 문자열을 쓴다. Direct connection은 IPv6 전용이라 IPv4만 지원하는 GitHub Actions 러너에서 접속되지 않는다.
 - 비밀번호 자리 표시자(`[YOUR-PASSWORD]`)를 실제 DB 비밀번호로 바꿔 넣는다. 비밀번호에 특수문자가 있으면 URL 인코딩한다.
+- 끝에 `?sslmode=require`를 붙인다. 지정하지 않으면 libpq 기본값(`prefer`)이라 TLS가 거부될 때 평문 연결로 내려갈 수 있다.
 
 ### 등록 요약
 
@@ -58,7 +59,7 @@ ssh-keygen -t ed25519 -N "" -C "pkpkdupr-backup-deploy" -f ./backup-deploy-key
 | --- | --- | --- | --- |
 | Variable | `BACKUP_AGE_PUBLIC_KEY` | `pkpkdupr` | age 공개키(`age1...`) |
 | Secret | `BACKUP_DEPLOY_KEY` | `pkpkdupr` | deploy key 개인키 전체 |
-| Secret | `SUPABASE_DB_URL` | `pkpkdupr` | Session pooler 접속 문자열 |
+| Secret | `SUPABASE_DB_URL` | `pkpkdupr` | Session pooler 접속 문자열 + `?sslmode=require` |
 
 ## 수동 실행
 
@@ -105,12 +106,12 @@ age --decrypt -i pkpkdupr-backup-key.txt pkpkdupr-backup/backups/2026-01-01.sql.
 
 ```bash
 psql "$TARGET_DB_URL" -c "SELECT count(*) FROM players"
-psql "$TARGET_DB_URL" -c "\dt"   # public 테이블 13개
+psql "$TARGET_DB_URL" -c "\dt"   # supabase/migrations/의 테이블이 모두 있는지 확인
 ```
 
 ## 주의
 
 - **예약 작업 비활성화**: 공개 저장소는 60일 동안 저장소 활동이 없으면 GitHub가 예약 workflow를 자동으로 끈다. Actions 탭에 비활성화 안내가 보이면 workflow를 다시 활성화한다.
-- **실패 알림**: 두 workflow 모두 실패하면 workflow 실패로 드러난다. 백업이 며칠째 올라오지 않으면 `pkpkdupr-backup`의 `backups/` 최신 파일 날짜를 확인한다.
+- **실패 알림**: 두 workflow 모두 실패하면 Actions에 실패로 표시된다. GitHub는 예약 workflow 실패 알림을 그 workflow의 cron을 마지막으로 수정한(또는 다시 활성화한) 사용자에게만 보내며, 개인 알림 설정을 따른다. 그 외 운영진은 자동 알림을 받지 않으므로 Actions 탭을 주기적으로 확인한다. 백업이 며칠째 올라오지 않으면 `pkpkdupr-backup`의 `backups/` 최신 파일 날짜를 확인한다.
 - **보존 기간**: 30일이 지난 파일은 트리에서 지우지만 git 히스토리에는 남는다(암호화된 상태). 저장소가 커지면 히스토리를 정리한다.
 - **복원 시험**: 개인키로 실제 복호화·복원이 되는지 분기마다 한 번 확인한다.

@@ -21,6 +21,10 @@ env:
   PG_MAJOR: "17"
   BACKUP_REPO: kakaopkpk/pkpkdupr-backup
   RETENTION_DAYS: "30"
+  # 이보다 작은 암호화 결과는 빈 덤프로 보고 실패 처리한다.
+  MIN_BACKUP_BYTES: "1024"
+  # 출처: https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/githubs-ssh-key-fingerprints
+  GITHUB_ED25519_FINGERPRINT: "SHA256:+DiY3wvvV6TuJJhbpZisF/zLDA0zPMSvHdkr4UvCOqU"
 
 jobs:
   backup:
@@ -58,7 +62,7 @@ jobs:
           # github.com 호스트 키를 공식 ed25519 지문과 대조해 고정한다.
           ssh-keyscan -t ed25519 github.com > "${ssh_dir}/known_hosts" 2>/dev/null
           fingerprint="$(ssh-keygen -lf "${ssh_dir}/known_hosts" | awk '{print $2}')"
-          if [ "${fingerprint}" != "SHA256:+DiY3wvvV6TuJJhbpZisF/zLDA0zPMSvHdkr4UvCOqU" ]; then
+          if [ "${fingerprint}" != "${GITHUB_ED25519_FINGERPRINT}" ]; then
             echo "::error::github.com 호스트 키 지문이 예상과 다릅니다: ${fingerprint}"
             exit 1
           fi
@@ -97,9 +101,8 @@ jobs:
             | gzip --best \
             | age --recipient "${BACKUP_AGE_PUBLIC_KEY}" --output "${out}"
 
-          # 빈 덤프가 정상 백업으로 남지 않도록 최소 크기를 확인한다.
           size="$(wc -c < "${out}")"
-          if [ "${size}" -lt 1024 ]; then
+          if [ "${size}" -lt "${MIN_BACKUP_BYTES}" ]; then
             echo "::error::암호화된 백업이 비정상적으로 작습니다(${size} bytes)."
             rm -f "${out}"
             exit 1
