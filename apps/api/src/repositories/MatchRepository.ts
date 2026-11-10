@@ -625,7 +625,7 @@ export class MatchRepository {
     playerId?: string,
   ): Promise<{ matches: Match[]; total: number }> {
     const result = await this.run(
-      () => db.matches.findAll(Number(page), Number(limit), playerId || undefined),
+      () => db.matches.findAll(page, limit, playerId || undefined),
       500,
     );
 
@@ -641,8 +641,7 @@ export class MatchRepository {
     playerId?: string,
   ): Promise<{ items: MatchFeedItem[]; total: number }> {
     const result = await this.run(
-      () =>
-        db.matches.findFeed(Number(page), Number(limit), playerId || undefined),
+      () => db.matches.findFeed(page, limit, playerId || undefined),
       500,
     );
     return {

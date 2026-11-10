@@ -119,7 +119,9 @@ describe("incremental match rating", () => {
     vi.spyOn(db.players, "findById").mockImplementation(
       async (playerId) => players.get(playerId) as any,
     );
-    const findAllMatches = vi.spyOn(db.matches, "findAll");
+    const findAllMatches = vi
+      .spyOn(db.matches, "findAll")
+      .mockResolvedValue({ matches: [], total: 0 });
 
     const service = new AuthService(ratingService);
     const rebuildPlayers = vi
