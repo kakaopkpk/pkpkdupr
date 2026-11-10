@@ -23,7 +23,6 @@ const player: Player = {
 const session: AuthenticatedSession = {
   payload: { playerId: player.id, isAdmin: false },
   player,
-  isFirstLogin: false,
 };
 const outsider: Player = {
   ...player,
@@ -33,7 +32,6 @@ const outsider: Player = {
 const outsiderSession: AuthenticatedSession = {
   payload: { playerId: outsider.id, isAdmin: false },
   player: outsider,
-  isFirstLogin: false,
 };
 const match: Match = {
   id: "match-001",
@@ -63,7 +61,6 @@ describe("GET /api/matches/:matchId", () => {
       AuthService.prototype,
       "authenticateAccessToken",
     ).mockResolvedValue(session);
-    vi.spyOn(AuthService.prototype, "initAdmin").mockResolvedValue(player);
     vi.spyOn(AuthService.prototype, "getPlayerById").mockResolvedValue({
       ...player,
       duprRating: { singles: 3.2, doubles: 3 },
@@ -135,7 +132,6 @@ describe("POST /api/matches/:matchId/result", () => {
       AuthService.prototype,
       "authenticateAccessToken",
     ).mockResolvedValue(session);
-    vi.spyOn(AuthService.prototype, "initAdmin").mockResolvedValue(player);
   });
 
   afterEach(() => {
@@ -230,7 +226,6 @@ describe("POST /api/matches/:matchId/rejection", () => {
       AuthService.prototype,
       "authenticateAccessToken",
     ).mockResolvedValue(session);
-    vi.spyOn(AuthService.prototype, "initAdmin").mockResolvedValue(player);
   });
 
   afterEach(() => {
@@ -270,7 +265,6 @@ describe("GET /api/matches", () => {
       AuthService.prototype,
       "authenticateAccessToken",
     ).mockResolvedValue(session);
-    vi.spyOn(AuthService.prototype, "initAdmin").mockResolvedValue(player);
     vi.spyOn(AuthService.prototype, "getPlayerById").mockResolvedValue({
       ...player,
       duprRating: { singles: 3.2, doubles: 3 },
@@ -347,7 +341,6 @@ describe("GET /api/players/:playerId/profile-summary", () => {
       AuthService.prototype,
       "authenticateAccessToken",
     ).mockResolvedValue(session);
-    vi.spyOn(AuthService.prototype, "initAdmin").mockResolvedValue(player);
   });
 
   afterEach(() => {
@@ -420,7 +413,6 @@ describe("GET /api/match-feed", () => {
       AuthService.prototype,
       "authenticateAccessToken",
     ).mockResolvedValue(session);
-    vi.spyOn(AuthService.prototype, "initAdmin").mockResolvedValue(player);
   });
 
   afterEach(() => {
@@ -502,7 +494,6 @@ describe("GET /api/match-sessions/:sessionId/matches", () => {
       AuthService.prototype,
       "authenticateAccessToken",
     ).mockResolvedValue(session);
-    vi.spyOn(AuthService.prototype, "initAdmin").mockResolvedValue(player);
   });
 
   afterEach(() => {

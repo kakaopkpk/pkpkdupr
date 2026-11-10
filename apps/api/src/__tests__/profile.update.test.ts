@@ -20,7 +20,6 @@ const player: Player = {
 const session: AuthenticatedSession = {
   payload: { playerId: player.id, isAdmin: false },
   player,
-  isFirstLogin: false,
 };
 
 describe("PATCH /api/me/profile", () => {
@@ -28,7 +27,6 @@ describe("PATCH /api/me/profile", () => {
     vi.spyOn(AuthService.prototype, "authenticateAccessToken").mockResolvedValue(
       session,
     );
-    vi.spyOn(AuthService.prototype, "initAdmin").mockResolvedValue(player);
   });
 
   afterEach(() => {

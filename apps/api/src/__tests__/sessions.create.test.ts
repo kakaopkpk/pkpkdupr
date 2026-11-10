@@ -28,7 +28,6 @@ const admin: Player = {
 const adminSession: AuthenticatedSession = {
   payload: { playerId: admin.id, isAdmin: true },
   player: admin,
-  isFirstLogin: false,
 };
 const participants: Player[] = Array.from({ length: 4 }, (_, index) => ({
   id: `player-${index + 1}`,
@@ -56,7 +55,6 @@ describe("admin match sessions", () => {
       AuthService.prototype,
       "authenticateAccessToken",
     ).mockResolvedValue(adminSession);
-    vi.spyOn(AuthService.prototype, "initAdmin").mockResolvedValue(admin);
   });
 
   afterEach(() => {
@@ -437,9 +435,6 @@ describe("admin match sessions", () => {
   });
 
   it("관리자가 세션 경기를 삭제하고 남은 완료 경기를 재계산한다", async () => {
-    const verifyAdminPassword = vi
-      .spyOn(AuthService.prototype, "verifyAdminPassword")
-      .mockResolvedValue(true);
     const deleteMatch = vi
       .spyOn(MatchRepository.prototype, "delete")
       .mockResolvedValue(undefined);
@@ -460,14 +455,9 @@ describe("admin match sessions", () => {
 
     const response = await request(app)
       .delete("/api/admin/matches/Mmatch01")
-      .set("Authorization", "Bearer admin-token")
-      .send({ adminPassword: "admin-password" });
+      .set("Authorization", "Bearer admin-token");
 
     expect(response.status).toBe(200);
-    expect(verifyAdminPassword).toHaveBeenCalledWith(
-      admin.id,
-      "admin-password",
-    );
     expect(deleteMatch).toHaveBeenCalledWith("Mmatch01");
     expect(recalculate).toHaveBeenCalledWith(
       [],
@@ -476,20 +466,21 @@ describe("admin match sessions", () => {
     expect(response.body.deletedMatchId).toBe("Mmatch01");
   });
 
-  it("admin 비밀번호가 틀리면 세션 경기를 삭제하지 않는다", async () => {
-    vi.spyOn(AuthService.prototype, "verifyAdminPassword").mockResolvedValue(
-      false,
-    );
+  it("관리자가 아니면 세션 경기를 삭제하지 않는다", async () => {
+    vi.spyOn(AuthService.prototype, "authenticateAccessToken").mockResolvedValue({
+      ...adminSession,
+      payload: { playerId: admin.id, isAdmin: false },
+    });
     const deleteMatch = vi.spyOn(MatchRepository.prototype, "delete");
 
     const response = await request(app)
       .delete("/api/admin/matches/Mmatch01")
-      .set("Authorization", "Bearer admin-token")
-      .send({ adminPassword: "wrong-password" });
+      .set("Authorization", "Bearer member-token");
 
-    expect(response.status).toBe(400);
+    expect(response.status).toBe(403);
     expect(response.body).toEqual({
-      error: "admin 비밀번호가 올바르지 않습니다.",
+      error: "관리자 권한이 필요합니다.",
+      code: "FORBIDDEN",
     });
     expect(deleteMatch).not.toHaveBeenCalled();
   });

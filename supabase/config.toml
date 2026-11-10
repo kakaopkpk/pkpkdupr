@@ -159,11 +159,17 @@ max_indexes = 5
 enabled = true
 # The base URL of your website. Used as an allow-list for redirects and for constructing URLs used
 # in emails.
-site_url = "http://127.0.0.1:3000"
+# 로컬 web(:8080)·admin-web(:3100)이 매직링크 로그인 후 돌아올 주소.
+site_url = "http://localhost:8080"
 # The public URL that Auth serves on. Defaults to the API external URL with `/auth/v1` appended.
 # external_url = ""
 # A list of *exact* URLs that auth providers are permitted to redirect to post authentication.
-additional_redirect_urls = ["https://127.0.0.1:3000"]
+additional_redirect_urls = [
+  "http://localhost:8080",
+  "http://127.0.0.1:8080",
+  "http://localhost:3100",
+  "http://127.0.0.1:3100",
+]
 # How long tokens are valid for, in seconds. Defaults to 3600 (1 hour), maximum 604,800 (1 week).
 jwt_expiry = 3600
 # JWT issuer URL. If not set, defaults to auth.external_url.
@@ -219,6 +225,9 @@ web3 = 30
 # provider = "hcaptcha"
 # secret = ""
 
+# 로컬 개발은 Google 없이 이메일 매직링크로 로그인한다. 메일은 실제로 보내지 않고 Mailpit
+# (http://127.0.0.1:54324)에서 확인한다. 예: dev_alice@kakaocorp.com → dev mock 회원 dev_alice와 자동 연결.
+# 운영 프로젝트는 대시보드에서 Google provider만 켠다(docs/deploy.md).
 [auth.email]
 # Allow/disallow new user signups via email to your project.
 enable_signup = true
@@ -389,7 +398,8 @@ deno_version = 2
 # [edge_runtime.secrets]
 # secret_key = "env(SECRET_VALUE)"
 
-# apps/api의 Express app을 서비스하는 함수. 인증은 Express 미들웨어(자체 JWT)가 하므로 게이트웨이 JWT 검증을 끈다.
+# apps/api의 Express app을 서비스하는 함수. 인증은 api가 Supabase Auth access token을 직접 확인하므로
+# (Authorization 헤더 없는 공개 경로·cron 경로도 있어) 게이트웨이 JWT 검증을 끈다.
 [functions.api]
 enabled = true
 verify_jwt = false

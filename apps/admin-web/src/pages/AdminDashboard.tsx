@@ -171,6 +171,7 @@ const creationSourceLabelMap: Record<PlayerCreationSource, string> = {
   self_register: "일반 가입",
   admin_register: "관리자 생성",
   bootstrap: "초기 관리자 생성",
+  invite: "초대 코드 가입",
 };
 
 const PROTECTED_ADMIN_USERNAME =

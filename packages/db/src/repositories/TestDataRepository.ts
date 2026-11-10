@@ -16,12 +16,15 @@ import type { CreatePlayerStatusChangeLogInput } from "./PlayerStatusChangeLogRe
 import { PlayerStatusChangeLogRepository } from "./PlayerStatusChangeLogRepository";
 import type { CreateStoredPlayerInput } from "./PlayerRepository";
 import { PlayerRepository } from "./PlayerRepository";
+import { PlayerAdminRepository } from "./PlayerAdminRepository";
 import { firstRow, placeholders } from "../db/client";
 
-const DEV_PASSWORD_HASH =
-  "$2b$10$YwUchh/fxRAeCFxtLM5QW.YsBqK3BvgFBkEM2AxPHaaNnpaB62aEW"; // dev1234
-const TEST_PASSWORD_HASH =
-  "$2b$10$GISrPxsWRYCfWRrsnRBbu.iTuxCX6hsJ4UiKDmqVNmSYahHTK1hQq"; // test123qwe
+/**
+ * 로컬 Supabase 이메일 매직링크로 `<username>@<ALLOWED_EMAIL_DOMAIN>`(예: dev_alice@kakaocorp.com)에
+ * 로그인하면 GET /api/me가 이 username의 회원과 자동 연결한다.
+ * dev_alice는 관리자 화면 확인용으로 player_admins에 넣는다.
+ */
+const DEV_ADMIN_PLAYER_ID = "dev-player-alice";
 
 const createDupr = (seed: number): PlayerDupr => ({
   singles: seed - 0.013,
@@ -77,8 +80,6 @@ const mockPlayers: CreateStoredPlayerInput[] = [
     gender: "F",
     status: "active",
     duprRating: createDupr(3.62),
-    passwordHash: DEV_PASSWORD_HASH,
-    isFirstLogin: false,
     createdAt: new Date("2026-06-01T09:00:00+09:00"),
     updatedAt: new Date("2026-06-01T09:00:00+09:00"),
   },
@@ -88,8 +89,6 @@ const mockPlayers: CreateStoredPlayerInput[] = [
     gender: "M",
     status: "active",
     duprRating: createDupr(4.11),
-    passwordHash: DEV_PASSWORD_HASH,
-    isFirstLogin: false,
     createdAt: new Date("2026-06-02T10:30:00+09:00"),
     updatedAt: new Date("2026-06-02T10:30:00+09:00"),
   },
@@ -99,8 +98,6 @@ const mockPlayers: CreateStoredPlayerInput[] = [
     gender: "F",
     status: "active",
     duprRating: createDupr(3.49),
-    passwordHash: DEV_PASSWORD_HASH,
-    isFirstLogin: false,
     createdAt: new Date("2026-06-02T11:00:00+09:00"),
     updatedAt: new Date("2026-06-02T11:00:00+09:00"),
   },
@@ -110,8 +107,6 @@ const mockPlayers: CreateStoredPlayerInput[] = [
     gender: "F",
     status: "active",
     duprRating: createDupr(3.77),
-    passwordHash: DEV_PASSWORD_HASH,
-    isFirstLogin: false,
     createdAt: new Date("2026-06-02T11:30:00+09:00"),
     updatedAt: new Date("2026-06-02T11:30:00+09:00"),
   },
@@ -121,8 +116,6 @@ const mockPlayers: CreateStoredPlayerInput[] = [
     gender: "F",
     status: "active",
     duprRating: createDupr(3.92),
-    passwordHash: DEV_PASSWORD_HASH,
-    isFirstLogin: false,
     createdAt: new Date("2026-06-02T12:00:00+09:00"),
     updatedAt: new Date("2026-06-02T12:00:00+09:00"),
   },
@@ -132,8 +125,6 @@ const mockPlayers: CreateStoredPlayerInput[] = [
     gender: "M",
     status: "active",
     duprRating: createDupr(4.05),
-    passwordHash: DEV_PASSWORD_HASH,
-    isFirstLogin: false,
     createdAt: new Date("2026-06-02T12:30:00+09:00"),
     updatedAt: new Date("2026-06-02T12:30:00+09:00"),
   },
@@ -143,8 +134,6 @@ const mockPlayers: CreateStoredPlayerInput[] = [
     gender: "M",
     status: "active",
     duprRating: createDupr(3.86),
-    passwordHash: DEV_PASSWORD_HASH,
-    isFirstLogin: false,
     createdAt: new Date("2026-06-02T13:00:00+09:00"),
     updatedAt: new Date("2026-06-02T13:00:00+09:00"),
   },
@@ -154,8 +143,6 @@ const mockPlayers: CreateStoredPlayerInput[] = [
     gender: "M",
     status: "active",
     duprRating: createDupr(4.21),
-    passwordHash: DEV_PASSWORD_HASH,
-    isFirstLogin: false,
     createdAt: new Date("2026-06-02T13:30:00+09:00"),
     updatedAt: new Date("2026-06-02T13:30:00+09:00"),
   },
@@ -165,8 +152,6 @@ const mockPlayers: CreateStoredPlayerInput[] = [
     gender: "M",
     status: "inactive",
     duprRating: createDupr(2.98),
-    passwordHash: DEV_PASSWORD_HASH,
-    isFirstLogin: false,
     createdAt: new Date("2026-06-03T14:15:00+09:00"),
     updatedAt: new Date("2026-06-04T08:45:00+09:00"),
   },
@@ -177,8 +162,6 @@ const mockPlayers: CreateStoredPlayerInput[] = [
     status: "active",
     affiliations: [{ name: "Gangnam Club", isPrimary: true }],
     duprRating: createDupr(3.176),
-    passwordHash: TEST_PASSWORD_HASH,
-    isFirstLogin: false,
     createdAt: new Date("2026-07-20T09:00:00+09:00"),
     updatedAt: new Date("2026-07-21T19:10:00+09:00"),
   },
@@ -192,8 +175,6 @@ const mockPlayers: CreateStoredPlayerInput[] = [
       { name: "Weekend Pickleball Club", isPrimary: false },
     ],
     duprRating: createDupr(3.482),
-    passwordHash: TEST_PASSWORD_HASH,
-    isFirstLogin: false,
     createdAt: new Date("2026-07-18T09:00:00+09:00"),
     updatedAt: new Date("2026-07-22T20:15:00+09:00"),
   },
@@ -1040,11 +1021,6 @@ export class TestDataRepository {
           id: toDevPlayerId(player.id),
         }));
       if (existing) {
-        await this.playerRepository.updatePassword(
-          existing.id,
-          player.passwordHash,
-          player.isFirstLogin,
-        );
         if (!existing.affiliations?.length && player.affiliations?.length) {
           await this.playerRepository.updateProfile(existing.id, {
             affiliations: player.affiliations,
@@ -1060,6 +1036,10 @@ export class TestDataRepository {
     }
 
     await this.repairDevMockPlayerReferences();
+
+    await new PlayerAdminRepository(this.db).add(
+      this.resolveDevPlayerId(DEV_ADMIN_PLAYER_ID),
+    );
 
     for (const log of mockCreationLogs) {
       await this.createCreationLogIfMissing({

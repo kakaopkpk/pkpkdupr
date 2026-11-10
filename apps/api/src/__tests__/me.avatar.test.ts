@@ -23,7 +23,6 @@ const player: Player = {
 const session: AuthenticatedSession = {
   payload: { playerId: player.id, isAdmin: false },
   player,
-  isFirstLogin: false,
 };
 const previousAvatarUrl = `${PUBLIC_PREFIX}${player.id}/old-uuid.jpg`;
 const jpegDataUrl = `data:image/jpeg;base64,${Buffer.from("jpeg-bytes").toString("base64")}`;
@@ -47,7 +46,6 @@ describe("/api/me/avatar (Supabase Storage)", () => {
     vi.spyOn(AuthService.prototype, "authenticateAccessToken").mockResolvedValue(
       session,
     );
-    vi.spyOn(AuthService.prototype, "initAdmin").mockResolvedValue(player);
   });
 
   afterEach(() => {

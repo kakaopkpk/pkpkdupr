@@ -19,9 +19,8 @@ const admin: Player = {
   updatedAt: now,
 };
 const adminSession: AuthenticatedSession = {
-  payload: { playerId: admin.id, isAdmin: true, rememberMe: true },
+  payload: { playerId: admin.id, isAdmin: true },
   player: admin,
-  isFirstLogin: false,
 };
 
 describe("GET /api/admin/diagnostics/timestamp-units", () => {
@@ -30,7 +29,6 @@ describe("GET /api/admin/diagnostics/timestamp-units", () => {
       AuthService.prototype,
       "authenticateAccessToken",
     ).mockResolvedValue(adminSession);
-    vi.spyOn(AuthService.prototype, "initAdmin").mockResolvedValue(admin);
   });
 
   afterEach(() => {

@@ -20,16 +20,14 @@ const createState = (rating: number): StoredPlayerDupr => ({
 });
 
 const createPlayer = (id: string, rating: number): Player & {
-  passwordHash: string;
-  isFirstLogin: boolean;
+  authUserId: string | null;
 } => ({
   id,
   username: id,
   gender: "M",
   status: "active",
   duprRating: { singles: rating, doubles: rating },
-  passwordHash: "hash",
-  isFirstLogin: false,
+  authUserId: null,
   createdAt: completedAt,
   updatedAt: completedAt,
 });

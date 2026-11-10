@@ -8,14 +8,14 @@ import {
   type PlayerStatus,
   type StoredPlayerDupr,
 } from "@pkpkdupr/shared/player";
-import { desc, eq } from "drizzle-orm";
+import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import { isEntityId } from "@pkpkdupr/shared/entityId";
 import { players } from "../db/schema";
 import { firstRow } from "../db/client";
 
 export interface StoredPlayerRecord extends Player {
-  passwordHash: string;
-  isFirstLogin: boolean;
+  /** 연결된 Supabase Auth 사용자 ID. API 응답에는 내보내지 않는다. */
+  authUserId: string | null;
 }
 
 export interface CreateStoredPlayerInput {
@@ -28,8 +28,7 @@ export interface CreateStoredPlayerInput {
   affiliations?: PlayerAffiliation[];
   statusMessage?: string | null;
   statusMessageBackgroundColor?: string | null;
-  passwordHash: string;
-  isFirstLogin: boolean;
+  authUserId?: string | null;
   createdAt: Date;
   updatedAt: Date;
   duprState?: StoredPlayerDupr;
@@ -56,6 +55,42 @@ export class PlayerRepository {
       .limit(1)
       .then(firstRow);
     return player ? this.hydrate(player) : undefined;
+  }
+
+  async findByAuthUserId(
+    authUserId: string,
+  ): Promise<StoredPlayerRecord | undefined> {
+    const player = await this.db
+      .select()
+      .from(players)
+      .where(eq(players.authUserId, authUserId))
+      .limit(1)
+      .then(firstRow);
+    return player ? this.hydrate(player) : undefined;
+  }
+
+  /** username은 대소문자를 구분해 unique이므로 대소문자만 다른 회원이 여럿일 수 있다. */
+  async findAllByUsernameIgnoringCase(
+    username: string,
+  ): Promise<StoredPlayerRecord[]> {
+    const records = await this.db
+      .select()
+      .from(players)
+      .where(sql`lower(${players.username}) = lower(${username})`);
+    return records.map((record: any) => this.hydrate(record));
+  }
+
+  /**
+   * 아직 연결되지 않은 회원에만 Auth 사용자를 연결한다.
+   * 동시 요청으로 이미 연결됐으면 false를 돌려준다.
+   */
+  async linkAuthUser(id: string, authUserId: string): Promise<boolean> {
+    const updated = await this.db
+      .update(players)
+      .set({ authUserId, updatedAt: new Date() })
+      .where(and(eq(players.id, id), isNull(players.authUserId)))
+      .returning({ id: players.id });
+    return updated.length > 0;
   }
 
   async findAll(): Promise<StoredPlayerRecord[]> {
@@ -91,6 +126,7 @@ export class PlayerRepository {
     } = record;
     return {
       ...player,
+      authUserId: player.authUserId ?? null,
       affiliations,
       ...(statusMessage ? { statusMessage } : {}),
       ...(statusMessageBackgroundColor ? { statusMessageBackgroundColor } : {}),
@@ -116,6 +152,7 @@ export class PlayerRepository {
       affiliationsJson: JSON.stringify(affiliations ?? []),
       statusMessage: statusMessage ?? null,
       statusMessageBackgroundColor: statusMessageBackgroundColor ?? null,
+      authUserId: storedData.authUserId ?? null,
       duprRating,
       createdAt: new Date(storedData.createdAt),
       updatedAt: new Date(storedData.updatedAt),
@@ -142,18 +179,6 @@ export class PlayerRepository {
     await this.db
       .update(players)
       .set({ gender, updatedAt: new Date() })
-      .where(eq(players.id, id));
-    return await this.findById(id);
-  }
-
-  async updatePassword(
-    id: string,
-    passwordHash: string,
-    isFirstLogin: boolean,
-  ): Promise<StoredPlayerRecord | undefined> {
-    await this.db
-      .update(players)
-      .set({ passwordHash, isFirstLogin, updatedAt: new Date() })
       .where(eq(players.id, id));
     return await this.findById(id);
   }
@@ -185,14 +210,6 @@ export class PlayerRepository {
       .set(update)
       .where(eq(players.id, id));
     return await this.findById(id);
-  }
-
-  async initAdminIfMissing(data: CreateStoredPlayerInput): Promise<StoredPlayerRecord> {
-    const existing = await this.findByUsername(data.username);
-    if (existing) {
-      return existing;
-    }
-    return await this.create(data);
   }
 
   async updateDuprState(

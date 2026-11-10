@@ -22,12 +22,27 @@ pnpm db:migration:new <이름>  # 새 마이그레이션 파일 생성
 DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:54322/postgres
 ENABLE_DEV_MOCK_DATA=true
 SUPABASE_URL=<supabase status의 API_URL, 보통 http://127.0.0.1:54321>
+SUPABASE_ANON_KEY=<supabase status의 ANON_KEY>
 SUPABASE_SERVICE_ROLE_KEY=<supabase status의 SERVICE_ROLE_KEY>
+ALLOWED_EMAIL_DOMAIN=kakaocorp.com        # .env에 있으면 그 값
+QR_TOTP_SECRET=local-dev-qr-totp-secret   # .env에 있으면 그 값
 ```
 
-`SUPABASE_URL`·`SUPABASE_SERVICE_ROLE_KEY`는 아바타 업로드가 로컬 Storage(`avatars` 버킷)를 쓰는 데 필요합니다. `pnpm dev:api`로 따로 띄울 때 아바타를 다루려면 같은 값을 직접 넣습니다(`pnpm db:status -o env`로 확인).
+api는 `ALLOWED_EMAIL_DOMAIN`·`QR_TOTP_SECRET`·`SUPABASE_URL`·`SUPABASE_ANON_KEY`가 없으면 시작하지 않습니다. `SUPABASE_SERVICE_ROLE_KEY`는 아바타 업로드가 로컬 Storage(`avatars` 버킷)를 쓰는 데 필요합니다. `pnpm dev:api`로 따로 띄울 때는 같은 값을 직접 넣습니다(`pnpm db:status -o env`로 확인).
 
 `pnpm dev:api`처럼 api를 따로 띄울 때 `DATABASE_URL`이 없으면 위 로컬 주소를 씁니다. `NODE_ENV=production`에서는 `DATABASE_URL`이 필수입니다.
+
+## 로컬 로그인
+
+로컬 Supabase는 Google 없이 이메일 매직링크로 로그인합니다(`supabase/config.toml`의 `[auth.email]`). 메일은 실제로 보내지 않고 Mailpit에 쌓입니다.
+
+1. web(`http://localhost:8080`) 로그인 화면에서 `dev_alice@kakaocorp.com` 같은 dev 계정 이메일로 매직링크를 요청합니다.
+2. Mailpit(`http://127.0.0.1:54324`)에서 메일을 열어 링크를 누릅니다.
+3. `GET /api/me`가 이메일 앞부분과 같은 dev mock 회원(`dev_alice`, `dev_bob`, …, `test1`, `test2`)과 자동 연결합니다.
+
+- `dev_alice`는 dev mock 시딩 때 관리자(`player_admins`)로 등록됩니다.
+- dev mock에 없는 앞부분(예: `newbie@kakaocorp.com`)은 403 `ACCOUNT_NOT_LINKED`이며, 관리자가 발급한 초대 코드로 가입을 확인할 수 있습니다.
+- 허용 도메인이 아닌 이메일(예: `dev_alice@example.com`)은 403 `DOMAIN_NOT_ALLOWED`입니다.
 
 ## 구조
 

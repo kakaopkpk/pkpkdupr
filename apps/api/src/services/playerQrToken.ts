@@ -1,13 +1,20 @@
 import { createHmac, timingSafeEqual } from "crypto";
 import type { PlayerQrTokenResponse } from "@pkpkdupr/shared/qr";
-import { JWT_SECRET } from "../config/jwt";
 
 const QR_TOKEN_VERSION = "1";
 const QR_TOKEN_SCHEME = "pkpkdupr:";
 const QR_TOKEN_HOST = "player-qr";
 const DEV_QR_TOKEN_HOST = "player-qr-dev";
 const QR_TOKEN_STEP_MS = 15 * 60 * 1000;
-const QR_TOTP_SECRET = process.env.QR_TOTP_SECRET || JWT_SECRET;
+
+/** 기동 시 assertRequiredEnv()가 확인하지만, 다른 경로로 불려도 빈 키로 서명하지 않도록 사용할 때 다시 확인한다. */
+const getQrTotpSecret = (): string => {
+  const secret = process.env.QR_TOTP_SECRET?.trim();
+  if (!secret) {
+    throw new Error("QR_TOTP_SECRET 환경변수가 필요합니다.");
+  }
+  return secret;
+};
 
 export const getPlayerQrStep = (nowMs = Date.now()): number =>
   Math.floor(nowMs / QR_TOKEN_STEP_MS);
@@ -25,7 +32,7 @@ export const createPlayerQrCode = (
   playerId: string,
   step: number,
 ): string => {
-  const digest = createHmac("sha256", QR_TOTP_SECRET)
+  const digest = createHmac("sha256", getQrTotpSecret())
     .update(createPlayerQrMessage(playerId, step))
     .digest();
   const offset = digest[digest.length - 1] & 0x0f;
@@ -39,7 +46,7 @@ export const createPlayerQrCode = (
 };
 
 const createDevPlayerQrCode = (playerId: string): string => {
-  const digest = createHmac("sha256", QR_TOTP_SECRET)
+  const digest = createHmac("sha256", getQrTotpSecret())
     .update(createDevPlayerQrMessage(playerId))
     .digest();
   const offset = digest[digest.length - 1] & 0x0f;
