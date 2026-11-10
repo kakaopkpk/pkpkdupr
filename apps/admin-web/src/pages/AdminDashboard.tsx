@@ -1815,7 +1815,7 @@ const AdminDashboard: React.FC = () => {
                     <input
                       value={bulkMatchLocation}
                       onChange={(e) => setBulkMatchLocation(e.target.value)}
-                      placeholder="예: PKELO Court A"
+                      placeholder="예: Court A"
                       className="w-full rounded-lg border px-3 py-2"
                     />
                   </div>

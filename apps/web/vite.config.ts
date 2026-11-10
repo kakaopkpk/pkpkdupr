@@ -136,10 +136,6 @@ export default defineConfig({
   server: {
     host: "0.0.0.0",
     port: 8080,
-    allowedHosts: ["neiz-office.fedev.kakao.com"],
-    hmr: {
-      host: "neiz-office.fedev.kakao.com",
-    },
     proxy: {
       "/api": {
         target: "http://localhost:4000",

@@ -1,8 +1,8 @@
-# PKELO 프로젝트 가이드
+# pkpkdupr 프로젝트 가이드
 
 ## 개요
 
-- 제품명은 **PKELO**이며, 저장소/패키지 식별자는 기존의 `pkpkdupr`를 유지합니다.
+- 제품명과 저장소/패키지 식별자는 모두 `pkpkdupr`입니다.
 - 피클볼 플레이어, 경기 기록, DUPR 유사 평점과 관리자 운영 도구를 관리하는 pnpm 모노레포입니다.
 - 변경은 공유 계약(`packages/shared`)부터 API, DB 서버, web/admin 소비처까지 한 흐름으로 확인합니다.
 
@@ -20,7 +20,7 @@ apps/admin-web (:3100) ─┼─> apps/api (:4000) ─internal HTTP─> apps/db-
 | `apps/web` | React 19 사용자 앱. 인증, Match / Members / Me 탭, QR, PWA를 담당합니다. |
 | `apps/admin-web` | React 18 관리자 로그인과 회원·경기·평점 운영 화면을 담당합니다. |
 | `apps/api` | Express 공개 API, JWT 인증, 관리자 권한 검사, DB 서버 오케스트레이션을 담당합니다. |
-| `apps/db-server` | libSQL + Drizzle 저장 계층, 스키마 초기화와 내부 `/internal/*` API를 담당합니다. |
+| `apps/db-server` | mysql2 기반 MySQL 저장 계층, 스키마 초기화와 내부 `/internal/*` API를 담당합니다. |
 | `packages/shared` | `player.ts`, `match.ts`, `qr.ts`의 공통 도메인 계약을 제공합니다. |
 
 ## 개발 명령
@@ -39,8 +39,8 @@ pnpm build:api
 pnpm build:admin
 pnpm lint
 
-pnpm dev:db                     # MySQL :3306
-pnpm dev:db-browser             # Adminer :3301
+pnpm dev:db                     # MySQL :3306 (docker-compose.dev.yml)
+pnpm dev:db-browser             # Adminer :3301 (docker-compose.dev.yml)
 ```
 
 - 루트 `pnpm dev`는 Docker MySQL을 준비한 뒤 `ENABLE_DEV_MOCK_DATA=true`와 `DB_HOST=127.0.0.1`을 사용합니다.
@@ -74,9 +74,10 @@ pnpm dev:db-browser             # Adminer :3301
 
 ## 운영과 배포
 
-- GitHub Actions는 GHCR 이미지 빌드/푸시만 담당합니다.
-- 서버 반영, SWAG/TLS 및 운영 env 관리는 `/opt/pkpkdupr`의 `infra` 브랜치 checkout에서 수행합니다. 이 앱 소스 브랜치의 `scripts/`에는 서버 배포 스크립트를 두지 않습니다.
-- 운영 배포 명령과 대상 스택 선택은 `infra` 브랜치의 `docs/deploy-workflows.md`를 기준으로 합니다.
+- 운영·배포는 Supabase(DB·Auth·Storage·Edge Functions) + GitHub Pages로 이전 중입니다. 범위와 순서는 이슈 #1~#10을 따릅니다.
+- 이전 전까지 Docker는 로컬 개발용 MySQL·Adminer(`docker-compose.dev.yml`)에만 씁니다.
+- GitHub Actions `ci.yml`은 PR과 main push에서 설치·빌드·api/shared 테스트를 실행합니다.
+- api의 CORS 허용 origin은 env `CORS_ALLOWED_ORIGINS`(쉼표 구분)와 localhost 개발 origin(8080, 3100)입니다.
 
 ## 작업 및 커밋 규칙
 

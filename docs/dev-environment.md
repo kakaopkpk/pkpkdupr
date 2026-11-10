@@ -1,6 +1,6 @@
-# PKELO 개발 환경
+# pkpkdupr 개발 환경
 
-로컬 개발은 Docker MySQL과 Adminer를 사용합니다. 기존 SQLite 파일은 데이터 이관용 원본으로만 유지합니다.
+로컬 개발은 `docker-compose.dev.yml`이 띄우는 Docker MySQL과 Adminer를 사용합니다. 기존 SQLite 파일은 데이터 이관용 원본으로만 유지합니다.
 
 ## 실행
 
@@ -44,21 +44,14 @@ Vite는 `/api`, `/uploads`, `/db`를 각각 API 또는 Adminer 개발 서비스�
 - 직접 접근: `http://localhost:3301/`
 - Vite 경유 접근: `http://localhost:8080/db/`
 - 서버는 `mysql`, 데이터베이스는 `pkpkdupr`를 입력합니다.
-- 조회에는 `.env`의 `MYSQL_VIEWER_USER` / `MYSQL_VIEWER_PASSWORD`를 사용합니다. 이 계정은 `SELECT`, `SHOW VIEW` 권한만 가집니다.
+- 조회에는 `MYSQL_VIEWER_USER` / `MYSQL_VIEWER_PASSWORD`(기본값 `pkpkdupr_viewer` / `change-viewer-me`)를 사용합니다. 이 계정은 `SELECT`, `SHOW VIEW` 권한만 가집니다.
+- MySQL 계정 값은 루트 `.env`로 덮어쓸 수 있습니다(`MYSQL_DATABASE`, `MYSQL_USER`, `MYSQL_PASSWORD`, `MYSQL_ROOT_PASSWORD`, `MYSQL_VIEWER_USER`, `MYSQL_VIEWER_PASSWORD`). 미설정이면 `docker-compose.dev.yml`의 기본값을 씁니다.
 
 ## SQLite 데이터 이관
 
-운영 전환은 쓰기 중단 중에 수행합니다. 이관 명령은 원본 SQLite를 변경하지 않으며 대상 MySQL이 비어 있지 않으면 실패합니다.
+이관 명령은 원본 SQLite를 변경하지 않으며 대상 MySQL이 비어 있지 않으면 실패합니다.
 
 ```bash
-# 운영 서버의 infra checkout에서: SQLite 백업 생성, MySQL 준비, 데이터 이관 및 검증
-cd /opt/pkpkdupr
-git switch infra
-git pull --ff-only origin infra
-PKPKDUPR_DEPLOY_PATH=/opt/pkpkdupr \
-  bash scripts/migrate-sqlite-to-mysql.sh
-
-# 로컬에서 직접 실행할 때
 DB_PASSWORD=<MYSQL_PASSWORD> \
 SQLITE_SOURCE_URL=file:$PWD/data/db/db.sqlite \
   pnpm db:import-sqlite

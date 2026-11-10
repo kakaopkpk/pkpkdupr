@@ -1,4 +1,4 @@
-export const RECENT_INPUT_HISTORY_STORAGE_KEY = "pkelo:recent-inputs:v1";
+export const RECENT_INPUT_HISTORY_STORAGE_KEY = "pkpkdupr:recent-inputs:v1";
 export const RECENT_INPUT_HISTORY_LIMIT = 5;
 
 export interface StorageLike {
