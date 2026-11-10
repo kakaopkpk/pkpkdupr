@@ -74,23 +74,19 @@ const avatarUploadDir = process.env.AVATAR_UPLOAD_DIR
   : defaultAvatarUploadDir;
 const PROTECTED_ADMIN_USERNAME = process.env.API_ADMIN_USERNAME || "admin";
 const INITIAL_ADMIN_CREATED_PASSWORD = "123qwe";
-const domain = process.env.DOMAIN || "pkpkdupr.duckdns.org";
-const webPublicPort = process.env.WEB_PUBLIC_PORT || "443";
-const adminStackPort =
-  process.env.ADMIN_STACK_PORT || process.env.PROXY_PORT || "3333";
-const webOrigin =
-  webPublicPort === "443"
-    ? `https://${domain}`
-    : `https://${domain}:${webPublicPort}`;
-const adminStackOrigin = `https://${domain}:${adminStackPort}`;
-const allowedOrigins = new Set([
-  webOrigin,
-  adminStackOrigin,
-  "https://neiz-office.fedev.kakao.com",
+// 운영 origin은 CORS_ALLOWED_ORIGINS(쉼표 구분)로 주입하고, localhost 개발 origin은 항상 허용한다.
+const DEV_ALLOWED_ORIGINS = [
   "http://localhost:8080",
   "http://127.0.0.1:8080",
   "http://localhost:3100",
   "http://127.0.0.1:3100",
+];
+const allowedOrigins = new Set([
+  ...DEV_ALLOWED_ORIGINS,
+  ...(process.env.CORS_ALLOWED_ORIGINS ?? "")
+    .split(",")
+    .map((origin) => origin.trim())
+    .filter(Boolean),
 ]);
 
 app.use(
@@ -102,7 +98,7 @@ app.use(
       }
       callback(new Error(`허용되지 않은 Origin입니다: ${origin}`));
     },
-    methods: ["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allowedHeaders: ["Authorization", "Content-Type"],
   }),
 );
@@ -113,7 +109,7 @@ app.use(AVATAR_UPLOAD_ROUTE, express.static(avatarUploadDir));
 app.get("/api/health", (_req, res) => {
   res.json({
     status: "ok",
-    message: "PKELO API is running!",
+    message: "pkpkdupr API is running!",
     timestamp: new Date().toISOString(),
   });
 });
@@ -1395,43 +1391,10 @@ app.post("/api/admin/matches/batch", requireAdmin, async (req, res) => {
       };
     });
 
-    const recordBatchAttributes = async (
-      attributes: Record<string, string | number | boolean>,
-    ) => {
-      // 테스트와 로컬 개발에서는 New Relic agent를 시작하지 않는다. 운영에서는
-      // start.cjs가 이미 agent를 preload하므로 dynamic import는 기존 agent를 재사용한다.
-      if (!process.env.NEW_RELIC_APP_NAME) return;
-      const { default: newrelic } = await import("newrelic");
-      newrelic.addCustomAttributes(attributes);
-    };
-    const measureBatchStage = async <T>(name: string, operation: () => Promise<T>) => {
-      const startedAt = performance.now();
-      try {
-        return await operation();
-      } finally {
-        await recordBatchAttributes({
-          [`adminMatchBatch.${name}Ms`]: Math.round(performance.now() - startedAt),
-        });
-      }
-    };
-    const uniquePlayerCount = new Set(
-      matchesToCreate.flatMap((match) =>
-        match.teams.flatMap((team) => team.players.map((player) => player.id)),
-      ),
-    ).size;
-    await recordBatchAttributes({
-      "adminMatchBatch.matchCount": matchesToCreate.length,
-      "adminMatchBatch.uniquePlayerCount": uniquePlayerCount,
-    });
-
-    const createdMatches = await measureBatchStage("commitBatch", async () =>
-      commonSession
-        ? await matchRepository.createCompletedBatch(matchesToCreate)
-        : await Promise.all(matchesToCreate.map((match) => matchRepository.create(match))),
-    );
-    const ratingResult = await measureBatchStage("ratingAndProjection", async () =>
-      authService.applyMatchResultsToRatings(createdMatches),
-    );
+    const createdMatches = commonSession
+      ? await matchRepository.createCompletedBatch(matchesToCreate)
+      : await Promise.all(matchesToCreate.map((match) => matchRepository.create(match)));
+    const ratingResult = await authService.applyMatchResultsToRatings(createdMatches);
     const { ratingChangeLogs, changedPlayerCount } = ratingResult;
 
     res.status(201).json({
