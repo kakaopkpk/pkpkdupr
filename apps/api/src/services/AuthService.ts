@@ -811,13 +811,6 @@ export class AuthService {
     }));
   }
 
-  private async getStoredPlayerByUsername(
-    username: string,
-  ): Promise<StoredPlayerRecord | undefined> {
-    const player = await db.players.findByUsername(username);
-    return player ? hydratePlayer(player) : undefined;
-  }
-
   private async insertCreationLog(input: {
     playerId: string;
     createdByPlayerId: string | null;

@@ -69,10 +69,12 @@ export class InviteCodeRepository {
   async redeemForNewPlayer(input: RedeemInviteCodeInput): Promise<boolean> {
     const { codeHash, usedAt, player, creationLogId } = input;
     return await this.db.transaction(async (tx: any) => {
-      // 조건부 UPDATE 한 번으로 소비해 같은 코드를 동시에 내도 한 요청만 성공한다.
-      const consumed = await tx
-        .update(inviteCodes)
-        .set({ usedByPlayerId: player.id, usedAt })
+      // invite_codes.used_by_player_id FK가 즉시 검사되므로 회원을 먼저 만들고 코드를 소비한다.
+      // 그 전에 유효한 코드 행을 잠가 두어, 같은 코드를 동시에 내면 한 요청만 진행하고
+      // 뒤 요청은 앞 트랜잭션이 끝난 뒤 사용됨으로 보고 회원을 만들지 않는다.
+      const [validCode] = await tx
+        .select({ id: inviteCodes.id })
+        .from(inviteCodes)
         .where(
           and(
             eq(inviteCodes.codeHash, codeHash),
@@ -80,8 +82,8 @@ export class InviteCodeRepository {
             gt(inviteCodes.expiresAt, usedAt),
           ),
         )
-        .returning({ id: inviteCodes.id });
-      if (consumed.length === 0) {
+        .for("update");
+      if (!validCode) {
         return false;
       }
 
@@ -107,6 +109,10 @@ export class InviteCodeRepository {
         creationSource: "invite",
         createdAt: usedAt,
       });
+      await tx
+        .update(inviteCodes)
+        .set({ usedByPlayerId: player.id, usedAt })
+        .where(eq(inviteCodes.id, validCode.id));
       return true;
     });
   }

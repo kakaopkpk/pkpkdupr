@@ -591,9 +591,13 @@ const handleAuthFailure = (res: express.Response, error: unknown) => {
   );
 };
 
+const BEARER_PREFIX = "Bearer ";
+
 const getBearerToken = (req: express.Request, res: express.Response) => {
   const header = req.headers.authorization;
-  const token = header?.startsWith("Bearer ") ? header.slice(7).trim() : "";
+  const token = header?.startsWith(BEARER_PREFIX)
+    ? header.slice(BEARER_PREFIX.length).trim()
+    : "";
   if (!token) {
     sendAuthError(res, "SESSION_INVALID", "로그인이 필요합니다.");
     return null;
