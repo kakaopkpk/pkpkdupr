@@ -69,6 +69,16 @@ apps/web :8080 ── /api ──> apps/api :4000
 - 스키마의 기준은 `supabase/migrations/*.sql`입니다. 스키마를 바꿀 때는 기존 파일을 고치지 말고 `pnpm db:migration:new <이름>`으로 새 파일을 추가합니다.
 - `packages/db/src/db/schema.ts`(drizzle `pg-core`)는 쿼리 빌더용 정의입니다. 마이그레이션을 바꾸면 같은 변경을 여기에도 반영합니다.
 - 테이블·컬럼명과 저장 형식(타임스탬프는 Unix 초 `BIGINT`, JSON은 `TEXT` `*_json` 컬럼)은 기존 MySQL 스키마와 같아서 운영 데이터의 값은 바꾸지 않고 옮길 수 있습니다. 다만 mysqldump 출력은 백틱 식별자·백슬래시 이스케이프·`is_first_login`의 0/1 정수 표현 때문에 그대로 넣을 수 없으며, 운영 데이터 이관 방법은 아직 정해지지 않았습니다.
+- `players.username`은 표시용 대소문자를 보존하되 `lower(username)` 유니크 인덱스(`players_username_lower_unique`)로 대소문자 구분 없이 unique합니다. MySQL의 case-insensitive 콜레이션과 같은 판정입니다. 대소문자만 다른 username(`Alice`와 `alice`)이 이미 있으면 이 인덱스를 만드는 마이그레이션(`20261110050000_players_username_lower_unique.sql`)이 실패하므로, 마이그레이션 적용 전과 **운영 데이터 이관(#10) 전에** 아래 쿼리로 중복을 점검해 정리합니다. 결과가 없어야 합니다.
+
+  ```sql
+  SELECT lower(username) AS username_lower, array_agg(username ORDER BY username) AS usernames, count(*)
+  FROM players
+  GROUP BY lower(username)
+  HAVING count(*) > 1;
+  ```
+
+  MySQL 원본에서 점검할 때는 콜레이션과 무관하게 `GROUP BY LOWER(username)`(MySQL은 `array_agg` 대신 `GROUP_CONCAT(username)`)으로 같은 조건을 확인합니다.
 - raw SQL은 Postgres 위치 파라미터(`$1`, `$2`, ...)를 씁니다. 동적 목록은 `placeholders(count, start)`로 만듭니다.
 
 ## 원격 Supabase 프로젝트

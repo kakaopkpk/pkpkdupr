@@ -389,8 +389,12 @@ const getAllowedEmailLocalPart = (
   return domain === allowedDomain ? email.slice(0, atIndex) : null;
 };
 
+/** Postgres unique_violation(23505). 표현식 유니크 인덱스(lower(username)) 위반도 같은 코드다. */
 const isUniqueViolation = (error: unknown) => {
-  const message = (error as Error).message ?? "";
+  if ((error as { code?: unknown })?.code === "23505") {
+    return true;
+  }
+  const message = (error as Error)?.message ?? "";
   return message.includes("UNIQUE") || message.includes("unique");
 };
 
@@ -661,21 +665,14 @@ export class AuthService {
 
   /**
    * 이메일 앞부분과 대소문자 구분 없이 같은 username의 active 미연결 회원을 요청자와 연결한다.
-   * 대소문자만 다른 회원이 여럿이면 앞부분과 정확히 같은 회원만 대상으로 본다.
    * 이 요청이 실제로 연결했을 때만 감사 로그를 남긴다.
    */
   private async autoLinkByEmailLocalPart(
     authUser: AllowedAuthUser,
   ): Promise<StoredPlayerRecord | undefined> {
-    const candidates = await db.players.findAllByUsernameIgnoringCase(
+    const candidate = await db.players.findByUsernameIgnoringCase(
       authUser.emailLocalPart,
     );
-    const candidate =
-      candidates.length === 1
-        ? candidates[0]
-        : candidates.find(
-            (player) => player.username === authUser.emailLocalPart,
-          );
     if (
       !candidate ||
       candidate.authUserId ||
@@ -772,9 +769,7 @@ export class AuthService {
 
     const username = authUser.emailLocalPart.toLowerCase();
     // 자동 연결되지 않았는데 같은 username이 있으면 다른 Auth 사용자에게 연결됐거나 inactive인 회원이다.
-    if (
-      (await db.players.findAllByUsernameIgnoringCase(username)).length > 0
-    ) {
+    if (await db.players.findByUsernameIgnoringCase(username)) {
       throw alreadyLinkedError();
     }
 
@@ -793,7 +788,7 @@ export class AuthService {
         creationLogId: buildId("player-creation-log"),
       });
     } catch (error) {
-      // 같은 요청자·username으로 동시에 가입한 경우. 트랜잭션이 롤백돼 코드는 그대로 남는다.
+      // 같은 요청자이거나 대소문자 구분 없이 같은 username으로 동시에 가입한 경우. 트랜잭션이 롤백돼 코드는 그대로 남는다.
       if (isUniqueViolation(error)) {
         throw alreadyLinkedError();
       }
@@ -2037,11 +2032,8 @@ export class AuthService {
     input: AdminRegisterPlayerRequest,
     createdByPlayerId: string,
   ): Promise<Player> {
-    // 자동 연결이 대소문자를 무시하므로 대소문자만 다른 username도 중복으로 본다.
-    const duplicates = await db.players.findAllByUsernameIgnoringCase(
-      input.username,
-    );
-    if (duplicates.length > 0) {
+    // username은 대소문자 구분 없이 unique다. 동시 요청은 createStoredPlayer가 유니크 위반으로 걸러낸다.
+    if (await db.players.findByUsernameIgnoringCase(input.username)) {
       throw new Error("중복된 사용자명입니다.");
     }
 

@@ -31,11 +31,13 @@ const unixTimestamp = customType<{ data: Date; driverData: number | string }>({
 
 const id = (name: string) => varchar(name, { length: 255 });
 
+/**
+ * username은 lower(username) 유니크 인덱스(players_username_lower_unique)로 대소문자 구분 없이 unique다.
+ * drizzle 0.30 pg-core는 표현식 인덱스를 정의하지 못해 그 인덱스는 마이그레이션에만 있다.
+ */
 export const players = pgTable("players", {
   id: id("id").primaryKey(),
-  username: varchar("username", { length: 191 })
-    .notNull()
-    .unique("players_username_unique"),
+  username: varchar("username", { length: 191 }).notNull(),
   duprRating: text("dupr_rating"),
   gender: varchar("gender", { length: 8 }).notNull(),
   status: varchar("status", { length: 32 }).notNull(),

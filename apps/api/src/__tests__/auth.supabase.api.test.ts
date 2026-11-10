@@ -73,9 +73,9 @@ const setupAuthFixture = () => {
     async (authUserId) =>
       [...players.values()].find((player) => player.authUserId === authUserId),
   );
-  vi.spyOn(db.players, "findAllByUsernameIgnoringCase").mockImplementation(
+  vi.spyOn(db.players, "findByUsernameIgnoringCase").mockImplementation(
     async (username) =>
-      [...players.values()].filter(
+      [...players.values()].find(
         (player) => player.username.toLowerCase() === username.toLowerCase(),
       ),
   );
@@ -110,7 +110,7 @@ const setupAuthFixture = () => {
       if (
         [...players.values()].some(
           (existing) =>
-            existing.username === player.username ||
+            existing.username.toLowerCase() === player.username.toLowerCase() ||
             existing.authUserId === player.authUserId,
         )
       ) {
@@ -630,6 +630,45 @@ describe("Supabase Auth 기반 인증", () => {
       expect(fixture.invites[0].usedAt).toBeNull();
     });
 
+    it("대소문자만 다른 username이 다른 Auth 사용자에게 연결돼 있으면 ALREADY_LINKED로 거부한다", async () => {
+      const { code } = await issueInviteCode();
+      fixture.addPlayer("Ptaken01", "Taken", "auth-someone-else");
+      fixture.addAuthUser("taken", "taken@kakaocorp.com");
+      const playerCount = fixture.players.size;
+
+      const response = await request(app)
+        .post("/api/auth/invite")
+        .set(bearer("taken"))
+        .send({ code });
+
+      expect(response.status).toBe(409);
+      expect(response.body.code).toBe("ALREADY_LINKED");
+      expect(fixture.players.size).toBe(playerCount);
+      expect(fixture.invites[0].usedAt).toBeNull();
+    });
+
+    it("사전 검사 뒤 대소문자만 다른 username이 먼저 생기면 lower(username) 유니크 위반을 ALREADY_LINKED로 바꾸고 코드를 쓰지 않는다", async () => {
+      const { code } = await issueInviteCode();
+      fixture.addAuthUser("racer", "racer@kakaocorp.com");
+      vi.spyOn(db.inviteCodes, "redeemForNewPlayer").mockRejectedValue(
+        Object.assign(
+          new Error(
+            'duplicate key value violates unique constraint "players_username_lower_unique"',
+          ),
+          { code: "23505" },
+        ),
+      );
+
+      const response = await request(app)
+        .post("/api/auth/invite")
+        .set(bearer("racer"))
+        .send({ code });
+
+      expect(response.status).toBe(409);
+      expect(response.body.code).toBe("ALREADY_LINKED");
+      expect(fixture.invites[0].usedAt).toBeNull();
+    });
+
     it("같은 username의 active 미연결 회원이 있으면 코드를 쓰지 않고 그 회원과 연결하며 감사 로그를 남긴다", async () => {
       const { code } = await issueInviteCode();
       fixture.addPlayer("Pmember1", "member");
@@ -752,6 +791,26 @@ describe("Supabase Auth 기반 인증", () => {
 
     it("대소문자만 다른 username도 중복으로 거부한다", async () => {
       fixture.addPlayer("Pmember1", "member");
+
+      const response = await request(app)
+        .post("/api/admin/register")
+        .set(bearer("admin"))
+        .send({ username: "Member", gender: "F" });
+
+      expect(response.status).toBe(500);
+      expect(response.body.error).toBe("중복된 사용자명입니다.");
+    });
+
+    it("사전 검사 뒤 lower(username) 유니크 인덱스 위반이 나도 중복 메시지를 준다", async () => {
+      // 동시 요청이 먼저 대소문자만 다른 username을 만든 경우를 흉내 낸다.
+      vi.spyOn(db.players, "create").mockRejectedValue(
+        Object.assign(
+          new Error(
+            'duplicate key value violates unique constraint "players_username_lower_unique"',
+          ),
+          { code: "23505" },
+        ),
+      );
 
       const response = await request(app)
         .post("/api/admin/register")
