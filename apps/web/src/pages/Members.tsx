@@ -27,6 +27,7 @@ import { useMinimumLoading } from "@/hooks/useMinimumLoading";
 import { useOnlineStatus } from "@/hooks/useOnlineStatus";
 import { apiFetch } from "@/lib/api";
 import { isTabRefreshDue } from "@/lib/tabRefresh";
+import { CACHED_MEMBERS_KEY } from "@/lib/userCache";
 import {
   formatRating,
   getCompositeDoublesRating,
@@ -40,7 +41,6 @@ import {
   createEmptyRatingHistory,
 } from "@/utils/matchStats";
 
-const CACHED_MEMBERS_KEY = "pkpkdupr:members";
 const OFFLINE_FALLBACK_MESSAGE =
   "최신 정보를 불러오지 못해 저장된 멤버 목록을 표시합니다.";
 
