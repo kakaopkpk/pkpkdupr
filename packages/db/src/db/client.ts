@@ -17,17 +17,12 @@ export interface RawQueryResult {
 
 type SqlExecutor = Pick<Sql, "unsafe">;
 
-/** `supabase start`가 띄우는 로컬 Postgres의 기본 접속 문자열. */
-const LOCAL_SUPABASE_DATABASE_URL =
-  "postgresql://postgres:postgres@127.0.0.1:54322/postgres";
-
 const resolveDatabaseUrl = () => {
   const url = process.env.DATABASE_URL?.trim();
-  if (url) return url;
-  if (process.env.NODE_ENV === "production") {
+  if (!url) {
     throw new Error("DATABASE_URL 환경변수가 필요합니다.");
   }
-  return LOCAL_SUPABASE_DATABASE_URL;
+  return url;
 };
 
 const normalizeStatement = (statement: RawStatement) =>
