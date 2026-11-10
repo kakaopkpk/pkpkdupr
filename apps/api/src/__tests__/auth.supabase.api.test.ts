@@ -1,6 +1,7 @@
 import { createHash } from "crypto";
 import type {
   CreateInviteCodeInput,
+  CreatePlayerAuthLinkLogInput,
   RedeemInviteCodeInput,
   StoredPlayerRecord,
 } from "@pkpkdupr/db";
@@ -30,6 +31,7 @@ const setupAuthFixture = () => {
   const players = new Map<string, StoredPlayerRecord>();
   const admins = new Set<string>();
   const invites: StoredInvite[] = [];
+  const authLinkLogs: CreatePlayerAuthLinkLogInput[] = [];
 
   const addAuthUser = (
     token: string,
@@ -85,6 +87,11 @@ const setupAuthFixture = () => {
       player.authUserId = authUserId;
       return true;
     });
+  vi.spyOn(db.playerAuthLinkLogs, "create").mockImplementation(
+    async (input) => {
+      authLinkLogs.push(input);
+    },
+  );
   vi.spyOn(db.playerAdmins, "isAdmin").mockImplementation(async (playerId) =>
     admins.has(playerId),
   );
@@ -116,7 +123,15 @@ const setupAuthFixture = () => {
     },
   );
 
-  return { addAuthUser, addPlayer, admins, invites, players, linkAuthUser };
+  return {
+    addAuthUser,
+    addPlayer,
+    admins,
+    authLinkLogs,
+    invites,
+    players,
+    linkAuthUser,
+  };
 };
 
 const bearer = (token: string) => ({ Authorization: `Bearer ${token}` });
@@ -329,9 +344,61 @@ describe("Supabase Auth 기반 인증", () => {
         isAdmin: false,
       });
       expect(fixture.players.get("Palice01")?.authUserId).toBe(authUser.id);
+      expect(fixture.authLinkLogs).toEqual([
+        {
+          id: expect.stringMatching(/^player-auth-link-log-/),
+          playerId: "Palice01",
+          authUserId: authUser.id,
+          linkMethod: "email_local_part",
+          createdAt: NOW,
+        },
+      ]);
       // 이메일·Auth 사용자 ID는 응답에 싣지 않는다.
       expect(JSON.stringify(response.body)).not.toContain("@");
       expect(response.body).not.toHaveProperty("authUserId");
+    });
+
+    it("같은 username의 회원이 inactive면 연결하지 않고 ACCOUNT_NOT_LINKED를 준다", async () => {
+      fixture.addPlayer("Palice01", "dev_alice").status = "inactive";
+      fixture.addAuthUser("alice", "dev_alice@kakaocorp.com");
+
+      const response = await request(app).get("/api/me").set(bearer("alice"));
+
+      expect(response.status).toBe(403);
+      expect(response.body.code).toBe("ACCOUNT_NOT_LINKED");
+      expect(fixture.linkAuthUser).not.toHaveBeenCalled();
+      expect(fixture.players.get("Palice01")?.authUserId).toBeNull();
+      expect(fixture.authLinkLogs).toHaveLength(0);
+    });
+
+    it("다른 요청이 먼저 연결해 이 요청이 연결하지 못했으면 감사 로그를 남기지 않는다", async () => {
+      fixture.addPlayer("Palice01", "dev_alice");
+      const authUser = fixture.addAuthUser("alice", "dev_alice@kakaocorp.com");
+      fixture.linkAuthUser.mockImplementationOnce(async (id, authUserId) => {
+        // 같은 요청자의 동시 요청이 조회와 연결 사이에 먼저 연결한 상황.
+        fixture.players.get(id)!.authUserId = authUserId;
+        return false;
+      });
+
+      const response = await request(app).get("/api/me").set(bearer("alice"));
+
+      expect(response.status).toBe(200);
+      expect(response.body.id).toBe("Palice01");
+      expect(fixture.players.get("Palice01")?.authUserId).toBe(authUser.id);
+      expect(fixture.authLinkLogs).toHaveLength(0);
+    });
+
+    it("동시에 여러 번 요청해도 감사 로그는 한 번만 남긴다", async () => {
+      fixture.addPlayer("Palice01", "dev_alice");
+      fixture.addAuthUser("alice", "dev_alice@kakaocorp.com");
+
+      const responses = await Promise.all([
+        request(app).get("/api/me").set(bearer("alice")),
+        request(app).get("/api/me").set(bearer("alice")),
+      ]);
+
+      expect(responses.map((response) => response.status)).toEqual([200, 200]);
+      expect(fixture.authLinkLogs).toHaveLength(1);
     });
 
     it("이미 연결된 요청자는 같은 회원으로 계속 인증된다", async () => {
@@ -343,6 +410,7 @@ describe("Supabase Auth 기반 인증", () => {
       expect(response.status).toBe(200);
       expect(response.body.id).toBe("Palice01");
       expect(fixture.linkAuthUser).not.toHaveBeenCalled();
+      expect(fixture.authLinkLogs).toHaveLength(0);
     });
 
     it("같은 username이 다른 Auth 사용자와 연결돼 있으면 ACCOUNT_NOT_LINKED를 준다", async () => {
@@ -560,6 +628,48 @@ describe("Supabase Auth 기반 인증", () => {
       expect(response.status).toBe(409);
       expect(response.body.code).toBe("ALREADY_LINKED");
       expect(fixture.invites[0].usedAt).toBeNull();
+    });
+
+    it("같은 username의 active 미연결 회원이 있으면 코드를 쓰지 않고 그 회원과 연결하며 감사 로그를 남긴다", async () => {
+      const { code } = await issueInviteCode();
+      fixture.addPlayer("Pmember1", "member");
+      const authUser = fixture.addAuthUser("member", "Member@kakaocorp.com");
+
+      const response = await request(app)
+        .post("/api/auth/invite")
+        .set(bearer("member"))
+        .send({ code });
+
+      expect(response.status).toBe(201);
+      expect(response.body.id).toBe("Pmember1");
+      expect(fixture.players.get("Pmember1")?.authUserId).toBe(authUser.id);
+      expect(fixture.invites[0].usedAt).toBeNull();
+      expect(fixture.authLinkLogs).toEqual([
+        expect.objectContaining({
+          playerId: "Pmember1",
+          authUserId: authUser.id,
+          linkMethod: "email_local_part",
+        }),
+      ]);
+    });
+
+    it("같은 username의 회원이 inactive면 연결·생성하지 않고 ALREADY_LINKED로 거부한다", async () => {
+      const { code } = await issueInviteCode();
+      fixture.addPlayer("Pleft001", "left_member").status = "inactive";
+      fixture.addAuthUser("left", "left_member@kakaocorp.com");
+      const playerCount = fixture.players.size;
+
+      const response = await request(app)
+        .post("/api/auth/invite")
+        .set(bearer("left"))
+        .send({ code });
+
+      expect(response.status).toBe(409);
+      expect(response.body.code).toBe("ALREADY_LINKED");
+      expect(fixture.players.get("Pleft001")?.authUserId).toBeNull();
+      expect(fixture.players.size).toBe(playerCount);
+      expect(fixture.invites[0].usedAt).toBeNull();
+      expect(fixture.authLinkLogs).toHaveLength(0);
     });
 
     it("다른 도메인 계정은 코드가 유효해도 DOMAIN_NOT_ALLOWED로 거부한다", async () => {
