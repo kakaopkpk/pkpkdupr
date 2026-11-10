@@ -10,7 +10,7 @@
 
 ```text
 apps/web (:8080) ─┐
-apps/admin-web (:3100) ─┼─> apps/api (:4000) ─함수 호출─> packages/db (@pkpkdupr/db) ─> MySQL
+apps/admin-web (:3100) ─┼─> apps/api (:4000) ─함수 호출─> packages/db (@pkpkdupr/db) ─> Supabase Postgres
                        │
                        └─> packages/shared (player, match, qr domain types)
 ```
@@ -19,8 +19,9 @@ apps/admin-web (:3100) ─┼─> apps/api (:4000) ─함수 호출─> packages
 | --- | --- |
 | `apps/web` | React 19 사용자 앱. 인증, Match / Members / Me 탭, QR, PWA를 담당합니다. |
 | `apps/admin-web` | React 18 관리자 로그인과 회원·경기·평점 운영 화면을 담당합니다. |
-| `apps/api` | Express 공개 API, JWT 인증, 관리자 권한 검사를 담당합니다. 시작 시 `initDatabase()`로 스키마 초기화와 dev mock 시딩을 한 번 실행하고, 저장소 인스턴스는 `apps/api/src/db.ts`에서만 만듭니다. 저장소 예외를 공개 API 상태 코드로 바꾸는 처리도 api가 맡습니다. |
-| `packages/db` | `@pkpkdupr/db` 워크스페이스 라이브러리. mysql2 + Drizzle 기반 MySQL 저장소, 스키마·마이그레이션, dev mock 데이터를 제공합니다. HTTP 서버는 없습니다. |
+| `apps/api` | Express 공개 API, JWT 인증, 관리자 권한 검사를 담당합니다. 시작 시 `initDatabase()`로 dev mock 시딩만 한 번 실행하고(스키마는 Supabase CLI가 적용), 저장소 인스턴스는 `apps/api/src/db.ts`에서만 만듭니다. 저장소 예외를 공개 API 상태 코드로 바꾸는 처리도 api가 맡습니다. |
+| `packages/db` | `@pkpkdupr/db` 워크스페이스 라이브러리. postgres.js + Drizzle(`pg-core`) 기반 저장소와 dev mock 데이터를 제공합니다. 연결은 env `DATABASE_URL` 하나로 정하며 Node·Deno 모두에서 동작합니다. HTTP 서버는 없습니다. |
+| `supabase/` | Supabase CLI 프로젝트(`config.toml`). 스키마는 `supabase/migrations/*.sql`이 기준이며, 변경은 새 마이그레이션 파일로 추가합니다. |
 | `packages/shared` | `player.ts`, `match.ts`, `qr.ts`의 공통 도메인 계약을 제공합니다. |
 
 ## 개발 명령
@@ -31,20 +32,22 @@ pnpm dev                         # dev mock data와 전체 워크스페이스 �
 pnpm dev:web                     # Vite web :8080
 pnpm dev:api                     # API :4000
 pnpm dev:admin                   # admin Vite :3100
-pnpm db:migrate                  # @pkpkdupr/db 기준 MySQL 스키마 마이그레이션
+pnpm db:start / db:stop          # 로컬 Supabase 스택 (Docker 필요, Studio :54323)
+pnpm db:migrate                  # 미적용 마이그레이션을 로컬 DB에 적용
+pnpm db:reset                    # 로컬 DB 초기화 후 마이그레이션 재적용
+pnpm db:migration:new <이름>     # 새 마이그레이션 파일 생성
+pnpm supabase:link / db:push     # 원격 프로젝트 연결 / 원격 DB에 마이그레이션 적용
 
 pnpm build
 pnpm build:web
 pnpm build:api
 pnpm build:admin
 pnpm lint
-
-pnpm dev:db                     # MySQL :3306 (docker-compose.dev.yml)
-pnpm dev:db-browser             # Adminer :3301 (docker-compose.dev.yml)
 ```
 
-- 루트 `pnpm dev`는 Docker MySQL을 준비한 뒤 `ENABLE_DEV_MOCK_DATA=true`와 `DB_HOST=127.0.0.1`을 사용합니다.
-- web Vite proxy는 `/api`, `/uploads`, `/db`를 각각 API 또는 Adminer 개발 도구로 연결합니다.
+- 루트 `pnpm dev`는 `supabase start`와 미적용 마이그레이션 적용을 마친 뒤 `ENABLE_DEV_MOCK_DATA=true`와 로컬 `DATABASE_URL`로 실행합니다. 세부 내용과 RLS 확인 방법은 `docs/dev-environment.md`를 따릅니다.
+- Supabase CLI는 루트 devDependency이므로 전역 설치 없이 `pnpm exec supabase ...`(또는 `pnpm supabase ...`)로 씁니다.
+- web Vite proxy는 `/api`, `/uploads`를 API로 연결합니다. DB 조회는 Supabase Studio를 씁니다.
 - `apps/web/dist/`는 빌드 산출물이므로 커밋하지 않습니다.
 
 ## Web 규칙
@@ -75,7 +78,7 @@ pnpm dev:db-browser             # Adminer :3301 (docker-compose.dev.yml)
 ## 운영과 배포
 
 - 운영·배포는 Supabase(DB·Auth·Storage·Edge Functions) + GitHub Pages로 이전 중입니다. 범위와 순서는 이슈 #1~#10을 따릅니다.
-- 이전 전까지 Docker는 로컬 개발용 MySQL·Adminer(`docker-compose.dev.yml`)에만 씁니다.
+- DB는 Supabase Postgres입니다. 모든 테이블은 RLS on·정책 없음(기본 거부)이며, DB 접근은 서버만 합니다. Docker는 로컬 Supabase 스택에만 씁니다.
 - GitHub Actions `ci.yml`은 PR과 main push에서 설치·빌드·api/shared 테스트를 실행합니다.
 - api의 CORS 허용 origin은 env `CORS_ALLOWED_ORIGINS`(쉼표 구분)와 localhost 개발 origin(8080, 3100)입니다.
 

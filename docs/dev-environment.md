@@ -1,28 +1,29 @@
 # pkpkdupr 개발 환경
 
-로컬 개발은 `docker-compose.dev.yml`이 띄우는 Docker MySQL과 Adminer를 사용합니다. 기존 SQLite 파일은 데이터 이관용 원본으로만 유지합니다.
+로컬 개발은 Supabase CLI가 띄우는 로컬 Supabase 스택(Postgres·Studio·Data API 등)을 사용합니다. Supabase CLI는 루트 devDependency(`supabase` npm 패키지)라서 전역 설치 없이 `pnpm install`만으로 쓸 수 있습니다.
+
+> 로컬 스택 명령(`pnpm dev`, `pnpm db:start`, `pnpm db:reset`, `pnpm db:migrate` 등)은 **Docker가 필요**합니다. Docker Desktop(또는 호환 런타임)을 먼저 실행하세요.
 
 ## 실행
 
 ```bash
-pnpm dev                 # MySQL 준비 후 web/admin/api 실행
-pnpm db:migrate          # @pkpkdupr/db 기준 스키마 마이그레이션만 실행
-pnpm dev:db              # MySQL만 기동
-pnpm dev:db:down         # MySQL 중지
-pnpm dev:db-browser      # Adminer 기동 (http://localhost:3301/)
-pnpm dev:db-browser:down
+pnpm dev                 # supabase start + 미적용 마이그레이션 적용 후 web/admin/api 실행
+pnpm db:start            # 로컬 Supabase 스택만 기동
+pnpm db:stop             # 로컬 Supabase 스택 중지
+pnpm db:status           # 접속 URL·키 확인 (Studio, API URL, anon key 등)
+pnpm db:migrate          # supabase/migrations/ 중 미적용 마이그레이션을 로컬 DB에 적용
+pnpm db:reset            # 로컬 DB를 지우고 마이그레이션을 처음부터 다시 적용
+pnpm db:migration:new <이름>  # 새 마이그레이션 파일 생성
 ```
 
-`pnpm dev`는 다음 환경 변수를 api에 주입합니다. api는 시작 시 스키마를 초기화하고 개발 mock 데이터를 넣습니다.
+`pnpm dev`는 api에 다음 환경 변수를 주입합니다. api는 시작 시 스키마를 만들지 않고(마이그레이션은 Supabase CLI가 적용) dev mock 데이터만 넣습니다. mock 데이터를 넣으므로 `.env`의 `DATABASE_URL`과 무관하게 항상 로컬 DB를 씁니다.
 
 ```text
-DB_HOST=127.0.0.1
-DB_PORT=3306
-DB_NAME=pkpkdupr
-DB_USER=pkpkdupr
-DB_PASSWORD=<MYSQL_PASSWORD>
+DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:54322/postgres
 ENABLE_DEV_MOCK_DATA=true
 ```
+
+`pnpm dev:api`처럼 api를 따로 띄울 때 `DATABASE_URL`이 없으면 위 로컬 주소를 씁니다. `NODE_ENV=production`에서는 `DATABASE_URL`이 필수입니다.
 
 ## 구조
 
@@ -31,31 +32,68 @@ apps/web :8080 ── /api ──> apps/api :4000
                                  │ 함수 호출
                                  ▼
                      packages/db (@pkpkdupr/db)
-                                 │ mysql2 + Drizzle
+                                 │ postgres.js + Drizzle (pg-core)
                                  ▼
-                         MySQL 9.7 :3306
+               로컬 Supabase Postgres :54322 (DATABASE_URL)
                                  ▲
-                     Adminer :3301 (read-only viewer account)
+               Supabase Studio :54323 / Data API :54321
 ```
 
-Vite는 `/api`, `/uploads`, `/db`를 각각 API 또는 Adminer 개발 서비스로 프록시합니다.
+- DB 테이블 조회·편집은 Supabase Studio(`http://127.0.0.1:54323`)를 사용합니다.
+- 드라이버는 postgres.js라서 Node(api)와 Deno(Supabase Edge Function)에서 같은 `@pkpkdupr/db` 코드를 씁니다. Supabase 풀러(transaction 모드) 호환을 위해 prepared statement를 쓰지 않습니다.
 
-## Adminer
+## 스키마와 마이그레이션
 
-- 직접 접근: `http://localhost:3301/`
-- Vite 경유 접근: `http://localhost:8080/db/`
-- 서버는 `mysql`, 데이터베이스는 `pkpkdupr`를 입력합니다.
-- 조회에는 `MYSQL_VIEWER_USER` / `MYSQL_VIEWER_PASSWORD`(기본값 `pkpkdupr_viewer` / `change-viewer-me`)를 사용합니다. 이 계정은 `SELECT`, `SHOW VIEW` 권한만 가집니다.
-- MySQL 계정 값은 루트 `.env`로 덮어쓸 수 있습니다(`MYSQL_DATABASE`, `MYSQL_USER`, `MYSQL_PASSWORD`, `MYSQL_ROOT_PASSWORD`, `MYSQL_VIEWER_USER`, `MYSQL_VIEWER_PASSWORD`). 미설정이면 `docker-compose.dev.yml`의 기본값을 씁니다.
+- 스키마의 기준은 `supabase/migrations/*.sql`입니다. 스키마를 바꿀 때는 기존 파일을 고치지 말고 `pnpm db:migration:new <이름>`으로 새 파일을 추가합니다.
+- `packages/db/src/db/schema.ts`(drizzle `pg-core`)는 쿼리 빌더용 정의입니다. 마이그레이션을 바꾸면 같은 변경을 여기에도 반영합니다.
+- 테이블·컬럼명과 타입은 기존 MySQL 스키마와 같습니다. 타임스탬프는 Unix 초 `BIGINT`, JSON은 `TEXT` `*_json` 컬럼입니다. 운영 MySQL 덤프를 변환 없이 옮기기 위해서입니다.
+- raw SQL은 Postgres 위치 파라미터(`$1`, `$2`, ...)를 씁니다. 동적 목록은 `placeholders(count, start)`로 만듭니다.
 
-## SQLite 데이터 이관
-
-이관 명령은 원본 SQLite를 변경하지 않으며 대상 MySQL이 비어 있지 않으면 실패합니다.
+## 원격 Supabase 프로젝트
 
 ```bash
-DB_PASSWORD=<MYSQL_PASSWORD> \
-SQLITE_SOURCE_URL=file:$PWD/data/db/db.sqlite \
-  pnpm db:import-sqlite
+pnpm supabase:link --project-ref <project-ref>   # 원격 프로젝트 연결(최초 1회)
+pnpm db:push                                      # 원격 DB에 미적용 마이그레이션 적용
 ```
 
-이관은 선수, 경기, 점수, 참가자, 세션, 승인, 평점 변동·감사 로그를 복사하고 테이블별 행 수와 Unix 초 단위 timestamp를 검증합니다.
+`supabase:link`·`db:push`는 Docker 없이 동작하지만 Supabase 로그인(`pnpm supabase login`)과 DB 비밀번호가 필요합니다.
+
+## RLS(Row Level Security) 확인
+
+모든 테이블에 RLS가 켜져 있고 정책은 하나도 없습니다. 따라서 브라우저에 공개되는 anon key나 로그인 사용자 JWT(`anon`·`authenticated` 역할)로는 Data API를 통해 어떤 행도 읽거나 쓸 수 없습니다. DB 접근은 테이블 소유자(`postgres`)로 접속하는 서버(api / Edge Function)만 합니다.
+
+로컬 스택에서 다음으로 확인합니다.
+
+1. RLS·정책 상태 (Studio SQL Editor 또는 `psql "$DATABASE_URL"`):
+
+   ```sql
+   -- 0행이어야 한다(RLS가 꺼진 public 테이블 없음)
+   SELECT tablename FROM pg_tables WHERE schemaname = 'public' AND NOT rowsecurity;
+   -- 0이어야 한다(정책 없음)
+   SELECT count(*) FROM pg_policies WHERE schemaname = 'public';
+   ```
+
+2. Data API로 anon 접근 차단 (anon key는 `pnpm db:status`의 `anon key`/`Publishable key`):
+
+   ```bash
+   ANON_KEY=<anon key>
+   # 읽기: 행이 있어도 빈 배열 []
+   curl -s "http://127.0.0.1:54321/rest/v1/players?select=id" \
+     -H "apikey: $ANON_KEY" -H "Authorization: Bearer $ANON_KEY"
+   # 쓰기: 401/403과 "new row violates row-level security policy"
+   curl -s -X POST "http://127.0.0.1:54321/rest/v1/match_scores" \
+     -H "apikey: $ANON_KEY" -H "Authorization: Bearer $ANON_KEY" \
+     -H "Content-Type: application/json" \
+     -d '{"id":"x","match_id":"y","score_a":1,"score_b":2}'
+   ```
+
+   `authenticated` 역할도 같은 결과여야 합니다(로그인 사용자의 access token을 `Authorization`에 넣어 확인).
+
+3. SQL로 역할 전환 확인:
+
+   ```sql
+   SET ROLE anon;
+   SELECT count(*) FROM players;  -- 0
+   INSERT INTO match_scores (id, match_id, score_a, score_b) VALUES ('x', 'y', 1, 2);  -- RLS 위반 오류
+   RESET ROLE;
+   ```
