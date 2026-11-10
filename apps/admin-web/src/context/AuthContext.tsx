@@ -1,100 +1,220 @@
-import React, { createContext, useContext, useState, useEffect } from "react";
+import React, {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
+import type { AuthErrorResponse, MeResponse } from "@pkpkdupr/shared/auth";
 import type { Player } from "@pkpkdupr/shared/player";
+import { apiFetch } from "../lib/api";
+import { ALLOWED_EMAIL_DOMAIN, signOut, supabase } from "../lib/supabase";
 
 type PlayerInfo = Pick<
   Player,
   "id" | "username" | "duprRating" | "gender" | "status"
 >;
 
-type AdminSessionResponse = PlayerInfo & {
-  accessToken?: string;
-  isAdmin?: boolean;
-};
+/**
+ * - loading: Supabase 세션 복원 또는 /api/me 확인 중
+ * - signedOut: 세션 없음 → /login
+ * - authenticated: 관리자 확인 완료
+ */
+export type AdminAuthStatus = "loading" | "signedOut" | "authenticated";
 
 interface AuthContextType {
-  token: string | null;
+  status: AdminAuthStatus;
   player: PlayerInfo | null;
   isAdmin: boolean;
-  login: (username: string, password: string) => Promise<void>;
-  logout: () => void;
+  /** 로그인 화면에 보여줄 안내(관리자 아님, 도메인 거부 등) */
+  notice: string | null;
+  clearNotice: () => void;
+  logout: () => Promise<void>;
 }
+
+const NOT_ADMIN_NOTICE = "관리자 권한이 없습니다.";
+const DOMAIN_NOT_ALLOWED_NOTICE = `회사 계정(@${ALLOWED_EMAIL_DOMAIN})으로 로그인해 주세요.`;
+// 자체 JWT 시절 저장소 키. 남아 있으면 지운다.
+const LEGACY_TOKEN_STORAGE_KEY = "admin-token";
+const SESSION_RETRY_DELAYS_MS = [2_000, 5_000, 10_000];
+const SESSION_RETRY_INTERVAL_MS = 30_000;
 
 const AuthContext = createContext<AuthContextType | null>(null);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   children,
 }) => {
-  // Preserve a saved session during the first render.  AdminDashboard redirects
-  // when token is null, so setting this only in an effect lets a page reload
-  // (for example after a form submission) race into /login before /api/me
-  // finishes restoring the session.
-  const [token, setToken] = useState<string | null>(() =>
-    localStorage.getItem("admin-token"),
-  );
+  const [status, setStatus] = useState<AdminAuthStatus>("loading");
   const [player, setPlayer] = useState<PlayerInfo | null>(null);
-  const [isAdmin, setIsAdmin] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
 
-  useEffect(() => {
-    const storedToken = localStorage.getItem("admin-token");
-    if (storedToken) {
-      void fetchMe(storedToken);
+  const sessionUserIdRef = useRef<string | null>(null);
+  const retryTimeoutRef = useRef<number | null>(null);
+  const retryAttemptRef = useRef(0);
+  const validationInFlightRef = useRef(false);
+  const validateSessionRef = useRef<(() => Promise<void>) | null>(null);
+
+  const clearSessionRetry = useCallback(() => {
+    if (retryTimeoutRef.current !== null) {
+      window.clearTimeout(retryTimeoutRef.current);
+      retryTimeoutRef.current = null;
     }
+    retryAttemptRef.current = 0;
   }, []);
 
-  const logout = () => {
-    localStorage.removeItem("admin-token");
-    setToken(null);
+  const resetToSignedOut = useCallback(() => {
+    clearSessionRetry();
+    sessionUserIdRef.current = null;
     setPlayer(null);
-    setIsAdmin(false);
-  };
+    setStatus("signedOut");
+  }, [clearSessionRetry]);
 
-  const fetchMe = async (accessToken: string) => {
+  const endSession = useCallback(
+    async (nextNotice?: string) => {
+      if (nextNotice) {
+        setNotice(nextNotice);
+      }
+      resetToSignedOut();
+      await signOut();
+    },
+    [resetToSignedOut],
+  );
+
+  const scheduleRetry = useCallback(() => {
+    const retryDelay =
+      SESSION_RETRY_DELAYS_MS[retryAttemptRef.current] ??
+      SESSION_RETRY_INTERVAL_MS;
+    retryAttemptRef.current += 1;
+    retryTimeoutRef.current = window.setTimeout(() => {
+      retryTimeoutRef.current = null;
+      void validateSessionRef.current?.();
+    }, retryDelay);
+  }, []);
+
+  const validateSession = useCallback(async () => {
+    const userId = sessionUserIdRef.current;
+    if (!userId || validationInFlightRef.current) {
+      return;
+    }
+    const isCurrentSession = () => sessionUserIdRef.current === userId;
+
+    validationInFlightRef.current = true;
     try {
-      const res = await fetch("/api/me", {
-        headers: { Authorization: `Bearer ${accessToken}` },
-      });
-      if (!res.ok) {
-        if (res.status === 401 || res.status === 403) {
-          logout();
+      const res = await apiFetch("/api/me");
+      if (!isCurrentSession()) {
+        return;
+      }
+
+      if (res.ok) {
+        const data = (await res.json()) as MeResponse;
+        if (!isCurrentSession()) {
+          return;
         }
+        if (!data.isAdmin) {
+          await endSession(NOT_ADMIN_NOTICE);
+          return;
+        }
+        clearSessionRetry();
+        setNotice(null);
+        setPlayer(data);
+        setStatus("authenticated");
         return;
       }
 
-      const data = (await res.json()) as AdminSessionResponse;
-      if (!data.id || data.isAdmin !== true) {
-        logout();
+      const errorData = (await res
+        .json()
+        .catch(() => ({}))) as Partial<AuthErrorResponse>;
+      if (!isCurrentSession()) {
         return;
       }
 
-      const refreshedToken = data.accessToken ?? accessToken;
-      localStorage.setItem("admin-token", refreshedToken);
-      setToken(refreshedToken);
-      setPlayer(data);
-      setIsAdmin(true);
+      switch (errorData.code) {
+        case "DOMAIN_NOT_ALLOWED":
+          await endSession(DOMAIN_NOT_ALLOWED_NOTICE);
+          return;
+        // 연결된 회원이 없으면 관리자일 수 없다. 초대 코드 가입은 web에서 한다.
+        case "ACCOUNT_NOT_LINKED":
+        case "FORBIDDEN":
+          await endSession(NOT_ADMIN_NOTICE);
+          return;
+        default:
+          break;
+      }
+
+      if (res.status === 401 || errorData.code === "SESSION_INVALID") {
+        await endSession();
+        return;
+      }
+
+      // SESSION_UNAVAILABLE(503) 등 일시 오류는 세션을 유지하고 다시 시도한다.
+      scheduleRetry();
     } catch {
       console.error("Failed to fetch user info");
+      if (isCurrentSession()) {
+        scheduleRetry();
+      }
+    } finally {
+      validationInFlightRef.current = false;
     }
-  };
+  }, [clearSessionRetry, endSession, scheduleRetry]);
 
-  const login = async (username: string, password: string) => {
-    const res = await fetch("/api/login", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ username, password, rememberMe: true }),
+  validateSessionRef.current = validateSession;
+
+  useEffect(() => {
+    localStorage.removeItem(LEGACY_TOKEN_STORAGE_KEY);
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((event, session) => {
+      if (!session) {
+        resetToSignedOut();
+        return;
+      }
+
+      const isNewUser = sessionUserIdRef.current !== session.user.id;
+      sessionUserIdRef.current = session.user.id;
+
+      // 토큰 갱신만 일어난 경우에는 /api/me를 다시 부를 필요가 없다.
+      if (!isNewUser && event === "TOKEN_REFRESHED") {
+        return;
+      }
+
+      if (isNewUser) {
+        clearSessionRetry();
+        setPlayer(null);
+        setStatus("loading");
+      }
+
+      // 콜백 안에서 supabase 호출을 기다리면 교착될 수 있어 다음 틱으로 미룬다.
+      window.setTimeout(() => {
+        void validateSessionRef.current?.();
+      }, 0);
     });
-    if (!res.ok) {
-      const errorData = await res.json().catch(() => ({}));
-      throw new Error(errorData.error || "로그인 실패");
-    }
-    const data = await res.json();
-    if (data.isAdmin !== true) {
-      throw new Error("관리자 권한이 필요합니다.");
-    }
-    await fetchMe(data.accessToken);
-  };
+
+    return () => {
+      subscription.unsubscribe();
+      clearSessionRetry();
+    };
+  }, [clearSessionRetry, resetToSignedOut]);
+
+  const logout = useCallback(async () => {
+    await endSession();
+  }, [endSession]);
+
+  const clearNotice = useCallback(() => setNotice(null), []);
 
   return (
-    <AuthContext.Provider value={{ token, player, isAdmin, login, logout }}>
+    <AuthContext.Provider
+      value={{
+        status,
+        player,
+        isAdmin: status === "authenticated",
+        notice,
+        clearNotice,
+        logout,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );
