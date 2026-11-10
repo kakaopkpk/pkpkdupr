@@ -7,7 +7,6 @@
         "dev": "tsx watch src/index.ts",
         "build": "tsc",
         "build:edge": "node scripts/build-edge.mjs",
-        "start": "node dist/apps/api/src/index.js",
         "lint": "eslint .",
         "test": "vitest run",
         "test:watch": "vitest"
