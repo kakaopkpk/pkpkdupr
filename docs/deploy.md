@@ -8,6 +8,8 @@ api는 Supabase Edge Function `api`로, DB 스키마는 `supabase/migrations/`�
                                                                         ▼
                                                   Supabase Postgres (커넥션 풀러, transaction mode)
 Supabase Cron (pg_cron + pg_net) ── 5분마다 POST /api/internal/cron/auto-approvals ──┘
+Edge Function `api` ── service role key ──> Supabase Storage `avatars` 버킷 (업로드·삭제)
+브라우저 ── https://<project-ref>.supabase.co/storage/v1/object/public/avatars/... (아바타 읽기)
 ```
 
 - 클라이언트의 API base URL은 `https://<project-ref>.supabase.co/functions/v1`이고, 경로는 로컬과 같은 `/api/...`입니다(함수 이름 `api`가 경로 첫 segment가 됩니다).
@@ -30,7 +32,22 @@ pnpm build:edge   # apps/api/src/edge.ts → supabase/functions/api/dist/api.js
 - 부팅 작업(dev mock 시딩, 관리자 계정 동기화 `authService.initAdmin()`)과 자동 합의 interval은 Edge Runtime에서 실행하지 않습니다. 로컬 Node 개발(`pnpm dev`)에서는 기존처럼 실행합니다.
   - 따라서 운영 DB의 관리자 계정은 함수가 만들지 않습니다. 관리자 로그인 방식은 인증 교체 이슈에서 정합니다.
 - 자동 합의는 Supabase Cron이 5분마다 `POST /api/internal/cron/auto-approvals`를 호출해 처리합니다. 헤더 `x-cron-secret`이 함수 secret `CRON_SECRET`과 같을 때만 실행하고, 아니면 401을 돌려줍니다.
-- 아바타 업로드는 로컬 파일시스템을 쓰므로 Edge Runtime에서 동작하지 않습니다(Storage 이슈에서 해결).
+- 아바타는 Supabase Storage에 저장합니다. 아래 "아바타 저장소"를 봅니다.
+
+## 아바타 저장소 (Supabase Storage)
+
+- 버킷 `avatars`는 `supabase/migrations/20261110020000_avatars_storage_bucket.sql`이 만듭니다(`supabase db push`로 적용). 공개 읽기, 파일당 1MB, 허용 형식 `image/jpeg`·`image/png`·`image/webp`입니다.
+- 객체 경로는 `avatars/<playerId>/<uuid>.<ext>`이고, `players.avatar_url`에는 공개 절대 URL `https://<project-ref>.supabase.co/storage/v1/object/public/avatars/<playerId>/<uuid>.<ext>`를 저장합니다.
+- `storage.objects`에 avatars용 insert·update·delete 정책이 없으므로 브라우저(anon·authenticated)는 쓸 수 없습니다. 업로드(`POST /api/me/avatar`)와 삭제(`DELETE /api/me/avatar`)는 함수가 service role key로 합니다. 교체하면 이전 파일을 지웁니다.
+- 함수는 Supabase가 주입하는 `SUPABASE_URL`·`SUPABASE_SERVICE_ROLE_KEY`를 쓰므로 운영에서 추가 secret은 필요 없습니다.
+
+브라우저에서 쓰기가 막혀 있는지 확인합니다(400/403이어야 한다).
+
+```bash
+curl -si -X POST "https://<project-ref>.supabase.co/storage/v1/object/avatars/test/x.png" \
+  -H "apikey: <anon key>" -H "Authorization: Bearer <anon key>" \
+  -H "Content-Type: image/png" --data-binary 'x'
+```
 
 ## 1. Supabase 프로젝트 준비 (최초 1회)
 
@@ -72,6 +89,7 @@ gh variable set SUPABASE_PROJECT_REF --body <project-ref>
 | `JWT_SECRET` | 예 | api access token 서명 키. 없으면 함수가 기동하지 않습니다(로컬 `functions serve` 포함). |
 | `QR_TOTP_SECRET` | 아니오 | 플레이어 QR 토큰 서명 키. 없으면 `JWT_SECRET`을 씁니다. |
 | `API_ADMIN_USERNAME` | 아니오 | 보호 관리자 계정 이름(기본 `admin`) |
+| `STORAGE_PUBLIC_URL` | 아니오 | 아바타 공개 URL의 base. 없으면 `SUPABASE_URL`을 씁니다. 운영에서는 비워 두고, 로컬 `functions serve`에서만 `http://127.0.0.1:54321`로 넣습니다(함수 안의 `SUPABASE_URL`은 브라우저가 접근할 수 없는 `http://kong:8000`이기 때문). |
 
 ```bash
 CRON_SECRET="$(openssl rand -hex 32)"
@@ -146,4 +164,4 @@ curl -s http://127.0.0.1:54321/functions/v1/api/players
 
 - api 소스를 바꾸면 `pnpm build:edge`로 번들을 다시 만들어야 함수에 반영됩니다.
 - dev mock 데이터는 `pnpm dev`(Node api)가 시작할 때 로컬 DB에 넣습니다. 함수는 시딩하지 않습니다.
-- 함수 secret은 `supabase/functions/.env`(커밋 금지)에 두거나 `--env-file`로 넘깁니다. `JWT_SECRET`은 필수이고, cron 경로를 호출하려면 `CRON_SECRET`도 넣습니다.
+- 함수 secret은 `supabase/functions/.env`(커밋 금지)에 두거나 `--env-file`로 넘깁니다. `JWT_SECRET`은 필수이고, cron 경로를 호출하려면 `CRON_SECRET`도 넣습니다. 아바타 업로드를 확인하려면 `STORAGE_PUBLIC_URL=http://127.0.0.1:54321`도 넣습니다.

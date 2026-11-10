@@ -21,7 +21,11 @@ pnpm db:migration:new <이름>  # 새 마이그레이션 파일 생성
 ```text
 DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:54322/postgres
 ENABLE_DEV_MOCK_DATA=true
+SUPABASE_URL=<supabase status의 API_URL, 보통 http://127.0.0.1:54321>
+SUPABASE_SERVICE_ROLE_KEY=<supabase status의 SERVICE_ROLE_KEY>
 ```
+
+`SUPABASE_URL`·`SUPABASE_SERVICE_ROLE_KEY`는 아바타 업로드가 로컬 Storage(`avatars` 버킷)를 쓰는 데 필요합니다. `pnpm dev:api`로 따로 띄울 때 아바타를 다루려면 같은 값을 직접 넣습니다(`pnpm db:status -o env`로 확인).
 
 `pnpm dev:api`처럼 api를 따로 띄울 때 `DATABASE_URL`이 없으면 위 로컬 주소를 씁니다. `NODE_ENV=production`에서는 `DATABASE_URL`이 필수입니다.
 
