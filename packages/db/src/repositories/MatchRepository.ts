@@ -433,7 +433,7 @@ export class MatchRepository {
     const value = (result.rows[0] as { completed_at?: unknown } | undefined)
       ?.completed_at;
     // 이전 완료 경기가 없으면 MAX가 NULL이라 Number(null) === 0(1970-01-01)이 되므로 먼저 걸러낸다.
-    if (value === null || value === undefined) {
+    if (value == null) {
       return null;
     }
     const completedAt = Number(value);
