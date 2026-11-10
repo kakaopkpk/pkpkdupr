@@ -660,8 +660,9 @@ export class AuthService {
   }
 
   /**
-   * 이메일 앞부분과 대소문자 구분 없이 같은 username의 미연결 회원을 요청자와 연결한다.
+   * 이메일 앞부분과 대소문자 구분 없이 같은 username의 active 미연결 회원을 요청자와 연결한다.
    * 대소문자만 다른 회원이 여럿이면 앞부분과 정확히 같은 회원만 대상으로 본다.
+   * 이 요청이 실제로 연결했을 때만 감사 로그를 남긴다.
    */
   private async autoLinkByEmailLocalPart(
     authUser: AllowedAuthUser,
@@ -675,16 +676,30 @@ export class AuthService {
         : candidates.find(
             (player) => player.username === authUser.emailLocalPart,
           );
-    if (!candidate || candidate.authUserId) {
+    if (
+      !candidate ||
+      candidate.authUserId ||
+      candidate.status !== "active"
+    ) {
       return undefined;
     }
 
+    let linkedNow = false;
     try {
-      await db.players.linkAuthUser(candidate.id, authUser.id);
+      linkedNow = await db.players.linkAuthUser(candidate.id, authUser.id);
     } catch (error) {
       if (!isUniqueViolation(error)) {
         throw error;
       }
+    }
+    if (linkedNow) {
+      await db.playerAuthLinkLogs.create({
+        id: buildId("player-auth-link-log"),
+        playerId: candidate.id,
+        authUserId: authUser.id,
+        linkMethod: "email_local_part",
+        createdAt: new Date(),
+      });
     }
     // 동시 요청이 먼저 연결했을 수 있으므로 연결 결과는 요청자 기준으로 다시 읽는다.
     const linked = await db.players.findByAuthUserId(authUser.id);
@@ -711,7 +726,7 @@ export class AuthService {
 
   /**
    * 요청자와 연결된 회원 세션을 만든다. 연결된 회원이 없으면 ACCOUNT_NOT_LINKED로 거부한다.
-   * autoLink는 GET /api/me에서만 켜며, 이메일 앞부분과 같은 username의 미연결 회원을 연결한다.
+   * autoLink는 GET /api/me에서만 켜며, 이메일 앞부분과 같은 username의 active 미연결 회원을 연결한다.
    */
   async authenticateAccessToken(
     accessToken: string,
@@ -736,7 +751,7 @@ export class AuthService {
 
   /**
    * 초대 코드로 username이 이메일 앞부분(소문자)인 회원을 만들고 요청자와 연결한다.
-   * 같은 username의 미연결 회원이 있으면 코드를 쓰지 않고 그 회원과 연결한다.
+   * 같은 username의 active 미연결 회원이 있으면 코드를 쓰지 않고 그 회원과 연결한다.
    */
   async redeemInviteCode(
     accessToken: string,
@@ -756,7 +771,7 @@ export class AuthService {
     }
 
     const username = authUser.emailLocalPart.toLowerCase();
-    // 자동 연결되지 않았는데 같은 username이 있으면 다른 Auth 사용자에게 연결된 회원이다.
+    // 자동 연결되지 않았는데 같은 username이 있으면 다른 Auth 사용자에게 연결됐거나 inactive인 회원이다.
     if (
       (await db.players.findAllByUsernameIgnoringCase(username)).length > 0
     ) {
