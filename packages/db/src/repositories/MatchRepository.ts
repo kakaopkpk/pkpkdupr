@@ -186,7 +186,7 @@ const areScoresEqual = (
   );
 
 /**
- * MatchRepository - DB 서버의 경기 저장소.
+ * MatchRepository - `packages/db`의 경기 저장소.
  *
  * matches, match_scores, match_participants, match_result_approvals를 조립해
  * shared Match 계약 형태로 반환합니다.
