@@ -147,7 +147,7 @@ SELECT id, status_code, content, error_msg FROM net._http_response ORDER BY crea
 ### 로그인과 회원 연결
 
 - api는 요청의 access token으로 Supabase Auth 사용자(이메일, 이메일 확인 여부, 로그인 provider)를 조회합니다. 브라우저가 보낸 이메일 값은 쓰지 않습니다.
-- 로그인 provider가 `ALLOWED_AUTH_PROVIDERS`(기본 `google`)에 있고, 이메일 도메인이 `ALLOWED_EMAIL_DOMAIN`과 정확히 같고 확인된 경우만 통과합니다. 아니면 403 `DOMAIN_NOT_ALLOWED`입니다. Email provider를 끄는 것과 별개로, 서버도 Google이 아닌 세션을 거부합니다.
+- 로그인 provider가 `ALLOWED_AUTH_PROVIDERS`(기본 `google`)에 있고, 이메일 도메인이 `ALLOWED_EMAIL_DOMAIN`과 정확히 같고 확인된 경우만 통과합니다. 아니면 403 `DOMAIN_NOT_ALLOWED`입니다. provider는 Supabase `app_metadata.provider`, 즉 계정을 처음 만든 방식이며 이번 세션의 로그인 방식이 아닙니다. 그래서 Google로 가입한 계정이 다른 방식으로 로그인하면 막지 못하고, 반대로 email로 먼저 만들어진 계정은 Google로 로그인해도 거부됩니다. 1차 방어는 대시보드에서 Email provider를 끄는 것이고, 서버 검사는 보조 방어선입니다.
 - 회원 테이블(`players`)에는 이메일을 저장하지 않고 `auth_user_id`(auth.users.id)만 둡니다.
 - 처음 로그인하면 `GET /api/me`가 이메일 앞부분과 같은 `username`(대소문자 무시)의 미연결 회원을 찾아 연결합니다. 기존 회원은 그대로 로그인하면 됩니다.
 - 대상 회원이 없으면 403 `ACCOUNT_NOT_LINKED`이고, 관리자가 발급한 초대 코드(`POST /api/auth/invite`)로 가입합니다. 초대 가입 회원의 성별은 `M`으로 만들어지므로 필요하면 관리자가 고칩니다.

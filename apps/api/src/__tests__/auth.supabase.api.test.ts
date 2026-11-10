@@ -277,7 +277,7 @@ describe("Supabase Auth 기반 인증", () => {
       expect(fixture.players.size).toBe(0);
     });
 
-    it("ALLOWED_AUTH_PROVIDERS에 넣은 provider는 통과하고 기본값 google도 목록에 없으면 거부한다", async () => {
+    it("ALLOWED_AUTH_PROVIDERS 목록에 있는 provider는 통과하고 목록에 없는 provider(google)는 거부한다", async () => {
       vi.stubEnv("ALLOWED_AUTH_PROVIDERS", " google , Email ");
       fixture.addPlayer("Palice01", "dev_alice");
       fixture.addAuthUser("magic", "dev_alice@kakaocorp.com", true, "email");

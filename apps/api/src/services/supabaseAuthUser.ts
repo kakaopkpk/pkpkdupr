@@ -10,7 +10,10 @@ export interface SupabaseAuthUser {
   id: string;
   email: string | null;
   emailConfirmed: boolean;
-  /** 세션을 만든 로그인 방식(`app_metadata.provider`). 예: google, email. */
+  /**
+   * 계정을 처음 만든 로그인 provider(`app_metadata.provider`). 예: google, email.
+   * 이번 세션의 로그인 방식이 아니며, 나중에 다른 방식으로 로그인해도 바뀌지 않는다.
+   */
   provider: string | null;
 }
 

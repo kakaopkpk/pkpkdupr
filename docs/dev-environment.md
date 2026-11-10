@@ -29,7 +29,7 @@ ALLOWED_AUTH_PROVIDERS=google,email       # .env에 있으면 그 값
 QR_TOTP_SECRET=local-dev-qr-totp-secret   # .env에 있으면 그 값
 ```
 
-api는 `ALLOWED_EMAIL_DOMAIN`·`QR_TOTP_SECRET`·`SUPABASE_URL`·`SUPABASE_ANON_KEY`가 없으면 시작하지 않습니다. `ALLOWED_AUTH_PROVIDERS`는 api가 받아들일 로그인 provider(쉼표 구분)이며 없으면 `google`만 허용합니다. `pnpm dev`는 로컬 매직링크 로그인(provider `email`)이 되도록 `google,email`을 넣으므로, `pnpm dev:api`로 따로 띄울 때도 같은 값을 넣어야 로컬 로그인이 됩니다. `SUPABASE_SERVICE_ROLE_KEY`는 아바타 업로드가 로컬 Storage(`avatars` 버킷)를 쓰는 데 필요합니다. `pnpm dev:api`로 따로 띄울 때는 같은 값을 직접 넣습니다(`pnpm db:status -o env`로 확인).
+api는 `ALLOWED_EMAIL_DOMAIN`·`QR_TOTP_SECRET`·`SUPABASE_URL`·`SUPABASE_ANON_KEY`가 없으면 시작하지 않습니다. `ALLOWED_AUTH_PROVIDERS`는 api가 받아들일 로그인 provider(쉼표 구분)이며 없으면 `google`만 허용합니다. `pnpm dev`는 로컬 매직링크 로그인(provider `email`)이 되도록 `google,email`을 넣습니다. `SUPABASE_SERVICE_ROLE_KEY`는 아바타 업로드가 로컬 Storage(`avatars` 버킷)를 쓰는 데 필요합니다. `pnpm dev:api`로 따로 띄울 때는 `ALLOWED_AUTH_PROVIDERS=google,email`을 포함해 위 값을 직접 넣습니다(`pnpm db:status -o env`로 확인). `ALLOWED_AUTH_PROVIDERS`를 빠뜨리면 매직링크 로그인이 403 `DOMAIN_NOT_ALLOWED`로 거부됩니다.
 
 `pnpm dev:api`처럼 api를 따로 띄울 때 `DATABASE_URL`이 없으면 위 로컬 주소를 씁니다. `NODE_ENV=production`에서는 `DATABASE_URL`이 필수입니다.
 
