@@ -1506,19 +1506,37 @@ export class MatchRepository {
     );
   }
 
+  /** 아직 표시되지 않은 경기만 선점합니다. 이 호출이 행을 바꿨을 때만 true입니다. */
   async markAutoApprovalRatingApplied(
     matchId: string,
     appliedAt: Date = new Date(),
-  ): Promise<void> {
-    await this.client.execute({
+  ): Promise<boolean> {
+    const result = await this.client.execute({
       sql: `
         UPDATE matches
         SET auto_approval_rating_applied_at = $1
         WHERE id = $2
           AND status = 'completed'
           AND auto_approved_at IS NOT NULL
+          AND auto_approval_rating_applied_at IS NULL
       `,
       args: [toUnixTimestampSeconds(appliedAt), matchId],
+    });
+
+    return result.rowsAffected > 0;
+  }
+
+  /** 선점 표시를 되돌려 다음 주기에 평점 반영을 다시 시도하게 합니다. */
+  async clearAutoApprovalRatingApplied(matchId: string): Promise<void> {
+    await this.client.execute({
+      sql: `
+        UPDATE matches
+        SET auto_approval_rating_applied_at = NULL
+        WHERE id = $1
+          AND status = 'completed'
+          AND auto_approved_at IS NOT NULL
+      `,
+      args: [matchId],
     });
   }
 

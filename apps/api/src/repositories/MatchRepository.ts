@@ -510,13 +510,20 @@ export class MatchRepository {
   async markAutoApprovalRatingApplied(
     matchId: string,
     appliedAt: Date,
-  ): Promise<void> {
+  ): Promise<boolean> {
     const at = appliedAt ? new Date(appliedAt) : new Date();
     if (Number.isNaN(at.getTime())) {
       throw new MatchRepositoryError("유효한 평점 반영 시각이 필요합니다.", 400);
     }
-    await this.run(
+    return await this.run(
       () => db.matches.markAutoApprovalRatingApplied(matchId, at),
+      400,
+    );
+  }
+
+  async clearAutoApprovalRatingApplied(matchId: string): Promise<void> {
+    await this.run(
+      () => db.matches.clearAutoApprovalRatingApplied(matchId),
       400,
     );
   }
