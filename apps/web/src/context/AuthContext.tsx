@@ -21,6 +21,7 @@ import {
   INVITE_INVALID_MESSAGE,
 } from "@/lib/authMessages";
 import { getAccessToken, signOut, supabase } from "@/lib/supabase";
+import { clearUserCaches } from "@/lib/userCache";
 
 export interface PlayerInfo {
   id: string;
@@ -116,6 +117,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   const resetToSignedOut = useCallback(() => {
     clearSessionRetry();
     sessionUserIdRef.current = null;
+    clearUserCaches();
     setPlayer(null);
     setEmail(null);
     setStatus("signedOut");
@@ -241,7 +243,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
         return;
       }
 
-      const isNewUser = sessionUserIdRef.current !== session.user.id;
+      const previousUserId = sessionUserIdRef.current;
+      const isNewUser = previousUserId !== session.user.id;
+      // 앱 첫 로드(이전 id 없음)에서는 오프라인 캐시를 유지하고, 사용자가 바뀐 경우에만 지운다.
+      if (previousUserId && isNewUser) {
+        clearUserCaches();
+      }
       sessionUserIdRef.current = session.user.id;
       setEmail(session.user.email ?? null);
 

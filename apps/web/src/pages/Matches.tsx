@@ -21,13 +21,15 @@ import { useMinimumLoading } from "@/hooks/useMinimumLoading";
 import { useOnlineStatus } from "@/hooks/useOnlineStatus";
 import { apiFetch } from "@/lib/api";
 import { isTabRefreshDue } from "@/lib/tabRefresh";
+import {
+  CACHED_MATCH_FEED_KEY,
+  CACHED_MY_MATCH_FEED_KEY,
+} from "@/lib/userCache";
 
 interface MatchesProps {
   reloadKey?: number;
 }
 
-const CACHED_MATCH_FEED_KEY = "pkpkdupr:matches:v3-session-feed";
-const CACHED_MY_MATCH_FEED_KEY = `${CACHED_MATCH_FEED_KEY}:my`;
 const LEGACY_CACHED_MATCH_KEYS = [
   "pkpkdupr:matches",
   "pkpkdupr:matches:v2-public-dupr",
