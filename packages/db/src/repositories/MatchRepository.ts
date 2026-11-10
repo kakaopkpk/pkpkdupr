@@ -36,6 +36,7 @@ import {
   players,
 } from "../db/schema";
 import { generateEntityId, isEntityId } from "@pkpkdupr/shared/entityId";
+import { firstRow, placeholders } from "../db/client";
 
 type StoredMatch = typeof matches.$inferSelect;
 type StoredMatchParticipant = typeof matchParticipants.$inferSelect;
@@ -119,8 +120,8 @@ const toDateOrNull = (value: Date | string | number | null | undefined) =>
 
 const toDate = (value: Date | string | number) => new Date(value);
 
-// Drizzle's `timestamp` integer mode persists Unix seconds. Raw libSQL queries
-// bypass that conversion, so match mutation timestamps must be converted here.
+// schema의 unixTimestamp 컬럼은 Unix 초로 저장한다. raw SQL은 그 변환을
+// 거치지 않으므로 경기 변경 타임스탬프를 여기서 직접 초로 바꾼다.
 const toUnixTimestampSeconds = (value: Date) =>
   Math.floor(value.getTime() / 1000);
 
@@ -202,7 +203,8 @@ export class MatchRepository {
       .select()
       .from(matchSessions)
       .where(eq(matchSessions.id, sessionId))
-      .get();
+      .limit(1)
+      .then(firstRow);
 
     if (!stored) {
       throw new Error("세션 생성에 실패했습니다.");
@@ -224,12 +226,11 @@ export class MatchRepository {
         .select()
         .from(matchSessionParticipants)
         .where(eq(matchSessionParticipants.sessionId, stored.id))
-        .all(),
+        .orderBy(matchSessionParticipants.id),
       this.db
         .select()
         .from(matches)
-        .where(eq(matches.sessionId, stored.id))
-        .all(),
+        .where(eq(matches.sessionId, stored.id)),
     ]);
 
     return {
@@ -251,8 +252,7 @@ export class MatchRepository {
     const storedSessions = await this.db
       .select()
       .from(matchSessions)
-      .orderBy(desc(matchSessions.date))
-      .all();
+      .orderBy(desc(matchSessions.date));
     return await Promise.all(
       storedSessions.map((session: StoredMatchSession) =>
         this.toManagedSession(session),
@@ -270,7 +270,8 @@ export class MatchRepository {
       .select()
       .from(matchSessions)
       .where(eq(matchSessions.id, sessionId))
-      .get();
+      .limit(1)
+      .then(firstRow);
     return stored ? await this.toManagedSession(stored) : undefined;
   }
 
@@ -290,7 +291,8 @@ export class MatchRepository {
           .select()
           .from(players)
           .where(eq(players.id, playerId))
-          .get(),
+          .limit(1)
+          .then(firstRow),
       ),
     );
     if (
@@ -307,7 +309,7 @@ export class MatchRepository {
     const now = new Date();
     try {
       await transaction.execute({
-        sql: "DELETE FROM match_session_participants WHERE session_id = ?",
+        sql: "DELETE FROM match_session_participants WHERE session_id = $1",
         args: [sessionId],
       });
       for (const playerId of uniquePlayerIds) {
@@ -319,7 +321,7 @@ export class MatchRepository {
               player_id,
               created_at
             )
-            VALUES (?, ?, ?, ?)
+            VALUES ($1, $2, $3, $4)
           `,
           args: [
             `${sessionId}-${playerId}`,
@@ -330,7 +332,7 @@ export class MatchRepository {
         });
       }
       await transaction.execute({
-        sql: "UPDATE match_sessions SET updated_at = ? WHERE id = ?",
+        sql: "UPDATE match_sessions SET updated_at = $1 WHERE id = $2",
         args: [toUnixTimestampSeconds(now), sessionId],
       });
       await transaction.commit();
@@ -349,7 +351,8 @@ export class MatchRepository {
       .select()
       .from(matches)
       .where(eq(matches.id, id))
-      .get();
+      .limit(1)
+      .then(firstRow);
 
     if (!match) {
       return undefined;
@@ -379,8 +382,7 @@ export class MatchRepository {
             desc(matches.matchStartsAt),
             desc(matches.createdAt),
             desc(matches.id),
-          )
-          .all()).map((row: { match: StoredMatch }) => row.match)
+          )).map((row: { match: StoredMatch }) => row.match)
       : await this.db
           .select()
           .from(matches)
@@ -388,8 +390,7 @@ export class MatchRepository {
             desc(matches.matchStartsAt),
             desc(matches.createdAt),
             desc(matches.id),
-          )
-          .all();
+          );
     const hydratedMatches: Match[] = await Promise.all(
       allMatches.map((match: StoredMatch) => this.hydrateMatch(match)),
     );
@@ -411,16 +412,16 @@ export class MatchRepository {
       return null;
     }
 
-    const typePlaceholders = matchTypes.map(() => "?").join(", ");
+    const typePlaceholders = placeholders(matchTypes.length, 3);
     const result = await this.client.execute({
       sql: `
         SELECT MAX(matches.completed_at) AS completed_at
         FROM match_participants
         INNER JOIN matches ON matches.id = match_participants.match_id
-        WHERE match_participants.player_id = ?
+        WHERE match_participants.player_id = $1
           AND matches.status = 'completed'
           AND matches.completed_at IS NOT NULL
-          AND matches.completed_at < ?
+          AND matches.completed_at < $2
           AND matches.type IN (${typePlaceholders})
       `,
       args: [
@@ -449,8 +450,7 @@ export class MatchRepository {
           isNotNull(matches.completedAt),
         ),
       )
-      .groupBy(matchParticipants.playerId)
-      .all();
+      .groupBy(matchParticipants.playerId);
 
     return Object.fromEntries(
       rows.flatMap(({ playerId, lastPlayedAt }: {
@@ -464,7 +464,7 @@ export class MatchRepository {
 
   /**
    * Drizzle timestamp columns store Unix seconds. This audit deliberately uses
-   * the raw libSQL client so an already-corrupted millisecond value can be
+   * the raw SQL client so an already-corrupted millisecond value can be
    * inspected before Drizzle hydrates it into a far-future Date.
    */
   async getTimestampUnitAudit(): Promise<TimestampUnitAudit> {
@@ -473,7 +473,7 @@ export class MatchRepository {
       sql: `
         SELECT COUNT(*) AS legacy_match_starts_at_count
         FROM matches
-        WHERE match_starts_at >= ?
+        WHERE match_starts_at >= $1
       `,
       args: [legacyMatchStartsAtThreshold],
     });
@@ -491,7 +491,7 @@ export class MatchRepository {
           ON players.id = match_participants.player_id
         WHERE matches.status = 'completed'
           AND matches.completed_at IS NOT NULL
-          AND matches.match_starts_at >= ?
+          AND matches.match_starts_at >= $1
         GROUP BY players.id, players.username
         ORDER BY latest_legacy_match_starts_at DESC, players.username ASC
       `,
@@ -525,8 +525,8 @@ export class MatchRepository {
     const registeredParticipants = await this.db
       .select()
       .from(matchSessionParticipants)
-      .all();
-    const registeredPlayerRecords = await this.db.select().from(players).all();
+      .orderBy(matchSessionParticipants.id);
+    const registeredPlayerRecords = await this.db.select().from(players);
     const registeredPlayerById = new Map<string, Player>(
       registeredPlayerRecords.map((player: StoredPlayer) => [
         player.id,
@@ -720,7 +720,7 @@ export class MatchRepository {
       const nowSeconds = toUnixTimestampSeconds(now);
       for (const sessionId of sessionIds) {
         const session = await transaction.execute({
-          sql: "SELECT id FROM match_sessions WHERE id = ?",
+          sql: "SELECT id FROM match_sessions WHERE id = $1",
           args: [sessionId],
         });
         if (session.rows.length === 0) {
@@ -733,8 +733,8 @@ export class MatchRepository {
           await transaction.execute({
             sql: `
               INSERT INTO match_sessions (
-                id, name, date, location, created_at, updated_at
-              ) VALUES (?, ?, ?, ?, ?, ?)
+                id, name, "date", location, created_at, updated_at
+              ) VALUES ($1, $2, $3, $4, $5, $6)
             `,
             args: [
               sessionId,
@@ -783,7 +783,7 @@ export class MatchRepository {
               created_at,
               updated_at
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (${placeholders(18)})
           `,
           args: [
             match.id,
@@ -822,7 +822,7 @@ export class MatchRepository {
                   player_id,
                   dupr_rating_json
                 )
-                VALUES (?, ?, ?, ?, ?)
+                VALUES ($1, $2, $3, $4, $5)
               `,
               args: [
                 `${match.id}-team-${teamIndex}-${player.id}`,
@@ -877,9 +877,9 @@ export class MatchRepository {
       const result = await this.client.execute({
         sql: `
           UPDATE match_participants
-          SET dupr_rating_json = ?
-          WHERE match_id = ?
-            AND player_id = ?
+          SET dupr_rating_json = $1
+          WHERE match_id = $2
+            AND player_id = $3
             AND dupr_rating_json IS NULL
         `,
         args: [
@@ -950,15 +950,15 @@ export class MatchRepository {
         sql: `
           UPDATE matches
           SET
-            status = ?,
-            result_submitted_by_player_id = ?,
-            result_submitted_at = ?,
+            status = $1,
+            result_submitted_by_player_id = $2,
+            result_submitted_at = $3,
             completed_at = NULL,
-            auto_approval_due_at = ?,
+            auto_approval_due_at = $4,
             auto_approved_at = NULL,
             auto_approval_rating_applied_at = NULL,
-            updated_at = ?
-          WHERE id = ?
+            updated_at = $5
+          WHERE id = $6
             AND status IN ('created', 'pending-approval')
         `,
         args: [
@@ -983,14 +983,15 @@ export class MatchRepository {
       );
       if (shouldResetApprovals) {
         await transaction.execute({
-          sql: `DELETE FROM match_result_approvals WHERE match_id = ?`,
+          sql: `DELETE FROM match_result_approvals WHERE match_id = $1`,
           args: [matchId],
         });
       }
       await transaction.execute({
         sql: `
-          INSERT IGNORE INTO match_result_approvals (id, match_id, player_id, approved_at)
-          VALUES (?, ?, ?, ?)
+          INSERT INTO match_result_approvals (id, match_id, player_id, approved_at)
+          VALUES ($1, $2, $3, $4)
+          ON CONFLICT DO NOTHING
         `,
         args: [
           approvalId,
@@ -1066,15 +1067,15 @@ export class MatchRepository {
         sql: `
           UPDATE matches
           SET
-            status = ?,
-            result_submitted_by_player_id = ?,
-            result_submitted_at = ?,
-            completed_at = ?,
+            status = $1,
+            result_submitted_by_player_id = $2,
+            result_submitted_at = $3,
+            completed_at = $4,
             auto_approval_due_at = NULL,
             auto_approved_at = NULL,
             auto_approval_rating_applied_at = NULL,
-            updated_at = ?
-          WHERE id = ?
+            updated_at = $5
+          WHERE id = $6
             AND status IN ('created', 'pending-approval')
         `,
         args: [
@@ -1097,7 +1098,7 @@ export class MatchRepository {
         transaction,
       );
       await transaction.execute({
-        sql: `DELETE FROM match_result_approvals WHERE match_id = ?`,
+        sql: `DELETE FROM match_result_approvals WHERE match_id = $1`,
         args: [matchId],
       });
 
@@ -1132,19 +1133,19 @@ export class MatchRepository {
 
     try {
       await transaction.execute({
-        sql: `DELETE FROM match_scores WHERE match_id = ?`,
+        sql: `DELETE FROM match_scores WHERE match_id = $1`,
         args: [matchId],
       });
       await transaction.execute({
-        sql: `DELETE FROM match_participants WHERE match_id = ?`,
+        sql: `DELETE FROM match_participants WHERE match_id = $1`,
         args: [matchId],
       });
       await transaction.execute({
-        sql: `DELETE FROM match_result_approvals WHERE match_id = ?`,
+        sql: `DELETE FROM match_result_approvals WHERE match_id = $1`,
         args: [matchId],
       });
       const deleted = await transaction.execute({
-        sql: `DELETE FROM matches WHERE id = ?`,
+        sql: `DELETE FROM matches WHERE id = $1`,
         args: [matchId],
       });
       if (!deleted.rowsAffected) {
@@ -1172,7 +1173,7 @@ export class MatchRepository {
     let committed = false;
     try {
       const session = await transaction.execute({
-        sql: "SELECT id FROM match_sessions WHERE id = ?",
+        sql: "SELECT id FROM match_sessions WHERE id = $1",
         args: [sessionId],
       });
       if (!session.rows.length) {
@@ -1182,7 +1183,7 @@ export class MatchRepository {
       }
 
       const matchCount = await transaction.execute({
-        sql: "SELECT COUNT(*) AS count FROM matches WHERE session_id = ?",
+        sql: "SELECT COUNT(*) AS count FROM matches WHERE session_id = $1",
         args: [sessionId],
       });
       if (Number(matchCount.rows[0]?.count ?? 0) > 0) {
@@ -1190,11 +1191,11 @@ export class MatchRepository {
       }
 
       await transaction.execute({
-        sql: "DELETE FROM match_session_participants WHERE session_id = ?",
+        sql: "DELETE FROM match_session_participants WHERE session_id = $1",
         args: [sessionId],
       });
       await transaction.execute({
-        sql: "DELETE FROM match_sessions WHERE id = ?",
+        sql: "DELETE FROM match_sessions WHERE id = $1",
         args: [sessionId],
       });
       await transaction.commit();
@@ -1240,7 +1241,7 @@ export class MatchRepository {
       await transaction.execute({
         sql: `
           INSERT INTO match_result_approvals (id, match_id, player_id, approved_at)
-          VALUES (?, ?, ?, ?)
+          VALUES ($1, $2, $3, $4)
         `,
         args: [
           approvalId,
@@ -1301,8 +1302,8 @@ export class MatchRepository {
       const deleteResult = await transaction.execute({
         sql: `
           DELETE FROM match_result_approvals
-          WHERE match_id = ?
-            AND player_id = ?
+          WHERE match_id = $1
+            AND player_id = $2
             AND EXISTS (
               SELECT 1
               FROM matches
@@ -1368,15 +1369,15 @@ export class MatchRepository {
         sql: `
           UPDATE matches
           SET
-            status = ?,
+            status = $1,
             result_submitted_by_player_id = NULL,
             result_submitted_at = NULL,
             completed_at = NULL,
             auto_approval_due_at = NULL,
             auto_approved_at = NULL,
             auto_approval_rating_applied_at = NULL,
-            updated_at = ?
-          WHERE id = ?
+            updated_at = $2
+          WHERE id = $3
             AND status = 'pending-approval'
         `,
         args: ["created", toUnixTimestampSeconds(rejectedAt), matchId],
@@ -1387,11 +1388,11 @@ export class MatchRepository {
       }
 
       await transaction.execute({
-        sql: `DELETE FROM match_scores WHERE match_id = ?`,
+        sql: `DELETE FROM match_scores WHERE match_id = $1`,
         args: [matchId],
       });
       await transaction.execute({
-        sql: `DELETE FROM match_result_approvals WHERE match_id = ?`,
+        sql: `DELETE FROM match_result_approvals WHERE match_id = $1`,
         args: [matchId],
       });
 
@@ -1426,7 +1427,7 @@ export class MatchRepository {
           FROM matches
           WHERE status = 'pending-approval'
             AND auto_approval_due_at IS NOT NULL
-            AND auto_approval_due_at <= ?
+            AND auto_approval_due_at <= $1
         `,
         args: [nowSeconds],
       });
@@ -1438,15 +1439,15 @@ export class MatchRepository {
             UPDATE matches
             SET
               status = 'completed',
-              completed_at = ?,
+              completed_at = $1,
               auto_approval_due_at = NULL,
-              auto_approved_at = ?,
+              auto_approved_at = $2,
               auto_approval_rating_applied_at = NULL,
-              updated_at = ?
-            WHERE id = ?
+              updated_at = $3
+            WHERE id = $4
               AND status = 'pending-approval'
               AND auto_approval_due_at IS NOT NULL
-              AND auto_approval_due_at <= ?
+              AND auto_approval_due_at <= $5
           `,
           args: [
             nowSeconds,
@@ -1508,8 +1509,8 @@ export class MatchRepository {
     await this.client.execute({
       sql: `
         UPDATE matches
-        SET auto_approval_rating_applied_at = ?
-        WHERE id = ?
+        SET auto_approval_rating_applied_at = $1
+        WHERE id = $2
           AND status = 'completed'
           AND auto_approved_at IS NOT NULL
       `,
@@ -1563,7 +1564,8 @@ export class MatchRepository {
           .select()
           .from(matchSessions)
           .where(eq(matchSessions.id, data.sessionId))
-          .get();
+          .limit(1)
+          .then(firstRow);
         if (!session) {
           throw new Error("세션을 찾을 수 없습니다.");
         }
@@ -1583,23 +1585,24 @@ export class MatchRepository {
         .select()
         .from(matchParticipants)
         .where(eq(matchParticipants.matchId, match.id))
-        .all(),
+        .orderBy(matchParticipants.id),
       this.db
         .select()
         .from(matchScores)
         .where(eq(matchScores.matchId, match.id))
-        .all(),
+        .orderBy(matchScores.id),
       this.db
         .select()
         .from(matchResultApprovals)
         .where(eq(matchResultApprovals.matchId, match.id))
-        .all(),
+        .orderBy(matchResultApprovals.id),
       match.sessionId
         ? this.db
             .select()
             .from(matchSessions)
             .where(eq(matchSessions.id, match.sessionId))
-            .get()
+            .limit(1)
+            .then(firstRow)
         : Promise.resolve(undefined),
     ]);
     const playerRecords = await Promise.all(
@@ -1608,7 +1611,8 @@ export class MatchRepository {
           .select()
           .from(players)
           .where(eq(players.id, participant.playerId))
-          .get(),
+          .limit(1)
+          .then(firstRow),
       ),
     );
     const playerById = new Map<string, Player>(
@@ -1691,8 +1695,7 @@ export class MatchRepository {
         desc(matches.matchStartsAt),
         desc(matches.createdAt),
         desc(matches.id),
-      )
-      .all();
+      );
     return await Promise.all(
       storedMatches.map((match: StoredMatch) => this.hydrateMatch(match)),
     );
@@ -1806,7 +1809,8 @@ export class MatchRepository {
       .select()
       .from(matchSessions)
       .where(eq(matchSessions.id, session.id))
-      .get();
+      .limit(1)
+      .then(firstRow);
     if (existingById) {
       return existingById.id;
     }
@@ -1829,7 +1833,8 @@ export class MatchRepository {
           .select()
           .from(matchSessions)
           .where(eq(matchSessions.id, candidateId))
-          .get();
+          .limit(1)
+          .then(firstRow);
         if (concurrentSession) return concurrentSession.id;
         if (attempt === 7) throw error;
         candidateId = generateEntityId("session");
@@ -1860,7 +1865,7 @@ export class MatchRepository {
     executor: { execute: (statement: any) => Promise<any> },
   ) {
     await executor.execute({
-      sql: `DELETE FROM match_scores WHERE match_id = ?`,
+      sql: `DELETE FROM match_scores WHERE match_id = $1`,
       args: [matchId],
     });
 
@@ -1885,10 +1890,10 @@ export class MatchRepository {
         UPDATE matches
         SET
           status = 'completed',
-          completed_at = ?,
+          completed_at = $1,
           auto_approval_due_at = NULL,
-          updated_at = ?
-        WHERE id = ?
+          updated_at = $2
+        WHERE id = $3
           AND status = 'pending-approval'
           AND NOT EXISTS (
             SELECT 1
@@ -1941,7 +1946,7 @@ export class MatchRepository {
     addColumn("score_a", score.scoreA);
     addColumn("score_b", score.scoreB);
     await executor.execute({
-      sql: `INSERT INTO match_scores (${insertColumns.join(", ")}) VALUES (${insertColumns.map(() => "?").join(", ")})`,
+      sql: `INSERT INTO match_scores (${insertColumns.join(", ")}) VALUES (${placeholders(insertColumns.length)})`,
       args,
     });
   }
@@ -1975,7 +1980,8 @@ export class MatchRepository {
           eq(matchResultApprovals.playerId, playerId),
         ),
       )
-      .get();
+      .limit(1)
+      .then(firstRow);
 
     if (existing) {
       return;

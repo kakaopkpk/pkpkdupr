@@ -91,7 +91,6 @@ export default defineConfig({
         navigateFallbackDenylist: [
           /^\/api\//,
           /^\/uploads\//,
-          /^\/db\//,
         ],
         runtimeCaching: [
           {
@@ -144,11 +143,6 @@ export default defineConfig({
       "/uploads": {
         target: "http://localhost:4000",
         changeOrigin: true,
-      },
-      "/db": {
-        target: "http://localhost:3301",
-        changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/db/, ""),
       },
     },
   },

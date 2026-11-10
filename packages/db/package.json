@@ -11,10 +11,9 @@
     "build": "tsc --noEmit"
   },
   "dependencies": {
-    "@libsql/client": "^0.4.0",
     "@pkpkdupr/shared": "workspace:*",
-    "drizzle-orm": "^0.30.0",
-    "mysql2": "^3.23.2"
+    "drizzle-orm": "^0.30.10",
+    "postgres": "^3.4.9"
   },
   "devDependencies": {
     "@types/node": "^20.x",

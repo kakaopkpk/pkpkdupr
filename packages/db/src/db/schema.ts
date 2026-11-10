@@ -1,14 +1,14 @@
 import {
   boolean,
   customType,
-  double,
-  int,
+  doublePrecision,
+  integer,
   index,
-  mysqlTable,
+  pgTable,
   text,
   uniqueIndex,
   varchar,
-} from "drizzle-orm/mysql-core";
+} from "drizzle-orm/pg-core";
 import {
   DEFAULT_MATCH_MODE,
   matchModeValues,
@@ -18,9 +18,10 @@ import {
 import { PLAYER_STATUS_MESSAGE_MAX_LENGTH } from "@pkpkdupr/shared/player";
 
 /**
- * The SQLite database persisted timestamps as Unix seconds. Keep that storage
- * contract during the engine migration while exposing Date objects to the
- * repositories just as the previous libSQL schema did.
+ * 테이블 정의는 쿼리 빌더용이다. 실제 스키마는 supabase/migrations/*.sql이
+ * 기준이며, 인덱스·제약 이름도 마이그레이션과 맞춘다.
+ *
+ * 타임스탬프는 Unix 초 BIGINT로 저장하고 저장소에는 Date로 노출한다.
  */
 const unixTimestamp = customType<{ data: Date; driverData: number | string }>({
   dataType: () => "BIGINT",
@@ -30,9 +31,11 @@ const unixTimestamp = customType<{ data: Date; driverData: number | string }>({
 
 const id = (name: string) => varchar(name, { length: 255 });
 
-export const players = mysqlTable("players", {
+export const players = pgTable("players", {
   id: id("id").primaryKey(),
-  username: varchar("username", { length: 191 }).notNull().unique(),
+  username: varchar("username", { length: 191 })
+    .notNull()
+    .unique("players_username_unique"),
   duprRating: text("dupr_rating"),
   gender: varchar("gender", { length: 8 }).notNull(),
   status: varchar("status", { length: 32 }).notNull(),
@@ -50,16 +53,18 @@ export const players = mysqlTable("players", {
   updatedAt: unixTimestamp("updated_at").notNull(),
 });
 
-export const playerCreationLogs = mysqlTable("player_creation_logs", {
+export const playerCreationLogs = pgTable("player_creation_logs", {
   id: id("id").primaryKey(),
   playerId: id("player_id").notNull(),
   createdByPlayerId: id("created_by_player_id"),
   createdByUsername: varchar("created_by_username", { length: 191 }).notNull(),
   creationSource: varchar("creation_source", { length: 64 }).notNull(),
   createdAt: unixTimestamp("created_at").notNull(),
-});
+}, (table) => ({
+  playerIdIndex: index("player_creation_logs_player_id_idx").on(table.playerId),
+}));
 
-export const playerStatusChangeLogs = mysqlTable("player_status_change_logs", {
+export const playerStatusChangeLogs = pgTable("player_status_change_logs", {
   id: id("id").primaryKey(),
   playerId: id("player_id").notNull(),
   previousStatus: varchar("previous_status", { length: 32 }).notNull(),
@@ -67,9 +72,13 @@ export const playerStatusChangeLogs = mysqlTable("player_status_change_logs", {
   changedByPlayerId: id("changed_by_player_id").notNull(),
   changedByUsername: varchar("changed_by_username", { length: 191 }).notNull(),
   changedAt: unixTimestamp("changed_at").notNull(),
-});
+}, (table) => ({
+  playerIdIndex: index("player_status_change_logs_player_id_idx").on(
+    table.playerId,
+  ),
+}));
 
-export const playerRatingChangeLogs = mysqlTable("player_rating_change_logs", {
+export const playerRatingChangeLogs = pgTable("player_rating_change_logs", {
   id: id("id").primaryKey(),
   playerId: id("player_id").notNull(),
   source: varchar("source", { length: 64 }).notNull(),
@@ -78,14 +87,22 @@ export const playerRatingChangeLogs = mysqlTable("player_rating_change_logs", {
   nextRatingJson: text("next_rating_json").notNull(),
   deltaJson: text("delta_json").notNull(),
   createdAt: unixTimestamp("created_at").notNull(),
-});
+}, (table) => ({
+  playerIdIndex: index("player_rating_change_logs_player_id_idx").on(
+    table.playerId,
+  ),
+  sourceLogIdIndex: index("player_rating_change_logs_source_log_id_idx").on(
+    table.source,
+    table.sourceLogId,
+  ),
+}));
 
 /**
  * 프로필 차트 전용 materialized view입니다. 원본 평점 로그는
  * playerRatingChangeLogs에 유지하고, 이 테이블은 최대 90일의 압축된 지점만
  * 보관합니다.
  */
-export const playerRatingChartProjections = mysqlTable(
+export const playerRatingChartProjections = pgTable(
   "player_rating_chart_projections",
   {
     playerId: id("player_id").primaryKey(),
@@ -93,13 +110,13 @@ export const playerRatingChartProjections = mysqlTable(
   },
 );
 
-export const playerRatingChartPoints = mysqlTable(
+export const playerRatingChartPoints = pgTable(
   "player_rating_chart_points",
   {
     id: id("id").primaryKey(),
     playerId: id("player_id").notNull(),
     category: varchar("category", { length: 16 }).notNull(),
-    rating: double("rating").notNull(),
+    rating: doublePrecision("rating").notNull(),
     source: varchar("source", { length: 16 }).notNull(),
     pointAt: unixTimestamp("point_at").notNull(),
     generatedAt: unixTimestamp("generated_at").notNull(),
@@ -111,7 +128,7 @@ export const playerRatingChartPoints = mysqlTable(
   }),
 );
 
-export const matches = mysqlTable("matches", {
+export const matches = pgTable("matches", {
   id: id("id").primaryKey(),
   type: varchar("type", { length: 32, enum: matchTypeValues }).notNull(),
   mode: varchar("mode", { length: 32, enum: matchModeValues })
@@ -137,9 +154,14 @@ export const matches = mysqlTable("matches", {
   autoApprovalRatingAppliedAt: unixTimestamp("auto_approval_rating_applied_at"),
   createdAt: unixTimestamp("created_at").notNull(),
   updatedAt: unixTimestamp("updated_at").notNull(),
-});
+}, (table) => ({
+  sessionIdIndex: index("matches_session_id_idx").on(table.sessionId),
+  statusAutoApprovalDueAtIndex: index(
+    "matches_status_auto_approval_due_at_idx",
+  ).on(table.status, table.autoApprovalDueAt),
+}));
 
-export const matchSessions = mysqlTable(
+export const matchSessions = pgTable(
   "match_sessions",
   {
     id: id("id").primaryKey(),
@@ -157,7 +179,7 @@ export const matchSessions = mysqlTable(
   }),
 );
 
-export const matchSessionParticipants = mysqlTable(
+export const matchSessionParticipants = pgTable(
   "match_session_participants",
   {
     id: id("id").primaryKey(),
@@ -172,29 +194,42 @@ export const matchSessionParticipants = mysqlTable(
   }),
 );
 
-export const matchScores = mysqlTable("match_scores", {
+export const matchScores = pgTable("match_scores", {
   id: id("id").primaryKey(),
   matchId: id("match_id").notNull(),
-  scoreA: int("score_a").notNull(),
-  scoreB: int("score_b").notNull(),
-});
+  scoreA: integer("score_a").notNull(),
+  scoreB: integer("score_b").notNull(),
+}, (table) => ({
+  matchIdIndex: index("match_scores_match_id_idx").on(table.matchId),
+}));
 
-export const matchParticipants = mysqlTable("match_participants", {
+export const matchParticipants = pgTable("match_participants", {
   id: id("id").primaryKey(),
   matchId: id("match_id").notNull(),
-  teamIndex: int("team_index").notNull(),
+  teamIndex: integer("team_index").notNull(),
   playerId: id("player_id").notNull(),
   duprRatingJson: text("dupr_rating_json"),
-});
+}, (table) => ({
+  matchIdIndex: index("match_participants_match_id_idx").on(table.matchId),
+  playerIdIndex: index("match_participants_player_id_idx").on(table.playerId),
+  playerMatchIndex: index("match_participants_player_match_idx").on(
+    table.playerId,
+    table.matchId,
+  ),
+}));
 
-export const matchResultApprovals = mysqlTable("match_result_approvals", {
+export const matchResultApprovals = pgTable("match_result_approvals", {
   id: id("id").primaryKey(),
   matchId: id("match_id").notNull(),
   playerId: id("player_id").notNull(),
   approvedAt: unixTimestamp("approved_at").notNull(),
-});
+}, (table) => ({
+  matchPlayerUnique: uniqueIndex(
+    "match_result_approvals_match_player_unique",
+  ).on(table.matchId, table.playerId),
+}));
 
-export const officialDuprAdjustmentLogs = mysqlTable(
+export const officialDuprAdjustmentLogs = pgTable(
   "official_dupr_adjustment_logs",
   {
     id: id("id").primaryKey(),
@@ -209,4 +244,9 @@ export const officialDuprAdjustmentLogs = mysqlTable(
     reason: text("reason"),
     createdAt: unixTimestamp("created_at").notNull(),
   },
+  (table) => ({
+    playerIdIndex: index("official_dupr_adjustment_logs_player_id_idx").on(
+      table.playerId,
+    ),
+  }),
 );

@@ -10,7 +10,6 @@ import {
   PlayerRatingChartProjectionRepository,
   PlayerRepository,
   PlayerStatusChangeLogRepository,
-  runMigrations,
   TestDataRepository,
 } from "@pkpkdupr/db";
 
@@ -55,9 +54,11 @@ export const db: {
   ),
 };
 
-/** 스키마 초기화 + (dev mock 활성 시) 시딩. 앱 시작 시 한 번 호출한다. */
+/**
+ * (dev mock 활성 시) 시딩. 앱 시작 시 한 번 호출한다.
+ * 스키마는 Supabase CLI가 supabase/migrations/를 적용해 준비하므로 여기서 만들지 않는다.
+ */
 export async function initDatabase(): Promise<void> {
-  await runMigrations();
   if (isDevMockDataEnabled()) {
     await db.testData.seedDevMockData();
     console.log(

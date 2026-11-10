@@ -1,6 +1,7 @@
 import type { PlayerCreationLog, PlayerCreationSource } from "@pkpkdupr/shared/player";
 import { desc, eq } from "drizzle-orm";
 import { playerCreationLogs } from "../db/schema";
+import { firstRow } from "../db/client";
 
 export interface CreatePlayerCreationLogInput {
   id: string;
@@ -23,7 +24,8 @@ export class PlayerCreationLogRepository {
       .select()
       .from(playerCreationLogs)
       .where(eq(playerCreationLogs.id, data.id))
-      .get();
+      .limit(1)
+      .then(firstRow);
 
     if (!created) {
       throw new Error("생성 로그 저장에 실패했습니다.");
@@ -35,7 +37,6 @@ export class PlayerCreationLogRepository {
     return await this.db
       .select()
       .from(playerCreationLogs)
-      .orderBy(desc(playerCreationLogs.createdAt))
-      .all();
+      .orderBy(desc(playerCreationLogs.createdAt));
   }
 }
