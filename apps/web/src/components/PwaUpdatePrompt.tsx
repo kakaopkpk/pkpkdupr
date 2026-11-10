@@ -19,7 +19,7 @@ const FOREGROUND_UPDATE_CHECK_DEBOUNCE_MS = 5_000;
 const PwaUpdatePrompt: React.FC = () => {
   const location = useLocation();
   const isOnline = useOnlineStatus();
-  const { isAuthenticated, isLoading, requiresPasswordChange } = useAuth();
+  const { isAuthenticated, isLoading } = useAuth();
   const {
     isUpdateAvailable,
     isCheckingForUpdate,
@@ -32,8 +32,6 @@ const PwaUpdatePrompt: React.FC = () => {
 
   const isFullWidthDevPage =
     import.meta.env.DEV && location.pathname === "/dev/qrs";
-  const isForcedPasswordChangePage =
-    location.pathname === "/force-change-password";
   const isStandalone =
     typeof window !== "undefined" ? isStandaloneDisplay() : false;
 
@@ -43,9 +41,7 @@ const PwaUpdatePrompt: React.FC = () => {
         !isStandalone ||
         isLoading ||
         !isAuthenticated ||
-        requiresPasswordChange ||
         isFullWidthDevPage ||
-        isForcedPasswordChangePage ||
         !isOnline
       ) {
         return;
@@ -81,21 +77,17 @@ const PwaUpdatePrompt: React.FC = () => {
   }, [
     checkForUpdate,
     isAuthenticated,
-    isForcedPasswordChangePage,
     isFullWidthDevPage,
     isLoading,
     isOnline,
     isStandalone,
-    requiresPasswordChange,
   ]);
 
   if (
     !isStandalone ||
     isLoading ||
     !isAuthenticated ||
-    requiresPasswordChange ||
     isFullWidthDevPage ||
-    isForcedPasswordChangePage ||
     !isUpdateAvailable
   ) {
     return null;

@@ -1,3 +1,5 @@
+import { getAccessToken } from "@/lib/supabase";
+
 const normalizeBaseUrl = (value: string | undefined) =>
   value ? value.replace(/\/+$/, "") : "";
 
@@ -47,3 +49,17 @@ export const buildApiUrl = (path: string) => {
 
 // 아바타는 Supabase Storage 공개 절대 URL로 저장되므로 값을 그대로 쓴다.
 export const resolveAssetUrl = (value?: string | null) => value || undefined;
+
+/**
+ * 현재 Supabase 세션의 access token을 Authorization 헤더로 붙여 API를 호출한다.
+ * 토큰 갱신은 supabase-js가 하므로 호출할 때마다 현재 세션에서 토큰을 읽는다.
+ */
+export const apiFetch = async (path: string, init: RequestInit = {}) => {
+  const headers = new Headers(init.headers);
+  const accessToken = await getAccessToken();
+  if (accessToken) {
+    headers.set("Authorization", `Bearer ${accessToken}`);
+  }
+
+  return fetch(buildApiUrl(path), { ...init, headers });
+};

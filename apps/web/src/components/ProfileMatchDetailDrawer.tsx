@@ -11,7 +11,7 @@ import TabPanelStatus from "@/components/TabPanelStatus";
 import { useAuth } from "@/context/AuthContext";
 import type { TabKey } from "@/context/TabNavigationContext";
 import { useOnlineStatus } from "@/hooks/useOnlineStatus";
-import { buildApiUrl } from "@/lib/api";
+import { apiFetch } from "@/lib/api";
 
 interface ProfileMatchDetailDrawerProps {
   isOpen: boolean;
@@ -36,7 +36,7 @@ const ProfileMatchDetailDrawer: React.FC<ProfileMatchDetailDrawerProps> = ({
   onScrollContainerChange,
   layer,
 }) => {
-  const { token } = useAuth();
+  const { isAuthenticated } = useAuth();
   const isOnline = useOnlineStatus();
   const [displayedMatch, setDisplayedMatch] = useState<MatchInfo | null>(
     match ?? null,
@@ -49,7 +49,7 @@ const ProfileMatchDetailDrawer: React.FC<ProfileMatchDetailDrawerProps> = ({
 
   const loadMatchDetail = useCallback(
     async (matchId: string) => {
-      if (!token) {
+      if (!isAuthenticated) {
         setError("로그인이 필요합니다.");
         return;
       }
@@ -64,9 +64,7 @@ const ProfileMatchDetailDrawer: React.FC<ProfileMatchDetailDrawerProps> = ({
       setError(null);
 
       try {
-        const res = await fetch(buildApiUrl(`/api/matches/${matchId}`), {
-          headers: { Authorization: `Bearer ${token}` },
-        });
+        const res = await apiFetch(`/api/matches/${matchId}`);
         if (!res.ok) {
           const errorData = await res.json().catch(() => ({}));
           throw new Error(errorData.error || "매치를 불러오지 못했습니다.");
@@ -88,12 +86,12 @@ const ProfileMatchDetailDrawer: React.FC<ProfileMatchDetailDrawerProps> = ({
         }
       }
     },
-    [isOnline, token],
+    [isOnline, isAuthenticated],
   );
 
   const handleSubmitResult = useCallback(
     async (matchId: string, scores: MatchScore[]) => {
-      if (!token) throw new Error("로그인이 필요해요.");
+      if (!isAuthenticated) throw new Error("로그인이 필요해요.");
       if (!isOnline) {
         throw new Error(
           "오프라인에서는 결과를 입력할 수 없습니다. 온라인 연결이 필요합니다.",
@@ -102,10 +100,9 @@ const ProfileMatchDetailDrawer: React.FC<ProfileMatchDetailDrawerProps> = ({
 
       try {
         setIsSubmittingResult(true);
-        const res = await fetch(buildApiUrl(`/api/matches/${matchId}/result`), {
+        const res = await apiFetch(`/api/matches/${matchId}/result`, {
           method: "POST",
           headers: {
-            Authorization: `Bearer ${token}`,
             "Content-Type": "application/json",
           },
           body: JSON.stringify({ scores }),
@@ -121,7 +118,7 @@ const ProfileMatchDetailDrawer: React.FC<ProfileMatchDetailDrawerProps> = ({
         setIsSubmittingResult(false);
       }
     },
-    [isOnline, loadMatchDetail, token],
+    [isOnline, loadMatchDetail, isAuthenticated],
   );
 
   useEffect(() => {
