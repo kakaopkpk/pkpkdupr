@@ -16,7 +16,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          fetch-tags: true
+          # git describe가 HEAD 조상의 태그를 찾도록 전체 history와 태그를 받는다.
+          fetch-depth: 0
 
       - name: Resolve app version
         run: |
