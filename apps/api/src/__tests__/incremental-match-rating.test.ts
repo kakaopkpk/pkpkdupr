@@ -7,6 +7,7 @@ import type {
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { AuthService } from "../services/AuthService";
 import type { RatingServiceContract } from "../services/RatingService";
+import { db } from "../db";
 
 const completedAt = new Date("2026-08-01T10:00:00.000Z");
 
@@ -33,15 +34,8 @@ const createPlayer = (id: string, rating: number): Player & {
   updatedAt: completedAt,
 });
 
-const jsonResponse = (body: unknown) =>
-  new Response(JSON.stringify(body), {
-    status: 200,
-    headers: { "Content-Type": "application/json" },
-  });
-
 describe("incremental match rating", () => {
   afterEach(() => {
-    vi.unstubAllGlobals();
     vi.restoreAllMocks();
   });
 
@@ -95,67 +89,39 @@ describe("incremental match rating", () => {
       updatedAt: completedAt,
     };
 
-    const fetchMock = vi.fn(
-      async (input: string | URL | Request, init?: RequestInit) => {
-        const url = new URL(
-          typeof input === "string"
-            ? input
-            : input instanceof URL
-              ? input.toString()
-              : input.url,
-        );
-        const { pathname, searchParams } = url;
-
-        if (pathname === `/internal/matches/${match.id}/rating-change-logs`) {
-          return jsonResponse(persistedLogs);
-        }
-        if (pathname === "/internal/matches/previous-completed-at") {
-          const playerId = searchParams.get("playerId");
-          return jsonResponse({
-            completedAt:
-              playerId === "winner"
-                ? new Date(
-                    completedAt.getTime() - 24 * 60 * 60 * 1000,
-                  ).toISOString()
-                : null,
-          });
-        }
-        if (
-          pathname.endsWith("/dupr-state") &&
-          init?.method === "PATCH"
-        ) {
-          const playerId = pathname.split("/").at(-2)!;
-          const { duprState } = JSON.parse(String(init.body)) as {
-            duprState: StoredPlayerDupr;
-          };
-          persistedStates.set(playerId, duprState);
-          const player = players.get(playerId)!;
-          players.set(playerId, { ...player, duprRating: duprState.rating });
-          return jsonResponse({ ...players.get(playerId) });
-        }
-        if (
-          pathname === "/internal/matches/participant-dupr-snapshots" &&
-          init?.method === "PATCH"
-        ) {
-          return jsonResponse({ updatedParticipantCount: 2, updatedMatchCount: 1 });
-        }
-        if (
-          pathname === "/internal/player-rating-change-logs" &&
-          init?.method === "POST"
-        ) {
-          const log = JSON.parse(String(init.body)) as PlayerRatingChangeLog;
-          persistedLogs.push(log);
-          return jsonResponse(log);
-        }
-        if (pathname.startsWith("/internal/players/")) {
-          const playerId = pathname.split("/").at(-1)!;
-          return jsonResponse(players.get(playerId));
-        }
-
-        throw new Error(`Unexpected request: ${url}`);
+    vi.spyOn(db.playerRatingChangeLogs, "findByMatchId").mockImplementation(
+      async (matchId) => (matchId === match.id ? [...persistedLogs] : []),
+    );
+    const findPreviousCompletedAt = vi
+      .spyOn(db.matches, "findPreviousCompletedAt")
+      .mockImplementation(async (playerId) =>
+        playerId === "winner"
+          ? new Date(completedAt.getTime() - 24 * 60 * 60 * 1000)
+          : null,
+      );
+    vi.spyOn(db.players, "updateDuprState").mockImplementation(
+      async (playerId, duprState) => {
+        persistedStates.set(playerId, duprState);
+        const player = players.get(playerId)!;
+        players.set(playerId, { ...player, duprRating: duprState.rating });
+        return { ...players.get(playerId)! } as any;
       },
     );
-    vi.stubGlobal("fetch", fetchMock);
+    vi.spyOn(db.matches, "fillMissingParticipantDuprSnapshots").mockResolvedValue(
+      { updatedParticipantCount: 2, updatedMatchCount: 1 },
+    );
+    vi.spyOn(db.playerRatingChangeLogs, "create").mockImplementation(
+      async (log) => {
+        persistedLogs.push(log);
+        return log;
+      },
+    );
+    vi.spyOn(db.players, "findById").mockImplementation(
+      async (playerId) => players.get(playerId) as any,
+    );
+    const findAllMatches = vi
+      .spyOn(db.matches, "findAll")
+      .mockResolvedValue({ matches: [], total: 0 });
 
     const service = new AuthService(ratingService);
     const rebuildPlayers = vi
@@ -191,16 +157,8 @@ describe("incremental match rating", () => {
         error: expect.any(Error),
       }),
     );
-    expect(
-      fetchMock.mock.calls.some(([input]) =>
-        String(input).includes("/internal/matches?page=0&limit=10000"),
-      ),
-    ).toBe(false);
-    expect(
-      fetchMock.mock.calls.some(([input]) =>
-        String(input).includes("/internal/matches/previous-completed-at"),
-      ),
-    ).toBe(true);
+    expect(findAllMatches).not.toHaveBeenCalled();
+    expect(findPreviousCompletedAt).toHaveBeenCalled();
 
     await service.applyMatchResultToRatings(match);
 

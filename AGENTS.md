@@ -10,7 +10,7 @@
 
 ```text
 apps/web (:8080) ─┐
-apps/admin-web (:3100) ─┼─> apps/api (:4000) ─internal HTTP─> apps/db-server (:5001)
+apps/admin-web (:3100) ─┼─> apps/api (:4000) ─함수 호출─> packages/db (@pkpkdupr/db) ─> MySQL
                        │
                        └─> packages/shared (player, match, qr domain types)
 ```
@@ -19,8 +19,8 @@ apps/admin-web (:3100) ─┼─> apps/api (:4000) ─internal HTTP─> apps/db-
 | --- | --- |
 | `apps/web` | React 19 사용자 앱. 인증, Match / Members / Me 탭, QR, PWA를 담당합니다. |
 | `apps/admin-web` | React 18 관리자 로그인과 회원·경기·평점 운영 화면을 담당합니다. |
-| `apps/api` | Express 공개 API, JWT 인증, 관리자 권한 검사, DB 서버 오케스트레이션을 담당합니다. |
-| `apps/db-server` | mysql2 기반 MySQL 저장 계층, 스키마 초기화와 내부 `/internal/*` API를 담당합니다. |
+| `apps/api` | Express 공개 API, JWT 인증, 관리자 권한 검사를 담당합니다. 시작 시 `initDatabase()`로 스키마 초기화와 dev mock 시딩을 한 번 실행하고, 저장소 인스턴스는 `apps/api/src/db.ts`에서만 만듭니다. 저장소 예외를 공개 API 상태 코드로 바꾸는 처리도 api가 맡습니다. |
+| `packages/db` | `@pkpkdupr/db` 워크스페이스 라이브러리. mysql2 + Drizzle 기반 MySQL 저장소, 스키마·마이그레이션, dev mock 데이터를 제공합니다. HTTP 서버는 없습니다. |
 | `packages/shared` | `player.ts`, `match.ts`, `qr.ts`의 공통 도메인 계약을 제공합니다. |
 
 ## 개발 명령
@@ -31,7 +31,7 @@ pnpm dev                         # dev mock data와 전체 워크스페이스 �
 pnpm dev:web                     # Vite web :8080
 pnpm dev:api                     # API :4000
 pnpm dev:admin                   # admin Vite :3100
-pnpm --filter @pkpkdupr/db-server dev  # DB server :5001
+pnpm db:migrate                  # @pkpkdupr/db 기준 MySQL 스키마 마이그레이션
 
 pnpm build
 pnpm build:web
@@ -68,9 +68,9 @@ pnpm dev:db-browser             # Adminer :3301 (docker-compose.dev.yml)
 도메인 규칙:
 
 - `Player.duprRating`은 단일 숫자가 아니라 singles/doubles 분류와 metric을 포함하는 상태입니다. `null`인 NR 값도 허용합니다.
-- API와 DB 서버 사이의 `Date`는 JSON에서 문자열이므로 서비스 계층에서 hydrate 합니다.
+- api 저장소 어댑터(`apps/api/src/repositories/MatchRepository.ts`, `AuthService`)는 `@pkpkdupr/db` 결과를 공개 계약 형태로 hydrate 합니다.
 - 경기 타입·스코어·세션 계약은 `packages/shared/src/match.ts`가 기준입니다.
-- `packages/shared` 변경 시 web, admin-web, api, db-server 전체 소비처를 같은 변경 단위에서 점검합니다.
+- `packages/shared` 변경 시 web, admin-web, api, db 전체 소비처를 같은 변경 단위에서 점검합니다.
 
 ## 운영과 배포
 

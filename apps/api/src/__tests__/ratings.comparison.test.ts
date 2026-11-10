@@ -2,6 +2,7 @@ import type { Player } from "@pkpkdupr/shared/player";
 import type { Match } from "@pkpkdupr/shared/match";
 import request from "supertest";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { db } from "../db";
 import { app } from "../index";
 import { MatchRepository } from "../repositories/MatchRepository";
 import {
@@ -36,7 +37,6 @@ describe("GET /api/admin/ratings/comparison", () => {
 
   afterEach(() => {
     vi.restoreAllMocks();
-    vi.unstubAllGlobals();
   });
 
   it("기존 방식과 신규 방식의 회원별 레이팅을 반환한다", async () => {
@@ -154,32 +154,8 @@ describe("GET /api/admin/ratings/comparison", () => {
       updatedAt: now,
     };
 
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async (input: string | URL | Request) => {
-        const url =
-          typeof input === "string"
-            ? input
-            : input instanceof URL
-              ? input.toString()
-              : input.url;
-        const path = new URL(url).pathname;
-        const body =
-          path === "/internal/players"
-            ? storedPlayers
-            : path === "/internal/official-dupr-adjustment-logs"
-              ? []
-              : null;
-
-        if (body == null) {
-          throw new Error(`Unexpected request: ${path}`);
-        }
-        return new Response(JSON.stringify(body), {
-          status: 200,
-          headers: { "Content-Type": "application/json" },
-        });
-      }),
-    );
+    vi.spyOn(db.players, "findAll").mockResolvedValue(storedPlayers as any);
+    vi.spyOn(db.officialDuprAdjustmentLogs, "findAll").mockResolvedValue([]);
 
     const comparison = await new AuthService().compareRatingMethods([
       completedMatch,

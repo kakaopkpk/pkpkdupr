@@ -32,9 +32,10 @@ import type {
   PlayerStatus,
 } from "@pkpkdupr/shared/player";
 import type { VerifyPlayerQrTokenRequest } from "@pkpkdupr/shared/qr";
+import { initDatabase } from "./db";
 import {
-  DbRequestError,
   MatchRepository,
+  MatchRepositoryError,
 } from "./repositories/MatchRepository";
 import {
   AuthService,
@@ -1005,10 +1006,10 @@ app.delete(
       await matchRepository.deleteSession(req.params.sessionId);
       res.status(204).send();
     } catch (err) {
-      if (err instanceof DbRequestError && err.status === 404) {
+      if (err instanceof MatchRepositoryError && err.status === 404) {
         return res.status(404).json({ error: err.message });
       }
-      if (err instanceof DbRequestError && err.status === 409) {
+      if (err instanceof MatchRepositoryError && err.status === 409) {
         return res.status(409).json({ error: err.message });
       }
       res.status(400).json({ error: (err as Error).message });
@@ -1060,7 +1061,7 @@ app.put(
       );
     } catch (err) {
       const status =
-        err instanceof DbRequestError && err.status === 404 ? 404 : 400;
+        err instanceof MatchRepositoryError && err.status === 404 ? 404 : 400;
       res.status(status).json({ error: (err as Error).message });
     }
   },
@@ -1454,7 +1455,7 @@ app.patch("/api/admin/matches/bulk-metadata", requireAdmin, async (req, res) => 
 
     res.json({ matches });
   } catch (err) {
-    if (err instanceof DbRequestError && err.status === 404) {
+    if (err instanceof MatchRepositoryError && err.status === 404) {
       return res.status(404).json({ error: err.message });
     }
     res.status(400).json({ error: (err as Error).message });
@@ -1474,7 +1475,7 @@ app.patch(
 
       res.json(match);
     } catch (err) {
-      if (err instanceof DbRequestError && err.status === 404) {
+      if (err instanceof MatchRepositoryError && err.status === 404) {
         return res.status(404).json({ error: err.message });
       }
       res.status(400).json({ error: (err as Error).message });
@@ -1536,7 +1537,7 @@ app.post("/api/matches/:matchId/result", async (req, res) => {
 
     res.json(match);
   } catch (err) {
-    if (err instanceof DbRequestError && err.status === 409) {
+    if (err instanceof MatchRepositoryError && err.status === 409) {
       return res.status(409).json({ error: err.message });
     }
     res.status(400).json({ error: (err as Error).message });
@@ -1565,7 +1566,7 @@ app.post(
 
       res.json({ match, ...ratingResult });
     } catch (err) {
-      if (err instanceof DbRequestError && err.status === 409) {
+      if (err instanceof MatchRepositoryError && err.status === 409) {
         return res.status(409).json({ error: err.message });
       }
       res.status(400).json({ error: (err as Error).message });
@@ -1605,7 +1606,7 @@ app.delete(
 
       res.json({ deletedMatchId: req.params.matchId, ...recalculation });
     } catch (err) {
-      if (err instanceof DbRequestError && err.status === 404) {
+      if (err instanceof MatchRepositoryError && err.status === 404) {
         return res.status(404).json({ error: err.message });
       }
       res.status(400).json({ error: (err as Error).message });
@@ -1649,7 +1650,7 @@ app.delete("/api/matches/:matchId/approval", async (req, res) => {
 
     res.json(match);
   } catch (err) {
-    if (err instanceof DbRequestError && err.status === 409) {
+    if (err instanceof MatchRepositoryError && err.status === 409) {
       return res.status(409).json({ error: err.message });
     }
     res.status(400).json({ error: (err as Error).message });
@@ -2126,6 +2127,7 @@ const startAutoApprovalScheduler = () => {
 };
 
 export const startServer = async () => {
+  await initDatabase();
   await authService.initAdmin();
   startAutoApprovalScheduler();
   return (app as any).listen(PORT, () => {
@@ -2137,5 +2139,8 @@ export const startServer = async () => {
 };
 
 if (process.env.NODE_ENV !== "test" && process.env.VITEST !== "true") {
-  void startServer();
+  startServer().catch((error) => {
+    console.error("[API] Failed to start", error);
+    process.exit(1);
+  });
 }
