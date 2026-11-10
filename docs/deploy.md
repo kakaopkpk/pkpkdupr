@@ -141,7 +141,7 @@ SELECT id, status_code, content, error_msg FROM net._http_response ORDER BY crea
 2. Supabase 대시보드 → Authentication
    1. Sign In / Providers → **Google**을 켜고 Client ID·Client secret을 넣습니다.
    2. Sign In / Providers → **Email**은 끕니다(매직링크·비밀번호 로그인 차단).
-   3. URL Configuration → Site URL `https://kakaopkpk.github.io/<저장소 경로>/`, Redirect URLs에 web·admin 배포 주소를 넣습니다.
+   3. URL Configuration → Site URL과 Redirect URLs를 넣습니다. 값은 아래 "8. GitHub Pages (web·admin)"의 "Supabase Auth URL"을 따릅니다.
 
 ### 로그인과 회원 연결
 
@@ -215,3 +215,95 @@ curl -s http://127.0.0.1:54321/functions/v1/api/players
 - dev mock 데이터는 `pnpm dev`(Node api)가 시작할 때 로컬 DB에 넣습니다. 함수는 시딩하지 않습니다.
 - 함수 secret은 `supabase/functions/.env`(커밋 금지)에 두거나 `--env-file`로 넘깁니다. `ALLOWED_EMAIL_DOMAIN`(예: `kakaocorp.com`)과 `QR_TOTP_SECRET`은 필수이고, cron 경로를 호출하려면 `CRON_SECRET`도 넣습니다. 아바타 업로드를 확인하려면 `STORAGE_PUBLIC_URL=http://127.0.0.1:54321`도 넣습니다.
 - 로컬 로그인은 이메일 매직링크입니다. 방법은 `docs/dev-environment.md`의 "로컬 로그인"을 따릅니다.
+
+## 8. GitHub Pages (web·admin)
+
+web과 admin-web은 한 GitHub Pages 사이트에 같이 배포합니다. Pages는 저장소당 사이트가 하나라서 admin-web을 `admin/` 아래에 둡니다.
+
+| 앱 | 주소 | 빌드 base (`VITE_BASE_PATH`) |
+| --- | --- | --- |
+| web | `https://kakaopkpk.github.io/pkpkdupr/` | `/pkpkdupr/` |
+| admin-web | `https://kakaopkpk.github.io/pkpkdupr/admin/` | `/pkpkdupr/admin/` |
+
+- `VITE_BASE_PATH`는 두 앱 공통 이름의 빌드 env입니다(Vite 설정이 `process.env`에서 읽으므로 `.env` 파일이 아니라 빌드 명령의 환경으로 넘깁니다). 비우면 `/`라서 로컬 개발은 그대로입니다.
+- 라우터 basename, 정적 자산, 아이콘, web PWA manifest(`id`·`start_url`·`scope`·아이콘), 서비스워커의 `navigateFallback`·`importScripts`가 모두 이 base를 따릅니다.
+- web 서비스워커 scope(`/pkpkdupr/`) 안에 admin이 있으므로, `navigateFallbackDenylist`에 `/pkpkdupr/admin/`을 넣어 관리자 화면 탐색을 web `index.html`로 가로채지 않습니다.
+
+### Pages 설정 (최초 1회)
+
+1. 저장소 Settings → Pages → Build and deployment → **Source: GitHub Actions**
+2. Settings → Secrets and variables → Actions → **Variables**에 빌드 env를 넣습니다. 모두 브라우저 번들에 들어가는 공개 값입니다(service role key 금지).
+
+| variable | 필수 | 값 |
+| --- | --- | --- |
+| `VITE_API_BASE_URL` | 예 | `https://<project-ref>.supabase.co/functions/v1` |
+| `VITE_SUPABASE_URL` | 예 | `https://<project-ref>.supabase.co` |
+| `VITE_SUPABASE_ANON_KEY` | 예 | 프로젝트 anon(publishable) key |
+| `VITE_ALLOWED_EMAIL_DOMAIN` | 아니오 | `kakaocorp.com` (비우면 앱 기본값 `kakaocorp.com`) |
+
+```bash
+gh variable set VITE_API_BASE_URL --body 'https://<project-ref>.supabase.co/functions/v1'
+gh variable set VITE_SUPABASE_URL --body 'https://<project-ref>.supabase.co'
+gh variable set VITE_SUPABASE_ANON_KEY --body '<anon key>'
+gh variable set VITE_ALLOWED_EMAIL_DOMAIN --body 'kakaocorp.com'
+```
+
+- 필수 variable이 비어 있으면 workflow가 빌드 전에 실패합니다. web 운영 번들은 `VITE_API_BASE_URL`이 없으면 API 주소를 추측하지 않고 시작할 때 오류를 냅니다.
+
+### Supabase Auth URL
+
+Supabase 대시보드 → Authentication → URL Configuration
+
+- Site URL: `https://kakaopkpk.github.io/pkpkdupr/`
+- Redirect URLs: 아래 두 개를 **와일드카드 없이** 정확히 넣습니다. 와일드카드를 쓰면 로그인 코드가 의도하지 않은 경로로 돌아갈 수 있습니다.
+  - `https://kakaopkpk.github.io/pkpkdupr/`
+  - `https://kakaopkpk.github.io/pkpkdupr/admin/`
+- 앱은 로그인 후 각자의 base(`origin + BASE_URL`)로 돌아오도록 요청하므로 이 두 주소면 충분합니다.
+
+### Google OAuth 클라이언트
+
+Google Cloud Console → APIs & Services → Credentials → 위 5에서 만든 OAuth client ID
+
+- 승인된 JavaScript 원본: `https://kakaopkpk.github.io`
+- 승인된 리디렉션 URI: `https://<project-ref>.supabase.co/auth/v1/callback`
+  - Google은 Supabase로 돌려보내고, Supabase가 위 Redirect URLs의 앱 주소로 다시 보냅니다. Pages 주소를 Google 리디렉션 URI에 넣지 않습니다.
+
+### 함수 CORS
+
+api 함수 secret `CORS_ALLOWED_ORIGINS=https://kakaopkpk.github.io`(위 3). origin에는 경로가 없으므로 web·admin 모두 이 값 하나로 허용됩니다.
+
+### 배포
+
+- 자동: main push에서 `apps/web/**`, `apps/admin-web/**`, `packages/shared/**`, `scripts/pages/**`, 의존성 파일, workflow가 바뀌면 `pages` workflow가 실행됩니다.
+- 수동: Actions → `pages` → Run workflow (`gh workflow run pages.yml`).
+
+workflow는 `scripts/pages/assemble.sh`로 두 앱을 빌드해 산출물 하나로 합친 뒤 `actions/deploy-pages`로 배포합니다.
+
+```text
+<산출물>/
+├── index.html, assets/, sw.js, manifest.webmanifest ...   # web (base /pkpkdupr/)
+├── admin/index.html, admin/assets/ ...                     # admin-web (base /pkpkdupr/admin/)
+└── 404.html                                                # scripts/pages/404.html (base 치환)
+```
+
+### 딥링크 새로고침
+
+Pages는 없는 경로(예: `/pkpkdupr/login`, `/pkpkdupr/admin/players`)에 루트 `404.html`을 돌려줍니다.
+
+1. `404.html`이 경로가 `/pkpkdupr/admin/`으로 시작하면 admin, 아니면 web을 고릅니다.
+2. 원래 경로(쿼리·해시 포함)를 sessionStorage `pkpkdupr:pages-redirect`에 남기고 그 앱의 base로 이동합니다.
+3. 앱의 `main.tsx`가 라우터를 만들기 전에 값을 읽어 `history.replaceState`로 원래 경로를 되돌립니다.
+
+web 서비스워커가 설치된 뒤에는 web 경로 탐색을 서비스워커가 `index.html`로 바로 응답하므로 404를 거치지 않습니다.
+
+### 로컬에서 운영 base로 확인
+
+```bash
+PAGES_BASE_PATH=/pkpkdupr/ \
+VITE_API_BASE_URL=https://<project-ref>.supabase.co/functions/v1 \
+VITE_SUPABASE_URL=https://<project-ref>.supabase.co \
+VITE_SUPABASE_ANON_KEY=<anon key> \
+  bash scripts/pages/assemble.sh /tmp/pages-site/pkpkdupr
+```
+
+`/tmp/pages-site`를 루트로, 없는 경로에는 `/tmp/pages-site/pkpkdupr/404.html`을 404로 돌려주는 정적 서버로 띄워 `http://127.0.0.1:<port>/pkpkdupr/`, `/pkpkdupr/admin/`과 딥링크 새로고침을 확인합니다. 서비스워커는 `localhost`·`127.0.0.1`에서 HTTP로도 등록됩니다.
