@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="robots" content="noindex" />
+    <title>pkpkdupr</title>
+    <script>
+      // GitHub Pages는 없는 경로(딥링크 새로고침 등)에 이 파일을 돌려준다.
+      // 경로로 web·admin 중 어느 앱인지 고르고, 원래 경로를 sessionStorage에 남긴 뒤 그 앱의 base로 보낸다.
+      // 각 앱의 main.tsx가 같은 키를 읽어 주소를 원래 경로로 되돌린다.
+      (function () {
+        var webBase = "__PAGES_BASE_PATH__";
+        var adminBase = webBase + "admin/";
+        var path = window.location.pathname;
+        var target = null;
+
+        if (path.indexOf(adminBase) === 0) {
+          target = adminBase;
+        } else if (path.indexOf(webBase) === 0) {
+          target = webBase;
+        }
+        if (!target) return;
+
+        try {
+          window.sessionStorage.setItem(
+            "pkpkdupr:pages-redirect",
+            path + window.location.search + window.location.hash,
+          );
+        } catch (error) {
+          // 저장할 수 없으면 원래 경로 없이 앱 첫 화면으로 간다.
+        }
+        window.location.replace(target);
+      })();
+    </script>
+  </head>
+  <body>
+    <p>페이지를 찾을 수 없습니다.</p>
+  </body>
+</html>

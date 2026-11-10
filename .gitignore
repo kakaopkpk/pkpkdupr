@@ -6,6 +6,7 @@ dist/
 build/
 .out/
 apps/web/dev-dist/
+.pages-dist/
 data/
 packages/db/db.sqlite
 

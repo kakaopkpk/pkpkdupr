@@ -1,0 +1,82 @@
+name: pages
+
+# web(루트)과 admin-web(admin/)을 한 GitHub Pages 사이트로 빌드·배포한다.
+# 필요한 Pages 설정과 repo variables는 docs/deploy.md의 "GitHub Pages (web·admin)"을 따른다.
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "apps/web/**"
+      - "apps/admin-web/**"
+      - "packages/shared/**"
+      - "scripts/pages/**"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - ".github/workflows/pages.yml"
+  workflow_dispatch:
+
+# 배포가 겹치면 마지막 실행만 남긴다. 진행 중인 배포는 끊지 않는다.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      # 프로젝트 Pages 주소 https://<owner>.github.io/<저장소 이름>/
+      PAGES_BASE_PATH: /${{ github.event.repository.name }}/
+      VITE_API_BASE_URL: ${{ vars.VITE_API_BASE_URL }}
+      VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
+      VITE_SUPABASE_ANON_KEY: ${{ vars.VITE_SUPABASE_ANON_KEY }}
+      VITE_ALLOWED_EMAIL_DOMAIN: ${{ vars.VITE_ALLOWED_EMAIL_DOMAIN }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-tags: true
+
+      - name: Resolve app version
+        run: |
+          APP_VERSION="$(git describe --tags --abbrev=0 2>/dev/null || echo "0.0.0+$(git rev-parse --short=8 HEAD)")"
+          echo "VITE_APP_VERSION=${APP_VERSION}" >> "$GITHUB_ENV"
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Enable corepack pnpm
+        run: |
+          corepack enable
+          corepack prepare pnpm@11.7.0 --activate
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # 필수 variable이 비어 있으면 assemble.sh가 빌드 전에 실패한다.
+      - name: Build and assemble
+        run: bash scripts/pages/assemble.sh "$RUNNER_TEMP/pages"
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: ${{ runner.temp }}/pages
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
