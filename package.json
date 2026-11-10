@@ -6,9 +6,9 @@
     "scripts": {
         "dev": "bash scripts/dev-app.sh",
         "dev:db": "bash scripts/dev-db.sh",
-        "dev:db:down": "docker compose -f docker-compose.yml -f docker-compose.dev.yml stop mysql",
-        "dev:db-browser": "docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --remove-orphans --force-recreate adminer",
-        "dev:db-browser:down": "docker compose -f docker-compose.yml -f docker-compose.dev.yml stop adminer",
+        "dev:db:down": "docker compose -f docker-compose.dev.yml stop mysql",
+        "dev:db-browser": "docker compose -f docker-compose.dev.yml up -d --remove-orphans --force-recreate adminer",
+        "dev:db-browser:down": "docker compose -f docker-compose.dev.yml stop adminer",
         "dev:web": "pnpm --filter @pkpkdupr/web dev",
         "dev:api": "pnpm --filter @pkpkdupr/api dev",
         "dev:admin": "pnpm --filter @pkpkdupr/admin-web dev",
