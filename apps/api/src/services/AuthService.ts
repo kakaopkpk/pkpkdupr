@@ -59,9 +59,10 @@ import {
 } from "./RatingService";
 import { ScorePerformanceRatingService } from "./ScorePerformanceRatingService";
 import { matchTypeValues, type Match, type MatchType } from "@pkpkdupr/shared/match";
+import type { CreateStoredPlayerInput } from "@pkpkdupr/db";
+import { db } from "../db";
 
 const SALT_ROUNDS = 10;
-const DB_SERVER_URL = process.env.DB_SERVER_URL || "http://localhost:5001";
 const DEV_MOCK_DATA_ENABLED = process.env.ENABLE_DEV_MOCK_DATA === "true";
 const API_ADMIN_USERNAME = process.env.API_ADMIN_USERNAME || "admin";
 const API_ADMIN_PASSWORD = process.env.API_ADMIN_PASSWORD || "admin123qwe";
@@ -71,10 +72,6 @@ interface StoredPlayerRecord extends Player {
   isFirstLogin: boolean;
   duprMetrics: PlayerDuprMetrics;
   duprState: StoredPlayerDupr;
-}
-
-interface DbRequestOptions extends RequestInit {
-  retries?: number;
 }
 
 interface RetryOperationOptions {
@@ -116,7 +113,9 @@ const buildId = (prefix: string) =>
 const createPasswordFingerprint = (passwordHash: string) =>
   createHmac("sha256", JWT_SECRET).update(passwordHash).digest("hex");
 
-const createPlayer = (input: Pick<Player, "username" | "gender">): Player => {
+const createPlayer = (
+  input: Pick<Player, "username" | "gender">,
+): Player & { duprRating: null } => {
   const now = new Date();
 
   return {
@@ -347,22 +346,41 @@ const toPlayerQrPublicPlayer = (player: Player): PlayerQrPublicPlayer => ({
 const isActiveDevPlayer = (player: Player) =>
   player.status === "active" && player.username.startsWith("dev_");
 
+const RETRYABLE_DB_CONNECTION_ERROR_CODES = new Set([
+  "ECONNREFUSED",
+  "PROTOCOL_CONNECTION_LOST",
+  "ER_CON_COUNT_ERROR",
+]);
+
+const hasRetryableConnectionCode = (value: unknown) =>
+  typeof value === "object" &&
+  value !== null &&
+  "code" in value &&
+  RETRYABLE_DB_CONNECTION_ERROR_CODES.has(String((value as { code?: unknown }).code));
+
+/** MySQL이 아직 연결을 받지 못하는 기동 직후 오류만 재시도 대상으로 본다. */
 const isRetryableDbBootstrapError = (error: unknown) => {
   if (!(error instanceof Error)) {
     return false;
   }
 
-  const cause = (error as Error & { cause?: unknown }).cause;
-  if (
-    typeof cause === "object" &&
-    cause !== null &&
-    "code" in cause &&
-    (cause as { code?: string }).code === "ECONNREFUSED"
-  ) {
-    return true;
-  }
+  return (
+    hasRetryableConnectionCode(error) ||
+    hasRetryableConnectionCode((error as Error & { cause?: unknown }).cause)
+  );
+};
 
-  return error.message.includes("fetch failed");
+const isUniqueViolation = (error: unknown) => {
+  const message = (error as Error).message ?? "";
+  return message.includes("UNIQUE") || message.includes("unique");
+};
+
+/** 갱신 대상 플레이어가 없을 때 기존 공개 API와 같은 메시지로 실패시킨다. */
+const requireStoredPlayer = <T>(player: T | undefined): T => {
+  if (!player) {
+    throw new Error("사용자를 찾을 수 없습니다.");
+  }
+  return player;
 };
 
 type OfficialDuprRatingPatch = NonNullable<
@@ -590,62 +608,28 @@ export class AuthService {
       }
     }
 
-    throw new Error("DB 서버 요청 실패");
+    throw new Error("DB 요청 실패");
   }
 
-  private async dbRequest<T>(
-    path: string,
-    init?: DbRequestOptions,
-  ): Promise<T> {
-    const retries = init?.retries ?? 0;
-
-    for (let attempt = 0; attempt <= retries; attempt += 1) {
-      try {
-        const res = await fetch(`${DB_SERVER_URL}${path}`, {
-          ...init,
-          headers: {
-            "Content-Type": "application/json",
-            ...(init?.headers ?? {}),
-          },
-        });
-
-        if (!res.ok) {
-          const errorData = await res.json().catch(() => ({}));
-          throw new Error(
-            errorData.error || `DB 서버 요청 실패: ${res.status}`,
-          );
-        }
-
-        if (res.status === 204) {
-          return undefined as T;
-        }
-
-        return (await res.json()) as T;
-      } catch (error) {
-        if (attempt === retries) {
-          throw error;
-        }
-        await new Promise((resolve) =>
-          setTimeout(resolve, 300 * (attempt + 1)),
-        );
+  /** username unique 위반은 공개 API가 기대하는 중복 메시지로 바꾼다. */
+  private async createStoredPlayer(
+    input: CreateStoredPlayerInput,
+  ): ReturnType<typeof db.players.create> {
+    try {
+      return await db.players.create(input);
+    } catch (error) {
+      if (isUniqueViolation(error)) {
+        throw new Error("중복된 사용자명입니다.");
       }
+      throw error;
     }
-
-    throw new Error("DB 서버 요청 실패");
   }
 
   private async getStoredPlayerById(
     playerId: string,
   ): Promise<StoredPlayerRecord | undefined> {
-    try {
-      const player = await this.dbRequest<any>(`/internal/players/${playerId}`);
-      return hydratePlayer(player);
-    } catch (error) {
-      if ((error as Error).message.includes("사용자를 찾을 수 없습니다")) {
-        return undefined;
-      }
-      throw error;
-    }
+    const player = await db.players.findById(playerId);
+    return player ? hydratePlayer(player) : undefined;
   }
 
   private createAccessTokenForPlayer(
@@ -710,17 +694,8 @@ export class AuthService {
   private async getStoredPlayerByUsername(
     username: string,
   ): Promise<StoredPlayerRecord | undefined> {
-    try {
-      const player = await this.dbRequest<any>(
-        `/internal/players/by-username/${encodeURIComponent(username)}`,
-      );
-      return hydratePlayer(player);
-    } catch (error) {
-      if ((error as Error).message.includes("사용자를 찾을 수 없습니다.")) {
-        return undefined;
-      }
-      throw error;
-    }
+    const player = await db.players.findByUsername(username);
+    return player ? hydratePlayer(player) : undefined;
   }
 
   private async insertCreationLog(input: {
@@ -730,12 +705,9 @@ export class AuthService {
     creationSource: PlayerCreationSource;
     createdAt: Date;
   }): Promise<PlayerCreationLog> {
-    const log = await this.dbRequest<any>("/internal/player-creation-logs", {
-      method: "POST",
-      body: JSON.stringify({
-        id: buildId("player-creation-log"),
-        ...input,
-      }),
+    const log = await db.playerCreationLogs.create({
+      id: buildId("player-creation-log"),
+      ...input,
     });
     return hydrateCreationLog(log);
   }
@@ -748,32 +720,20 @@ export class AuthService {
     changedByUsername: string;
     changedAt: Date;
   }): Promise<PlayerStatusChangeLog> {
-    const log = await this.dbRequest<any>(
-      "/internal/player-status-change-logs",
-      {
-        method: "POST",
-        body: JSON.stringify({
-          id: buildId("player-status-log"),
-          ...input,
-        }),
-      },
-    );
+    const log = await db.playerStatusChangeLogs.create({
+      id: buildId("player-status-log"),
+      ...input,
+    });
     return hydrateStatusChangeLog(log);
   }
 
   private async insertPlayerRatingChangeLog(
     input: Omit<PlayerRatingChangeLog, "id">,
   ): Promise<PlayerRatingChangeLog> {
-    const log = await this.dbRequest<any>(
-      "/internal/player-rating-change-logs",
-      {
-        method: "POST",
-        body: JSON.stringify({
-          id: buildId("player-rating-change-log"),
-          ...input,
-        }),
-      },
-    );
+    const log = await db.playerRatingChangeLogs.create({
+      id: buildId("player-rating-change-log"),
+      ...input,
+    });
     return hydratePlayerRatingChangeLog(log);
   }
 
@@ -802,10 +762,7 @@ export class AuthService {
         );
     });
 
-    await this.dbRequest("/internal/player-rating-change-logs/match-completed", {
-      method: "PUT",
-      body: JSON.stringify(logs),
-    });
+    await db.playerRatingChangeLogs.replaceMatchCompleted(logs);
 
     return logs;
   }
@@ -828,13 +785,10 @@ export class AuthService {
     for (let attempt = 0; attempt < 8; attempt += 1) {
       const player = createPlayer({ username, gender });
       try {
-        created = await this.dbRequest<any>("/internal/players", {
-          method: "POST",
-          body: JSON.stringify({
-            ...player,
-            passwordHash: hashedPassword,
-            isFirstLogin: true,
-          }),
+        created = await this.createStoredPlayer({
+          ...player,
+          passwordHash: hashedPassword,
+          isFirstLogin: true,
         });
         break;
       } catch (error) {
@@ -977,10 +931,9 @@ export class AuthService {
     }
 
     const passwordHash = await bcrypt.hash(newPassword, SALT_ROUNDS);
-    await this.dbRequest(`/internal/players/${playerId}/password`, {
-      method: "PATCH",
-      body: JSON.stringify({ passwordHash, isFirstLogin: false }),
-    });
+    requireStoredPlayer(
+      await db.players.updatePassword(playerId, passwordHash, false),
+    );
   }
 
   async verifyAdminPassword(
@@ -1026,10 +979,9 @@ export class AuthService {
 
     const passwordHash = await bcrypt.hash(newPassword, SALT_ROUNDS);
     const updated = hydratePlayer(
-      await this.dbRequest<any>(`/internal/players/${playerId}/password`, {
-        method: "PATCH",
-        body: JSON.stringify({ passwordHash, isFirstLogin: true }),
-      }),
+      requireStoredPlayer(
+        await db.players.updatePassword(playerId, passwordHash, true),
+      ),
     );
 
     return toPublicPlayer(updated);
@@ -1073,22 +1025,19 @@ export class AuthService {
     }
 
     const updated = hydratePlayer(
-      await this.dbRequest<any>(`/internal/players/${playerId}/profile`, {
-        method: "PATCH",
-        body: JSON.stringify(profilePatch),
-      }),
+      requireStoredPlayer(await db.players.updateProfile(playerId, profilePatch)),
     );
 
     return toPublicPlayer(updated);
   }
 
   async getAllPlayers(): Promise<Player[]> {
-    const players = await this.dbRequest<any[]>("/internal/players");
+    const players = await db.players.findAll();
     return players.map((record) => toPublicPlayer(hydratePlayer(record)));
   }
 
   async getAdminPlayers(): Promise<AdminPlayer[]> {
-    const players = await this.dbRequest<any[]>("/internal/players");
+    const players = await db.players.findAll();
     return players.map((record) => toAdminPlayer(hydratePlayer(record)));
   }
 
@@ -1125,10 +1074,7 @@ export class AuthService {
     }
 
     const updated = hydratePlayer(
-      await this.dbRequest<any>(`/internal/players/${playerId}/gender`, {
-        method: "PATCH",
-        body: JSON.stringify({ gender: nextGender }),
-      }),
+      requireStoredPlayer(await db.players.updateGender(playerId, nextGender)),
     );
 
     return { player: toPublicPlayer(updated), changed: true };
@@ -1158,10 +1104,7 @@ export class AuthService {
     }
 
     const updated = hydratePlayer(
-      await this.dbRequest<any>(`/internal/players/${playerId}/status`, {
-        method: "PATCH",
-        body: JSON.stringify({ status: nextStatus }),
-      }),
+      requireStoredPlayer(await db.players.updateStatus(playerId, nextStatus)),
     );
 
     const log = await this.insertStatusChangeLog({
@@ -1177,23 +1120,19 @@ export class AuthService {
   }
 
   async getPlayerCreationLogs(): Promise<Record<string, PlayerCreationLog[]>> {
-    const logs = await this.dbRequest<any[]>("/internal/player-creation-logs");
+    const logs = await db.playerCreationLogs.findAll();
     return groupByPlayerId(logs.map(hydrateCreationLog));
   }
 
   async getPlayerStatusLogs(): Promise<
     Record<string, PlayerStatusChangeLog[]>
   > {
-    const logs = await this.dbRequest<any[]>(
-      "/internal/player-status-change-logs",
-    );
+    const logs = await db.playerStatusChangeLogs.findAll();
     return groupByPlayerId(logs.map(hydrateStatusChangeLog));
   }
 
   async getOfficialDuprAdjustmentLogs(): Promise<OfficialDuprAdjustmentLog[]> {
-    const logs = await this.dbRequest<any[]>(
-      "/internal/official-dupr-adjustment-logs",
-    );
+    const logs = await db.officialDuprAdjustmentLogs.findAll();
     return logs.map(hydrateOfficialDuprAdjustmentLog);
   }
 
@@ -1202,10 +1141,7 @@ export class AuthService {
     duprState: StoredPlayerDupr,
   ): Promise<StoredPlayerRecord> {
     return hydratePlayer(
-      await this.dbRequest<any>(`/internal/players/${playerId}/dupr-state`, {
-        method: "PATCH",
-        body: JSON.stringify({ duprState }),
-      }),
+      requireStoredPlayer(await db.players.updateDuprState(playerId, duprState)),
     );
   }
 
@@ -1305,9 +1241,7 @@ export class AuthService {
     additionalLogs: OfficialDuprAdjustmentLog[] = [],
     ratingService: RatingServiceContract = this.ratingService,
   ): Promise<DuprRecalculationResult> {
-    const players = (await this.dbRequest<any[]>("/internal/players")).map(
-      hydratePlayer,
-    );
+    const players = (await db.players.findAll()).map(hydratePlayer);
     const storedLogs = await this.getOfficialDuprAdjustmentLogs();
     const logs = [...storedLogs, ...additionalLogs].sort(
       (a, b) =>
@@ -1691,13 +1625,7 @@ export class AuthService {
       return { updatedParticipantCount: 0, updatedMatchCount: 0 };
     }
 
-    return await this.dbRequest<{
-      updatedParticipantCount: number;
-      updatedMatchCount: number;
-    }>("/internal/matches/participant-dupr-snapshots", {
-      method: "PATCH",
-      body: JSON.stringify({ snapshots }),
-    });
+    return await db.matches.fillMissingParticipantDuprSnapshots(snapshots);
   }
 
   /**
@@ -1712,10 +1640,11 @@ export class AuthService {
     const matchTypes = matchTypeValues.filter(
       (matchType) => getDuprCategoryForMatchType(matchType) === category,
     ) as MatchType[];
-    const result = await this.dbRequest<{ completedAt: string | null }>(
-      `/internal/matches/previous-completed-at?playerId=${encodeURIComponent(playerId)}&before=${encodeURIComponent(currentMatch.completedAt!.toISOString())}&types=${encodeURIComponent(matchTypes.join(","))}`,
+    return await db.matches.findPreviousCompletedAt(
+      playerId,
+      matchTypes,
+      new Date(currentMatch.completedAt!),
     );
-    return result.completedAt ? new Date(result.completedAt) : null;
   }
 
   private buildOfficialDuprImpacts(
@@ -1838,10 +1767,9 @@ export class AuthService {
       reason: input.reason,
     });
     const log = hydrateOfficialDuprAdjustmentLog(
-      await this.dbRequest<any>("/internal/official-dupr-adjustment-logs", {
-        method: "POST",
-        body: JSON.stringify(pendingLog satisfies OfficialDuprAdjustmentLog),
-      }),
+      await db.officialDuprAdjustmentLogs.create(
+        pendingLog satisfies OfficialDuprAdjustmentLog,
+      ),
     );
 
     const recalculation =
@@ -1963,9 +1891,7 @@ export class AuthService {
     }
 
     const existingLogs = (
-      await this.dbRequest<any[]>(
-        `/internal/matches/${encodeURIComponent(match.id)}/rating-change-logs`,
-      )
+      await db.playerRatingChangeLogs.findByMatchId(match.id)
     ).map(hydratePlayerRatingChangeLog);
     if (existingLogs.length > 0) {
       if (options.refreshProjection !== false) {
@@ -2136,17 +2062,11 @@ export class AuthService {
     if (existing) {
       const passwordHash = await bcrypt.hash(API_ADMIN_PASSWORD, SALT_ROUNDS);
       const updated = hydratePlayer(
-        await this.retryOperation(
-          () =>
-            this.dbRequest<any>(`/internal/players/${existing.id}/password`, {
-              method: "PATCH",
-              body: JSON.stringify({
-                passwordHash,
-                isFirstLogin: false,
-              }),
-              retries: 10,
-            }),
-          { retries: 20 },
+        requireStoredPlayer(
+          await this.retryOperation(
+            () => db.players.updatePassword(existing.id, passwordHash, false),
+            { retries: 20 },
+          ),
         ),
       );
 
@@ -2159,14 +2079,10 @@ export class AuthService {
     const created = hydratePlayer(
       await this.retryOperation(
         () =>
-          this.dbRequest<any>("/internal/players/init-admin", {
-            method: "POST",
-            body: JSON.stringify({
-              ...player,
-              passwordHash,
-              isFirstLogin: true,
-            }),
-            retries: 10,
+          db.players.initAdminIfMissing({
+            ...player,
+            passwordHash,
+            isFirstLogin: true,
           }),
         { retries: 20 },
       ),
@@ -2206,13 +2122,10 @@ export class AuthService {
     });
 
     const created = hydratePlayer(
-      await this.dbRequest<any>("/internal/players", {
-        method: "POST",
-        body: JSON.stringify({
-          ...player,
-          passwordHash,
-          isFirstLogin: true,
-        }),
+      await this.createStoredPlayer({
+        ...player,
+        passwordHash,
+        isFirstLogin: true,
       }),
     );
 

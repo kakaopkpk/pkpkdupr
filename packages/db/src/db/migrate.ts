@@ -225,9 +225,9 @@ export const runMigrations = async () => {
 
 if (process.argv[1]?.includes("migrate.")) {
   runMigrations()
-    .then(() => console.log("[DB-SERVER] MySQL migrations applied"))
+    .then(() => console.log("[DB] MySQL migrations applied"))
     .catch((error) => {
-      console.error("[DB-SERVER] Failed to apply MySQL migrations", error);
+      console.error("[DB] Failed to apply MySQL migrations", error);
       process.exitCode = 1;
     });
 }

@@ -5,14 +5,15 @@
 ## 실행
 
 ```bash
-pnpm dev                 # MySQL 준비 후 web/admin/api/db-server 실행
+pnpm dev                 # MySQL 준비 후 web/admin/api 실행
+pnpm db:migrate          # @pkpkdupr/db 기준 스키마 마이그레이션만 실행
 pnpm dev:db              # MySQL만 기동
 pnpm dev:db:down         # MySQL 중지
 pnpm dev:db-browser      # Adminer 기동 (http://localhost:3301/)
 pnpm dev:db-browser:down
 ```
 
-`pnpm dev`는 다음 환경 변수를 DB 서버에 주입하고 개발 mock 데이터를 넣습니다.
+`pnpm dev`는 다음 환경 변수를 api에 주입합니다. api는 시작 시 스키마를 초기화하고 개발 mock 데이터를 넣습니다.
 
 ```text
 DB_HOST=127.0.0.1
@@ -27,9 +28,9 @@ ENABLE_DEV_MOCK_DATA=true
 
 ```text
 apps/web :8080 ── /api ──> apps/api :4000
-                                 │ internal HTTP
+                                 │ 함수 호출
                                  ▼
-                        apps/db-server :5001
+                     packages/db (@pkpkdupr/db)
                                  │ mysql2 + Drizzle
                                  ▼
                          MySQL 9.7 :3306

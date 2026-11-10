@@ -193,9 +193,9 @@ describe("admin match metadata", () => {
   });
 
   it("존재하지 않는 세션 ID 연결을 거부한다", async () => {
-    const { DbRequestError } = await import("../repositories/MatchRepository");
+    const { MatchRepositoryError } = await import("../repositories/MatchRepository");
     vi.spyOn(MatchRepository.prototype, "updateMetadata").mockRejectedValue(
-      new DbRequestError("세션을 찾을 수 없습니다.", 400),
+      new MatchRepositoryError("세션을 찾을 수 없습니다.", 400),
     );
 
     const response = await request(app)

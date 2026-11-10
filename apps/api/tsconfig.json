@@ -18,6 +18,9 @@
         "paths": {
             "@pkpkdupr/shared/*": [
                 "../../packages/shared/src/*"
+            ],
+            "@pkpkdupr/db": [
+                "../../packages/db/src/index.ts"
             ]
         }
     },
