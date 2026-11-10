@@ -1,0 +1,135 @@
+name: db-backup
+
+# 운영 DB(public 스키마)를 pg_dump로 덤프하고 age 공개키로 암호화해
+# 비공개 저장소 kakaopkpk/pkpkdupr-backup 의 backups/YYYY-MM-DD.sql.gz.age 로 push한다.
+# 덤프 평문은 파이프로만 흘려 디스크·로그·artifact에 남기지 않는다.
+on:
+  schedule:
+    - cron: "23 18 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# 같은 백업 저장소에 동시에 push하지 않도록 직렬화한다.
+concurrency:
+  group: db-backup
+  cancel-in-progress: false
+
+env:
+  # Supabase 프로젝트의 Postgres 메이저 버전(supabase/config.toml [db] major_version)과 맞춘다.
+  PG_MAJOR: "17"
+  BACKUP_REPO: kakaopkpk/pkpkdupr-backup
+  RETENTION_DAYS: "30"
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Install pg_dump ${{ env.PG_MAJOR }} and age
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-common age
+          sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y
+          sudo apt-get install -y -qq "postgresql-client-${PG_MAJOR}"
+          "/usr/lib/postgresql/${PG_MAJOR}/bin/pg_dump" --version
+          age --version
+
+      - name: Configure deploy key
+        env:
+          BACKUP_DEPLOY_KEY: ${{ secrets.BACKUP_DEPLOY_KEY }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "${BACKUP_DEPLOY_KEY}" ]; then
+            echo "::error::secret BACKUP_DEPLOY_KEY가 설정되지 않았습니다."
+            exit 1
+          fi
+
+          ssh_dir="${RUNNER_TEMP}/backup-ssh"
+          mkdir -p "${ssh_dir}"
+          chmod 700 "${ssh_dir}"
+          printf '%s\n' "${BACKUP_DEPLOY_KEY}" > "${ssh_dir}/id"
+          chmod 600 "${ssh_dir}/id"
+
+          # github.com 호스트 키를 공식 ed25519 지문과 대조해 고정한다.
+          ssh-keyscan -t ed25519 github.com > "${ssh_dir}/known_hosts" 2>/dev/null
+          fingerprint="$(ssh-keygen -lf "${ssh_dir}/known_hosts" | awk '{print $2}')"
+          if [ "${fingerprint}" != "SHA256:+DiY3wvvV6TuJJhbpZisF/zLDA0zPMSvHdkr4UvCOqU" ]; then
+            echo "::error::github.com 호스트 키 지문이 예상과 다릅니다: ${fingerprint}"
+            exit 1
+          fi
+
+          echo "GIT_SSH_COMMAND=ssh -i ${ssh_dir}/id -o IdentitiesOnly=yes -o UserKnownHostsFile=${ssh_dir}/known_hosts -o StrictHostKeyChecking=yes" >> "${GITHUB_ENV}"
+
+      - name: Clone backup repository
+        run: |
+          set -euo pipefail
+          git clone --depth 1 "git@github.com:${BACKUP_REPO}.git" "${RUNNER_TEMP}/backup-repo"
+          mkdir -p "${RUNNER_TEMP}/backup-repo/backups"
+
+      - name: Dump, compress and encrypt
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          # 공개키만 저장소에 둔다. 개인키는 운영진이 따로 보관한다.
+          BACKUP_AGE_PUBLIC_KEY: ${{ vars.BACKUP_AGE_PUBLIC_KEY }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "${SUPABASE_DB_URL}" ]; then
+            echo "::error::secret SUPABASE_DB_URL이 설정되지 않았습니다."
+            exit 1
+          fi
+          if [ -z "${BACKUP_AGE_PUBLIC_KEY}" ]; then
+            echo "::error::repo variable BACKUP_AGE_PUBLIC_KEY가 설정되지 않았습니다."
+            exit 1
+          fi
+
+          out="${RUNNER_TEMP}/backup-repo/backups/$(date -u +%F).sql.gz.age"
+
+          # 평문은 파이프로만 흐르고 파일로 쓰이지 않는다. pipefail로 어느 단계가 실패해도 step이 실패한다.
+          "/usr/lib/postgresql/${PG_MAJOR}/bin/pg_dump" \
+            --dbname "${SUPABASE_DB_URL}" \
+            --schema=public --no-owner --no-privileges \
+            | gzip --best \
+            | age --recipient "${BACKUP_AGE_PUBLIC_KEY}" --output "${out}"
+
+          # 빈 덤프가 정상 백업으로 남지 않도록 최소 크기를 확인한다.
+          size="$(wc -c < "${out}")"
+          if [ "${size}" -lt 1024 ]; then
+            echo "::error::암호화된 백업이 비정상적으로 작습니다(${size} bytes)."
+            rm -f "${out}"
+            exit 1
+          fi
+          echo "backup size: ${size} bytes"
+
+      - name: Prune old backups
+        run: |
+          set -euo pipefail
+          cd "${RUNNER_TEMP}/backup-repo/backups"
+          cutoff="$(date -u -d "${RETENTION_DAYS} days ago" +%F)"
+          # 파일명 날짜(YYYY-MM-DD)가 cutoff보다 이전이면 삭제한다. 날짜 형식은 문자열 비교로 순서가 같다.
+          for f in [0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9].sql.gz.age; do
+            [ -e "${f}" ] || continue
+            if [[ "${f%%.*}" < "${cutoff}" ]]; then
+              echo "delete ${f}"
+              git rm -q -- "${f}"
+            fi
+          done
+
+      - name: Commit and push
+        run: |
+          set -euo pipefail
+          cd "${RUNNER_TEMP}/backup-repo"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A backups
+          git commit -m "backup: $(date -u +%F)"
+          git push origin HEAD
+
+      - name: Remove deploy key
+        if: always()
+        run: rm -rf "${RUNNER_TEMP}/backup-ssh"
