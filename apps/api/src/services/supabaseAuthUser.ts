@@ -10,6 +10,11 @@ export interface SupabaseAuthUser {
   id: string;
   email: string | null;
   emailConfirmed: boolean;
+  /**
+   * 계정을 처음 만든 로그인 provider(`app_metadata.provider`). 예: google, email.
+   * 이번 세션의 로그인 방식이 아니며, 나중에 다른 방식으로 로그인해도 바뀌지 않는다.
+   */
+  provider: string | null;
 }
 
 /** 토큰·세션·사용자가 무효임을 뜻하는 Auth 에러 코드. 이 밖의 오류는 일시 장애로 본다. */
@@ -70,6 +75,10 @@ export class SupabaseAuthUserVerifier {
       id: user.id,
       email: user.email ?? null,
       emailConfirmed: !!user.email_confirmed_at,
+      provider:
+        typeof user.app_metadata?.provider === "string"
+          ? user.app_metadata.provider
+          : null,
     };
   }
 }

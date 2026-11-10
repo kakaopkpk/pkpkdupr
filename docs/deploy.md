@@ -87,6 +87,7 @@ gh variable set SUPABASE_PROJECT_REF --body <project-ref>
 | `CORS_ALLOWED_ORIGINS` | 예 | 허용 origin(쉼표 구분). 운영값 `https://kakaopkpk.github.io` |
 | `CRON_SECRET` | 예 | 자동 합의 cron 호출 인증값. Vault의 `cron_secret`과 같은 값 |
 | `ALLOWED_EMAIL_DOMAIN` | 예 | 로그인을 허용할 이메일 도메인. 운영값 `kakaocorp.com`. 이 도메인과 정확히 같고 확인된 이메일만 통과합니다. |
+| `ALLOWED_AUTH_PROVIDERS` | 아니오 | 허용할 로그인 provider(쉼표 구분). 기본값 `google`. **운영 secret에는 설정하지 않습니다.** 로컬 `pnpm dev`만 `google,email`을 넣어 매직링크 로그인을 허용합니다. |
 | `QR_TOTP_SECRET` | 예 | 플레이어 QR 토큰 서명 키. 다른 값으로 대신하지 않습니다. |
 | `STORAGE_PUBLIC_URL` | 아니오 | 아바타 공개 URL의 base. 없으면 `SUPABASE_URL`을 씁니다. 운영에서는 비워 두고, 로컬 `functions serve`에서만 `http://127.0.0.1:54321`로 넣습니다(함수 안의 `SUPABASE_URL`은 브라우저가 접근할 수 없는 `http://kong:8000`이기 때문). |
 
@@ -140,13 +141,13 @@ SELECT id, status_code, content, error_msg FROM net._http_response ORDER BY crea
    3. 만들어진 Client ID·Client secret을 보관합니다.
 2. Supabase 대시보드 → Authentication
    1. Sign In / Providers → **Google**을 켜고 Client ID·Client secret을 넣습니다.
-   2. Sign In / Providers → **Email**은 끕니다(매직링크·비밀번호 로그인 차단).
+   2. Sign In / Providers → **Email**은 끕니다(매직링크·비밀번호 로그인 차단). 함수 secret `ALLOWED_AUTH_PROVIDERS`는 설정하지 않고 기본값 `google`을 씁니다.
    3. URL Configuration → Site URL과 Redirect URLs를 넣습니다. 값은 아래 "8. GitHub Pages (web·admin)"의 "Supabase Auth URL"을 따릅니다.
 
 ### 로그인과 회원 연결
 
-- api는 요청의 access token으로 Supabase Auth 사용자(이메일, 이메일 확인 여부)를 조회합니다. 브라우저가 보낸 이메일 값은 쓰지 않습니다.
-- 이메일 도메인이 `ALLOWED_EMAIL_DOMAIN`과 정확히 같고 확인된 경우만 통과합니다. 아니면 403 `DOMAIN_NOT_ALLOWED`입니다.
+- api는 요청의 access token으로 Supabase Auth 사용자(이메일, 이메일 확인 여부, 로그인 provider)를 조회합니다. 브라우저가 보낸 이메일 값은 쓰지 않습니다.
+- 로그인 provider가 `ALLOWED_AUTH_PROVIDERS`(기본 `google`)에 있고, 이메일 도메인이 `ALLOWED_EMAIL_DOMAIN`과 정확히 같고 확인된 경우만 통과합니다. 아니면 403 `DOMAIN_NOT_ALLOWED`입니다. provider는 Supabase `app_metadata.provider`, 즉 계정을 처음 만든 방식이며 이번 세션의 로그인 방식이 아닙니다. 그래서 Google로 가입한 계정이 다른 방식으로 로그인하면 막지 못하고, 반대로 email로 먼저 만들어진 계정은 Google로 로그인해도 거부됩니다. 1차 방어는 대시보드에서 Email provider를 끄는 것이고, 서버 검사는 보조 방어선입니다.
 - 회원 테이블(`players`)에는 이메일을 저장하지 않고 `auth_user_id`(auth.users.id)만 둡니다.
 - 처음 로그인하면 `GET /api/me`가 이메일 앞부분과 같은 `username`(대소문자 무시)의 미연결 회원을 찾아 연결합니다. 기존 회원은 그대로 로그인하면 됩니다.
 - 대상 회원이 없으면 403 `ACCOUNT_NOT_LINKED`이고, 관리자가 발급한 초대 코드(`POST /api/auth/invite`)로 가입합니다. 초대 가입 회원의 성별은 `M`으로 만들어지므로 필요하면 관리자가 고칩니다.
