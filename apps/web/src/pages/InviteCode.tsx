@@ -16,6 +16,8 @@ const InviteCode: React.FC = () => {
       await redeemInvite(code);
     } catch (err) {
       setError(err instanceof Error ? err.message : "알 수 없는 오류입니다.");
+    } finally {
+      // 이미 연결된 계정이지만 /api/me 재조회가 일시 실패하면 이 화면에 남으므로 다시 제출할 수 있게 한다.
       setIsSubmitting(false);
     }
   };

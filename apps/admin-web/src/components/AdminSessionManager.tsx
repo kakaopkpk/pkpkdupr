@@ -1989,6 +1989,8 @@ const AdminSessionManager: React.FC<AdminSessionManagerProps> = ({
                 type="button"
                 disabled={deletingMatchId === deleteConfirmationMatch.id}
                 onClick={() => setDeleteConfirmationMatch(null)}
+                // 파괴적 동작이므로 Enter 한 번에 삭제되지 않게 취소 버튼에 포커스를 둔다.
+                autoFocus
                 className="rounded-lg px-4 py-2 text-sm font-medium text-slate-600"
               >
                 취소
@@ -1996,7 +1998,6 @@ const AdminSessionManager: React.FC<AdminSessionManagerProps> = ({
               <button
                 type="submit"
                 disabled={deletingMatchId === deleteConfirmationMatch.id}
-                autoFocus
                 className="rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white disabled:bg-red-300"
               >
                 {deletingMatchId === deleteConfirmationMatch.id

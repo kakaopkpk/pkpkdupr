@@ -40,7 +40,7 @@ interface AuthContextType {
 
 const NOT_ADMIN_NOTICE = "관리자 권한이 없습니다.";
 const DOMAIN_NOT_ALLOWED_NOTICE = `회사 계정(@${ALLOWED_EMAIL_DOMAIN})으로 로그인해 주세요.`;
-// 자체 JWT 시절 저장소 키. 남아 있으면 지운다.
+// 더 이상 쓰지 않는 저장소 키. 남아 있으면 지운다.
 const LEGACY_TOKEN_STORAGE_KEY = "admin-token";
 const SESSION_RETRY_DELAYS_MS = [2_000, 5_000, 10_000];
 const SESSION_RETRY_INTERVAL_MS = 30_000;
@@ -91,6 +91,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
       SESSION_RETRY_DELAYS_MS[retryAttemptRef.current] ??
       SESSION_RETRY_INTERVAL_MS;
     retryAttemptRef.current += 1;
+    // 재시도 대기 중에 검증이 다시 돌았을 수 있으므로 기존 타이머를 지우고 하나만 유지한다.
+    if (retryTimeoutRef.current !== null) {
+      window.clearTimeout(retryTimeoutRef.current);
+    }
     retryTimeoutRef.current = window.setTimeout(() => {
       retryTimeoutRef.current = null;
       void validateSessionRef.current?.();
@@ -168,6 +172,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
       }
     } finally {
       validationInFlightRef.current = false;
+      // 검증 중에 다른 사용자로 바뀌었다면 그 사용자의 검증은 in-flight 가드에 걸려 건너뛰어졌으므로 다시 실행한다.
+      if (sessionUserIdRef.current && !isCurrentSession()) {
+        void validateSessionRef.current?.();
+      }
     }
   }, [clearSessionRetry, endSession, scheduleRetry]);
 

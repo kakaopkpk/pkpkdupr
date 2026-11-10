@@ -69,7 +69,7 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | null>(null);
 const ONLINE_REQUIRED_MESSAGE = "온라인 연결이 필요합니다.";
-// 자체 JWT 시절 저장소 키. 남아 있으면 지운다.
+// 더 이상 쓰지 않는 저장소 키. 남아 있으면 지운다.
 const LEGACY_STORAGE_KEYS = ["token", "pkpkdupr:auth-state"];
 
 type MeFetchResult =
@@ -85,8 +85,6 @@ const SESSION_RETRY_INTERVAL_MS = 30_000;
 const isOnline = () =>
   typeof navigator === "undefined" ? true : navigator.onLine;
 
-const toPlayerInfo = (me: MeResponse): PlayerInfo => me;
-
 const readErrorResponse = async (res: Response) =>
   (await res.json().catch(() => ({}))) as Partial<AuthErrorResponse>;
 
@@ -100,7 +98,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
 
   // 현재 Supabase 세션의 사용자. 응답이 늦게 와도 다른 세션의 결과를 반영하지 않도록 비교한다.
   const sessionUserIdRef = useRef<string | null>(null);
-  const hasProfileRef = useRef(false);
   const retryTimeoutRef = useRef<number | null>(null);
   const retryAttemptRef = useRef(0);
   const validationInFlightRef = useRef(false);
@@ -119,7 +116,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   const resetToSignedOut = useCallback(() => {
     clearSessionRetry();
     sessionUserIdRef.current = null;
-    hasProfileRef.current = false;
     setPlayer(null);
     setEmail(null);
     setStatus("signedOut");
@@ -137,7 +133,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   );
 
   const applyPlayer = useCallback((nextPlayer: PlayerInfo) => {
-    hasProfileRef.current = true;
     setNotice(null);
     setPlayer(nextPlayer);
     setStatus("authenticated");
@@ -161,7 +156,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
       }
 
       if (res.ok) {
-        const nextPlayer = toPlayerInfo((await res.json()) as MeResponse);
+        const nextPlayer: PlayerInfo = (await res.json()) as MeResponse;
         if (!isCurrentSession()) {
           return { status: "stale" };
         }
@@ -175,7 +170,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
       }
 
       if (errorData.code === "ACCOUNT_NOT_LINKED") {
-        hasProfileRef.current = false;
         setPlayer(null);
         setStatus("needsInvite");
         return { status: "needsInvite" };
@@ -210,20 +204,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     const result = await fetchMe();
     validationInFlightRef.current = false;
 
+    // 검증 중에 다른 사용자로 바뀌었다면 그 사용자의 검증은 in-flight 가드에 걸려 건너뛰어졌으므로 다시 실행한다.
+    if (sessionUserIdRef.current !== userId) {
+      if (sessionUserIdRef.current) {
+        void validateSessionRef.current?.();
+      }
+      return;
+    }
+
     if (result.status !== "unavailable") {
       clearSessionRetry();
       return;
     }
 
-    if (sessionUserIdRef.current !== userId) {
-      return;
-    }
-
-    // 프로필을 아직 못 받았으면 로딩을 유지하고, 이미 있으면 화면을 그대로 둔 채 재시도한다.
-    if (!hasProfileRef.current) {
-      setStatus("loading");
-    }
-
+    // 현재 화면(로딩·초대 코드 입력·메인)을 그대로 둔 채 재시도한다.
     const retryDelay =
       SESSION_RETRY_DELAYS_MS[retryAttemptRef.current] ??
       SESSION_RETRY_INTERVAL_MS;
@@ -258,7 +252,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
 
       if (isNewUser) {
         clearSessionRetry();
-        hasProfileRef.current = false;
         setPlayer(null);
         setStatus("loading");
       }
@@ -303,7 +296,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     });
 
     if (res.ok) {
-      applyPlayer(toPlayerInfo((await res.json()) as MeResponse));
+      applyPlayer((await res.json()) as MeResponse);
       return;
     }
 
