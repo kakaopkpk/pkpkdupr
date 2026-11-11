@@ -18,9 +18,17 @@ const sessionStatusBadgeClassMap = {
   completed: "bg-emerald-100 text-emerald-700",
 } as const;
 
-interface SessionCardProps {
-  session: MatchSessionSummaryInfo;
-  onPress?: (session: MatchSessionSummaryInfo) => void;
+/** 피드 요약과 세션 상세 응답 모두 그릴 수 있는 최소 형태. 상세 응답에는 status가 없다 */
+export type SessionCardSession = Pick<
+  MatchSessionSummaryInfo,
+  "id" | "name" | "date" | "location" | "matchCount" | "participants"
+> & {
+  status?: MatchSessionSummaryInfo["status"];
+};
+
+interface SessionCardProps<T extends SessionCardSession> {
+  session: T;
+  onPress?: (session: T) => void;
   headerRightContent?: React.ReactNode;
   showMatchCount?: boolean;
   showChevron?: boolean;
@@ -46,13 +54,13 @@ const formatSessionDateTime = (value: string) => {
   };
 };
 
-const SessionCard: React.FC<SessionCardProps> = ({
+const SessionCard = <T extends SessionCardSession>({
   session,
   onPress,
   headerRightContent,
   showMatchCount = true,
   showChevron = true,
-}) => {
+}: SessionCardProps<T>) => {
   const { date, time } = formatSessionDateTime(session.date);
   const sessionChip = (
     <span
@@ -92,11 +100,13 @@ const SessionCard: React.FC<SessionCardProps> = ({
           showChevron={showChevron}
           afterTime={
             <>
-              <span
-                className={`${sessionChipClassName} ${sessionStatusBadgeClassMap[session.status]}`}
-              >
-                {sessionStatusLabelMap[session.status]}
-              </span>
+              {session.status ? (
+                <span
+                  className={`${sessionChipClassName} ${sessionStatusBadgeClassMap[session.status]}`}
+                >
+                  {sessionStatusLabelMap[session.status]}
+                </span>
+              ) : null}
               {sessionChip}
             </>
           }

@@ -1,0 +1,101 @@
+import type {
+  AddMatchSessionParticipantRequest,
+  CreateMatchSessionRequest,
+  MatchSessionDetail,
+  TodayMatchSessionsResponse,
+} from "@pkpkdupr/shared/session";
+import { apiFetch } from "@/lib/api";
+
+/** JSON 응답 형태(날짜는 문자열) */
+export type MatchSessionDetailInfo = Omit<MatchSessionDetail, "date"> & {
+  date: string;
+};
+
+export type TodayMatchSessionsInfo = Omit<
+  TodayMatchSessionsResponse,
+  "sessions"
+> & {
+  sessions: MatchSessionDetailInfo[];
+};
+
+const requestJson = async <T>(
+  path: string,
+  fallbackMessage: string,
+  init?: RequestInit,
+): Promise<T> => {
+  const res = await apiFetch(path, init);
+  if (!res.ok) {
+    const errorData = (await res.json().catch(() => ({}))) as {
+      error?: string;
+    };
+    throw new Error(errorData.error || fallbackMessage);
+  }
+
+  return (await res.json().catch(() => null)) as T;
+};
+
+const jsonInit = (method: string, body?: unknown): RequestInit => ({
+  method,
+  headers: { "Content-Type": "application/json" },
+  ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+});
+
+const sessionPath = (sessionId: string) =>
+  `/api/match-sessions/${encodeURIComponent(sessionId)}`;
+
+export const fetchTodayMatchSessions = () =>
+  requestJson<TodayMatchSessionsInfo>(
+    "/api/match-sessions/today",
+    "오늘 세션을 불러오지 못했어요.",
+  );
+
+export const fetchMatchSession = (sessionId: string) =>
+  requestJson<MatchSessionDetailInfo>(
+    sessionPath(sessionId),
+    "세션 정보를 불러오지 못했어요.",
+  );
+
+/** 오늘 정기 세션을 연다. 이미 있으면 서버가 기존 세션을 돌려준다 */
+export const openTodayRegularSession = () =>
+  requestJson<MatchSessionDetailInfo>(
+    "/api/match-sessions/regular/today",
+    "정기 세션을 열지 못했어요.",
+    jsonInit("POST"),
+  );
+
+export const createMatchSession = (body: CreateMatchSessionRequest) =>
+  requestJson<MatchSessionDetailInfo>(
+    "/api/match-sessions",
+    "세션을 만들지 못했어요.",
+    jsonInit("POST", body),
+  );
+
+export const addMatchSessionParticipant = async (
+  sessionId: string,
+  playerId: string,
+) => {
+  const body: AddMatchSessionParticipantRequest = { playerId };
+  await requestJson<unknown>(
+    `${sessionPath(sessionId)}/participants`,
+    "참여자를 추가하지 못했어요.",
+    jsonInit("POST", body),
+  );
+};
+
+export const removeMatchSessionParticipant = async (
+  sessionId: string,
+  playerId: string,
+) => {
+  await requestJson<unknown>(
+    `${sessionPath(sessionId)}/participants/${encodeURIComponent(playerId)}`,
+    "참여를 취소하지 못했어요.",
+    jsonInit("DELETE"),
+  );
+};
+
+export const isSessionParticipant = (
+  session: Pick<MatchSessionDetailInfo, "participants">,
+  playerId: string | undefined,
+) =>
+  !!playerId &&
+  session.participants.some((participant) => participant.id === playerId);
