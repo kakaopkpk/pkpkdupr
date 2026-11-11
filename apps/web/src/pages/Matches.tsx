@@ -3,22 +3,28 @@ import { Button, Card, Switch } from "@heroui/react";
 import Match, {
   type MatchFeedItemInfo,
   type MatchInfo,
-  type MatchSessionSummaryInfo,
 } from "@/components/Match";
 import MatchDetail, { MatchDetailSkeleton } from "@/components/MatchDetail";
 import DetailPageHeader from "@/components/DetailPageHeader";
 import LoadMoreButton from "@/components/LoadMoreButton";
 import RightDrawer from "@/components/RightDrawer";
-import SessionCard from "@/components/SessionCard";
+import SessionCard, { type SessionCardSession } from "@/components/SessionCard";
 import SessionDetail from "@/components/SessionDetail";
 import SkeletonBlock from "@/components/SkeletonBlock";
 import TabPanelHeader from "@/components/TabPanelHeader";
 import TabPanelStatus from "@/components/TabPanelStatus";
+import TodaySessionSection from "@/components/TodaySessionSection";
 import { useAuth } from "@/context/AuthContext";
 import { useTabNavigation } from "@/context/TabNavigationContext";
 import { useMinimumLoading } from "@/hooks/useMinimumLoading";
 import { useOnlineStatus } from "@/hooks/useOnlineStatus";
 import { apiFetch } from "@/lib/api";
+import {
+  fetchMatchSession,
+  fetchTodayMatchSessions,
+  type MatchSessionDetailInfo,
+  type TodayMatchSessionsInfo,
+} from "@/lib/matchSessions";
 import { isTabRefreshDue } from "@/lib/tabRefresh";
 import {
   CACHED_MATCH_FEED_KEY,
@@ -141,10 +147,9 @@ const mergeFeedItems = (
   nextItems: MatchFeedItemInfo[],
 ) => dedupeFeedItems([...currentItems, ...nextItems]);
 
-const isSameSession = (
-  left: MatchSessionSummaryInfo,
-  right: MatchSessionSummaryInfo,
-) => left.id === right.id;
+const isSessionDetailInfo = (
+  session: SessionCardSession | MatchSessionDetailInfo,
+): session is MatchSessionDetailInfo => "isToday" in session;
 
 const noop = () => {};
 
@@ -170,8 +175,21 @@ const Matches: React.FC<MatchesProps> = ({ reloadKey = 0 }) => {
   const [loadMoreError, setLoadMoreError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [isMyMatchOnly, setIsMyMatchOnly] = useState(false);
+  // 상세를 받기 전 헤더용. 피드 요약 또는 오늘 세션 응답
   const [selectedSession, setSelectedSession] =
-    useState<MatchSessionSummaryInfo | null>(null);
+    useState<SessionCardSession | null>(null);
+  const [selectedSessionDetail, setSelectedSessionDetail] =
+    useState<MatchSessionDetailInfo | null>(null);
+  const [isLoadingSessionDetail, setIsLoadingSessionDetail] = useState(false);
+  const [sessionDetailError, setSessionDetailError] = useState<string | null>(
+    null,
+  );
+  const [todaySessions, setTodaySessions] =
+    useState<TodayMatchSessionsInfo | null>(null);
+  const [isLoadingTodaySessions, setIsLoadingTodaySessions] = useState(true);
+  const [todaySessionsError, setTodaySessionsError] = useState<string | null>(
+    null,
+  );
   const [selectedSessionMatches, setSelectedSessionMatches] = useState<
     MatchInfo[]
   >([]);
@@ -186,6 +204,9 @@ const Matches: React.FC<MatchesProps> = ({ reloadKey = 0 }) => {
   const isMatchFeedLoading = useMinimumLoading(isLoading);
   const isSelectedMatchLoading = useMinimumLoading(isLoadingSelectedMatch);
   const latestRequestIdRef = useRef(0);
+  const latestTodayRequestIdRef = useRef(0);
+  // 늦게 도착한 다른 세션의 응답이 열린 상세를 덮어쓰지 않게 한다
+  const selectedSessionIdRef = useRef<string | null>(null);
   const lastSuccessfulLoadAtRef = useRef<number | null>(null);
   const wasTabActiveRef = useRef(false);
   const pendingReloadRef = useRef(false);
@@ -351,7 +372,7 @@ const Matches: React.FC<MatchesProps> = ({ reloadKey = 0 }) => {
 
   const loadSessionMatches = useCallback(
     async (
-      session: MatchSessionSummaryInfo,
+      sessionId: string,
       preserveVisibleData = false,
       throwOnError = false,
     ) => {
@@ -374,7 +395,9 @@ const Matches: React.FC<MatchesProps> = ({ reloadKey = 0 }) => {
           setIsLoadingSession(true);
           setSessionError(null);
         }
-        const res = await apiFetch(`/api/match-sessions/${session.id}/matches`);
+        const res = await apiFetch(
+          `/api/match-sessions/${encodeURIComponent(sessionId)}/matches`,
+        );
         if (!res.ok) {
           const errorData = await res.json().catch(() => ({}));
           throw new Error(
@@ -382,9 +405,12 @@ const Matches: React.FC<MatchesProps> = ({ reloadKey = 0 }) => {
           );
         }
 
-        setSelectedSessionMatches((await res.json()) as MatchInfo[]);
+        const sessionMatches = (await res.json()) as MatchInfo[];
+        if (selectedSessionIdRef.current !== sessionId) return;
+        setSelectedSessionMatches(sessionMatches);
         setSessionError(null);
       } catch (err) {
+        if (selectedSessionIdRef.current !== sessionId) return;
         const message =
           err instanceof Error ? err.message : "세션 경기를 불러오지 못했습니다.";
         setSessionError(message);
@@ -395,6 +421,88 @@ const Matches: React.FC<MatchesProps> = ({ reloadKey = 0 }) => {
     },
     [isOnline, isAuthenticated],
   );
+
+  const loadSessionDetail = useCallback(
+    async (
+      sessionId: string,
+      preserveVisibleData = false,
+      throwOnError = false,
+    ) => {
+      if (!isAuthenticated) {
+        const nextError = "로그인이 필요해요.";
+        setSessionDetailError(nextError);
+        if (throwOnError) throw new Error(nextError);
+        return;
+      }
+
+      try {
+        if (!preserveVisibleData) {
+          setIsLoadingSessionDetail(true);
+          setSessionDetailError(null);
+        }
+        const detail = await fetchMatchSession(sessionId);
+        if (selectedSessionIdRef.current !== sessionId) return;
+        setSelectedSessionDetail(detail);
+        setSessionDetailError(null);
+      } catch (err) {
+        if (selectedSessionIdRef.current !== sessionId) return;
+        setSessionDetailError(
+          err instanceof Error ? err.message : "세션 정보를 불러오지 못했어요.",
+        );
+        if (throwOnError) throw err;
+      } finally {
+        if (selectedSessionIdRef.current === sessionId) {
+          setIsLoadingSessionDetail(false);
+        }
+      }
+    },
+    [isAuthenticated],
+  );
+
+  /** 세션 상세(참여자 등)와 세션 경기 목록을 함께 읽는다 */
+  const loadSession = useCallback(
+    async (
+      sessionId: string,
+      preserveVisibleData = false,
+      throwOnError = false,
+    ) => {
+      await Promise.all([
+        loadSessionDetail(sessionId, preserveVisibleData, throwOnError),
+        loadSessionMatches(sessionId, preserveVisibleData, throwOnError),
+      ]);
+    },
+    [loadSessionDetail, loadSessionMatches],
+  );
+
+  const loadTodaySessions = useCallback(async () => {
+    const requestId = latestTodayRequestIdRef.current + 1;
+    latestTodayRequestIdRef.current = requestId;
+
+    if (!isAuthenticated) {
+      setTodaySessions(null);
+      setTodaySessionsError(null);
+      setIsLoadingTodaySessions(false);
+      return;
+    }
+
+    setIsLoadingTodaySessions(true);
+    try {
+      const data = await fetchTodayMatchSessions();
+      if (latestTodayRequestIdRef.current !== requestId) return;
+      setTodaySessions(data);
+      setTodaySessionsError(null);
+    } catch (err) {
+      if (latestTodayRequestIdRef.current !== requestId) return;
+      // 이전 응답이 있으면 그대로 보여 주고 오류만 남긴다
+      setTodaySessionsError(
+        err instanceof Error ? err.message : "오늘 세션을 불러오지 못했어요.",
+      );
+    } finally {
+      if (latestTodayRequestIdRef.current === requestId) {
+        setIsLoadingTodaySessions(false);
+      }
+    }
+  }, [isAuthenticated]);
 
   useEffect(() => {
     const isTabActive = selectedTab === "match";
@@ -414,7 +522,8 @@ const Matches: React.FC<MatchesProps> = ({ reloadKey = 0 }) => {
 
     pendingReloadRef.current = false;
     void loadFeed(0, false, lastSuccessfulLoadAtRef.current !== null);
-  }, [loadFeed, selectedTab]);
+    void loadTodaySessions();
+  }, [loadFeed, loadTodaySessions, selectedTab]);
 
   useEffect(() => {
     if (previousReloadKeyRef.current === reloadKey) return;
@@ -425,7 +534,8 @@ const Matches: React.FC<MatchesProps> = ({ reloadKey = 0 }) => {
       return;
     }
     void loadFeed(0, false, feedItems.length > 0);
-  }, [feedItems.length, loadFeed, reloadKey, selectedTab]);
+    void loadTodaySessions();
+  }, [feedItems.length, loadFeed, loadTodaySessions, reloadKey, selectedTab]);
 
   useEffect(() => {
     if (previousIsMyMatchOnlyRef.current === isMyMatchOnly) return;
@@ -455,7 +565,7 @@ const Matches: React.FC<MatchesProps> = ({ reloadKey = 0 }) => {
 
     const refreshedSession = feedItems.find(
       (item): item is Extract<MatchFeedItemInfo, { kind: "session" }> =>
-        item.kind === "session" && isSameSession(item.session, selectedSession),
+        item.kind === "session" && item.session.id === selectedSession.id,
     )?.session;
     if (refreshedSession) setSelectedSession(refreshedSession);
   }, [feedItems, selectedSession]);
@@ -468,15 +578,19 @@ const Matches: React.FC<MatchesProps> = ({ reloadKey = 0 }) => {
           return;
         }
         if (selectedSession) {
-          await loadSessionMatches(selectedSession, true, true);
+          await loadSession(selectedSession.id, true, true);
           return;
         }
-        await loadFeed(0, false, true, true);
+        await Promise.all([
+          loadFeed(0, false, true, true),
+          loadTodaySessions(),
+        ]);
       }),
     [
       loadFeed,
       loadSelectedMatch,
-      loadSessionMatches,
+      loadSession,
+      loadTodaySessions,
       registerPullToRefresh,
       selectedMatch,
       selectedSession,
@@ -484,11 +598,20 @@ const Matches: React.FC<MatchesProps> = ({ reloadKey = 0 }) => {
   );
 
   const refreshFeedAndSession = useCallback(async () => {
-    await loadFeed();
+    await Promise.all([loadFeed(), loadTodaySessions()]);
     if (selectedSession) {
-      await loadSessionMatches(selectedSession, true);
+      await loadSession(selectedSession.id, true);
     }
-  }, [loadFeed, loadSessionMatches, selectedSession]);
+  }, [loadFeed, loadSession, loadTodaySessions, selectedSession]);
+
+  const handleSessionParticipantsChanged = useCallback(async () => {
+    if (!selectedSession) return;
+
+    await Promise.all([
+      loadSessionDetail(selectedSession.id, true, true),
+      loadTodaySessions(),
+    ]);
+  }, [loadSessionDetail, loadTodaySessions, selectedSession]);
 
   const handleMatchRecorded = useCallback(
     (recordedMatch: MatchInfo) => {
@@ -517,7 +640,11 @@ const Matches: React.FC<MatchesProps> = ({ reloadKey = 0 }) => {
   }, [restoreScrollTop]);
 
   const completeSessionDetailClose = useCallback(() => {
+    selectedSessionIdRef.current = null;
     setSelectedSession(null);
+    setSelectedSessionDetail(null);
+    setSessionDetailError(null);
+    setIsLoadingSessionDetail(false);
     setSelectedSessionMatches([]);
     setSessionError(null);
     restoreScrollTop("match");
@@ -545,25 +672,37 @@ const Matches: React.FC<MatchesProps> = ({ reloadKey = 0 }) => {
   );
 
   const openSessionDetail = useCallback(
-    (session: MatchSessionSummaryInfo) => {
+    (session: SessionCardSession | MatchSessionDetailInfo) => {
       saveScrollPosition("match");
       pushDepth("match", {
         id: `session-detail:${session.id}`,
         kind: "session-detail",
         onClose: noop,
       });
+      selectedSessionIdRef.current = session.id;
       setSelectedSession(session);
+      // 오늘 세션 카드에서 열면 이미 상세 응답이므로 참여자를 바로 보여 준다
+      setSelectedSessionDetail(isSessionDetailInfo(session) ? session : null);
+      setSessionDetailError(null);
       setSelectedSessionMatches([]);
       setSessionError(null);
       window.requestAnimationFrame(() => scrollToTop("auto"));
-      void loadSessionMatches(session).catch(() => {});
+      void loadSession(session.id).catch(() => {});
     },
     [
-      loadSessionMatches,
+      loadSession,
       pushDepth,
       saveScrollPosition,
       scrollToTop,
     ],
+  );
+
+  const handleSessionCreated = useCallback(
+    (session: MatchSessionDetailInfo) => {
+      void loadTodaySessions();
+      openSessionDetail(session);
+    },
+    [loadTodaySessions, openSessionDetail],
   );
 
   const hasMoreItems = isOnline && feedItems.length < total;
@@ -634,12 +773,18 @@ const Matches: React.FC<MatchesProps> = ({ reloadKey = 0 }) => {
   const sessionDrawerContent = selectedSession ? (
       <SessionDetail
         session={selectedSession}
+        detail={selectedSessionDetail}
+        isDetailLoading={isLoadingSessionDetail}
+        detailError={sessionDetailError}
         matches={selectedSessionMatches}
         currentPlayerId={player?.id}
         isLoading={isLoadingSession}
         error={sessionError}
-        onRetry={() => void loadSessionMatches(selectedSession)}
+        isOnline={isOnline}
+        onRetry={() => void loadSession(selectedSession.id)}
         onPressMatch={openMatchDetail}
+        onParticipantsChanged={handleSessionParticipantsChanged}
+        onMatchRecorded={handleMatchRecorded}
       />
     ) : null;
 
@@ -673,6 +818,16 @@ const Matches: React.FC<MatchesProps> = ({ reloadKey = 0 }) => {
       </TabPanelHeader>
       <div className="flex min-h-full p-2">
         <div className="mx-auto flex min-h-full w-full flex-1 flex-col gap-4">
+          <TodaySessionSection
+            today={todaySessions}
+            isLoading={isLoadingTodaySessions}
+            error={todaySessionsError}
+            currentPlayerId={player?.id}
+            isOnline={isOnline}
+            onChanged={loadTodaySessions}
+            onOpenSession={openSessionDetail}
+            onSessionCreated={handleSessionCreated}
+          />
           {notice ? (
             <p className="rounded-2xl bg-amber-50 px-3 py-2 text-xs font-semibold text-pkpk-sub-font">
               {notice}
@@ -734,9 +889,7 @@ const Matches: React.FC<MatchesProps> = ({ reloadKey = 0 }) => {
           ariaLabel="세션 상세"
           onExited={completeSessionDetailClose}
           onScrollContainerChange={registerSessionScrollContainer}
-          onPullToRefresh={() =>
-            loadSessionMatches(selectedSession, true, true)
-          }
+          onPullToRefresh={() => loadSession(selectedSession.id, true, true)}
         >
           {sessionDrawerContent}
         </RightDrawer>
