@@ -5,6 +5,7 @@ import {
   MATCHMAKING_DEFAULT_COURTS,
   MATCHMAKING_MAX_COURTS,
   MATCHMAKING_MIN_COURTS,
+  MATCHMAKING_PLAYERS_PER_COURT,
   type MatchSessionRecommendationResponse,
   type RecommendationPlayer,
   type RecommendedCourt,
@@ -22,7 +23,7 @@ import {
 import { formatRating } from "@/utils/dupr";
 
 /** 기기 설정이라 로그아웃해도 지우지 않는다(USER_CACHE_KEYS에 넣지 않음) */
-export const RECOMMENDATION_COURTS_STORAGE_KEY =
+const RECOMMENDATION_COURTS_STORAGE_KEY =
   "pkpkdupr:recommendation-courts";
 
 const COURT_OPTIONS = Array.from(
@@ -56,7 +57,10 @@ const writeStoredCourts = (courts: number) => {
   }
 };
 
-const createSeed = () => Math.floor(Math.random() * 2 ** 31);
+const SEED_RANGE = 2 ** 31;
+const SKELETON_COURT_COUNT = 2;
+
+const createSeed = () => Math.floor(Math.random() * SEED_RANGE);
 
 const getCourtName = (courtIndex: number) => `코트 ${courtIndex + 1}`;
 
@@ -79,7 +83,7 @@ const RecommendationSkeleton: React.FC = () => (
     role="status"
     aria-label="추천 매칭 로딩 중"
   >
-    {Array.from({ length: 2 }, (_, index) => (
+    {Array.from({ length: SKELETON_COURT_COUNT }, (_, index) => (
       <Card key={index} className="rounded-3xl bg-white p-3">
         <SkeletonBlock className="h-4 w-16" />
         <div className="mt-3 grid grid-cols-2 gap-3">
@@ -280,6 +284,13 @@ const SessionRecommendation: React.FC<SessionRecommendationProps> = ({
   const startCourt = async (court: RecommendedCourt, courtIndex: number) => {
     if (!isOnline) return;
 
+    // 응답 전에 추천이 바뀌면 코트 인덱스가 다른 대진을 가리키므로 결과를 반영하지 않는다
+    const requestId = latestRequestIdRef.current;
+    const updateStartState = (state: CourtStartState) => {
+      if (latestRequestIdRef.current !== requestId) return;
+      setStartStates((states) => ({ ...states, [courtIndex]: state }));
+    };
+
     setStartStates((states) => ({
       ...states,
       [courtIndex]: { status: "starting" },
@@ -298,23 +309,22 @@ const SessionRecommendation: React.FC<SessionRecommendationProps> = ({
         ],
         courtName: getCourtName(courtIndex),
       });
-      setStartStates((states) => ({
-        ...states,
-        [courtIndex]: { status: "started" },
-      }));
+      updateStartState({ status: "started" });
       // 시작은 이미 성공했으므로 목록 갱신 실패는 이 화면에 오류로 띄우지 않는다
       void onMatchStarted?.().catch(() => {});
     } catch (err) {
-      setStartStates((states) => ({
-        ...states,
-        [courtIndex]: {
-          status: "failed",
-          message:
-            err instanceof Error ? err.message : "경기를 시작하지 못했어요.",
-        },
-      }));
+      updateStartState({
+        status: "failed",
+        message:
+          err instanceof Error ? err.message : "경기를 시작하지 못했어요.",
+      });
     }
   };
+
+  // 시작 요청 중에 추천을 바꾸면 이미 시작된 대진을 다시 시작할 수 있으므로 막는다
+  const isAnyCourtStarting = Object.values(startStates).some(
+    (state) => state.status === "starting",
+  );
 
   let content: React.ReactNode;
   if (isLoading && !recommendation) {
@@ -338,7 +348,7 @@ const SessionRecommendation: React.FC<SessionRecommendationProps> = ({
       <>
         {recommendation.courts.length === 0 ? (
           <p className="rounded-2xl bg-white px-3 py-4 text-center text-sm font-medium text-pkpk-sub-font">
-            추천하려면 경기에 나갈 수 있는 참여자가 4명 이상 필요해요.
+            {`추천하려면 경기에 나갈 수 있는 참여자가 ${MATCHMAKING_PLAYERS_PER_COURT}명 이상 필요해요.`}
           </p>
         ) : (
           <div className="flex flex-col gap-3">
@@ -411,7 +421,7 @@ const SessionRecommendation: React.FC<SessionRecommendationProps> = ({
                       ? "bg-pkpk-primary-bg text-white"
                       : "text-pkpk-sub-font hover:bg-pkpk-primary-bg/10"
                   } disabled:opacity-40`}
-                  disabled={!isOnline}
+                  disabled={!isOnline || isAnyCourtStarting}
                   onClick={() => changeCourts(option)}
                 >
                   {option}코트
@@ -422,7 +432,7 @@ const SessionRecommendation: React.FC<SessionRecommendationProps> = ({
               size="sm"
               variant="secondary"
               className="app-action-button shrink-0 rounded-2xl font-semibold text-pkpk-primary-bg"
-              isDisabled={!isOnline || isLoading}
+              isDisabled={!isOnline || isLoading || isAnyCourtStarting}
               onPress={recommendAgain}
             >
               <IoRefresh aria-hidden="true" className="size-4" />

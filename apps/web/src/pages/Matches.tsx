@@ -954,6 +954,7 @@ const Matches: React.FC<MatchesProps> = ({ reloadKey = 0 }) => {
           ariaLabel="추천 매칭"
           onExited={completeRecommendationClose}
           onScrollContainerChange={registerRecommendationScrollContainer}
+          // 세션 상세(기본 50) 위, 경기 상세(60) 아래
           layer={55}
         >
           <SessionRecommendation
