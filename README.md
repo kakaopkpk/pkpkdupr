@@ -20,7 +20,7 @@
 | `supabase-deploy.yml` | main push 때 DB 마이그레이션과 API 함수 배포 |
 | `pages.yml` | main push 때 web·admin 빌드와 Pages 배포 |
 | `db-keepalive.yml` | 3일마다 DB에 접속해 무료 프로젝트 일시정지를 막음 |
-| `db-backup.yml` | 매일 암호화 백업. **기본적으로 꺼져 있습니다.** 켜는 방법은 [docs/backup-restore.md](docs/backup-restore.md) |
+| `db-backup.yml` | 매일 암호화 백업. 백업 키를 설정하지 않아 **Actions 탭에서 Disable해 둔 상태**입니다. [docs/backup-restore.md](docs/backup-restore.md)대로 백업 저장소와 키(`BACKUP_DEPLOY_KEY`, `BACKUP_AGE_PUBLIC_KEY`)를 설정한 뒤 Actions → db-backup → **Enable workflow**로 켭니다. |
 
 자세한 문서:
 
@@ -60,10 +60,12 @@ GitHub Actions secret 중에는 이전 운영자 개인 계정에 묶인 값이 
 | --- | --- | --- |
 | `SUPABASE_ACCESS_TOKEN` | **새 운영자**가 Supabase 대시보드 우측 상단 계정 → **Access Tokens**에서 새 토큰을 만들어 넣습니다. 이전 운영자의 토큰은 그 사람이 Supabase에서 빠지면 더 이상 동작하지 않습니다. | 예 |
 | `SUPABASE_DB_PASSWORD` | 이전 운영자가 DB 비밀번호를 알고 있으므로 바꾸는 것을 권장합니다. 프로젝트 **Database → Settings → Reset database password**로 바꾼 뒤 이 값과 아래 `SUPABASE_DB_URL`을 함께 고칩니다. 비밀번호는 영문·숫자만 쓰면 URL이 깨지지 않습니다. | 권장 |
-| `SUPABASE_DB_URL` | `postgresql://postgres.uvybzkypmbllmpgzmvmr:<DB 비밀번호>@aws-0-ap-southeast-1.pooler.supabase.com:5432/postgres` | DB 비밀번호를 바꿨으면 예 |
+| `SUPABASE_DB_URL` | Session pooler 접속 문자열에 새 비밀번호를 넣은 값입니다. 현재 프로젝트 기준으로는 `postgresql://postgres.uvybzkypmbllmpgzmvmr:<DB 비밀번호>@aws-0-ap-southeast-1.pooler.supabase.com:5432/postgres?sslmode=require`입니다. 호스트는 대시보드 **Connect** 화면에서 확인할 수 있습니다. | DB 비밀번호를 바꿨으면 예 |
 | `BACKUP_DEPLOY_KEY` | 백업을 켜 둔 경우에만 해당합니다. [docs/backup-restore.md](docs/backup-restore.md)대로 새로 만듭니다. 백업 복호화 키(age 개인키)도 새 운영자에게 안전하게 넘깁니다. | 백업 사용 시 |
 
 Supabase 함수 secret(`QR_TOTP_SECRET`, `CRON_SECRET`, `CORS_ALLOWED_ORIGINS`)과 Vault 값은 프로젝트에 저장되어 있습니다. 그래서 운영자가 바뀌어도 그대로 둡니다.
+
+API 함수는 DB에 접속할 때 Supabase가 자동으로 넣어 주는 접속 주소를 씁니다. 그래서 DB 비밀번호를 바꿔도 함수 쪽은 고칠 것이 없습니다. 다만 함수 secret `DATABASE_URL`을 따로 설정해 두었다면 사정이 다릅니다. 이때는 그 값에도 새 비밀번호를 넣어야 하고, 넣지 않으면 API가 DB에 접속하지 못합니다. 어느 경우든 아래 5의 로그인 확인으로 API의 DB 접속을 함께 점검합니다.
 
 ### 4. 앱 관리자 권한
 
@@ -100,6 +102,11 @@ GitHub 조직이나 저장소 이름이 바뀌어 Pages 주소가 달라졌을 �
    pnpm exec supabase secrets set --project-ref uvybzkypmbllmpgzmvmr CORS_ALLOWED_ORIGINS='https://<새 조직>.github.io'
    ```
 
-2. Supabase 대시보드 **Authentication → URL Configuration**에서 Site URL과 Redirect URLs를 새 주소로 바꿉니다. 형식은 [docs/deploy.md](docs/deploy.md)의 "Supabase Auth URL"을 따릅니다.
-3. 새 저장소 Settings → Pages에서 **Source: GitHub Actions**를 고르고, Actions variables(`VITE_API_BASE_URL`, `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `SUPABASE_PROJECT_REF`)가 그대로 있는지 확인합니다. Pages 경로(`/<저장소>/`)는 `pages.yml`이 저장소 이름에서 자동으로 정합니다.
-4. 이 README와 [docs/deploy.md](docs/deploy.md)에 적힌 주소를 새 주소로 고칩니다.
+2. Supabase 대시보드 **Authentication → URL Configuration**에서 Site URL을 새 주소로 바꿉니다. 아이디·비밀번호 로그인은 리다이렉트를 쓰지 않아 Redirect URLs는 비워 둬도 됩니다. 값이 들어 있으면 새 주소로 맞춥니다. 자세한 설명은 [docs/deploy.md](docs/deploy.md)의 "Supabase Auth URL"에 있습니다.
+3. 새 저장소 Settings → Pages에서 **Source: GitHub Actions**를 고릅니다. 그리고 Actions variables가 그대로 있는지 확인합니다.
+   - `pages.yml` 빌드용: `VITE_API_BASE_URL`, `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`
+   - `supabase-deploy.yml`용: `SUPABASE_PROJECT_REF`
+
+   Pages 경로(`/<저장소>/`)는 `pages.yml`이 저장소 이름에서 자동으로 정합니다.
+4. 백업을 쓰고 있다면 `.github/workflows/db-backup.yml`의 `BACKUP_REPO`(`kakaopkpk/pkpkdupr-backup`)를 새 조직의 백업 저장소로 바꿉니다.
+5. 이 README와 [docs/deploy.md](docs/deploy.md)에 적힌 주소를 새 주소로 고칩니다.
