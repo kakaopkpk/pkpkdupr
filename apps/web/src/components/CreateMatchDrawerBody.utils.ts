@@ -13,13 +13,6 @@ export type MatchMember = Pick<
 };
 export type MatchTeams = [MatchMember[], MatchMember[]];
 export type TeamIndex = 0 | 1;
-export type QrScannerStatus =
-  | "idle"
-  | "scanning"
-  | "verifying"
-  | "confirm"
-  | "error";
-
 export const normalizeMatchMember = (
   value:
     | Partial<
@@ -40,15 +33,6 @@ export const normalizeMatchMember = (
     duprRating: "duprRating" in value ? value.duprRating : undefined,
   };
 };
-
-export const formatRating = (rating?: number | null) =>
-  rating?.toFixed(2) ?? "NR";
-
-export const getGenderLabel = (gender: MatchMember["gender"]) =>
-  gender === "M" ? "Male" : "Female";
-
-export const getGenderClassName = (gender: MatchMember["gender"]) =>
-  gender === "M" ? "text-[#409eff]" : "text-[#f8626c]";
 
 export const mergeUniqueMembers = (members: MatchMember[]) => {
   const seen = new Set<string>();
@@ -281,35 +265,4 @@ export const canSwapMembers = (
   }
 
   return true;
-};
-
-export const getCameraErrorMessage = (error: unknown) => {
-  if (
-    window.location.protocol !== "https:" &&
-    !["localhost", "127.0.0.1"].includes(window.location.hostname)
-  ) {
-    return "카메라 스캔은 HTTPS 환경에서 사용할 수 있어요.";
-  }
-
-  if (error instanceof DOMException) {
-    if (
-      error.name === "NotAllowedError" ||
-      error.name === "PermissionDeniedError"
-    ) {
-      return "카메라 권한이 필요해요. 브라우저 권한을 허용한 뒤 다시 시도해주세요.";
-    }
-
-    if (
-      error.name === "NotFoundError" ||
-      error.name === "DevicesNotFoundError"
-    ) {
-      return "사용 가능한 카메라를 찾지 못했어요.";
-    }
-
-    if (error.name === "NotReadableError" || error.name === "TrackStartError") {
-      return "카메라를 시작하지 못했어요. 다른 앱이 카메라를 사용 중인지 확인해주세요.";
-    }
-  }
-
-  return "QR 스캐너를 시작하지 못했어요. 다시 시도해주세요.";
 };

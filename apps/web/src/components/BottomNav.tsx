@@ -31,9 +31,9 @@ import {
 import AppSettingsSheetBody from "@/components/AppSettingsSheetBody";
 import type { PlayerQrTokenResponse } from "@pkpkdupr/shared/qr";
 import BottomSheet from "@/components/BottomSheet";
-import CreateMatchDrawerBody from "@/components/CreateMatchDrawerBody";
 import HoldToConfirmButton from "@/components/HoldToConfirmButton";
 import PlayerQrSheetBody from "@/components/PlayerQrSheetBody";
+import RecordMatchDrawerBody from "@/components/RecordMatchDrawerBody";
 import ProfileMatchDetailDrawer from "@/components/ProfileMatchDetailDrawer";
 import PullToRefreshIndicator, {
   type PullToRefreshStatus,
@@ -131,6 +131,8 @@ const BottomNav: React.FC = () => {
   const [isQrOpen, setIsQrOpen] = useState(false);
   const [qrTabKey, setQrTabKey] = useState<TabKey>("me");
   const [isCreateMatchOpen, setIsCreateMatchOpen] = useState(false);
+  // 열 때마다 올려서 기록 시트를 초기 상태로 리마운트한다
+  const [createMatchSheetKey, setCreateMatchSheetKey] = useState(0);
   const [createMatchTabKey, setCreateMatchTabKey] = useState<TabKey>("me");
   const [isAppSettingsOpen, setIsAppSettingsOpen] = useState(false);
   const [appSettingsTabKey, setAppSettingsTabKey] = useState<TabKey>("me");
@@ -144,16 +146,11 @@ const BottomNav: React.FC = () => {
   const [pullToRefreshStatus, setPullToRefreshStatus] =
     useState<PullToRefreshStatus>("idle");
   const [isPullRefreshSlow, setIsPullRefreshSlow] = useState(false);
-  const isCreateMatchQrScannerOpenRef = useRef(false);
   const handledDeepLinkMatchIdRef = useRef<string | null>(null);
   const [qrToken, setQrToken] = useState<PlayerQrTokenResponse | null>(null);
   const [isQrLoading, setIsQrLoading] = useState(false);
   const [qrError, setQrError] = useState<string | null>(null);
   const [qrRemainingSeconds, setQrRemainingSeconds] = useState(0);
-  const [
-    createMatchQrScannerCloseRequestKey,
-    setCreateMatchQrScannerCloseRequestKey,
-  ] = useState(0);
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
   const depthScrollContainersRef = useRef(
     new Map<string, HTMLDivElement>(),
@@ -531,7 +528,7 @@ const BottomNav: React.FC = () => {
   const openCreateMatchSheet = useCallback(() => {
     const tabKey = selectedTabRef.current;
     setCreateMatchTabKey(tabKey);
-    isCreateMatchQrScannerOpenRef.current = false;
+    setCreateMatchSheetKey((prev) => prev + 1);
     pushDepth(tabKey, {
       id: "create-match-sheet",
       kind: "bottom-sheet",
@@ -581,11 +578,6 @@ const BottomNav: React.FC = () => {
     (isOpen: boolean) => {
       if (isOpen) {
         openCreateMatchSheet();
-        return;
-      }
-
-      if (isCreateMatchQrScannerOpenRef.current) {
-        setCreateMatchQrScannerCloseRequestKey((prev) => prev + 1);
         return;
       }
 
@@ -754,9 +746,11 @@ const BottomNav: React.FC = () => {
     }
   }, [closeDepth, globalMenuTabKey, logout]);
 
-  const handleCreateMatch = () => {
-    isCreateMatchQrScannerOpenRef.current = false;
+  const handleRecordMatch = useCallback(() => {
     setMatchesReloadKey((prev) => prev + 1);
+  }, []);
+
+  const handleRecordMatchDone = () => {
     if (
       !closeDepth(createMatchTabKey, "create-match-sheet", () =>
         selectTab("match"),
@@ -768,18 +762,10 @@ const BottomNav: React.FC = () => {
   };
 
   const handleCancelCreateMatch = () => {
-    isCreateMatchQrScannerOpenRef.current = false;
     if (!closeDepth(createMatchTabKey, "create-match-sheet")) {
       setIsCreateMatchOpen(false);
     }
   };
-
-  const handleCreateMatchQrScannerOpenChange = useCallback(
-    (isOpen: boolean) => {
-      isCreateMatchQrScannerOpenRef.current = isOpen;
-    },
-    [],
-  );
 
   const isGlobalMenuVisible =
     isGlobalMenuOpen && globalMenuTabKey === selectedTab;
@@ -1338,14 +1324,14 @@ const BottomNav: React.FC = () => {
         isOpen={isCreateMatchOpen}
         isActive={createMatchTabKey === selectedTab}
         onOpenChange={handleCreateMatchOpenChange}
-        ariaLabel="Create match"
+        ariaLabel="Record match"
       >
-        <CreateMatchDrawerBody
-          onCreateMatch={handleCreateMatch}
-          onCancel={handleCancelCreateMatch}
-          onQrScannerOpenChange={handleCreateMatchQrScannerOpenChange}
+        <RecordMatchDrawerBody
+          key={createMatchSheetKey}
           isOnline={isOnline}
-          closeQrScannerRequestKey={createMatchQrScannerCloseRequestKey}
+          onCancel={handleCancelCreateMatch}
+          onRecorded={handleRecordMatch}
+          onDone={handleRecordMatchDone}
         />
       </BottomSheet>
 
@@ -1454,13 +1440,13 @@ const BottomNav: React.FC = () => {
                         <Separator className="mx-2" />
                         <Dropdown.Item
                           id="create-match"
-                          textValue="Create match"
+                          textValue="Record match"
                           isDisabled={!isOnline}
                           className="data-[focused]:bg-pkpk-primary-bg/5 data-[hovered]:bg-pkpk-primary-bg/5"
                         >
                           <IoAddCircleOutline className="size-4 shrink-0 text-pkpk-sub-font" />
                           <Label className="text-[1.05rem] font-medium leading-5">
-                            매치 생성
+                            경기 기록
                           </Label>
                         </Dropdown.Item>
                       </Dropdown.Menu>
