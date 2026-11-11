@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { Button, Card, Separator } from "@heroui/react";
 import {
   getMatchTopLevelType,
+  canEditMatchRecord,
   isWithinMatchEditWindow,
 } from "@pkpkdupr/shared/match";
 import type { PlayerRatingChangeLog } from "@pkpkdupr/shared/player";
@@ -161,15 +162,12 @@ const MatchDetail: React.FC<MatchDetailProps> = ({
   // 시트를 열 때마다 RecordMatchDrawerBody를 리마운트해 최신 경기 값으로 채운다
   const [resultSheetKey, setResultSheetKey] = useState(0);
   const { closeDepth, pushDepth, selectedTab } = useTabNavigation();
-  const isParticipant =
-    !!currentPlayerId &&
-    match.teams.some((team) =>
-      team.players.some((player) => player.id === currentPlayerId),
-    );
+  const isEditor =
+    !!currentPlayerId && canEditMatchRecord(match, currentPlayerId);
   const hasResultScores = !!match.scores?.length;
   // 기한이 지나는 순간을 따로 감시하지 않는다. 열어 둔 채 지나면 서버가 거절한다
   const canEditRecord =
-    isParticipant &&
+    isEditor &&
     match.status !== "cancelled" &&
     isWithinMatchEditWindow(new Date(match.matchStartsAt)) &&
     isOnline &&

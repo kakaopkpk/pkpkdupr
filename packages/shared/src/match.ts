@@ -95,7 +95,7 @@ export const MATCH_RESULT_MAX_SCORE_COUNT = 3;
 
 export type MatchStatus = "created" | "completed" | "cancelled";
 
-/** 참가자가 기록을 고칠 수 있는 기간(경기 시작 시각 기준) */
+/** 참가자·생성자가 기록을 고칠 수 있는 기간(경기 시작 시각 기준) */
 export const MATCH_EDIT_WINDOW_MS = 24 * 60 * 60 * 1000;
 
 /** 경기 시작 후 24시간 이내(시작 전 포함)면 true */
@@ -103,6 +103,16 @@ export const isWithinMatchEditWindow = (
   matchStartsAt: Date,
   now: Date = new Date(),
 ): boolean => now.getTime() - matchStartsAt.getTime() <= MATCH_EDIT_WINDOW_MS;
+
+/** 기록을 고칠 수 있는 사람: 경기 참가자 또는 경기 생성자 */
+export const canEditMatchRecord = (
+  match: Pick<Match, "creatorPlayerId" | "teams">,
+  playerId: string,
+): boolean =>
+  match.creatorPlayerId === playerId ||
+  match.teams.some((team) =>
+    team.players.some((player) => player.id === playerId),
+  );
 
 /** 점수가 아직 없는 진행 중 경기(status "created")면 true */
 export const isMatchInProgress = (match: Pick<Match, "status">): boolean =>
