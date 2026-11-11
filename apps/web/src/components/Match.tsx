@@ -93,7 +93,8 @@ const teamChipWidthClass = "w-[clamp(6rem,32cqw,10rem)]";
 const teamSetScoreChipWidthClass = "w-[clamp(6.6rem,35.2cqw,11rem)]";
 
 const statusLabelMap: Record<MatchStatus, string> = {
-  created: "예정",
+  // 점수 없는 created 경기는 시작 2시간 뒤 서버가 지우므로 "예정"으로 남지 않는다
+  created: "진행 중",
   completed: "완료",
   cancelled: "취소",
 };
