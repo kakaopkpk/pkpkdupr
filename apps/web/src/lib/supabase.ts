@@ -1,4 +1,9 @@
 import { createClient } from "@supabase/supabase-js";
+import { toInternalEmail } from "@pkpkdupr/shared/auth";
+import {
+  INVALID_CREDENTIALS_MESSAGE,
+  PASSWORD_MIN_LENGTH,
+} from "@/lib/authMessages";
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL?.trim();
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY?.trim();
@@ -19,35 +24,50 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   },
 });
 
-export const ALLOWED_EMAIL_DOMAIN =
-  import.meta.env.VITE_ALLOWED_EMAIL_DOMAIN?.trim() || "kakaocorp.com";
-
-/** 하위 경로 배포에서도 앱 루트로 돌아오도록 BASE_URL을 붙인다. */
-export const getAuthRedirectUrl = () =>
-  `${window.location.origin}${import.meta.env.BASE_URL}`;
-
-export const signInWithGoogle = async () => {
-  const { error } = await supabase.auth.signInWithOAuth({
-    provider: "google",
-    options: {
-      redirectTo: getAuthRedirectUrl(),
-      queryParams: { hd: ALLOWED_EMAIL_DOMAIN },
-    },
+/**
+ * 아이디·비밀번호로 로그인한다. 아이디는 내부 이메일로 바꿔 Supabase Auth에 넘긴다.
+ * 아이디 형식은 따로 검사하지 않고, 형식이 틀린 아이디도 로그인 실패로 처리한다.
+ */
+export const signInWithUsername = async (username: string, password: string) => {
+  const { error } = await supabase.auth.signInWithPassword({
+    email: toInternalEmail(username),
+    password,
   });
-  if (error) {
-    throw new Error(error.message || "Google 로그인을 시작하지 못했습니다.");
+  if (!error) {
+    return;
   }
+  // 없는 계정·틀린 비밀번호(invalid_credentials)와 형식 오류 등 400 응답은 같은 문구로 보여 준다.
+  if (error.code === "invalid_credentials" || error.status === 400) {
+    throw new Error(INVALID_CREDENTIALS_MESSAGE);
+  }
+  throw new Error("로그인하지 못했습니다. 잠시 후 다시 시도해 주세요.");
 };
 
-/** 로컬 개발 전용: 로컬 Supabase Mailpit으로 매직링크를 보낸다. */
-export const signInWithMagicLink = async (email: string) => {
-  const { error } = await supabase.auth.signInWithOtp({
-    email,
-    options: { emailRedirectTo: getAuthRedirectUrl() },
-  });
-  if (error) {
-    throw new Error(error.message || "로그인 링크를 보내지 못했습니다.");
+/**
+ * 로그인 세션만으로 비밀번호를 바꾼다(현재 비밀번호를 묻지 않는다).
+ * 현재 비밀번호와 같으면(same_password) 바뀐 것이 없으므로 오류로 본다.
+ * allowSamePassword는 이 세션에서 방금 같은 값으로 바꾼 뒤 다시 제출하는 경우에만 쓴다.
+ */
+export const updatePassword = async (
+  password: string,
+  { allowSamePassword = false }: { allowSamePassword?: boolean } = {},
+) => {
+  const { error } = await supabase.auth.updateUser({ password });
+  if (!error) {
+    return;
   }
+  if (error.code === "same_password") {
+    if (allowSamePassword) {
+      return;
+    }
+    throw new Error("현재 비밀번호와 다른 비밀번호를 입력해 주세요.");
+  }
+  if (error.code === "weak_password") {
+    throw new Error(
+      `비밀번호는 ${PASSWORD_MIN_LENGTH}자 이상이어야 합니다.`,
+    );
+  }
+  throw new Error(error.message || "비밀번호를 변경하지 못했습니다.");
 };
 
 /**

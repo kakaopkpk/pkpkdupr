@@ -1,6 +1,8 @@
-import { ALLOWED_EMAIL_DOMAIN } from "@/lib/supabase";
+/** supabase/config.toml의 auth.minimum_password_length와 같다. */
+export const PASSWORD_MIN_LENGTH = 6;
 
-export const DOMAIN_NOT_ALLOWED_NOTICE = `회사 계정(@${ALLOWED_EMAIL_DOMAIN})으로 로그인해 주세요.`;
+export const INVALID_CREDENTIALS_MESSAGE =
+  "아이디 또는 비밀번호가 올바르지 않습니다.";
 
-export const INVITE_INVALID_MESSAGE =
-  "초대 코드가 올바르지 않거나 만료되었어요. 관리자에게 새 코드를 요청해 주세요.";
+export const ACCOUNT_NOT_LINKED_NOTICE =
+  "연결된 회원이 없습니다. 관리자에게 문의해 주세요.";

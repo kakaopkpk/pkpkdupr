@@ -3,7 +3,7 @@
 ## 현재 역할
 
 - 일반 사용자용 웹 앱입니다.
-- 현재 엔트리 라우트는 `/`와 `/login` 두 개입니다.
+- 엔트리 라우트는 `/`, `/login`, `/force-change-password`(첫 로그인·비밀번호 초기화 직후), 개발 전용 `/dev/qrs`입니다. `AuthContext`의 `status`(`signedOut`·`mustChangePassword`·`authenticated`)가 열 수 있는 라우트를 정합니다.
 - `/`에서는 `BottomNav`가 내부 state로 `Match`, `Player`, `Me` 화면을 전환합니다.
 - 중앙 QR 버튼은 `react-qr-code` 모달을 띄우는 UI입니다.
 
@@ -23,7 +23,7 @@
   - 예: `BottomNav.tsx`
 - `src/context/`
   - 인증/세션 상태
-  - 현재 `AuthContext.tsx`가 `token`, `player`, `login`, `logout` 담당
+  - `AuthContext.tsx`가 Supabase 세션 구독, `/api/me` 검증, `status`·`player`, 비밀번호 변경, `logout` 담당
 - `src/pages/`
   - 화면 단위 컴포넌트
   - 현재 `Login`, `Match`, `Player`, `Me`, `Home`
@@ -32,8 +32,10 @@
 ## 현재 UX / 상태 관리 규칙
 
 - 앱 폭은 모바일 프레임 기준 `max-w-[430px]`를 유지합니다.
-- 인증 토큰은 `localStorage`의 `token` 키를 사용합니다.
-- 앱 시작 시 저장된 토큰이 있으면 `/api/me`로 사용자 정보를 다시 가져옵니다.
+- 로그인은 관리자가 발급한 아이디·비밀번호로 합니다. `lib/supabase.ts`의 `signInWithUsername`이 `toInternalEmail(아이디)`로 `supabase.auth.signInWithPassword`를 호출합니다. 내부 이메일은 화면에 보이지 않습니다.
+- 세션 저장·토큰 갱신은 supabase-js가 맡습니다. 세션이 바뀌면 `/api/me`로 회원을 확인하고, `isFirstLogin`이 true면 `/force-change-password`만 엽니다.
+- 비밀번호 변경은 `supabase.auth.updateUser({ password })`로 하며 현재 비밀번호는 묻지 않습니다. 강제 변경은 이어서 `POST /api/me/password-changed`까지 성공해야 끝납니다.
+- `/api/me`가 403 `ACCOUNT_NOT_LINKED`면 로그아웃하고 로그인 화면에 안내합니다. 401·`SESSION_INVALID`만 로그아웃하고, 일시 오류(`SESSION_UNAVAILABLE`, 네트워크)는 세션을 유지한 채 재시도합니다.
 - `Match`, `Player`, `Me`는 아직 플레이스홀더 성격이 강하므로, 기능 추가 시 탭 상태와 실제 라우트 분리가 필요한지 먼저 판단합니다.
 
 ## 라우팅 규칙
@@ -46,7 +48,7 @@
 
 - Vite dev server는 `/api`를 `http://localhost:4000`으로 프록시합니다.
 - 프런트 코드에서는 절대 호스트를 하드코딩하지 말고 `/api/...`만 사용합니다.
-- 사용자 정보는 `/api/me`, 로그인은 `/api/login`을 사용합니다.
+- API 호출은 `lib/api.ts`의 `apiFetch`로 해서 Supabase access token을 붙입니다. 사용자 정보는 `/api/me`를 사용합니다.
 - 공유 타입과 실제 API 응답 간 불일치가 생기면 `packages/shared`와 `apps/api`를 먼저 같이 수정합니다.
 
 ## 코드 컨벤션
