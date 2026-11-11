@@ -1224,6 +1224,8 @@ app.post("/api/match-sessions/:sessionId/matches", async (req, res) => {
     if (!Array.isArray(teams) || teams.length !== 2) {
       throw new MatchRecordRequestError("두 팀 구성이 필요합니다.", 400);
     }
+    // 참여자 추가 같은 쓰기 전에 400을 내도록 코트명은 먼저 검증한다.
+    const normalizedCourtName = normalizeNullableCourtName(courtName);
 
     // 시작 시각은 진행 중 만료(2시간)·24시간 수정 기한·정기 세션 판정의 기준이라 서버 now로 정한다.
     const now = new Date();
@@ -1251,7 +1253,6 @@ app.post("/api/match-sessions/:sessionId/matches", async (req, res) => {
       );
     }
 
-    // 정기 세션이라도 22:00 KST 이후 시작이면 세션 없이 저장된다.
     const session = await resolveSessionForNewMatch(sessionId, now);
     if (session) {
       await matchRepository.addSessionParticipants(session.id, playerIds);
@@ -1275,7 +1276,7 @@ app.post("/api/match-sessions/:sessionId/matches", async (req, res) => {
       resultSubmittedByPlayerId: null,
       resultSubmittedAt: null,
       location: normalizeOptionalName(location) ?? requestedSession.location,
-      courtName: normalizeNullableCourtName(courtName) ?? undefined,
+      courtName: normalizedCourtName ?? undefined,
       matchStartsAt: now,
       completedAt: null,
     });

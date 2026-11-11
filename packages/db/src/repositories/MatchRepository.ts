@@ -137,6 +137,12 @@ const toDate = (value: Date | string | number) => new Date(value);
 const toUnixTimestampSeconds = (value: Date) =>
   Math.floor(value.getTime() / 1000);
 
+/** match_starts_at이 이 값(Unix 초) 이하인 점수 없는 created 경기는 진행 중 만료로 본다. */
+const inProgressExpiryCutoff = (now: Date) =>
+  toUnixTimestampSeconds(
+    new Date(now.getTime() - IN_PROGRESS_MATCH_TIMEOUT_MS),
+  );
+
 const toPublicPlayer = (record: StoredPlayer): Player => ({
   id: record.id,
   username: record.username,
@@ -541,9 +547,7 @@ export class MatchRepository {
    * 참가자·점수 행과 함께 삭제한다. 삭제한 경기 수를 돌려준다.
    */
   async deleteExpiredInProgressMatches(now: Date): Promise<number> {
-    const cutoff = toUnixTimestampSeconds(
-      new Date(now.getTime() - IN_PROGRESS_MATCH_TIMEOUT_MS),
-    );
+    const cutoff = inProgressExpiryCutoff(now);
     const transaction = await this.client.transaction("write");
     let committed = false;
     try {
@@ -591,9 +595,7 @@ export class MatchRepository {
    * 시작 시각이 아직 오지 않은 관리자 예정 경기는 진행 중으로 보지 않는다.
    */
   async findInProgressPlayerIds(now: Date): Promise<string[]> {
-    const cutoff = toUnixTimestampSeconds(
-      new Date(now.getTime() - IN_PROGRESS_MATCH_TIMEOUT_MS),
-    );
+    const cutoff = inProgressExpiryCutoff(now);
     const result: RawQueryResult = await this.client.execute({
       sql: `
         SELECT DISTINCT p.player_id
