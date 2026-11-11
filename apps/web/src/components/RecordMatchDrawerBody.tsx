@@ -117,7 +117,9 @@ const buildScoresForSave = (
 ): MatchScore[] | null => {
   if (mode === "single-game") {
     const set = sets[0];
-    return isSetDecided(set) ? [{ scoreA: set.scoreA, scoreB: set.scoreB }] : null;
+    return isSetDecided(set)
+      ? [{ scoreA: set.scoreA, scoreB: set.scoreB }]
+      : null;
   }
 
   const wins: [number, number] = [0, 0];
@@ -810,7 +812,7 @@ const RecordMatchDrawerBody: React.FC<RecordMatchDrawerBodyProps> = ({
               className="app-action-button col-span-2 w-full justify-center rounded-2xl bg-[#409eff] px-3 py-3 text-base font-semibold text-white disabled:bg-slate-200 disabled:text-slate-400"
               progressClassName="bg-white/20"
             >
-              길게 눌러 기록 저장
+              {isOnline ? "길게 눌러 기록 저장" : "온라인 연결 필요"}
             </HoldToConfirmButton>
           </div>
         </div>

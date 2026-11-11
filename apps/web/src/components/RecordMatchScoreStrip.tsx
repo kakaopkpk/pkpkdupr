@@ -1,8 +1,11 @@
 import React, { useLayoutEffect, useRef, useState } from "react";
 
 // 듀스 연장·대회 룰로 점수가 11점을 넘을 수 있어 넉넉히 보여 주고, 더 높은 점수는 직접 입력한다
-const SCORE_OPTIONS = Array.from({ length: 31 }, (_, n) => n);
-const SCORE_OPTION_MAX = SCORE_OPTIONS[SCORE_OPTIONS.length - 1];
+const SCORE_OPTION_MAX = 30;
+const SCORE_OPTIONS = Array.from(
+  { length: SCORE_OPTION_MAX + 1 },
+  (_, n) => n,
+);
 const SCORE_CHIP_WIDTH = 44;
 const DIRECT_SCORE_MAX_LENGTH = 2;
 const INITIAL_CENTER_SCORE = 9;
@@ -32,6 +35,7 @@ const RecordMatchScoreStrip: React.FC<RecordMatchScoreStripProps> = ({
   const [directInput, setDirectInput] = useState("");
   const isDirectValue = value !== null && value > SCORE_OPTION_MAX;
   const directInputId = `record-score-direct-${teamIndex}`;
+  const teamLabel = `Team ${teamIndex === 0 ? "A" : "B"}`;
 
   useLayoutEffect(() => {
     const el = scrollRef.current;
@@ -75,7 +79,7 @@ const RecordMatchScoreStrip: React.FC<RecordMatchScoreStripProps> = ({
       <div className="flex items-center justify-between gap-3">
         <div className="min-w-0">
           <p className="bs-text-caption font-semibold uppercase tracking-wide text-pkpk-sub-font">
-            Team {teamIndex === 0 ? "A" : "B"}
+            {teamLabel}
             {isWinner ? (
               <span className="ml-1.5 rounded-full bg-pkpk-accent-bg px-1.5 text-[0.65rem] text-pkpk-dark">
                 WIN
@@ -102,7 +106,7 @@ const RecordMatchScoreStrip: React.FC<RecordMatchScoreStripProps> = ({
             type="button"
             data-score={n}
             aria-pressed={value === n}
-            aria-label={`Team ${teamIndex === 0 ? "A" : "B"} ${n}점`}
+            aria-label={`${teamLabel} ${n}점`}
             onClick={() => {
               setIsDirectInputOpen(false);
               onChange(n);
@@ -140,7 +144,7 @@ const RecordMatchScoreStrip: React.FC<RecordMatchScoreStripProps> = ({
           }}
         >
           <label htmlFor={directInputId} className="sr-only">
-            Team {teamIndex === 0 ? "A" : "B"} 점수 직접 입력
+            {teamLabel} 점수 직접 입력
           </label>
           <input
             id={directInputId}
