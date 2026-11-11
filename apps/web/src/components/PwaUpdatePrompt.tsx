@@ -1,6 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Alert, Button } from "@heroui/react";
-import { useLocation } from "react-router-dom";
 import { useAppUpdate } from "@/context/AppUpdateContext";
 import { useAuth } from "@/context/AuthContext";
 import { useOnlineStatus } from "@/hooks/useOnlineStatus";
@@ -17,7 +16,6 @@ const isStandaloneDisplay = () =>
 const FOREGROUND_UPDATE_CHECK_DEBOUNCE_MS = 5_000;
 
 const PwaUpdatePrompt: React.FC = () => {
-  const location = useLocation();
   const isOnline = useOnlineStatus();
   const { isAuthenticated, isLoading } = useAuth();
   const {
@@ -30,8 +28,6 @@ const PwaUpdatePrompt: React.FC = () => {
   const lastAutoCheckAtRef = useRef(0);
   const [error, setError] = useState<string | null>(null);
 
-  const isFullWidthDevPage =
-    import.meta.env.DEV && location.pathname === "/dev/qrs";
   const isStandalone =
     typeof window !== "undefined" ? isStandaloneDisplay() : false;
 
@@ -41,7 +37,6 @@ const PwaUpdatePrompt: React.FC = () => {
         !isStandalone ||
         isLoading ||
         !isAuthenticated ||
-        isFullWidthDevPage ||
         !isOnline
       ) {
         return;
@@ -77,7 +72,6 @@ const PwaUpdatePrompt: React.FC = () => {
   }, [
     checkForUpdate,
     isAuthenticated,
-    isFullWidthDevPage,
     isLoading,
     isOnline,
     isStandalone,
@@ -87,7 +81,6 @@ const PwaUpdatePrompt: React.FC = () => {
     !isStandalone ||
     isLoading ||
     !isAuthenticated ||
-    isFullWidthDevPage ||
     !isUpdateAvailable
   ) {
     return null;

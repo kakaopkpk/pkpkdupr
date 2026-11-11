@@ -1,6 +1,5 @@
 /** 서버가 뜨기 전에 확인하는 필수 환경변수. 하나라도 없으면 기동을 막는다. */
 const REQUIRED_ENV_NAMES = [
-  "QR_TOTP_SECRET",
   "SUPABASE_URL",
   "SUPABASE_ANON_KEY",
   "SUPABASE_SERVICE_ROLE_KEY",

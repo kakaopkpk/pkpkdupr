@@ -23,16 +23,13 @@ import {
   IoPeopleOutline,
   IoPersonCircle,
   IoPersonCircleOutline,
-  IoQrCodeSharp,
   IoSettingsOutline,
   IoTennisball,
   IoTennisballOutline,
 } from "react-icons/io5";
 import AppSettingsSheetBody from "@/components/AppSettingsSheetBody";
-import type { PlayerQrTokenResponse } from "@pkpkdupr/shared/qr";
 import BottomSheet from "@/components/BottomSheet";
 import HoldToConfirmButton from "@/components/HoldToConfirmButton";
-import PlayerQrSheetBody from "@/components/PlayerQrSheetBody";
 import RecordMatchDrawerBody from "@/components/RecordMatchDrawerBody";
 import ProfileMatchDetailDrawer from "@/components/ProfileMatchDetailDrawer";
 import PullToRefreshIndicator, {
@@ -52,7 +49,6 @@ import {
   PULL_TO_REFRESH_MIN_RESISTANCE,
   PULL_TO_REFRESH_THRESHOLD,
 } from "@/hooks/usePullToRefresh";
-import { apiFetch } from "@/lib/api";
 import { triggerHapticFeedback } from "@/lib/haptics";
 import { DEFAULT_THEME_COLOR, DIMMED_THEME_COLOR } from "@/lib/themeColor";
 import Matches from "@/pages/Matches";
@@ -119,7 +115,7 @@ const isTabDepthHistoryState = (
 };
 
 const BottomNav: React.FC = () => {
-  const { isAuthenticated, logout, player } = useAuth();
+  const { logout, player } = useAuth();
   const isOnline = useOnlineStatus();
   const [selectedTab, setSelectedTab] = useState<TabKey>("me");
   const [visitedTabs, setVisitedTabs] =
@@ -128,8 +124,6 @@ const BottomNav: React.FC = () => {
     useState<TabDepthStacks>(emptyDepthStacks);
   const [isGlobalMenuOpen, setIsGlobalMenuOpen] = useState(false);
   const [globalMenuTabKey, setGlobalMenuTabKey] = useState<TabKey>("me");
-  const [isQrOpen, setIsQrOpen] = useState(false);
-  const [qrTabKey, setQrTabKey] = useState<TabKey>("me");
   const [isCreateMatchOpen, setIsCreateMatchOpen] = useState(false);
   // 열 때마다 올려서 기록 시트를 초기 상태로 리마운트한다
   const [createMatchSheetKey, setCreateMatchSheetKey] = useState(0);
@@ -147,10 +141,6 @@ const BottomNav: React.FC = () => {
     useState<PullToRefreshStatus>("idle");
   const [isPullRefreshSlow, setIsPullRefreshSlow] = useState(false);
   const handledDeepLinkMatchIdRef = useRef<string | null>(null);
-  const [qrToken, setQrToken] = useState<PlayerQrTokenResponse | null>(null);
-  const [isQrLoading, setIsQrLoading] = useState(false);
-  const [qrError, setQrError] = useState<string | null>(null);
-  const [qrRemainingSeconds, setQrRemainingSeconds] = useState(0);
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
   const depthScrollContainersRef = useRef(
     new Map<string, HTMLDivElement>(),
@@ -514,17 +504,6 @@ const BottomNav: React.FC = () => {
     setIsGlobalMenuOpen(true);
   }, [pushDepth]);
 
-  const openQrSheet = useCallback(() => {
-    const tabKey = selectedTabRef.current;
-    setQrTabKey(tabKey);
-    pushDepth(tabKey, {
-      id: "qr-sheet",
-      kind: "bottom-sheet",
-      onClose: () => setIsQrOpen(false),
-    });
-    setIsQrOpen(true);
-  }, [pushDepth]);
-
   const openCreateMatchSheet = useCallback(() => {
     const tabKey = selectedTabRef.current;
     setCreateMatchTabKey(tabKey);
@@ -561,19 +540,6 @@ const BottomNav: React.FC = () => {
     [closeDepth, globalMenuTabKey, openGlobalMenu],
   );
 
-  const handleQrOpenChange = useCallback(
-    (isOpen: boolean) => {
-      if (isOpen) {
-        openQrSheet();
-        return;
-      }
-
-      closeDepth(qrTabKey, "qr-sheet");
-      setIsQrOpen(false);
-    },
-    [closeDepth, openQrSheet, qrTabKey],
-  );
-
   const handleCreateMatchOpenChange = useCallback(
     (isOpen: boolean) => {
       if (isOpen) {
@@ -599,54 +565,6 @@ const BottomNav: React.FC = () => {
     },
     [appSettingsTabKey, closeDepth, openAppSettingsSheet],
   );
-
-  const loadPlayerQrToken = useCallback(async () => {
-    if (!isOnline) {
-      setQrToken(null);
-      setQrError(
-        "오프라인에서는 QR 코드를 생성할 수 없습니다. 온라인 연결이 필요합니다.",
-      );
-      setQrRemainingSeconds(0);
-      return;
-    }
-
-    if (!isAuthenticated) {
-      setQrToken(null);
-      setQrError("로그인이 필요합니다.");
-      setQrRemainingSeconds(0);
-      return;
-    }
-
-    try {
-      setIsQrLoading(true);
-      setQrError(null);
-
-      const res = await apiFetch("/api/player-qr-token");
-
-      if (!res.ok) {
-        const errorData = await res.json().catch(() => ({}));
-        throw new Error(errorData.error || "QR 코드를 생성하지 못했습니다.");
-      }
-
-      const data = (await res.json()) as PlayerQrTokenResponse;
-      setQrToken(data);
-      setQrRemainingSeconds(data.ttlSeconds);
-    } catch (err) {
-      setQrError(
-        err instanceof Error ? err.message : "QR 코드를 생성하지 못했습니다.",
-      );
-    } finally {
-      setIsQrLoading(false);
-    }
-  }, [isOnline, isAuthenticated]);
-
-  const handleRefreshPlayerQrToken = useCallback(() => {
-    if (qrToken && qrRemainingSeconds > 60) {
-      return;
-    }
-
-    void loadPlayerQrToken();
-  }, [loadPlayerQrToken, qrRemainingSeconds, qrToken]);
 
   useEffect(() => {
     selectedTabRef.current = selectedTab;
@@ -684,39 +602,9 @@ const BottomNav: React.FC = () => {
     };
   }, [removeDepthEntry]);
 
-  useEffect(() => {
-    if (isQrOpen) {
-      void loadPlayerQrToken();
-    }
-  }, [isQrOpen, loadPlayerQrToken]);
-
-  useEffect(() => {
-    if (!isQrOpen || !qrToken) {
-      return;
-    }
-
-    const updateRemainingTime = () => {
-      const expiresAtMs = new Date(qrToken.expiresAt).getTime();
-      setQrRemainingSeconds(
-        Math.max(0, Math.ceil((expiresAtMs - Date.now()) / 1000)),
-      );
-    };
-
-    updateRemainingTime();
-    const intervalId = window.setInterval(updateRemainingTime, 1000);
-
-    return () => {
-      window.clearInterval(intervalId);
-    };
-  }, [isQrOpen, qrToken]);
-
   const handleGlobalAction = (key: React.Key) => {
     const action = () => {
       switch (String(key)) {
-        case "qr":
-          if (!isOnline) return;
-          openQrSheet();
-          break;
         case "create-match":
           if (!isOnline) return;
           openCreateMatchSheet();
@@ -775,7 +663,6 @@ const BottomNav: React.FC = () => {
   const isDimmedOverlayVisible =
     hasActiveBottomSheet ||
     isGlobalMenuVisible ||
-    (isQrOpen && qrTabKey === selectedTab) ||
     (isCreateMatchOpen && createMatchTabKey === selectedTab) ||
     (isAppSettingsOpen && appSettingsTabKey === selectedTab);
   const hasBlockingLayer = useMemo(() => {
@@ -787,8 +674,7 @@ const BottomNav: React.FC = () => {
     return (
       hasBlockingDepth ||
       isGlobalMenuVisible ||
-      (isQrOpen && qrTabKey === selectedTab) ||
-      (isCreateMatchOpen && createMatchTabKey === selectedTab) ||
+        (isCreateMatchOpen && createMatchTabKey === selectedTab) ||
       (isAppSettingsOpen && appSettingsTabKey === selectedTab)
     );
   }, [
@@ -798,8 +684,6 @@ const BottomNav: React.FC = () => {
     isAppSettingsOpen,
     isCreateMatchOpen,
     isGlobalMenuVisible,
-    isQrOpen,
-    qrTabKey,
     selectedTab,
   ]);
 
@@ -1306,21 +1190,6 @@ const BottomNav: React.FC = () => {
 
       </Tabs>
       <BottomSheet
-        isOpen={isQrOpen}
-        isActive={qrTabKey === selectedTab}
-        onOpenChange={handleQrOpenChange}
-        ariaLabel="Player QR code"
-      >
-        <PlayerQrSheetBody
-          qrToken={qrToken}
-          qrRemainingSeconds={qrRemainingSeconds}
-          qrError={qrError}
-          isQrLoading={isQrLoading}
-          onRefresh={handleRefreshPlayerQrToken}
-        />
-      </BottomSheet>
-
-      <BottomSheet
         isOpen={isCreateMatchOpen}
         isActive={createMatchTabKey === selectedTab}
         onOpenChange={handleCreateMatchOpenChange}
@@ -1426,18 +1295,6 @@ const BottomNav: React.FC = () => {
                         onAction={handleGlobalAction}
                         className="bg-transparent"
                       >
-                        <Dropdown.Item
-                          id="qr"
-                          textValue="QR code"
-                          isDisabled={!isOnline}
-                          className="data-[focused]:bg-pkpk-primary-bg/5 data-[hovered]:bg-pkpk-primary-bg/5"
-                        >
-                          <IoQrCodeSharp className="size-4 shrink-0 text-pkpk-sub-font" />
-                          <Label className="text-[1.05rem] font-medium leading-5">
-                            QR 코드
-                          </Label>
-                        </Dropdown.Item>
-                        <Separator className="mx-2" />
                         <Dropdown.Item
                           id="create-match"
                           textValue="Record match"

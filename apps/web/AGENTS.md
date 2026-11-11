@@ -3,16 +3,16 @@
 ## 현재 역할
 
 - 일반 사용자용 웹 앱입니다.
-- 엔트리 라우트는 `/`, `/login`, `/force-change-password`(첫 로그인·비밀번호 초기화 직후), 개발 전용 `/dev/qrs`입니다. `AuthContext`의 `status`(`signedOut`·`mustChangePassword`·`authenticated`)가 열 수 있는 라우트를 정합니다.
+- 엔트리 라우트는 `/`, `/login`, `/force-change-password`(첫 로그인·비밀번호 초기화 직후)입니다. `AuthContext`의 `status`(`signedOut`·`mustChangePassword`·`authenticated`)가 열 수 있는 라우트를 정합니다.
 - `/`에서는 `BottomNav`가 내부 state로 `Match`, `Player`, `Me` 화면을 전환합니다.
-- 중앙 QR 버튼은 `react-qr-code` 모달을 띄우는 UI입니다.
+- 상단 + 메뉴는 `설정`과 `경기 기록` 시트를 엽니다.
 
 ## 기술 스택
 
 - **Framework**: React 19 + TypeScript
 - **Build Tool**: Vite 5
 - **Routing**: react-router-dom v6
-- **UI**: HeroUI 3, react-icons, react-qr-code
+- **UI**: HeroUI 3, react-icons
 - **Styling**: Tailwind CSS v4 (`@tailwindcss/vite`)
 - **Alias**: `@/` → `src/`
 
