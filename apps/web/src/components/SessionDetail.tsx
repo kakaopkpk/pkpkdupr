@@ -471,6 +471,9 @@ const SessionDetail: React.FC<SessionDetailProps> = ({
               key={sheetKey}
               isOnline={isOnline}
               sessionId={detail.id}
+              sessionParticipantIds={detail.participants.map(
+                (participant) => participant.id,
+              )}
               defaultLocation={detail.location}
               onCancel={closeRecordSheet}
               onRecorded={(recordedMatch) => onMatchRecorded?.(recordedMatch)}
