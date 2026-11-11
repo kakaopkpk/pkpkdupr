@@ -1,4 +1,8 @@
-import type { MatchType, RecordMatchTeamRequest } from "./match.js";
+import type {
+  MatchSessionParticipant,
+  MatchType,
+  RecordMatchTeamRequest,
+} from "./match.js";
 import type { PublicPlayerDupr } from "./player.js";
 
 /** 정기 세션 요일(KST, 0=일요일). 월·목 */
@@ -73,10 +77,7 @@ export const isInProgressMatchExpired = (
   now.getTime() - matchStartsAt.getTime() >= IN_PROGRESS_MATCH_TIMEOUT_MS;
 
 /** 세션 참여자. 추천 화면이 평점·성별을 쓰므로 함께 내려준다 */
-export interface MatchSessionMember {
-  id: string;
-  username: string;
-  avatarUrl?: string;
+export interface MatchSessionMember extends MatchSessionParticipant {
   gender: "M" | "F";
   duprRating: PublicPlayerDupr | null;
 }
