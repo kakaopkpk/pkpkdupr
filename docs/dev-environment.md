@@ -24,10 +24,9 @@ ENABLE_DEV_MOCK_DATA=true
 SUPABASE_URL=<supabase status의 API_URL, 보통 http://127.0.0.1:54321>
 SUPABASE_ANON_KEY=<supabase status의 ANON_KEY>
 SUPABASE_SERVICE_ROLE_KEY=<supabase status의 SERVICE_ROLE_KEY>
-QR_TOTP_SECRET=local-dev-qr-totp-secret   # .env에 있으면 그 값
 ```
 
-api는 `QR_TOTP_SECRET`·`SUPABASE_URL`·`SUPABASE_ANON_KEY`·`SUPABASE_SERVICE_ROLE_KEY`가 없으면 시작하지 않습니다. `SUPABASE_ANON_KEY`는 access token 확인에, `SUPABASE_SERVICE_ROLE_KEY`는 관리자의 계정 발급·비밀번호 초기화·아이디 변경(Auth admin API), dev 계정 시딩, 아바타 업로드(로컬 Storage `avatars` 버킷)에 씁니다. `pnpm dev:api`로 따로 띄울 때는 위 값을 직접 넣습니다(`pnpm db:status -o env`로 확인).
+api는 `SUPABASE_URL`·`SUPABASE_ANON_KEY`·`SUPABASE_SERVICE_ROLE_KEY`가 없으면 시작하지 않습니다. `SUPABASE_ANON_KEY`는 access token 확인에, `SUPABASE_SERVICE_ROLE_KEY`는 관리자의 계정 발급·비밀번호 초기화·아이디 변경(Auth admin API), dev 계정 시딩, 아바타 업로드(로컬 Storage `avatars` 버킷)에 씁니다. `pnpm dev:api`로 따로 띄울 때는 위 값을 직접 넣습니다(`pnpm db:status -o env`로 확인).
 
 `DATABASE_URL`은 `NODE_ENV`와 무관하게 필수입니다. 없으면 api는 `DATABASE_URL 환경변수가 필요합니다.` 오류로 시작하지 않습니다. 예외로 Edge 런타임(`supabase functions serve`, 배포된 함수)에서는 `apps/api/src/db.ts`가 `DATABASE_URL`이 없을 때 Supabase가 주입하는 `SUPABASE_DB_URL`로 대체하고 경고 로그만 남깁니다. `pnpm dev`는 위 로컬 주소를 주입하고, `pnpm dev:api`처럼 api를 따로 띄울 때는 직접 지정해야 합니다. 로컬 값은 `pnpm db:status -o env`의 `DB_URL`로 확인합니다. api 테스트(vitest)는 `apps/api/vitest.setup.ts`가 로컬 주소를 채우며 실제 연결은 만들지 않습니다.
 
