@@ -133,6 +133,9 @@ describe("GET /api/matches/:matchId", () => {
 
   it("빈 세션 정리가 실패해도 조회는 계속한다", async () => {
     cleanupExpired.mockRestore();
+    const deleteExpiredInProgressMatches = vi
+      .spyOn(db.matches, "deleteExpiredInProgressMatches")
+      .mockRejectedValue(new Error("in-progress cleanup failure"));
     const deleteExpiredEmptySessions = vi
       .spyOn(db.matches, "deleteExpiredEmptySessions")
       .mockRejectedValue(new Error("cleanup failure"));
@@ -149,8 +152,32 @@ describe("GET /api/matches/:matchId", () => {
       .set("Authorization", "Bearer test-token");
 
     expect(response.status).toBe(200);
+    expect(deleteExpiredInProgressMatches).toHaveBeenCalledTimes(1);
     expect(deleteExpiredEmptySessions).toHaveBeenCalledTimes(1);
-    expect(consoleError).toHaveBeenCalled();
+    expect(consoleError).toHaveBeenCalledTimes(2);
+  });
+
+  it("만료 정리는 진행 중 경기를 빈 세션보다 먼저 삭제한다", async () => {
+    cleanupExpired.mockRestore();
+    const deleteExpiredInProgressMatches = vi
+      .spyOn(db.matches, "deleteExpiredInProgressMatches")
+      .mockResolvedValue(1);
+    const deleteExpiredEmptySessions = vi
+      .spyOn(db.matches, "deleteExpiredEmptySessions")
+      .mockResolvedValue(1);
+    vi.spyOn(
+      MatchRepository.prototype,
+      "findByIdWithRatingChanges",
+    ).mockResolvedValue({ match, ratingChanges: [] });
+
+    const response = await request(app)
+      .get(`/api/matches/${match.id}`)
+      .set("Authorization", "Bearer test-token");
+
+    expect(response.status).toBe(200);
+    expect(
+      deleteExpiredInProgressMatches.mock.invocationCallOrder[0],
+    ).toBeLessThan(deleteExpiredEmptySessions.mock.invocationCallOrder[0]!);
   });
 });
 
