@@ -402,23 +402,19 @@ const RecordMatchDrawerBody: React.FC<RecordMatchDrawerBodyProps> = ({
 
   const recentPlayers = useMemo(() => {
     const normalizedQuery = query.trim().toLocaleLowerCase();
-    const candidates = players
+    return players
       .filter(
         (candidate) =>
-          candidate.id !== player?.id && candidate.status === "active",
+          candidate.id !== player?.id &&
+          candidate.status === "active" &&
+          (!normalizedQuery ||
+            candidate.username.toLocaleLowerCase().includes(normalizedQuery)),
       )
       .sort(
         (a, b) =>
           getLastPlayedAtMs(b.lastPlayedAt) - getLastPlayedAtMs(a.lastPlayedAt),
-      );
-
-    const matched = normalizedQuery
-      ? candidates.filter((candidate) =>
-          candidate.username.toLocaleLowerCase().includes(normalizedQuery),
-        )
-      : candidates;
-
-    return matched.slice(0, RECENT_PLAYER_LIMIT);
+      )
+      .slice(0, RECENT_PLAYER_LIMIT);
   }, [player?.id, players, query]);
 
   const handlePickPlayer = (candidate: RecordablePlayer) => {
