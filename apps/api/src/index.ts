@@ -33,7 +33,6 @@ import type {
   PlayerRatingChangeLog,
   PlayerStatus,
 } from "@pkpkdupr/shared/player";
-import type { VerifyPlayerQrTokenRequest } from "@pkpkdupr/shared/qr";
 import type {
   AdminRegisterPlayerRequest,
   AdminUpdateUsernameRequest,
@@ -804,47 +803,6 @@ app.get("/api/players/:playerId/profile-summary", async (req, res) => {
     res.json(buildPlayerProfileSummary(matches, playerId, projection.history));
   } catch (err) {
     res.status(500).json({ error: (err as Error).message });
-  }
-});
-
-app.get("/api/player-qr-token", async (req, res) => {
-  try {
-    const decoded = await getAuthPayload(req, res);
-    if (!decoded) {
-      return;
-    }
-
-    const result = await authService.createPlayerQrToken(decoded.playerId);
-    res.json(result);
-  } catch (err) {
-    res.status(400).json({ error: (err as Error).message });
-  }
-});
-
-app.get("/api/dev/player-qr-tokens", async (_req, res) => {
-  try {
-    const result = await authService.getDevPlayerQrTokens();
-    res.json(result);
-  } catch (err) {
-    res.status(404).json({ error: (err as Error).message });
-  }
-});
-
-app.post("/api/player-qr-token/verify", async (req, res) => {
-  try {
-    if (!(await getAuthPayload(req, res))) {
-      return;
-    }
-
-    const { payload } = req.body as VerifyPlayerQrTokenRequest;
-    if (!payload) {
-      return res.status(400).json({ error: "payload는 필수입니다." });
-    }
-
-    const result = await authService.verifyPlayerQrToken(payload);
-    res.json(result);
-  } catch (err) {
-    res.status(400).json({ error: (err as Error).message });
   }
 });
 

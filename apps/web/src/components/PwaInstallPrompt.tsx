@@ -1,6 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Alert, Button, CloseButton } from "@heroui/react";
-import { useLocation } from "react-router-dom";
 import { IoShareOutline } from "react-icons/io5";
 import { useAuth } from "@/context/AuthContext";
 
@@ -57,7 +56,6 @@ type InstallPrompt =
     };
 
 const PwaInstallPrompt: React.FC = () => {
-  const location = useLocation();
   const { isAuthenticated, isLoading } = useAuth();
   const [deferredPrompt, setDeferredPrompt] =
     useState<BeforeInstallPromptEvent | null>(null);
@@ -126,13 +124,9 @@ const PwaInstallPrompt: React.FC = () => {
     };
   }, []);
 
-  const isFullWidthDevPage =
-    import.meta.env.DEV && location.pathname === "/dev/qrs";
-
   if (
     isLoading ||
     !isAuthenticated ||
-    isFullWidthDevPage ||
     isInstalled ||
     isDismissed ||
     !installPrompt
