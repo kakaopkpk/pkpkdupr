@@ -3,6 +3,7 @@ import { isMatchInProgress } from "../match";
 import {
   canOpenRegularSession,
   getEmptySessionExpiresAt,
+  getEmptySessionExpiryCutoff,
   IN_PROGRESS_MATCH_TIMEOUT_MS,
   isInProgressMatchExpired,
   isRegularSessionTime,
@@ -125,6 +126,88 @@ describe("getEmptySessionExpiresAt", () => {
         new Date("2026-11-09T16:00:00Z"),
       ).toISOString(),
     ).toBe("2026-11-10T15:00:00.000Z");
+  });
+});
+
+describe("getEmptySessionExpiryCutoff", () => {
+  const SECOND_MS = 1000;
+  // 기준 시각 비교(세션 시각 < cutoff)가 getEmptySessionExpiresAt(kind, 세션 시각) <= now와 같은지 본다
+  const isExpiredByCutoff = (
+    kind: "regular" | "custom",
+    sessionDate: Date,
+    now: Date,
+  ) =>
+    sessionDate.getTime() < getEmptySessionExpiryCutoff(kind, now).getTime();
+  const isExpiredByRule = (
+    kind: "regular" | "custom",
+    sessionDate: Date,
+    now: Date,
+  ) => getEmptySessionExpiresAt(kind, sessionDate).getTime() <= now.getTime();
+
+  it.each([
+    ["regular", "2026-11-09T18:00:00+09:00", "2026-11-09T22:00:00+09:00"],
+    ["regular", "2026-11-09T00:00:00+09:00", "2026-11-09T22:00:00+09:00"],
+    ["regular", "2026-11-09T23:59:59+09:00", "2026-11-09T22:00:00+09:00"],
+    ["custom", "2026-11-09T23:30:00+09:00", "2026-11-10T00:00:00+09:00"],
+    ["custom", "2026-11-09T00:00:00+09:00", "2026-11-10T00:00:00+09:00"],
+    ["custom", "2026-12-31T23:59:59+09:00", "2027-01-01T00:00:00+09:00"],
+  ] as const)(
+    "%s 세션(%s)은 만료 1초 전에는 남고 만료 정각(%s)에 만료된다",
+    (kind, sessionDateIso, expiresAtIso) => {
+      const sessionDate = new Date(sessionDateIso);
+      const expiresAt = new Date(expiresAtIso);
+      expect(getEmptySessionExpiresAt(kind, sessionDate)).toEqual(expiresAt);
+
+      const oneSecondBefore = new Date(expiresAt.getTime() - SECOND_MS);
+      expect(isExpiredByCutoff(kind, sessionDate, oneSecondBefore)).toBe(false);
+      expect(isExpiredByCutoff(kind, sessionDate, expiresAt)).toBe(true);
+    },
+  );
+
+  it("정기 세션 기준 시각은 22:00 KST에 하루 넘어간다", () => {
+    expect(
+      getEmptySessionExpiryCutoff(
+        "regular",
+        new Date("2026-11-09T21:59:59+09:00"),
+      ).toISOString(),
+    ).toBe("2026-11-08T15:00:00.000Z");
+    expect(
+      getEmptySessionExpiryCutoff(
+        "regular",
+        new Date("2026-11-09T22:00:00+09:00"),
+      ).toISOString(),
+    ).toBe("2026-11-09T15:00:00.000Z");
+  });
+
+  it("회원 세션 기준 시각은 오늘 00:00 KST다", () => {
+    expect(
+      getEmptySessionExpiryCutoff(
+        "custom",
+        new Date("2026-11-10T00:00:00+09:00"),
+      ).toISOString(),
+    ).toBe("2026-11-09T15:00:00.000Z");
+  });
+
+  it("세션 시각·now 조합 전반에서 getEmptySessionExpiresAt 판정과 같다", () => {
+    const base = new Date("2026-11-08T00:00:00+09:00").getTime();
+    // 37분은 시·일 경계와 어긋나게 해 KST 자정·22시 전후를 고르게 훑기 위한 간격이다.
+    const STEP_MS = 37 * 60 * SECOND_MS;
+    const SESSION_COUNT = 120;
+    // now는 세션 범위보다 더 뒤까지 훑어 만료 후 구간도 확인한다.
+    const NOW_COUNT = 160;
+    // 정각에서 비껴난 now로 초 단위 경계 처리도 확인한다.
+    const NOW_OFFSET_MS = 13 * SECOND_MS;
+    for (const kind of ["regular", "custom"] as const) {
+      for (let s = 0; s < SESSION_COUNT; s += 1) {
+        const sessionDate = new Date(base + s * STEP_MS);
+        for (let n = 0; n < NOW_COUNT; n += 1) {
+          const now = new Date(base + n * STEP_MS + NOW_OFFSET_MS);
+          expect(isExpiredByCutoff(kind, sessionDate, now)).toBe(
+            isExpiredByRule(kind, sessionDate, now),
+          );
+        }
+      }
+    }
   });
 });
 

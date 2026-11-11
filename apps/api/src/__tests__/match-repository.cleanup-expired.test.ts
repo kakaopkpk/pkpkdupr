@@ -1,0 +1,130 @@
+import { MatchRepository } from "@pkpkdupr/db";
+import {
+  getEmptySessionExpiresAt,
+  IN_PROGRESS_MATCH_TIMEOUT_MS,
+} from "@pkpkdupr/shared/session";
+import { describe, expect, it, vi } from "vitest";
+
+const createRepository = (rows: unknown[]) => {
+  const execute = vi.fn().mockResolvedValue({ rows, rowsAffected: 0 });
+  const transaction = vi.fn();
+  const repository = new MatchRepository({}, { execute, transaction });
+  return { repository, execute, transaction };
+};
+
+const toSeconds = (date: Date) => Math.floor(date.getTime() / 1000);
+
+type ExecuteArgs = { sql: string; args: unknown[] };
+
+const executedStatement = (execute: ReturnType<typeof vi.fn>): ExecuteArgs =>
+  execute.mock.calls[0]![0] as ExecuteArgs;
+
+// 2026-11-09는 월요일(KST)
+const now = new Date("2026-11-09T22:00:00+09:00");
+
+describe("MatchRepository.deleteExpiredInProgressMatchesAndEmptySessions", () => {
+  it("지울 대상이 없어도 execute 1회로 끝나고 트랜잭션을 열지 않는다", async () => {
+    const { repository, execute, transaction } = createRepository([
+      { deleted_match_count: "0", deleted_session_count: "0" },
+    ]);
+
+    await expect(
+      repository.deleteExpiredInProgressMatchesAndEmptySessions(now),
+    ).resolves.toEqual({ deletedMatchCount: 0, deletedSessionCount: 0 });
+    expect(execute).toHaveBeenCalledTimes(1);
+    expect(transaction).not.toHaveBeenCalled();
+  });
+
+  it("지울 대상이 있어도 execute 1회로 끝나고 삭제 수를 숫자로 돌려준다", async () => {
+    const { repository, execute, transaction } = createRepository([
+      { deleted_match_count: "2", deleted_session_count: "1" },
+    ]);
+
+    await expect(
+      repository.deleteExpiredInProgressMatchesAndEmptySessions(now),
+    ).resolves.toEqual({ deletedMatchCount: 2, deletedSessionCount: 1 });
+    expect(execute).toHaveBeenCalledTimes(1);
+    expect(transaction).not.toHaveBeenCalled();
+  });
+
+  it("경기·세션과 딸린 행을 모두 한 문장에서 지우고, 진행 중 경기는 잠근 뒤 지운다", async () => {
+    const { repository, execute } = createRepository([
+      { deleted_match_count: 0, deleted_session_count: 0 },
+    ]);
+
+    await repository.deleteExpiredInProgressMatchesAndEmptySessions(now);
+
+    const { sql } = executedStatement(execute);
+    for (const table of [
+      "matches",
+      "match_scores",
+      "match_participants",
+      "match_sessions",
+      "match_session_participants",
+    ]) {
+      expect(sql).toMatch(new RegExp(`DELETE FROM ${table}\\b`));
+    }
+    expect(sql).toMatch(/FOR UPDATE/);
+    expect(sql).toMatch(/m\.status = 'created'/);
+    // 같은 문장이 지우는 경기는 빼고 빈 세션을 판정한다
+    expect(sql).toMatch(/NOT EXISTS \(SELECT 1 FROM deleted_matches d/);
+  });
+
+  it("진행 중 경기 만료 기준은 now - IN_PROGRESS_MATCH_TIMEOUT_MS(epoch 초)다", async () => {
+    const { repository, execute } = createRepository([]);
+
+    await expect(
+      repository.deleteExpiredInProgressMatchesAndEmptySessions(now),
+    ).resolves.toEqual({ deletedMatchCount: 0, deletedSessionCount: 0 });
+
+    const { args } = executedStatement(execute);
+    expect(args[0]).toBe(
+      toSeconds(new Date(now.getTime() - IN_PROGRESS_MATCH_TIMEOUT_MS)),
+    );
+  });
+
+  // SQL은 정기 세션에 `"date" < $2`, 그 외 세션에 `"date" < $3`을 쓴다
+  const isExpiredBySqlArgs = (
+    kind: "regular" | "custom",
+    sessionDate: Date,
+    args: unknown[],
+  ) => toSeconds(sessionDate) < Number(kind === "regular" ? args[1] : args[2]);
+
+  it.each([
+    ["regular", "2026-11-09T18:00:00+09:00"],
+    ["regular", "2026-11-09T19:30:00+09:00"],
+    ["custom", "2026-11-09T20:15:00+09:00"],
+    ["custom", "2026-11-09T00:00:00+09:00"],
+  ] as const)(
+    "%s 세션(%s)의 SQL 기준값 판정은 만료 1초 전엔 남기고 정각엔 지워 getEmptySessionExpiresAt과 같다",
+    async (kind, sessionDateIso) => {
+      const sessionDate = new Date(sessionDateIso);
+      const expiresAt = getEmptySessionExpiresAt(kind, sessionDate);
+      const oneSecondBefore = new Date(expiresAt.getTime() - 1000);
+
+      const before = createRepository([]);
+      await before.repository.deleteExpiredInProgressMatchesAndEmptySessions(
+        oneSecondBefore,
+      );
+      expect(
+        isExpiredBySqlArgs(
+          kind,
+          sessionDate,
+          executedStatement(before.execute).args,
+        ),
+      ).toBe(false);
+
+      const atExpiry = createRepository([]);
+      await atExpiry.repository.deleteExpiredInProgressMatchesAndEmptySessions(
+        expiresAt,
+      );
+      expect(
+        isExpiredBySqlArgs(
+          kind,
+          sessionDate,
+          executedStatement(atExpiry.execute).args,
+        ),
+      ).toBe(true);
+    },
+  );
+});

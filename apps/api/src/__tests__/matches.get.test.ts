@@ -130,13 +130,10 @@ describe("GET /api/matches/:matchId", () => {
     expect(response.body).toEqual({ error: "매치를 찾을 수 없습니다." });
   });
 
-  it("빈 세션 정리가 실패해도 조회는 계속한다", async () => {
+  it("만료 정리가 실패해도 로그만 남기고 조회는 계속한다", async () => {
     cleanupExpired.mockRestore();
-    const deleteExpiredInProgressMatches = vi
-      .spyOn(db.matches, "deleteExpiredInProgressMatches")
-      .mockRejectedValue(new Error("in-progress cleanup failure"));
-    const deleteExpiredEmptySessions = vi
-      .spyOn(db.matches, "deleteExpiredEmptySessions")
+    const deleteExpired = vi
+      .spyOn(db.matches, "deleteExpiredInProgressMatchesAndEmptySessions")
       .mockRejectedValue(new Error("cleanup failure"));
     const consoleError = vi
       .spyOn(console, "error")
@@ -151,32 +148,29 @@ describe("GET /api/matches/:matchId", () => {
       .set("Authorization", "Bearer test-token");
 
     expect(response.status).toBe(200);
-    expect(deleteExpiredInProgressMatches).toHaveBeenCalledTimes(1);
-    expect(deleteExpiredEmptySessions).toHaveBeenCalledTimes(1);
-    expect(consoleError).toHaveBeenCalledTimes(2);
+    expect(deleteExpired).toHaveBeenCalledTimes(1);
+    expect(consoleError).toHaveBeenCalledTimes(1);
+    expect(consoleError.mock.calls[0]?.[0]).toMatch(/^\[MATCH\]/);
   });
 
-  it("만료 정리는 진행 중 경기를 빈 세션보다 먼저 삭제한다", async () => {
+  it("만료 정리는 조회 전에 진행 중 경기·빈 세션 정리를 한 번에 실행한다", async () => {
     cleanupExpired.mockRestore();
-    const deleteExpiredInProgressMatches = vi
-      .spyOn(db.matches, "deleteExpiredInProgressMatches")
-      .mockResolvedValue(1);
-    const deleteExpiredEmptySessions = vi
-      .spyOn(db.matches, "deleteExpiredEmptySessions")
-      .mockResolvedValue(1);
-    vi.spyOn(
-      MatchRepository.prototype,
-      "findByIdWithRatingChanges",
-    ).mockResolvedValue({ match, ratingChanges: [] });
+    const deleteExpired = vi
+      .spyOn(db.matches, "deleteExpiredInProgressMatchesAndEmptySessions")
+      .mockResolvedValue({ deletedMatchCount: 1, deletedSessionCount: 1 });
+    const findByIdWithRatingChanges = vi
+      .spyOn(MatchRepository.prototype, "findByIdWithRatingChanges")
+      .mockResolvedValue({ match, ratingChanges: [] });
 
     const response = await request(app)
       .get(`/api/matches/${match.id}`)
       .set("Authorization", "Bearer test-token");
 
     expect(response.status).toBe(200);
-    expect(
-      deleteExpiredInProgressMatches.mock.invocationCallOrder[0],
-    ).toBeLessThan(deleteExpiredEmptySessions.mock.invocationCallOrder[0]!);
+    expect(deleteExpired).toHaveBeenCalledTimes(1);
+    expect(deleteExpired.mock.invocationCallOrder[0]).toBeLessThan(
+      findByIdWithRatingChanges.mock.invocationCallOrder[0]!,
+    );
   });
 });
 
