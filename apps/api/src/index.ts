@@ -1171,10 +1171,13 @@ const parseRecommendationCourts = (value: unknown): number => {
   return clampMatchmakingCourts(courts);
 };
 
+/** 서버가 정하는 seed 범위 상한(미포함). 32비트 부호 있는 정수 양수 범위에 맞춘다 */
+const GENERATED_SEED_MAX_EXCLUSIVE = 2 ** 31;
+
 /** seed 쿼리: 생략이면 서버가 무작위 정수를 정하고, 정수가 아니면 400 */
 const parseRecommendationSeed = (value: unknown): number => {
   if (value === undefined) {
-    return Math.floor(Math.random() * 2 ** 31);
+    return Math.floor(Math.random() * GENERATED_SEED_MAX_EXCLUSIVE);
   }
   const seed =
     typeof value === "string" && /^-?\d+$/.test(value.trim())
