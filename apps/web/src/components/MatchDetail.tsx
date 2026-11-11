@@ -433,6 +433,7 @@ const MatchDetail: React.FC<MatchDetailProps> = ({
         onOpenChange={handleResultSheetOpenChange}
         ariaLabel="Record match"
         layer={80}
+        isFixedHeight
       >
         <RecordMatchDrawerBody
           key={resultSheetKey}
