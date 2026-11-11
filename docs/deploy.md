@@ -170,10 +170,21 @@ Supabase 대시보드 → Authentication
    WHERE lower(username) = lower('<아이디>')
    RETURNING id, username, auth_user_id;
 
-   -- 위가 0행(회원이 없음)이면 회원 행을 만듭니다. 컬럼은 supabase/migrations/의 players 정의를 따릅니다.
+   -- 위가 0행(회원이 없음)이면 회원 행을 만듭니다.
+   -- id는 'P' + 영문 소문자·숫자 7자, gender는 'M' 또는 'F', 타임스탬프는 Unix 초입니다.
+   INSERT INTO players (id, username, gender, status, is_first_login, auth_user_id, created_at, updated_at)
+   VALUES (
+     'P' || substr(md5(random()::text), 1, 7),
+     '<아이디>',
+     'M',
+     'active',
+     true,
+     '<UID>',
+     extract(epoch FROM now())::bigint,
+     extract(epoch FROM now())::bigint
+   )
+   RETURNING id, username, auth_user_id;
    ```
-
-   회원 행을 새로 만들 때는 `players`의 NOT NULL 컬럼(`id`, `username`, `gender`, 타임스탬프 등)을 마이그레이션 정의에 맞춰 채우고 `auth_user_id`에 UID를 넣습니다.
 3. `player_admins`에 등록합니다(created_at은 Unix 초).
 
    ```sql
@@ -198,7 +209,7 @@ WHERE player_id = (SELECT id FROM players WHERE lower(username) = lower('<아이
 
 ### Google 로그인 운영 프로젝트 전환 (1회)
 
-Google 로그인으로 운영 중인 프로젝트를 아이디·비밀번호 로그인으로 옮기는 절차입니다. 새 함수를 먼저 배포하고 그다음 대시보드에서 Google을 끕니다. 새 서버는 provider를 검사하지 않으므로 그 사이에도 기존 Google 연결 회원의 로그인은 유지됩니다.
+Google 로그인으로 운영 중인 프로젝트를 아이디·비밀번호 로그인으로 옮기는 절차입니다. 새 함수를 먼저 배포하고 그다음 대시보드에서 Google을 끕니다. 배포하면 web·admin-web에는 아이디·비밀번호 로그인 화면만 남으므로, 기존 회원은 4단계에서 비밀번호 초기화를 받기 전까지 새로 로그인할 수 없습니다. 회원에게 미리 알리고 1~4단계를 이어서 진행합니다.
 
 1. **배포**: 새 코드와 마이그레이션(`20261111000000_password_login.sql`)을 main에 머지해 `supabase-deploy`·`pages` workflow로 배포합니다(아래 7, 8). 마이그레이션이 `invite_codes`·`player_auth_link_logs` 테이블을 지우므로 미사용 초대 코드는 버려집니다.
 2. **대시보드 설정**: 위 5대로 Email 켬, Google 끔, 가입 허용 끔, Secure password change 끔으로 바꿉니다.
