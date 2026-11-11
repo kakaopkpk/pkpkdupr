@@ -285,7 +285,6 @@ const MatchDetail: React.FC<MatchDetailProps> = ({
     setIsResultSheetOpen(false);
   }, [match.id, match.mode, match.scores]);
 
-
   const updateScoreRow = (
     index: number,
     field: keyof ReturnType<typeof createEmptyScoreRow>,
@@ -364,7 +363,6 @@ const MatchDetail: React.FC<MatchDetailProps> = ({
       );
     }
   };
-
 
   return (
     <div className="min-h-full">
