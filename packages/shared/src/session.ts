@@ -14,6 +14,9 @@ export const REGULAR_SESSION_NAME = "정기 세션";
 export const REGULAR_SESSION_LOCATION = "야탑초등학교";
 /** 경기 기록·세션 만들기의 장소 기본값 */
 export const DEFAULT_MATCH_LOCATION = REGULAR_SESSION_LOCATION;
+/** 회원이 만드는 세션의 이름·장소 최대 글자 수(`Array.from(value).length` 기준) */
+export const MATCH_SESSION_NAME_MAX_LENGTH = 30;
+export const MATCH_SESSION_LOCATION_MAX_LENGTH = 30;
 /** 점수 없는 진행 중 경기가 무효로 삭제되기까지의 시간(시작 시각 기준) */
 export const IN_PROGRESS_MATCH_TIMEOUT_MS = 2 * 60 * 60 * 1000;
 

@@ -26,6 +26,8 @@ import {
   canOpenRegularSession,
   isInProgressMatchExpired,
   isRegularSessionTime,
+  MATCH_SESSION_LOCATION_MAX_LENGTH,
+  MATCH_SESSION_NAME_MAX_LENGTH,
   toKstDateKey,
   type AddMatchSessionParticipantRequest,
   type CreateMatchSessionRequest,
@@ -1127,14 +1129,25 @@ app.post("/api/match-sessions", async (req, res) => {
     if (!location) {
       throw new MatchSessionRequestError("세션 장소가 필요합니다.", 400);
     }
+    if (Array.from(name).length > MATCH_SESSION_NAME_MAX_LENGTH) {
+      throw new MatchSessionRequestError(
+        `세션 이름은 ${MATCH_SESSION_NAME_MAX_LENGTH}자 이하여야 합니다.`,
+        400,
+      );
+    }
+    if (Array.from(location).length > MATCH_SESSION_LOCATION_MAX_LENGTH) {
+      throw new MatchSessionRequestError(
+        `세션 장소는 ${MATCH_SESSION_LOCATION_MAX_LENGTH}자 이하여야 합니다.`,
+        400,
+      );
+    }
 
     const now = new Date();
     await matchRepository.cleanupExpired(now);
-    const created = await matchRepository.createSession({
-      name,
-      date: now,
-      location,
-    });
+    const created = await matchRepository.createSession(
+      { name, date: now, location },
+      { conflictOnDuplicate: true },
+    );
     res.status(201).json(await requireMatchSessionDetail(created.id, now));
   } catch (err) {
     sendMatchSessionFailure(res, err);

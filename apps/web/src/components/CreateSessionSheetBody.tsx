@@ -1,7 +1,11 @@
 import React, { useState } from "react";
 import { Button } from "@heroui/react";
 import { rememberRecentInputValue } from "@pkpkdupr/shared/recentInputHistory";
-import { DEFAULT_MATCH_LOCATION } from "@pkpkdupr/shared/session";
+import {
+  DEFAULT_MATCH_LOCATION,
+  MATCH_SESSION_LOCATION_MAX_LENGTH,
+  MATCH_SESSION_NAME_MAX_LENGTH,
+} from "@pkpkdupr/shared/session";
 import {
   createMatchSession,
   type MatchSessionDetailInfo,
@@ -15,8 +19,6 @@ interface CreateSessionSheetBodyProps {
   onCancel: () => void;
   onCreated: (session: MatchSessionDetailInfo) => void;
 }
-
-const SESSION_NAME_MAX_LENGTH = 50;
 
 const inputClassName =
   "app-mobile-input w-full rounded-2xl border border-border bg-white px-4 py-2 text-base text-pkpk-sub-font outline-none";
@@ -83,7 +85,7 @@ const CreateSessionSheetBody: React.FC<CreateSessionSheetBodyProps> = ({
                 setError(null);
               }}
               required
-              maxLength={SESSION_NAME_MAX_LENGTH}
+              maxLength={MATCH_SESSION_NAME_MAX_LENGTH}
               placeholder="예: 번개, 클럽 대회"
               className={inputClassName}
             />
@@ -104,6 +106,7 @@ const CreateSessionSheetBody: React.FC<CreateSessionSheetBodyProps> = ({
                 setError(null);
               }}
               required
+              maxLength={MATCH_SESSION_LOCATION_MAX_LENGTH}
               placeholder="장소 입력"
               className="w-full"
               inputClassName={inputClassName}
