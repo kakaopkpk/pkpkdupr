@@ -180,14 +180,14 @@ const parseParticipantDuprSnapshot = (
   }
 };
 
+const REGULAR_DATE_KEY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+
 /**
  * MatchRepository - `packages/db`의 경기 저장소.
  *
  * matches, match_scores, match_participants를 조립해
  * shared Match 계약 형태로 반환합니다.
  */
-const REGULAR_DATE_KEY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
-
 export class MatchRepository {
   constructor(
     private db: any,
@@ -370,6 +370,7 @@ export class MatchRepository {
 
     const sessionDate = kstDateKeyToDate(dateKey, REGULAR_SESSION_START_HOUR);
     // 새 id가 기존 세션 id와 겹치면 행이 들어가지 않으므로 다른 id로 다시 시도한다.
+    // 같은 날 18:00 KST에 이름이 '정기 세션'인 다른 세션이 있으면 (name, date) 유니크 충돌로 끝까지 실패한다.
     for (let attempt = 0; attempt < 8; attempt += 1) {
       const now = new Date();
       await this.db
