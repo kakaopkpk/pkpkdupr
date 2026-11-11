@@ -674,7 +674,7 @@ const BottomNav: React.FC = () => {
     return (
       hasBlockingDepth ||
       isGlobalMenuVisible ||
-        (isCreateMatchOpen && createMatchTabKey === selectedTab) ||
+      (isCreateMatchOpen && createMatchTabKey === selectedTab) ||
       (isAppSettingsOpen && appSettingsTabKey === selectedTab)
     );
   }, [
