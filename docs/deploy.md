@@ -280,14 +280,17 @@ web과 admin-web은 한 GitHub Pages 사이트에 같이 배포합니다. Pages�
 | `VITE_API_BASE_URL` | 예 | `https://<project-ref>.supabase.co/functions/v1` |
 | `VITE_SUPABASE_URL` | 예 | `https://<project-ref>.supabase.co` |
 | `VITE_SUPABASE_ANON_KEY` | 예 | 프로젝트 anon(publishable) key |
+| `VITE_FUNCTION_REGION` | 아니오 | Supabase 프로젝트(DB) 리전 코드. 현재 운영값 `ap-southeast-1` |
 
 ```bash
 gh variable set VITE_API_BASE_URL --body 'https://<project-ref>.supabase.co/functions/v1'
 gh variable set VITE_SUPABASE_URL --body 'https://<project-ref>.supabase.co'
 gh variable set VITE_SUPABASE_ANON_KEY --body '<anon key>'
+gh variable set VITE_FUNCTION_REGION --body 'ap-southeast-1'   # 선택
 ```
 
 - 필수 variable이 비어 있으면 workflow가 빌드 전에 실패합니다. web 운영 번들은 `VITE_API_BASE_URL`이 없으면 API 주소를 추측하지 않고 시작할 때 오류를 냅니다.
+- `VITE_FUNCTION_REGION`은 선택값이라 비어 있어도 빌드는 실패하지 않습니다. 값이 있으면 두 앱이 모든 API 요청 URL에 `forceFunctionRegion=<값>` 쿼리를 붙여 Edge Function을 그 리전에서 실행합니다. 함수를 DB와 같은 리전에서 실행해 DB 왕복 지연을 줄이기 위해서입니다. 비우면 파라미터를 붙이지 않고(함수는 요청자 근처 리전에서 실행), Supabase Auth 호출과 Storage URL에는 붙지 않습니다.
 
 ### Supabase Auth URL
 
