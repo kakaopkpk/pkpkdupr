@@ -14,11 +14,12 @@ import type {
   PlayerRatingHistory,
 } from "@pkpkdupr/shared/player";
 import {
-  CompletedMatchApprovalCancelError,
   CompletedMatchResultEditError,
+  MatchRecordUpdateConflictError,
   SessionHasMatchesError,
   type CreateMatchInput,
   type UpdateMatchMetadataInput,
+  type UpdateRecordedMatchInput,
 } from "@pkpkdupr/db";
 import { db } from "../db";
 
@@ -62,7 +63,6 @@ const toCreateMatchInput = (match: NewMatchInput): CreateMatchInput =>
     id: match.id ?? generateEntityId("match"),
     resultSubmittedByPlayerId: match.resultSubmittedByPlayerId ?? null,
     resultSubmittedAt: match.resultSubmittedAt ?? null,
-    approvals: match.approvals ?? [],
   }) as CreateMatchInput;
 
 export interface TimestampUnitAudit {
@@ -183,13 +183,6 @@ export const hydrateMatch = (record: any): Match => ({
   })),
   resultSubmittedByPlayerId: record.resultSubmittedByPlayerId ?? null,
   resultSubmittedAt: toDateOrNull(record.resultSubmittedAt),
-  autoApprovalDueAt: toDateOrNull(record.autoApprovalDueAt),
-  approvals: (record.approvals ?? []).map(
-    (approval: { playerId: string; approvedAt: string | Date }) => ({
-      playerId: approval.playerId,
-      approvedAt: new Date(approval.approvedAt),
-    }),
-  ),
   matchStartsAt: new Date(record.matchStartsAt),
   completedAt: toDateOrNull(record.completedAt),
   createdAt: new Date(record.createdAt),
@@ -394,28 +387,6 @@ export class MatchRepository {
     return hydrateManagedSession(updated);
   }
 
-  async submitResult(
-    matchId: string,
-    submittedByPlayerId: string,
-    scores: MatchScore[],
-  ): Promise<Match> {
-    const updated = await this.run(
-      () =>
-        db.matches.submitResult(
-          matchId,
-          submittedByPlayerId,
-          scores,
-          `${matchId}-approval-${submittedByPlayerId}`,
-          new Date(),
-        ),
-      400,
-      (error) =>
-        error instanceof CompletedMatchResultEditError ? 409 : undefined,
-    );
-
-    return hydrateMatch(updated);
-  }
-
   async recordAdminResult(
     matchId: string,
     submittedByPlayerId: string,
@@ -437,6 +408,21 @@ export class MatchRepository {
     return hydrateMatch(updated);
   }
 
+  /** 참가자의 경기 기록 수정. cancelled 등 수정할 수 없는 상태로 바뀌었으면 409로 응답한다. */
+  async updateRecordedMatch(
+    matchId: string,
+    input: UpdateRecordedMatchInput,
+  ): Promise<Match> {
+    const updated = await this.run(
+      () => db.matches.updateRecordedMatch(matchId, input),
+      400,
+      (error) =>
+        error instanceof MatchRecordUpdateConflictError ? 409 : undefined,
+    );
+
+    return hydrateMatch(updated);
+  }
+
   async delete(matchId: string): Promise<void> {
     try {
       await db.matches.delete(matchId);
@@ -446,86 +432,6 @@ export class MatchRepository {
       }
       throw toRepositoryError(error, 400);
     }
-  }
-
-  async approveResult(matchId: string, playerId: string): Promise<Match> {
-    const updated = await this.run(
-      () =>
-        db.matches.approveResult(
-          matchId,
-          playerId,
-          `${matchId}-approval-${playerId}`,
-          new Date(),
-        ),
-      400,
-    );
-
-    return hydrateMatch(updated);
-  }
-
-  async cancelApproval(matchId: string, playerId: string): Promise<Match> {
-    const updated = await this.run(
-      () => db.matches.cancelApproval(matchId, playerId),
-      400,
-      (error) =>
-        error instanceof CompletedMatchApprovalCancelError ? 409 : undefined,
-    );
-
-    return hydrateMatch(updated);
-  }
-
-  async rejectResult(matchId: string, playerId: string): Promise<Match> {
-    const updated = await this.run(
-      () => db.matches.rejectResult(matchId, playerId),
-      400,
-    );
-
-    return hydrateMatch(updated);
-  }
-
-  async completeExpiredAutoApprovals(now: Date): Promise<Match[]> {
-    const at = now ? new Date(now) : new Date();
-    if (Number.isNaN(at.getTime())) {
-      throw new MatchRepositoryError(
-        "유효한 자동 합의 처리 시각이 필요합니다.",
-        400,
-      );
-    }
-    const records = await this.run(
-      () => db.matches.completeExpiredAutoApprovals(at),
-      400,
-    );
-
-    return records.map(hydrateMatch);
-  }
-
-  async findAutoApprovedMatchesAwaitingRating(): Promise<Match[]> {
-    const records = await this.run(
-      () => db.matches.findAutoApprovedMatchesAwaitingRating(),
-      400,
-    );
-    return records.map(hydrateMatch);
-  }
-
-  async markAutoApprovalRatingApplied(
-    matchId: string,
-    appliedAt: Date,
-  ): Promise<boolean> {
-    const at = appliedAt ? new Date(appliedAt) : new Date();
-    if (Number.isNaN(at.getTime())) {
-      throw new MatchRepositoryError("유효한 평점 반영 시각이 필요합니다.", 400);
-    }
-    return await this.run(
-      () => db.matches.markAutoApprovalRatingApplied(matchId, at),
-      400,
-    );
-  }
-
-  async clearAutoApprovalRatingApplied(matchId: string): Promise<void> {
-    await this.run(
-      () => db.matches.clearAutoApprovalRatingApplied(matchId),
-      400,
-    );
   }
 
   /** 특정 플레이어의 rating 변동 로그 조회 */

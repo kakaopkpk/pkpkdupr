@@ -143,7 +143,6 @@ describe("GET /api/admin/ratings/comparison", () => {
       scores: [{ scoreA: 11, scoreB: 9 }],
       resultSubmittedByPlayerId: "winner-a",
       resultSubmittedAt: now,
-      approvals: [],
       location: "Court",
       matchStartsAt: now,
       completedAt: now,

@@ -25,16 +25,6 @@ const session: AuthenticatedSession = {
   player,
   isFirstLogin: false,
 };
-const outsider: Player = {
-  ...player,
-  id: "player-outsider",
-  username: "outsider",
-};
-const outsiderSession: AuthenticatedSession = {
-  payload: { playerId: outsider.id, isAdmin: false },
-  player: outsider,
-  isFirstLogin: false,
-};
 const match: Match = {
   id: "match-001",
   type: "singles",
@@ -49,7 +39,6 @@ const match: Match = {
   scores: [],
   resultSubmittedByPlayerId: null,
   resultSubmittedAt: null,
-  approvals: [],
   location: "Court TBD",
   matchStartsAt: now,
   completedAt: null,
@@ -125,139 +114,6 @@ describe("GET /api/matches/:matchId", () => {
 
     expect(response.status).toBe(404);
     expect(response.body).toEqual({ error: "매치를 찾을 수 없습니다." });
-  });
-});
-
-describe("POST /api/matches/:matchId/result", () => {
-  beforeEach(() => {
-    vi.spyOn(
-      AuthService.prototype,
-      "authenticateAccessToken",
-    ).mockResolvedValue(session);
-  });
-
-  afterEach(() => {
-    vi.restoreAllMocks();
-  });
-
-  it("일반 경기 생성자는 클라이언트에서 결과를 입력할 수 있다", async () => {
-    vi.spyOn(MatchRepository.prototype, "findById").mockResolvedValue(match);
-    const submitResult = vi
-      .spyOn(MatchRepository.prototype, "submitResult")
-      .mockResolvedValue({
-        ...match,
-        status: "pending-approval",
-        scores: [{ scoreA: 11, scoreB: 8 }],
-        resultSubmittedByPlayerId: player.id,
-        resultSubmittedAt: now,
-        approvals: [{ playerId: player.id, approvedAt: now }],
-      });
-
-    const response = await request(app)
-      .post(`/api/matches/${match.id}/result`)
-      .set("Authorization", "Bearer test-token")
-      .send({ scores: [{ scoreA: 11, scoreB: 8 }] });
-
-    expect(response.status).toBe(200);
-    expect(submitResult).toHaveBeenCalledWith(
-      match.id,
-      player.id,
-      [{ scoreA: 11, scoreB: 8 }],
-    );
-  });
-
-  it("세션 경기 결과는 참여자여도 클라이언트에서 입력할 수 없다", async () => {
-    const sessionMatch: Match = {
-      ...match,
-      source: "admin_created",
-      creatorPlayerId: "admin-001",
-      session: {
-        id: "Ssession1",
-        name: "관리자 세션",
-        date: now,
-        location: "PKELO Court",
-      },
-    };
-    vi.spyOn(MatchRepository.prototype, "findById").mockResolvedValue(
-      sessionMatch,
-    );
-    const submitResult = vi.spyOn(
-      MatchRepository.prototype,
-      "submitResult",
-    );
-
-    const response = await request(app)
-      .post(`/api/matches/${match.id}/result`)
-      .set("Authorization", "Bearer participant-token")
-      .send({ scores: [{ scoreA: 11, scoreB: 8 }] });
-
-    expect(response.status).toBe(403);
-    expect(response.body).toEqual({
-      error: "세션 경기 결과는 관리자만 입력할 수 있습니다.",
-    });
-    expect(submitResult).not.toHaveBeenCalled();
-  });
-
-  it("일반 경기 생성자가 아니면 결과를 입력할 수 없다", async () => {
-    vi.spyOn(
-      AuthService.prototype,
-      "authenticateAccessToken",
-    ).mockResolvedValue(outsiderSession);
-    vi.spyOn(MatchRepository.prototype, "findById").mockResolvedValue(match);
-    const submitResult = vi.spyOn(
-      MatchRepository.prototype,
-      "submitResult",
-    );
-
-    const response = await request(app)
-      .post(`/api/matches/${match.id}/result`)
-      .set("Authorization", "Bearer outsider-token")
-      .send({ scores: [{ scoreA: 11, scoreB: 8 }] });
-
-    expect(response.status).toBe(403);
-    expect(response.body).toEqual({
-      error: "경기 생성자만 결과를 입력할 수 있습니다.",
-    });
-    expect(submitResult).not.toHaveBeenCalled();
-  });
-});
-
-describe("POST /api/matches/:matchId/rejection", () => {
-  beforeEach(() => {
-    vi.spyOn(
-      AuthService.prototype,
-      "authenticateAccessToken",
-    ).mockResolvedValue(session);
-  });
-
-  afterEach(() => {
-    vi.restoreAllMocks();
-  });
-
-  it("참여자가 대기 중인 결과를 거부하면 결과와 승인이 초기화된다", async () => {
-    const rejectResult = vi
-      .spyOn(MatchRepository.prototype, "rejectResult")
-      .mockResolvedValue({
-        ...match,
-        scores: [],
-        resultSubmittedByPlayerId: null,
-        resultSubmittedAt: null,
-        approvals: [],
-      });
-
-    const response = await request(app)
-      .post(`/api/matches/${match.id}/rejection`)
-      .set("Authorization", "Bearer test-token");
-
-    expect(response.status).toBe(200);
-    expect(rejectResult).toHaveBeenCalledWith(match.id, player.id);
-    expect(response.body).toMatchObject({
-      status: "created",
-      scores: [],
-      approvals: [],
-      resultSubmittedByPlayerId: null,
-      resultSubmittedAt: null,
-    });
   });
 });
 

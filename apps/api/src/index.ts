@@ -1,17 +1,20 @@
 import cors from "cors";
 import express from "express";
-import { createHash, randomUUID, timingSafeEqual } from "crypto";
+import { randomUUID } from "crypto";
 import {
-  computeMatchStartsAt,
   DEFAULT_MATCH_MODE,
   MATCH_RESULT_MAX_SCORE_COUNT,
   isSinglesMatchType,
+  isWithinMatchEditWindow,
   inferMatchModeFromScores,
   matchModeValues,
   matchTypeLabels,
   matchTypeValues,
+  type Match,
   type MatchMode,
   type MatchScore,
+  type RecordMatchRequest,
+  type RecordedMatchResponse,
   type Team,
   type Session,
   type MatchType,
@@ -27,6 +30,7 @@ import type {
   MemberListPlayer,
   Player,
   PlayerAffiliation,
+  PlayerRatingChangeLog,
   PlayerStatus,
 } from "@pkpkdupr/shared/player";
 import type { VerifyPlayerQrTokenRequest } from "@pkpkdupr/shared/qr";
@@ -49,7 +53,6 @@ import {
   AuthService,
   type AuthenticatedSession,
 } from "./services/AuthService";
-import { AutoApprovalService } from "./services/AutoApprovalService";
 import {
   attachMatchRatingChanges,
   PlayerRatingChartProjectionService,
@@ -123,24 +126,8 @@ const playerRatingChartProjectionService =
 authService.setPlayerRatingChartProjectionRefresher(
   playerRatingChartProjectionService,
 );
-const autoApprovalService = new AutoApprovalService(matchRepository, authService);
-const AUTO_APPROVAL_INTERVAL_MS = 60_000;
-let autoApprovalInterval: ReturnType<typeof setInterval> | undefined;
 const playerStatuses: PlayerStatus[] = ["active", "inactive"];
 const playerGenders: Array<Player["gender"]> = ["M", "F"];
-
-type CreateMatchRequest = {
-  name?: string;
-  type?: MatchType;
-  mode?: MatchMode;
-  teams?: [
-    { name?: string; playerIds?: string[] },
-    { name?: string; playerIds?: string[] },
-  ];
-  location?: string;
-  courtName?: string;
-  matchStartsAt?: string;
-};
 
 type MatchTeamRequest = { name?: string; playerIds?: string[] };
 
@@ -560,6 +547,102 @@ const normalizeMatchScores = (scores: unknown): MatchScore[] => {
   });
 };
 
+const MATCH_RATING_APPLY_FAILURE_MESSAGE =
+  "경기는 저장됐지만 평점 반영에 실패했습니다. 관리자에게 평점 재계산을 요청해 주세요.";
+
+/** 경기 기록·수정 요청 검증 실패. status로 400·403을 구분한다. */
+class MatchRecordRequestError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+  ) {
+    super(message);
+    this.name = "MatchRecordRequestError";
+  }
+}
+
+/**
+ * 경기 기록·수정 요청(RecordMatchRequest)을 검증해 저장할 값으로 바꾼다.
+ * 요청자는 active여야 하고 팀 구성에 본인이 포함돼야 한다.
+ */
+const prepareRecordedMatch = async (
+  body: Partial<RecordMatchRequest> | undefined,
+  requesterPlayerId: string,
+) => {
+  const { name, type, mode, teams, location, scores } = body ?? {};
+  if (type != null && !isMatchType(type)) {
+    throw new MatchRecordRequestError("유효한 매치 타입이 필요합니다.", 400);
+  }
+  if (mode != null && !isMatchMode(mode)) {
+    throw new MatchRecordRequestError("유효한 경기 모드가 필요합니다.", 400);
+  }
+  if (!Array.isArray(teams) || teams.length !== 2) {
+    throw new MatchRecordRequestError("두 팀 구성이 필요합니다.", 400);
+  }
+
+  const normalizedLocation = normalizeOptionalName(location);
+  if (!normalizedLocation) {
+    throw new MatchRecordRequestError("장소를 입력해주세요.", 400);
+  }
+
+  const normalizedScores = normalizeMatchScores(scores);
+  const resolvedMode = mode ?? inferMatchModeFromScores(normalizedScores);
+  validateMatchScoresForMode(resolvedMode, normalizedScores);
+
+  const requester = await authService.getPlayerById(requesterPlayerId);
+  if (!requester || requester.status !== "active") {
+    throw new MatchRecordRequestError("경기를 기록할 수 없는 계정입니다.", 403);
+  }
+
+  const publicPlayers = await authService.getPublicPlayers();
+  const playersById = new Map<string, Player>(
+    [requester, ...publicPlayers].map((player) => [player.id, player]),
+  );
+  const requestedTeams = teams as [MatchTeamRequest, MatchTeamRequest];
+  const flatPlayerIds = normalizeRequestedTeamPlayerIds(requestedTeams);
+  if (!flatPlayerIds.includes(requesterPlayerId)) {
+    throw new MatchRecordRequestError(
+      "매치 멤버에 본인이 포함되어야 합니다.",
+      400,
+    );
+  }
+
+  const matchTeams = buildMatchTeamsFromRequests(requestedTeams, playersById);
+  const resolvedMatchType =
+    type ??
+    inferMatchTypeFromTeams([matchTeams[0].players, matchTeams[1].players]);
+  if (
+    !validateCreateMatchTeams(resolvedMatchType, [
+      matchTeams[0].players,
+      matchTeams[1].players,
+    ])
+  ) {
+    throw new MatchRecordRequestError(
+      `${matchTypeLabels[resolvedMatchType]}에 맞는 유효한 팀 구성이 필요합니다.`,
+      400,
+    );
+  }
+
+  return {
+    name: normalizeOptionalName(name),
+    type: resolvedMatchType,
+    mode: resolvedMode,
+    teams: matchTeams,
+    location: normalizedLocation,
+    scores: normalizedScores,
+  };
+};
+
+/** 검증·저장소 오류는 지정된 상태로, 그 밖의 검증 예외는 400으로 응답한다. */
+const sendMatchRecordFailure = (res: express.Response, error: unknown) => {
+  const status =
+    error instanceof MatchRecordRequestError ||
+    error instanceof MatchRepositoryError
+      ? error.status
+      : 400;
+  res.status(status).json({ error: (error as Error).message });
+};
+
 const authErrorStatus: Record<AuthErrorCode, number> = {
   SESSION_INVALID: 401,
   SESSION_UNAVAILABLE: 503,
@@ -834,94 +917,44 @@ app.get("/api/match-sessions/:sessionId/matches", async (req, res) => {
 });
 
 app.post("/api/matches", async (req, res) => {
+  const decoded = await getAuthPayload(req, res);
+  if (!decoded) {
+    return;
+  }
+
+  let match: Match;
   try {
-    const decoded = await getAuthPayload(req, res);
-    if (!decoded) {
-      return;
-    }
-
-    const { name, type, mode, teams, location, courtName, matchStartsAt } =
-      req.body as CreateMatchRequest;
-    if (type != null && !isMatchType(type)) {
-      return res.status(400).json({ error: "유효한 매치 타입이 필요합니다." });
-    }
-    if (mode != null && !isMatchMode(mode)) {
-      return res.status(400).json({ error: "유효한 경기 모드가 필요합니다." });
-    }
-
-    if (!teams || teams.length !== 2) {
-      return res.status(400).json({ error: "두 팀 구성이 필요합니다." });
-    }
-
-    const normalizedLocation = normalizeOptionalName(location);
-    if (!normalizedLocation) {
-      return res.status(400).json({ error: "장소를 입력해주세요." });
-    }
-
-    const creator = await authService.getPlayerById(decoded.playerId);
-    if (!creator || creator.status !== "active") {
-      return res
-        .status(403)
-        .json({ error: "매치를 생성할 수 없는 계정입니다." });
-    }
-
-    const publicPlayers = await authService.getPublicPlayers();
-    const playersById = new Map<string, Player>(
-      [creator, ...publicPlayers].map((player) => [player.id, player]),
+    const prepared = await prepareRecordedMatch(
+      req.body as Partial<RecordMatchRequest>,
+      decoded.playerId,
     );
-    const flatPlayerIds = normalizeRequestedTeamPlayerIds(teams);
-    if (!flatPlayerIds.includes(decoded.playerId)) {
-      return res
-        .status(400)
-        .json({ error: "매치 멤버에 본인이 포함되어야 합니다." });
-    }
-
-    const matchTeams = buildMatchTeamsFromRequests(teams, playersById);
-    const resolvedMatchType = type
-      ? type
-      : inferMatchTypeFromTeams([matchTeams[0].players, matchTeams[1].players]);
-
-    if (
-      !validateCreateMatchTeams(resolvedMatchType, [
-        matchTeams[0].players,
-        matchTeams[1].players,
-      ])
-    ) {
-      return res.status(400).json({
-        error: `${matchTypeLabels[resolvedMatchType]}에 맞는 유효한 팀 구성이 필요합니다.`,
-      });
-    }
-
-    const matchStartsAtDate = matchStartsAt
-      ? new Date(matchStartsAt)
-      : computeMatchStartsAt();
-    if (Number.isNaN(matchStartsAtDate.getTime())) {
-      return res
-        .status(400)
-        .json({ error: "유효한 매치 시작 시간이 필요합니다." });
-    }
-
-    const match = await matchRepository.create({
-      name: normalizeOptionalName(name),
-      type: resolvedMatchType,
-      mode: mode ?? DEFAULT_MATCH_MODE,
+    // 시작 시각은 24시간 수정 기한의 기준이므로 클라이언트 값을 받지 않고 서버 now로 정한다.
+    const now = new Date();
+    match = await matchRepository.create({
+      ...prepared,
       source: "player_created",
       creatorPlayerId: decoded.playerId,
-      status: "created",
-      teams: matchTeams,
-      scores: [],
-      resultSubmittedByPlayerId: null,
-      resultSubmittedAt: null,
-      approvals: [],
-      location: normalizedLocation,
-      courtName: normalizeNullableCourtName(courtName) ?? undefined,
-      matchStartsAt: matchStartsAtDate,
-      completedAt: null,
+      status: "completed",
+      resultSubmittedByPlayerId: decoded.playerId,
+      resultSubmittedAt: now,
+      matchStartsAt: now,
+      completedAt: now,
     });
-
-    res.status(201).json(match);
   } catch (err) {
-    res.status(400).json({ error: (err as Error).message });
+    return sendMatchRecordFailure(res, err);
+  }
+
+  try {
+    const { ratingChangeLogs } =
+      await authService.applyMatchResultToRatings(match);
+    const response: RecordedMatchResponse = {
+      ...match,
+      ratingChanges: ratingChangeLogs,
+    };
+    res.status(201).json(response);
+  } catch (err) {
+    console.error("[MATCH] 경기 기록 후 평점 반영 실패", match.id, err);
+    res.status(500).json({ error: MATCH_RATING_APPLY_FAILURE_MESSAGE });
   }
 });
 
@@ -1101,7 +1134,6 @@ app.post(
         scores: [],
         resultSubmittedByPlayerId: null,
         resultSubmittedAt: null,
-        approvals: [],
         location: session.location,
         courtName: normalizeNullableCourtName(courtName) ?? undefined,
         matchStartsAt: matchStartsAtDate,
@@ -1212,7 +1244,6 @@ app.post(
           scores: [],
           resultSubmittedByPlayerId: null,
           resultSubmittedAt: null,
-          approvals: [],
           location: context.session.location,
           courtName: match.courtName!,
           matchStartsAt: match.matchStartsAt!,
@@ -1329,7 +1360,6 @@ app.post("/api/admin/matches/batch", requireAdmin, async (req, res) => {
         scores: normalizedScores,
         resultSubmittedByPlayerId: createdBy.id,
         resultSubmittedAt: matchStartsAtDate,
-        approvals: [],
         location: normalizedLocation,
         courtName: normalizeNullableCourtName(courtName) ?? undefined,
         matchStartsAt: matchStartsAtDate,
@@ -1447,48 +1477,6 @@ app.get("/api/matches/:matchId", async (req, res) => {
   }
 });
 
-app.post("/api/matches/:matchId/result", async (req, res) => {
-  try {
-    const decoded = await getAuthPayload(req, res);
-    if (!decoded) {
-      return;
-    }
-
-    const existingMatch = await matchRepository.findById(req.params.matchId);
-    if (!existingMatch) {
-      return res.status(404).json({ error: "매치를 찾을 수 없습니다." });
-    }
-    if (existingMatch.session && !decoded.isAdmin) {
-      return res
-        .status(403)
-        .json({ error: "세션 경기 결과는 관리자만 입력할 수 있습니다." });
-    }
-    if (
-      !existingMatch.session &&
-      existingMatch.creatorPlayerId !== decoded.playerId
-    ) {
-      return res
-        .status(403)
-        .json({ error: "경기 생성자만 결과를 입력할 수 있습니다." });
-    }
-
-    const { scores } = req.body as SubmitMatchResultRequest;
-    const normalizedScores = normalizeMatchScores(scores);
-    const match = await matchRepository.submitResult(
-      req.params.matchId,
-      decoded.playerId,
-      normalizedScores,
-    );
-
-    res.json(match);
-  } catch (err) {
-    if (err instanceof MatchRepositoryError && err.status === 409) {
-      return res.status(409).json({ error: err.message });
-    }
-    res.status(400).json({ error: (err as Error).message });
-  }
-});
-
 app.post(
   "/api/admin/matches/:matchId/result",
   requireAdmin,
@@ -1545,61 +1533,84 @@ app.delete(
   },
 );
 
-app.post("/api/matches/:matchId/approval", async (req, res) => {
+const isMatchParticipant = (match: Match, playerId: string) =>
+  match.teams.some((team) =>
+    team.players.some((player) => player.id === playerId),
+  );
+
+app.put("/api/matches/:matchId", async (req, res) => {
+  const decoded = await getAuthPayload(req, res);
+  if (!decoded) {
+    return;
+  }
+
+  const matchId = req.params.matchId;
+  let wasCompleted: boolean;
+  let match: Match;
   try {
-    const decoded = await getAuthPayload(req, res);
-    if (!decoded) {
-      return;
+    const existing = await matchRepository.findById(matchId);
+    if (!existing) {
+      return res.status(404).json({ error: "매치를 찾을 수 없습니다." });
+    }
+    // 생성자·관리자 여부와 무관하게 수정 전 참가자만 고칠 수 있다(세션 경기 포함).
+    if (!isMatchParticipant(existing, decoded.playerId)) {
+      return res
+        .status(403)
+        .json({ error: "경기 참가자만 기록을 수정할 수 있습니다." });
+    }
+    const now = new Date();
+    if (!isWithinMatchEditWindow(existing.matchStartsAt, now)) {
+      return res.status(403).json({
+        error:
+          "경기 시작 후 24시간이 지나 수정할 수 없습니다. 관리자에게 요청해 주세요.",
+      });
+    }
+    if (existing.status === "cancelled") {
+      return res
+        .status(409)
+        .json({ error: "취소된 경기는 기록을 수정할 수 없습니다." });
     }
 
-    const match = await matchRepository.approveResult(
-      req.params.matchId,
+    const prepared = await prepareRecordedMatch(
+      req.body as Partial<RecordMatchRequest>,
       decoded.playerId,
     );
-
-    if (match.status === "completed") {
-      await authService.applyMatchResultToRatings(match);
-    }
-
-    res.json(match);
+    wasCompleted = existing.status === "completed";
+    match = await matchRepository.updateRecordedMatch(matchId, {
+      ...prepared,
+      resultSubmittedByPlayerId: decoded.playerId,
+      resultSubmittedAt: now,
+    });
   } catch (err) {
-    res.status(400).json({ error: (err as Error).message });
+    return sendMatchRecordFailure(res, err);
   }
-});
 
-app.delete("/api/matches/:matchId/approval", async (req, res) => {
   try {
-    const decoded = await getAuthPayload(req, res);
-    if (!decoded) {
-      return;
+    let ratingChanges: PlayerRatingChangeLog[];
+    if (wasCompleted) {
+      // 증분 반영은 같은 경기의 로그가 이미 있으면 아무것도 하지 않으므로, 반영된 경기를 고치면 전체 재계산한다.
+      const { matches } = await matchRepository.findAll(0, 10000);
+      const { perMatchLogs } = await authService.recalculateDuprRatings(
+        matches.filter((candidate) => candidate.status === "completed"),
+        {
+          source: "manual_recalculation",
+          sourceLogId: `match-edit-${matchId}-${Date.now()}-${randomUUID()}`,
+          perMatchLogs: true,
+        },
+      );
+      const matchLogPrefix = `match-completed-${matchId}-`;
+      ratingChanges = perMatchLogs.filter((log) =>
+        log.sourceLogId.startsWith(matchLogPrefix),
+      );
+    } else {
+      ({ ratingChangeLogs: ratingChanges } =
+        await authService.applyMatchResultToRatings(match));
     }
-
-    const match = await matchRepository.cancelApproval(
-      req.params.matchId,
-      decoded.playerId,
-    );
-
-    res.json(match);
+    const response: RecordedMatchResponse = { ...match, ratingChanges };
+    res.json(response);
   } catch (err) {
-    if (err instanceof MatchRepositoryError && err.status === 409) {
-      return res.status(409).json({ error: err.message });
-    }
-    res.status(400).json({ error: (err as Error).message });
-  }
-});
-
-app.post("/api/matches/:matchId/rejection", async (req, res) => {
-  try {
-    const decoded = await getAuthPayload(req, res);
-    if (!decoded) {
-      return;
-    }
-
-    res.json(
-      await matchRepository.rejectResult(req.params.matchId, decoded.playerId),
-    );
-  } catch (err) {
-    res.status(400).json({ error: (err as Error).message });
+    console.error("[MATCH] 경기 기록 수정 후 평점 반영 실패", matchId, err);
+    res.status(500).json({ error: MATCH_RATING_APPLY_FAILURE_MESSAGE });
   }
 });
 
@@ -2027,65 +2038,18 @@ app.patch(
   },
 );
 
-export const processAutoApprovals = (now: Date = new Date()) =>
-  autoApprovalService.process(now);
-
-const hashCronSecret = (value: string) =>
-  createHash("sha256").update(value).digest();
-
-/** 길이가 달라도 비교 시간이 같도록 해시끼리 비교한다. */
-const isValidCronSecret = (received: string | undefined) => {
-  const expected = process.env.CRON_SECRET;
-  if (!expected || !received) return false;
-  return timingSafeEqual(hashCronSecret(received), hashCronSecret(expected));
-};
-
-// Supabase Cron(pg_cron + pg_net)이 주기적으로 호출한다. 로컬 Node 개발에서는 interval이 같은 처리를 한다.
-app.post("/api/internal/cron/auto-approvals", async (req, res) => {
-  if (!isValidCronSecret(req.header("x-cron-secret"))) {
-    return res.status(401).json({ error: "인증되지 않은 요청입니다." });
-  }
-
-  try {
-    const { completedMatches, appliedRatingCount } =
-      await processAutoApprovals();
-    res.json({
-      completedMatchCount: completedMatches.length,
-      appliedRatingCount,
-    });
-  } catch (error) {
-    console.error("[AUTO_APPROVAL] 자동 합의 처리 실패", error);
-    res.status(500).json({ error: (error as Error).message });
-  }
-});
-
 export { app };
-
-const startAutoApprovalScheduler = () => {
-  if (autoApprovalInterval) return;
-
-  const process = () => {
-    void processAutoApprovals().catch((error) => {
-      console.error("[AUTO_APPROVAL] 자동 합의 처리 실패", error);
-    });
-  };
-
-  process();
-  autoApprovalInterval = setInterval(process, AUTO_APPROVAL_INTERVAL_MS);
-  autoApprovalInterval.unref?.();
-};
 
 export const startServer = async () => {
   assertRequiredEnv();
   await initDatabase();
   await authService.seedDevAuthAccounts();
-  startAutoApprovalScheduler();
   return (app as any).listen(PORT, () => {
     console.log(`🚀 API Server running on http://localhost:${PORT}`);
   });
 };
 
-// Edge Runtime은 supabase/functions/api 진입점이 app을 서비스하므로 Node 부팅(시딩·interval·listen)을 건너뛴다.
+// Edge Runtime은 supabase/functions/api 진입점이 app을 서비스하므로 Node 부팅(시딩·listen)을 건너뛴다.
 if (
   process.env.NODE_ENV !== "test" &&
   process.env.VITEST !== "true" &&

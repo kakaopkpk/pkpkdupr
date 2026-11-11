@@ -39,7 +39,6 @@ const buildMatch = (id: string): Match => ({
   scores: [],
   resultSubmittedByPlayerId: null,
   resultSubmittedAt: null,
-  approvals: [],
   location: "PKELO Court A",
   matchStartsAt: now,
   completedAt: null,
