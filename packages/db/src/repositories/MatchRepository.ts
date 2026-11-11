@@ -122,6 +122,11 @@ export interface TimestampUnitAudit {
   }>;
 }
 
+export interface ExpiredCleanupResult {
+  deletedMatchCount: number;
+  deletedSessionCount: number;
+}
+
 const toDateOrNull = (value: Date | string | number | null | undefined) =>
   value == null ? null : new Date(value);
 
@@ -487,10 +492,12 @@ export class MatchRepository {
    *   한 문장 안의 CTE는 같은 스냅샷을 보므로, 같은 문장이 지우는 경기는 빼고 빈 세션을 판정한다.
    *   그래서 만료된 진행 중 경기만 있던 세션도 같은 호출에서 빈 세션으로 지워진다.
    * 명시적 트랜잭션 없이 문장 하나라 DB 왕복은 대상 유무와 관계없이 1회다.
+   * 빈 세션 판정은 문장 시작 스냅샷 기준이고 세션 행을 잠그지 않으므로, 그 뒤 같은 세션에 커밋된 경기는 보지 못한다.
+   * 정리 대상은 이미 만료된 과거 세션이고 경기 생성은 오늘 세션만 허용하므로 이 경계는 허용한다.
    */
   async deleteExpiredInProgressMatchesAndEmptySessions(
     now: Date,
-  ): Promise<{ deletedMatchCount: number; deletedSessionCount: number }> {
+  ): Promise<ExpiredCleanupResult> {
     const result: RawQueryResult = await this.client.execute({
       // 같은 경기에 점수 입력(updateRecordedMatch)이 동시에 들어오면 FOR UPDATE 행 잠금으로 순서를 정한다.
       // 잠금을 기다린 행은 갱신된 버전으로 WHERE를 다시 평가하므로, 먼저 completed가 된 경기는 지우지 않는다.

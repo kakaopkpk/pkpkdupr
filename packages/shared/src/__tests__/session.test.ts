@@ -190,12 +190,18 @@ describe("getEmptySessionExpiryCutoff", () => {
 
   it("세션 시각·now 조합 전반에서 getEmptySessionExpiresAt 판정과 같다", () => {
     const base = new Date("2026-11-08T00:00:00+09:00").getTime();
-    const step = 37 * 60 * SECOND_MS;
+    // 37분은 시·일 경계와 어긋나게 해 KST 자정·22시 전후를 고르게 훑기 위한 간격이다.
+    const STEP_MS = 37 * 60 * SECOND_MS;
+    const SESSION_COUNT = 120;
+    // now는 세션 범위보다 더 뒤까지 훑어 만료 후 구간도 확인한다.
+    const NOW_COUNT = 160;
+    // 정각에서 비껴난 now로 초 단위 경계 처리도 확인한다.
+    const NOW_OFFSET_MS = 13 * SECOND_MS;
     for (const kind of ["regular", "custom"] as const) {
-      for (let s = 0; s < 120; s += 1) {
-        const sessionDate = new Date(base + s * step);
-        for (let n = 0; n < 160; n += 1) {
-          const now = new Date(base + n * step + 13 * SECOND_MS);
+      for (let s = 0; s < SESSION_COUNT; s += 1) {
+        const sessionDate = new Date(base + s * STEP_MS);
+        for (let n = 0; n < NOW_COUNT; n += 1) {
+          const now = new Date(base + n * STEP_MS + NOW_OFFSET_MS);
           expect(isExpiredByCutoff(kind, sessionDate, now)).toBe(
             isExpiredByRule(kind, sessionDate, now),
           );
