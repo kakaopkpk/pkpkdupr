@@ -39,7 +39,7 @@ import {
   getEmptySessionExpiresAt,
   kstDateKeyToDate,
 } from "@pkpkdupr/shared/session";
-import { firstRow, placeholders } from "../db/client";
+import { firstRow, placeholders, type RawQueryResult } from "../db/client";
 
 type StoredMatch = typeof matches.$inferSelect;
 type StoredMatchParticipant = typeof matchParticipants.$inferSelect;
@@ -442,7 +442,7 @@ export class MatchRepository {
    * 삭제한 세션 수를 돌려준다.
    */
   async deleteExpiredEmptySessions(now: Date): Promise<number> {
-    const candidates = await this.client.execute(`
+    const candidates: RawQueryResult = await this.client.execute(`
       SELECT s.id, s."date", s.regular_date_key
       FROM match_sessions s
       WHERE NOT EXISTS (SELECT 1 FROM matches m WHERE m.session_id = s.id)
@@ -465,7 +465,7 @@ export class MatchRepository {
     let committed = false;
     try {
       // 후보 조회 뒤 경기가 들어온 세션은 지우지 않도록 삭제 시점에 다시 확인한다.
-      const deleted = await transaction.execute({
+      const deleted: RawQueryResult = await transaction.execute({
         sql: `
           DELETE FROM match_sessions s
           WHERE s.id IN (${placeholders(expiredIds.length)})
