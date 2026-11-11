@@ -321,7 +321,7 @@ describe("public match sessions", () => {
       expect(again.body.participants).toHaveLength(1);
     });
 
-    it("동시에 서로 다른 회원을 추가해도 전체 교체 없이 둘 다 남는다", async () => {
+    it("동시 추가 요청은 전체 교체 없이 개별 추가만 써서 둘 다 남는다", async () => {
       const replace = vi.spyOn(
         MatchRepository.prototype,
         "replaceSessionParticipants",
@@ -352,7 +352,9 @@ describe("public match sessions", () => {
 
       expect((await add(other.id)).status).toBe(403);
       expect((await remove(other.id)).status).toBe(403);
-      expect(MatchRepository.prototype.addSessionParticipants).not.toHaveBeenCalled();
+      expect(
+        MatchRepository.prototype.addSessionParticipants,
+      ).not.toHaveBeenCalled();
       expect(
         MatchRepository.prototype.removeSessionParticipant,
       ).not.toHaveBeenCalled();
@@ -362,7 +364,9 @@ describe("public match sessions", () => {
       expect((await add(inactive.id)).status).toBe(400);
       expect((await add("Pnobody1")).status).toBe(400);
       expect((await add("")).status).toBe(400);
-      expect(MatchRepository.prototype.addSessionParticipants).not.toHaveBeenCalled();
+      expect(
+        MatchRepository.prototype.addSessionParticipants,
+      ).not.toHaveBeenCalled();
     });
   });
 });

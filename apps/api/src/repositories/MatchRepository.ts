@@ -24,6 +24,8 @@ import {
 } from "@pkpkdupr/db";
 import { db } from "../db";
 
+const DAY_MS = 24 * 60 * 60 * 1000;
+
 /**
  * 저장소 호출 실패를 공개 API가 응답할 HTTP 상태와 함께 전달한다.
  * status는 라우트가 404·409 등을 구분해 응답하는 데 쓴다.
@@ -396,7 +398,7 @@ export class MatchRepository {
     dateKey: string,
   ): Promise<ManagedMatchSession[]> {
     const from = kstDateKeyToDate(dateKey);
-    const to = new Date(from.getTime() + 24 * 60 * 60 * 1000);
+    const to = new Date(from.getTime() + DAY_MS);
     const records = await this.run(
       () => db.matches.findSessionsInRange(from, to),
       500,
