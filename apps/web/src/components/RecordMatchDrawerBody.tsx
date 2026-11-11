@@ -30,6 +30,11 @@ import MatchCard from "@/components/Match";
 import UserChip from "@/components/UserChip";
 import { useAuth } from "@/context/AuthContext";
 import { apiFetch } from "@/lib/api";
+import {
+  fetchMatchSession,
+  fetchTodayMatchSessions,
+  getPrioritySessionMemberIds,
+} from "@/lib/matchSessions";
 import { formatRating } from "@/utils/dupr";
 import BottomSheet from "./BottomSheet";
 import BottomSheetSection from "./BottomSheetSection";
@@ -325,6 +330,9 @@ const RecordMatchDrawerBody: React.FC<RecordMatchDrawerBodyProps> = ({
 
   const [players, setPlayers] = useState<RecordablePlayer[]>([]);
   const [isPlayersError, setIsPlayersError] = useState(false);
+  const [sessionMemberIds, setSessionMemberIds] = useState<Set<string>>(
+    () => new Set(),
+  );
   const [query, setQuery] = useState("");
 
   useEffect(() => {
@@ -355,6 +363,32 @@ const RecordMatchDrawerBody: React.FC<RecordMatchDrawerBodyProps> = ({
       isCancelled = true;
     };
   }, []);
+
+  // 세션 시간이면 세션 멤버를 목록 앞에 둔다. 조회에 실패하면 최근 함께 친 순서만 쓴다
+  useEffect(() => {
+    let isCancelled = false;
+
+    const loadSessionMembers = async () => {
+      try {
+        const sessions = sessionId
+          ? [await fetchMatchSession(sessionId)]
+          : (await fetchTodayMatchSessions()).sessions;
+        if (!isCancelled) {
+          setSessionMemberIds(
+            getPrioritySessionMemberIds(sessions, player?.id),
+          );
+        }
+      } catch {
+        // 우선 추천은 부가 기능이라 실패해도 알리지 않는다
+      }
+    };
+
+    void loadSessionMembers();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [player?.id, sessionId]);
 
   const applyMembers = useCallback((nextMembers: MatchMember[]) => {
     setMembers(nextMembers);
@@ -430,10 +464,12 @@ const RecordMatchDrawerBody: React.FC<RecordMatchDrawerBodyProps> = ({
       )
       .sort(
         (a, b) =>
+          Number(sessionMemberIds.has(b.id)) -
+            Number(sessionMemberIds.has(a.id)) ||
           getLastPlayedAtMs(b.lastPlayedAt) - getLastPlayedAtMs(a.lastPlayedAt),
       )
       .slice(0, RECENT_PLAYER_LIMIT);
-  }, [players, query]);
+  }, [players, query, sessionMemberIds]);
 
   const handlePickPlayer = (candidate: RecordablePlayer) => {
     const member = normalizeMatchMember(candidate);
@@ -628,6 +664,7 @@ const RecordMatchDrawerBody: React.FC<RecordMatchDrawerBodyProps> = ({
                   const isPicked = members.some(
                     (member) => member.id === candidate.id,
                   );
+                  const isSessionMember = sessionMemberIds.has(candidate.id);
                   const lastPlayedLabel = formatLastPlayed(
                     candidate.lastPlayedAt,
                   );
@@ -647,7 +684,11 @@ const RecordMatchDrawerBody: React.FC<RecordMatchDrawerBodyProps> = ({
                             : () => handlePickPlayer(candidate)
                         }
                         endAdornment={
-                          lastPlayedLabel ? (
+                          isSessionMember ? (
+                            <span className="text-[0.65rem] font-semibold text-emerald-600">
+                              세션
+                            </span>
+                          ) : lastPlayedLabel ? (
                             <span className="text-[0.65rem] font-medium text-pkpk-detail-font">
                               {lastPlayedLabel}
                             </span>
