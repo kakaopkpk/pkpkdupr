@@ -34,7 +34,7 @@ import {
   REGULAR_SESSION_LOCATION,
   REGULAR_SESSION_NAME,
   REGULAR_SESSION_START_HOUR,
-  getEmptySessionExpiresAt,
+  getEmptySessionExpiryCutoff,
   kstDateKeyToDate,
 } from "@pkpkdupr/shared/session";
 import { firstRow, placeholders, type RawQueryResult } from "../db/client";
@@ -120,6 +120,11 @@ export interface TimestampUnitAudit {
     completedMatchCount: number;
     latestLegacyMatchStartsAt: number;
   }>;
+}
+
+export interface ExpiredCleanupResult {
+  deletedMatchCount: number;
+  deletedSessionCount: number;
 }
 
 const toDateOrNull = (value: Date | string | number | null | undefined) =>
@@ -481,108 +486,77 @@ export class MatchRepository {
   }
 
   /**
-   * 경기가 하나도 없고 getEmptySessionExpiresAt이 지난 세션을 참여자 행과 함께 삭제한다.
-   * 삭제한 세션 수를 돌려준다.
+   * 조회 시점 만료 정리를 단일 SQL 문(data-modifying CTE) 한 번으로 실행한다.
+   * - 점수 없는 created 경기 중 isInProgressMatchExpired인 경기(관리자 예정 경기 포함)를 참가자·점수 행과 함께 삭제한다.
+   * - 경기가 하나도 없고 getEmptySessionExpiresAt이 지난 세션을 참여자 행과 함께 삭제한다.
+   *   한 문장 안의 CTE는 같은 스냅샷을 보므로, 같은 문장이 지우는 경기는 빼고 빈 세션을 판정한다.
+   *   그래서 만료된 진행 중 경기만 있던 세션도 같은 호출에서 빈 세션으로 지워진다.
+   * 명시적 트랜잭션 없이 문장 하나라 DB 왕복은 대상 유무와 관계없이 1회다.
+   * 빈 세션 판정은 문장 시작 스냅샷 기준이고 세션 행을 잠그지 않으므로, 그 뒤 같은 세션에 커밋된 경기는 보지 못한다.
+   * 정리 대상은 이미 만료된 과거 세션이고 경기 생성은 오늘 세션만 허용하므로 이 경계는 허용한다.
    */
-  async deleteExpiredEmptySessions(now: Date): Promise<number> {
-    const candidates: RawQueryResult = await this.client.execute(`
-      SELECT s.id, s."date", s.regular_date_key
-      FROM match_sessions s
-      WHERE NOT EXISTS (SELECT 1 FROM matches m WHERE m.session_id = s.id)
-    `);
-    const expiredIds = candidates.rows
-      .filter((row) => {
-        const kind = row.regular_date_key ? "regular" : "custom";
-        const sessionDate = new Date(Number(row.date) * 1000);
-        return (
-          getEmptySessionExpiresAt(kind, sessionDate).getTime() <=
-          now.getTime()
-        );
-      })
-      .map((row) => String(row.id));
-    if (expiredIds.length === 0) {
-      return 0;
-    }
-
-    const transaction = await this.client.transaction("write");
-    let committed = false;
-    try {
-      // 후보 조회 뒤 경기가 들어온 세션은 지우지 않도록 삭제 시점에 다시 확인한다.
-      const deleted: RawQueryResult = await transaction.execute({
-        sql: `
-          DELETE FROM match_sessions s
-          WHERE s.id IN (${placeholders(expiredIds.length)})
-            AND NOT EXISTS (SELECT 1 FROM matches m WHERE m.session_id = s.id)
-          RETURNING s.id
-        `,
-        args: expiredIds,
-      });
-      const deletedIds = deleted.rows.map((row) => String(row.id));
-      if (deletedIds.length > 0) {
-        await transaction.execute({
-          sql: `
-            DELETE FROM match_session_participants
-            WHERE session_id IN (${placeholders(deletedIds.length)})
-          `,
-          args: deletedIds,
-        });
-      }
-      await transaction.commit();
-      committed = true;
-      return deletedIds.length;
-    } finally {
-      if (!committed) {
-        transaction.close();
-      }
-    }
-  }
-
-  /**
-   * 점수 없는 created 경기 중 isInProgressMatchExpired인(시작 후 IN_PROGRESS_MATCH_TIMEOUT_MS가 지난) 경기를
-   * 참가자·점수 행과 함께 삭제한다. 삭제한 경기 수를 돌려준다.
-   */
-  async deleteExpiredInProgressMatches(now: Date): Promise<number> {
-    const cutoff = inProgressExpiryCutoff(now);
-    const transaction = await this.client.transaction("write");
-    let committed = false;
-    try {
-      // 같은 경기에 점수 입력(updateRecordedMatch)이 동시에 들어오면 행 잠금으로 순서를 정한다.
-      // 잠금을 얻은 뒤에도 created·점수 없음 조건을 다시 보므로 먼저 completed가 된 경기는 지우지 않는다.
-      const expired: RawQueryResult = await transaction.execute({
-        sql: `
+  async deleteExpiredInProgressMatchesAndEmptySessions(
+    now: Date,
+  ): Promise<ExpiredCleanupResult> {
+    const result: RawQueryResult = await this.client.execute({
+      // 같은 경기에 점수 입력(updateRecordedMatch)이 동시에 들어오면 FOR UPDATE 행 잠금으로 순서를 정한다.
+      // 잠금을 기다린 행은 갱신된 버전으로 WHERE를 다시 평가하므로, 먼저 completed가 된 경기는 지우지 않는다.
+      // 세션 만료의 KST 계산은 TS(getEmptySessionExpiryCutoff)에서 하고 epoch 초 기준값만 넘긴다.
+      sql: `
+        WITH expired_matches AS (
           SELECT m.id
           FROM matches m
           WHERE m.status = 'created'
             AND m.match_starts_at <= $1
-            AND NOT EXISTS (SELECT 1 FROM match_scores s WHERE s.match_id = m.id)
+            AND NOT EXISTS (SELECT 1 FROM match_scores sc WHERE sc.match_id = m.id)
           FOR UPDATE
-        `,
-        args: [cutoff],
-      });
-      const expiredIds = expired.rows.map((row) => String(row.id));
-      if (expiredIds.length > 0) {
-        const idList = placeholders(expiredIds.length);
-        await transaction.execute({
-          sql: `DELETE FROM match_scores WHERE match_id IN (${idList})`,
-          args: expiredIds,
-        });
-        await transaction.execute({
-          sql: `DELETE FROM match_participants WHERE match_id IN (${idList})`,
-          args: expiredIds,
-        });
-        await transaction.execute({
-          sql: `DELETE FROM matches WHERE id IN (${idList})`,
-          args: expiredIds,
-        });
-      }
-      await transaction.commit();
-      committed = true;
-      return expiredIds.length;
-    } finally {
-      if (!committed) {
-        transaction.close();
-      }
-    }
+        ),
+        deleted_matches AS (
+          DELETE FROM matches m
+          WHERE m.id IN (SELECT id FROM expired_matches)
+          RETURNING m.id
+        ),
+        deleted_match_scores AS (
+          DELETE FROM match_scores
+          WHERE match_id IN (SELECT id FROM deleted_matches)
+        ),
+        deleted_match_participants AS (
+          DELETE FROM match_participants
+          WHERE match_id IN (SELECT id FROM deleted_matches)
+        ),
+        deleted_sessions AS (
+          DELETE FROM match_sessions s
+          WHERE (
+              (s.regular_date_key IS NOT NULL AND s."date" < $2)
+              OR (s.regular_date_key IS NULL AND s."date" < $3)
+            )
+            AND NOT EXISTS (
+              SELECT 1
+              FROM matches m
+              WHERE m.session_id = s.id
+                AND NOT EXISTS (SELECT 1 FROM deleted_matches d WHERE d.id = m.id)
+            )
+          RETURNING s.id
+        ),
+        deleted_session_participants AS (
+          DELETE FROM match_session_participants
+          WHERE session_id IN (SELECT id FROM deleted_sessions)
+        )
+        SELECT
+          (SELECT count(*) FROM deleted_matches) AS deleted_match_count,
+          (SELECT count(*) FROM deleted_sessions) AS deleted_session_count
+      `,
+      args: [
+        inProgressExpiryCutoff(now),
+        toUnixTimestampSeconds(getEmptySessionExpiryCutoff("regular", now)),
+        toUnixTimestampSeconds(getEmptySessionExpiryCutoff("custom", now)),
+      ],
+    });
+    const row = result.rows[0];
+    return {
+      deletedMatchCount: Number(row?.deleted_match_count ?? 0),
+      deletedSessionCount: Number(row?.deleted_session_count ?? 0),
+    };
   }
 
   /**

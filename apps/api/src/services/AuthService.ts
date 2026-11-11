@@ -592,9 +592,10 @@ export class AuthService {
     return player ? hydratePlayer(player) : undefined;
   }
 
-  private async buildSession(
+  private buildSession(
     stored: StoredPlayerRecord,
-  ): Promise<AuthenticatedSession> {
+    isAdmin: boolean,
+  ): AuthenticatedSession {
     if (stored.status === "inactive") {
       throw new InvalidAccessTokenError(
         "비활성 계정입니다. 관리자에게 문의해주세요.",
@@ -604,7 +605,7 @@ export class AuthService {
     return {
       payload: {
         playerId: stored.id,
-        isAdmin: await db.playerAdmins.isAdmin(stored.id),
+        isAdmin,
       },
       player: toPublicPlayer(stored),
       isFirstLogin: stored.isFirstLogin,
@@ -612,7 +613,8 @@ export class AuthService {
   }
 
   /**
-   * Supabase Auth로 토큰을 확인하고 `players.auth_user_id`로 연결된 회원 세션을 만든다.
+   * Supabase Auth 토큰을 확인하고 `players.auth_user_id`로 연결된 회원 세션을 만든다.
+   * 회원과 관리자 여부는 DB 쿼리 1회로 가져온다.
    * Auth 사용자는 관리자만 만들 수 있으므로 provider·이메일은 따로 검사하지 않는다.
    */
   async authenticateAccessToken(
@@ -623,7 +625,7 @@ export class AuthService {
       throw new InvalidAccessTokenError("세션이 만료되었거나 유효하지 않습니다.");
     }
 
-    const linked = await db.players.findByAuthUserId(user.id);
+    const linked = await db.players.findByAuthUserIdWithAdmin(user.id);
     if (!linked) {
       throw new AuthError(
         "ACCOUNT_NOT_LINKED",
@@ -631,7 +633,7 @@ export class AuthService {
       );
     }
 
-    return await this.buildSession(hydratePlayer(linked));
+    return this.buildSession(hydratePlayer(linked.player), linked.isAdmin);
   }
 
   /**

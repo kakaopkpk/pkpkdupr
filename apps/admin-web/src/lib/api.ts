@@ -5,11 +5,17 @@ const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? "")
   .trim()
   .replace(/\/+$/, "");
 
+// 값이 있으면 Edge Function 실행 리전을 고정한다(DB와 같은 리전에서 실행해 DB 왕복 지연을 줄인다).
+const FUNCTION_REGION = (import.meta.env.VITE_FUNCTION_REGION ?? "").trim();
+
 export const buildApiUrl = (path: string) => {
   if (!path.startsWith("/")) {
     throw new Error(`API path must start with '/': ${path}`);
   }
-  return `${API_BASE_URL}${path}`;
+  const regionQuery = FUNCTION_REGION
+    ? `${path.includes("?") ? "&" : "?"}forceFunctionRegion=${encodeURIComponent(FUNCTION_REGION)}`
+    : "";
+  return `${API_BASE_URL}${path}${regionQuery}`;
 };
 
 /**

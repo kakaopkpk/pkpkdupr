@@ -405,19 +405,14 @@ export class MatchRepository {
 
   /**
    * 조회 시점 정리. 시작 후 2시간이 지나도록 점수 없는 진행 중 경기를 먼저 삭제하고,
-   * 그 결과 경기가 없어진 세션까지 포함해 만료된 빈 세션을 삭제한다.
+   * 그 결과 경기가 없어진 세션까지 포함해 만료된 빈 세션을 삭제한다(단일 SQL 문, DB 왕복 1회).
    * best-effort라 실패는 로그만 남기고 호출부 조회를 막지 않는다.
    */
   async cleanupExpired(now: Date = new Date()): Promise<void> {
     try {
-      await db.matches.deleteExpiredInProgressMatches(now);
+      await db.matches.deleteExpiredInProgressMatchesAndEmptySessions(now);
     } catch (error) {
-      console.error("[MATCH] 만료된 진행 중 경기 정리 실패", error);
-    }
-    try {
-      await db.matches.deleteExpiredEmptySessions(now);
-    } catch (error) {
-      console.error("[MATCH] 빈 세션 정리 실패", error);
+      console.error("[MATCH] 만료된 진행 중 경기·빈 세션 정리 실패", error);
     }
   }
 

@@ -104,7 +104,7 @@ GitHub 조직이나 저장소 이름이 바뀌어 Pages 주소가 달라졌을 �
 
 2. Supabase 대시보드 **Authentication → URL Configuration**에서 Site URL을 새 주소로 바꿉니다. 아이디·비밀번호 로그인은 리다이렉트를 쓰지 않아 Redirect URLs는 비워 둬도 됩니다. 값이 들어 있으면 새 주소로 맞춥니다. 자세한 설명은 [docs/deploy.md](docs/deploy.md)의 "Supabase Auth URL"에 있습니다.
 3. 새 저장소 Settings → Pages에서 **Source: GitHub Actions**를 고릅니다. 그리고 Actions variables가 그대로 있는지 확인합니다.
-   - `pages.yml` 빌드용: `VITE_API_BASE_URL`, `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`
+   - `pages.yml` 빌드용: `VITE_API_BASE_URL`, `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `VITE_FUNCTION_REGION`(선택)
    - `supabase-deploy.yml`용: `SUPABASE_PROJECT_REF`
 
    Pages 경로(`/<저장소>/`)는 `pages.yml`이 저장소 이름에서 자동으로 정합니다.

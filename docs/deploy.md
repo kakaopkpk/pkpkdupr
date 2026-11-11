@@ -12,7 +12,7 @@ Edge Function `api` ── service role key ──> Supabase Storage `avatars` �
 ```
 
 - 클라이언트의 API base URL은 `https://<project-ref>.supabase.co/functions/v1`이고, 경로는 로컬과 같은 `/api/...`입니다(함수 이름 `api`가 경로 첫 segment가 됩니다).
-- 함수는 게이트웨이 JWT 검증을 끕니다(`supabase/config.toml`의 `[functions.api] verify_jwt = false`). 인증은 api가 `Authorization: Bearer <Supabase Auth access token>`을 Supabase Auth로 직접 확인해 합니다(아래 "로그인과 회원 연결").
+- 함수는 게이트웨이 JWT 검증을 끕니다(`supabase/config.toml`의 `[functions.api] verify_jwt = false`). 인증은 api가 `Authorization: Bearer <Supabase Auth access token>`의 서명을 직접 검증해 합니다(아래 "로그인과 회원 연결").
 
 ## 패키징
 
@@ -85,7 +85,7 @@ gh variable set SUPABASE_PROJECT_REF --body <project-ref>
 | `CORS_ALLOWED_ORIGINS` | 예 | 허용 origin(쉼표 구분). 운영값 `https://kakaopkpk.github.io` |
 | `STORAGE_PUBLIC_URL` | 아니오 | 아바타 공개 URL의 base. 없으면 `SUPABASE_URL`을 씁니다. 운영에서는 비워 두고, 로컬 `functions serve`에서만 `http://127.0.0.1:54321`로 넣습니다(함수 안의 `SUPABASE_URL`은 브라우저가 접근할 수 없는 `http://kong:8000`이기 때문). |
 
-`SUPABASE_URL`·`SUPABASE_ANON_KEY`·`SUPABASE_SERVICE_ROLE_KEY`는 Supabase가 함수에 자동으로 넣으므로 직접 설정하지 않습니다. 토큰 확인에는 앞의 둘을, 계정 발급·비밀번호 초기화·아이디 변경(Auth admin API)에는 service role key를 씁니다.
+`SUPABASE_URL`·`SUPABASE_ANON_KEY`·`SUPABASE_SERVICE_ROLE_KEY`·`SUPABASE_JWKS`는 Supabase가 함수에 자동으로 넣으므로 직접 설정하지 않습니다(예약 이름이라 설정할 수도 없습니다). 토큰 확인에는 `SUPABASE_JWKS`(프로젝트 JWT 서명 공개키, 토큰 서명 검증용)와 `SUPABASE_URL`·`SUPABASE_ANON_KEY`를, 계정 발급·비밀번호 초기화·아이디 변경(Auth admin API)에는 service role key를 씁니다.
 
 ```bash
 pnpm exec supabase secrets set --project-ref <project-ref> \
@@ -118,7 +118,11 @@ Supabase 대시보드 → Authentication
   - **비밀번호 초기화**: 임시 비밀번호가 응답에 한 번만 보입니다. 이 회원은 다시 첫 로그인 상태가 됩니다.
   - **아이디 변경**: 회원의 `username`과 Auth 사용자의 내부 이메일을 같이 바꿉니다.
 - 관리자가 발급·초기화한 계정은 `players.is_first_login = true`입니다. 처음 로그인하면 web이 `/force-change-password`로 보내 비밀번호를 바꾸게 하고, 바꾸면 `POST /api/me/password-changed`가 플래그를 내립니다.
-- api는 요청의 access token으로 Supabase Auth 사용자를 조회해 `players.auth_user_id`(auth.users.id)가 같은 회원을 찾습니다. 회원 테이블에는 이메일을 저장하지 않습니다. 브라우저가 보낸 이메일·아이디 값은 쓰지 않습니다.
+- api는 요청의 access token 서명과 만료(`exp`)를 프로젝트 공개키로 직접 검증하고(Auth 서버 왕복 없음), 토큰의 `sub`(auth.users.id)와 `players.auth_user_id`가 같은 회원과 관리자 여부를 DB 쿼리 1회로 찾습니다. 회원 테이블에는 이메일을 저장하지 않습니다. 브라우저가 보낸 이메일·아이디 값은 쓰지 않습니다.
+  - 공개키는 `SUPABASE_JWKS`에서 읽고, 없거나 읽을 수 없으면(로컬 Node api 등) Auth JWKS 엔드포인트(`<SUPABASE_URL>/auth/v1/.well-known/jwks.json`)에서 받습니다. 받은 키는 auth-js가 프로세스 전역 캐시에 약 10분간 보관합니다. 캐시에 없는 `kid`는 곧바로 다시 받으므로 새 키는 바로 쓰이지만, 폐기한 키는 캐시가 만료될 때까지(최대 약 10분) 계속 통과할 수 있습니다. 엔드포인트를 조회하지 못하면 503 `SESSION_UNAVAILABLE`입니다.
+  - 대칭 서명(HS256) 토큰과 키 목록에 없는 `kid`의 토큰은 전처럼 Auth 서버 사용자 조회(`GET /auth/v1/user`)로 확인합니다.
+  - `iss`·`aud`는 검사하지 않습니다(로컬 함수 런타임의 `SUPABASE_URL`이 토큰 `iss`와 다릅니다).
+  - **세션 무효화 지연**: 로그아웃·세션 철회·Auth 사용자 삭제·정지(ban)는 access token이 만료될 때까지 api에 반영되지 않습니다. 만료 시간은 로컬이 `supabase/config.toml`의 `jwt_expiry`(3600초), 운영은 대시보드 설정을 따릅니다. 회원 inactive 처리는 요청마다 DB로 확인하므로 즉시 반영됩니다. 계정을 즉시 차단해야 하면 Auth 정지 대신(또는 함께) 회원 상태를 inactive로 바꿉니다. 삭제된 Auth 사용자는 `players.auth_user_id`가 비워지므로 만료 전까지 401 대신 403 `ACCOUNT_NOT_LINKED`를 받습니다.
 - 연결된 회원이 없는 Auth 사용자(예: 대시보드에서 직접 만든 사용자)는 403 `ACCOUNT_NOT_LINKED`이고, 앱이 관리자에게 문의하라고 안내합니다.
 - 로그인 provider와 이메일 도메인은 서버가 검사하지 않습니다. 계정을 만들 수 있는 주체를 막는 것(위 설정의 가입 끔, 관리자 발급)이 접근 통제입니다.
 
@@ -280,14 +284,17 @@ web과 admin-web은 한 GitHub Pages 사이트에 같이 배포합니다. Pages�
 | `VITE_API_BASE_URL` | 예 | `https://<project-ref>.supabase.co/functions/v1` |
 | `VITE_SUPABASE_URL` | 예 | `https://<project-ref>.supabase.co` |
 | `VITE_SUPABASE_ANON_KEY` | 예 | 프로젝트 anon(publishable) key |
+| `VITE_FUNCTION_REGION` | 아니오 | Supabase 프로젝트(DB) 리전 코드. 현재 운영값 `ap-southeast-1` |
 
 ```bash
 gh variable set VITE_API_BASE_URL --body 'https://<project-ref>.supabase.co/functions/v1'
 gh variable set VITE_SUPABASE_URL --body 'https://<project-ref>.supabase.co'
 gh variable set VITE_SUPABASE_ANON_KEY --body '<anon key>'
+gh variable set VITE_FUNCTION_REGION --body 'ap-southeast-1'   # 선택
 ```
 
 - 필수 variable이 비어 있으면 workflow가 빌드 전에 실패합니다. web 운영 번들은 `VITE_API_BASE_URL`이 없으면 API 주소를 추측하지 않고 시작할 때 오류를 냅니다.
+- `VITE_FUNCTION_REGION`은 선택값이라 비어 있어도 빌드는 실패하지 않습니다. 값이 있으면 두 앱이 모든 API 요청 URL에 `forceFunctionRegion=<값>` 쿼리를 붙여 Edge Function을 그 리전에서 실행합니다. 함수를 DB와 같은 리전에서 실행해 DB 왕복 지연을 줄이기 위해서입니다. 비우면 파라미터를 붙이지 않고(함수는 요청자 근처 리전에서 실행), Supabase Auth 호출과 Storage URL에는 붙지 않습니다.
 
 ### Supabase Auth URL
 

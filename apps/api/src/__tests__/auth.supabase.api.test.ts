@@ -107,10 +107,17 @@ const setupAuthFixture = () => {
   vi.spyOn(db.players, "findById").mockImplementation(async (id) =>
     players.get(id),
   );
-  vi.spyOn(db.players, "findByAuthUserId").mockImplementation(
-    async (authUserId) =>
-      [...players.values()].find((player) => player.authUserId === authUserId),
-  );
+  const findByAuthUserIdWithAdmin = vi
+    .spyOn(db.players, "findByAuthUserIdWithAdmin")
+    .mockImplementation(async (authUserId) => {
+      const player = [...players.values()].find(
+        (candidate) => candidate.authUserId === authUserId,
+      );
+      return player ? { player, isAdmin: admins.has(player.id) } : undefined;
+    });
+  // 인증 경로가 별도 회원·관리자 조회를 하지 않는지 확인하는 용도다.
+  const findByAuthUserId = vi.spyOn(db.players, "findByAuthUserId");
+  const isAdmin = vi.spyOn(db.playerAdmins, "isAdmin");
   vi.spyOn(db.players, "findByUsernameIgnoringCase").mockImplementation(
     async (username) => findByUsername(username),
   );
@@ -162,11 +169,10 @@ const setupAuthFixture = () => {
   vi.spyOn(db.playerCreationLogs, "create").mockImplementation(
     async (input) => input,
   );
-  vi.spyOn(db.playerAdmins, "isAdmin").mockImplementation(async (playerId) =>
-    admins.has(playerId),
-  );
-
   return {
+    findByAuthUserIdWithAdmin,
+    findByAuthUserId,
+    isAdmin,
     addAuthUser,
     addPlayer,
     admins,
@@ -182,6 +188,63 @@ const setupAuthFixture = () => {
 };
 
 const bearer = (token: string) => ({ Authorization: `Bearer ${token}` });
+
+const base64Url = (input: string | Uint8Array) =>
+  Buffer.from(input).toString("base64url");
+
+const encodeJwtParts = (
+  header: Record<string, unknown>,
+  claims: Record<string, unknown>,
+) => `${base64Url(JSON.stringify(header))}.${base64Url(JSON.stringify(claims))}`;
+
+/** 현재 시각(가짜 타이머 포함) 기준 한 시간 뒤 만료. */
+const futureExp = () => Math.floor(Date.now() / 1000) + 3600;
+
+/** 서명은 검증하지 않고 Auth 서버 사용자 조회로 확인하는 HS256 토큰. */
+const hs256Token = (claims: Record<string, unknown> = { sub: "auth-hs" }) =>
+  `${encodeJwtParts({ alg: "HS256", typ: "JWT" }, { exp: futureExp(), ...claims })}.${base64Url("signature")}`;
+
+interface SigningKey {
+  kid: string;
+  privateKey: CryptoKey;
+  publicJwk: JsonWebKey & { kid: string; alg: string };
+}
+
+const ES256 = { name: "ECDSA", namedCurve: "P-256" } as const;
+
+const createSigningKey = async (kid: string): Promise<SigningKey> => {
+  const pair = await crypto.subtle.generateKey(ES256, true, ["sign", "verify"]);
+  const jwk = await crypto.subtle.exportKey("jwk", pair.publicKey);
+  return {
+    kid,
+    privateKey: pair.privateKey,
+    publicJwk: { ...jwk, kid, alg: "ES256", key_ops: ["verify"] },
+  };
+};
+
+/** WebCrypto ECDSA 서명은 JWS ES256과 같은 r||s 형식이다. */
+const signEs256 = async (
+  key: SigningKey,
+  claims: Record<string, unknown>,
+  kid = key.kid,
+) => {
+  const input = encodeJwtParts({ alg: "ES256", typ: "JWT", kid }, claims);
+  const signature = await crypto.subtle.sign(
+    { name: "ECDSA", hash: "SHA-256" },
+    key.privateKey,
+    new TextEncoder().encode(input),
+  );
+  return `${input}.${base64Url(new Uint8Array(signature))}`;
+};
+
+const jsonResponse = (body: unknown, status = 200) =>
+  new Response(JSON.stringify(body), {
+    status,
+    headers: {
+      "Content-Type": "application/json",
+      "X-Supabase-Api-Version": "2024-01-01",
+    },
+  });
 
 describe("Supabase Auth 기반 인증", () => {
   let fixture: ReturnType<typeof setupAuthFixture>;
@@ -223,7 +286,10 @@ describe("Supabase Auth 기반 인증", () => {
     /** 응답 본문에 code를 넣지 않는 케이스. 테스트 이름에 그대로 출력된다. */
     const NO_CODE = "(code 없음)";
 
-    /** fixture의 getUser mock을 풀고, Auth 서버 HTTP 응답을 fetch stub으로 대신한다. */
+    /**
+     * fixture의 getUser mock을 풀고, Auth 서버 HTTP 응답을 fetch stub으로 대신한다.
+     * 요청 토큰은 Auth 서버 사용자 조회로 확인하는 HS256 토큰을 쓴다.
+     */
     const stubAuthServerError = (status: number, code: string) => {
       vi.mocked(SupabaseAuthUserVerifier.prototype.getUser).mockRestore();
       vi.stubEnv("SUPABASE_URL", "http://auth.test");
@@ -252,6 +318,26 @@ describe("Supabase Auth 기반 인증", () => {
       vi.unstubAllGlobals();
     });
 
+    it("JWKS 엔드포인트를 조회하지 못하면 SESSION_UNAVAILABLE로 503을 준다", async () => {
+      vi.mocked(SupabaseAuthUserVerifier.prototype.getUser).mockRestore();
+      vi.stubEnv("SUPABASE_URL", "http://auth.test");
+      vi.stubEnv("SUPABASE_ANON_KEY", "anon-key");
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async () => {
+          throw new TypeError("fetch failed");
+        }),
+      );
+      vi.spyOn(console, "error").mockImplementation(() => undefined);
+      const key = await createSigningKey("unreachable-kid");
+      const token = await signEs256(key, { sub: "auth-es", exp: futureExp() });
+
+      const response = await request(app).get("/api/me").set(bearer(token));
+
+      expect(response.status).toBe(503);
+      expect(response.body.code).toBe("SESSION_UNAVAILABLE");
+    });
+
     it.each([
       [403, "bad_jwt"],
       [403, "session_not_found"],
@@ -263,7 +349,9 @@ describe("Supabase Auth 기반 인증", () => {
       async (status, code) => {
         stubAuthServerError(status, code);
 
-        const response = await request(app).get("/api/me").set(bearer("any"));
+        const response = await request(app)
+          .get("/api/me")
+          .set(bearer(hs256Token()));
 
         expect(response.status).toBe(401);
         expect(response.body.code).toBe("SESSION_INVALID");
@@ -282,7 +370,9 @@ describe("Supabase Auth 기반 인증", () => {
       async (status, code) => {
         stubAuthServerError(status, code);
 
-        const response = await request(app).get("/api/me").set(bearer("any"));
+        const response = await request(app)
+          .get("/api/me")
+          .set(bearer(hs256Token()));
 
         expect(response.status).toBe(503);
         expect(response.body.code).toBe("SESSION_UNAVAILABLE");
@@ -334,6 +424,21 @@ describe("Supabase Auth 기반 인증", () => {
 
       expect(response.status).toBe(200);
       expect(response.body.id).toBe("Pmember1");
+    });
+
+    it("회원과 관리자 여부를 DB 쿼리 1회로 가져온다", async () => {
+      const authUser = fixture.addAuthUser("admin");
+      fixture.addPlayer("Padmin01", "club_admin", authUser.id);
+      fixture.admins.add("Padmin01");
+
+      const response = await request(app).get("/api/me").set(bearer("admin"));
+
+      expect(response.status).toBe(200);
+      expect(response.body.isAdmin).toBe(true);
+      expect(fixture.findByAuthUserIdWithAdmin).toHaveBeenCalledTimes(1);
+      expect(fixture.findByAuthUserIdWithAdmin).toHaveBeenCalledWith(authUser.id);
+      expect(fixture.findByAuthUserId).not.toHaveBeenCalled();
+      expect(fixture.isAdmin).not.toHaveBeenCalled();
     });
 
     it("비활성 회원은 SESSION_INVALID로 거부한다", async () => {
@@ -719,6 +824,147 @@ describe("Supabase Auth 기반 인증", () => {
         ]);
       });
     });
+  });
+});
+
+describe("SupabaseAuthUserVerifier 토큰 검증", () => {
+  // auth-js는 엔드포인트에서 받은 JWKS를 Supabase URL(호스트)별 전역 캐시에 둔다. 테스트끼리 섞이지 않게 호스트를 바꾼다.
+  let authHostNumber = 0;
+  let AUTH_URL = "";
+  let fetchMock: ReturnType<typeof vi.fn>;
+
+  /** 요청 URL별 응답을 정한다. 정하지 않은 URL은 네트워크 오류로 실패한다. */
+  const stubFetch = (routes: Record<string, () => Response>) => {
+    fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input instanceof Request ? input.url : input);
+      const route = Object.entries(routes).find(([path]) =>
+        url.startsWith(`${AUTH_URL}${path}`),
+      );
+      if (!route) throw new TypeError(`fetch failed: ${url}`);
+      return route[1]();
+    });
+    vi.stubGlobal("fetch", fetchMock);
+  };
+
+  const requestedPaths = () =>
+    fetchMock.mock.calls.map(([input]) =>
+      new URL(String(input instanceof Request ? input.url : input)).pathname,
+    );
+
+  let key: SigningKey;
+
+  beforeEach(async () => {
+    AUTH_URL = `http://verifier${++authHostNumber}.test`;
+    vi.stubEnv("SUPABASE_URL", AUTH_URL);
+    vi.stubEnv("SUPABASE_ANON_KEY", "anon-key");
+    vi.stubEnv("SUPABASE_JWKS", "");
+    key = await createSigningKey("project-key");
+    stubFetch({});
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  it.each([
+    ["{ keys: [...] }", (jwk: object) => ({ keys: [jwk] })],
+    ["키 배열", (jwk: object) => [jwk]],
+  ])(
+    "SUPABASE_JWKS(%s)에 kid가 있으면 네트워크 요청 없이 sub를 돌려준다",
+    async (_label, wrap) => {
+      vi.stubEnv("SUPABASE_JWKS", JSON.stringify(wrap(key.publicJwk)));
+      const token = await signEs256(key, { sub: "auth-es", exp: futureExp() });
+
+      await expect(new SupabaseAuthUserVerifier().getUser(token)).resolves.toEqual({
+        id: "auth-es",
+      });
+      expect(fetchMock).not.toHaveBeenCalled();
+    },
+  );
+
+  it("서명 불일치·만료·JWT 형식 아님·sub 없음은 null이다", async () => {
+    vi.stubEnv("SUPABASE_JWKS", JSON.stringify({ keys: [key.publicJwk] }));
+    const otherKey = await createSigningKey("other");
+    const verifier = new SupabaseAuthUserVerifier();
+    const tokens = [
+      await signEs256(otherKey, { sub: "auth-es", exp: futureExp() }, key.kid),
+      await signEs256(key, { sub: "auth-es", exp: Math.floor(Date.now() / 1000) - 1 }),
+      "not-a-jwt",
+      `${base64Url("not json")}.${base64Url("not json")}.${base64Url("sig")}`,
+      await signEs256(key, { exp: futureExp() }),
+    ];
+
+    for (const token of tokens) {
+      await expect(verifier.getUser(token)).resolves.toBeNull();
+    }
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("SUPABASE_JWKS가 없으면 JWKS 엔드포인트에서 받은 키를 캐시해 쓴다", async () => {
+    stubFetch({
+      "/auth/v1/.well-known/jwks.json": () => jsonResponse({ keys: [key.publicJwk] }),
+    });
+    const verifier = new SupabaseAuthUserVerifier();
+
+    for (const sub of ["auth-1", "auth-2"]) {
+      const token = await signEs256(key, { sub, exp: futureExp() });
+      await expect(verifier.getUser(token)).resolves.toEqual({ id: sub });
+    }
+    expect(requestedPaths()).toEqual(["/auth/v1/.well-known/jwks.json"]);
+  });
+
+  it("SUPABASE_JWKS를 읽지 못하면 경고하고 JWKS 엔드포인트를 조회한다", async () => {
+    vi.stubEnv("SUPABASE_JWKS", "{not json");
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    stubFetch({
+      "/auth/v1/.well-known/jwks.json": () => jsonResponse({ keys: [key.publicJwk] }),
+    });
+    const token = await signEs256(key, { sub: "auth-es", exp: futureExp() });
+
+    await expect(new SupabaseAuthUserVerifier().getUser(token)).resolves.toEqual({
+      id: "auth-es",
+    });
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(requestedPaths()).toEqual(["/auth/v1/.well-known/jwks.json"]);
+  });
+
+  it("JWKS 엔드포인트가 5xx·네트워크 오류면 일시 장애로 throw한다", async () => {
+    const token = await signEs256(key, { sub: "auth-es", exp: futureExp() });
+
+    await expect(new SupabaseAuthUserVerifier().getUser(token)).rejects.toThrow();
+
+    stubFetch({
+      "/auth/v1/.well-known/jwks.json": () => jsonResponse({ msg: "error" }, 500),
+    });
+    await expect(new SupabaseAuthUserVerifier().getUser(token)).rejects.toThrow();
+  });
+
+  it("HS256 토큰은 Auth 서버 사용자 조회로 확인한다", async () => {
+    stubFetch({
+      "/auth/v1/user": () => jsonResponse({ id: "auth-hs", aud: "authenticated" }),
+    });
+
+    await expect(
+      new SupabaseAuthUserVerifier().getUser(hs256Token({ sub: "auth-hs" })),
+    ).resolves.toEqual({ id: "auth-hs" });
+    expect(requestedPaths()).toEqual(["/auth/v1/user"]);
+  });
+
+  it("어느 키 목록에도 없는 kid는 Auth 서버 사용자 조회로 확인한다", async () => {
+    vi.stubEnv("SUPABASE_JWKS", JSON.stringify({ keys: [key.publicJwk] }));
+    const rotatedKey = await createSigningKey("rotated");
+    stubFetch({
+      "/auth/v1/.well-known/jwks.json": () => jsonResponse({ keys: [key.publicJwk] }),
+      "/auth/v1/user": () => jsonResponse({ id: "auth-es", aud: "authenticated" }),
+    });
+    const token = await signEs256(rotatedKey, { sub: "auth-es", exp: futureExp() });
+
+    await expect(new SupabaseAuthUserVerifier().getUser(token)).resolves.toEqual({
+      id: "auth-es",
+    });
+    expect(requestedPaths()).toEqual(["/auth/v1/.well-known/jwks.json", "/auth/v1/user"]);
   });
 });
 
