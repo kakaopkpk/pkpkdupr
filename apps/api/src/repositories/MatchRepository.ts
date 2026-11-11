@@ -1,13 +1,11 @@
 import type {
   Match,
   MatchFeedItem,
-  MatchMode,
   MatchScore,
   MatchSessionSummary,
   ManagedMatchSession,
   Session,
 } from "@pkpkdupr/shared/match";
-import { DEFAULT_MATCH_MODE } from "@pkpkdupr/shared/match";
 import { generateEntityId, isEntityId } from "@pkpkdupr/shared/entityId";
 import { kstDateKeyToDate } from "@pkpkdupr/shared/session";
 import type {
@@ -152,7 +150,6 @@ const hydrateRatingHistory = (record: any): PlayerRatingHistory => ({
 
 export const hydrateMatch = (record: any): Match => ({
   ...record,
-  mode: (record.mode as MatchMode | undefined) ?? DEFAULT_MATCH_MODE,
   source: record.source ?? "player_created",
   name:
     typeof record.name === "string" && record.name.trim()

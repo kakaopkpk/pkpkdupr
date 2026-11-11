@@ -1,13 +1,11 @@
 import {
-  getMatchScheduleDurationMs,
-  type MatchMode,
+  MATCH_SCHEDULE_DURATION_MS,
   type MatchStatus,
 } from "@pkpkdupr/shared/match";
 
 export type CourtScheduleMatch = {
   id?: string;
   name?: string;
-  mode: MatchMode;
   status?: MatchStatus;
   matchStartsAt: Date;
   courtName?: string;
@@ -90,7 +88,7 @@ const toInterval = (
     label,
     courtName: canonicalCourtName,
     startsAt,
-    endsAt: startsAt + getMatchScheduleDurationMs(match.mode),
+    endsAt: startsAt + MATCH_SCHEDULE_DURATION_MS,
   };
 };
 
@@ -129,12 +127,13 @@ export const buildCourtSchedule = ({
   courts,
   sessionStartsAt,
   existingMatches,
-  modes,
+  matchCount,
 }: {
   courts: string[];
   sessionStartsAt: Date;
   existingMatches: CourtScheduleMatch[];
-  modes: MatchMode[];
+  /** 새로 배정할 경기 수 */
+  matchCount: number;
 }): CourtScheduleSlot[] => {
   const normalizedCourts = normalizeCourtNames(courts);
   const sessionStartMs = new Date(sessionStartsAt).getTime();
@@ -145,8 +144,8 @@ export const buildCourtSchedule = ({
   const intervals = getExistingIntervals(normalizedCourts, existingMatches);
   const slots: CourtScheduleSlot[] = [];
 
-  for (const mode of modes) {
-    const durationMs = getMatchScheduleDurationMs(mode);
+  const durationMs = MATCH_SCHEDULE_DURATION_MS;
+  for (let matchIndex = 0; matchIndex < matchCount; matchIndex += 1) {
     const candidates = normalizedCourts.map((courtName, courtIndex) => ({
       courtName,
       courtIndex,

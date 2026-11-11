@@ -37,7 +37,6 @@ const session: AuthenticatedSession = {
 const match: Match = {
   id: "match-001",
   type: "singles",
-  mode: "single-game",
   source: "player_created",
   creatorPlayerId: player.id,
   status: "created",

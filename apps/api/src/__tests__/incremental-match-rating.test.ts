@@ -68,7 +68,6 @@ describe("incremental match rating", () => {
     const match: Match = {
       id: "match-incremental",
       type: "singles",
-      mode: "single-game",
       source: "player_created",
       creatorPlayerId: "winner",
       status: "completed",

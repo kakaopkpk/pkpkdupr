@@ -1,5 +1,4 @@
 import type {
-  MatchMode,
   Match,
   MatchFeedItem,
   MatchScore,
@@ -12,10 +11,8 @@ import type {
   Team,
 } from "@pkpkdupr/shared/match";
 import {
-  DEFAULT_MATCH_MODE,
   getMatchSessionStatus,
-  getMaxScoreCountForMatchMode,
-  validateMatchScoresForMode,
+  validateMatchScores,
 } from "@pkpkdupr/shared/match";
 import {
   normalizeNullablePlayerDupr,
@@ -75,7 +72,6 @@ export class SessionHasMatchesError extends Error {
 export interface CreateMatchInput {
   id: string;
   type: MatchType;
-  mode: MatchMode;
   source?: MatchSource;
   creatorPlayerId: string;
   name?: string;
@@ -94,7 +90,6 @@ export interface CreateMatchInput {
 /** 참가자의 경기 기록 수정 입력. 시작 시각·세션·코트·생성자는 바꾸지 않는다. */
 export interface UpdateRecordedMatchInput {
   type: MatchType;
-  mode: MatchMode;
   name?: string;
   location: string;
   teams: [Team, Team];
@@ -894,7 +889,7 @@ export class MatchRepository {
     }
 
     if ((data.scores?.length ?? 0) > 0) {
-      validateMatchScoresForMode(data.mode, data.scores ?? []);
+      validateMatchScores(data.scores ?? []);
     }
 
     const sessionId = data.session
@@ -904,7 +899,6 @@ export class MatchRepository {
     await this.db.insert(matches).values({
       id: data.id,
       type: data.type,
-      mode: data.mode,
       source: data.source ?? "player_created",
       creatorPlayerId: data.creatorPlayerId,
       name: data.name?.trim() || null,
@@ -1034,7 +1028,6 @@ export class MatchRepository {
             INSERT INTO matches (
               id,
               type,
-              mode,
               source,
               creator_player_id,
               name,
@@ -1051,12 +1044,11 @@ export class MatchRepository {
               created_at,
               updated_at
             )
-            VALUES (${placeholders(18)})
+            VALUES (${placeholders(17)})
           `,
           args: [
             match.id,
             match.type,
-            match.mode,
             match.source ?? "admin_created",
             match.creatorPlayerId,
             match.name?.trim() || null,
@@ -1188,7 +1180,7 @@ export class MatchRepository {
       throw new Error("결과를 입력할 수 없는 매치 상태입니다.");
     }
 
-    validateMatchScoresForMode(existing.mode, scores);
+    validateMatchScores(scores);
 
     const scoreColumns = await this.getMatchScoreColumns();
     const transaction = await this.client.transaction("write");
@@ -1254,7 +1246,7 @@ export class MatchRepository {
   }
 
   /**
-   * created·completed 경기의 기록(종류·모드·이름·장소·참가자·점수)을 한 트랜잭션으로 교체하고
+   * created·completed 경기의 기록(종류·이름·장소·참가자·점수)을 한 트랜잭션으로 교체하고
    * completed로 만든다. completed_at은 기존 값을 유지하고 없을 때만 resultSubmittedAt으로 채운다.
    * 남는 참가자는 기존 평점 스냅샷을 유지하고, 새 참가자는 비워 두어 평점 반영 때 채워지게 한다.
    */
@@ -1262,7 +1254,7 @@ export class MatchRepository {
     matchId: string,
     data: UpdateRecordedMatchInput,
   ): Promise<Match> {
-    validateMatchScoresForMode(data.mode, data.scores);
+    validateMatchScores(data.scores);
     const location = data.location.trim();
     if (!location) {
       throw new Error("매치 장소를 입력해주세요.");
@@ -1279,20 +1271,18 @@ export class MatchRepository {
           UPDATE matches
           SET
             type = $1,
-            mode = $2,
-            name = $3,
-            location = $4,
+            name = $2,
+            location = $3,
             status = 'completed',
-            result_submitted_by_player_id = $5,
-            result_submitted_at = $6,
-            completed_at = COALESCE(completed_at, $6),
-            updated_at = $6
-          WHERE id = $7
+            result_submitted_by_player_id = $4,
+            result_submitted_at = $5,
+            completed_at = COALESCE(completed_at, $5),
+            updated_at = $5
+          WHERE id = $6
             AND status IN ('created', 'completed')
         `,
         args: [
           data.type,
-          data.mode,
           data.name?.trim() || null,
           location,
           data.resultSubmittedByPlayerId,
@@ -1563,7 +1553,6 @@ export class MatchRepository {
     const hydratedMatch = {
       id: match.id,
       type: match.type as MatchType,
-      mode: (match.mode as MatchMode | null) ?? DEFAULT_MATCH_MODE,
       source: (match.source as MatchSource | null) ?? "player_created",
       creatorPlayerId: match.creatorPlayerId,
       name: match.name?.trim() || undefined,
@@ -1578,14 +1567,7 @@ export class MatchRepository {
         : undefined,
       status: match.status as Match["status"],
       teams,
-      scores: scores
-        .map(toMatchScore)
-        .slice(
-          0,
-          getMaxScoreCountForMatchMode(
-            (match.mode as MatchMode | null) ?? DEFAULT_MATCH_MODE,
-          ),
-        ),
+      scores: scores.map(toMatchScore),
       resultSubmittedByPlayerId: match.resultSubmittedByPlayerId ?? null,
       resultSubmittedAt: toDateOrNull(match.resultSubmittedAt),
       location: match.location,

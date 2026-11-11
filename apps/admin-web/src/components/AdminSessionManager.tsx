@@ -1396,9 +1396,8 @@ const AdminSessionManager: React.FC<AdminSessionManagerProps> = ({
 
                 <p className="text-xs text-slate-500">
                   단식은 참여자 4~6명, 복식은 4~5명일 때만 생성하며 이미
-                  존재하는 동일 대진은 제외합니다. 선택한 경기 모드가 생성되는
-                  모든 대진에 적용됩니다. 코트명과 기존 일정으로 시간표를 먼저
-                  계산한 뒤 확인합니다.
+                  존재하는 동일 대진은 제외합니다. 코트명과 기존 일정으로
+                  시간표를 먼저 계산한 뒤 확인합니다.
                 </p>
 
                 {autoSchedulePreview ? (

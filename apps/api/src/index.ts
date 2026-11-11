@@ -2,18 +2,13 @@ import cors from "cors";
 import express from "express";
 import { randomUUID } from "crypto";
 import {
-  DEFAULT_MATCH_MODE,
-  MATCH_RESULT_MAX_SCORE_COUNT,
   isMatchInProgress,
   isSinglesMatchType,
   canEditMatchRecord,
   isWithinMatchEditWindow,
-  inferMatchModeFromScores,
-  matchModeValues,
   matchTypeLabels,
   matchTypeValues,
   type Match,
-  type MatchMode,
   type MatchScore,
   type RecordMatchRequest,
   type RecordedMatchResponse,
@@ -21,7 +16,7 @@ import {
   type Session,
   type ManagedMatchSession,
   type MatchType,
-  validateMatchScoresForMode,
+  validateMatchScores,
 } from "@pkpkdupr/shared/match";
 import {
   canOpenRegularSession,
@@ -166,7 +161,6 @@ type AdminBatchMatchRequest = {
   matches?: Array<{
     name?: string;
     type?: MatchType;
-    mode?: MatchMode;
     teams?: [MatchTeamRequest, MatchTeamRequest];
     location?: string;
     courtName?: string;
@@ -178,7 +172,6 @@ type AdminBatchMatchRequest = {
 type AdminScheduledMatchRequest = {
   name?: string;
   type?: MatchType;
-  mode?: MatchMode;
   teams?: [MatchTeamRequest, MatchTeamRequest];
   courtName?: string;
   matchStartsAt?: string;
@@ -332,9 +325,6 @@ const isPlayerGender = (value: unknown): value is Player["gender"] =>
   typeof value === "string" &&
   playerGenders.includes(value as Player["gender"]);
 
-const isMatchMode = (value: unknown): value is MatchMode =>
-  typeof value === "string" && matchModeValues.includes(value as MatchMode);
-
 const isMixedDoublesTeamValid = (players: Player[]) =>
   players.length === 2 &&
   players.some((player) => player.gender === "M") &&
@@ -446,7 +436,6 @@ const buildMatchTeamsFromRequests = (
 type PreparedAdminScheduledMatch = {
   name?: string;
   type: MatchType;
-  mode: MatchMode;
   teams: [Team, Team];
   matchStartsAt?: Date;
   courtName?: string;
@@ -469,13 +458,10 @@ const prepareAdminScheduledMatches = ({
 
   return requestedMatches.map((requested, index) => {
     const label = `${index + 1}번 경기`;
-    const { name, type, mode, teams, matchStartsAt, courtName } =
+    const { name, type, teams, matchStartsAt, courtName } =
       requested as AdminScheduledMatchRequest;
     if (!isMatchType(type)) {
       throw new Error(`${label}: 유효한 매치 타입이 필요합니다.`);
-    }
-    if (mode != null && !isMatchMode(mode)) {
-      throw new Error(`${label}: 유효한 경기 모드가 필요합니다.`);
     }
     if (!teams || teams.length !== 2) {
       throw new Error(`${label}: 두 팀 구성이 필요합니다.`);
@@ -504,7 +490,6 @@ const prepareAdminScheduledMatches = ({
     const prepared: PreparedAdminScheduledMatch = {
       name: normalizeOptionalName(name),
       type,
-      mode: mode ?? DEFAULT_MATCH_MODE,
       teams: matchTeams,
     };
     if (requireSchedule) {
@@ -543,15 +528,10 @@ const loadAdminSessionMatchContext = async (sessionId: string) => {
 };
 
 const normalizeMatchScores = (scores: unknown): MatchScore[] => {
-  if (!Array.isArray(scores) || scores.length === 0) {
-    throw new Error("한 개 이상의 스코어가 필요합니다.");
+  if (!Array.isArray(scores)) {
+    throw new Error("스코어가 필요합니다.");
   }
-
-  if (scores.length > MATCH_RESULT_MAX_SCORE_COUNT) {
-    throw new Error(
-      `스코어는 최대 ${MATCH_RESULT_MAX_SCORE_COUNT}개까지 입력할 수 있습니다.`,
-    );
-  }
+  validateMatchScores(scores);
 
   return scores.map((score, index) => {
     const scoreA = Number((score as MatchScore | undefined)?.scoreA);
@@ -593,12 +573,9 @@ const prepareRecordedMatch = async (
   body: Partial<RecordMatchRequest> | undefined,
   requesterPlayerId: string,
 ) => {
-  const { name, type, mode, teams, location, scores } = body ?? {};
+  const { name, type, teams, location, scores } = body ?? {};
   if (type != null && !isMatchType(type)) {
     throw new MatchRecordRequestError("유효한 매치 타입이 필요합니다.", 400);
-  }
-  if (mode != null && !isMatchMode(mode)) {
-    throw new MatchRecordRequestError("유효한 경기 모드가 필요합니다.", 400);
   }
   if (!Array.isArray(teams) || teams.length !== 2) {
     throw new MatchRecordRequestError("두 팀 구성이 필요합니다.", 400);
@@ -610,8 +587,6 @@ const prepareRecordedMatch = async (
   }
 
   const normalizedScores = normalizeMatchScores(scores);
-  const resolvedMode = mode ?? inferMatchModeFromScores(normalizedScores);
-  validateMatchScoresForMode(resolvedMode, normalizedScores);
 
   const lineup = await prepareMatchLineup(
     type,
@@ -622,7 +597,6 @@ const prepareRecordedMatch = async (
   return {
     name: normalizeOptionalName(name),
     type: lineup.type,
-    mode: resolvedMode,
     teams: lineup.teams,
     location: normalizedLocation,
     scores: normalizedScores,
@@ -1401,7 +1375,6 @@ app.post("/api/match-sessions/:sessionId/matches", async (req, res) => {
     }
     const match = await matchRepository.create({
       type: lineup.type,
-      mode: DEFAULT_MATCH_MODE,
       teams: lineup.teams,
       scores: [],
       session: session
@@ -1590,15 +1563,12 @@ app.post(
         return res.status(404).json({ error: "세션을 찾을 수 없습니다." });
       }
 
-      const { name, type, mode, teams, courtName, matchStartsAt } =
+      const { name, type, teams, courtName, matchStartsAt } =
         req.body as AdminScheduledMatchRequest;
       if (!isMatchType(type)) {
         return res
           .status(400)
           .json({ error: "유효한 매치 타입이 필요합니다." });
-      }
-      if (mode != null && !isMatchMode(mode)) {
-        return res.status(400).json({ error: "유효한 경기 모드가 필요합니다." });
       }
       if (!teams || teams.length !== 2) {
         return res.status(400).json({ error: "두 팀 구성이 필요합니다." });
@@ -1653,7 +1623,6 @@ app.post(
           location: session.location,
         },
         type,
-        mode: mode ?? DEFAULT_MATCH_MODE,
         source: "admin_created",
         creatorPlayerId: decoded.playerId,
         status: "created",
@@ -1698,7 +1667,7 @@ app.post(
         courts,
         sessionStartsAt: context.session.date,
         existingMatches,
-        modes: matches.map((match) => match.mode),
+        matchCount: matches.length,
       });
 
       res.json({
@@ -1744,7 +1713,6 @@ app.post(
         existingMatches,
         scheduledMatches: matches.map((match) => ({
           name: match.name,
-          mode: match.mode,
           matchStartsAt: match.matchStartsAt!,
           courtName: match.courtName,
         })),
@@ -1763,7 +1731,6 @@ app.post(
             location: context.session.location,
           },
           type: match.type,
-          mode: match.mode,
           source: "admin_created" as const,
           creatorPlayerId: decoded.playerId,
           status: "created" as const,
@@ -1822,7 +1789,6 @@ app.post("/api/admin/matches/batch", requireAdmin, async (req, res) => {
       const {
         name,
         type,
-        mode,
         teams,
         location,
         courtName,
@@ -1833,9 +1799,6 @@ app.post("/api/admin/matches/batch", requireAdmin, async (req, res) => {
 
       if (!isMatchType(type)) {
         throw new Error(`${label}: 유효한 매치 타입이 필요합니다.`);
-      }
-      if (mode != null && !isMatchMode(mode)) {
-        throw new Error(`${label}: 유효한 경기 모드가 필요합니다.`);
       }
 
       if (!teams || teams.length !== 2) {
@@ -1872,14 +1835,11 @@ app.post("/api/admin/matches/batch", requireAdmin, async (req, res) => {
       }
 
       const normalizedScores = normalizeMatchScores(scores);
-      const resolvedMode = mode ?? inferMatchModeFromScores(normalizedScores);
-      validateMatchScoresForMode(resolvedMode, normalizedScores);
 
       return {
         name: normalizeOptionalName(name),
         session: commonSession,
         type,
-        mode: resolvedMode,
         source: "admin_created_result" as const,
         creatorPlayerId: createdBy.id,
         status: "completed" as const,

@@ -14,20 +14,19 @@ describe("session court schedule", () => {
     );
   });
 
-  it("기존 코트 점유와 경기 모드별 소요 시간을 고려해 가장 빠른 코트에 배정한다", () => {
+  it("기존 코트 점유와 경기당 15분을 고려해 가장 빠른 코트에 배정한다", () => {
     const schedule = buildCourtSchedule({
       courts: ["코트 A", "코트 B"],
       sessionStartsAt,
       existingMatches: [
         {
           id: "existing-a",
-          mode: "single-game",
           status: "created",
           courtName: "코트 A",
           matchStartsAt: sessionStartsAt,
         },
       ],
-      modes: ["best-of-3", "single-game"],
+      matchCount: 2,
     });
 
     expect(schedule).toEqual([
@@ -50,12 +49,11 @@ describe("session court schedule", () => {
         existingMatches: [
           {
             id: "existing-without-court",
-            mode: "single-game",
             status: "created",
             matchStartsAt: sessionStartsAt,
           },
         ],
-        modes: ["single-game"],
+        matchCount: 1,
       }),
     ).toThrow("existing-without-court의 코트명을 먼저 지정해주세요.");
   });
@@ -66,7 +64,6 @@ describe("session court schedule", () => {
       existingMatches: [
         {
           id: "existing-a",
-          mode: "best-of-3",
           status: "created",
           courtName: "코트 A",
           matchStartsAt: sessionStartsAt,
@@ -75,13 +72,11 @@ describe("session court schedule", () => {
       scheduledMatches: [
         {
           id: "same-court",
-          mode: "single-game",
           courtName: "코트 A",
-          matchStartsAt: new Date("2026-07-25T09:15:00.000Z"),
+          matchStartsAt: new Date("2026-07-25T09:10:00.000Z"),
         },
         {
           id: "other-court",
-          mode: "single-game",
           courtName: "코트 B",
           matchStartsAt: sessionStartsAt,
         },

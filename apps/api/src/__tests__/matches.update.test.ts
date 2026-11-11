@@ -46,7 +46,6 @@ const buildSession = (player: Player): AuthenticatedSession => ({
 const buildExistingMatch = (overrides: Partial<Match> = {}): Match => ({
   id: "match-edit-001",
   type: "mixed-doubles",
-  mode: "single-game",
   source: "player_created",
   creatorPlayerId: opponentM.id,
   status: "completed",
@@ -133,7 +132,6 @@ describe("PUT /api/matches/:matchId", () => {
         ...existing,
         id: matchId,
         type: input.type,
-        mode: input.mode,
         name: input.name,
         location: input.location,
         teams: input.teams,
@@ -180,7 +178,6 @@ describe("PUT /api/matches/:matchId", () => {
     expect(matchId).toBe(existing.id);
     expect(input).toMatchObject({
       type: "mixed-doubles",
-      mode: "single-game",
       location: "야탑초등학교",
       scores: [{ scoreA: 9, scoreB: 11 }],
       resultSubmittedByPlayerId: requester.id,

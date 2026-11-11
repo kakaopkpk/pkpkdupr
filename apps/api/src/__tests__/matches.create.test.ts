@@ -186,7 +186,6 @@ describe("POST /api/matches", () => {
       .post("/api/matches")
       .set("Authorization", "Bearer test-token")
       .send({
-        mode: "single-game",
         teams: [
           { name: "Team A", playerIds: teamPlayerIds[0] },
           { name: "Team B", playerIds: teamPlayerIds[1] },
@@ -306,7 +305,6 @@ describe("POST /api/matches", () => {
     expect(capturedCreatePayload?.type).toBe(expectedType);
     expect(capturedCreatePayload?.creatorPlayerId).toBe(expectedCreatorId);
     expect(capturedCreatePayload?.status).toBe("completed");
-    expect(capturedCreatePayload?.mode).toBe("single-game");
     expect(response.body.type).toBe(expectedType);
   });
 
@@ -344,7 +342,6 @@ describe("POST /api/matches", () => {
     expect(payload.creatorPlayerId).toBe(creator.id);
     expect(payload.resultSubmittedByPlayerId).toBe(creator.id);
     expect(payload.scores).toEqual([{ scoreA: 15, scoreB: 13 }]);
-    expect(payload.mode).toBe("single-game");
     expect(payload.name).toBeUndefined();
     expect(payload.courtName).toBeUndefined();
     const startsAt = payload.matchStartsAt.getTime();
@@ -361,15 +358,10 @@ describe("POST /api/matches", () => {
       .send({
         teams: validDoublesTeams,
         location: "PKELO Court A",
-        scores: [
-          { scoreA: 11, scoreB: 9 },
-          { scoreA: 8, scoreB: 11 },
-          { scoreA: 11, scoreB: 6 },
-        ],
+        scores: [{ scoreA: 11, scoreB: 9 }],
       });
 
     expect(response.status).toBe(201);
-    expect(capturedCreatePayload?.mode).toBe("best-of-3");
     expect(applyMatchResult).toHaveBeenCalledTimes(1);
     expect(applyMatchResult.mock.calls[0]?.[0]).toMatchObject({
       id: "match-test-001",
@@ -384,30 +376,29 @@ describe("POST /api/matches", () => {
   it.each([
     { name: "점수가 없으면", scores: undefined },
     { name: "점수가 비었으면", scores: [] },
-    { name: "동점 세트가 있으면", scores: [{ scoreA: 10, scoreB: 10 }] },
+    { name: "동점이면", scores: [{ scoreA: 10, scoreB: 10 }] },
     {
-      name: "단판에 세트가 2개면",
+      name: "점수가 2개면",
       scores: [
         { scoreA: 11, scoreB: 9 },
         { scoreA: 11, scoreB: 9 },
       ],
-      mode: "single-game",
     },
     {
-      name: "2선승에서 승부가 나지 않으면",
+      name: "2선승 형식(점수 3개)이면",
       scores: [
         { scoreA: 11, scoreB: 9 },
-        { scoreA: 9, scoreB: 11 },
+        { scoreA: 8, scoreB: 11 },
+        { scoreA: 11, scoreB: 6 },
       ],
     },
-  ] as Array<{ name: string; scores?: unknown; mode?: string }>)(
+  ] as Array<{ name: string; scores?: unknown }>)(
     "$name 400을 반환하고 저장하지 않는다",
-    async ({ scores, mode }) => {
+    async ({ scores }) => {
     const response = await request(app)
       .post("/api/matches")
       .set("Authorization", "Bearer test-token")
       .send({
-        mode,
         teams: validDoublesTeams,
         location: "PKELO Court A",
         scores,

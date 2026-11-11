@@ -46,7 +46,6 @@ let replacedMatchCompletedLogs: PlayerRatingChangeLog[];
 const buildMatch = (completedAt: Date): Match => ({
   id: `match-${completedAt.getTime()}`,
   type: "men-doubles",
-  mode: "single-game",
   source: "player_created",
   creatorPlayerId: "anchor",
   status: "completed",
