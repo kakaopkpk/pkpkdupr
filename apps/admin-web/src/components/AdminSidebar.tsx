@@ -16,7 +16,7 @@ export const adminSectionInfo: Record<
 > = {
   members: {
     label: "회원 관리",
-    description: "회원 추가, 초대 코드 발급과 성별, 상태 및 계정 로그를 관리합니다.",
+    description: "회원 계정 발급, 비밀번호 초기화, 아이디·성별·상태 변경과 계정 로그를 관리합니다.",
   },
   ratings: {
     label: "레이팅 관리",
