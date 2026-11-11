@@ -87,12 +87,8 @@ const editLog = (matchId: string): PlayerRatingChangeLog => ({
 
 describe("PUT /api/matches/:matchId", () => {
   let existing: Match;
-  let updateRecordedMatch: MockInstance<
-    MatchRepository["updateRecordedMatch"]
-  >;
-  let applyMatchResult: MockInstance<
-    AuthService["applyMatchResultToRatings"]
-  >;
+  let updateRecordedMatch: MockInstance<MatchRepository["updateRecordedMatch"]>;
+  let applyMatchResult: MockInstance<AuthService["applyMatchResultToRatings"]>;
   let recalculate: MockInstance<AuthService["recalculateDuprRatings"]>;
   let addSessionParticipants: MockInstance<
     MatchRepository["addSessionParticipants"]
@@ -381,7 +377,7 @@ describe("PUT /api/matches/:matchId", () => {
     expect(updateRecordedMatch).not.toHaveBeenCalled();
   });
 
-  it("수정 전 참가자가 아니면 403을 반환한다", async () => {
+  it("참가자도 생성자도 아니면 403을 반환한다", async () => {
     vi.spyOn(
       AuthService.prototype,
       "authenticateAccessToken",
@@ -400,12 +396,50 @@ describe("PUT /api/matches/:matchId", () => {
 
     expect(response.status).toBe(403);
     expect(response.body).toEqual({
-      error: "경기 참가자만 기록을 수정할 수 있습니다.",
+      error: "경기 참가자 또는 생성자만 기록을 수정할 수 있습니다.",
     });
     expect(updateRecordedMatch).not.toHaveBeenCalled();
   });
 
-  it("관리자여도 참가자가 아니면 403을 반환한다", async () => {
+  it("참가자가 아니어도 경기 생성자면 수정할 수 있다", async () => {
+    existing = buildExistingMatch({ creatorPlayerId: outsider.id });
+    vi.spyOn(
+      AuthService.prototype,
+      "authenticateAccessToken",
+    ).mockResolvedValue(buildSession(outsider));
+    vi.spyOn(AuthService.prototype, "getPlayerById").mockResolvedValue(
+      outsider,
+    );
+
+    const response = await putMatch({
+      ...validBody,
+      teams: [
+        { playerIds: [partner.id, substitute.id] },
+        { playerIds: [opponentM.id, opponentF.id] },
+      ],
+    });
+
+    expect(response.status).toBe(200);
+    expect(updateRecordedMatch).toHaveBeenCalledTimes(1);
+  });
+
+  it("경기 생성자라도 24시간이 지났으면 403을 반환한다", async () => {
+    existing = buildExistingMatch({
+      creatorPlayerId: outsider.id,
+      matchStartsAt: new Date(Date.now() - MATCH_EDIT_WINDOW_MS - 60_000),
+    });
+    vi.spyOn(
+      AuthService.prototype,
+      "authenticateAccessToken",
+    ).mockResolvedValue(buildSession(outsider));
+
+    const response = await putMatch();
+
+    expect(response.status).toBe(403);
+    expect(updateRecordedMatch).not.toHaveBeenCalled();
+  });
+
+  it("관리자여도 참가자도 생성자도 아니면 403을 반환한다", async () => {
     vi.spyOn(
       AuthService.prototype,
       "authenticateAccessToken",
