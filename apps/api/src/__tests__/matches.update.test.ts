@@ -87,8 +87,12 @@ const editLog = (matchId: string): PlayerRatingChangeLog => ({
 
 describe("PUT /api/matches/:matchId", () => {
   let existing: Match;
-  let updateRecordedMatch: MockInstance<MatchRepository["updateRecordedMatch"]>;
-  let applyMatchResult: MockInstance<AuthService["applyMatchResultToRatings"]>;
+  let updateRecordedMatch: MockInstance<
+    MatchRepository["updateRecordedMatch"]
+  >;
+  let applyMatchResult: MockInstance<
+    AuthService["applyMatchResultToRatings"]
+  >;
   let recalculate: MockInstance<AuthService["recalculateDuprRatings"]>;
   let addSessionParticipants: MockInstance<
     MatchRepository["addSessionParticipants"]

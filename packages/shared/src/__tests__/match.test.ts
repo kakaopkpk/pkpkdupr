@@ -10,7 +10,9 @@ import type { Player } from "../player";
 
 describe("getMatchSessionStatus", () => {
   it("모든 매치가 완료일 때만 완료 상태를 반환한다", () => {
-    expect(getMatchSessionStatus(["completed", "completed"])).toBe("completed");
+    expect(getMatchSessionStatus(["completed", "completed"])).toBe(
+      "completed",
+    );
     expect(getMatchSessionStatus(["completed", "created"])).toBe("created");
     expect(getMatchSessionStatus(["cancelled"])).toBe("created");
   });

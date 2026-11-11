@@ -199,9 +199,10 @@ type AdminMatchMetadataUpdateRequest = {
   matchStartsAt?: unknown;
 };
 
-type AdminBulkMatchMetadataUpdateRequest = AdminMatchMetadataUpdateRequest & {
-  matchIds?: unknown;
-};
+type AdminBulkMatchMetadataUpdateRequest =
+  AdminMatchMetadataUpdateRequest & {
+    matchIds?: unknown;
+  };
 
 const normalizeOptionalName = (value: unknown) =>
   typeof value === "string" && value.trim() ? value.trim() : undefined;
@@ -291,10 +292,7 @@ const parseAdminMatchMetadataUpdate = (
     throw new Error("수정할 필드가 없습니다.");
   }
   if (hasSessionId && body.sessionId !== null) {
-    if (
-      typeof body.sessionId !== "string" ||
-      !isEntityId(body.sessionId, "session")
-    ) {
+    if (typeof body.sessionId !== "string" || !isEntityId(body.sessionId, "session")) {
       throw new Error("유효한 세션 ID가 필요합니다.");
     }
   }
@@ -486,9 +484,7 @@ const prepareAdminScheduledMatches = ({
       requestedPlayerIds.length === 0 ||
       requestedPlayerIds.some((playerId) => !registeredPlayerIds.has(playerId))
     ) {
-      throw new Error(
-        `${label}: 세션에 등록된 참여자만 경기에 배정할 수 있습니다.`,
-      );
+      throw new Error(`${label}: 세션에 등록된 참여자만 경기에 배정할 수 있습니다.`);
     }
 
     const matchTeams = buildMatchTeamsFromRequests(teams, playersById);
@@ -1011,8 +1007,9 @@ app.get("/api/matches", async (req, res) => {
       : await matchRepository.findAll(page, limit);
 
     if (playerId) {
-      const ratingChangeLogs =
-        await matchRepository.getPlayerRatingChangeLogs(playerId);
+      const ratingChangeLogs = await matchRepository.getPlayerRatingChangeLogs(
+        playerId,
+      );
       result.matches = attachMatchRatingChanges(
         result.matches,
         ratingChangeLogs,
@@ -1168,8 +1165,7 @@ const parseRecommendationCourts = (value: unknown): number => {
   if (value === undefined) {
     return MATCHMAKING_DEFAULT_COURTS;
   }
-  const courts =
-    typeof value === "string" && value.trim() ? Number(value) : NaN;
+  const courts = typeof value === "string" && value.trim() ? Number(value) : NaN;
   if (Number.isNaN(courts)) {
     throw new MatchSessionRequestError("courts는 숫자여야 합니다.", 400);
   }
@@ -1291,7 +1287,8 @@ app.post("/api/match-sessions/:sessionId/participants", async (req, res) => {
     }
 
     const body = req.body as
-      Partial<AddMatchSessionParticipantRequest> | undefined;
+      | Partial<AddMatchSessionParticipantRequest>
+      | undefined;
     const playerId =
       typeof body?.playerId === "string" ? body.playerId.trim() : "";
     if (!playerId) {
@@ -1588,9 +1585,7 @@ app.post(
           .json({ error: "유효한 매치 타입이 필요합니다." });
       }
       if (mode != null && !isMatchMode(mode)) {
-        return res
-          .status(400)
-          .json({ error: "유효한 경기 모드가 필요합니다." });
+        return res.status(400).json({ error: "유효한 경기 모드가 필요합니다." });
       }
       if (!teams || teams.length !== 2) {
         return res.status(400).json({ error: "두 팀 구성이 필요합니다." });
@@ -1619,7 +1614,8 @@ app.post(
         allPlayers
           .filter(
             (player) =>
-              player.status === "active" && registeredPlayerIds.has(player.id),
+              player.status === "active" &&
+              registeredPlayerIds.has(player.id),
           )
           .map((player) => [player.id, player]),
       );
@@ -1819,7 +1815,8 @@ app.post("/api/admin/matches/batch", requireAdmin, async (req, res) => {
         courtName,
         matchStartsAt,
         scores,
-      } = requestedMatch;
+      } =
+        requestedMatch;
 
       if (!isMatchType(type)) {
         throw new Error(`${label}: 유효한 매치 타입이 필요합니다.`);
@@ -1886,11 +1883,8 @@ app.post("/api/admin/matches/batch", requireAdmin, async (req, res) => {
 
     const createdMatches = commonSession
       ? await matchRepository.createCompletedBatch(matchesToCreate)
-      : await Promise.all(
-          matchesToCreate.map((match) => matchRepository.create(match)),
-        );
-    const ratingResult =
-      await authService.applyMatchResultsToRatings(createdMatches);
+      : await Promise.all(matchesToCreate.map((match) => matchRepository.create(match)));
+    const ratingResult = await authService.applyMatchResultsToRatings(createdMatches);
     const { ratingChangeLogs, changedPlayerCount } = ratingResult;
 
     res.status(201).json({
@@ -1926,47 +1920,36 @@ app.get(
   },
 );
 
-app.patch(
-  "/api/admin/matches/bulk-metadata",
-  requireAdmin,
-  async (req, res) => {
-    try {
-      const body = req.body as AdminBulkMatchMetadataUpdateRequest;
-      const matchIds = Array.isArray(body.matchIds)
-        ? [
-            ...new Set(
-              body.matchIds.filter(
-                (matchId): matchId is string =>
-                  typeof matchId === "string" && matchId.trim().length > 0,
-              ),
-            ),
-          ]
-        : [];
-      if (!matchIds.length) {
-        return res.status(400).json({ error: "수정할 매치를 선택해주세요." });
-      }
-
-      const update = parseAdminMatchMetadataUpdate(body);
-      const matches = [];
-      for (const matchId of matchIds) {
-        const match = await matchRepository.updateMetadata(matchId, update);
-        if (!match) {
-          return res
-            .status(404)
-            .json({ error: `매치를 찾을 수 없습니다: ${matchId}` });
-        }
-        matches.push(match);
-      }
-
-      res.json({ matches });
-    } catch (err) {
-      if (err instanceof MatchRepositoryError && err.status === 404) {
-        return res.status(404).json({ error: err.message });
-      }
-      res.status(400).json({ error: (err as Error).message });
+app.patch("/api/admin/matches/bulk-metadata", requireAdmin, async (req, res) => {
+  try {
+    const body = req.body as AdminBulkMatchMetadataUpdateRequest;
+    const matchIds = Array.isArray(body.matchIds)
+      ? [...new Set(body.matchIds.filter((matchId): matchId is string =>
+          typeof matchId === "string" && matchId.trim().length > 0,
+        ))]
+      : [];
+    if (!matchIds.length) {
+      return res.status(400).json({ error: "수정할 매치를 선택해주세요." });
     }
-  },
-);
+
+    const update = parseAdminMatchMetadataUpdate(body);
+    const matches = [];
+    for (const matchId of matchIds) {
+      const match = await matchRepository.updateMetadata(matchId, update);
+      if (!match) {
+        return res.status(404).json({ error: `매치를 찾을 수 없습니다: ${matchId}` });
+      }
+      matches.push(match);
+    }
+
+    res.json({ matches });
+  } catch (err) {
+    if (err instanceof MatchRepositoryError && err.status === 404) {
+      return res.status(404).json({ error: err.message });
+    }
+    res.status(400).json({ error: (err as Error).message });
+  }
+});
 
 app.patch(
   "/api/admin/matches/:matchId/metadata",
@@ -2039,27 +2022,31 @@ app.post(
   },
 );
 
-app.delete("/api/admin/matches/:matchId", requireAdmin, async (req, res) => {
-  try {
-    await matchRepository.delete(req.params.matchId);
-    const { matches } = await matchRepository.findAll(0, 10000);
-    const recalculation = await authService.recalculateDuprRatings(
-      matches.filter((candidate) => candidate.status === "completed"),
-      {
-        source: "manual_recalculation",
-        sourceLogId: `admin-match-delete-${req.params.matchId}-${Date.now()}-${randomUUID()}`,
-        perMatchLogs: true,
-      },
-    );
+app.delete(
+  "/api/admin/matches/:matchId",
+  requireAdmin,
+  async (req, res) => {
+    try {
+      await matchRepository.delete(req.params.matchId);
+      const { matches } = await matchRepository.findAll(0, 10000);
+      const recalculation = await authService.recalculateDuprRatings(
+        matches.filter((candidate) => candidate.status === "completed"),
+        {
+          source: "manual_recalculation",
+          sourceLogId: `admin-match-delete-${req.params.matchId}-${Date.now()}-${randomUUID()}`,
+          perMatchLogs: true,
+        },
+      );
 
-    res.json({ deletedMatchId: req.params.matchId, ...recalculation });
-  } catch (err) {
-    if (err instanceof MatchRepositoryError && err.status === 404) {
-      return res.status(404).json({ error: err.message });
+      res.json({ deletedMatchId: req.params.matchId, ...recalculation });
+    } catch (err) {
+      if (err instanceof MatchRepositoryError && err.status === 404) {
+        return res.status(404).json({ error: err.message });
+      }
+      res.status(400).json({ error: (err as Error).message });
     }
-    res.status(400).json({ error: (err as Error).message });
-  }
-});
+  },
+);
 
 /** 점수 없는 created 경기가 시작 후 2시간을 넘겨 무효가 됐으면 true */
 const isExpiredInProgressMatch = (match: Match, now: Date) =>
@@ -2160,9 +2147,7 @@ const normalizeProfileAffiliations = (value: unknown): PlayerAffiliation[] => {
     throw new Error("소속은 목록 형식이어야 합니다.");
   }
   if (value.length > PLAYER_AFFILIATION_MAX_COUNT) {
-    throw new Error(
-      `소속은 최대 ${PLAYER_AFFILIATION_MAX_COUNT}개까지 등록할 수 있습니다.`,
-    );
+    throw new Error(`소속은 최대 ${PLAYER_AFFILIATION_MAX_COUNT}개까지 등록할 수 있습니다.`);
   }
 
   const names = new Set<string>();
@@ -2175,16 +2160,12 @@ const normalizeProfileAffiliations = (value: unknown): PlayerAffiliation[] => {
     if (!normalizedName) {
       throw new Error("소속명을 입력해 주세요.");
     }
-    if (
-      Array.from(normalizedName).length > PLAYER_AFFILIATION_NAME_MAX_LENGTH
-    ) {
+    if (Array.from(normalizedName).length > PLAYER_AFFILIATION_NAME_MAX_LENGTH) {
       throw new Error(
         `소속명은 ${PLAYER_AFFILIATION_NAME_MAX_LENGTH}자 이하여야 합니다.`,
       );
     }
-    const duplicateKey = normalizedName
-      .replace(/\s+/g, " ")
-      .toLocaleLowerCase();
+    const duplicateKey = normalizedName.replace(/\s+/g, " ").toLocaleLowerCase();
     if (names.has(duplicateKey)) {
       throw new Error("같은 소속을 중복 등록할 수 없습니다.");
     }
@@ -2216,9 +2197,7 @@ const normalizeStatusMessage = (value: unknown): string | null => {
   return message || null;
 };
 
-const normalizeStatusMessageBackgroundColor = (
-  value: unknown,
-): string | null => {
+const normalizeStatusMessageBackgroundColor = (value: unknown): string | null => {
   if (value == null || value === "") return null;
   if (typeof value !== "string" || !/^#[0-9a-f]{6}$/i.test(value)) {
     throw new Error("상태메시지 배경색 형식이 올바르지 않습니다.");
@@ -2250,24 +2229,17 @@ app.patch("/api/me/profile", async (req, res) => {
     }
     if (hasOwnProperty(input, "statusMessage")) {
       update.statusMessage = normalizeStatusMessage(input.statusMessage);
-      if (
-        !update.statusMessage &&
-        !hasOwnProperty(input, "statusMessageBackgroundColor")
-      ) {
+      if (!update.statusMessage && !hasOwnProperty(input, "statusMessageBackgroundColor")) {
         update.statusMessageBackgroundColor = null;
       }
     }
     if (hasOwnProperty(input, "statusMessageBackgroundColor")) {
-      update.statusMessageBackgroundColor =
-        normalizeStatusMessageBackgroundColor(
-          input.statusMessageBackgroundColor,
-        );
+      update.statusMessageBackgroundColor = normalizeStatusMessageBackgroundColor(
+        input.statusMessageBackgroundColor,
+      );
     }
 
-    const player = await authService.updatePlayerProfile(
-      decoded.playerId,
-      update,
-    );
+    const player = await authService.updatePlayerProfile(decoded.playerId, update);
     res.json(player);
   } catch (err) {
     res.status(400).json({ error: (err as Error).message });
