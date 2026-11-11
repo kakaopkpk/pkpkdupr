@@ -106,8 +106,9 @@ const createRandom = (seed: number): (() => number) => {
   };
 };
 
+/** 정수로 내리고 1~4로 자른다. NaN만 기본값이고 ±Infinity는 상·하한으로 잘린다 */
 export const clampMatchmakingCourts = (courts: number): number => {
-  if (!Number.isFinite(courts)) {
+  if (Number.isNaN(courts)) {
     return MATCHMAKING_DEFAULT_COURTS;
   }
   return Math.min(
@@ -220,13 +221,17 @@ export const recommendDoublesMatches = (
   const random = createRandom(input.seed);
   const busy = new Set(input.busyPlayerIds);
   const seen = new Set<string>();
-  const eligible = input.participants.filter((participant) => {
-    if (busy.has(participant.id) || seen.has(participant.id)) {
+  // 같은 id가 여러 번 들어와도 NR 중앙값·추천 대상 모두 한 번만 센다
+  const participants = input.participants.filter((participant) => {
+    if (seen.has(participant.id)) {
       return false;
     }
     seen.add(participant.id);
     return true;
   });
+  const eligible = participants.filter(
+    (participant) => !busy.has(participant.id),
+  );
 
   const courtCount = Math.min(
     clampMatchmakingCourts(input.courts),
@@ -241,7 +246,7 @@ export const recommendDoublesMatches = (
   }
 
   const history = collectTodayHistory(input.completedMatches);
-  const nrRating = resolveNrRating(input.participants);
+  const nrRating = resolveNrRating(participants);
   const ratingById = new Map(
     eligible.map((participant) => [
       participant.id,

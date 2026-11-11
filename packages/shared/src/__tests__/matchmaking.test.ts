@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   MATCHMAKING_ALL_NR_FALLBACK_RATING,
+  MATCHMAKING_DEFAULT_COURTS,
+  clampMatchmakingCourts,
   recommendDoublesMatches,
   type DoublesRecommendationPlan,
   type MatchmakingParticipant,
@@ -80,6 +82,9 @@ describe("recommendDoublesMatches", () => {
     expect(recommend({ participants: players(20), courts: 10 }).courts).toHaveLength(4);
     expect(recommend({ participants: players(20), courts: 0 }).courts).toHaveLength(1);
     expect(recommend({ participants: players(20), courts: 2.9 }).courts).toHaveLength(2);
+    expect(clampMatchmakingCourts(Number.POSITIVE_INFINITY)).toBe(4);
+    expect(clampMatchmakingCourts(Number.NEGATIVE_INFINITY)).toBe(1);
+    expect(clampMatchmakingCourts(Number.NaN)).toBe(MATCHMAKING_DEFAULT_COURTS);
 
     const short = recommend({ participants: players(9), courts: 3 });
     expect(short.courts).toHaveLength(2);
@@ -132,6 +137,22 @@ describe("recommendDoublesMatches", () => {
     // non-null [3, 4, 5, 6]의 중앙값 4.5가 c의 평점이 된다
     const [averageA, averageB] = plan.courts[0].teamAverages;
     expect(averageA + averageB).toBeCloseTo((3 + 4 + 4.5 + 5) / 2);
+  });
+
+  it("NR 중앙값은 같은 id가 중복돼도 한 번만 센다", () => {
+    const plan = recommend({
+      participants: [
+        { id: "a", doublesRating: 3 },
+        { id: "b", doublesRating: 4 },
+        { id: "c", doublesRating: null },
+        { id: "d", doublesRating: 5 },
+        { id: "d", doublesRating: 5 },
+      ],
+      courts: 1,
+    });
+    // 중복을 빼면 non-null [3, 4, 5]의 중앙값 4가 c의 평점이 된다
+    const [averageA, averageB] = plan.courts[0].teamAverages;
+    expect(averageA + averageB).toBeCloseTo((3 + 4 + 4 + 5) / 2);
   });
 
   it("전원 NR이면 3.5로 계산한다", () => {
