@@ -20,8 +20,8 @@ import { PlayerAdminRepository } from "./PlayerAdminRepository";
 import { firstRow, placeholders } from "../db/client";
 
 /**
- * 로컬 Supabase 이메일 매직링크로 `<username>@<ALLOWED_EMAIL_DOMAIN>`(예: dev_alice@kakaocorp.com)에
- * 로그인하면 GET /api/me가 이 username의 회원과 자동 연결한다.
+ * api가 기동하며 active dev mock 회원마다 아이디 로그인 계정(공통 dev 비밀번호)을 만들어 연결한다
+ * (apps/api AuthService.seedDevAuthAccounts). 예: 아이디 dev_alice.
  * dev_alice는 관리자 화면 확인용으로 player_admins에 넣는다.
  */
 const DEV_ADMIN_PLAYER_ID = "dev-player-alice";

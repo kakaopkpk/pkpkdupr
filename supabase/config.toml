@@ -159,7 +159,7 @@ max_indexes = 5
 enabled = true
 # The base URL of your website. Used as an allow-list for redirects and for constructing URLs used
 # in emails.
-# 로컬 web(:8080)·admin-web(:3100)이 매직링크 로그인 후 돌아올 주소.
+# 로컬 web(:8080)·admin-web(:3100) 주소. 리다이렉트 허용 목록에 쓴다.
 site_url = "http://localhost:8080"
 # The public URL that Auth serves on. Defaults to the API external URL with `/auth/v1` appended.
 # external_url = ""
@@ -182,7 +182,8 @@ enable_refresh_token_rotation = true
 # Requires enable_refresh_token_rotation = true.
 refresh_token_reuse_interval = 10
 # Allow/disallow new user signups to your project.
-enable_signup = true
+# 공개 가입(signUp)을 막는다. 계정은 관리자가 api(service role admin API)로만 만들며, admin API는 이 값과 무관하다.
+enable_signup = false
 # Allow/disallow anonymous sign-ins to your project.
 enable_anonymous_sign_ins = false
 # Allow/disallow testing manual linking of accounts
@@ -225,9 +226,11 @@ web3 = 30
 # provider = "hcaptcha"
 # secret = ""
 
-# 로컬 개발은 Google 없이 이메일 매직링크로 로그인한다. 메일은 실제로 보내지 않고 Mailpit
-# (http://127.0.0.1:54324)에서 확인한다. 예: dev_alice@kakaocorp.com → dev mock 회원 dev_alice와 자동 연결.
-# 운영 프로젝트는 대시보드에서 Google provider만 켠다(docs/deploy.md).
+# 로그인은 관리자가 발급한 아이디·비밀번호다. 아이디는 `<아이디>@<INTERNAL_EMAIL_DOMAIN>`
+# (packages/shared/src/auth.ts) 합성 이메일로 바꿔 비밀번호 로그인하며, 이 주소로 메일은 보내지 않는다.
+# 아래 enable_signup은 이메일 provider 자체를 켜고 끄는 값이라 false면 비밀번호 로그인도 막히므로 true로 둔다.
+# 공개 가입 차단은 위 [auth] enable_signup = false가 맡는다.
+# 로컬 dev 계정: dev mock 회원 아이디(dev_alice 등) + 비밀번호 devpass1234 (docs/dev-environment.md).
 [auth.email]
 # Allow/disallow new user signups via email to your project.
 enable_signup = true

@@ -22,6 +22,7 @@ const admin: Player = {
 const adminSession: AuthenticatedSession = {
   payload: { playerId: admin.id, isAdmin: true },
   player: admin,
+  isFirstLogin: false,
 };
 
 const buildMatch = (id: string): Match => ({

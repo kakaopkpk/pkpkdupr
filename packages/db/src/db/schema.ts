@@ -1,4 +1,5 @@
 import {
+  boolean,
   customType,
   doublePrecision,
   integer,
@@ -49,8 +50,10 @@ export const players = pgTable("players", {
   statusMessageBackgroundColor: varchar("status_message_background_color", {
     length: 32,
   }),
-  /** Supabase Auth 사용자(auth.users.id). 아직 로그인해 연결되지 않은 회원은 null이다. */
+  /** Supabase Auth 사용자(auth.users.id). 관리자가 아직 계정을 발급하지 않은 회원은 null이다. */
   authUserId: uuid("auth_user_id").unique("players_auth_user_id_unique"),
+  /** 관리자가 발급·초기화한 비밀번호를 아직 바꾸지 않은 상태. */
+  isFirstLogin: boolean("is_first_login").notNull().default(false),
   createdAt: unixTimestamp("created_at").notNull(),
   updatedAt: unixTimestamp("updated_at").notNull(),
 });
@@ -61,21 +64,6 @@ export const playerAdmins = pgTable("player_admins", {
   createdAt: unixTimestamp("created_at").notNull(),
 });
 
-/** 1회용 초대 코드. 평문은 저장하지 않고 SHA-256 hex만 둔다. */
-export const inviteCodes = pgTable("invite_codes", {
-  id: id("id").primaryKey(),
-  codeHash: varchar("code_hash", { length: 64 })
-    .notNull()
-    .unique("invite_codes_code_hash_unique"),
-  createdByPlayerId: id("created_by_player_id").notNull(),
-  createdAt: unixTimestamp("created_at").notNull(),
-  expiresAt: unixTimestamp("expires_at").notNull(),
-  usedByPlayerId: id("used_by_player_id"),
-  usedAt: unixTimestamp("used_at"),
-}, (table) => ({
-  createdAtIndex: index("invite_codes_created_at_idx").on(table.createdAt),
-}));
-
 export const playerCreationLogs = pgTable("player_creation_logs", {
   id: id("id").primaryKey(),
   playerId: id("player_id").notNull(),
@@ -85,17 +73,6 @@ export const playerCreationLogs = pgTable("player_creation_logs", {
   createdAt: unixTimestamp("created_at").notNull(),
 }, (table) => ({
   playerIdIndex: index("player_creation_logs_player_id_idx").on(table.playerId),
-}));
-
-/** 미연결 회원이 Auth 사용자와 자동 연결된 기록. 회원이 지워져도 남도록 FK를 두지 않는다. */
-export const playerAuthLinkLogs = pgTable("player_auth_link_logs", {
-  id: id("id").primaryKey(),
-  playerId: id("player_id").notNull(),
-  authUserId: uuid("auth_user_id").notNull(),
-  linkMethod: varchar("link_method", { length: 32 }).notNull(),
-  createdAt: unixTimestamp("created_at").notNull(),
-}, (table) => ({
-  playerIdIndex: index("player_auth_link_logs_player_id_idx").on(table.playerId),
 }));
 
 export const playerStatusChangeLogs = pgTable("player_status_change_logs", {

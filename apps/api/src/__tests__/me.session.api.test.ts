@@ -21,6 +21,7 @@ const player: Player = {
 const session: AuthenticatedSession = {
   payload: { playerId: player.id, isAdmin: true },
   player,
+  isFirstLogin: false,
 };
 
 describe("GET /api/me session contract", () => {
@@ -28,20 +29,23 @@ describe("GET /api/me session contract", () => {
     vi.restoreAllMocks();
   });
 
-  it("유효한 세션은 플레이어 정보와 관리자 여부만 반환한다", async () => {
+  it("유효한 세션은 플레이어 정보와 관리자 여부·첫 로그인 여부를 반환한다", async () => {
     const authenticate = vi
       .spyOn(AuthService.prototype, "authenticateAccessToken")
-      .mockResolvedValue(session);
+      .mockResolvedValue({ ...session, isFirstLogin: true });
 
     const response = await request(app)
       .get("/api/me")
       .set("Authorization", "Bearer valid-token");
 
     expect(response.status).toBe(200);
-    expect(response.body).toMatchObject({ id: player.id, isAdmin: true });
+    expect(response.body).toMatchObject({
+      id: player.id,
+      isAdmin: true,
+      isFirstLogin: true,
+    });
     expect(response.body).not.toHaveProperty("accessToken");
-    expect(response.body).not.toHaveProperty("isFirstLogin");
-    expect(authenticate).toHaveBeenCalledWith("valid-token", { autoLink: true });
+    expect(authenticate).toHaveBeenCalledWith("valid-token");
   });
 
   it("Authorization 헤더가 없으면 SESSION_INVALID와 함께 401을 반환한다", async () => {
