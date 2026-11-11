@@ -47,9 +47,8 @@ import {
 } from "./supabaseAuthAdmin";
 import {
   getDuprCategoryForMatchType,
-  RatingService,
   type RatingServiceContract,
-} from "./RatingService";
+} from "./RatingContract";
 import { ScorePerformanceRatingService } from "./ScorePerformanceRatingService";
 import { matchTypeValues, type Match, type MatchType } from "@pkpkdupr/shared/match";
 import {
@@ -1486,89 +1485,6 @@ export class AuthService {
       relatedMatchCountByPlayerId,
       matchParticipantDuprSnapshots,
       perMatchChanges,
-    };
-  }
-
-  async compareRatingMethods(completedMatches: Match[]): Promise<{
-    completedMatchCount: number;
-    players: Array<{
-      playerId: string;
-      username: string;
-      currentRating: PublicPlayerDupr | null;
-      legacyRating: PublicPlayerDupr | null;
-      scorePerformanceRating: PublicPlayerDupr | null;
-      difference: PublicPlayerDupr;
-      relatedMatchCount: number;
-    }>;
-  }> {
-    const [legacy, scorePerformance] = await Promise.all([
-      this.calculateDuprRecalculation(
-        completedMatches,
-        [],
-        new RatingService(),
-      ),
-      this.calculateDuprRecalculation(
-        completedMatches,
-        [],
-        new ScorePerformanceRatingService(),
-      ),
-    ]);
-
-    return {
-      completedMatchCount: completedMatches.length,
-      players: scorePerformance.players
-        .map((player) => {
-          const legacyState = legacy.stateByPlayerId.get(player.id);
-          const scorePerformanceState =
-            scorePerformance.stateByPlayerId.get(player.id);
-          if (!legacyState || !scorePerformanceState) {
-            return null;
-          }
-          const currentRating = toPublicPlayerDupr(player.duprState);
-          const legacyRating = toPublicPlayerDupr(legacyState);
-          const scorePerformanceRating =
-            toPublicPlayerDupr(scorePerformanceState);
-
-          return {
-            playerId: player.id,
-            username: player.username,
-            currentRating,
-            legacyRating,
-            scorePerformanceRating,
-            difference: {
-              singles:
-                legacyRating?.singles != null &&
-                scorePerformanceRating?.singles != null
-                  ? roundDuprRating(
-                      scorePerformanceRating.singles - legacyRating.singles,
-                    )
-                  : null,
-              doubles:
-                legacyRating?.doubles != null &&
-                scorePerformanceRating?.doubles != null
-                  ? roundDuprRating(
-                      scorePerformanceRating.doubles - legacyRating.doubles,
-                    )
-                  : null,
-            },
-            relatedMatchCount:
-              scorePerformance.relatedMatchCountByPlayerId.get(player.id) ?? 0,
-          };
-        })
-        .filter(
-          (
-            comparison,
-          ): comparison is {
-            playerId: string;
-            username: string;
-            currentRating: PublicPlayerDupr | null;
-            legacyRating: PublicPlayerDupr | null;
-            scorePerformanceRating: PublicPlayerDupr | null;
-            difference: PublicPlayerDupr;
-            relatedMatchCount: number;
-          } => Boolean(comparison),
-        )
-        .sort((a, b) => a.username.localeCompare(b.username)),
     };
   }
 

@@ -13,7 +13,7 @@ import {
   getDuprCategoryForMatchType,
   type MatchReplayInput,
   type RatingServiceContract,
-} from "./RatingService";
+} from "./RatingContract";
 
 export interface ScorePerformanceRatingCalculation {
   /** 팀 평균 레이팅으로 예상한 득점 비율 */
@@ -32,10 +32,10 @@ export interface ScorePerformanceRatingCalculation {
 }
 
 /**
- * 신규 득점률식의 confidence별 기본 K-factor입니다.
+ * 득점률식의 confidence별 기본 K-factor입니다.
  *
- * 실제 득점률 차이는 승패의 0/1 차이보다 작으므로 기존 승패식보다 큰
- * K-factor를 사용합니다. 최종 변화량은 별도로 ±0.2에서 제한합니다.
+ * 실제 득점률 차이는 승패의 0/1 차이보다 작으므로 K-factor를 크게 잡고,
+ * 최종 변화량은 별도로 ±0.2에서 제한합니다.
  */
 const CONFIDENCE_K_FACTORS = [
   { maxExclusive: 20, kFactor: 0.32 },
@@ -103,17 +103,17 @@ export const getExpectedPointShare = (
 ) => 1 / (1 + Math.pow(10, (opponentTeamRating - teamRating) / scale));
 
 /**
- * 신규 득점률 기반 레이팅 구현체입니다.
+ * 득점률 기반 레이팅 구현체입니다.
  *
  * 팀 평균 레이팅으로 구한 기대 득점률과 실제 득점률의 차이를 반영합니다.
  * 예를 들어 강팀이 근소하게 이기면 기대보다 낮은 득점률일 수 있어 레이팅이
  * 내려갈 수 있고, 약팀이 패해도 접전을 만들면 올라갈 수 있습니다.
  *
  * 점수가 없는 과거 경기는 재계산 가능성을 유지하기 위해 승자=1, 패자=0인
- * 기존 승패 입력으로 fallback합니다.
+ * 승패 입력으로 fallback합니다.
  */
 export class ScorePerformanceRatingService implements RatingServiceContract {
-  /** confidence를 정규화한 뒤 신규 득점률식의 K-factor를 선택합니다. */
+  /** confidence를 정규화한 뒤 득점률식의 K-factor를 선택합니다. */
   getKFactor(confidence: number): number {
     const normalized = clamp(Math.round(confidence), 0, 100);
     return CONFIDENCE_K_FACTORS.find(
@@ -143,7 +143,7 @@ export class ScorePerformanceRatingService implements RatingServiceContract {
    *   = clamp((actualPointShare - expectedPointShare) × K-factor, -0.2, 0.2)
    *
    * 제한은 반올림 전에 적용하며, confidence는 자신을 제외한 경기 참가자들의
-   * 평균 confidence에 따라 기존 승패식과 같은 규칙으로 증가합니다.
+   * 평균 confidence가 높을수록 1~5만큼 증가합니다.
    */
   calculate(calcParams: {
     currentRating: number;
