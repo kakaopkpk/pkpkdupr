@@ -1429,7 +1429,7 @@ const AdminDashboard: React.FC = () => {
                 레이팅 재계산
               </h2>
               <p className="mt-1 text-sm text-gray-500">
-                현재 적용 중인 신규 득점률식으로 전체 완료 매치를 재생해 모든
+                득점률식으로 전체 완료 매치를 재생해 모든
                 회원의 저장 레이팅을 갱신합니다.
               </p>
             </div>

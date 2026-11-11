@@ -281,15 +281,3 @@ export type RecordedMatchResponse = Match & {
 export type MatchFeedItem =
   | { kind: "match"; match: Match }
   | { kind: "session"; session: MatchSessionSummary };
-
-export interface MatchResult {
-  matchId: string;
-  winnerTeamIndex: 0 | 1;
-  scores: MatchScore[];
-  // 경기 결과에 따라 각 선수의 DUPR 평점이 어떻게 변경되었는지 기록
-  ratingChanges: Array<{
-    playerId: string;
-    oldRating: number;
-    newRating: number;
-  }>;
-}

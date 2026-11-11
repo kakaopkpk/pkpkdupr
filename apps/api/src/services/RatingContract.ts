@@ -1,8 +1,5 @@
 import type { MatchScore, MatchType } from "@pkpkdupr/shared/match";
-import type {
-  PlayerDuprCategory,
-  StoredPlayerDupr,
-} from "@pkpkdupr/shared/player";
+import type { StoredPlayerDupr } from "@pkpkdupr/shared/player";
 
 export interface MatchParticipantRatingInput {
   playerId: string;
@@ -43,53 +40,3 @@ export interface RatingServiceContract {
     correctionWeightByPlayerId?: Record<string, number>,
   ): Record<string, StoredPlayerDupr>;
 }
-
-const DAY_MS = 24 * 60 * 60 * 1000;
-/** 마지막 경기 후 14일까지는 confidence를 유지합니다. */
-const CONFIDENCE_DECAY_GRACE_PERIOD_MS = 14 * DAY_MS;
-/** 유예기간 이후 미참여 하루마다 감소하는 confidence입니다. */
-const CONFIDENCE_DECAY_PER_DAY = 1.5;
-const CONFIDENCE_DECAY_FLOOR = 0;
-
-/**
- * 장기간 경기가 없었던 선수의 confidence를 경기 직전에 감쇠합니다.
- *
- * 저장된 confidence 자체를 매일 갱신하지 않고, 다음 경기를 재생하는 순간
- * 경과일을 계산하기 때문에 배치 작업 없이도 동일한 결과를 재현할 수 있습니다.
- */
-export const getDecayedConfidenceByInactivity = (
-  confidence: number,
-  elapsedMs?: number,
-): number => {
-  if (
-    elapsedMs == null ||
-    !Number.isFinite(elapsedMs) ||
-    elapsedMs <= CONFIDENCE_DECAY_GRACE_PERIOD_MS
-  ) {
-    return Math.max(CONFIDENCE_DECAY_FLOOR, confidence);
-  }
-
-  const decayDays = Math.floor(
-    (elapsedMs - CONFIDENCE_DECAY_GRACE_PERIOD_MS) / DAY_MS,
-  );
-
-  if (decayDays <= 0) {
-    return Math.max(CONFIDENCE_DECAY_FLOOR, confidence);
-  }
-
-  return Math.max(
-    CONFIDENCE_DECAY_FLOOR,
-    confidence - decayDays * CONFIDENCE_DECAY_PER_DAY,
-  );
-};
-
-/** 경기 세부 타입을 실제로 갱신할 singles/doubles 트랙으로 변환합니다. */
-export const getDuprCategoryForMatchType = (
-  matchType: MatchType,
-): PlayerDuprCategory => {
-  if (matchType === "singles" || matchType === "unrestricted-singles") {
-    return "singles";
-  }
-
-  return "doubles";
-};
