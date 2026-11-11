@@ -70,7 +70,7 @@ pnpm lint
 - 인증/프로필: `GET /api/me`, `POST /api/me/password-changed`(첫 로그인 비밀번호 변경 완료), `PATCH /api/me/profile`, avatar API. 로그인과 비밀번호 변경은 클라이언트가 Supabase Auth로 직접 합니다.
 - 플레이어: `GET /api/players`
 - 경기: `GET /api/matches`, 경기 기록 `POST /api/matches`·수정 `PUT /api/matches/:matchId`, `GET /api/match-feed`, 세션 조회 API
-- 세션: 오늘 세션 `GET /api/match-sessions/today`, 오늘 정기 세션 열기 `POST /api/match-sessions/regular/today`(정기 요일 22시 전만), 회원 세션 생성 `POST /api/match-sessions`, 상세 `GET /api/match-sessions/:sessionId`, 세션 경기 `GET /api/match-sessions/:sessionId/matches`, 점수 없이 진행 중 경기 시작 `POST /api/match-sessions/:sessionId/matches`(오늘 세션만, 이미 진행 중인 선수 포함 시 409, 선수 자동 참여), 참여자 한 명씩 추가 `POST /api/match-sessions/:sessionId/participants`·삭제 `DELETE /api/match-sessions/:sessionId/participants/:playerId`(활성 회원 누구나·대리 가능, 오늘 세션만, 멱등)
+- 세션: 오늘 세션 `GET /api/match-sessions/today`, 오늘 정기 세션 열기 `POST /api/match-sessions/regular/today`(정기 요일 22시 전만), 회원 세션 생성 `POST /api/match-sessions`, 상세 `GET /api/match-sessions/:sessionId`, 세션 경기 `GET /api/match-sessions/:sessionId/matches`, 점수 없이 진행 중 경기 시작 `POST /api/match-sessions/:sessionId/matches`(오늘 세션만, 이미 진행 중인 선수 포함 시 409, 선수 자동 참여), 복식 추천 매칭 `GET /api/match-sessions/:sessionId/recommendations?courts=N&seed=S`(오늘 세션만, courts 기본 3·1~4로 자름, seed 생략 시 서버가 정해 응답에 포함·같은 seed면 같은 결과, 진행 중 경기 선수 제외), 참여자 한 명씩 추가 `POST /api/match-sessions/:sessionId/participants`·삭제 `DELETE /api/match-sessions/:sessionId/participants/:playerId`(활성 회원 누구나·대리 가능, 오늘 세션만, 멱등)
 - 관리자: 선수/감사 로그, 회원 추가(`POST /api/admin/register`)·비밀번호 초기화·아이디 변경, 경기 일괄 등록·메타데이터, 평점 재계산, 공식 DUPR 조정 API
 
 도메인 규칙:

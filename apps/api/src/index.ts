@@ -36,6 +36,14 @@ import {
 } from "@pkpkdupr/shared/session";
 import { generateEntityId, isEntityId } from "@pkpkdupr/shared/entityId";
 import {
+  MATCHMAKING_DEFAULT_COURTS,
+  clampMatchmakingCourts,
+  recommendDoublesMatches,
+  type MatchSessionRecommendationResponse,
+  type RecommendationPlayer,
+  type RecommendedTeam,
+} from "@pkpkdupr/shared/matchmaking";
+import {
   PLAYER_AFFILIATION_MAX_COUNT,
   PLAYER_AFFILIATION_NAME_MAX_LENGTH,
   PLAYER_STATUS_MESSAGE_MAX_LENGTH,
@@ -1146,6 +1154,123 @@ app.get("/api/match-sessions/:sessionId", async (req, res) => {
     const now = new Date();
     await matchRepository.cleanupExpired(now);
     res.json(await requireMatchSessionDetail(sessionId, now));
+  } catch (err) {
+    sendMatchSessionFailure(res, err);
+  }
+});
+
+/** courts 쿼리: 생략이면 기본값, 숫자가 아니면 400, 숫자면 1~4로 자른다 */
+const parseRecommendationCourts = (value: unknown): number => {
+  if (value === undefined) {
+    return MATCHMAKING_DEFAULT_COURTS;
+  }
+  const courts = typeof value === "string" && value.trim() ? Number(value) : NaN;
+  if (Number.isNaN(courts)) {
+    throw new MatchSessionRequestError("courts는 숫자여야 합니다.", 400);
+  }
+  return clampMatchmakingCourts(courts);
+};
+
+/** seed 쿼리: 생략이면 서버가 무작위 정수를 정하고, 정수가 아니면 400 */
+const parseRecommendationSeed = (value: unknown): number => {
+  if (value === undefined) {
+    return Math.floor(Math.random() * 2 ** 31);
+  }
+  const seed =
+    typeof value === "string" && /^-?\d+$/.test(value.trim())
+      ? Number(value)
+      : NaN;
+  if (!Number.isSafeInteger(seed)) {
+    throw new MatchSessionRequestError("seed는 정수여야 합니다.", 400);
+  }
+  return seed;
+};
+
+const toRecommendationPlayer = (
+  member: MatchSessionMember,
+): RecommendationPlayer => ({
+  id: member.id,
+  username: member.username,
+  avatarUrl: member.avatarUrl,
+  doublesRating: member.duprRating?.doubles ?? null,
+});
+
+app.get("/api/match-sessions/:sessionId/recommendations", async (req, res) => {
+  try {
+    if (!(await getAuthPayload(req, res))) {
+      return;
+    }
+
+    const sessionId = req.params.sessionId;
+    if (!isEntityId(sessionId, "session")) {
+      throw new MatchSessionRequestError("유효한 세션 ID가 필요합니다.", 400);
+    }
+    const courts = parseRecommendationCourts(req.query.courts);
+    const seed = parseRecommendationSeed(req.query.seed);
+
+    const now = new Date();
+    await matchRepository.cleanupExpired(now);
+    const session = await requireMatchSessionDetail(sessionId, now);
+    if (!session.isToday) {
+      throw new MatchSessionRequestError(
+        "오늘 세션에서만 추천 매칭을 볼 수 있습니다.",
+        403,
+      );
+    }
+
+    const [busyPlayerIds, sessionMatches] = await Promise.all([
+      matchRepository.findInProgressPlayerIds(now),
+      matchRepository.findBySession(sessionId),
+    ]);
+    const plan = recommendDoublesMatches({
+      participants: session.participants.map((member) => ({
+        id: member.id,
+        doublesRating: member.duprRating?.doubles ?? null,
+      })),
+      busyPlayerIds,
+      completedMatches: sessionMatches
+        .filter((match) => match.status === "completed")
+        .map((match) => ({
+          teams: [
+            match.teams[0].players.map((player) => player.id),
+            match.teams[1].players.map((player) => player.id),
+          ],
+        })),
+      courts,
+      seed,
+    });
+
+    // 알고리즘은 participants 안의 id만 돌려주므로 조회가 항상 성공한다.
+    const playersById = new Map(
+      session.participants.map((member) => [
+        member.id,
+        toRecommendationPlayer(member),
+      ]),
+    );
+    const playerOf = (id: string) => playersById.get(id)!;
+    const toTeam = (
+      [first, second]: [string, string],
+      averageRating: number,
+    ): RecommendedTeam => ({
+      players: [playerOf(first), playerOf(second)],
+      averageRating,
+    });
+
+    const response: MatchSessionRecommendationResponse = {
+      sessionId,
+      requestedCourts: courts,
+      seed,
+      courts: plan.courts.map((court) => ({
+        teams: [
+          toTeam(court.teams[0], court.teamAverages[0]),
+          toTeam(court.teams[1], court.teamAverages[1]),
+        ],
+        repeatedPartnerPairs: court.repeatedPartnerPairs,
+        repeatedOpponentPairs: court.repeatedOpponentPairs,
+      })),
+      restingPlayers: plan.restingPlayerIds.map(playerOf),
+    };
+    res.json(response);
   } catch (err) {
     sendMatchSessionFailure(res, err);
   }
