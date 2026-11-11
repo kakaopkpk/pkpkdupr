@@ -116,6 +116,7 @@ const hydrateManagedSession = (record: any): ManagedMatchSession => ({
   location: record.location,
   participantIds: record.participantIds ?? [],
   matchCount: Number(record.matchCount ?? 0),
+  kind: record.kind === "regular" ? "regular" : "custom",
   createdAt: new Date(record.createdAt),
   updatedAt: new Date(record.updatedAt),
 });
@@ -349,8 +350,45 @@ export class MatchRepository {
   async findSessionById(
     sessionId: string,
   ): Promise<ManagedMatchSession | undefined> {
-    const sessions = await this.findSessions();
-    return sessions.find((session) => session.id === sessionId);
+    const record = await this.run(
+      () => db.matches.findSessionById(sessionId),
+      500,
+    );
+    return record ? hydrateManagedSession(record) : undefined;
+  }
+
+  /** 그 KST 날짜의 정기 세션을 찾거나 만든다. 같은 날짜에 하나만 존재한다 */
+  async findOrCreateRegularSession(
+    dateKey: string,
+  ): Promise<ManagedMatchSession> {
+    const record = await this.run(
+      () => db.matches.findOrCreateRegularSession(dateKey),
+      500,
+    );
+    return hydrateManagedSession(record);
+  }
+
+  /** 참여자를 추가한다. 이미 있으면 무시한다(동시 호출에도 덮어쓰지 않음) */
+  async addSessionParticipants(
+    sessionId: string,
+    playerIds: string[],
+  ): Promise<void> {
+    await this.run(
+      () => db.matches.addSessionParticipants(sessionId, playerIds),
+      500,
+    );
+  }
+
+  /**
+   * 조회 시점 정리. 경기 없는 세션을 만료 시각이 지나면 삭제한다.
+   * best-effort라 실패는 로그만 남기고 호출부 조회를 막지 않는다.
+   */
+  async cleanupExpired(now: Date = new Date()): Promise<void> {
+    try {
+      await db.matches.deleteExpiredEmptySessions(now);
+    } catch (error) {
+      console.error("[MATCH] 빈 세션 정리 실패", error);
+    }
   }
 
   async deleteSession(sessionId: string): Promise<void> {

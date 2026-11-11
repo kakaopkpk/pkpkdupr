@@ -175,12 +175,17 @@ export const matchSessions = pgTable(
     location: varchar("location", { length: 255 }).notNull(),
     createdAt: unixTimestamp("created_at").notNull(),
     updatedAt: unixTimestamp("updated_at").notNull(),
+    /** 정기 세션의 KST 날짜 키(YYYY-MM-DD). 날짜당 하나만 있다. 회원·관리자가 만든 세션은 null이다. */
+    regularDateKey: varchar("regular_date_key", { length: 10 }),
   },
   (table) => ({
     nameDateUnique: uniqueIndex("match_sessions_name_date_unique").on(
       table.name,
       table.date,
     ),
+    regularDateKeyUnique: uniqueIndex(
+      "match_sessions_regular_date_key_unique",
+    ).on(table.regularDateKey),
   }),
 );
 

@@ -1,4 +1,5 @@
 import type { Player, PlayerRatingChangeLog } from "./player.js";
+import type { MatchSessionKind } from "./session.js";
 
 export const matchTypeValues = [
   "singles",
@@ -143,6 +144,8 @@ export interface ManagedMatchSession {
   location: string;
   participantIds: string[];
   matchCount: number;
+  /** 정기 세션 날짜 키(regular_date_key)가 있으면 "regular" */
+  kind: MatchSessionKind;
   createdAt: Date;
   updatedAt: Date;
 }
