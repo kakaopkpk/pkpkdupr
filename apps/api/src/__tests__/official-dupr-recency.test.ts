@@ -68,7 +68,6 @@ const buildMatch = (completedAt: Date): Match => ({
   scores: [{ scoreA: 11, scoreB: 9 }],
   resultSubmittedByPlayerId: "anchor",
   resultSubmittedAt: completedAt,
-  approvals: [],
   location: "Court",
   matchStartsAt: completedAt,
   completedAt,

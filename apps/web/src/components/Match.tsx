@@ -25,9 +25,7 @@ export type MatchInfo = Omit<
   | "updatedAt"
   | "completedAt"
   | "resultSubmittedAt"
-  | "autoApprovalDueAt"
   | "session"
-  | "approvals"
 > & {
   matchStartsAt: string;
   createdAt: string;
@@ -96,14 +94,12 @@ const teamSetScoreChipWidthClass = "w-[clamp(6.6rem,35.2cqw,11rem)]";
 
 const statusLabelMap: Record<MatchStatus, string> = {
   created: "예정",
-  "pending-approval": "합의중",
   completed: "완료",
   cancelled: "취소",
 };
 
 const statusBadgeClassMap: Record<MatchStatus, string> = {
   created: "bg-sky-100 text-sky-700",
-  "pending-approval": "bg-violet-100 text-violet-700",
   completed: "bg-emerald-100 text-emerald-700",
   cancelled: "bg-slate-200 text-slate-700",
 };

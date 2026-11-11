@@ -2,7 +2,6 @@ import type { PlayerDupr } from "@pkpkdupr/shared/player";
 import { and, eq } from "drizzle-orm";
 import {
   matchParticipants,
-  matchResultApprovals,
   matchSessions,
   matches,
   matchScores,
@@ -751,18 +750,6 @@ const mockMatchParticipants = [
   },
 ];
 
-const mockMatchResultApprovals = [
-  "dev-player-alice",
-  "dev-player-bob",
-  "dev-player-cara",
-  "dev-player-finn",
-].map((playerId) => ({
-  id: `dev-match-open-play-001-approval-${playerId}`,
-  matchId: "dev-match-open-play-001",
-  playerId,
-  approvedAt: new Date("2026-06-05T20:10:00+09:00"),
-}));
-
 interface MockRatingChangeLog {
   id: string;
   playerId: string;
@@ -1111,14 +1098,6 @@ export class TestDataRepository {
       });
     }
 
-    for (const approval of mockMatchResultApprovals) {
-      await this.createMatchResultApprovalIfMissing({
-        ...approval,
-        matchId: toDevMatchId(approval.matchId),
-        playerId: this.resolveDevPlayerId(approval.playerId),
-      });
-    }
-
     for (const log of mockPlayerRatingChangeLogs) {
       await this.createRatingChangeLogIfMissing({
         ...log,
@@ -1164,21 +1143,6 @@ export class TestDataRepository {
         });
         await transaction.execute({
           sql: "UPDATE match_participants SET player_id = $1 WHERE player_id = $2",
-          args: [persistedId, legacyId],
-        });
-        await transaction.execute({
-          sql: `
-            DELETE FROM match_result_approvals AS legacy
-            USING match_result_approvals AS persisted
-            WHERE persisted.match_id = legacy.match_id
-              AND persisted.player_id = $1
-              AND legacy.player_id = $2
-          `,
-          args: [persistedId, legacyId],
-        });
-        await transaction.execute({
-          sql:
-            "UPDATE match_result_approvals SET player_id = $1 WHERE player_id = $2",
           args: [persistedId, legacyId],
         });
         await transaction.execute({
@@ -1256,7 +1220,6 @@ export class TestDataRepository {
         args: [...playerIds, ...TEST_RATING_FIXTURE_SOURCE_LOG_IDS],
       });
       for (const table of [
-        "match_result_approvals",
         "match_scores",
         "match_participants",
       ]) {
@@ -1511,43 +1474,6 @@ export class TestDataRepository {
 
     try {
       await this.db.insert(matchParticipants).values(data);
-    } catch (error) {
-      if (!isUniqueConstraintError(error)) {
-        throw error;
-      }
-    }
-  }
-
-  private async createMatchResultApprovalIfMissing(
-    data: (typeof mockMatchResultApprovals)[number],
-  ) {
-    const existingById = await this.db
-      .select()
-      .from(matchResultApprovals)
-      .where(eq(matchResultApprovals.id, data.id))
-      .limit(1)
-      .then(firstRow);
-    if (existingById) {
-      return;
-    }
-
-    const existingByApproval = await this.db
-      .select()
-      .from(matchResultApprovals)
-      .where(
-        and(
-          eq(matchResultApprovals.matchId, data.matchId),
-          eq(matchResultApprovals.playerId, data.playerId),
-        ),
-      )
-      .limit(1)
-      .then(firstRow);
-    if (existingByApproval) {
-      return;
-    }
-
-    try {
-      await this.db.insert(matchResultApprovals).values(data);
     } catch (error) {
       if (!isUniqueConstraintError(error)) {
         throw error;

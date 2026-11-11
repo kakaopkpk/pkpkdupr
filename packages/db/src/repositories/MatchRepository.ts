@@ -2,7 +2,6 @@ import type {
   MatchMode,
   Match,
   MatchFeedItem,
-  MatchResultApproval,
   MatchScore,
   MatchSessionSummary,
   MatchStatus,
@@ -14,10 +13,8 @@ import type {
 } from "@pkpkdupr/shared/match";
 import {
   DEFAULT_MATCH_MODE,
-  getAutoApprovalDueAt,
   getMatchSessionStatus,
   getMaxScoreCountForMatchMode,
-  MATCH_RESULT_MAX_SCORE_COUNT,
   validateMatchScoresForMode,
 } from "@pkpkdupr/shared/match";
 import {
@@ -28,7 +25,6 @@ import {
 import { and, desc, eq, isNotNull, max } from "drizzle-orm";
 import {
   matchParticipants,
-  matchResultApprovals,
   matches,
   matchScores,
   matchSessionParticipants,
@@ -41,14 +37,11 @@ import { firstRow, placeholders } from "../db/client";
 type StoredMatch = typeof matches.$inferSelect;
 type StoredMatchParticipant = typeof matchParticipants.$inferSelect;
 type StoredMatchScore = typeof matchScores.$inferSelect;
-type StoredMatchApproval = typeof matchResultApprovals.$inferSelect;
 type StoredMatchSession = typeof matchSessions.$inferSelect;
 type StoredPlayer = typeof players.$inferSelect;
 
 export const COMPLETED_MATCH_RESULT_EDIT_ERROR_MESSAGE =
   "이미 완료된 매치 결과는 수정할 수 없습니다.";
-export const COMPLETED_MATCH_APPROVAL_CANCEL_ERROR_MESSAGE =
-  "이미 완료된 매치 합의는 취소할 수 없습니다.";
 
 export class CompletedMatchResultEditError extends Error {
   constructor() {
@@ -57,10 +50,10 @@ export class CompletedMatchResultEditError extends Error {
   }
 }
 
-export class CompletedMatchApprovalCancelError extends Error {
+export class MatchRecordUpdateConflictError extends Error {
   constructor() {
-    super(COMPLETED_MATCH_APPROVAL_CANCEL_ERROR_MESSAGE);
-    this.name = "CompletedMatchApprovalCancelError";
+    super("기록을 수정할 수 없는 매치 상태입니다.");
+    this.name = "MatchRecordUpdateConflictError";
   }
 }
 
@@ -88,7 +81,18 @@ export interface CreateMatchInput {
   completedAt: Date | null;
   resultSubmittedByPlayerId?: string | null;
   resultSubmittedAt?: Date | null;
-  approvals?: MatchResultApproval[];
+}
+
+/** 참가자의 경기 기록 수정 입력. 시작 시각·세션·코트·생성자는 바꾸지 않는다. */
+export interface UpdateRecordedMatchInput {
+  type: MatchType;
+  mode: MatchMode;
+  name?: string;
+  location: string;
+  teams: [Team, Team];
+  scores: MatchScore[];
+  resultSubmittedByPlayerId: string;
+  resultSubmittedAt: Date;
 }
 
 export interface UpdateMatchMetadataInput {
@@ -141,11 +145,6 @@ const toMatchScore = (score: StoredMatchScore): MatchScore => ({
   scoreB: score.scoreB,
 });
 
-const toApproval = (approval: StoredMatchApproval): MatchResultApproval => ({
-  playerId: approval.playerId,
-  approvedAt: toDate(approval.approvedAt),
-});
-
 const parseParticipantDuprSnapshot = (
   value: string | null,
 ): PublicPlayerDupr | null | undefined => {
@@ -174,21 +173,10 @@ const parseParticipantDuprSnapshot = (
   }
 };
 
-const areScoresEqual = (
-  currentScores: MatchScore[] = [],
-  nextScores: MatchScore[],
-) =>
-  currentScores.length === nextScores.length &&
-  currentScores.every(
-    (currentScore, index) =>
-      currentScore.scoreA === nextScores[index]?.scoreA &&
-      currentScore.scoreB === nextScores[index]?.scoreB,
-  );
-
 /**
  * MatchRepository - `packages/db`의 경기 저장소.
  *
- * matches, match_scores, match_participants, match_result_approvals를 조립해
+ * matches, match_scores, match_participants를 조립해
  * shared Match 계약 형태로 반환합니다.
  */
 export class MatchRepository {
@@ -659,7 +647,6 @@ export class MatchRepository {
 
     await this.createParticipants(data.id, data.teams);
     await this.replaceScores(data.id, data.scores ?? []);
-    await this.createApprovals(data.id, data.approvals ?? []);
 
     const created = await this.findById(data.id);
     if (!created) {
@@ -905,138 +892,6 @@ export class MatchRepository {
     };
   }
 
-  async submitResult(
-    matchId: string,
-    submittedByPlayerId: string,
-    scores: MatchScore[],
-    approvalId: string,
-    submittedAt: Date = new Date(),
-  ): Promise<Match> {
-    const existing = await this.findById(matchId);
-    if (!existing) {
-      throw new Error("매치를 찾을 수 없습니다.");
-    }
-
-    if (existing.status === "completed") {
-      throw new CompletedMatchResultEditError();
-    }
-
-    if (
-      existing.status !== "created" &&
-      existing.status !== "pending-approval"
-    ) {
-      throw new Error("결과를 입력할 수 없는 매치 상태입니다.");
-    }
-
-    if (existing.creatorPlayerId !== submittedByPlayerId) {
-      throw new Error("매치 생성자만 결과를 입력할 수 있습니다.");
-    }
-
-    if (scores.length > MATCH_RESULT_MAX_SCORE_COUNT) {
-      throw new Error(
-        `스코어는 최대 ${MATCH_RESULT_MAX_SCORE_COUNT}개까지 입력할 수 있습니다.`,
-      );
-    }
-
-    validateMatchScoresForMode(existing.mode, scores);
-
-    const scoreColumns = await this.getMatchScoreColumns();
-    const shouldResetApprovals =
-      existing.status === "created" || !areScoresEqual(existing.scores, scores);
-    const autoApprovalDueAt = shouldResetApprovals || !existing.autoApprovalDueAt
-      ? getAutoApprovalDueAt(existing.matchStartsAt, submittedAt)
-      : existing.autoApprovalDueAt;
-    const transaction = await this.client.transaction("write");
-    let committed = false;
-
-    try {
-      const updateResult = await transaction.execute({
-        sql: `
-          UPDATE matches
-          SET
-            status = $1,
-            result_submitted_by_player_id = $2,
-            result_submitted_at = $3,
-            completed_at = NULL,
-            auto_approval_due_at = $4,
-            auto_approved_at = NULL,
-            auto_approval_rating_applied_at = NULL,
-            updated_at = $5
-          WHERE id = $6
-            AND status IN ('created', 'pending-approval')
-        `,
-        args: [
-          "pending-approval",
-          submittedByPlayerId,
-          toUnixTimestampSeconds(submittedAt),
-          toUnixTimestampSeconds(autoApprovalDueAt),
-          toUnixTimestampSeconds(submittedAt),
-          matchId,
-        ],
-      });
-
-      if (!updateResult.rowsAffected) {
-        throw new Error("RESULT_SUBMIT_STATE_CONFLICT");
-      }
-
-      await this.replaceScoresWithExecutor(
-        matchId,
-        scores,
-        scoreColumns,
-        transaction,
-      );
-      if (shouldResetApprovals) {
-        await transaction.execute({
-          sql: `DELETE FROM match_result_approvals WHERE match_id = $1`,
-          args: [matchId],
-        });
-      }
-      await transaction.execute({
-        sql: `
-          INSERT INTO match_result_approvals (id, match_id, player_id, approved_at)
-          VALUES ($1, $2, $3, $4)
-          ON CONFLICT DO NOTHING
-        `,
-        args: [
-          approvalId,
-          matchId,
-          submittedByPlayerId,
-          toUnixTimestampSeconds(submittedAt),
-        ],
-      });
-      if (!shouldResetApprovals) {
-        await this.completeMatchIfFullyApproved(
-          matchId,
-          submittedAt,
-          transaction,
-        );
-      }
-
-      await transaction.commit();
-      committed = true;
-    } catch (error) {
-      transaction.close();
-      const current = await this.findById(matchId);
-      if (
-        (error as Error).message === "RESULT_SUBMIT_STATE_CONFLICT" &&
-        current?.status === "completed"
-      ) {
-        throw new CompletedMatchResultEditError();
-      }
-      throw error;
-    } finally {
-      if (!committed) {
-        transaction.close();
-      }
-    }
-
-    const updated = await this.findById(matchId);
-    if (!updated) {
-      throw new Error("매치 결과 저장에 실패했습니다.");
-    }
-    return updated;
-  }
-
   async recordAdminResult(
     matchId: string,
     submittedByPlayerId: string,
@@ -1052,10 +907,7 @@ export class MatchRepository {
       throw new CompletedMatchResultEditError();
     }
 
-    if (
-      existing.status !== "created" &&
-      existing.status !== "pending-approval"
-    ) {
+    if (existing.status !== "created") {
       throw new Error("결과를 입력할 수 없는 매치 상태입니다.");
     }
 
@@ -1075,12 +927,9 @@ export class MatchRepository {
             result_submitted_by_player_id = $2,
             result_submitted_at = $3,
             completed_at = $4,
-            auto_approval_due_at = NULL,
-            auto_approved_at = NULL,
-            auto_approval_rating_applied_at = NULL,
             updated_at = $5
           WHERE id = $6
-            AND status IN ('created', 'pending-approval')
+            AND status = 'created'
         `,
         args: [
           "completed",
@@ -1101,10 +950,6 @@ export class MatchRepository {
         scoreColumns,
         transaction,
       );
-      await transaction.execute({
-        sql: `DELETE FROM match_result_approvals WHERE match_id = $1`,
-        args: [matchId],
-      });
 
       await transaction.commit();
       committed = true;
@@ -1131,6 +976,116 @@ export class MatchRepository {
     return updated;
   }
 
+  /**
+   * created·completed 경기의 기록(종류·모드·이름·장소·참가자·점수)을 한 트랜잭션으로 교체하고
+   * completed로 만든다. completed_at은 기존 값을 유지하고 없을 때만 resultSubmittedAt으로 채운다.
+   * 남는 참가자는 기존 평점 스냅샷을 유지하고, 새 참가자는 비워 두어 평점 반영 때 채워지게 한다.
+   */
+  async updateRecordedMatch(
+    matchId: string,
+    data: UpdateRecordedMatchInput,
+  ): Promise<Match> {
+    validateMatchScoresForMode(data.mode, data.scores);
+    const location = data.location.trim();
+    if (!location) {
+      throw new Error("매치 장소를 입력해주세요.");
+    }
+
+    const scoreColumns = await this.getMatchScoreColumns();
+    const transaction = await this.client.transaction("write");
+    let committed = false;
+
+    try {
+      const submittedAtSeconds = toUnixTimestampSeconds(data.resultSubmittedAt);
+      const updateResult = await transaction.execute({
+        sql: `
+          UPDATE matches
+          SET
+            type = $1,
+            mode = $2,
+            name = $3,
+            location = $4,
+            status = 'completed',
+            result_submitted_by_player_id = $5,
+            result_submitted_at = $6,
+            completed_at = COALESCE(completed_at, $6),
+            updated_at = $6
+          WHERE id = $7
+            AND status IN ('created', 'completed')
+        `,
+        args: [
+          data.type,
+          data.mode,
+          data.name?.trim() || null,
+          location,
+          data.resultSubmittedByPlayerId,
+          submittedAtSeconds,
+          matchId,
+        ],
+      });
+      if (!updateResult.rowsAffected) {
+        throw new MatchRecordUpdateConflictError();
+      }
+
+      const existingParticipants = await transaction.execute({
+        sql: `SELECT player_id, dupr_rating_json FROM match_participants WHERE match_id = $1`,
+        args: [matchId],
+      });
+      const snapshotByPlayerId = new Map<string, string | null>(
+        existingParticipants.rows.map((row: Record<string, unknown>) => [
+          String(row.player_id),
+          (row.dupr_rating_json as string | null) ?? null,
+        ]),
+      );
+      await transaction.execute({
+        sql: `DELETE FROM match_participants WHERE match_id = $1`,
+        args: [matchId],
+      });
+      for (const [teamIndex, team] of data.teams.entries()) {
+        for (const player of team.players) {
+          await transaction.execute({
+            sql: `
+              INSERT INTO match_participants (
+                id,
+                match_id,
+                team_index,
+                player_id,
+                dupr_rating_json
+              )
+              VALUES ($1, $2, $3, $4, $5)
+            `,
+            args: [
+              `${matchId}-team-${teamIndex}-${player.id}`,
+              matchId,
+              teamIndex,
+              player.id,
+              snapshotByPlayerId.get(player.id) ?? null,
+            ],
+          });
+        }
+      }
+      await this.replaceScoresWithExecutor(
+        matchId,
+        data.scores,
+        scoreColumns,
+        transaction,
+      );
+
+      await transaction.commit();
+      committed = true;
+    } finally {
+      if (!committed) {
+        transaction.close();
+      }
+    }
+
+    const updated = await this.findById(matchId);
+    if (!updated) {
+      throw new Error("매치 기록 저장에 실패했습니다.");
+    }
+    return updated;
+  }
+
   async delete(matchId: string): Promise<void> {
     const transaction = await this.client.transaction("write");
     let committed = false;
@@ -1142,10 +1097,6 @@ export class MatchRepository {
       });
       await transaction.execute({
         sql: `DELETE FROM match_participants WHERE match_id = $1`,
-        args: [matchId],
-      });
-      await transaction.execute({
-        sql: `DELETE FROM match_result_approvals WHERE match_id = $1`,
         args: [matchId],
       });
       const deleted = await transaction.execute({
@@ -1212,334 +1163,6 @@ export class MatchRepository {
     }
   }
 
-  async approveResult(
-    matchId: string,
-    playerId: string,
-    approvalId: string,
-    approvedAt: Date = new Date(),
-  ): Promise<Match> {
-    const existing = await this.findById(matchId);
-    if (!existing) {
-      throw new Error("매치를 찾을 수 없습니다.");
-    }
-
-    if (existing.status !== "pending-approval") {
-      throw new Error("승인할 수 없는 매치 상태입니다.");
-    }
-
-    const participantIds = existing.teams.flatMap((team) =>
-      team.players.map((player) => player.id),
-    );
-    if (!participantIds.includes(playerId)) {
-      throw new Error("매치 참여자만 결과를 승인할 수 있습니다.");
-    }
-
-    if (existing.approvals.some((approval) => approval.playerId === playerId)) {
-      throw new Error("이미 승인한 매치 결과입니다.");
-    }
-
-    const transaction = await this.client.transaction("write");
-    let committed = false;
-
-    try {
-      await transaction.execute({
-        sql: `
-          INSERT INTO match_result_approvals (id, match_id, player_id, approved_at)
-          VALUES ($1, $2, $3, $4)
-        `,
-        args: [
-          approvalId,
-          matchId,
-          playerId,
-          toUnixTimestampSeconds(approvedAt),
-        ],
-      });
-
-      await this.completeMatchIfFullyApproved(matchId, approvedAt, transaction);
-
-      await transaction.commit();
-      committed = true;
-    } finally {
-      if (!committed) {
-        transaction.close();
-      }
-    }
-
-    const completed = await this.findById(matchId);
-    if (!completed) {
-      throw new Error("매치 완료 처리에 실패했습니다.");
-    }
-    return completed;
-  }
-
-  async cancelApproval(matchId: string, playerId: string): Promise<Match> {
-    const existing = await this.findById(matchId);
-    if (!existing) {
-      throw new Error("매치를 찾을 수 없습니다.");
-    }
-
-    if (existing.status === "completed") {
-      throw new CompletedMatchApprovalCancelError();
-    }
-
-    if (existing.status !== "pending-approval") {
-      throw new Error("합의를 취소할 수 없는 매치 상태입니다.");
-    }
-
-    const participantIds = existing.teams.flatMap((team) =>
-      team.players.map((player) => player.id),
-    );
-    if (!participantIds.includes(playerId)) {
-      throw new Error("매치 참여자만 합의를 취소할 수 있습니다.");
-    }
-
-    if (
-      !existing.approvals.some((approval) => approval.playerId === playerId)
-    ) {
-      throw new Error("취소할 합의 내역이 없습니다.");
-    }
-
-    const transaction = await this.client.transaction("write");
-    let committed = false;
-
-    try {
-      const deleteResult = await transaction.execute({
-        sql: `
-          DELETE FROM match_result_approvals
-          WHERE match_id = $1
-            AND player_id = $2
-            AND EXISTS (
-              SELECT 1
-              FROM matches
-              WHERE matches.id = match_result_approvals.match_id
-                AND matches.status = 'pending-approval'
-            )
-        `,
-        args: [matchId, playerId],
-      });
-
-      if (!deleteResult.rowsAffected) {
-        throw new Error("APPROVAL_CANCEL_STATE_CONFLICT");
-      }
-
-      await transaction.commit();
-      committed = true;
-    } catch (error) {
-      transaction.close();
-      const current = await this.findById(matchId);
-      if (
-        (error as Error).message === "APPROVAL_CANCEL_STATE_CONFLICT" &&
-        current?.status === "completed"
-      ) {
-        throw new CompletedMatchApprovalCancelError();
-      }
-      throw error;
-    } finally {
-      if (!committed) {
-        transaction.close();
-      }
-    }
-
-    const updated = await this.findById(matchId);
-    if (!updated) {
-      throw new Error("합의 취소 처리에 실패했습니다.");
-    }
-    return updated;
-  }
-
-  async rejectResult(matchId: string, playerId: string): Promise<Match> {
-    const existing = await this.findById(matchId);
-    if (!existing) {
-      throw new Error("매치를 찾을 수 없습니다.");
-    }
-
-    if (existing.status !== "pending-approval") {
-      throw new Error("거부할 수 없는 매치 상태입니다.");
-    }
-
-    const participantIds = existing.teams.flatMap((team) =>
-      team.players.map((player) => player.id),
-    );
-    if (!participantIds.includes(playerId)) {
-      throw new Error("매치 참여자만 결과를 거부할 수 있습니다.");
-    }
-
-    const rejectedAt = new Date();
-    const transaction = await this.client.transaction("write");
-    let committed = false;
-
-    try {
-      const updateResult = await transaction.execute({
-        sql: `
-          UPDATE matches
-          SET
-            status = $1,
-            result_submitted_by_player_id = NULL,
-            result_submitted_at = NULL,
-            completed_at = NULL,
-            auto_approval_due_at = NULL,
-            auto_approved_at = NULL,
-            auto_approval_rating_applied_at = NULL,
-            updated_at = $2
-          WHERE id = $3
-            AND status = 'pending-approval'
-        `,
-        args: ["created", toUnixTimestampSeconds(rejectedAt), matchId],
-      });
-
-      if (!updateResult.rowsAffected) {
-        throw new Error("RESULT_REJECT_STATE_CONFLICT");
-      }
-
-      await transaction.execute({
-        sql: `DELETE FROM match_scores WHERE match_id = $1`,
-        args: [matchId],
-      });
-      await transaction.execute({
-        sql: `DELETE FROM match_result_approvals WHERE match_id = $1`,
-        args: [matchId],
-      });
-
-      await transaction.commit();
-      committed = true;
-    } catch (error) {
-      transaction.close();
-      throw error;
-    } finally {
-      if (!committed) {
-        transaction.close();
-      }
-    }
-
-    const updated = await this.findById(matchId);
-    if (!updated) {
-      throw new Error("결과 거부 처리에 실패했습니다.");
-    }
-    return updated;
-  }
-
-  async completeExpiredAutoApprovals(now: Date = new Date()): Promise<Match[]> {
-    const nowSeconds = toUnixTimestampSeconds(now);
-    const transaction = await this.client.transaction("write");
-    let committed = false;
-    const completedIds: string[] = [];
-
-    try {
-      const candidates = await transaction.execute({
-        sql: `
-          SELECT id
-          FROM matches
-          WHERE status = 'pending-approval'
-            AND auto_approval_due_at IS NOT NULL
-            AND auto_approval_due_at <= $1
-        `,
-        args: [nowSeconds],
-      });
-
-      for (const candidate of candidates.rows) {
-        const matchId = String(candidate.id);
-        const updateResult = await transaction.execute({
-          sql: `
-            UPDATE matches
-            SET
-              status = 'completed',
-              completed_at = $1,
-              auto_approval_due_at = NULL,
-              auto_approved_at = $2,
-              auto_approval_rating_applied_at = NULL,
-              updated_at = $3
-            WHERE id = $4
-              AND status = 'pending-approval'
-              AND auto_approval_due_at IS NOT NULL
-              AND auto_approval_due_at <= $5
-          `,
-          args: [
-            nowSeconds,
-            nowSeconds,
-            nowSeconds,
-            matchId,
-            nowSeconds,
-          ],
-        });
-
-        if (updateResult.rowsAffected) {
-          completedIds.push(matchId);
-        }
-      }
-
-      await transaction.commit();
-      committed = true;
-    } finally {
-      if (!committed) {
-        transaction.close();
-      }
-    }
-
-    return await Promise.all(
-      completedIds.map(async (matchId) => {
-        const match = await this.findById(matchId);
-        if (!match) {
-          throw new Error("자동 합의 처리한 매치를 찾을 수 없습니다.");
-        }
-        return match;
-      }),
-    );
-  }
-
-  async findAutoApprovedMatchesAwaitingRating(): Promise<Match[]> {
-    const result = await this.client.execute(`
-      SELECT id
-      FROM matches
-      WHERE status = 'completed'
-        AND auto_approved_at IS NOT NULL
-        AND auto_approval_rating_applied_at IS NULL
-    `);
-
-    return await Promise.all(
-      result.rows.map(async (row: { id: unknown }) => {
-        const match = await this.findById(String(row.id));
-        if (!match) {
-          throw new Error("자동 합의 매치를 찾을 수 없습니다.");
-        }
-        return match;
-      }),
-    );
-  }
-
-  /** 아직 표시되지 않은 경기만 선점합니다. 이 호출이 행을 바꿨을 때만 true입니다. */
-  async markAutoApprovalRatingApplied(
-    matchId: string,
-    appliedAt: Date = new Date(),
-  ): Promise<boolean> {
-    const result = await this.client.execute({
-      sql: `
-        UPDATE matches
-        SET auto_approval_rating_applied_at = $1
-        WHERE id = $2
-          AND status = 'completed'
-          AND auto_approved_at IS NOT NULL
-          AND auto_approval_rating_applied_at IS NULL
-      `,
-      args: [toUnixTimestampSeconds(appliedAt), matchId],
-    });
-
-    return result.rowsAffected > 0;
-  }
-
-  /** 선점 표시를 되돌려 다음 주기에 평점 반영을 다시 시도하게 합니다. */
-  async clearAutoApprovalRatingApplied(matchId: string): Promise<void> {
-    await this.client.execute({
-      sql: `
-        UPDATE matches
-        SET auto_approval_rating_applied_at = NULL
-        WHERE id = $1
-          AND status = 'completed'
-          AND auto_approved_at IS NOT NULL
-      `,
-      args: [matchId],
-    });
-  }
-
   async updateMetadata(
     id: string,
     data: UpdateMatchMetadataInput,
@@ -1602,7 +1225,7 @@ export class MatchRepository {
   }
 
   private async hydrateMatch(match: StoredMatch): Promise<Match> {
-    const [participants, scores, approvals, session] = await Promise.all([
+    const [participants, scores, session] = await Promise.all([
       this.db
         .select()
         .from(matchParticipants)
@@ -1613,11 +1236,6 @@ export class MatchRepository {
         .from(matchScores)
         .where(eq(matchScores.matchId, match.id))
         .orderBy(matchScores.id),
-      this.db
-        .select()
-        .from(matchResultApprovals)
-        .where(eq(matchResultApprovals.matchId, match.id))
-        .orderBy(matchResultApprovals.id),
       match.sessionId
         ? this.db
             .select()
@@ -1693,11 +1311,6 @@ export class MatchRepository {
         ),
       resultSubmittedByPlayerId: match.resultSubmittedByPlayerId ?? null,
       resultSubmittedAt: toDateOrNull(match.resultSubmittedAt),
-      autoApprovalDueAt:
-        match.status === "pending-approval"
-          ? toDateOrNull(match.autoApprovalDueAt)
-          : null,
-      approvals: approvals.map(toApproval),
       location: match.location,
       courtName: match.courtName?.trim() || undefined,
       matchStartsAt: toDate(match.matchStartsAt),
@@ -1902,41 +1515,6 @@ export class MatchRepository {
     }
   }
 
-  private async completeMatchIfFullyApproved(
-    matchId: string,
-    completedAt: Date,
-    executor: { execute: (statement: any) => Promise<any> },
-  ) {
-    await executor.execute({
-      sql: `
-        UPDATE matches
-        SET
-          status = 'completed',
-          completed_at = $1,
-          auto_approval_due_at = NULL,
-          updated_at = $2
-        WHERE id = $3
-          AND status = 'pending-approval'
-          AND NOT EXISTS (
-            SELECT 1
-            FROM match_participants
-            WHERE match_participants.match_id = matches.id
-              AND NOT EXISTS (
-                SELECT 1
-                FROM match_result_approvals
-                WHERE match_result_approvals.match_id = match_participants.match_id
-                  AND match_result_approvals.player_id = match_participants.player_id
-              )
-          )
-      `,
-      args: [
-        toUnixTimestampSeconds(completedAt),
-        toUnixTimestampSeconds(completedAt),
-        matchId,
-      ],
-    });
-  }
-
   private async getMatchScoreColumns(): Promise<Set<string>> {
     return new Set(["score_a", "score_b"]);
   }
@@ -1970,50 +1548,6 @@ export class MatchRepository {
     await executor.execute({
       sql: `INSERT INTO match_scores (${insertColumns.join(", ")}) VALUES (${placeholders(insertColumns.length)})`,
       args,
-    });
-  }
-
-  private async createApprovals(
-    matchId: string,
-    approvals: MatchResultApproval[],
-  ) {
-    for (const approval of approvals) {
-      await this.insertApprovalIfMissing(
-        `${matchId}-approval-${approval.playerId}`,
-        matchId,
-        approval.playerId,
-        approval.approvedAt,
-      );
-    }
-  }
-
-  private async insertApprovalIfMissing(
-    id: string,
-    matchId: string,
-    playerId: string,
-    approvedAt: Date,
-  ) {
-    const existing = await this.db
-      .select()
-      .from(matchResultApprovals)
-      .where(
-        and(
-          eq(matchResultApprovals.matchId, matchId),
-          eq(matchResultApprovals.playerId, playerId),
-        ),
-      )
-      .limit(1)
-      .then(firstRow);
-
-    if (existing) {
-      return;
-    }
-
-    await this.db.insert(matchResultApprovals).values({
-      id,
-      matchId,
-      playerId,
-      approvedAt,
     });
   }
 }

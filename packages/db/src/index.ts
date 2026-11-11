@@ -29,10 +29,11 @@ export {
 export {
   MatchRepository,
   CompletedMatchResultEditError,
-  CompletedMatchApprovalCancelError,
+  MatchRecordUpdateConflictError,
   SessionHasMatchesError,
   type CreateMatchInput,
   type UpdateMatchMetadataInput,
+  type UpdateRecordedMatchInput,
   type MatchParticipantDuprSnapshot,
   type TimestampUnitAudit,
 } from "./repositories/MatchRepository";
