@@ -563,10 +563,7 @@ const normalizeMatchScores = (scores: unknown): MatchScore[] => {
 const authErrorStatus: Record<AuthErrorCode, number> = {
   SESSION_INVALID: 401,
   SESSION_UNAVAILABLE: 503,
-  DOMAIN_NOT_ALLOWED: 403,
   ACCOUNT_NOT_LINKED: 403,
-  INVITE_INVALID: 400,
-  ALREADY_LINKED: 409,
   FORBIDDEN: 403,
 };
 
