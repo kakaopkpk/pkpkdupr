@@ -1,4 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
+import { toInternalEmail } from "@pkpkdupr/shared/auth";
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL?.trim();
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY?.trim();
@@ -12,42 +13,29 @@ if (!supabaseUrl || !supabaseAnonKey) {
 // 브라우저에는 anon(publishable) key만 둔다. 세션 저장·토큰 갱신은 supabase-js가 맡는다.
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
-    flowType: "pkce",
     persistSession: true,
     autoRefreshToken: true,
-    detectSessionInUrl: true,
+    // 리다이렉트 기반 로그인을 쓰지 않으므로 URL에서 세션을 읽지 않는다.
+    detectSessionInUrl: false,
   },
 });
 
-export const ALLOWED_EMAIL_DOMAIN =
-  import.meta.env.VITE_ALLOWED_EMAIL_DOMAIN?.trim() || "kakaocorp.com";
+const INVALID_CREDENTIALS_MESSAGE = "아이디 또는 비밀번호가 올바르지 않습니다.";
 
-/** 하위 경로 배포에서도 앱 루트로 돌아오도록 BASE_URL을 붙인다. */
-export const getAuthRedirectUrl = () =>
-  `${window.location.origin}${import.meta.env.BASE_URL}`;
-
-export const signInWithGoogle = async () => {
-  const { error } = await supabase.auth.signInWithOAuth({
-    provider: "google",
-    options: {
-      redirectTo: getAuthRedirectUrl(),
-      queryParams: { hd: ALLOWED_EMAIL_DOMAIN },
-    },
+/** 관리자가 발급한 아이디·비밀번호로 로그인한다. 아이디는 내부 이메일로 바꿔 Supabase Auth에 넘긴다. */
+export const signInWithUsername = async (username: string, password: string) => {
+  const { error } = await supabase.auth.signInWithPassword({
+    email: toInternalEmail(username),
+    password,
   });
-  if (error) {
-    throw new Error(error.message || "Google 로그인을 시작하지 못했습니다.");
+  if (!error) {
+    return;
   }
-};
-
-/** 로컬 개발 전용: 로컬 Supabase Mailpit으로 매직링크를 보낸다. */
-export const signInWithMagicLink = async (email: string) => {
-  const { error } = await supabase.auth.signInWithOtp({
-    email,
-    options: { emailRedirectTo: getAuthRedirectUrl() },
-  });
-  if (error) {
-    throw new Error(error.message || "로그인 링크를 보내지 못했습니다.");
+  // 400은 미확인 이메일·차단 등 다른 사유에도 오므로 코드로만 판별하고 나머지는 원문을 보여 준다.
+  if (error.code === "invalid_credentials") {
+    throw new Error(INVALID_CREDENTIALS_MESSAGE);
   }
+  throw new Error(error.message || "로그인하지 못했습니다.");
 };
 
 /**

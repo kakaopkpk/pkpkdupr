@@ -9,12 +9,7 @@ import React, {
 import type { AuthErrorResponse, MeResponse } from "@pkpkdupr/shared/auth";
 import type { Player } from "@pkpkdupr/shared/player";
 import { apiFetch } from "../lib/api";
-import {
-  ALLOWED_EMAIL_DOMAIN,
-  getAccessToken,
-  signOut,
-  supabase,
-} from "../lib/supabase";
+import { getAccessToken, signOut, supabase } from "../lib/supabase";
 
 type PlayerInfo = Pick<
   Player,
@@ -32,14 +27,13 @@ interface AuthContextType {
   status: AdminAuthStatus;
   player: PlayerInfo | null;
   isAdmin: boolean;
-  /** 로그인 화면에 보여줄 안내(관리자 아님, 도메인 거부 등) */
+  /** 로그인 화면에 보여줄 안내(관리자 아님 등) */
   notice: string | null;
   clearNotice: () => void;
   logout: () => Promise<void>;
 }
 
 const NOT_ADMIN_NOTICE = "관리자 권한이 없습니다.";
-const DOMAIN_NOT_ALLOWED_NOTICE = `회사 계정(@${ALLOWED_EMAIL_DOMAIN})으로 로그인해 주세요.`;
 // 더 이상 쓰지 않는 저장소 키. 남아 있으면 지운다.
 const LEGACY_TOKEN_STORAGE_KEY = "admin-token";
 const SESSION_RETRY_DELAYS_MS = [2_000, 5_000, 10_000];
@@ -146,10 +140,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
       }
 
       switch (errorData.code) {
-        case "DOMAIN_NOT_ALLOWED":
-          await endSession(DOMAIN_NOT_ALLOWED_NOTICE);
-          return;
-        // 연결된 회원이 없으면 관리자일 수 없다. 초대 코드 가입은 web에서 한다.
+        // 연결된 회원이 없으면 관리자일 수 없다.
         case "ACCOUNT_NOT_LINKED":
         case "FORBIDDEN":
           await endSession(NOT_ADMIN_NOTICE);

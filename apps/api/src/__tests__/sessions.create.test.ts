@@ -28,6 +28,7 @@ const admin: Player = {
 const adminSession: AuthenticatedSession = {
   payload: { playerId: admin.id, isAdmin: true },
   player: admin,
+  isFirstLogin: false,
 };
 const participants: Player[] = Array.from({ length: 4 }, (_, index) => ({
   id: `player-${index + 1}`,

@@ -22,58 +22,62 @@ const player: Player = {
 const adminSession: AuthenticatedSession = {
   payload: { playerId: player.id, isAdmin: true },
   player,
+  isFirstLogin: false,
 };
 
-describe("sensitive invite code response headers", () => {
+describe("sensitive password response headers", () => {
   afterEach(() => {
     vi.restoreAllMocks();
   });
 
   it.each([
-    ["POST", "/api/auth/invite"],
-    ["POST", "/api/admin/invite-codes"],
-    ["POST", "/api/admin/invite-codes/"],
+    ["POST", "/api/admin/register"],
+    ["POST", "/api/admin/register/"],
+    ["POST", "/api/admin/players/Pplayer1/password-reset"],
   ])("marks %s %s as sensitive", (method, path) => {
     expect(isSensitiveRequest({ method, path })).toBe(true);
   });
 
   it.each([
     ["GET", "/api/me"],
-    ["GET", "/api/admin/invite-codes"],
+    ["POST", "/api/auth/invite"],
+    ["POST", "/api/admin/invite-codes"],
+    ["PATCH", "/api/admin/players/Pplayer1/username"],
+    ["POST", "/api/admin/players/Pplayer1/password-reset/extra"],
     ["POST", "/api/matches"],
     ["DELETE", "/api/admin/matches/Mmatch01"],
   ])("does not mark %s %s", (method, path) => {
     expect(isSensitiveRequest({ method, path })).toBe(false);
   });
 
-  it("sets no-store on invite code responses", async () => {
+  it("sets no-store on responses carrying a password", async () => {
     vi.spyOn(AuthService.prototype, "authenticateAccessToken").mockResolvedValue(
       adminSession,
     );
-    vi.spyOn(AuthService.prototype, "createInviteCode").mockResolvedValue({
-      code: "ABCD2345",
-      expiresAt: "2026-08-18T00:00:00.000Z",
+    vi.spyOn(AuthService.prototype, "registerAdmin").mockResolvedValue({
+      player,
+      initialPassword: "Abcd2345ef",
     });
-    vi.spyOn(AuthService.prototype, "redeemInviteCode").mockResolvedValue(
-      adminSession,
-    );
+    vi.spyOn(AuthService.prototype, "resetPlayerPassword").mockResolvedValue({
+      temporaryPassword: "Abcd2345ef",
+    });
 
     const responses = await Promise.all([
       request(app)
-        .post("/api/admin/invite-codes")
-        .set("Authorization", "Bearer admin-token"),
+        .post("/api/admin/register")
+        .set("Authorization", "Bearer admin-token")
+        .send({ username: "new_member", gender: "M" }),
       request(app)
-        .post("/api/auth/invite")
-        .set("Authorization", "Bearer new-member-token")
-        .send({ code: "ABCD2345" }),
-      request(app)
-        .post("/api/auth/invite")
-        .set("Authorization", "Bearer new-member-token")
+        .post("/api/admin/register")
+        .set("Authorization", "Bearer admin-token")
         .send({}),
+      request(app)
+        .post(`/api/admin/players/${player.id}/password-reset`)
+        .set("Authorization", "Bearer admin-token"),
     ]);
 
     expect(responses.map((response) => response.status)).toEqual([
-      201, 201, 400,
+      200, 400, 200,
     ]);
     for (const response of responses) {
       expect(response.headers["cache-control"]).toBe("no-store");
@@ -84,7 +88,7 @@ describe("sensitive invite code response headers", () => {
     const set = vi.fn();
     const next = vi.fn();
     sensitiveResponseHeaders(
-      { method: "POST", path: "/api/auth/invite" } as any,
+      { method: "POST", path: "/api/admin/register" } as any,
       { set } as any,
       next,
     );

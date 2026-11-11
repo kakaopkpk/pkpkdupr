@@ -23,6 +23,7 @@ const admin: Player = {
 const adminSession: AuthenticatedSession = {
   payload: { playerId: admin.id, isAdmin: true },
   player: admin,
+  isFirstLogin: false,
 };
 
 describe("GET /api/admin/ratings/comparison", () => {

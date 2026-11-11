@@ -26,10 +26,19 @@ import {
   type MatchType,
 } from "@pkpkdupr/shared/match";
 import { rememberRecentInputValue } from "@pkpkdupr/shared/recentInputHistory";
-import type { AdminRegisterPlayerRequest } from "@pkpkdupr/shared/auth";
+import {
+  isValidUsername,
+  type AdminPasswordResetResponse,
+  type AdminRegisterPlayerRequest,
+  type AdminRegisterPlayerResponse,
+  type AdminUpdateUsernameRequest,
+  type AdminUpdateUsernameResponse,
+} from "@pkpkdupr/shared/auth";
 import { useAuth } from "../context/AuthContext";
 import { apiFetch } from "../lib/api";
-import AdminInviteCodePanel from "../components/AdminInviteCodePanel";
+import IssuedPasswordNotice, {
+  type IssuedCredential,
+} from "../components/IssuedPasswordNotice";
 import AdminMatchBatchForm, {
   type AdminBatchMatchSubmitPayload,
 } from "../components/AdminMatchBatchForm";
@@ -247,6 +256,14 @@ const getTeamLabel = (team: MatchTeamInfo, matchType: MatchType) =>
 
 const normalizeDraftValue = (value: string) => value.trim();
 
+const USERNAME_FORMAT_HINT =
+  "아이디는 영문·숫자·.·_·-만 쓸 수 있고 64자 이하여야 합니다. (.은 맨 앞·맨 뒤에 오거나 연달아 올 수 없습니다.)";
+
+const readErrorMessage = async (res: Response, fallback: string) => {
+  const data = (await res.json().catch(() => ({}))) as { error?: string };
+  return data.error || fallback;
+};
+
 const AdminDashboard: React.FC = () => {
   const { player, isAdmin, logout } = useAuth();
   const [activeSection, setActiveSection] =
@@ -289,6 +306,18 @@ const AdminDashboard: React.FC = () => {
     string | null
   >(null);
   const [savingPlayerId, setSavingPlayerId] = useState<string | null>(null);
+  const [usernameDrafts, setUsernameDrafts] = useState<Record<string, string>>(
+    {},
+  );
+  const [savingUsernamePlayerId, setSavingUsernamePlayerId] = useState<
+    string | null
+  >(null);
+  const [resettingPasswordPlayerId, setResettingPasswordPlayerId] = useState<
+    string | null
+  >(null);
+  // 서버가 한 번만 돌려주는 발급 비밀번호. 화면 상태에만 두고 저장하지 않는다.
+  const [issuedCredential, setIssuedCredential] =
+    useState<IssuedCredential | null>(null);
   const [savingMatchMetadataIds, setSavingMatchMetadataIds] = useState<
     string[]
   >([]);
@@ -322,6 +351,16 @@ const AdminDashboard: React.FC = () => {
       const next: Record<string, PlayerGender> = {};
       loadedPlayers.forEach((loadedPlayer) => {
         next[loadedPlayer.id] = prev[loadedPlayer.id] ?? loadedPlayer.gender;
+      });
+      return next;
+    });
+  };
+
+  const syncUsernameDrafts = (loadedPlayers: PlayerInfo[]) => {
+    setUsernameDrafts((prev) => {
+      const next: Record<string, string> = {};
+      loadedPlayers.forEach((loadedPlayer) => {
+        next[loadedPlayer.id] = prev[loadedPlayer.id] ?? loadedPlayer.username;
       });
       return next;
     });
@@ -379,6 +418,7 @@ const AdminDashboard: React.FC = () => {
     const data = (await res.json()) as PlayerInfo[];
     setPlayers(data);
     syncGenderDrafts(data);
+    syncUsernameDrafts(data);
     syncStatusDrafts(data);
   };
 
@@ -497,6 +537,10 @@ const AdminDashboard: React.FC = () => {
     e.preventDefault();
     setError(null);
     setSuccess(null);
+    if (!isValidUsername(newUsername)) {
+      setError(USERNAME_FORMAT_HINT);
+      return;
+    }
     try {
       const res = await apiFetch("/api/admin/register", {
         method: "POST",
@@ -509,16 +553,96 @@ const AdminDashboard: React.FC = () => {
         } satisfies AdminRegisterPlayerRequest),
       });
       if (!res.ok) {
-        const errData = await res.json().catch(() => ({}));
-        throw new Error(errData.error || "회원 추가 실패");
+        throw new Error(await readErrorMessage(res, "회원 추가 실패"));
       }
-      setSuccess(
-        `${newUsername.trim()} 회원이 추가되었습니다. 이메일 앞부분이 아이디와 같은 회사 Google 계정으로 로그인하면 자동으로 연결됩니다.`,
-      );
+      const data = (await res.json()) as AdminRegisterPlayerResponse;
+      setSuccess(`${data.player.username} 회원이 추가되었습니다.`);
+      setIssuedCredential({
+        username: data.player.username,
+        password: data.initialPassword,
+        kind: "initial",
+      });
       setNewUsername("");
       await loadDashboardData();
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "알 수 없는 오류");
+    }
+  };
+
+  const handlePasswordReset = async (target: PlayerInfo) => {
+    const confirmed = window.confirm(
+      `${target.username} 회원의 비밀번호를 초기화할까요?\n` +
+        "기존 비밀번호로는 더 이상 로그인할 수 없습니다. 아직 계정이 없는 회원이면 이번에 계정이 발급됩니다.",
+    );
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      setResettingPasswordPlayerId(target.id);
+      setError(null);
+      setSuccess(null);
+
+      const res = await apiFetch(
+        `/api/admin/players/${target.id}/password-reset`,
+        { method: "POST" },
+      );
+      if (!res.ok) {
+        throw new Error(await readErrorMessage(res, "비밀번호 초기화 실패"));
+      }
+
+      const data = (await res.json()) as AdminPasswordResetResponse;
+      setIssuedCredential({
+        username: target.username,
+        password: data.temporaryPassword,
+        kind: "reset",
+      });
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "알 수 없는 오류");
+    } finally {
+      setResettingPasswordPlayerId(null);
+    }
+  };
+
+  const handleUsernameChange = async (playerId: string) => {
+    const nextUsername = normalizeDraftValue(usernameDrafts[playerId] ?? "");
+    setError(null);
+    setSuccess(null);
+    if (!isValidUsername(nextUsername)) {
+      setError(USERNAME_FORMAT_HINT);
+      return;
+    }
+
+    try {
+      setSavingUsernamePlayerId(playerId);
+
+      const res = await apiFetch(`/api/admin/players/${playerId}/username`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          username: nextUsername,
+        } satisfies AdminUpdateUsernameRequest),
+      });
+      if (!res.ok) {
+        throw new Error(await readErrorMessage(res, "아이디 변경 실패"));
+      }
+
+      const data = (await res.json()) as AdminUpdateUsernameResponse;
+      setUsernameDrafts((prev) => ({
+        ...prev,
+        [playerId]: data.player.username,
+      }));
+      setSuccess(
+        `아이디를 ${data.player.username}(으)로 바꿨습니다. 회원은 앞으로 새 아이디로 로그인해야 합니다.`,
+      );
+      // 경기·로그에도 아이디가 보이므로 목록 전체를 다시 불러온다.
+      await loadDashboardData();
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "알 수 없는 오류");
+    } finally {
+      setSavingUsernamePlayerId(null);
     }
   };
 
@@ -1280,6 +1404,16 @@ const AdminDashboard: React.FC = () => {
               {success}
             </div>
           )}
+          {issuedCredential && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+              <div className="w-full max-w-md rounded-xl bg-white p-4 shadow-xl">
+                <IssuedPasswordNotice
+                  credential={issuedCredential}
+                  onClose={() => setIssuedCredential(null)}
+                />
+              </div>
+            </div>
+          )}
 
         {activeSection === "members" ? (
         <section className="space-y-4">
@@ -1298,12 +1432,18 @@ const AdminDashboard: React.FC = () => {
               <input
                 type="text"
                 required
-                placeholder="계정명"
+                placeholder="아이디"
+                autoCapitalize="none"
+                spellCheck={false}
                 value={newUsername}
                 onChange={(e) => setNewUsername(e.target.value)}
                 className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>
+            <p className="text-xs text-slate-500 self-center">
+              {USERNAME_FORMAT_HINT} 초기 비밀번호는 추가하면 한 번만
+              보여 줍니다.
+            </p>
             <div className="col-span-2 flex gap-6 items-center">
               <label className="flex items-center gap-2 cursor-pointer">
                 <input
@@ -1337,8 +1477,6 @@ const AdminDashboard: React.FC = () => {
           </form>
         </section>
         ) : null}
-
-        {activeSection === "members" ? <AdminInviteCodePanel /> : null}
 
         {activeSection === "ratings" ? (
           <RatingComparisonPanel
@@ -1956,10 +2094,11 @@ const AdminDashboard: React.FC = () => {
             </p>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[1360px] table-auto text-sm">
+              <table className="w-full min-w-[1720px] table-auto text-sm">
                 <thead className="bg-slate-100">
                   <tr className="text-left text-slate-600">
                     <th className="px-4 py-3 whitespace-nowrap">Username</th>
+                    <th className="px-4 py-3 whitespace-nowrap">계정</th>
                     <th className="px-4 py-3 whitespace-nowrap">레이팅</th>
                     <th className="px-4 py-3 whitespace-nowrap">Confidence</th>
                     <th className="px-4 py-3 whitespace-nowrap">성별</th>
@@ -1980,6 +2119,12 @@ const AdminDashboard: React.FC = () => {
                     const isSaving = savingPlayerId === p.id;
                     const isGenderDirty = draftGender !== p.gender;
                     const isDirty = draftStatus !== p.status;
+                    const draftUsername = usernameDrafts[p.id] ?? p.username;
+                    const isSavingUsername = savingUsernamePlayerId === p.id;
+                    const isUsernameDirty =
+                      normalizeDraftValue(draftUsername) !== p.username;
+                    const isResettingPassword =
+                      resettingPasswordPlayerId === p.id;
                     const singlesRating = getCompositeSinglesRating(
                       p.duprRating,
                     );
@@ -1998,8 +2143,53 @@ const AdminDashboard: React.FC = () => {
                         key={p.id}
                         className="border-b align-top hover:bg-gray-50"
                       >
-                        <td className="px-4 py-4 font-medium whitespace-nowrap">
-                          {p.username}
+                        <td className="px-4 py-4 min-w-[260px]">
+                          <div className="font-medium">{p.username}</div>
+                          <div className="mt-2 flex items-center gap-2">
+                            <input
+                              type="text"
+                              aria-label={`${p.username} 새 아이디`}
+                              autoCapitalize="none"
+                              spellCheck={false}
+                              value={draftUsername}
+                              onChange={(e) =>
+                                setUsernameDrafts((prev) => ({
+                                  ...prev,
+                                  [p.id]: e.target.value,
+                                }))
+                              }
+                              className="w-40 border rounded-lg px-3 py-2"
+                            />
+                            <button
+                              type="button"
+                              disabled={!isUsernameDirty || isSavingUsername}
+                              onClick={() => void handleUsernameChange(p.id)}
+                              className="px-3 py-2 rounded-lg bg-slate-800 text-white disabled:bg-slate-300"
+                            >
+                              {isSavingUsername ? "저장 중..." : "저장"}
+                            </button>
+                          </div>
+                          {isUsernameDirty && (
+                            <p className="mt-1 text-xs text-amber-700">
+                              저장하면 회원은 새 아이디로 로그인해야 합니다.
+                            </p>
+                          )}
+                        </td>
+                        <td className="px-4 py-4 min-w-[180px]">
+                          <button
+                            type="button"
+                            // 발급 비밀번호는 한 번만 보이므로, 응답이 서로 덮어쓰지 않게 초기화는 한 번에 하나만 한다.
+                            disabled={resettingPasswordPlayerId !== null}
+                            onClick={() => void handlePasswordReset(p)}
+                            className="px-3 py-2 rounded-lg border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 disabled:text-slate-300"
+                          >
+                            {isResettingPassword
+                              ? "초기화 중..."
+                              : "비밀번호 초기화"}
+                          </button>
+                          <p className="mt-1 text-xs text-slate-500">
+                            계정이 없는 회원은 이 버튼으로 발급합니다.
+                          </p>
                         </td>
                         <td className="px-4 py-4 min-w-[120px] text-blue-600">
                           <div className="space-y-1 text-xs">

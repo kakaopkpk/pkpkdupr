@@ -23,6 +23,7 @@ const player: Player = {
 const session: AuthenticatedSession = {
   payload: { playerId: player.id, isAdmin: false },
   player,
+  isFirstLogin: false,
 };
 const outsider: Player = {
   ...player,
@@ -32,6 +33,7 @@ const outsider: Player = {
 const outsiderSession: AuthenticatedSession = {
   payload: { playerId: outsider.id, isAdmin: false },
   player: outsider,
+  isFirstLogin: false,
 };
 const match: Match = {
   id: "match-001",

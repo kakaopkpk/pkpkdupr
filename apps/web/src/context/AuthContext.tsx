@@ -6,21 +6,19 @@ import React, {
   useRef,
   useState,
 } from "react";
-import type {
-  AuthErrorResponse,
-  MeResponse,
-  RedeemInviteRequest,
-} from "@pkpkdupr/shared/auth";
+import type { AuthErrorResponse, MeResponse } from "@pkpkdupr/shared/auth";
 import type {
   PlayerAffiliation,
   PublicPlayerDupr,
 } from "@pkpkdupr/shared/player";
 import { apiFetch } from "@/lib/api";
+import { ACCOUNT_NOT_LINKED_NOTICE } from "@/lib/authMessages";
 import {
-  DOMAIN_NOT_ALLOWED_NOTICE,
-  INVITE_INVALID_MESSAGE,
-} from "@/lib/authMessages";
-import { getAccessToken, signOut, supabase } from "@/lib/supabase";
+  getAccessToken,
+  signOut,
+  supabase,
+  updatePassword,
+} from "@/lib/supabase";
 import { clearUserCaches } from "@/lib/userCache";
 
 export interface PlayerInfo {
@@ -37,26 +35,27 @@ export interface PlayerInfo {
 /**
  * - loading: Supabase 세션 복원 또는 첫 /api/me 확인 중
  * - signedOut: Supabase 세션 없음 → /login
- * - needsInvite: Google 계정은 확인됐지만 연결된 회원이 없음 → 초대 코드 입력
- * - authenticated: /api/me 200
+ * - mustChangePassword: /api/me 200이지만 isFirstLogin=true → /force-change-password
+ * - authenticated: /api/me 200, isFirstLogin=false
  */
 export type AuthStatus =
   | "loading"
   | "signedOut"
-  | "needsInvite"
+  | "mustChangePassword"
   | "authenticated";
 
 interface AuthContextType {
   status: AuthStatus;
   player: PlayerInfo | null;
-  /** 로그인한 Google 계정 이메일 */
-  email: string | null;
   isLoading: boolean;
   isAuthenticated: boolean;
-  /** 로그인 화면에 보여줄 안내(도메인 거부 등) */
+  /** 로그인 화면에 보여줄 안내(연결된 회원 없음 등) */
   notice: string | null;
   clearNotice: () => void;
-  redeemInvite: (code: string) => Promise<void>;
+  /** 로그인 중 비밀번호 변경. 현재 비밀번호는 묻지 않는다. */
+  changePassword: (newPassword: string) => Promise<void>;
+  /** 첫 로그인·초기화 직후 강제 변경. 성공하면 메인으로 간다. */
+  completeForcedPasswordChange: (newPassword: string) => Promise<void>;
   updateProfile: (input: {
     affiliations?: PlayerAffiliation[];
     statusMessage?: string | null;
@@ -75,7 +74,6 @@ const LEGACY_STORAGE_KEYS = ["token", "pkpkdupr:auth-state"];
 
 type MeFetchResult =
   | { status: "authenticated"; player: PlayerInfo }
-  | { status: "needsInvite" }
   | { status: "signedOut" }
   | { status: "unavailable" }
   | { status: "stale" };
@@ -95,7 +93,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   const [status, setStatus] = useState<AuthStatus>("loading");
   const [player, setPlayer] = useState<PlayerInfo | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-  const [email, setEmail] = useState<string | null>(null);
 
   // 현재 Supabase 세션의 사용자. 응답이 늦게 와도 다른 세션의 결과를 반영하지 않도록 비교한다.
   const sessionUserIdRef = useRef<string | null>(null);
@@ -103,6 +100,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   const retryAttemptRef = useRef(0);
   const validationInFlightRef = useRef(false);
   const validateSessionRef = useRef<(() => Promise<void>) | null>(null);
+  // 강제 변경을 완료할 때마다 올린다. 그 전에 시작한 /api/me 응답(isFirstLogin=true)은 버린다.
+  const meGenerationRef = useRef(0);
+  // 강제 변경에서 updateUser까지 성공했고 password-changed가 아직 끝나지 않은 사용자.
+  // 이 사용자가 같은 비밀번호로 다시 제출하면 same_password를 성공으로 본다.
+  const pendingPasswordChangeUserIdRef = useRef<string | null>(null);
 
   const clearSessionRetry = useCallback((resetAttempt = true) => {
     if (retryTimeoutRef.current !== null) {
@@ -117,9 +119,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   const resetToSignedOut = useCallback(() => {
     clearSessionRetry();
     sessionUserIdRef.current = null;
+    pendingPasswordChangeUserIdRef.current = null;
     clearUserCaches();
     setPlayer(null);
-    setEmail(null);
     setStatus("signedOut");
   }, [clearSessionRetry]);
 
@@ -134,10 +136,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     [resetToSignedOut],
   );
 
-  const applyPlayer = useCallback((nextPlayer: PlayerInfo) => {
+  const applyMe = useCallback((me: MeResponse) => {
     setNotice(null);
-    setPlayer(nextPlayer);
-    setStatus("authenticated");
+    setPlayer(me);
+    setStatus(me.isFirstLogin ? "mustChangePassword" : "authenticated");
   }, []);
 
   const fetchMe = useCallback(async (): Promise<MeFetchResult> => {
@@ -145,7 +147,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     if (!userId) {
       return { status: "signedOut" };
     }
-    const isCurrentSession = () => sessionUserIdRef.current === userId;
+    const generation = meGenerationRef.current;
+    const isCurrentSession = () =>
+      sessionUserIdRef.current === userId &&
+      meGenerationRef.current === generation;
 
     try {
       // 토큰 갱신이 일시적으로 실패하면 세션은 남고 토큰만 없다. 이때는 401로 로그아웃하지 않고 다시 시도한다.
@@ -158,12 +163,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
       }
 
       if (res.ok) {
-        const nextPlayer: PlayerInfo = (await res.json()) as MeResponse;
+        const me = (await res.json()) as MeResponse;
         if (!isCurrentSession()) {
           return { status: "stale" };
         }
-        applyPlayer(nextPlayer);
-        return { status: "authenticated", player: nextPlayer };
+        applyMe(me);
+        return { status: "authenticated", player: me };
       }
 
       const errorData = await readErrorResponse(res);
@@ -172,13 +177,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
       }
 
       if (errorData.code === "ACCOUNT_NOT_LINKED") {
-        setPlayer(null);
-        setStatus("needsInvite");
-        return { status: "needsInvite" };
-      }
-
-      if (errorData.code === "DOMAIN_NOT_ALLOWED") {
-        await endSession(DOMAIN_NOT_ALLOWED_NOTICE);
+        await endSession(ACCOUNT_NOT_LINKED_NOTICE);
         return { status: "signedOut" };
       }
 
@@ -193,7 +192,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
       console.error("Failed to fetch user info");
       return { status: "unavailable" };
     }
-  }, [applyPlayer, endSession]);
+  }, [applyMe, endSession]);
 
   const validateSession = useCallback(async () => {
     const userId = sessionUserIdRef.current;
@@ -219,7 +218,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
       return;
     }
 
-    // 현재 화면(로딩·초대 코드 입력·메인)을 그대로 둔 채 재시도한다.
+    // 현재 화면(로딩·비밀번호 변경·메인)을 그대로 둔 채 재시도한다.
     const retryDelay =
       SESSION_RETRY_DELAYS_MS[retryAttemptRef.current] ??
       SESSION_RETRY_INTERVAL_MS;
@@ -250,10 +249,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
         clearUserCaches();
       }
       sessionUserIdRef.current = session.user.id;
-      setEmail(session.user.email ?? null);
 
-      // 토큰 갱신만 일어난 경우에는 /api/me를 다시 부를 필요가 없다.
-      if (!isNewUser && event === "TOKEN_REFRESHED") {
+      // 같은 사용자의 토큰 갱신·비밀번호 변경(USER_UPDATED)에는 /api/me를 다시 부르지 않는다.
+      if (
+        !isNewUser &&
+        (event === "TOKEN_REFRESHED" || event === "USER_UPDATED")
+      ) {
         return;
       }
 
@@ -291,39 +292,48 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     };
   }, [clearSessionRetry, resetToSignedOut]);
 
-  const redeemInvite = async (code: string) => {
+  const changePassword = async (newPassword: string) => {
     if (!isOnline()) {
       throw new Error(ONLINE_REQUIRED_MESSAGE);
     }
+    await updatePassword(newPassword);
+  };
 
-    const res = await apiFetch("/api/auth/invite", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ code: code.trim() } satisfies RedeemInviteRequest),
+  const completeForcedPasswordChange = async (newPassword: string) => {
+    if (!isOnline()) {
+      throw new Error(ONLINE_REQUIRED_MESSAGE);
+    }
+    const userId = sessionUserIdRef.current;
+    await updatePassword(newPassword, {
+      allowSamePassword:
+        userId !== null && pendingPasswordChangeUserIdRef.current === userId,
     });
+    pendingPasswordChangeUserIdRef.current = userId;
 
+    const res = await apiFetch("/api/me/password-changed", { method: "POST" });
     if (res.ok) {
-      applyPlayer((await res.json()) as MeResponse);
+      const me = (await res.json()) as MeResponse;
+      if (sessionUserIdRef.current !== userId) {
+        return;
+      }
+      pendingPasswordChangeUserIdRef.current = null;
+      meGenerationRef.current += 1;
+      applyMe(me);
       return;
     }
 
     const errorData = await readErrorResponse(res);
-    switch (errorData.code) {
-      case "INVITE_INVALID":
-        throw new Error(INVITE_INVALID_MESSAGE);
-      case "ALREADY_LINKED":
-        // 다른 탭 등에서 이미 연결됐다면 내 정보를 다시 받아 메인으로 간다.
-        await fetchMe();
-        return;
-      case "DOMAIN_NOT_ALLOWED":
-        await endSession(DOMAIN_NOT_ALLOWED_NOTICE);
-        return;
-      case "SESSION_INVALID":
-        await endSession();
-        return;
-      default:
-        throw new Error(errorData.error || "초대 코드를 확인하지 못했습니다.");
+    if (res.status === 401 || errorData.code === "SESSION_INVALID") {
+      await endSession();
+      return;
     }
+    if (errorData.code === "ACCOUNT_NOT_LINKED") {
+      await endSession(ACCOUNT_NOT_LINKED_NOTICE);
+      return;
+    }
+    throw new Error(
+      errorData.error || "비밀번호 변경을 완료하지 못했습니다. 다시 시도해 주세요.",
+    );
   };
 
   const updateProfile: AuthContextType["updateProfile"] = async (input) => {
@@ -399,12 +409,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
       value={{
         status,
         player,
-        email,
         isLoading: status === "loading",
         isAuthenticated: status === "authenticated",
         notice,
         clearNotice,
-        redeemInvite,
+        changePassword,
+        completeForcedPasswordChange,
         updateProfile,
         uploadAvatar,
         deleteAvatar,

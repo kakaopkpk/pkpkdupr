@@ -1,82 +1,29 @@
 import React, { useState } from "react";
 import { useAuth } from "../context/AuthContext";
-import { signInWithGoogle, signInWithMagicLink } from "../lib/supabase";
+import { signInWithUsername } from "../lib/supabase";
 
 const getErrorMessage = (err: unknown) =>
   err instanceof Error ? err.message : "알 수 없는 오류입니다.";
 
-/** 로컬 개발 전용: 로컬 Supabase Mailpit으로 받는 매직링크 로그인 */
-const DevMagicLinkForm: React.FC<{ onError: (message: string) => void }> = ({
-  onError,
-}) => {
-  const [email, setEmail] = useState("");
-  const [sentTo, setSentTo] = useState<string | null>(null);
-  const [isSending, setIsSending] = useState(false);
+const Login: React.FC = () => {
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const { notice, clearNotice } = useAuth();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setIsSending(true);
-    try {
-      await signInWithMagicLink(email.trim());
-      setSentTo(email.trim());
-    } catch (err) {
-      onError(getErrorMessage(err));
-    } finally {
-      setIsSending(false);
-    }
-  };
-
-  return (
-    <form
-      onSubmit={handleSubmit}
-      className="space-y-3 rounded-lg border border-dashed border-gray-300 p-4"
-    >
-      <p className="text-xs font-semibold text-gray-500">
-        로컬 개발용 매직링크 로그인
-      </p>
-      <input
-        type="email"
-        placeholder="이메일"
-        value={email}
-        onChange={(e) => setEmail(e.target.value)}
-        required
-        className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-      />
-      <button
-        type="submit"
-        disabled={isSending}
-        className="w-full py-2 border border-blue-600 text-blue-600 rounded-lg text-sm font-semibold hover:bg-blue-50 disabled:opacity-60"
-      >
-        {isSending ? "보내는 중..." : "로그인 링크 받기"}
-      </button>
-      {sentTo && (
-        <p className="text-xs text-gray-500">
-          {sentTo}로 링크를 보냈습니다. 로컬 Mailpit(http://127.0.0.1:54324)에서
-          메일을 열어 주세요.
-        </p>
-      )}
-    </form>
-  );
-};
-
-const Login: React.FC = () => {
-  const [error, setError] = useState<string | null>(null);
-  const [isRedirecting, setIsRedirecting] = useState(false);
-  const { notice, clearNotice } = useAuth();
-
-  const handleError = (message: string) => {
     clearNotice();
-    setError(message);
-  };
-
-  const handleGoogleLogin = async () => {
     setError(null);
-    setIsRedirecting(true);
+    setIsSubmitting(true);
     try {
-      await signInWithGoogle();
+      // 성공하면 AuthContext가 세션 변경을 받아 관리자 여부를 확인한다.
+      await signInWithUsername(username, password);
     } catch (err) {
-      setIsRedirecting(false);
-      handleError(getErrorMessage(err));
+      setError(getErrorMessage(err));
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -100,16 +47,37 @@ const Login: React.FC = () => {
           </div>
         )}
 
-        <button
-          type="button"
-          onClick={() => void handleGoogleLogin()}
-          disabled={isRedirecting}
-          className="w-full py-3 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 transition-colors disabled:opacity-60"
-        >
-          {isRedirecting ? "Google로 이동 중..." : "Google 계정으로 로그인"}
-        </button>
-
-        {import.meta.env.DEV && <DevMagicLinkForm onError={handleError} />}
+        <form onSubmit={handleSubmit} className="space-y-3">
+          <input
+            type="text"
+            name="username"
+            placeholder="아이디"
+            autoComplete="username"
+            autoCapitalize="none"
+            spellCheck={false}
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+            required
+            className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+          <input
+            type="password"
+            name="password"
+            placeholder="비밀번호"
+            autoComplete="current-password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            required
+            className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+          <button
+            type="submit"
+            disabled={isSubmitting}
+            className="w-full py-3 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 transition-colors disabled:opacity-60"
+          >
+            {isSubmitting ? "로그인 중..." : "로그인"}
+          </button>
+        </form>
       </div>
     </div>
   );

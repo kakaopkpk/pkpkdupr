@@ -16,6 +16,8 @@ import { firstRow } from "../db/client";
 export interface StoredPlayerRecord extends Player {
   /** 연결된 Supabase Auth 사용자 ID. API 응답에는 내보내지 않는다. */
   authUserId: string | null;
+  /** 관리자가 발급·초기화한 비밀번호를 아직 바꾸지 않은 상태. */
+  isFirstLogin: boolean;
 }
 
 export interface CreateStoredPlayerInput {
@@ -29,6 +31,7 @@ export interface CreateStoredPlayerInput {
   statusMessage?: string | null;
   statusMessageBackgroundColor?: string | null;
   authUserId?: string | null;
+  isFirstLogin?: boolean;
   createdAt: Date;
   updatedAt: Date;
   duprState?: StoredPlayerDupr;
@@ -86,10 +89,14 @@ export class PlayerRepository {
    * 아직 연결되지 않은 active 회원에만 Auth 사용자를 연결한다.
    * 동시 요청으로 이미 연결됐거나 조회 후 inactive로 바뀌었으면 false를 돌려준다.
    */
-  async linkAuthUser(id: string, authUserId: string): Promise<boolean> {
+  async linkAuthUser(
+    id: string,
+    authUserId: string,
+    isFirstLogin: boolean,
+  ): Promise<boolean> {
     const updated = await this.db
       .update(players)
-      .set({ authUserId, updatedAt: new Date() })
+      .set({ authUserId, isFirstLogin, updatedAt: new Date() })
       .where(
         and(
           eq(players.id, id),
@@ -135,6 +142,7 @@ export class PlayerRepository {
     return {
       ...player,
       authUserId: player.authUserId ?? null,
+      isFirstLogin: !!player.isFirstLogin,
       affiliations,
       ...(statusMessage ? { statusMessage } : {}),
       ...(statusMessageBackgroundColor ? { statusMessageBackgroundColor } : {}),
@@ -176,6 +184,29 @@ export class PlayerRepository {
     await this.db
       .update(players)
       .set({ status, updatedAt: new Date() })
+      .where(eq(players.id, id));
+    return await this.findById(id);
+  }
+
+  async updateFirstLogin(
+    id: string,
+    isFirstLogin: boolean,
+  ): Promise<StoredPlayerRecord | undefined> {
+    await this.db
+      .update(players)
+      .set({ isFirstLogin, updatedAt: new Date() })
+      .where(eq(players.id, id));
+    return await this.findById(id);
+  }
+
+  /** lower(username) 유니크 인덱스 위반이면 Postgres unique_violation(23505)을 그대로 던진다. */
+  async updateUsername(
+    id: string,
+    username: string,
+  ): Promise<StoredPlayerRecord | undefined> {
+    await this.db
+      .update(players)
+      .set({ username, updatedAt: new Date() })
       .where(eq(players.id, id));
     return await this.findById(id);
   }

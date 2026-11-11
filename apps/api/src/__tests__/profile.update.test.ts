@@ -20,6 +20,7 @@ const player: Player = {
 const session: AuthenticatedSession = {
   payload: { playerId: player.id, isAdmin: false },
   player,
+  isFirstLogin: false,
 };
 
 describe("PATCH /api/me/profile", () => {

@@ -2,12 +2,10 @@ import {
   getDb,
   getDbClient,
   getDevMockUsernames,
-  InviteCodeRepository,
   isDevMockDataEnabled,
   MatchRepository,
   OfficialDuprAdjustmentLogRepository,
   PlayerAdminRepository,
-  PlayerAuthLinkLogRepository,
   PlayerCreationLogRepository,
   PlayerRatingChangeLogRepository,
   PlayerRatingChartProjectionRepository,
@@ -42,9 +40,7 @@ const playerStatusChangeLogs = new PlayerStatusChangeLogRepository(drizzleDb);
 export const db: {
   players: PlayerRepository;
   playerAdmins: PlayerAdminRepository;
-  inviteCodes: InviteCodeRepository;
   playerCreationLogs: PlayerCreationLogRepository;
-  playerAuthLinkLogs: PlayerAuthLinkLogRepository;
   playerStatusChangeLogs: PlayerStatusChangeLogRepository;
   playerRatingChangeLogs: PlayerRatingChangeLogRepository;
   playerRatingChartProjections: PlayerRatingChartProjectionRepository;
@@ -54,9 +50,7 @@ export const db: {
 } = {
   players,
   playerAdmins: new PlayerAdminRepository(drizzleDb),
-  inviteCodes: new InviteCodeRepository(drizzleDb),
   playerCreationLogs,
-  playerAuthLinkLogs: new PlayerAuthLinkLogRepository(drizzleDb),
   playerStatusChangeLogs,
   playerRatingChangeLogs: new PlayerRatingChangeLogRepository(drizzleDb),
   playerRatingChartProjections: new PlayerRatingChartProjectionRepository(

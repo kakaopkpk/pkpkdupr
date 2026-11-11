@@ -34,15 +34,23 @@ import type {
   PlayerQrTokenResponse,
   VerifyPlayerQrTokenResponse,
 } from "@pkpkdupr/shared/qr";
-import type {
-  AdminRegisterPlayerRequest,
-  AuthErrorCode,
-  CreatedInviteCode,
-  InviteCodeSummary,
+import {
+  isValidUsername,
+  toInternalEmail,
+  type AdminPasswordResetResponse,
+  type AdminRegisterPlayerRequest,
+  type AdminRegisterPlayerResponse,
+  type AdminUpdateUsernameResponse,
+  type AuthErrorCode,
 } from "@pkpkdupr/shared/auth";
-import { createHash, randomInt, randomUUID } from "crypto";
+import { randomUUID } from "crypto";
 import { generateEntityId } from "@pkpkdupr/shared/entityId";
 import { SupabaseAuthUserVerifier } from "./supabaseAuthUser";
+import {
+  AuthEmailExistsError,
+  generateInitialPassword,
+  SupabaseAuthAdmin,
+} from "./supabaseAuthAdmin";
 import {
   createDevPlayerQrPayload,
   createPlayerQrToken as createPlayerQrTokenPayload,
@@ -57,20 +65,31 @@ import {
 } from "./RatingService";
 import { ScorePerformanceRatingService } from "./ScorePerformanceRatingService";
 import { matchTypeValues, type Match, type MatchType } from "@pkpkdupr/shared/match";
-import type { CreateStoredPlayerInput } from "@pkpkdupr/db";
+import {
+  getDevMockUsernames,
+  isDevMockDataEnabled,
+  type CreateStoredPlayerInput,
+} from "@pkpkdupr/db";
 import { db } from "../db";
 
 const DEV_MOCK_DATA_ENABLED = process.env.ENABLE_DEV_MOCK_DATA === "true";
 
-const INVITE_CODE_LENGTH = 8;
-/** 0/O, 1/I/L처럼 옮겨 적을 때 헷갈리는 문자를 뺀 영문 대문자·숫자. */
-const INVITE_CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
-const INVITE_CODE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
-/** 초대 가입 요청에는 성별이 없으므로 기본값으로 만들고, 관리자가 회원 성별 변경 API로 고친다. */
-const INVITED_PLAYER_DEFAULT_GENDER: Player["gender"] = "M";
+/** 같은 내부 이메일의 Auth 사용자가 이미 있으면 409 AccountRequestError로 바꾸고, 그 밖의 오류는 그대로 둔다. */
+const toDuplicateAuthEmailError = (error: unknown) =>
+  error instanceof AuthEmailExistsError
+    ? new AccountRequestError(409, "같은 아이디의 로그인 계정이 이미 있습니다.")
+    : error;
+
+/** 로컬 dev mock 회원 Auth 계정의 공통 비밀번호. dev mock이 켜졌을 때만 쓴다. */
+const DEV_MOCK_AUTH_PASSWORD = "devpass1234";
+
+const USERNAME_FORMAT_MESSAGE =
+  "아이디는 영문·숫자·.·_·-로 1~64자여야 하며 .은 맨 앞·맨 뒤나 연달아 쓸 수 없습니다.";
+const DUPLICATE_USERNAME_MESSAGE = "중복된 사용자명입니다.";
 
 interface StoredPlayerRecord extends Player {
   authUserId: string | null;
+  isFirstLogin: boolean;
   duprMetrics: PlayerDuprMetrics;
   duprState: StoredPlayerDupr;
 }
@@ -81,6 +100,8 @@ export interface AuthenticatedSession {
     isAdmin: boolean;
   };
   player: Player;
+  /** 관리자가 발급·초기화한 비밀번호를 아직 바꾸지 않았다. */
+  isFirstLogin: boolean;
 }
 
 /** 인증·가입 실패. index.ts가 code에 맞는 HTTP 상태로 응답한다. */
@@ -102,6 +123,17 @@ export class InvalidAccessTokenError extends AuthError {
   constructor(message: string) {
     super("SESSION_INVALID", message);
     this.name = "InvalidAccessTokenError";
+  }
+}
+
+/** 관리자 계정 관리 요청의 실패. index.ts가 status 그대로 `{error}`로 응답한다. */
+export class AccountRequestError extends Error {
+  constructor(
+    readonly status: 400 | 404 | 409,
+    message: string,
+  ) {
+    super(message);
+    this.name = "AccountRequestError";
   }
 }
 
@@ -138,6 +170,7 @@ const hydratePlayer = (record: any): StoredPlayerRecord => {
     duprRating: normalizeNullablePlayerDupr(record.duprRating),
     duprMetrics: duprState.metrics,
     duprState,
+    isFirstLogin: record.isFirstLogin === true,
     status: record.status === "deleted" ? "inactive" : record.status,
     createdAt: toDate(record.createdAt),
     updatedAt: toDate(record.updatedAt),
@@ -321,6 +354,7 @@ const groupByPlayerId = <T extends { playerId: string }>(items: T[]) =>
 const toPublicPlayer = (stored: StoredPlayerRecord): Player => {
   const {
     authUserId: _authUserId,
+    isFirstLogin: _isFirstLogin,
     duprMetrics: _duprMetrics,
     duprState: _duprState,
     ...player
@@ -343,51 +377,6 @@ const toPlayerQrPublicPlayer = (player: Player): PlayerQrPublicPlayer => ({
 
 const isActiveDevPlayer = (player: Player) =>
   player.status === "active" && player.username.startsWith("dev_");
-
-const hashInviteCode = (code: string) =>
-  createHash("sha256").update(code).digest("hex");
-
-const generateInviteCode = () =>
-  Array.from(
-    { length: INVITE_CODE_LENGTH },
-    () => INVITE_CODE_ALPHABET[randomInt(INVITE_CODE_ALPHABET.length)],
-  ).join("");
-
-/** 사용자가 소문자·앞뒤 공백·하이픈을 섞어 입력해도 같은 코드로 본다. */
-const normalizeInviteCode = (code: string) =>
-  code.trim().toUpperCase().replace(/[\s-]/g, "");
-
-interface AllowedAuthUser {
-  id: string;
-  /** 이메일 앞부분(@ 앞). 대소문자는 원래 값 그대로다. */
-  emailLocalPart: string;
-}
-
-/** `ALLOWED_AUTH_PROVIDERS`(쉼표 구분)의 허용 로그인 provider. 미설정이면 google만 허용한다. */
-const getAllowedAuthProviders = (): string[] => {
-  const configured = process.env.ALLOWED_AUTH_PROVIDERS?.trim();
-  return (configured || "google")
-    .split(",")
-    .map((provider) => provider.trim().toLowerCase())
-    .filter(Boolean);
-};
-
-/** 허용 도메인과 정확히 같고 확인된 이메일이면 앞부분을 돌려준다. */
-const getAllowedEmailLocalPart = (
-  email: string | null,
-  emailConfirmed: boolean,
-): string | null => {
-  const allowedDomain = process.env.ALLOWED_EMAIL_DOMAIN?.trim().toLowerCase();
-  if (!allowedDomain || !email || !emailConfirmed) {
-    return null;
-  }
-  const atIndex = email.lastIndexOf("@");
-  if (atIndex <= 0) {
-    return null;
-  }
-  const domain = email.slice(atIndex + 1).toLowerCase();
-  return domain === allowedDomain ? email.slice(0, atIndex) : null;
-};
 
 /** Postgres unique_violation(23505). 표현식 유니크 인덱스(lower(username)) 위반도 같은 코드다. */
 const isUniqueViolation = (error: unknown) => {
@@ -575,6 +564,7 @@ export class AuthService {
     private readonly ratingService: RatingServiceContract =
       new ScorePerformanceRatingService(),
     private readonly authUserVerifier = new SupabaseAuthUserVerifier(),
+    private readonly authAdmin = new SupabaseAuthAdmin(),
   ) {}
 
   setPlayerRatingChartProjectionRefresher(
@@ -614,7 +604,7 @@ export class AuthService {
       return await db.players.create(input);
     } catch (error) {
       if (isUniqueViolation(error)) {
-        throw new Error("중복된 사용자명입니다.");
+        throw new AccountRequestError(409, DUPLICATE_USERNAME_MESSAGE);
       }
       throw error;
     }
@@ -625,82 +615,6 @@ export class AuthService {
   ): Promise<StoredPlayerRecord | undefined> {
     const player = await db.players.findById(playerId);
     return player ? hydratePlayer(player) : undefined;
-  }
-
-  /**
-   * Supabase Auth로 토큰을 확인하고 허용 provider·허용 도메인·이메일 확인 여부를 검사한다.
-   * 허용 목록에 없는 provider나 다른 도메인 계정은 회원 조회·연결 전에 거부해 앞부분이 같아도 남의 회원 기록에 닿지 못한다.
-   */
-  private async resolveAllowedAuthUser(
-    accessToken: string,
-  ): Promise<AllowedAuthUser> {
-    const user = await this.authUserVerifier.getUser(accessToken);
-    if (!user) {
-      throw new InvalidAccessTokenError("세션이 만료되었거나 유효하지 않습니다.");
-    }
-
-    if (
-      !user.provider ||
-      !getAllowedAuthProviders().includes(user.provider.toLowerCase())
-    ) {
-      throw new AuthError(
-        "DOMAIN_NOT_ALLOWED",
-        "허용된 회사 계정(Google)으로만 로그인할 수 있습니다.",
-      );
-    }
-
-    const emailLocalPart = getAllowedEmailLocalPart(
-      user.email,
-      user.emailConfirmed,
-    );
-    if (!emailLocalPart) {
-      throw new AuthError(
-        "DOMAIN_NOT_ALLOWED",
-        "허용된 회사 계정(Google)으로만 로그인할 수 있습니다.",
-      );
-    }
-
-    return { id: user.id, emailLocalPart };
-  }
-
-  /**
-   * 이메일 앞부분과 대소문자 구분 없이 같은 username의 active 미연결 회원을 요청자와 연결한다.
-   * 이 요청이 실제로 연결했을 때만 감사 로그를 남긴다.
-   */
-  private async autoLinkByEmailLocalPart(
-    authUser: AllowedAuthUser,
-  ): Promise<StoredPlayerRecord | undefined> {
-    const candidate = await db.players.findByUsernameIgnoringCase(
-      authUser.emailLocalPart,
-    );
-    if (
-      !candidate ||
-      candidate.authUserId ||
-      candidate.status !== "active"
-    ) {
-      return undefined;
-    }
-
-    let linkedNow = false;
-    try {
-      linkedNow = await db.players.linkAuthUser(candidate.id, authUser.id);
-    } catch (error) {
-      if (!isUniqueViolation(error)) {
-        throw error;
-      }
-    }
-    if (linkedNow) {
-      await db.playerAuthLinkLogs.create({
-        id: buildId("player-auth-link-log"),
-        playerId: candidate.id,
-        authUserId: authUser.id,
-        linkMethod: "email_local_part",
-        createdAt: new Date(),
-      });
-    }
-    // 동시 요청이 먼저 연결했을 수 있으므로 연결 결과는 요청자 기준으로 다시 읽는다.
-    const linked = await db.players.findByAuthUserId(authUser.id);
-    return linked ? hydratePlayer(linked) : undefined;
   }
 
   private async buildSession(
@@ -718,126 +632,277 @@ export class AuthService {
         isAdmin: await db.playerAdmins.isAdmin(stored.id),
       },
       player: toPublicPlayer(stored),
+      isFirstLogin: stored.isFirstLogin,
     };
   }
 
   /**
-   * 요청자와 연결된 회원 세션을 만든다. 연결된 회원이 없으면 ACCOUNT_NOT_LINKED로 거부한다.
-   * autoLink는 GET /api/me에서만 켜며, 이메일 앞부분과 같은 username의 active 미연결 회원을 연결한다.
+   * Supabase Auth로 토큰을 확인하고 `players.auth_user_id`로 연결된 회원 세션을 만든다.
+   * Auth 사용자는 관리자만 만들 수 있으므로 provider·이메일은 따로 검사하지 않는다.
    */
   async authenticateAccessToken(
     accessToken: string,
-    options: { autoLink?: boolean } = {},
   ): Promise<AuthenticatedSession> {
-    const authUser = await this.resolveAllowedAuthUser(accessToken);
-    const linked = await db.players.findByAuthUserId(authUser.id);
-    const stored = linked
-      ? hydratePlayer(linked)
-      : options.autoLink
-        ? await this.autoLinkByEmailLocalPart(authUser)
-        : undefined;
-    if (!stored) {
+    const user = await this.authUserVerifier.getUser(accessToken);
+    if (!user) {
+      throw new InvalidAccessTokenError("세션이 만료되었거나 유효하지 않습니다.");
+    }
+
+    const linked = await db.players.findByAuthUserId(user.id);
+    if (!linked) {
       throw new AuthError(
         "ACCOUNT_NOT_LINKED",
-        "연결된 회원이 없습니다. 관리자에게 받은 초대 코드로 가입해주세요.",
+        "연결된 회원이 없습니다. 관리자에게 문의해주세요.",
       );
     }
 
-    return await this.buildSession(stored);
+    return await this.buildSession(hydratePlayer(linked));
   }
 
   /**
-   * 초대 코드로 username이 이메일 앞부분(소문자)인 회원을 만들고 요청자와 연결한다.
-   * 같은 username의 active 미연결 회원이 있으면 코드를 쓰지 않고 그 회원과 연결한다.
+   * 첫 로그인 비밀번호 변경을 마쳤다고 기록한다. 클라이언트가 Auth에서 비밀번호를 바꾼 뒤 부르며,
+   * 실제로 바뀌었는지는 확인하지 않는다(우회해도 본인의 강제 변경을 건너뛸 뿐이다).
    */
-  async redeemInviteCode(
-    accessToken: string,
-    code: string,
+  async markPasswordChanged(
+    session: AuthenticatedSession,
   ): Promise<AuthenticatedSession> {
-    const authUser = await this.resolveAllowedAuthUser(accessToken);
-    const alreadyLinkedError = () =>
-      new AuthError("ALREADY_LINKED", "이미 회원과 연결된 계정입니다.");
+    const updated = hydratePlayer(
+      requireStoredPlayer(
+        await db.players.updateFirstLogin(session.payload.playerId, false),
+      ),
+    );
+    return {
+      ...session,
+      player: toPublicPlayer(updated),
+      isFirstLogin: updated.isFirstLogin,
+    };
+  }
 
-    if (await db.players.findByAuthUserId(authUser.id)) {
-      throw alreadyLinkedError();
-    }
-
-    const autoLinked = await this.autoLinkByEmailLocalPart(authUser);
-    if (autoLinked) {
-      return await this.buildSession(autoLinked);
-    }
-
-    const username = authUser.emailLocalPart.toLowerCase();
-    // 자동 연결되지 않았는데 같은 username이 있으면 다른 Auth 사용자에게 연결됐거나 inactive인 회원이다.
-    if (await db.players.findByUsernameIgnoringCase(username)) {
-      throw alreadyLinkedError();
-    }
-
-    const playerId = generateEntityId("player");
-    let redeemed: boolean;
+  /** username의 내부 이메일로 Auth 사용자를 만든다. 같은 이메일의 사용자가 이미 있으면 409다. */
+  private async createAuthUser(
+    username: string,
+    password: string,
+  ): Promise<string> {
     try {
-      redeemed = await db.inviteCodes.redeemForNewPlayer({
-        codeHash: hashInviteCode(normalizeInviteCode(code)),
-        usedAt: new Date(),
-        player: {
-          id: playerId,
-          username,
-          gender: INVITED_PLAYER_DEFAULT_GENDER,
-          authUserId: authUser.id,
-        },
-        creationLogId: buildId("player-creation-log"),
+      return await this.authAdmin.createUser({
+        email: toInternalEmail(username),
+        password,
       });
     } catch (error) {
-      // 같은 요청자이거나 대소문자 구분 없이 같은 username으로 동시에 가입한 경우. 트랜잭션이 롤백돼 코드는 그대로 남는다.
-      if (isUniqueViolation(error)) {
-        throw alreadyLinkedError();
-      }
-      throw error;
+      throw toDuplicateAuthEmailError(error);
     }
-    if (!redeemed) {
-      throw new AuthError(
-        "INVITE_INVALID",
-        "초대 코드가 없거나 만료되었거나 이미 사용되었습니다.",
+  }
+
+  private async updateAuthUser(
+    authUserId: string,
+    input: { email?: string; password?: string },
+  ): Promise<void> {
+    try {
+      await this.authAdmin.updateUser(authUserId, input);
+    } catch (error) {
+      throw toDuplicateAuthEmailError(error);
+    }
+  }
+
+  /** 회원과 연결하지 못한 Auth 사용자를 지운다. 실패하면 수동 정리할 수 있게 id를 로그로 남긴다. */
+  private async deleteOrphanAuthUser(authUserId: string): Promise<void> {
+    try {
+      await this.authAdmin.deleteUser(authUserId);
+    } catch (error) {
+      console.error(
+        "[AUTH] 회원과 연결하지 못한 Auth 사용자를 지우지 못했습니다. 수동으로 지워주세요.",
+        { authUserId, error },
+      );
+    }
+  }
+
+  /**
+   * 관리자가 회원 비밀번호를 임시 비밀번호로 초기화한다. 연결된 Auth 사용자가 없으면 새로 만들어 연결한다(계정 발급).
+   * 연결된 사용자의 이메일도 현재 아이디의 내부 이메일로 맞춰, 예전 방식으로 만든 계정도 아이디로 로그인하게 한다.
+   */
+  async resetPlayerPassword(
+    playerId: string,
+  ): Promise<AdminPasswordResetResponse> {
+    const stored = await this.getStoredPlayerById(playerId);
+    if (!stored) {
+      throw new AccountRequestError(404, "사용자를 찾을 수 없습니다.");
+    }
+    if (stored.status !== "active") {
+      throw new AccountRequestError(
+        400,
+        "비활성 회원에게는 비밀번호를 발급할 수 없습니다. 먼저 활성화해주세요.",
+      );
+    }
+    if (!isValidUsername(stored.username)) {
+      throw new AccountRequestError(
+        400,
+        `현재 아이디로는 로그인 계정을 만들 수 없습니다. 먼저 아이디를 바꿔주세요. ${USERNAME_FORMAT_MESSAGE}`,
       );
     }
 
-    const created = await this.getStoredPlayerById(playerId);
-    return await this.buildSession(requireStoredPlayer(created));
+    const temporaryPassword = generateInitialPassword();
+
+    if (stored.authUserId) {
+      // 플래그를 먼저 켠다. Auth 갱신이 실패해도 다음 로그인에서 비밀번호 변경을 한 번 더 요구할 뿐이다.
+      await db.players.updateFirstLogin(stored.id, true);
+      await this.updateAuthUser(stored.authUserId, {
+        email: toInternalEmail(stored.username),
+        password: temporaryPassword,
+      });
+      return { temporaryPassword };
+    }
+
+    const authUserId = await this.createAuthUser(
+      stored.username,
+      temporaryPassword,
+    );
+    let linked: boolean;
+    try {
+      linked = await db.players.linkAuthUser(stored.id, authUserId, true);
+    } catch (error) {
+      await this.deleteOrphanAuthUser(authUserId);
+      throw error;
+    }
+    if (!linked) {
+      // 조회 뒤 다른 요청이 먼저 연결했거나 회원이 inactive로 바뀌었다.
+      await this.deleteOrphanAuthUser(authUserId);
+      throw new AccountRequestError(
+        409,
+        "회원 상태가 바뀌어 계정을 발급하지 못했습니다. 다시 시도해주세요.",
+      );
+    }
+    return { temporaryPassword };
   }
 
-  async createInviteCode(createdByPlayerId: string): Promise<CreatedInviteCode> {
-    const createdAt = new Date();
-    const expiresAt = new Date(createdAt.getTime() + INVITE_CODE_TTL_MS);
-    // 31^8 공간이라 해시 충돌은 사실상 없지만, unique 위반이면 새 코드로 다시 만든다.
-    for (let attempt = 0; ; attempt += 1) {
-      const code = generateInviteCode();
+  /**
+   * 관리자가 회원 아이디를 바꾼다. 연결된 Auth 사용자의 이메일도 새 아이디의 내부 이메일로 바꾸며,
+   * Auth 이메일을 먼저 바꾸고 username 갱신이 실패하면 Auth 이메일을 되돌려 둘이 어긋나지 않게 한다.
+   */
+  async updatePlayerUsername(
+    playerId: string,
+    rawUsername: string,
+  ): Promise<AdminUpdateUsernameResponse> {
+    const username = rawUsername.trim();
+    if (!isValidUsername(username)) {
+      throw new AccountRequestError(400, USERNAME_FORMAT_MESSAGE);
+    }
+
+    const stored = await this.getStoredPlayerById(playerId);
+    if (!stored) {
+      throw new AccountRequestError(404, "사용자를 찾을 수 없습니다.");
+    }
+
+    const conflict = await db.players.findByUsernameIgnoringCase(username);
+    if (conflict && conflict.id !== stored.id) {
+      throw new AccountRequestError(409, DUPLICATE_USERNAME_MESSAGE);
+    }
+    if (stored.username === username) {
+      return { player: toPublicPlayer(stored) };
+    }
+
+    const nextEmail = toInternalEmail(username);
+    let previousAuthEmail: string | null = null;
+    if (stored.authUserId) {
+      const currentEmail = await this.authAdmin.getUserEmail(stored.authUserId);
+      if (currentEmail?.toLowerCase() !== nextEmail) {
+        await this.updateAuthUser(stored.authUserId, { email: nextEmail });
+        previousAuthEmail = currentEmail;
+      }
+    }
+
+    try {
+      const updated = hydratePlayer(
+        requireStoredPlayer(await db.players.updateUsername(stored.id, username)),
+      );
+      return { player: toPublicPlayer(updated) };
+    } catch (error) {
+      if (stored.authUserId && previousAuthEmail) {
+        await this.restoreAuthEmail(stored.authUserId, previousAuthEmail);
+      }
+      if (isUniqueViolation(error)) {
+        throw new AccountRequestError(409, DUPLICATE_USERNAME_MESSAGE);
+      }
+      throw error;
+    }
+  }
+
+  private async restoreAuthEmail(
+    authUserId: string,
+    email: string,
+  ): Promise<void> {
+    try {
+      await this.authAdmin.updateUser(authUserId, { email });
+    } catch (error) {
+      console.error(
+        "[AUTH] 아이디 변경 실패 후 Auth 이메일을 되돌리지 못했습니다. 비밀번호 초기화로 이메일을 다시 맞춰주세요.",
+        { authUserId, error },
+      );
+    }
+  }
+
+  /**
+   * dev mock이 켜져 있으면 active dev mock 회원마다 아이디 로그인 계정(공통 dev 비밀번호)을 만들어 연결한다.
+   * 이미 연결된 회원은 Auth 이메일이 내부 이메일이 아닐 때만 맞춘다. 실패해도 경고만 남기고 기동을 막지 않는다.
+   */
+  async seedDevAuthAccounts(): Promise<void> {
+    if (!isDevMockDataEnabled()) {
+      return;
+    }
+    for (const { username, status } of getDevMockUsernames()) {
+      if (status !== "active") {
+        continue;
+      }
       try {
-        await db.inviteCodes.create({
-          id: buildId("invite-code"),
-          codeHash: hashInviteCode(code),
-          createdByPlayerId,
-          createdAt,
-          expiresAt,
-        });
-        return { code, expiresAt: expiresAt.toISOString() };
+        await this.ensureDevAuthAccount(username);
       } catch (error) {
-        if (!isUniqueViolation(error) || attempt >= 2) {
-          throw error;
-        }
+        console.warn(`[DEV_AUTH] ${username} 로그인 계정을 준비하지 못했습니다.`, error);
       }
     }
   }
 
-  async getInviteCodes(): Promise<InviteCodeSummary[]> {
-    const codes = await db.inviteCodes.findAllSummaries();
-    return codes.map((code) => ({
-      id: code.id,
-      createdByUsername: code.createdByUsername,
-      createdAt: toDate(code.createdAt).toISOString(),
-      expiresAt: toDate(code.expiresAt).toISOString(),
-      usedByUsername: code.usedByUsername ?? null,
-      usedAt: code.usedAt ? toDate(code.usedAt).toISOString() : null,
-    }));
+  private async ensureDevAuthAccount(username: string): Promise<void> {
+    const stored = await db.players.findByUsernameIgnoringCase(username);
+    if (!stored || stored.status !== "active") {
+      return;
+    }
+    const email = toInternalEmail(stored.username);
+
+    if (stored.authUserId) {
+      const currentEmail = await this.authAdmin.getUserEmail(stored.authUserId);
+      if (currentEmail?.toLowerCase() !== email) {
+        await this.authAdmin.updateUser(stored.authUserId, {
+          email,
+          password: DEV_MOCK_AUTH_PASSWORD,
+        });
+      }
+      return;
+    }
+
+    let authUserId: string;
+    try {
+      authUserId = await this.authAdmin.createUser({
+        email,
+        password: DEV_MOCK_AUTH_PASSWORD,
+      });
+    } catch (error) {
+      if (!(error instanceof AuthEmailExistsError)) {
+        throw error;
+      }
+      // 이전 기동이 Auth 사용자만 만들고 연결 전에 멈췄으면 그 사용자를 이어서 쓴다.
+      const existingId = await this.authAdmin.findUserIdByEmail(email);
+      if (!existingId) {
+        throw error;
+      }
+      await this.authAdmin.updateUser(existingId, {
+        password: DEV_MOCK_AUTH_PASSWORD,
+      });
+      authUserId = existingId;
+    }
+    if (!(await db.players.linkAuthUser(stored.id, authUserId, false))) {
+      throw new Error(
+        `회원에 Auth 사용자를 연결하지 못했습니다. 다음 기동에서 다시 연결합니다. (authUserId=${authUserId})`,
+      );
+    }
   }
 
   private async insertCreationLog(input: {
@@ -2027,14 +2092,21 @@ export class AuthService {
     };
   }
 
-  /** 아직 로그인하지 않은 회원을 미리 만든다. 그 회원이 Google로 로그인하면 GET /api/me가 자동 연결한다. */
+  /**
+   * 회원을 만들고 서버가 만든 초기 비밀번호로 아이디 로그인 계정을 발급한다.
+   * 초기 비밀번호는 응답으로만 돌려주고 저장·로그하지 않는다. 회원 생성이 실패하면 만든 Auth 사용자를 지운다.
+   */
   async registerAdmin(
     input: AdminRegisterPlayerRequest,
     createdByPlayerId: string,
-  ): Promise<Player> {
+  ): Promise<AdminRegisterPlayerResponse> {
+    const username = input.username.trim();
+    if (!isValidUsername(username)) {
+      throw new AccountRequestError(400, USERNAME_FORMAT_MESSAGE);
+    }
     // username은 대소문자 구분 없이 unique다. 동시 요청은 createStoredPlayer가 유니크 위반으로 걸러낸다.
-    if (await db.players.findByUsernameIgnoringCase(input.username)) {
-      throw new Error("중복된 사용자명입니다.");
+    if (await db.players.findByUsernameIgnoringCase(username)) {
+      throw new AccountRequestError(409, DUPLICATE_USERNAME_MESSAGE);
     }
 
     const createdBy = await this.getStoredPlayerById(createdByPlayerId);
@@ -2042,14 +2114,23 @@ export class AuthService {
       throw new Error("계정 생성 요청자를 찾을 수 없습니다.");
     }
 
-    const player = createPlayer({
-      username: input.username,
-      gender: input.gender,
-    });
+    const player = createPlayer({ username, gender: input.gender });
+    const initialPassword = generateInitialPassword();
+    const authUserId = await this.createAuthUser(username, initialPassword);
 
-    const created = hydratePlayer(
-      await this.createStoredPlayer({ ...player, authUserId: null }),
-    );
+    let created: StoredPlayerRecord;
+    try {
+      created = hydratePlayer(
+        await this.createStoredPlayer({
+          ...player,
+          authUserId,
+          isFirstLogin: true,
+        }),
+      );
+    } catch (error) {
+      await this.deleteOrphanAuthUser(authUserId);
+      throw error;
+    }
 
     await this.insertCreationLog({
       playerId: created.id,
@@ -2059,6 +2140,6 @@ export class AuthService {
       createdAt: created.createdAt,
     });
 
-    return toPublicPlayer(created);
+    return { player: toPublicPlayer(created), initialPassword };
   }
 }

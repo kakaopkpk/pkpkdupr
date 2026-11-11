@@ -8,7 +8,7 @@ import PwaUpdatePrompt from "./components/PwaUpdatePrompt";
 import { AppUpdateProvider } from "./context/AppUpdateContext";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import DevQrs from "./pages/DevQrs";
-import InviteCode from "./pages/InviteCode";
+import ForceChangePassword from "./pages/ForceChangePassword";
 import Login from "./pages/Login";
 
 const KEYBOARD_INPUT_TYPES = new Set([
@@ -81,11 +81,17 @@ function AppRoutes() {
     );
   }
 
-  if (status === "needsInvite") {
+  if (status === "mustChangePassword") {
     return (
       <Routes>
-        <Route path="/invite" element={<InviteCode />} />
-        <Route path="*" element={<Navigate to="/invite" replace />} />
+        <Route
+          path="/force-change-password"
+          element={<ForceChangePassword />}
+        />
+        <Route
+          path="*"
+          element={<Navigate to="/force-change-password" replace />}
+        />
       </Routes>
     );
   }

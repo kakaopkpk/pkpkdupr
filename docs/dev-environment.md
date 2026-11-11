@@ -24,28 +24,29 @@ ENABLE_DEV_MOCK_DATA=true
 SUPABASE_URL=<supabase status의 API_URL, 보통 http://127.0.0.1:54321>
 SUPABASE_ANON_KEY=<supabase status의 ANON_KEY>
 SUPABASE_SERVICE_ROLE_KEY=<supabase status의 SERVICE_ROLE_KEY>
-ALLOWED_EMAIL_DOMAIN=kakaocorp.com        # .env에 있으면 그 값
-ALLOWED_AUTH_PROVIDERS=google,email       # .env에 있으면 그 값
 QR_TOTP_SECRET=local-dev-qr-totp-secret   # .env에 있으면 그 값
 ```
 
-api는 `ALLOWED_EMAIL_DOMAIN`·`QR_TOTP_SECRET`·`SUPABASE_URL`·`SUPABASE_ANON_KEY`가 없으면 시작하지 않습니다. `ALLOWED_AUTH_PROVIDERS`는 api가 받아들일 로그인 provider(쉼표 구분)이며 없으면 `google`만 허용합니다. `pnpm dev`는 로컬 매직링크 로그인(provider `email`)이 되도록 `google,email`을 넣습니다. `SUPABASE_SERVICE_ROLE_KEY`는 아바타 업로드가 로컬 Storage(`avatars` 버킷)를 쓰는 데 필요합니다. `pnpm dev:api`로 따로 띄울 때는 `ALLOWED_AUTH_PROVIDERS=google,email`을 포함해 위 값을 직접 넣습니다(`pnpm db:status -o env`로 확인). `ALLOWED_AUTH_PROVIDERS`를 빠뜨리면 매직링크 로그인이 403 `DOMAIN_NOT_ALLOWED`로 거부됩니다.
+api는 `QR_TOTP_SECRET`·`SUPABASE_URL`·`SUPABASE_ANON_KEY`·`SUPABASE_SERVICE_ROLE_KEY`가 없으면 시작하지 않습니다. `SUPABASE_ANON_KEY`는 access token 확인에, `SUPABASE_SERVICE_ROLE_KEY`는 관리자의 계정 발급·비밀번호 초기화·아이디 변경(Auth admin API), dev 계정 시딩, 아바타 업로드(로컬 Storage `avatars` 버킷)에 씁니다. `pnpm dev:api`로 따로 띄울 때는 위 값을 직접 넣습니다(`pnpm db:status -o env`로 확인).
 
 `DATABASE_URL`은 `NODE_ENV`와 무관하게 필수입니다. 없으면 api는 `DATABASE_URL 환경변수가 필요합니다.` 오류로 시작하지 않습니다. 예외로 Edge 런타임(`supabase functions serve`, 배포된 함수)에서는 `apps/api/src/db.ts`가 `DATABASE_URL`이 없을 때 Supabase가 주입하는 `SUPABASE_DB_URL`로 대체하고 경고 로그만 남깁니다. `pnpm dev`는 위 로컬 주소를 주입하고, `pnpm dev:api`처럼 api를 따로 띄울 때는 직접 지정해야 합니다. 로컬 값은 `pnpm db:status -o env`의 `DB_URL`로 확인합니다. api 테스트(vitest)는 `apps/api/vitest.setup.ts`가 로컬 주소를 채우며 실제 연결은 만들지 않습니다.
 
 ## 로컬 로그인
 
-로컬 Supabase는 Google 없이 이메일 매직링크로 로그인합니다(`supabase/config.toml`의 `[auth.email]`). 메일은 실제로 보내지 않고 Mailpit에 쌓입니다. web·admin 로그인 화면의 매직링크 폼은 개발 서버(`import.meta.env.DEV`)에서만 보이고, 운영 빌드에는 Google 버튼만 있습니다.
+로그인은 관리자가 발급한 아이디·비밀번호입니다. 클라이언트는 아이디를 `toInternalEmail(아이디)`(`<아이디 소문자>@pkpkdupr.invalid`, `packages/shared/src/auth.ts`)로 바꿔 Supabase Auth 비밀번호 로그인(`signInWithPassword`)을 합니다. 이 주소로 메일은 보내지 않습니다. 공개 가입은 막혀 있고(`supabase/config.toml`의 `[auth] enable_signup = false`), 계정은 관리자가 api로만 만듭니다.
 
-`pnpm dev`는 web·admin-web에 `VITE_SUPABASE_URL`·`VITE_SUPABASE_ANON_KEY`·`VITE_ALLOWED_EMAIL_DOMAIN`을 넣습니다. `pnpm dev:web`·`pnpm dev:admin`으로 따로 띄울 때는 각 앱의 `.env.example`을 참고해 같은 값을 넣습니다.
+`pnpm dev`는 web·admin-web에 `VITE_SUPABASE_URL`·`VITE_SUPABASE_ANON_KEY`를 넣습니다. `pnpm dev:web`·`pnpm dev:admin`으로 따로 띄울 때는 각 앱의 `.env.example`을 참고해 같은 값을 넣습니다.
 
-1. web(`http://localhost:8080`) 로그인 화면에서 `dev_alice@kakaocorp.com` 같은 dev 계정 이메일로 매직링크를 요청합니다.
-2. Mailpit(`http://127.0.0.1:54324`)에서 메일을 열어 링크를 누릅니다.
-3. `GET /api/me`가 이메일 앞부분과 같은 dev mock 회원(`dev_alice`, `dev_bob`, …, `test1`, `test2`)과 자동 연결합니다.
+dev mock이 켜진 상태로 api가 뜨면 active dev mock 회원(`dev_alice`, `dev_bob`, …, `test1`, `test2`)마다 Auth 계정을 만들어 회원과 연결합니다. 다시 띄워도 중복으로 만들지 않고, 계정 생성이 실패하면 경고만 남기고 기동을 계속합니다.
 
-- `dev_alice`는 dev mock 시딩 때 관리자(`player_admins`)로 등록됩니다.
-- dev mock에 없는 앞부분(예: `newbie@kakaocorp.com`)은 403 `ACCOUNT_NOT_LINKED`이며, 관리자가 발급한 초대 코드로 가입을 확인할 수 있습니다.
-- 허용 도메인이 아닌 이메일(예: `dev_alice@example.com`)은 403 `DOMAIN_NOT_ALLOWED`입니다.
+| 아이디 | 비밀번호 | 비고 |
+| --- | --- | --- |
+| `dev_alice` | `devpass1234` | 관리자(`player_admins`) |
+| `dev_bob` 등 다른 active dev mock 회원 | `devpass1234` | 일반 회원 |
+
+- dev 계정은 `is_first_login = false`로 만들어 첫 로그인 비밀번호 변경을 요구하지 않습니다. 관리자가 회원 추가(`POST /api/admin/register`)나 비밀번호 초기화(`POST /api/admin/players/:playerId/password-reset`)로 발급한 계정은 `is_first_login = true`라서 첫 로그인 뒤 비밀번호를 바꿔야 합니다. 바꾸면 클라이언트가 `POST /api/me/password-changed`로 플래그를 해제합니다.
+- 회원과 연결되지 않은 Auth 사용자(예: Studio에서 직접 만든 사용자)는 403 `ACCOUNT_NOT_LINKED`입니다.
+- inactive 회원(`dev_chris_inactive`)에게는 계정을 만들지 않습니다.
 
 ## 구조
 
@@ -68,7 +69,7 @@ apps/web :8080 ── /api ──> apps/api :4000
 
 - 스키마의 기준은 `supabase/migrations/*.sql`입니다. 스키마를 바꿀 때는 기존 파일을 고치지 말고 `pnpm db:migration:new <이름>`으로 새 파일을 추가합니다.
 - `packages/db/src/db/schema.ts`(drizzle `pg-core`)는 쿼리 빌더용 정의입니다. 마이그레이션을 바꾸면 같은 변경을 여기에도 반영합니다.
-- 테이블·컬럼명과 저장 형식(타임스탬프는 Unix 초 `BIGINT`, JSON은 `TEXT` `*_json` 컬럼)은 기존 MySQL 스키마와 같아서 운영 데이터의 값은 바꾸지 않고 옮길 수 있습니다. 다만 mysqldump 출력은 백틱 식별자·백슬래시 이스케이프·`is_first_login`의 0/1 정수 표현 때문에 그대로 넣을 수 없으며, 운영 데이터 이관 방법은 아직 정해지지 않았습니다.
+- 테이블·컬럼명과 저장 형식(타임스탬프는 Unix 초 `BIGINT`, JSON은 `TEXT` `*_json` 컬럼)은 기존 MySQL 스키마와 같아서 운영 데이터의 값은 바꾸지 않고 옮길 수 있습니다. 다만 mysqldump 출력은 백틱 식별자·백슬래시 이스케이프, 그리고 `players.is_first_login`이 MySQL에서는 0/1 정수이고 여기서는 `BOOLEAN`이라는 차이 때문에 그대로 넣을 수 없으며, 운영 데이터 이관 방법은 아직 정해지지 않았습니다.
 - `players.username`은 표시용 대소문자를 보존하되 `lower(username)` 유니크 인덱스(`players_username_lower_unique`)로 대소문자 구분 없이 unique합니다. MySQL의 case-insensitive 콜레이션과 같은 판정입니다. 대소문자만 다른 username(`Alice`와 `alice`)이 이미 있으면 이 인덱스를 만드는 마이그레이션(`20261110050000_players_username_lower_unique.sql`)이 실패하므로, 마이그레이션 적용 전과 **운영 데이터 이관(#10) 전에** 아래 쿼리로 중복을 점검해 정리합니다. 결과가 없어야 합니다.
 
   ```sql

@@ -63,6 +63,7 @@ export default defineConfig({
         navigateFallbackAllowlist: [
           new RegExp(`^${escapeRegExp(basePath)}$`),
           new RegExp(`^${escapeRegExp(basePath)}login$`),
+          new RegExp(`^${escapeRegExp(basePath)}force-change-password$`),
         ],
       },
       includeAssets: [
