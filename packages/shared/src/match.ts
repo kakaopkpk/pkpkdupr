@@ -74,24 +74,11 @@ export const matchSourceLabels: Record<MatchSource, string> = {
   admin_created_result: "관리자 입력",
 };
 
-export const matchModeValues = ["single-game", "best-of-3"] as const;
+/** 세션 코트 일정에서 경기 하나가 차지하는 시간 */
+export const MATCH_SCHEDULE_DURATION_MS = 15 * 60 * 1000;
 
-export type MatchMode = (typeof matchModeValues)[number];
-
-export const DEFAULT_MATCH_MODE: MatchMode = "single-game";
-
-export const matchModeLabels: Record<MatchMode, string> = {
-  "single-game": "단판",
-  "best-of-3": "2선승",
-};
-
-export const getMatchScheduleDurationMinutes = (mode: MatchMode) =>
-  mode === "best-of-3" ? 30 : 15;
-
-export const getMatchScheduleDurationMs = (mode: MatchMode) =>
-  getMatchScheduleDurationMinutes(mode) * 60 * 1000;
-
-export const MATCH_RESULT_MAX_SCORE_COUNT = 3;
+/** 경기 하나에 기록하는 점수 개수. 경기는 단판만 지원한다 */
+export const MATCH_SCORE_COUNT = 1;
 
 export type MatchStatus = "created" | "completed" | "cancelled";
 
@@ -177,80 +164,23 @@ export interface MatchSessionSummary {
   latestCreatedAt: Date;
 }
 
-const getMatchWinCounts = (scores: MatchScore[]) =>
-  scores.reduce<[number, number]>(
-    (wins, score) => {
-      if (score.scoreA > score.scoreB) {
-        wins[0] += 1;
-      } else if (score.scoreB > score.scoreA) {
-        wins[1] += 1;
-      }
-
-      return wins;
-    },
-    [0, 0],
-  );
-
-export const getMaxScoreCountForMatchMode = (mode: MatchMode) =>
-  mode === "single-game" ? 1 : MATCH_RESULT_MAX_SCORE_COUNT;
-
-export const inferMatchModeFromScores = (scores: MatchScore[]): MatchMode => {
-  if (scores.length === 1) {
-    return "single-game";
-  }
-
-  if (scores.length >= 2 && scores.length <= MATCH_RESULT_MAX_SCORE_COUNT) {
-    return "best-of-3";
-  }
-
-  throw new Error("매치는 단판 또는 2선승만 지원합니다.");
-};
-
-export const validateMatchScoresForMode = (
-  mode: MatchMode,
-  scores: MatchScore[],
-) => {
-  if (mode === "single-game") {
-    if (scores.length !== 1) {
-      throw new Error("단판 매치는 스코어를 1개만 입력해야 합니다.");
-    }
-
-    return;
-  }
-
-  if (scores.length < 2 || scores.length > MATCH_RESULT_MAX_SCORE_COUNT) {
-    throw new Error("2선승 매치는 스코어를 2개 또는 3개 입력해야 합니다.");
-  }
-
-  let teamWins: [number, number] = [0, 0];
-
-  for (const [index, score] of scores.entries()) {
-    if (score.scoreA > score.scoreB) {
-      teamWins = [teamWins[0] + 1, teamWins[1]];
-    } else if (score.scoreB > score.scoreA) {
-      teamWins = [teamWins[0], teamWins[1] + 1];
-    }
-
-    const isDecided = teamWins[0] === 2 || teamWins[1] === 2;
-
-    if (isDecided && index < scores.length - 1) {
-      throw new Error(
-        "2선승 매치는 승부가 결정된 뒤 추가 스코어를 입력할 수 없습니다.",
-      );
-    }
-  }
-
-  const [teamAWins, teamBWins] = getMatchWinCounts(scores);
-
-  if (teamAWins !== 2 && teamBWins !== 2) {
-    throw new Error("2선승 매치는 한 팀이 2게임을 먼저 이겨야 합니다.");
+/**
+ * 새로 저장하는 점수 목록을 검증한다. 점수는 정확히 MATCH_SCORE_COUNT개여야 한다.
+ * 점수가 여러 개인 과거 2선승 기록은 조회·평점 재계산에만 쓰고 이 검증을 거치지 않는다.
+ */
+export const validateMatchScores = (scores: MatchScore[]) => {
+  if (scores.length !== MATCH_SCORE_COUNT) {
+    throw new Error(`스코어는 ${MATCH_SCORE_COUNT}개만 입력할 수 있습니다.`);
   }
 };
+
+/** 점수가 여러 개인 과거 2선승 기록이면 true. 점수를 1개로 바꾸면 승패가 달라질 수 있어 참가자 수정을 막는다 */
+export const isMultiGameMatchRecord = (match: Pick<Match, "scores">): boolean =>
+  (match.scores?.length ?? 0) > MATCH_SCORE_COUNT;
 
 export interface Match {
   id: string;
   type: MatchType;
-  mode: MatchMode;
   source: MatchSource;
   creatorPlayerId: string;
   name?: string;
@@ -282,11 +212,9 @@ export interface RecordMatchRequest {
   name?: string;
   /** 생략하면 서버가 팀 구성으로 추론 */
   type?: MatchType;
-  /** 생략하면 scores 개수로 추론 */
-  mode?: MatchMode;
   teams: [RecordMatchTeamRequest, RecordMatchTeamRequest];
   location: string;
-  /** 단판 1개, 2선승 2~3개. 세트마다 동점 불가 */
+  /** 단판 점수 1개. 동점 불가 */
   scores: MatchScore[];
   /** POST /api/matches 전용. 회원 세션(오늘) 안에서 기록할 때 지정. 정기 세션은 시작 시각 규칙으로 자동 지정되므로 무시된다 */
   sessionId?: string;

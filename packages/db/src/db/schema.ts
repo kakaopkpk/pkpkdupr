@@ -11,8 +11,6 @@ import {
   varchar,
 } from "drizzle-orm/pg-core";
 import {
-  DEFAULT_MATCH_MODE,
-  matchModeValues,
   matchSourceValues,
   matchTypeValues,
 } from "@pkpkdupr/shared/match";
@@ -142,9 +140,6 @@ export const playerRatingChartPoints = pgTable(
 export const matches = pgTable("matches", {
   id: id("id").primaryKey(),
   type: varchar("type", { length: 32, enum: matchTypeValues }).notNull(),
-  mode: varchar("mode", { length: 32, enum: matchModeValues })
-    .notNull()
-    .default(DEFAULT_MATCH_MODE),
   source: varchar("source", { length: 32, enum: matchSourceValues })
     .notNull()
     .default("player_created"),

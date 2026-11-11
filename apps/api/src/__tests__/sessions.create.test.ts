@@ -210,7 +210,6 @@ describe("admin match sessions", () => {
       id: "Mmatch01",
       name: "1번 경기",
       type: "men-doubles",
-      mode: "single-game",
       source: "admin_created",
       creatorPlayerId: admin.id,
       session: managedSession,
@@ -246,7 +245,6 @@ describe("admin match sessions", () => {
       .send({
         name: createdMatch.name,
         type: createdMatch.type,
-        mode: createdMatch.mode,
         matchStartsAt: createdMatch.matchStartsAt.toISOString(),
         teams: [
           {
@@ -299,7 +297,6 @@ describe("admin match sessions", () => {
         matches: [
           {
             type: "men-doubles",
-            mode: "best-of-3",
             teams: [
               {
                 name: "Team A",
@@ -347,7 +344,6 @@ describe("admin match sessions", () => {
         matches: [
           {
             type: "men-doubles",
-            mode: "single-game",
             courtName: "코트 A",
             matchStartsAt: managedSession.date.toISOString(),
             teams: [
@@ -379,7 +375,6 @@ describe("admin match sessions", () => {
       id: "Mmatch01",
       name: "1번 경기",
       type: "men-doubles",
-      mode: "single-game",
       source: "admin_created",
       creatorPlayerId: admin.id,
       session: managedSession,

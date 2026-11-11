@@ -35,7 +35,6 @@ const buildMatch = (
   const match: Match = {
     id,
     type,
-    mode: "single-game",
     source: "player_created",
     creatorPlayerId: player.id,
     status: "completed",

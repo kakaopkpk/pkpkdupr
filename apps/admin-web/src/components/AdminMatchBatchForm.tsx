@@ -1,6 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
 import {
-  MATCH_RESULT_MAX_SCORE_COUNT,
   doublesMatchTypeValues,
   getMatchTopLevelType,
   isSinglesMatchType,
@@ -47,7 +46,7 @@ interface AdminMatchBatchFormProps {
   onSubmit: (payload: AdminBatchMatchSubmitPayload) => Promise<void>;
 }
 
-type ScoreRowDraft = {
+type ScoreDraft = {
   scoreA: string;
   scoreB: string;
 };
@@ -65,7 +64,7 @@ type MatchDraft = {
   courtName: string;
   matchStartsAt: string;
   teams: [string[], string[]];
-  scores: ScoreRowDraft[];
+  score: ScoreDraft;
 };
 
 type FormMode = "manual" | "paste";
@@ -113,7 +112,7 @@ type ImportHeader =
   | (typeof REQUIRED_IMPORT_HEADERS)[number]
   | (typeof OPTIONAL_IMPORT_HEADERS)[number];
 
-const createEmptyScoreRow = (): ScoreRowDraft => ({ scoreA: "", scoreB: "" });
+const EMPTY_SCORE_DRAFT: ScoreDraft = { scoreA: "", scoreB: "" };
 
 const toLocalDateTimeValue = (date = new Date()) => {
   const timezoneOffsetMs = date.getTimezoneOffset() * 60_000;
@@ -183,7 +182,7 @@ const createEmptyDraft = (): MatchDraft => ({
   courtName: "",
   matchStartsAt: toLocalDateTimeValue(),
   teams: createEmptyTeams("singles"),
-  scores: [createEmptyScoreRow()],
+  score: EMPTY_SCORE_DRAFT,
 });
 
 const normalizeOptionalText = (value: string) => {
@@ -593,17 +592,12 @@ const AdminMatchBatchForm: React.FC<AdminMatchBatchFormProps> = ({
 
   const handleScoreChange = (
     draftId: string,
-    scoreIndex: number,
-    field: keyof ScoreRowDraft,
+    field: keyof ScoreDraft,
     value: string,
   ) => {
     updateDraft(draftId, (draft) => ({
       ...draft,
-      scores: draft.scores.map((scoreRow, currentIndex) =>
-        currentIndex === scoreIndex
-          ? { ...scoreRow, [field]: value }
-          : scoreRow,
-      ),
+      score: { ...draft.score, [field]: value },
     }));
   };
 
@@ -667,34 +661,18 @@ const AdminMatchBatchForm: React.FC<AdminMatchBatchFormProps> = ({
           );
         }
 
-        if (draft.scores.length === 0) {
-          throw new Error(`${label}: 한 개 이상의 스코어를 입력해주세요.`);
+        const scoreA = Number(draft.score.scoreA);
+        const scoreB = Number(draft.score.scoreB);
+
+        if (
+          !Number.isInteger(scoreA) ||
+          !Number.isInteger(scoreB) ||
+          scoreA < 0 ||
+          scoreB < 0 ||
+          scoreA === scoreB
+        ) {
+          throw new Error(`${label}: 스코어를 확인해주세요.`);
         }
-
-        if (draft.scores.length > MATCH_RESULT_MAX_SCORE_COUNT) {
-          throw new Error(
-            `${label}: 스코어는 최대 ${MATCH_RESULT_MAX_SCORE_COUNT}개까지 입력할 수 있습니다.`,
-          );
-        }
-
-        const scores = draft.scores.map((scoreRow, scoreIndex) => {
-          const scoreA = Number(scoreRow.scoreA);
-          const scoreB = Number(scoreRow.scoreB);
-
-          if (
-            !Number.isInteger(scoreA) ||
-            !Number.isInteger(scoreB) ||
-            scoreA < 0 ||
-            scoreB < 0 ||
-            scoreA === scoreB
-          ) {
-            throw new Error(
-              `${label}: ${scoreIndex + 1}번째 스코어를 확인해주세요.`,
-            );
-          }
-
-          return { scoreA, scoreB };
-        });
 
         return {
           name: normalizeOptionalText(draft.name),
@@ -709,7 +687,7 @@ const AdminMatchBatchForm: React.FC<AdminMatchBatchFormProps> = ({
           location: draft.location.trim(),
           courtName: normalizeOptionalText(draft.courtName),
           matchStartsAt: matchStartsAtDate.toISOString(),
-          scores,
+          scores: [{ scoreA, scoreB }],
         };
       });
 
@@ -1133,96 +1111,31 @@ const AdminMatchBatchForm: React.FC<AdminMatchBatchFormProps> = ({
                 </div>
 
                 <div className="rounded-lg border border-slate-200 bg-white p-4">
-                  <div className="flex flex-wrap items-center justify-between gap-3">
-                    <div>
-                      <h4 className="font-semibold text-slate-700">스코어</h4>
-                      <p className="text-xs text-slate-500">
-                        최대 {MATCH_RESULT_MAX_SCORE_COUNT}개까지 입력할 수
-                        있습니다.
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      disabled={
-                        draft.scores.length >= MATCH_RESULT_MAX_SCORE_COUNT
+                  <h4 className="font-semibold text-slate-700">스코어</h4>
+                  <div className="mt-3 flex gap-2">
+                    <input
+                      type="number"
+                      min={0}
+                      inputMode="numeric"
+                      value={draft.score.scoreA}
+                      onChange={(event) =>
+                        handleScoreChange(draft.id, "scoreA", event.target.value)
                       }
-                      onClick={() =>
-                        updateDraft(draft.id, (currentDraft) => ({
-                          ...currentDraft,
-                          scores: [
-                            ...currentDraft.scores,
-                            createEmptyScoreRow(),
-                          ],
-                        }))
+                      className="w-full rounded-lg border px-4 py-2"
+                      placeholder="Team A"
+                    />
+                    <span className="self-center text-slate-400">:</span>
+                    <input
+                      type="number"
+                      min={0}
+                      inputMode="numeric"
+                      value={draft.score.scoreB}
+                      onChange={(event) =>
+                        handleScoreChange(draft.id, "scoreB", event.target.value)
                       }
-                      className="px-3 py-2 rounded-lg border border-slate-300 text-sm font-medium disabled:text-slate-300"
-                    >
-                      스코어 추가
-                    </button>
-                  </div>
-                  <div className="mt-3 space-y-3">
-                    {draft.scores.map((scoreRow, scoreIndex) => (
-                      <div
-                        key={`${draft.id}-score-${scoreIndex}`}
-                        className="flex gap-2"
-                      >
-                        <span className="w-12 self-center text-sm font-medium text-slate-500">
-                          G{scoreIndex + 1}
-                        </span>
-                        <input
-                          type="number"
-                          min={0}
-                          inputMode="numeric"
-                          value={scoreRow.scoreA}
-                          onChange={(event) =>
-                            handleScoreChange(
-                              draft.id,
-                              scoreIndex,
-                              "scoreA",
-                              event.target.value,
-                            )
-                          }
-                          className="w-full rounded-lg border px-4 py-2"
-                          placeholder="Team A"
-                        />
-                        <span className="self-center text-slate-400">:</span>
-                        <input
-                          type="number"
-                          min={0}
-                          inputMode="numeric"
-                          value={scoreRow.scoreB}
-                          onChange={(event) =>
-                            handleScoreChange(
-                              draft.id,
-                              scoreIndex,
-                              "scoreB",
-                              event.target.value,
-                            )
-                          }
-                          className="w-full rounded-lg border px-4 py-2"
-                          placeholder="Team B"
-                        />
-                        <button
-                          type="button"
-                          disabled={draft.scores.length === 1}
-                          onClick={() =>
-                            updateDraft(draft.id, (currentDraft) => ({
-                              ...currentDraft,
-                              scores:
-                                currentDraft.scores.length === 1
-                                  ? currentDraft.scores
-                                  : currentDraft.scores.filter(
-                                      (_, currentScoreIndex) =>
-                                        currentScoreIndex !== scoreIndex,
-                                    ),
-                            }))
-                          }
-                          className="px-3 py-2 text-sm font-medium text-red-500 disabled:text-slate-300"
-                        >
-                          삭제
-                        </button>
-                      </div>
-                    ))}
+                      className="w-full rounded-lg border px-4 py-2"
+                      placeholder="Team B"
+                    />
                   </div>
                 </div>
               </div>

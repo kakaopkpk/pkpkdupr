@@ -28,7 +28,6 @@ const adminSession: AuthenticatedSession = {
 const buildMatch = (id: string): Match => ({
   id,
   type: "singles",
-  mode: "single-game",
   source: "admin_created",
   creatorPlayerId: admin.id,
   status: "created",

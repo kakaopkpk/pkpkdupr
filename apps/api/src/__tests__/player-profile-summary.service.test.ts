@@ -21,7 +21,6 @@ const opponent = makePlayer("Popponen");
 const makeMatch = (overrides: Partial<Match>): Match => ({
   id: "Mmatch01",
   type: "unrestricted-singles",
-  mode: "single-game",
   source: "player_created",
   creatorPlayerId: me.id,
   status: "completed",
