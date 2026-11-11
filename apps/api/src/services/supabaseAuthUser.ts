@@ -52,9 +52,9 @@ const readJwksFromEnv = (): { keys: JWK[] } | undefined => {
  * Supabase Auth access token을 확인한다.
  * - 비대칭 서명(ES256/RS256) 토큰은 `auth.getClaims`가 프로젝트 공개키로 서명·`exp`를 직접 검증한다.
  *   키는 `SUPABASE_JWKS`에서 먼저 찾고, 없으면 `<SUPABASE_URL>/auth/v1/.well-known/jwks.json`을 받아
- *   클라이언트 인스턴스에 캐시한다.
+ *   auth-js가 프로세스 전역 캐시(storageKey별)에 약 10분간 보관한다.
  * - 대칭 서명(HS256) 토큰과 어느 키 목록에도 없는 `kid`는 getClaims가 Auth 서버(`GET /auth/v1/user`)로 확인한다.
- * 로컬 서명 검증이라 로그아웃·세션 철회·Auth 사용자 삭제는 토큰이 만료될 때까지 반영되지 않는다.
+ * 로컬 서명 검증이라 로그아웃·세션 철회·Auth 사용자 삭제·정지(ban)는 토큰이 만료될 때까지 반영되지 않는다.
  * `iss`·`aud`는 검사하지 않는다(로컬 함수 런타임의 SUPABASE_URL이 토큰 iss와 달라 오탐이 난다).
  * Edge Function에는 SUPABASE_URL·SUPABASE_ANON_KEY·SUPABASE_JWKS가 자동 주입되고, 로컬 Node api는 `pnpm dev`가
  * SUPABASE_URL·SUPABASE_ANON_KEY를 넣는다.
@@ -84,6 +84,7 @@ export class SupabaseAuthUserVerifier {
 
   /**
    * 토큰이 무효·만료됐거나 서명이 맞지 않거나, 사용자가 없거나 정지된 계정일 때만 null을 돌려준다.
+   * 사용자 존재·정지 여부는 Auth 서버로 폴백한 토큰만 판정하며, 로컬 서명 검증 경로에서는 확인하지 않는다.
    * Auth 서버 응답은 에러 코드로 판정하며, code를 받지 못한 401만 예외로 인증 거부로 본다.
    * JWKS·Auth 서버 조회 실패, rate limit(429)·타임아웃(408) 등 토큰 유효성을 판단하지 못한 경우와
    * 알 수 없는 오류는 모두 throw한다.
