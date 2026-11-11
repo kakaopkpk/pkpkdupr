@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
   computeMatchStartsAt,
-  getAutoApprovalDueAt,
   getMatchSessionStatus,
+  isWithinMatchEditWindow,
+  MATCH_EDIT_WINDOW_MS,
 } from "../match";
 
 describe("getMatchSessionStatus", () => {
@@ -11,7 +12,6 @@ describe("getMatchSessionStatus", () => {
       "completed",
     );
     expect(getMatchSessionStatus(["completed", "created"])).toBe("created");
-    expect(getMatchSessionStatus(["pending-approval"])).toBe("created");
     expect(getMatchSessionStatus(["cancelled"])).toBe("created");
   });
 });
@@ -72,45 +72,30 @@ describe("computeMatchStartsAt", () => {
   });
 });
 
-describe("getAutoApprovalDueAt", () => {
+describe("isWithinMatchEditWindow", () => {
   const startsAt = new Date("2026-07-31T10:00:00.000Z");
 
-  it("경기 시작 전 또는 시작 후 1시간 이내 입력은 2시간을 적용한다", () => {
+  it("경기 시작 전이면 true를 반환한다", () => {
     expect(
-      getAutoApprovalDueAt(
-        startsAt,
-        new Date("2026-07-31T09:50:00.000Z"),
-      ),
-    ).toEqual(new Date("2026-07-31T11:50:00.000Z"));
-    expect(
-      getAutoApprovalDueAt(
-        startsAt,
-        new Date("2026-07-31T11:00:00.000Z"),
-      ),
-    ).toEqual(new Date("2026-07-31T13:00:00.000Z"));
+      isWithinMatchEditWindow(startsAt, new Date("2026-07-31T09:00:00.000Z")),
+    ).toBe(true);
   });
 
-  it("시작 후 1시간 초과~4시간 이내 입력은 8시간을 적용한다", () => {
+  it("시작 후 정확히 24시간이면 true를 반환한다", () => {
     expect(
-      getAutoApprovalDueAt(
+      isWithinMatchEditWindow(
         startsAt,
-        new Date("2026-07-31T11:00:00.001Z"),
+        new Date(startsAt.getTime() + MATCH_EDIT_WINDOW_MS),
       ),
-    ).toEqual(new Date("2026-07-31T19:00:00.001Z"));
-    expect(
-      getAutoApprovalDueAt(
-        startsAt,
-        new Date("2026-07-31T14:00:00.000Z"),
-      ),
-    ).toEqual(new Date("2026-07-31T22:00:00.000Z"));
+    ).toBe(true);
   });
 
-  it("시작 후 4시간 초과 입력은 24시간을 적용한다", () => {
+  it("시작 후 24시간 + 1ms이면 false를 반환한다", () => {
     expect(
-      getAutoApprovalDueAt(
+      isWithinMatchEditWindow(
         startsAt,
-        new Date("2026-07-31T14:00:00.001Z"),
+        new Date(startsAt.getTime() + MATCH_EDIT_WINDOW_MS + 1),
       ),
-    ).toEqual(new Date("2026-08-01T14:00:00.001Z"));
+    ).toBe(false);
   });
 });
