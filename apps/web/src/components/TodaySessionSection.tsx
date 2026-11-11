@@ -233,6 +233,16 @@ const TodaySessionSection: React.FC<TodaySessionSectionProps> = ({
     });
   };
 
+  /** 생성 전 정기 세션은 먼저 만들고 추천 화면을 연다 */
+  const openRegularPlaceholderRecommendation = () => {
+    if (!onOpenRecommendation) return;
+
+    void runAction(REGULAR_PLACEHOLDER_KEY, async () => {
+      const session = await openTodayRegularSession();
+      onOpenRecommendation(session);
+    });
+  };
+
   const createButton = (
     <Button
       size="sm"
@@ -276,6 +286,11 @@ const TodaySessionSection: React.FC<TodaySessionSectionProps> = ({
             isPending={pendingKey === REGULAR_PLACEHOLDER_KEY}
             isActionDisabled={isActionDisabled}
             onToggleJoin={joinRegularPlaceholder}
+            onOpenRecommendation={
+              onOpenRecommendation
+                ? openRegularPlaceholderRecommendation
+                : undefined
+            }
           />
         ) : null}
         {sessions.map((session) => (

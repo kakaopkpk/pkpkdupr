@@ -10,6 +10,7 @@ import LoadMoreButton from "@/components/LoadMoreButton";
 import RightDrawer from "@/components/RightDrawer";
 import SessionCard, { type SessionCardSession } from "@/components/SessionCard";
 import SessionDetail from "@/components/SessionDetail";
+import SessionRecommendation from "@/components/SessionRecommendation";
 import SkeletonBlock from "@/components/SkeletonBlock";
 import TabPanelHeader from "@/components/TabPanelHeader";
 import TabPanelStatus from "@/components/TabPanelStatus";
@@ -195,6 +196,10 @@ const Matches: React.FC<MatchesProps> = ({ reloadKey = 0 }) => {
   >([]);
   const [isLoadingSession, setIsLoadingSession] = useState(false);
   const [sessionError, setSessionError] = useState<string | null>(null);
+  const [recommendationSession, setRecommendationSession] =
+    useState<MatchSessionDetailInfo | null>(null);
+  // 같은 세션을 다시 열어도 새 seed로 시작하도록 추천 화면을 리마운트한다
+  const [recommendationKey, setRecommendationKey] = useState(0);
   const [selectedMatchId, setSelectedMatchId] = useState<string | null>(null);
   const [selectedMatch, setSelectedMatch] = useState<MatchInfo | null>(null);
   const [isLoadingSelectedMatch, setIsLoadingSelectedMatch] = useState(false);
@@ -700,6 +705,35 @@ const Matches: React.FC<MatchesProps> = ({ reloadKey = 0 }) => {
     ],
   );
 
+  const openRecommendation = useCallback(
+    (session: MatchSessionDetailInfo) => {
+      saveScrollPosition("match");
+      pushDepth("match", {
+        id: `session-recommendation:${session.id}`,
+        kind: "session-recommendation",
+        onClose: noop,
+      });
+      setRecommendationSession(session);
+      setRecommendationKey((key) => key + 1);
+      window.requestAnimationFrame(() => scrollToTop("auto"));
+    },
+    [pushDepth, saveScrollPosition, scrollToTop],
+  );
+
+  const completeRecommendationClose = useCallback(() => {
+    setRecommendationSession(null);
+    restoreScrollTop("match");
+  }, [restoreScrollTop]);
+
+  /** 추천 화면에서 경기를 시작한 뒤 피드·오늘 세션·열린 세션 상세를 다시 읽는다 */
+  const handleRecommendedMatchStarted = useCallback(async () => {
+    await Promise.all([
+      loadFeed(0, false, true),
+      loadTodaySessions(),
+      selectedSession ? loadSession(selectedSession.id, true) : null,
+    ]);
+  }, [loadFeed, loadSession, loadTodaySessions, selectedSession]);
+
   const handleSessionCreated = useCallback(
     (session: MatchSessionDetailInfo) => {
       void loadTodaySessions();
@@ -715,6 +749,12 @@ const Matches: React.FC<MatchesProps> = ({ reloadKey = 0 }) => {
   const matchDepthId = selectedMatchId
     ? `match-detail:${selectedMatchId}`
     : null;
+  const recommendationDepthId = recommendationSession
+    ? `session-recommendation:${recommendationSession.id}`
+    : null;
+  const isRecommendationDrawerOpen =
+    !!recommendationDepthId &&
+    depthStacks.match.includes(recommendationDepthId);
   const isSessionDrawerOpen =
     !!sessionDepthId && depthStacks.match.includes(sessionDepthId);
   const isMatchDrawerOpen =
@@ -726,6 +766,14 @@ const Matches: React.FC<MatchesProps> = ({ reloadKey = 0 }) => {
       registerScrollContainer("match", sessionDepthId, element);
     },
     [registerScrollContainer, sessionDepthId],
+  );
+
+  const registerRecommendationScrollContainer = useCallback(
+    (element: HTMLDivElement | null) => {
+      if (!recommendationDepthId) return;
+      registerScrollContainer("match", recommendationDepthId, element);
+    },
+    [recommendationDepthId, registerScrollContainer],
   );
 
   const registerMatchScrollContainer = useCallback(
@@ -788,6 +836,7 @@ const Matches: React.FC<MatchesProps> = ({ reloadKey = 0 }) => {
         onPressMatch={openMatchDetail}
         onParticipantsChanged={handleSessionParticipantsChanged}
         onMatchRecorded={handleMatchRecorded}
+        onOpenRecommendation={openRecommendation}
       />
     ) : null;
 
@@ -830,6 +879,7 @@ const Matches: React.FC<MatchesProps> = ({ reloadKey = 0 }) => {
             onChanged={loadTodaySessions}
             onOpenSession={openSessionDetail}
             onSessionCreated={handleSessionCreated}
+            onOpenRecommendation={openRecommendation}
           />
           {notice ? (
             <p className="rounded-2xl bg-amber-50 px-3 py-2 text-xs font-semibold text-pkpk-sub-font">
@@ -895,6 +945,24 @@ const Matches: React.FC<MatchesProps> = ({ reloadKey = 0 }) => {
           onPullToRefresh={() => loadSession(selectedSession.id, true, true)}
         >
           {sessionDrawerContent}
+        </RightDrawer>
+      ) : null}
+      {recommendationSession && recommendationDepthId ? (
+        <RightDrawer
+          isOpen={isRecommendationDrawerOpen}
+          isActive={selectedTab === "match"}
+          ariaLabel="추천 매칭"
+          onExited={completeRecommendationClose}
+          onScrollContainerChange={registerRecommendationScrollContainer}
+          layer={55}
+        >
+          <SessionRecommendation
+            key={recommendationKey}
+            session={recommendationSession}
+            currentPlayerId={player?.id}
+            isOnline={isOnline}
+            onMatchStarted={handleRecommendedMatchStarted}
+          />
         </RightDrawer>
       ) : null}
       {selectedMatchId && matchDepthId ? (
