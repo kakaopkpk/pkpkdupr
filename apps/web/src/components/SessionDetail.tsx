@@ -465,11 +465,15 @@ const SessionDetail: React.FC<SessionDetailProps> = ({
             }
             ariaLabel="Record match"
             layer={SESSION_SHEET_LAYER}
+            isFixedHeight
           >
             <RecordMatchDrawerBody
               key={sheetKey}
               isOnline={isOnline}
               sessionId={detail.id}
+              sessionParticipantIds={detail.participants.map(
+                (participant) => participant.id,
+              )}
               defaultLocation={detail.location}
               onCancel={closeRecordSheet}
               onRecorded={(recordedMatch) => onMatchRecorded?.(recordedMatch)}

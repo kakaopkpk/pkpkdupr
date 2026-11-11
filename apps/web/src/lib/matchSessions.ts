@@ -6,6 +6,7 @@ import type {
   StartSessionMatchRequest,
   TodayMatchSessionsResponse,
 } from "@pkpkdupr/shared/session";
+import { isRegularSessionTime } from "@pkpkdupr/shared/session";
 import { apiFetch } from "@/lib/api";
 
 /** JSON 응답 형태(날짜는 문자열) */
@@ -128,3 +129,30 @@ export const isSessionParticipant = (
 ) =>
   !!playerId &&
   session.participants.some((participant) => participant.id === playerId);
+
+/**
+ * 경기 기록 멤버 목록에서 먼저 보여 줄 오늘 세션 멤버 id(나 제외).
+ * 내가 참여한 오늘 세션만 본다. 정기 세션은 월·목 18~22시(KST) 동안만, 회원 세션은 그날 하루 적용한다.
+ */
+export const getPrioritySessionMemberIds = (
+  sessions: Pick<
+    MatchSessionDetailInfo,
+    "kind" | "isToday" | "participants"
+  >[],
+  playerId: string | undefined,
+  now: Date = new Date(),
+): Set<string> =>
+  new Set(
+    sessions
+      .filter(
+        (session) =>
+          session.isToday &&
+          isSessionParticipant(session, playerId) &&
+          (session.kind !== "regular" || isRegularSessionTime(now)),
+      )
+      .flatMap((session) =>
+        session.participants
+          .map((participant) => participant.id)
+          .filter((id) => id !== playerId),
+      ),
+  );

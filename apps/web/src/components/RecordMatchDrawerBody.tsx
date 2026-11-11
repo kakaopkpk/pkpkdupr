@@ -30,6 +30,10 @@ import MatchCard from "@/components/Match";
 import UserChip from "@/components/UserChip";
 import { useAuth } from "@/context/AuthContext";
 import { apiFetch } from "@/lib/api";
+import {
+  fetchTodayMatchSessions,
+  getPrioritySessionMemberIds,
+} from "@/lib/matchSessions";
 import { formatRating } from "@/utils/dupr";
 import BottomSheet from "./BottomSheet";
 import BottomSheetSection from "./BottomSheetSection";
@@ -57,6 +61,8 @@ export interface RecordMatchDrawerBodyProps {
   isOnline?: boolean;
   /** 새 기록을 이 세션 안의 경기로 저장한다(POST 바디 sessionId). 수정(PUT)에는 쓰지 않는다 */
   sessionId?: string;
+  /** 세션 화면에서 열 때 그 세션 참여자 id. 있으면 시간대와 상관없이 이 멤버를 목록 앞에 두고, 오늘 세션을 따로 조회하지 않는다 */
+  sessionParticipantIds?: string[];
   /** 새 기록의 장소 기본값. 없으면 DEFAULT_MATCH_LOCATION */
   defaultLocation?: string;
   /** 입력 화면의 "취소" */
@@ -277,6 +283,7 @@ const RecordMatchDrawerBody: React.FC<RecordMatchDrawerBodyProps> = ({
   editMatch,
   isOnline = true,
   sessionId,
+  sessionParticipantIds,
   defaultLocation = DEFAULT_MATCH_LOCATION,
   onCancel,
   onRecorded,
@@ -325,6 +332,11 @@ const RecordMatchDrawerBody: React.FC<RecordMatchDrawerBodyProps> = ({
 
   const [players, setPlayers] = useState<RecordablePlayer[]>([]);
   const [isPlayersError, setIsPlayersError] = useState(false);
+  const [todaySessionMemberIds, setTodaySessionMemberIds] = useState<
+    Set<string>
+  >(
+    () => new Set(),
+  );
   const [query, setQuery] = useState("");
 
   useEffect(() => {
@@ -355,6 +367,48 @@ const RecordMatchDrawerBody: React.FC<RecordMatchDrawerBodyProps> = ({
       isCancelled = true;
     };
   }, []);
+
+  const isEditing = !!editMatch;
+  const hasSessionParticipants = !!sessionParticipantIds;
+
+  // 세션 시간이면 내가 참여한 오늘 세션 멤버를 목록 앞에 둔다. 세션 화면에서 열었거나 기존 경기를 수정할 때는 조회하지 않는다
+  useEffect(() => {
+    if (isEditing || hasSessionParticipants) {
+      return undefined;
+    }
+
+    let isCancelled = false;
+
+    const loadTodaySessionMembers = async () => {
+      try {
+        const { sessions } = await fetchTodayMatchSessions();
+        if (!isCancelled) {
+          setTodaySessionMemberIds(
+            getPrioritySessionMemberIds(sessions, player?.id),
+          );
+        }
+      } catch {
+        // 우선 추천은 부가 기능이라 실패를 알리지 않고 최근 함께 친 순서로 둔다
+        if (!isCancelled) {
+          setTodaySessionMemberIds(new Set());
+        }
+      }
+    };
+
+    void loadTodaySessionMembers();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [hasSessionParticipants, isEditing, player?.id]);
+
+  const sessionMemberIds = useMemo(
+    () =>
+      sessionParticipantIds
+        ? new Set(sessionParticipantIds.filter((id) => id !== player?.id))
+        : todaySessionMemberIds,
+    [player?.id, sessionParticipantIds, todaySessionMemberIds],
+  );
 
   const applyMembers = useCallback((nextMembers: MatchMember[]) => {
     setMembers(nextMembers);
@@ -430,10 +484,12 @@ const RecordMatchDrawerBody: React.FC<RecordMatchDrawerBodyProps> = ({
       )
       .sort(
         (a, b) =>
+          Number(sessionMemberIds.has(b.id)) -
+            Number(sessionMemberIds.has(a.id)) ||
           getLastPlayedAtMs(b.lastPlayedAt) - getLastPlayedAtMs(a.lastPlayedAt),
       )
       .slice(0, RECENT_PLAYER_LIMIT);
-  }, [players, query]);
+  }, [players, query, sessionMemberIds]);
 
   const handlePickPlayer = (candidate: RecordablePlayer) => {
     const member = normalizeMatchMember(candidate);
@@ -628,6 +684,7 @@ const RecordMatchDrawerBody: React.FC<RecordMatchDrawerBodyProps> = ({
                   const isPicked = members.some(
                     (member) => member.id === candidate.id,
                   );
+                  const isSessionMember = sessionMemberIds.has(candidate.id);
                   const lastPlayedLabel = formatLastPlayed(
                     candidate.lastPlayedAt,
                   );
@@ -647,7 +704,11 @@ const RecordMatchDrawerBody: React.FC<RecordMatchDrawerBodyProps> = ({
                             : () => handlePickPlayer(candidate)
                         }
                         endAdornment={
-                          lastPlayedLabel ? (
+                          isSessionMember ? (
+                            <span className="text-[0.65rem] font-semibold text-emerald-600">
+                              세션
+                            </span>
+                          ) : lastPlayedLabel ? (
                             <span className="text-[0.65rem] font-medium text-pkpk-detail-font">
                               {lastPlayedLabel}
                             </span>
