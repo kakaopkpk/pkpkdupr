@@ -794,12 +794,11 @@ const RecordMatchDrawerBody: React.FC<RecordMatchDrawerBodyProps> = ({
             </div>
           </BottomSheetSection>
         )}
-
+      </BottomSheet.Body>
+      <BottomSheet.Footer className="flex flex-col gap-2">
         {saveError ? (
           <p className="bs-text-body text-error">{saveError}</p>
         ) : null}
-      </BottomSheet.Body>
-      <BottomSheet.Footer>
         <div className="grid w-full grid-cols-3 gap-2">
           <Button
             className="app-action-button w-full rounded-2xl bg-red-50 py-3 text-base font-semibold text-red-500"
