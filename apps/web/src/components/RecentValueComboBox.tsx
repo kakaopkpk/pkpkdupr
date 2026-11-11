@@ -11,6 +11,7 @@ interface RecentValueComboBoxProps {
   className?: string;
   inputClassName?: string;
   required?: boolean;
+  maxLength?: number;
   disabled?: boolean;
   onFocus?: () => void;
 }
@@ -24,6 +25,7 @@ const RecentValueComboBox: React.FC<RecentValueComboBoxProps> = ({
   className,
   inputClassName,
   required = false,
+  maxLength,
   disabled = false,
   onFocus,
 }) => {
@@ -73,6 +75,7 @@ const RecentValueComboBox: React.FC<RecentValueComboBoxProps> = ({
           id={id}
           placeholder={placeholder}
           required={required}
+          maxLength={maxLength}
           onFocus={() => {
             onFocus?.();
             openWithRecentValues();

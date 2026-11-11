@@ -330,18 +330,32 @@ export class MatchRepository {
     return await this.createBatch(matches, true);
   }
 
+  /**
+   * 세션을 만든다. `conflictOnDuplicate`면 `(name, date)` 유니크 위반을 DB 원문 대신
+   * 안내 메시지의 409로 바꾼다. `date`는 초 단위로 저장되므로 같은 이름이 같은 초에
+   * 들어오는 동시 제출이 대상이며, 같은 날 다른 시각의 같은 이름은 막지 않는다.
+   */
   async createSession(
     session: Omit<Session, "id"> & { id?: string },
+    options: { conflictOnDuplicate?: boolean } = {},
   ): Promise<Session> {
-    const created = await this.run(
-      () =>
-        db.matches.createSession({
-          ...session,
-          id: session.id ?? generateEntityId("session"),
-          date: new Date(session.date),
-        }),
-      400,
-    );
+    let created;
+    try {
+      created = await this.run(
+        () =>
+          db.matches.createSession({
+            ...session,
+            id: session.id ?? generateEntityId("session"),
+            date: new Date(session.date),
+          }),
+        400,
+      );
+    } catch (error) {
+      if (options.conflictOnDuplicate && isUniqueViolation(error)) {
+        throw new MatchRepositoryError("같은 이름의 세션이 이미 있습니다.", 409);
+      }
+      throw error;
+    }
     return hydrateStandaloneSession(created);
   }
 

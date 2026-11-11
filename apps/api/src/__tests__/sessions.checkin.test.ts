@@ -2,6 +2,11 @@ import type { Player } from "@pkpkdupr/shared/player";
 import type { ManagedMatchSession, Session } from "@pkpkdupr/shared/match";
 import request from "supertest";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  MATCH_SESSION_LOCATION_MAX_LENGTH,
+  MATCH_SESSION_NAME_MAX_LENGTH,
+} from "@pkpkdupr/shared/session";
+import { db } from "../db";
 import { app } from "../index";
 import { MatchRepository } from "../repositories/MatchRepository";
 import {
@@ -213,11 +218,10 @@ describe("public match sessions", () => {
       .send({ name: "  번개 ", location: " 탄천 " });
 
     expect(response.status).toBe(201);
-    expect(createSession).toHaveBeenCalledWith({
-      name: "번개",
-      date: thursdayMorning,
-      location: "탄천",
-    });
+    expect(createSession).toHaveBeenCalledWith(
+      { name: "번개", date: thursdayMorning, location: "탄천" },
+      { conflictOnDuplicate: true },
+    );
     expect(addParticipants).not.toHaveBeenCalled();
     expect(response.body).toMatchObject({
       id: "Scustom1",
@@ -241,6 +245,69 @@ describe("public match sessions", () => {
       expect(response.status).toBe(400);
     }
     expect(createSession).not.toHaveBeenCalled();
+  });
+
+  it("회원 세션 이름·장소가 상한을 넘으면 400, 상한 글자 수는 허용한다", async () => {
+    const createSession = vi
+      .spyOn(MatchRepository.prototype, "createSession")
+      .mockResolvedValue({
+        id: "Scustom1",
+        name: "번개",
+        date: thursdayMorning,
+        location: "탄천",
+      });
+    vi.spyOn(MatchRepository.prototype, "findSessionById").mockResolvedValue(
+      makeSession({ date: thursdayMorning }),
+    );
+    const tooLong = "가".repeat(MATCH_SESSION_NAME_MAX_LENGTH + 1);
+
+    const longName = await request(app)
+      .post("/api/match-sessions")
+      .set("Authorization", "Bearer token")
+      .send({ name: tooLong, location: "탄천" });
+    expect(longName.status).toBe(400);
+    expect(longName.body.error).toBe(
+      `세션 이름은 ${MATCH_SESSION_NAME_MAX_LENGTH}자 이하여야 합니다.`,
+    );
+
+    const longLocation = await request(app)
+      .post("/api/match-sessions")
+      .set("Authorization", "Bearer token")
+      .send({ name: "번개", location: tooLong });
+    expect(longLocation.status).toBe(400);
+    expect(longLocation.body.error).toBe(
+      `세션 장소는 ${MATCH_SESSION_LOCATION_MAX_LENGTH}자 이하여야 합니다.`,
+    );
+    expect(createSession).not.toHaveBeenCalled();
+
+    // 코드 포인트 단위로 세므로 이모지 30개는 통과한다.
+    const atLimit = await request(app)
+      .post("/api/match-sessions")
+      .set("Authorization", "Bearer token")
+      .send({
+        name: "🏓".repeat(MATCH_SESSION_NAME_MAX_LENGTH),
+        location: "가".repeat(MATCH_SESSION_LOCATION_MAX_LENGTH),
+      });
+    expect(atLimit.status).toBe(201);
+  });
+
+  it("같은 이름·같은 시각의 (name, date) 유니크 위반이면 DB 원문 대신 안내 메시지로 409", async () => {
+    vi.spyOn(db.matches, "createSession").mockRejectedValue(
+      Object.assign(
+        new Error(
+          'duplicate key value violates unique constraint "match_sessions_name_date_unique"',
+        ),
+        { code: "23505", constraint_name: "match_sessions_name_date_unique" },
+      ),
+    );
+
+    const response = await request(app)
+      .post("/api/match-sessions")
+      .set("Authorization", "Bearer token")
+      .send({ name: "번개", location: "탄천" });
+
+    expect(response.status).toBe(409);
+    expect(response.body).toEqual({ error: "같은 이름의 세션이 이미 있습니다." });
   });
 
   it("세션 상세는 지난 세션도 조회하고, 없으면 404·형식 오류면 400", async () => {
