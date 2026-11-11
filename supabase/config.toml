@@ -402,7 +402,7 @@ deno_version = 2
 # secret_key = "env(SECRET_VALUE)"
 
 # apps/api의 Express app을 서비스하는 함수. 인증은 api가 Supabase Auth access token을 직접 확인하므로
-# (Authorization 헤더 없는 공개 경로·cron 경로도 있어) 게이트웨이 JWT 검증을 끈다.
+# (Authorization 헤더 없는 공개 경로도 있어) 게이트웨이 JWT 검증을 끈다.
 [functions.api]
 enabled = true
 verify_jwt = false

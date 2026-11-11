@@ -160,16 +160,10 @@ export const matches = pgTable("matches", {
   completedAt: unixTimestamp("completed_at"),
   resultSubmittedByPlayerId: id("result_submitted_by_player_id"),
   resultSubmittedAt: unixTimestamp("result_submitted_at"),
-  autoApprovalDueAt: unixTimestamp("auto_approval_due_at"),
-  autoApprovedAt: unixTimestamp("auto_approved_at"),
-  autoApprovalRatingAppliedAt: unixTimestamp("auto_approval_rating_applied_at"),
   createdAt: unixTimestamp("created_at").notNull(),
   updatedAt: unixTimestamp("updated_at").notNull(),
 }, (table) => ({
   sessionIdIndex: index("matches_session_id_idx").on(table.sessionId),
-  statusAutoApprovalDueAtIndex: index(
-    "matches_status_auto_approval_due_at_idx",
-  ).on(table.status, table.autoApprovalDueAt),
 }));
 
 export const matchSessions = pgTable(
@@ -227,17 +221,6 @@ export const matchParticipants = pgTable("match_participants", {
     table.playerId,
     table.matchId,
   ),
-}));
-
-export const matchResultApprovals = pgTable("match_result_approvals", {
-  id: id("id").primaryKey(),
-  matchId: id("match_id").notNull(),
-  playerId: id("player_id").notNull(),
-  approvedAt: unixTimestamp("approved_at").notNull(),
-}, (table) => ({
-  matchPlayerUnique: uniqueIndex(
-    "match_result_approvals_match_player_unique",
-  ).on(table.matchId, table.playerId),
 }));
 
 export const officialDuprAdjustmentLogs = pgTable(

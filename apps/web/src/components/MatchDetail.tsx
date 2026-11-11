@@ -1,30 +1,17 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
-import {
-  AlertDialog,
-  Button,
-  Card,
-  Separator,
-  TooltipArrow,
-  TooltipContent,
-  TooltipRoot,
-  TooltipTrigger,
-} from "@heroui/react";
-import { IoInformationCircleOutline } from "react-icons/io5";
-import type { MatchScore } from "@pkpkdupr/shared/match";
+import React, { useEffect, useMemo, useState } from "react";
+import { Button, Card, Separator } from "@heroui/react";
 import {
   getMatchTopLevelType,
-  MATCH_RESULT_MAX_SCORE_COUNT,
-  validateMatchScoresForMode,
+  isWithinMatchEditWindow,
 } from "@pkpkdupr/shared/match";
 import type { PlayerRatingChangeLog } from "@pkpkdupr/shared/player";
 import BottomSheet from "@/components/BottomSheet";
 import Match, { type MatchInfo } from "@/components/Match";
 import CopyableId from "@/components/CopyableId";
 import DetailPageHeader from "@/components/DetailPageHeader";
-import HoldToConfirmButton from "@/components/HoldToConfirmButton";
 import RatingDeltaChip from "@/components/RatingDeltaChip";
+import RecordMatchDrawerBody from "@/components/RecordMatchDrawerBody";
 import SkeletonBlock from "@/components/SkeletonBlock";
-import UserChip from "@/components/UserChip";
 import { type TabKey, useTabNavigation } from "@/context/TabNavigationContext";
 import { useMinimumLoading } from "@/hooks/useMinimumLoading";
 import { formatRating } from "@/utils/dupr";
@@ -33,84 +20,14 @@ interface MatchDetailProps {
   match: MatchInfo;
   tabKey?: TabKey;
   currentPlayerId?: string;
-  onSubmitResult?: (matchId: string, scores: MatchScore[]) => Promise<void>;
-  onApproveResult?: (matchId: string) => Promise<void>;
-  onCancelApproval?: (matchId: string) => Promise<void>;
-  onRejectResult?: (matchId: string) => Promise<void>;
-  onAutoApprovalDue?: () => void;
+  /** 기록 시트에서 저장할 때마다 호출한다. "한 판 더"로 만든 다른 경기도 넘어온다 */
+  onMatchRecorded?: (match: MatchInfo) => void;
   isOnline?: boolean;
-  isSubmittingResult?: boolean;
-  isApprovingResult?: boolean;
-  isCancellingApproval?: boolean;
-  isRejectingResult?: boolean;
   isLoading?: boolean;
 }
 
 const subTextClassName = "text-pkpk-sub-font";
-
-const formatDateTime = (value: string) =>
-  new Intl.DateTimeFormat("ko-KR", {
-    year: "numeric",
-    month: "numeric",
-    day: "numeric",
-    weekday: "short",
-    hour: "numeric",
-    minute: "2-digit",
-  }).format(new Date(value));
-
-const createEmptyScoreRow = () => ({ scoreA: "", scoreB: "" });
 const SCORE_TABLE_SET_COUNT = 3;
-const resultTeamChipWidthClass = "w-[clamp(6.6rem,35.2cqw,11rem)]";
-
-type ScoreRow = ReturnType<typeof createEmptyScoreRow>;
-
-const createScoreRows = (
-  mode: MatchInfo["mode"],
-  scores?: MatchScore[],
-): ScoreRow[] => {
-  if (mode === "best-of-3") {
-    return Array.from({ length: MATCH_RESULT_MAX_SCORE_COUNT }, (_, index) => {
-      const score = scores?.[index];
-      return score
-        ? { scoreA: String(score.scoreA), scoreB: String(score.scoreB) }
-        : createEmptyScoreRow();
-    });
-  }
-
-  return scores?.length
-    ? scores.map((score) => ({
-        scoreA: String(score.scoreA),
-        scoreB: String(score.scoreB),
-      }))
-    : [createEmptyScoreRow()];
-};
-
-const getScoreRowWinner = (row: ScoreRow): 0 | 1 | null => {
-  const scoreA = Number(row.scoreA);
-  const scoreB = Number(row.scoreB);
-
-  if (
-    row.scoreA.trim() === "" ||
-    row.scoreB.trim() === "" ||
-    !Number.isInteger(scoreA) ||
-    !Number.isInteger(scoreB) ||
-    scoreA < 0 ||
-    scoreB < 0 ||
-    scoreA === scoreB
-  ) {
-    return null;
-  }
-
-  return scoreA > scoreB ? 0 : 1;
-};
-
-const formatAutoApprovalRemaining = (remainingMs: number) => {
-  const totalSeconds = Math.max(0, Math.ceil(remainingMs / 1000));
-  const hours = Math.floor(totalSeconds / 3600);
-  const minutes = Math.floor((totalSeconds % 3600) / 60);
-  const seconds = totalSeconds % 60;
-  return `${hours}시간 ${minutes}분 ${seconds}초`;
-};
 
 export const MatchDetailSkeleton: React.FC = () => (
   <div
@@ -178,25 +95,6 @@ export const MatchDetailSkeleton: React.FC = () => (
           </Card>
         </section>
 
-        <section>
-          <div className="flex items-center justify-between gap-3">
-            <p
-              className="px-1 text-[clamp(1.1rem,5cqw,1.45rem)] font-semibold uppercase tracking-wide text-pkpk-sub-title"
-            >
-              Approval
-            </p>
-          </div>
-          <Card className="mt-3 rounded-xl border border-pkpk-sub-bg/30 bg-white/95 p-3">
-            <div className="flex flex-col gap-3">
-              {Array.from({ length: 4 }, (_, index) => (
-                <div key={index} className="flex items-center justify-between gap-3">
-                  <SkeletonBlock className="h-4 w-24" />
-                  <SkeletonBlock className="h-3 w-20" />
-                </div>
-              ))}
-            </div>
-          </Card>
-        </section>
       </div>
     </div>
   </div>
@@ -247,25 +145,6 @@ const MatchDetailSectionsSkeleton: React.FC = () => (
       </Card>
     </section>
 
-    <section>
-      <div className="flex items-center justify-between gap-3">
-        <p
-          className="px-1 text-[clamp(1.1rem,5cqw,1.45rem)] font-semibold uppercase tracking-wide text-pkpk-sub-title"
-        >
-          Approval
-        </p>
-      </div>
-      <Card className="mt-1.5 rounded-xl border border-pkpk-sub-bg/30 bg-white/95 p-3">
-        <div className="flex flex-col gap-3">
-          {Array.from({ length: 4 }, (_, index) => (
-            <div key={index} className="flex items-center justify-between gap-3">
-              <SkeletonBlock className="h-4 w-24" />
-              <SkeletonBlock className="h-3 w-20" />
-            </div>
-          ))}
-        </div>
-      </Card>
-    </section>
   </div>
 );
 
@@ -273,108 +152,29 @@ const MatchDetail: React.FC<MatchDetailProps> = ({
   match,
   tabKey = "match",
   currentPlayerId,
-  onSubmitResult,
-  onApproveResult,
-  onCancelApproval,
-  onRejectResult,
-  onAutoApprovalDue,
+  onMatchRecorded,
   isOnline = true,
-  isSubmittingResult = false,
-  isApprovingResult = false,
-  isCancellingApproval = false,
-  isRejectingResult = false,
   isLoading = false,
 }) => {
-  const [scoreRows, setScoreRows] = useState(() =>
-    createScoreRows(match.mode, match.scores),
-  );
-  const [resultError, setResultError] = useState<string | null>(null);
   const isSectionsLoading = useMinimumLoading(isLoading);
   const [isResultSheetOpen, setIsResultSheetOpen] = useState(false);
-  const [isRejectConfirmationOpen, setIsRejectConfirmationOpen] =
-    useState(false);
-  const [isAutoApprovalTooltipOpen, setIsAutoApprovalTooltipOpen] =
-    useState(false);
-  const [nowMs, setNowMs] = useState(() => Date.now());
-  const lastAutoApprovalRefreshAtRef = useRef(0);
+  // 시트를 열 때마다 RecordMatchDrawerBody를 리마운트해 최신 경기 값으로 채운다
+  const [resultSheetKey, setResultSheetKey] = useState(0);
   const { closeDepth, pushDepth, selectedTab } = useTabNavigation();
-  const isMyMatch = match.teams.some((team) =>
-    team.players.some((teamPlayer) => teamPlayer.id === currentPlayerId),
-  );
-  const isPendingApprovalMatch = match.status === "pending-approval";
-  const autoApprovalDueAtMs = match.autoApprovalDueAt
-    ? new Date(match.autoApprovalDueAt).getTime()
-    : Number.NaN;
-  const hasAutoApprovalTimer =
-    isPendingApprovalMatch && Number.isFinite(autoApprovalDueAtMs);
-  const autoApprovalRemainingMs = hasAutoApprovalTimer
-    ? Math.max(0, autoApprovalDueAtMs - nowMs)
-    : 0;
-  const isCreator = match.creatorPlayerId === currentPlayerId;
+  const isParticipant =
+    !!currentPlayerId &&
+    match.teams.some((team) =>
+      team.players.some((player) => player.id === currentPlayerId),
+    );
   const hasResultScores = !!match.scores?.length;
-  const canSubmitResult =
-    (match.status === "created" || match.status === "pending-approval") &&
-    !match.session &&
-    isCreator &&
+  // 기한이 지나는 순간을 따로 감시하지 않는다. 열어 둔 채 지나면 서버가 거절한다
+  const canEditRecord =
+    isParticipant &&
+    match.status !== "cancelled" &&
+    isWithinMatchEditWindow(new Date(match.matchStartsAt)) &&
     isOnline &&
-    !!onSubmitResult;
-  const approvalByPlayerId = useMemo(
-    () =>
-      new Map(match.approvals.map((approval) => [approval.playerId, approval])),
-    [match.approvals],
-  );
-  const hasApproved =
-    !!currentPlayerId && approvalByPlayerId.has(currentPlayerId);
-  const canApproveResult =
-    isPendingApprovalMatch &&
-    isMyMatch &&
-    !hasApproved &&
-    isOnline &&
-    !!onApproveResult;
-  const canCancelApproval =
-    isPendingApprovalMatch &&
-    isMyMatch &&
-    hasApproved &&
-    isOnline &&
-    !!onCancelApproval;
-  const canRejectResult =
-    isPendingApprovalMatch &&
-    isMyMatch &&
-    !hasApproved &&
-    isOnline &&
-    !!onRejectResult;
-  const resultActionLabel = hasResultScores ? "결과 수정" : "결과 입력";
+    !!onMatchRecorded;
   const resultSheetDepthId = `match-result-sheet:${match.id}`;
-  const isBestOfThree = match.mode === "best-of-3";
-  const firstTwoSetWinners = scoreRows.slice(0, 2).map(getScoreRowWinner);
-  const isThirdSetEnabled =
-    isBestOfThree &&
-    firstTwoSetWinners.length === 2 &&
-    firstTwoSetWinners[0] !== null &&
-    firstTwoSetWinners[1] !== null &&
-    firstTwoSetWinners[0] !== firstTwoSetWinners[1];
-  const submittedScoreRows =
-    isBestOfThree && !isThirdSetEnabled ? scoreRows.slice(0, 2) : scoreRows;
-  const isResultScoreValid = (() => {
-    const scores = submittedScoreRows.map((row) => ({
-      scoreA: Number(row.scoreA),
-      scoreB: Number(row.scoreB),
-    }));
-
-    if (
-      scores.length > MATCH_RESULT_MAX_SCORE_COUNT ||
-      submittedScoreRows.some((row) => getScoreRowWinner(row) === null)
-    ) {
-      return false;
-    }
-
-    try {
-      validateMatchScoresForMode(match.mode, scores);
-      return true;
-    } catch {
-      return false;
-    }
-  })();
   const totalPoints = useMemo(
     () =>
       (match.scores ?? []).reduce<[number, number]>(
@@ -403,56 +203,20 @@ const MatchDetail: React.FC<MatchDetailProps> = ({
   const hasRatingChanges =
     match.status === "completed" && (match.ratingChanges?.length ?? 0) > 0;
 
+  // 저장 후 같은 경기의 값만 바뀔 때는 완료 화면을 보여 주도록 시트를 유지한다
   useEffect(() => {
-    setScoreRows(createScoreRows(match.mode, match.scores));
-    setResultError(null);
     setIsResultSheetOpen(false);
-  }, [match.id, match.mode, match.scores]);
-
-  useEffect(() => {
-    if (!hasAutoApprovalTimer) return;
-
-    const updateNow = () => setNowMs(Date.now());
-    updateNow();
-    const interval = window.setInterval(updateNow, 1000);
-    return () => window.clearInterval(interval);
-  }, [hasAutoApprovalTimer, autoApprovalDueAtMs]);
-
-  useEffect(() => {
-    if (
-      !hasAutoApprovalTimer ||
-      nowMs < autoApprovalDueAtMs ||
-      !onAutoApprovalDue ||
-      nowMs - lastAutoApprovalRefreshAtRef.current < 60_000
-    ) {
-      return;
-    }
-
-    lastAutoApprovalRefreshAtRef.current = nowMs;
-    onAutoApprovalDue();
-  }, [autoApprovalDueAtMs, hasAutoApprovalTimer, nowMs, onAutoApprovalDue]);
-
-  const updateScoreRow = (
-    index: number,
-    field: keyof ReturnType<typeof createEmptyScoreRow>,
-    value: string,
-  ) => {
-    setScoreRows((rows) =>
-      rows.map((row, rowIndex) =>
-        rowIndex === index ? { ...row, [field]: value } : row,
-      ),
-    );
-  };
+  }, [match.id]);
 
   const openResultSheet = () => {
-    if (!canSubmitResult) return;
+    if (!canEditRecord) return;
 
     pushDepth(tabKey, {
       id: resultSheetDepthId,
       kind: "bottom-sheet",
       onClose: () => setIsResultSheetOpen(false),
     });
-    setResultError(null);
+    setResultSheetKey((key) => key + 1);
     setIsResultSheetOpen(true);
   };
 
@@ -469,86 +233,6 @@ const MatchDetail: React.FC<MatchDetailProps> = ({
     }
 
     closeResultSheet();
-  };
-
-  const handleSubmitResult = async () => {
-    if (!onSubmitResult) return;
-
-    try {
-      if (submittedScoreRows.length > MATCH_RESULT_MAX_SCORE_COUNT) {
-        throw new Error(
-          `스코어는 최대 ${MATCH_RESULT_MAX_SCORE_COUNT}개까지 입력할 수 있어요.`,
-        );
-      }
-
-      const scores = submittedScoreRows.map((row, index) => {
-        const scoreA = Number(row.scoreA);
-        const scoreB = Number(row.scoreB);
-
-        if (
-          row.scoreA.trim() === "" ||
-          row.scoreB.trim() === "" ||
-          !Number.isInteger(scoreA) ||
-          !Number.isInteger(scoreB) ||
-          scoreA < 0 ||
-          scoreB < 0 ||
-          scoreA === scoreB
-        ) {
-          throw new Error(`${index + 1}번째 스코어를 확인해주세요.`);
-        }
-
-        return { scoreA, scoreB };
-      });
-
-      validateMatchScoresForMode(match.mode, scores);
-      setResultError(null);
-      await onSubmitResult(match.id, scores);
-      closeResultSheet();
-    } catch (err) {
-      setResultError(
-        err instanceof Error ? err.message : "결과를 입력하지 못했어요.",
-      );
-    }
-  };
-
-  const handleApproveResult = async () => {
-    if (!onApproveResult) return;
-
-    try {
-      setResultError(null);
-      await onApproveResult(match.id);
-    } catch (err) {
-      setResultError(
-        err instanceof Error ? err.message : "결과를 승인하지 못했어요.",
-      );
-    }
-  };
-
-  const handleCancelApproval = async () => {
-    if (!onCancelApproval) return;
-
-    try {
-      setResultError(null);
-      await onCancelApproval(match.id);
-    } catch (err) {
-      setResultError(
-        err instanceof Error ? err.message : "합의를 취소하지 못했어요.",
-      );
-    }
-  };
-
-  const handleRejectResult = async () => {
-    if (!onRejectResult) return;
-
-    try {
-      setResultError(null);
-      await onRejectResult(match.id);
-      setIsRejectConfirmationOpen(false);
-    } catch (err) {
-      setResultError(
-        err instanceof Error ? err.message : "결과를 거부하지 못했어요.",
-      );
-    }
   };
 
   return (
@@ -667,7 +351,7 @@ const MatchDetail: React.FC<MatchDetailProps> = ({
                 </tbody>
               </table>
             </div>
-            {canSubmitResult ? (
+            {canEditRecord ? (
               <div className="mt-3 flex justify-end">
                 <Button
                   size="sm"
@@ -734,221 +418,11 @@ const MatchDetail: React.FC<MatchDetailProps> = ({
                 })()
               ) : (
                 <p className="text-sm text-pkpk-sub-font">
-                  결과 합의 후 평점 변경 내역이 표시돼요.
+                  결과를 기록하면 평점 변동이 표시돼요.
                 </p>
               )}
             </Card>
             </section>
-
-            <section>
-            <div className="flex items-center gap-1.5">
-              <p
-                className="px-1 text-[clamp(1rem,4.5cqw,1.25rem)] font-semibold tracking-wide text-pkpk-sub-title"
-              >
-                합의
-              </p>
-              {hasAutoApprovalTimer ? (
-                <div className="flex shrink-0 items-center gap-1 rounded-full bg-pkpk-secondary-bg/8 px-2 py-1 text-xs font-semibold tabular-nums text-pkpk-secondary-bg">
-                  <span>
-                    {autoApprovalRemainingMs > 0
-                      ? `자동 합의까지 ${formatAutoApprovalRemaining(autoApprovalRemainingMs)}`
-                      : "자동 합의 처리 중..."}
-                  </span>
-                  <TooltipRoot
-                    isOpen={isAutoApprovalTooltipOpen}
-                    onOpenChange={setIsAutoApprovalTooltipOpen}
-                    delay={0}
-                    closeDelay={0}
-                  >
-                    <TooltipTrigger
-                      aria-label="자동 합의 안내 보기"
-                      className="shrink-0 text-pkpk-secondary-bg/70 transition-colors hover:text-pkpk-secondary-bg"
-                      onClick={() =>
-                        setIsAutoApprovalTooltipOpen((isOpen) => !isOpen)
-                      }
-                    >
-                      <IoInformationCircleOutline className="size-4" />
-                    </TooltipTrigger>
-                    <TooltipContent
-                      placement="top"
-                      shouldFlip
-                      containerPadding={8}
-                      showArrow
-                      className="w-64 rounded-2xl bg-white p-3 text-left text-pkpk-main-font shadow-xl ring-1 ring-black/10"
-                      style={{ "--overlay": "#fff" } as React.CSSProperties}
-                    >
-                      <TooltipArrow />
-                      <p className="font-semibold">자동 합의 안내</p>
-                      <p className="mt-1 text-xs leading-5 text-pkpk-sub-font">
-                        거부 없이 합의 대기 상태가 유지되면 정해진 시간 뒤에
-                        결과와 평점이 자동 합의·확정됩니다.
-                      </p>
-                      <ul className="mt-2 space-y-1 text-xs leading-5 text-pkpk-sub-font">
-                        <li>
-                          경기 시작 전 또는 1시간 이내 입력: 2시간 이후 자동
-                          합의
-                        </li>
-                        <li>
-                          시작 후 1~4시간 이내 입력: 8시간 이후 자동 합의
-                        </li>
-                        <li>시작 후 4시간 초과 입력: 24시간 이후 자동 합의</li>
-                      </ul>
-                    </TooltipContent>
-                  </TooltipRoot>
-                </div>
-              ) : null}
-            </div>
-            <Card className="mt-1.5 rounded-xl border border-pkpk-sub-bg/30 bg-white/95 p-3">
-              {match.teams
-                .flatMap((team) => team.players)
-                .map((player, index, players) => {
-                  const approval = approvalByPlayerId.get(player.id);
-                  const isMatchCreator = player.id === match.creatorPlayerId;
-                  const isAdminResult = match.source === "admin_created_result";
-                  const approvalLabel = isAdminResult
-                    ? "관리자 자동 승인"
-                    : isMatchCreator
-                      ? hasResultScores
-                        ? "매치 생성자(자동 승인)"
-                        : "매치 생성자(결과 입력 대기)"
-                      : approval
-                        ? "승인 완료"
-                        : "승인 대기";
-
-                  return (
-                    <React.Fragment key={player.id}>
-                      <div className="flex items-center justify-between gap-3 py-0">
-                        <p
-                          className={`min-w-0 truncate text-sm ${
-                            player.id === currentPlayerId
-                              ? "font-bold text-pkpk-sub-font"
-                              : "font-medium text-pkpk-sub-font"
-                          }`}
-                        >
-                          {player.username}
-                        </p>
-                        <div className="min-w-0 text-right text-xs font-medium">
-                          {approval || isAdminResult ? (
-                            <>
-                              <p className="text-emerald-600">
-                                {approvalLabel}
-                              </p>
-                              {approval ? (
-                                <p className="mt-0.5 text-[#888]">
-                                  {formatDateTime(approval.approvedAt)}
-                                </p>
-                              ) : null}
-                            </>
-                          ) : (
-                            <p className="text-[#888]">{approvalLabel}</p>
-                          )}
-                        </div>
-                      </div>
-                      {index < players.length - 1 ? (
-                        <Separator className="-mx-3 w-[calc(100%+1.5rem)]" />
-                      ) : null}
-                    </React.Fragment>
-                  );
-                })}
-            </Card>
-            {canApproveResult || canCancelApproval || canRejectResult ? (
-              <div className="mt-3 flex justify-end gap-2">
-                {canCancelApproval ? (
-                  <Button
-                    size="sm"
-                    variant="secondary"
-                    className="rounded-2xl text-pkpk-sub-font"
-                    onPress={() => void handleCancelApproval()}
-                    isDisabled={isCancellingApproval}
-                  >
-                    합의 취소
-                  </Button>
-                ) : null}
-                {canRejectResult ? (
-                  <AlertDialog.Root
-                    isOpen={isRejectConfirmationOpen}
-                    onOpenChange={setIsRejectConfirmationOpen}
-                  >
-                    <AlertDialog.Trigger>
-                      <Button
-                        size="sm"
-                        variant="secondary"
-                        className="rounded-2xl text-red-600"
-                        isDisabled={isRejectingResult}
-                      >
-                        결과 거부
-                      </Button>
-                    </AlertDialog.Trigger>
-                    <AlertDialog.Backdrop
-                      variant="blur"
-                      isDismissable={!isRejectingResult}
-                      isKeyboardDismissDisabled={isRejectingResult}
-                    >
-                      <AlertDialog.Container placement="center" size="sm">
-                        <AlertDialog.Dialog>
-                          <AlertDialog.Header>
-                            <AlertDialog.Icon status="warning" />
-                            <AlertDialog.Heading>
-                              정말 거부하시겠습니까?
-                            </AlertDialog.Heading>
-                          </AlertDialog.Header>
-                          <AlertDialog.Body>
-                            <p>
-                              <strong>주의:</strong> 거부하면 입력된 스코어와
-                              모든 승인 내역이 삭제됩니다. 결과 입력 후 처음부터
-                              다시 합의해야 합니다.
-                            </p>
-                            <p className="mt-3 text-sm font-medium text-amber-700">
-                              별다른 이유 없이 결과를 거부하는 행위는 이용 제재
-                              대상이 될 수 있습니다.
-                            </p>
-                            {resultError ? (
-                              <p className="mt-3 text-sm font-medium text-red-600">
-                                {resultError}
-                              </p>
-                            ) : null}
-                          </AlertDialog.Body>
-                          <AlertDialog.Footer>
-                            <AlertDialog.CloseTrigger
-                              isDisabled={isRejectingResult}
-                            >
-                              취소
-                            </AlertDialog.CloseTrigger>
-                            <HoldToConfirmButton
-                              holdDurationMs={1000}
-                              ariaLabel="길게 눌러 결과 거부"
-                              onComplete={() => void handleRejectResult()}
-                              isDisabled={isRejectingResult}
-                              className="justify-center bg-red-600 font-semibold text-white hover:bg-red-700"
-                              progressClassName="bg-white/20"
-                            >
-                              {isRejectingResult
-                                ? "거부 처리 중..."
-                                : "길게 눌러 거부"}
-                            </HoldToConfirmButton>
-                          </AlertDialog.Footer>
-                        </AlertDialog.Dialog>
-                      </AlertDialog.Container>
-                    </AlertDialog.Backdrop>
-                  </AlertDialog.Root>
-                ) : null}
-                {canApproveResult ? (
-                  <Button
-                    size="sm"
-                    className="rounded-2xl bg-[#409eff] font-semibold text-white"
-                    onPress={() => void handleApproveResult()}
-                    isDisabled={isApprovingResult}
-                  >
-                    결과 승인
-                  </Button>
-                ) : null}
-              </div>
-            ) : null}
-            </section>
-
-            {!isResultSheetOpen && resultError ? (
-            <p className="text-xs font-medium text-red-500">{resultError}</p>
-            ) : null}
 
           </div>
         </div>
@@ -957,122 +431,17 @@ const MatchDetail: React.FC<MatchDetailProps> = ({
         isOpen={isResultSheetOpen}
         isActive={selectedTab === tabKey}
         onOpenChange={handleResultSheetOpenChange}
-        ariaLabel={hasResultScores ? "경기 결과 수정" : "경기 결과 입력"}
-        className="[container-type:inline-size]"
+        ariaLabel="Record match"
         layer={80}
       >
-        <BottomSheet.Header>
-          <h2 className="bs-text-head text-pkpk-main-font">
-            {hasResultScores ? "경기 결과 수정" : "경기 결과 입력"}
-          </h2>
-        </BottomSheet.Header>
-        <BottomSheet.Body>
-          <div className="flex flex-col">
-            <div className="grid grid-cols-[2.5rem_minmax(0,1fr)_1rem_minmax(0,1fr)] items-end gap-2">
-              <span aria-hidden="true" />
-              {match.teams.map((team, teamIndex) => (
-                <React.Fragment key={team.id}>
-                  {teamIndex === 1 ? <span aria-hidden="true" /> : null}
-                  <div className="flex min-w-0 flex-col items-center gap-1">
-                    <p className="w-full text-center bs-text-caption font-semibold text-pkpk-sub-font">
-                      {teamIndex === 0 ? "A팀" : "B팀"}
-                    </p>
-                    <div className="flex w-full flex-col items-center gap-1">
-                      {team.players.map((player) => (
-                        <UserChip
-                          key={player.id}
-                          player={player}
-                          isMe={player.id === currentPlayerId}
-                          size="match"
-                          chipWidthClass={resultTeamChipWidthClass}
-                          isMirrored={teamIndex === 1}
-                        />
-                      ))}
-                    </div>
-                  </div>
-                </React.Fragment>
-              ))}
-            </div>
-            <div className="mt-[1.2rem] flex flex-col gap-[0.84rem]">
-              {scoreRows.map((row, index) => {
-                const isThirdSet = isBestOfThree && index === 2;
-                const isSetDisabled = isThirdSet && !isThirdSetEnabled;
-
-                return (
-                  <div
-                    key={index}
-                    aria-disabled={isSetDisabled}
-                    className="grid grid-cols-[2.5rem_minmax(0,1fr)_1rem_minmax(0,1fr)] items-center gap-2"
-                  >
-                    <span
-                      className={`text-xs font-semibold ${
-                        isSetDisabled
-                          ? "text-pkpk-detail-font"
-                          : "text-[#888]"
-                      }`}
-                    >
-                      Set {index + 1}
-                    </span>
-                    <input
-                      type="number"
-                      inputMode="numeric"
-                      min={0}
-                      value={row.scoreA}
-                      onChange={(event) =>
-                        updateScoreRow(index, "scoreA", event.target.value)
-                      }
-                      disabled={isSetDisabled}
-                      className="app-mobile-input min-w-0 w-full rounded-xl border border-border px-3 py-2 text-center text-base font-semibold text-pkpk-sub-font outline-none disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-pkpk-detail-font"
-                      placeholder="점수"
-                      aria-label={`G${index + 1} A팀 점수`}
-                    />
-                    <span
-                      className={`text-center text-sm font-semibold ${
-                        isSetDisabled
-                          ? "text-pkpk-detail-font"
-                          : "text-[#888]"
-                      }`}
-                    >
-                      :
-                    </span>
-                    <input
-                      type="number"
-                      inputMode="numeric"
-                      min={0}
-                      value={row.scoreB}
-                      onChange={(event) =>
-                        updateScoreRow(index, "scoreB", event.target.value)
-                      }
-                      disabled={isSetDisabled}
-                      className="app-mobile-input min-w-0 w-full rounded-xl border border-border px-3 py-2 text-center text-base font-semibold text-pkpk-sub-font outline-none disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-pkpk-detail-font"
-                      placeholder="점수"
-                      aria-label={`G${index + 1} B팀 점수`}
-                    />
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-          {resultError ? (
-            <p className="text-xs font-medium text-red-500">{resultError}</p>
-          ) : null}
-          <div className="mt-2 grid grid-cols-2 gap-2">
-            <Button
-              className="app-action-button w-full rounded-2xl bg-slate-100 font-semibold text-pkpk-sub-font"
-              onPress={closeResultSheet}
-              isDisabled={isSubmittingResult}
-            >
-              취소
-            </Button>
-            <Button
-              className="app-action-button w-full rounded-2xl bg-[#409eff] font-semibold text-white disabled:bg-slate-200 disabled:text-slate-400"
-              onPress={() => void handleSubmitResult()}
-              isDisabled={isSubmittingResult || !isResultScoreValid}
-            >
-              {isSubmittingResult ? "입력 중..." : resultActionLabel}
-            </Button>
-          </div>
-        </BottomSheet.Body>
+        <RecordMatchDrawerBody
+          key={resultSheetKey}
+          editMatch={match}
+          isOnline={isOnline}
+          onCancel={closeResultSheet}
+          onRecorded={(recordedMatch) => onMatchRecorded?.(recordedMatch)}
+          onDone={closeResultSheet}
+        />
       </BottomSheet>
     </div>
   );

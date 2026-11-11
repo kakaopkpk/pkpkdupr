@@ -28,12 +28,6 @@ import {
   setDuprRatingByCategory,
   toPublicPlayerDupr,
 } from "@pkpkdupr/shared/player";
-import type {
-  DevPlayerQrTokenListResponse,
-  PlayerQrPublicPlayer,
-  PlayerQrTokenResponse,
-  VerifyPlayerQrTokenResponse,
-} from "@pkpkdupr/shared/qr";
 import {
   isValidUsername,
   toInternalEmail,
@@ -52,13 +46,6 @@ import {
   SupabaseAuthAdmin,
 } from "./supabaseAuthAdmin";
 import {
-  createDevPlayerQrPayload,
-  createPlayerQrToken as createPlayerQrTokenPayload,
-  isDevPlayerQrPayload,
-  verifyDevPlayerQrPayload,
-  verifyPlayerQrPayload,
-} from "./playerQrToken";
-import {
   getDuprCategoryForMatchType,
   RatingService,
   type RatingServiceContract,
@@ -71,8 +58,6 @@ import {
   type CreateStoredPlayerInput,
 } from "@pkpkdupr/db";
 import { db } from "../db";
-
-const DEV_MOCK_DATA_ENABLED = process.env.ENABLE_DEV_MOCK_DATA === "true";
 
 /** 같은 내부 이메일의 Auth 사용자가 이미 있으면 409 AccountRequestError로 바꾸고, 그 밖의 오류는 그대로 둔다. */
 const toDuplicateAuthEmailError = (error: unknown) =>
@@ -366,17 +351,6 @@ const toAdminPlayer = (stored: StoredPlayerRecord): AdminPlayer => ({
   ...toPublicPlayer(stored),
   duprMetrics: stored.duprMetrics,
 });
-
-const toPlayerQrPublicPlayer = (player: Player): PlayerQrPublicPlayer => ({
-  id: player.id,
-  username: player.username,
-  gender: player.gender,
-  avatarUrl: player.avatarUrl,
-  duprRating: player.duprRating,
-});
-
-const isActiveDevPlayer = (player: Player) =>
-  player.status === "active" && player.username.startsWith("dev_");
 
 /** Postgres unique_violation(23505). 표현식 유니크 인덱스(lower(username)) 위반도 같은 코드다. */
 const isUniqueViolation = (error: unknown) => {
@@ -980,61 +954,6 @@ export class AuthService {
       return undefined;
     }
     return toPublicPlayer(stored);
-  }
-
-  async createPlayerQrToken(playerId: string): Promise<PlayerQrTokenResponse> {
-    const stored = await this.getStoredPlayerById(playerId);
-    if (!stored) {
-      throw new Error("사용자를 찾을 수 없습니다.");
-    }
-    if (stored.status !== "active") {
-      throw new Error("QR 코드를 생성할 수 없는 계정입니다.");
-    }
-
-    return createPlayerQrTokenPayload(stored.id);
-  }
-
-  async verifyPlayerQrToken(
-    payload: string,
-  ): Promise<VerifyPlayerQrTokenResponse> {
-    const playerId =
-      DEV_MOCK_DATA_ENABLED && isDevPlayerQrPayload(payload)
-        ? verifyDevPlayerQrPayload(payload)
-        : verifyPlayerQrPayload(payload);
-    const stored = await this.getStoredPlayerById(playerId);
-    if (!stored) {
-      throw new Error("사용자를 찾을 수 없습니다.");
-    }
-    if (
-      stored.status !== "active" ||
-      (isDevPlayerQrPayload(payload) && !isActiveDevPlayer(stored))
-    ) {
-      throw new Error("유효하지 않은 플레이어 QR 코드입니다.");
-    }
-
-    return { player: toPlayerQrPublicPlayer(stored) };
-  }
-
-  async getDevPlayerQrTokens(): Promise<DevPlayerQrTokenListResponse> {
-    if (!DEV_MOCK_DATA_ENABLED) {
-      throw new Error("Dev mock data mode is not enabled.");
-    }
-
-    const players = (await this.getAllPlayers())
-      .filter(isActiveDevPlayer)
-      .sort((a, b) => {
-        if (a.gender !== b.gender) {
-          return a.gender === "M" ? -1 : 1;
-        }
-        return a.username.localeCompare(b.username);
-      });
-
-    return {
-      players: players.map((player) => ({
-        player: toPlayerQrPublicPlayer(player),
-        payload: createDevPlayerQrPayload(player.id),
-      })),
-    };
   }
 
   async updatePlayerProfile(

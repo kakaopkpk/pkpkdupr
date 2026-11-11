@@ -1,68 +1,7 @@
 import request from "supertest";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import { app } from "../index";
 import { isEdgeRuntime, normalizeEdgeRequestUrl } from "../runtime";
-import { AutoApprovalService } from "../services/AutoApprovalService";
-
-const CRON_PATH = "/api/internal/cron/auto-approvals";
-
-describe("auto-approval cron endpoint", () => {
-  beforeEach(() => {
-    vi.stubEnv("CRON_SECRET", "cron-secret-value");
-  });
-
-  afterEach(() => {
-    vi.unstubAllEnvs();
-    vi.restoreAllMocks();
-  });
-
-  it("rejects requests without the cron secret header", async () => {
-    const processSpy = vi.spyOn(AutoApprovalService.prototype, "process");
-
-    const response = await request(app).post(CRON_PATH);
-
-    expect(response.status).toBe(401);
-    expect(processSpy).not.toHaveBeenCalled();
-  });
-
-  it("rejects requests with a wrong cron secret", async () => {
-    const processSpy = vi.spyOn(AutoApprovalService.prototype, "process");
-
-    const response = await request(app)
-      .post(CRON_PATH)
-      .set("x-cron-secret", "wrong");
-
-    expect(response.status).toBe(401);
-    expect(processSpy).not.toHaveBeenCalled();
-  });
-
-  it("rejects every request when CRON_SECRET is not configured", async () => {
-    vi.stubEnv("CRON_SECRET", "");
-    const processSpy = vi.spyOn(AutoApprovalService.prototype, "process");
-
-    const response = await request(app).post(CRON_PATH).set("x-cron-secret", "");
-
-    expect(response.status).toBe(401);
-    expect(processSpy).not.toHaveBeenCalled();
-  });
-
-  it("runs auto approvals with the matching cron secret", async () => {
-    const processSpy = vi
-      .spyOn(AutoApprovalService.prototype, "process")
-      .mockResolvedValue({ completedMatches: [], appliedRatingCount: 2 });
-
-    const response = await request(app)
-      .post(CRON_PATH)
-      .set("x-cron-secret", "cron-secret-value");
-
-    expect(response.status).toBe(200);
-    expect(response.body).toEqual({
-      completedMatchCount: 0,
-      appliedRatingCount: 2,
-    });
-    expect(processSpy).toHaveBeenCalledTimes(1);
-  });
-});
 
 describe("CORS preflight", () => {
   it("answers preflight from an allowed origin", async () => {

@@ -63,7 +63,7 @@ GitHub Actions secret 중에는 이전 운영자 개인 계정에 묶인 값이 
 | `SUPABASE_DB_URL` | Session pooler 접속 문자열에 새 비밀번호를 넣은 값입니다. 현재 프로젝트 기준으로는 `postgresql://postgres.uvybzkypmbllmpgzmvmr:<DB 비밀번호>@aws-0-ap-southeast-1.pooler.supabase.com:5432/postgres?sslmode=require`입니다. 호스트는 대시보드 **Connect** 화면에서 확인할 수 있습니다. | DB 비밀번호를 바꿨으면 예 |
 | `BACKUP_DEPLOY_KEY` | 백업을 켜 둔 경우에만 해당합니다. [docs/backup-restore.md](docs/backup-restore.md)대로 새로 만듭니다. 백업 복호화 키(age 개인키)도 새 운영자에게 안전하게 넘깁니다. | 백업 사용 시 |
 
-Supabase 함수 secret(`QR_TOTP_SECRET`, `CRON_SECRET`, `CORS_ALLOWED_ORIGINS`)과 Vault 값은 프로젝트에 저장되어 있습니다. 그래서 운영자가 바뀌어도 그대로 둡니다.
+Supabase 함수 secret(`CORS_ALLOWED_ORIGINS` 등)은 프로젝트에 저장되어 있습니다. 그래서 운영자가 바뀌어도 그대로 둡니다.
 
 API 함수는 DB에 접속할 때 Supabase가 자동으로 넣어 주는 접속 주소를 씁니다. 그래서 DB 비밀번호를 바꿔도 함수 쪽은 고칠 것이 없습니다. 다만 함수 secret `DATABASE_URL`을 따로 설정해 두었다면 사정이 다릅니다. 이때는 그 값에도 새 비밀번호를 넣어야 하고, 넣지 않으면 API가 DB에 접속하지 못합니다. 어느 경우든 아래 5의 로그인 확인으로 API의 DB 접속을 함께 점검합니다.
 
@@ -84,7 +84,7 @@ DELETE FROM player_admins
 WHERE player_id = (SELECT id FROM players WHERE lower(username) = lower('<이전 관리자 아이디>'));
 ```
 
-관리자가 한 명도 없는 상태에서 처음 만드는 방법은 [docs/deploy.md](docs/deploy.md)의 "6. 첫 관리자 등록"을 따릅니다.
+관리자가 한 명도 없는 상태에서 처음 만드는 방법은 [docs/deploy.md](docs/deploy.md)의 "5. 첫 관리자 등록"을 따릅니다.
 
 ### 5. 확인 후 이전 운영자 제거
 

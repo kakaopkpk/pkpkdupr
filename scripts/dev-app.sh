@@ -33,7 +33,5 @@ export SUPABASE_SERVICE_ROLE_KEY="$(read_local_supabase_env SERVICE_ROLE_KEY)"
 # web·admin-web(Vite)도 같은 로컬 Supabase Auth로 로그인한다. 브라우저에는 anon key만 넘긴다.
 export VITE_SUPABASE_URL="${SUPABASE_URL}"
 export VITE_SUPABASE_ANON_KEY="${SUPABASE_ANON_KEY}"
-# 로컬 전용 값. 운영 QR_TOTP_SECRET은 함수 secret으로 따로 넣는다.
-export QR_TOTP_SECRET="${QR_TOTP_SECRET:-local-dev-qr-totp-secret}"
 
 exec pnpm -r --parallel dev

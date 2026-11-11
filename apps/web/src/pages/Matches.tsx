@@ -1,6 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Button, Card, Switch } from "@heroui/react";
-import type { MatchScore } from "@pkpkdupr/shared/match";
 import Match, {
   type MatchFeedItemInfo,
   type MatchInfo,
@@ -192,14 +191,6 @@ const Matches: React.FC<MatchesProps> = ({ reloadKey = 0 }) => {
   const pendingReloadRef = useRef(false);
   const previousReloadKeyRef = useRef(reloadKey);
   const previousIsMyMatchOnlyRef = useRef(isMyMatchOnly);
-  const [pendingMatchAction, setPendingMatchAction] = useState<{
-    matchId: string;
-    type:
-      | "submit-result"
-      | "approve-result"
-      | "cancel-approval"
-      | "reject-result";
-  } | null>(null);
 
   useEffect(() => {
     clearLegacyCachedMatches();
@@ -499,115 +490,22 @@ const Matches: React.FC<MatchesProps> = ({ reloadKey = 0 }) => {
     }
   }, [loadFeed, loadSessionMatches, selectedSession]);
 
-  const handleSubmitResult = useCallback(
-    async (matchId: string, scores: MatchScore[]) => {
-      if (!isAuthenticated) throw new Error("로그인이 필요해요.");
-      if (!isOnline) {
-        throw new Error(
-          "오프라인에서는 결과를 입력할 수 없습니다. 온라인 연결이 필요합니다.",
-        );
-      }
+  const handleMatchRecorded = useCallback(
+    (recordedMatch: MatchInfo) => {
+      const isSelected = recordedMatch.id === selectedMatchId;
+      // "한 판 더"로 만든 새 경기는 피드에만 반영하고 상세는 수정한 경기를 유지한다
+      if (isSelected) setSelectedMatch(recordedMatch);
 
-      try {
-        setPendingMatchAction({ matchId, type: "submit-result" });
-        const res = await apiFetch(`/api/matches/${matchId}/result`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ scores }),
-        });
-        if (!res.ok) {
-          const errorData = await res.json().catch(() => ({}));
-          throw new Error(errorData.error || "결과를 입력하지 못했어요.");
-        }
+      void (async () => {
         await refreshFeedAndSession();
-      } finally {
-        setPendingMatchAction(null);
-      }
+        // 피드 항목이 상세를 덮어쓰므로 상세 응답으로 다시 맞춘다
+        if (isSelected) await loadSelectedMatch(recordedMatch.id);
+      })().catch(() => {
+        // 저장은 이미 성공했으므로 상세 재조회 실패로 기록 시트의 완료 화면을 오류 화면으로 바꾸지 않는다.
+        // 피드 조회 오류는 loadFeed가 직접 표시한다
+      });
     },
-    [isOnline, refreshFeedAndSession, isAuthenticated],
-  );
-
-  const handleApproveResult = useCallback(
-    async (matchId: string) => {
-      if (!isAuthenticated) throw new Error("로그인이 필요해요.");
-      if (!isOnline) {
-        throw new Error(
-          "오프라인에서는 결과를 승인할 수 없습니다. 온라인 연결이 필요합니다.",
-        );
-      }
-
-      try {
-        setPendingMatchAction({ matchId, type: "approve-result" });
-        const res = await apiFetch(
-          `/api/matches/${matchId}/approval`,
-          { method: "POST" },
-        );
-        if (!res.ok) {
-          const errorData = await res.json().catch(() => ({}));
-          throw new Error(errorData.error || "결과를 승인하지 못했어요.");
-        }
-        await refreshFeedAndSession();
-      } finally {
-        setPendingMatchAction(null);
-      }
-    },
-    [isOnline, refreshFeedAndSession, isAuthenticated],
-  );
-
-  const handleCancelApproval = useCallback(
-    async (matchId: string) => {
-      if (!isAuthenticated) throw new Error("로그인이 필요해요.");
-      if (!isOnline) {
-        throw new Error(
-          "오프라인에서는 합의를 취소할 수 없습니다. 온라인 연결이 필요합니다.",
-        );
-      }
-
-      try {
-        setPendingMatchAction({ matchId, type: "cancel-approval" });
-        const res = await apiFetch(
-          `/api/matches/${matchId}/approval`,
-          { method: "DELETE" },
-        );
-        if (!res.ok) {
-          const errorData = await res.json().catch(() => ({}));
-          throw new Error(errorData.error || "합의를 취소하지 못했어요.");
-        }
-        await refreshFeedAndSession();
-      } finally {
-        setPendingMatchAction(null);
-      }
-    },
-    [isOnline, refreshFeedAndSession, isAuthenticated],
-  );
-
-  const handleRejectResult = useCallback(
-    async (matchId: string) => {
-      if (!isAuthenticated) throw new Error("로그인이 필요해요.");
-      if (!isOnline) {
-        throw new Error(
-          "오프라인에서는 결과를 거부할 수 없습니다. 온라인 연결이 필요합니다.",
-        );
-      }
-
-      try {
-        setPendingMatchAction({ matchId, type: "reject-result" });
-        const res = await apiFetch(
-          `/api/matches/${matchId}/rejection`,
-          { method: "POST" },
-        );
-        if (!res.ok) {
-          const errorData = await res.json().catch(() => ({}));
-          throw new Error(errorData.error || "결과를 거부하지 못했어요.");
-        }
-        await refreshFeedAndSession();
-      } finally {
-        setPendingMatchAction(null);
-      }
-    },
-    [isOnline, refreshFeedAndSession, isAuthenticated],
+    [loadSelectedMatch, refreshFeedAndSession, selectedMatchId],
   );
 
   const completeMatchDetailClose = useCallback(() => {
@@ -726,30 +624,8 @@ const Matches: React.FC<MatchesProps> = ({ reloadKey = 0 }) => {
       <MatchDetail
         match={selectedMatch}
         currentPlayerId={player?.id}
-        onSubmitResult={handleSubmitResult}
-        onApproveResult={handleApproveResult}
-        onCancelApproval={handleCancelApproval}
-        onRejectResult={handleRejectResult}
-        onAutoApprovalDue={() => {
-          void refreshFeedAndSession();
-        }}
+        onMatchRecorded={handleMatchRecorded}
         isOnline={isOnline}
-        isSubmittingResult={
-          pendingMatchAction?.matchId === selectedMatch.id &&
-          pendingMatchAction.type === "submit-result"
-        }
-        isApprovingResult={
-          pendingMatchAction?.matchId === selectedMatch.id &&
-          pendingMatchAction.type === "approve-result"
-        }
-        isCancellingApproval={
-          pendingMatchAction?.matchId === selectedMatch.id &&
-          pendingMatchAction.type === "cancel-approval"
-        }
-        isRejectingResult={
-          pendingMatchAction?.matchId === selectedMatch.id &&
-          pendingMatchAction.type === "reject-result"
-        }
         isLoading={isSelectedMatchLoading}
       />
     );

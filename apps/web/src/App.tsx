@@ -1,13 +1,12 @@
 import { Spinner } from "@heroui/react";
 import { useEffect } from "react";
-import { Navigate, Route, Routes, useLocation } from "react-router-dom";
+import { Navigate, Route, Routes } from "react-router-dom";
 import BottomNav from "./components/BottomNav";
 import OfflineBanner from "./components/OfflineBanner";
 import PwaInstallPrompt from "./components/PwaInstallPrompt";
 import PwaUpdatePrompt from "./components/PwaUpdatePrompt";
 import { AppUpdateProvider } from "./context/AppUpdateContext";
 import { AuthProvider, useAuth } from "./context/AuthContext";
-import DevQrs from "./pages/DevQrs";
 import ForceChangePassword from "./pages/ForceChangePassword";
 import Login from "./pages/Login";
 
@@ -98,7 +97,6 @@ function AppRoutes() {
 
   return (
     <Routes>
-      {import.meta.env.DEV && <Route path="/dev/qrs" element={<DevQrs />} />}
       <Route path="/" element={<BottomNav />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
@@ -106,10 +104,6 @@ function AppRoutes() {
 }
 
 function App() {
-  const location = useLocation();
-  const isFullWidthDevPage =
-    import.meta.env.DEV && location.pathname === "/dev/qrs";
-
   useEffect(() => {
     if (typeof window === "undefined" || !isIosLike()) {
       return;
@@ -226,18 +220,10 @@ function App() {
 
   return (
     <div
-      className={
-        isFullWidthDevPage
-          ? "h-full w-full min-w-[320px] overflow-hidden bg-amber-50"
-          : "flex h-full w-full min-w-[320px] justify-center overflow-hidden bg-gray-900"
-      }
+      className="flex h-full w-full min-w-[320px] justify-center overflow-hidden bg-gray-900"
     >
       <main
-        className={
-          isFullWidthDevPage
-            ? "h-full w-full overflow-y-auto overflow-x-hidden"
-            : "h-full w-full max-w-[480px] overflow-hidden bg-white shadow-none min-[481px]:shadow-lg"
-        }
+        className="h-full w-full max-w-[480px] overflow-hidden bg-white shadow-none min-[481px]:shadow-lg"
       >
         <AppUpdateProvider>
           <AuthProvider>

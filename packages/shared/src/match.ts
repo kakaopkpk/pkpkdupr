@@ -1,4 +1,4 @@
-import { Player } from "./player.js";
+import type { Player, PlayerRatingChangeLog } from "./player.js";
 
 export const matchTypeValues = [
   "singles",
@@ -92,35 +92,16 @@ export const getMatchScheduleDurationMs = (mode: MatchMode) =>
 
 export const MATCH_RESULT_MAX_SCORE_COUNT = 3;
 
-const ONE_HOUR_MS = 60 * 60 * 1000;
+export type MatchStatus = "created" | "completed" | "cancelled";
 
-/**
- * 결과가 경기 시작 시각에 가까울수록 더 짧은 합의 대기 시간을 적용한다.
- * 경기 시작 전 입력은 가장 빠른 입력으로 간주한다.
- */
-export const getAutoApprovalDueAt = (
+/** 참가자가 기록을 고칠 수 있는 기간(경기 시작 시각 기준) */
+export const MATCH_EDIT_WINDOW_MS = 24 * 60 * 60 * 1000;
+
+/** 경기 시작 후 24시간 이내(시작 전 포함)면 true */
+export const isWithinMatchEditWindow = (
   matchStartsAt: Date,
-  resultSubmittedAt: Date,
-): Date => {
-  const elapsedMs = Math.max(
-    0,
-    resultSubmittedAt.getTime() - matchStartsAt.getTime(),
-  );
-  const approvalWindowMs =
-    elapsedMs <= ONE_HOUR_MS
-      ? 2 * ONE_HOUR_MS
-      : elapsedMs <= 4 * ONE_HOUR_MS
-        ? 8 * ONE_HOUR_MS
-        : 24 * ONE_HOUR_MS;
-
-  return new Date(resultSubmittedAt.getTime() + approvalWindowMs);
-};
-
-export type MatchStatus =
-  | "created"
-  | "pending-approval"
-  | "completed"
-  | "cancelled";
+  now: Date = new Date(),
+): boolean => now.getTime() - matchStartsAt.getTime() <= MATCH_EDIT_WINDOW_MS;
 
 export type MatchSessionStatus = "created" | "completed";
 
@@ -142,11 +123,6 @@ export interface Team {
 export interface MatchScore {
   scoreA: number;
   scoreB: number;
-}
-
-export interface MatchResultApproval {
-  playerId: string;
-  approvedAt: Date;
 }
 
 export interface Session {
@@ -254,15 +230,6 @@ export const validateMatchScoresForMode = (
   }
 };
 
-export const computeMatchStartsAt = (from: Date = new Date()): Date => {
-  const ms = from.getTime();
-  const intervalMs = 30 * 60 * 1000;
-  const remainder = ms % intervalMs;
-  return remainder === 0
-    ? new Date(ms)
-    : new Date(ms + (intervalMs - remainder));
-};
-
 export interface Match {
   id: string;
   type: MatchType;
@@ -274,10 +241,9 @@ export interface Match {
   status: MatchStatus;
   teams: [Team, Team];
   scores?: MatchScore[];
+  /** 마지막으로 기록·수정한 참가자와 시각 */
   resultSubmittedByPlayerId: string | null;
   resultSubmittedAt: Date | null;
-  autoApprovalDueAt?: Date | null;
-  approvals: MatchResultApproval[];
   location: string;
   courtName?: string;
   matchStartsAt: Date;
@@ -285,6 +251,32 @@ export interface Match {
   completedAt: Date | null;
   updatedAt: Date;
 }
+
+/** 경기 기록(POST /api/matches)·수정(PUT /api/matches/:matchId) 요청의 한 팀 */
+export interface RecordMatchTeamRequest {
+  /** "Team A" | "Team B" 표시용. 생략 가능 */
+  name?: string;
+  playerIds: string[];
+}
+
+/** 경기 기록(POST /api/matches)·수정(PUT /api/matches/:matchId) 요청 바디 */
+export interface RecordMatchRequest {
+  /** 비우거나 생략하면 자동 이름(저장 안 함) */
+  name?: string;
+  /** 생략하면 서버가 팀 구성으로 추론 */
+  type?: MatchType;
+  /** 생략하면 scores 개수로 추론 */
+  mode?: MatchMode;
+  teams: [RecordMatchTeamRequest, RecordMatchTeamRequest];
+  location: string;
+  /** 단판 1개, 2선승 2~3개. 세트마다 동점 불가 */
+  scores: MatchScore[];
+}
+
+/** 기록·수정 응답. GET /api/matches/:matchId 응답과 같은 형태다 */
+export type RecordedMatchResponse = Match & {
+  ratingChanges: PlayerRatingChangeLog[];
+};
 
 export type MatchFeedItem =
   | { kind: "match"; match: Match }

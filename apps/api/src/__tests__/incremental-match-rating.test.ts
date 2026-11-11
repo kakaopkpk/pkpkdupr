@@ -79,7 +79,6 @@ describe("incremental match rating", () => {
       scores: [{ scoreA: 11, scoreB: 8 }],
       resultSubmittedByPlayerId: "winner",
       resultSubmittedAt: completedAt,
-      approvals: [],
       location: "Court",
       matchStartsAt: completedAt,
       completedAt,
