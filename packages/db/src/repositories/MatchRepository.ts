@@ -22,7 +22,7 @@ import {
   type Player,
   type PublicPlayerDupr,
 } from "@pkpkdupr/shared/player";
-import { and, desc, eq, isNotNull, max } from "drizzle-orm";
+import { and, asc, desc, eq, gte, isNotNull, lt, max } from "drizzle-orm";
 import {
   matchParticipants,
   matches,
@@ -32,7 +32,15 @@ import {
   players,
 } from "../db/schema";
 import { generateEntityId, isEntityId } from "@pkpkdupr/shared/entityId";
-import { firstRow, placeholders } from "../db/client";
+import {
+  IN_PROGRESS_MATCH_TIMEOUT_MS,
+  REGULAR_SESSION_LOCATION,
+  REGULAR_SESSION_NAME,
+  REGULAR_SESSION_START_HOUR,
+  getEmptySessionExpiresAt,
+  kstDateKeyToDate,
+} from "@pkpkdupr/shared/session";
+import { firstRow, placeholders, type RawQueryResult } from "../db/client";
 
 type StoredMatch = typeof matches.$inferSelect;
 type StoredMatchParticipant = typeof matchParticipants.$inferSelect;
@@ -129,6 +137,12 @@ const toDate = (value: Date | string | number) => new Date(value);
 const toUnixTimestampSeconds = (value: Date) =>
   Math.floor(value.getTime() / 1000);
 
+/** match_starts_at이 이 값(Unix 초) 이하인 점수 없는 created 경기는 진행 중 만료로 본다. */
+const inProgressExpiryCutoff = (now: Date) =>
+  toUnixTimestampSeconds(
+    new Date(now.getTime() - IN_PROGRESS_MATCH_TIMEOUT_MS),
+  );
+
 const toPublicPlayer = (record: StoredPlayer): Player => ({
   id: record.id,
   username: record.username,
@@ -172,6 +186,8 @@ const parseParticipantDuprSnapshot = (
     return undefined;
   }
 };
+
+const REGULAR_DATE_KEY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
 /**
  * MatchRepository - `packages/db`의 경기 저장소.
@@ -231,6 +247,7 @@ export class MatchRepository {
           participant.playerId,
       ),
       matchCount: sessionMatches.length,
+      kind: stored.regularDateKey ? "regular" : "custom",
       createdAt: toDate(stored.createdAt),
       updatedAt: toDate(stored.updatedAt),
     };
@@ -332,6 +349,266 @@ export class MatchRepository {
     }
 
     return await this.findSessionById(sessionId);
+  }
+
+  /**
+   * 그 KST 날짜의 정기 세션을 찾거나 만든다.
+   * 날짜당 하나는 regular_date_key 유니크 제약이 보장하므로, 동시 호출은 ON CONFLICT DO NOTHING 후 재조회로 같은 행을 받는다.
+   */
+  async findOrCreateRegularSession(
+    dateKey: string,
+  ): Promise<ManagedMatchSession> {
+    if (!REGULAR_DATE_KEY_PATTERN.test(dateKey)) {
+      throw new Error("유효한 정기 세션 날짜가 필요합니다.");
+    }
+
+    const findStored = (): Promise<StoredMatchSession | undefined> =>
+      this.db
+        .select()
+        .from(matchSessions)
+        .where(eq(matchSessions.regularDateKey, dateKey))
+        .limit(1)
+        .then(firstRow);
+
+    const existing = await findStored();
+    if (existing) {
+      return await this.toManagedSession(existing);
+    }
+
+    const sessionDate = kstDateKeyToDate(dateKey, REGULAR_SESSION_START_HOUR);
+    // 새 id가 기존 세션 id와 겹치면 행이 들어가지 않으므로 다른 id로 다시 시도한다.
+    // 같은 날 18:00 KST에 이름이 '정기 세션'인 다른 세션이 있으면 (name, date) 유니크 충돌로 끝까지 실패한다.
+    for (let attempt = 0; attempt < 8; attempt += 1) {
+      const now = new Date();
+      await this.db
+        .insert(matchSessions)
+        .values({
+          id: generateEntityId("session"),
+          name: REGULAR_SESSION_NAME,
+          date: sessionDate,
+          location: REGULAR_SESSION_LOCATION,
+          regularDateKey: dateKey,
+          createdAt: now,
+          updatedAt: now,
+        })
+        .onConflictDoNothing();
+
+      const stored = await findStored();
+      if (stored) {
+        return await this.toManagedSession(stored);
+      }
+    }
+
+    throw new Error("정기 세션을 만들지 못했습니다.");
+  }
+
+  /** 세션 참여자를 추가한다. 이미 있는 참여자는 그대로 둔다. */
+  async addSessionParticipants(
+    sessionId: string,
+    playerIds: string[],
+  ): Promise<void> {
+    if (!isEntityId(sessionId, "session")) {
+      throw new Error("유효한 세션 ID가 필요합니다.");
+    }
+    const uniquePlayerIds = [...new Set(playerIds)];
+    if (uniquePlayerIds.length === 0) {
+      return;
+    }
+
+    const now = toUnixTimestampSeconds(new Date());
+    const values = uniquePlayerIds
+      .map((_, index) => `(${placeholders(4, index * 4 + 1)})`)
+      .join(", ");
+    const inserted = await this.client.execute({
+      sql: `
+        INSERT INTO match_session_participants (
+          id,
+          session_id,
+          player_id,
+          created_at
+        )
+        VALUES ${values}
+        ON CONFLICT DO NOTHING
+      `,
+      args: uniquePlayerIds.flatMap((playerId) => [
+        `${sessionId}-${playerId}`,
+        sessionId,
+        playerId,
+        now,
+      ]),
+    });
+    if (inserted.rowsAffected > 0) {
+      await this.client.execute({
+        sql: "UPDATE match_sessions SET updated_at = $1 WHERE id = $2",
+        args: [now, sessionId],
+      });
+    }
+  }
+
+  /** 세션 참여자 한 명을 뺀다. 참여 중이 아니면 아무것도 하지 않는다. */
+  async removeSessionParticipant(
+    sessionId: string,
+    playerId: string,
+  ): Promise<void> {
+    if (!isEntityId(sessionId, "session")) {
+      throw new Error("유효한 세션 ID가 필요합니다.");
+    }
+    const deleted = await this.client.execute({
+      sql: `
+        DELETE FROM match_session_participants
+        WHERE session_id = $1 AND player_id = $2
+      `,
+      args: [sessionId, playerId],
+    });
+    if (deleted.rowsAffected > 0) {
+      await this.client.execute({
+        sql: "UPDATE match_sessions SET updated_at = $1 WHERE id = $2",
+        args: [toUnixTimestampSeconds(new Date()), sessionId],
+      });
+    }
+  }
+
+  /** 세션 시각이 [from, to) 범위인 세션을 시각 오름차순으로 돌려준다. */
+  async findSessionsInRange(
+    from: Date,
+    to: Date,
+  ): Promise<ManagedMatchSession[]> {
+    const storedSessions = await this.db
+      .select()
+      .from(matchSessions)
+      .where(and(gte(matchSessions.date, from), lt(matchSessions.date, to)))
+      .orderBy(asc(matchSessions.date));
+    return await Promise.all(
+      storedSessions.map((session: StoredMatchSession) =>
+        this.toManagedSession(session),
+      ),
+    );
+  }
+
+  /**
+   * 경기가 하나도 없고 getEmptySessionExpiresAt이 지난 세션을 참여자 행과 함께 삭제한다.
+   * 삭제한 세션 수를 돌려준다.
+   */
+  async deleteExpiredEmptySessions(now: Date): Promise<number> {
+    const candidates: RawQueryResult = await this.client.execute(`
+      SELECT s.id, s."date", s.regular_date_key
+      FROM match_sessions s
+      WHERE NOT EXISTS (SELECT 1 FROM matches m WHERE m.session_id = s.id)
+    `);
+    const expiredIds = candidates.rows
+      .filter((row) => {
+        const kind = row.regular_date_key ? "regular" : "custom";
+        const sessionDate = new Date(Number(row.date) * 1000);
+        return (
+          getEmptySessionExpiresAt(kind, sessionDate).getTime() <=
+          now.getTime()
+        );
+      })
+      .map((row) => String(row.id));
+    if (expiredIds.length === 0) {
+      return 0;
+    }
+
+    const transaction = await this.client.transaction("write");
+    let committed = false;
+    try {
+      // 후보 조회 뒤 경기가 들어온 세션은 지우지 않도록 삭제 시점에 다시 확인한다.
+      const deleted: RawQueryResult = await transaction.execute({
+        sql: `
+          DELETE FROM match_sessions s
+          WHERE s.id IN (${placeholders(expiredIds.length)})
+            AND NOT EXISTS (SELECT 1 FROM matches m WHERE m.session_id = s.id)
+          RETURNING s.id
+        `,
+        args: expiredIds,
+      });
+      const deletedIds = deleted.rows.map((row) => String(row.id));
+      if (deletedIds.length > 0) {
+        await transaction.execute({
+          sql: `
+            DELETE FROM match_session_participants
+            WHERE session_id IN (${placeholders(deletedIds.length)})
+          `,
+          args: deletedIds,
+        });
+      }
+      await transaction.commit();
+      committed = true;
+      return deletedIds.length;
+    } finally {
+      if (!committed) {
+        transaction.close();
+      }
+    }
+  }
+
+  /**
+   * 점수 없는 created 경기 중 isInProgressMatchExpired인(시작 후 IN_PROGRESS_MATCH_TIMEOUT_MS가 지난) 경기를
+   * 참가자·점수 행과 함께 삭제한다. 삭제한 경기 수를 돌려준다.
+   */
+  async deleteExpiredInProgressMatches(now: Date): Promise<number> {
+    const cutoff = inProgressExpiryCutoff(now);
+    const transaction = await this.client.transaction("write");
+    let committed = false;
+    try {
+      // 같은 경기에 점수 입력(updateRecordedMatch)이 동시에 들어오면 행 잠금으로 순서를 정한다.
+      // 잠금을 얻은 뒤에도 created·점수 없음 조건을 다시 보므로 먼저 completed가 된 경기는 지우지 않는다.
+      const expired: RawQueryResult = await transaction.execute({
+        sql: `
+          SELECT m.id
+          FROM matches m
+          WHERE m.status = 'created'
+            AND m.match_starts_at <= $1
+            AND NOT EXISTS (SELECT 1 FROM match_scores s WHERE s.match_id = m.id)
+          FOR UPDATE
+        `,
+        args: [cutoff],
+      });
+      const expiredIds = expired.rows.map((row) => String(row.id));
+      if (expiredIds.length > 0) {
+        const idList = placeholders(expiredIds.length);
+        await transaction.execute({
+          sql: `DELETE FROM match_scores WHERE match_id IN (${idList})`,
+          args: expiredIds,
+        });
+        await transaction.execute({
+          sql: `DELETE FROM match_participants WHERE match_id IN (${idList})`,
+          args: expiredIds,
+        });
+        await transaction.execute({
+          sql: `DELETE FROM matches WHERE id IN (${idList})`,
+          args: expiredIds,
+        });
+      }
+      await transaction.commit();
+      committed = true;
+      return expiredIds.length;
+    } finally {
+      if (!committed) {
+        transaction.close();
+      }
+    }
+  }
+
+  /**
+   * 진행 중(점수 없는 created, 이미 시작했고 만료 전) 경기에 들어간 선수 id.
+   * 시작 시각이 아직 오지 않은 관리자 예정 경기는 진행 중으로 보지 않는다.
+   */
+  async findInProgressPlayerIds(now: Date): Promise<string[]> {
+    const cutoff = inProgressExpiryCutoff(now);
+    const result: RawQueryResult = await this.client.execute({
+      sql: `
+        SELECT DISTINCT p.player_id
+        FROM match_participants p
+        INNER JOIN matches m ON m.id = p.match_id
+        WHERE m.status = 'created'
+          AND m.match_starts_at > $1
+          AND m.match_starts_at <= $2
+          AND NOT EXISTS (SELECT 1 FROM match_scores s WHERE s.match_id = m.id)
+      `,
+      args: [cutoff, toUnixTimestampSeconds(now)],
+    });
+    return result.rows.map((row) => String(row.player_id));
   }
 
   async findById(id: string): Promise<Match | undefined> {

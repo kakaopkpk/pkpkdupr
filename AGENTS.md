@@ -70,6 +70,7 @@ pnpm lint
 - 인증/프로필: `GET /api/me`, `POST /api/me/password-changed`(첫 로그인 비밀번호 변경 완료), `PATCH /api/me/profile`, avatar API. 로그인과 비밀번호 변경은 클라이언트가 Supabase Auth로 직접 합니다.
 - 플레이어: `GET /api/players`
 - 경기: `GET /api/matches`, 경기 기록 `POST /api/matches`·수정 `PUT /api/matches/:matchId`, `GET /api/match-feed`, 세션 조회 API
+- 세션: 오늘 세션 `GET /api/match-sessions/today`, 오늘 정기 세션 열기 `POST /api/match-sessions/regular/today`(정기 요일 22시 전만), 회원 세션 생성 `POST /api/match-sessions`, 상세 `GET /api/match-sessions/:sessionId`, 세션 경기 `GET /api/match-sessions/:sessionId/matches`, 점수 없이 진행 중 경기 시작 `POST /api/match-sessions/:sessionId/matches`(오늘 세션만, 이미 진행 중인 선수 포함 시 409, 선수 자동 참여), 복식 추천 매칭 `GET /api/match-sessions/:sessionId/recommendations?courts=N&seed=S`(오늘 세션만, courts 기본 3·1~4로 자름, seed 생략 시 서버가 정해 응답에 포함·같은 seed면 같은 결과, 진행 중 경기 선수 제외), 참여자 한 명씩 추가 `POST /api/match-sessions/:sessionId/participants`·삭제 `DELETE /api/match-sessions/:sessionId/participants/:playerId`(활성 회원 누구나·대리 가능, 오늘 세션만, 멱등)
 - 관리자: 선수/감사 로그, 회원 추가(`POST /api/admin/register`)·비밀번호 초기화·아이디 변경, 경기 일괄 등록·메타데이터, 평점 재계산, 공식 DUPR 조정 API
 
 도메인 규칙:
@@ -77,7 +78,8 @@ pnpm lint
 - `Player.duprRating`은 단일 숫자가 아니라 singles/doubles 분류와 metric을 포함하는 상태입니다. `null`인 NR 값도 허용합니다.
 - api 저장소 어댑터(`apps/api/src/repositories/MatchRepository.ts`, `AuthService`)는 `@pkpkdupr/db` 결과를 공개 계약 형태로 hydrate 합니다.
 - 경기 타입·스코어·세션 계약은 `packages/shared/src/match.ts`가 기준입니다.
-- 경기는 기록 즉시 completed가 되어 평점에 반영됩니다. 참가자는 경기 시작 후 24시간 이내(`isWithinMatchEditWindow`)에만 수정할 수 있고, 이후 정정은 관리자가 합니다.
+- 경기는 기록 즉시 completed가 되어 평점에 반영됩니다. 참가자 또는 경기 생성자(`creatorPlayerId`, 관리자 일괄 등록·예정 경기는 등록한 관리자)는 경기 시작 후 24시간 이내(`isWithinMatchEditWindow`)에만 수정할 수 있고(`canEditMatchRecord`, API·웹 공통), 이후 정정은 관리자가 합니다.
+- 예외로 세션에서 시작한 경기는 점수 없는 진행 중 경기(`status: "created"`)입니다. 참가자가 `PUT /api/matches/:matchId`로 첫 점수를 넣는 순간 completed(`completedAt`=입력 시각)가 되고 평점에 증분 반영됩니다. 진행 중 경기는 평점·평점 이력·통계·`lastPlayedAt`에서 빠지고, 시작 2시간(`isInProgressMatchExpired`)이 지나도록 점수가 없으면 조회 시점 정리(`cleanupExpired`)에서 빈 세션 정리보다 먼저 삭제됩니다. 이 정리는 관리자 예정 경기를 포함한 점수 없는 created 경기 전부에 적용됩니다.
 - `packages/shared` 변경 시 web, admin-web, api, db 전체 소비처를 같은 변경 단위에서 점검합니다.
 
 ## 운영과 배포

@@ -94,6 +94,11 @@ describe("PUT /api/matches/:matchId", () => {
     AuthService["applyMatchResultToRatings"]
   >;
   let recalculate: MockInstance<AuthService["recalculateDuprRatings"]>;
+  let addSessionParticipants: MockInstance<
+    MatchRepository["addSessionParticipants"]
+  >;
+  let cleanupExpired: MockInstance<MatchRepository["cleanupExpired"]>;
+  let findAll: MockInstance<MatchRepository["findAll"]>;
 
   const putMatch = (body: object = validBody, matchId = existing.id) =>
     request(app)
@@ -103,6 +108,12 @@ describe("PUT /api/matches/:matchId", () => {
 
   beforeEach(() => {
     existing = buildExistingMatch();
+    cleanupExpired = vi
+      .spyOn(MatchRepository.prototype, "cleanupExpired")
+      .mockResolvedValue(undefined);
+    addSessionParticipants = vi
+      .spyOn(MatchRepository.prototype, "addSessionParticipants")
+      .mockResolvedValue(undefined);
     vi.spyOn(
       AuthService.prototype,
       "authenticateAccessToken",
@@ -132,9 +143,9 @@ describe("PUT /api/matches/:matchId", () => {
         resultSubmittedAt: input.resultSubmittedAt,
         completedAt: existing.completedAt ?? input.resultSubmittedAt,
       }));
-    vi.spyOn(MatchRepository.prototype, "findAll").mockImplementation(
-      async () => ({ matches: [existing], total: 1 }),
-    );
+    findAll = vi
+      .spyOn(MatchRepository.prototype, "findAll")
+      .mockImplementation(async () => ({ matches: [existing], total: 1 }));
     applyMatchResult = vi
       .spyOn(AuthService.prototype, "applyMatchResultToRatings")
       .mockImplementation(async (match) => ({
@@ -208,6 +219,86 @@ describe("PUT /api/matches/:matchId", () => {
     expect(response.body.ratingChanges).toHaveLength(1);
   });
 
+  it("진행 중 경기에 첫 점수를 넣으면 입력 시각에 completed가 되고 증분 반영한다", async () => {
+    existing = buildExistingMatch({
+      status: "created",
+      scores: [],
+      completedAt: null,
+      resultSubmittedByPlayerId: null,
+      resultSubmittedAt: null,
+      matchStartsAt: new Date(Date.now() - 30 * 60 * 1000),
+    });
+
+    const before = Date.now();
+    const response = await putMatch();
+
+    expect(response.status).toBe(200);
+    expect(cleanupExpired).toHaveBeenCalledTimes(1);
+    const [, input] = updateRecordedMatch.mock.calls[0]!;
+    expect(input.resultSubmittedAt.getTime()).toBeGreaterThanOrEqual(before);
+    expect(response.body.status).toBe("completed");
+    expect(new Date(response.body.completedAt).getTime()).toBe(
+      input.resultSubmittedAt.getTime(),
+    );
+    expect(applyMatchResult).toHaveBeenCalledTimes(1);
+    expect(applyMatchResult.mock.calls[0]![0]).toMatchObject({
+      id: existing.id,
+      status: "completed",
+    });
+    expect(recalculate).not.toHaveBeenCalled();
+    expect(response.body.ratingChanges).toEqual([
+      expect.objectContaining({ id: `log-${existing.id}` }),
+    ]);
+  });
+
+  it("시작 2시간이 지난 점수 없는 진행 중 경기는 404를 반환한다", async () => {
+    existing = buildExistingMatch({
+      status: "created",
+      scores: [],
+      completedAt: null,
+      resultSubmittedByPlayerId: null,
+      resultSubmittedAt: null,
+      matchStartsAt: new Date(Date.now() - 2 * 60 * 60 * 1000 - 1000),
+    });
+
+    const response = await putMatch();
+
+    expect(response.status).toBe(404);
+    expect(updateRecordedMatch).not.toHaveBeenCalled();
+    expect(applyMatchResult).not.toHaveBeenCalled();
+  });
+
+  it("처리 전에 만료 정리를 먼저 호출한다", async () => {
+    const findById = vi.mocked(MatchRepository.prototype.findById);
+
+    await putMatch();
+
+    expect(cleanupExpired.mock.invocationCallOrder[0]).toBeLessThan(
+      findById.mock.invocationCallOrder[0]!,
+    );
+  });
+
+  it("completed 경기 수정의 전체 재계산 입력에서 진행 중 경기는 빠진다", async () => {
+    const inProgress = buildExistingMatch({
+      id: "match-in-progress",
+      status: "created",
+      scores: [],
+      completedAt: null,
+      resultSubmittedByPlayerId: null,
+      resultSubmittedAt: null,
+    });
+    findAll.mockImplementation(async () => ({
+      matches: [existing, inProgress],
+      total: 2,
+    }));
+
+    const response = await putMatch();
+
+    expect(response.status).toBe(200);
+    const [replayed] = recalculate.mock.calls[0]!;
+    expect(replayed.map((match) => match.id)).toEqual([existing.id]);
+  });
+
   it("세션 경기 참가자도 기록을 입력할 수 있다", async () => {
     existing = buildExistingMatch({
       status: "created",
@@ -230,6 +321,40 @@ describe("PUT /api/matches/:matchId", () => {
     expect(updateRecordedMatch).toHaveBeenCalledTimes(1);
     expect(response.body.session).toMatchObject({ id: "Ssession1" });
     expect(response.body.courtName).toBe("1번 코트");
+  });
+
+  it("세션 경기 팀이 바뀌면 새 선수를 세션 참여자로 추가한다", async () => {
+    existing = buildExistingMatch({
+      session: {
+        id: "Ssession1",
+        name: "정기 세션",
+        date: now,
+        location: "야탑초등학교",
+      },
+    });
+
+    const response = await putMatch({
+      ...validBody,
+      teams: [
+        { playerIds: [requester.id, partner.id] },
+        { playerIds: [substitute.id, opponentF.id] },
+      ],
+    });
+
+    expect(response.status).toBe(200);
+    expect(addSessionParticipants).toHaveBeenCalledWith("Ssession1", [
+      requester.id,
+      partner.id,
+      substitute.id,
+      opponentF.id,
+    ]);
+  });
+
+  it("세션 없는 경기는 참여자를 추가하지 않는다", async () => {
+    const response = await putMatch();
+
+    expect(response.status).toBe(200);
+    expect(addSessionParticipants).not.toHaveBeenCalled();
   });
 
   it("멤버를 바꾸면 새 팀 구성으로 저장한다", async () => {
@@ -256,7 +381,7 @@ describe("PUT /api/matches/:matchId", () => {
     expect(updateRecordedMatch).not.toHaveBeenCalled();
   });
 
-  it("수정 전 참가자가 아니면 403을 반환한다", async () => {
+  it("참가자도 생성자도 아니면 403을 반환한다", async () => {
     vi.spyOn(
       AuthService.prototype,
       "authenticateAccessToken",
@@ -275,12 +400,50 @@ describe("PUT /api/matches/:matchId", () => {
 
     expect(response.status).toBe(403);
     expect(response.body).toEqual({
-      error: "경기 참가자만 기록을 수정할 수 있습니다.",
+      error: "경기 참가자 또는 생성자만 기록을 수정할 수 있습니다.",
     });
     expect(updateRecordedMatch).not.toHaveBeenCalled();
   });
 
-  it("관리자여도 참가자가 아니면 403을 반환한다", async () => {
+  it("참가자가 아니어도 경기 생성자면 수정할 수 있다", async () => {
+    existing = buildExistingMatch({ creatorPlayerId: outsider.id });
+    vi.spyOn(
+      AuthService.prototype,
+      "authenticateAccessToken",
+    ).mockResolvedValue(buildSession(outsider));
+    vi.spyOn(AuthService.prototype, "getPlayerById").mockResolvedValue(
+      outsider,
+    );
+
+    const response = await putMatch({
+      ...validBody,
+      teams: [
+        { playerIds: [partner.id, substitute.id] },
+        { playerIds: [opponentM.id, opponentF.id] },
+      ],
+    });
+
+    expect(response.status).toBe(200);
+    expect(updateRecordedMatch).toHaveBeenCalledTimes(1);
+  });
+
+  it("경기 생성자라도 24시간이 지났으면 403을 반환한다", async () => {
+    existing = buildExistingMatch({
+      creatorPlayerId: outsider.id,
+      matchStartsAt: new Date(Date.now() - MATCH_EDIT_WINDOW_MS - 60_000),
+    });
+    vi.spyOn(
+      AuthService.prototype,
+      "authenticateAccessToken",
+    ).mockResolvedValue(buildSession(outsider));
+
+    const response = await putMatch();
+
+    expect(response.status).toBe(403);
+    expect(updateRecordedMatch).not.toHaveBeenCalled();
+  });
+
+  it("관리자여도 참가자도 생성자도 아니면 403을 반환한다", async () => {
     vi.spyOn(
       AuthService.prototype,
       "authenticateAccessToken",
@@ -319,7 +482,7 @@ describe("PUT /api/matches/:matchId", () => {
     expect(updateRecordedMatch).not.toHaveBeenCalled();
   });
 
-  it("새 팀 구성에 본인이 없으면 400을 반환한다", async () => {
+  it("새 팀 구성에 본인이 없어도 수정된다", async () => {
     const response = await putMatch({
       ...validBody,
       teams: [
@@ -328,9 +491,12 @@ describe("PUT /api/matches/:matchId", () => {
       ],
     });
 
-    expect(response.status).toBe(400);
-    expect(response.body.error).toBe("매치 멤버에 본인이 포함되어야 합니다.");
-    expect(updateRecordedMatch).not.toHaveBeenCalled();
+    expect(response.status).toBe(200);
+    const input = updateRecordedMatch.mock.calls[0]![1];
+    expect(input.teams[0].players.map((player) => player.id)).toEqual([
+      substitute.id,
+      partner.id,
+    ]);
   });
 
   it("동점 점수면 400을 반환한다", async () => {

@@ -1,4 +1,4 @@
-import type { Match } from "@pkpkdupr/shared/match";
+import type { ManagedMatchSession, Match } from "@pkpkdupr/shared/match";
 import type { Player, PlayerRatingChangeLog } from "@pkpkdupr/shared/player";
 import request from "supertest";
 import {
@@ -111,6 +111,22 @@ const ratingChangeLog: PlayerRatingChangeLog = {
   createdAt: now,
 };
 
+const buildManagedSession = (
+  overrides: Partial<ManagedMatchSession> = {},
+): ManagedMatchSession => ({
+  id: "Sregular1",
+  name: "정기 세션",
+  // 2026-11-12(목) 18:00 KST
+  date: new Date("2026-11-12T09:00:00.000Z"),
+  location: "야탑초등학교",
+  participantIds: [],
+  matchCount: 0,
+  kind: "regular",
+  createdAt: now,
+  updatedAt: now,
+  ...overrides,
+});
+
 describe("POST /api/matches", () => {
   let capturedCreatePayload:
     | (Omit<Match, "id" | "createdAt" | "updatedAt"> & { id?: string })
@@ -118,9 +134,25 @@ describe("POST /api/matches", () => {
   let applyMatchResult: MockInstance<
     AuthService["applyMatchResultToRatings"]
   >;
+  let findOrCreateRegularSession: MockInstance<
+    MatchRepository["findOrCreateRegularSession"]
+  >;
+  let addSessionParticipants: MockInstance<
+    MatchRepository["addSessionParticipants"]
+  >;
+  let findSessionById: MockInstance<MatchRepository["findSessionById"]>;
 
   beforeEach(() => {
     capturedCreatePayload = null;
+    findOrCreateRegularSession = vi
+      .spyOn(MatchRepository.prototype, "findOrCreateRegularSession")
+      .mockResolvedValue(buildManagedSession());
+    addSessionParticipants = vi
+      .spyOn(MatchRepository.prototype, "addSessionParticipants")
+      .mockResolvedValue(undefined);
+    findSessionById = vi
+      .spyOn(MatchRepository.prototype, "findSessionById")
+      .mockResolvedValue(undefined);
     applyMatchResult = vi
       .spyOn(AuthService.prototype, "applyMatchResultToRatings")
       .mockResolvedValue({
@@ -145,6 +177,7 @@ describe("POST /api/matches", () => {
   });
 
   afterEach(() => {
+    vi.useRealTimers();
     vi.restoreAllMocks();
   });
 
@@ -421,11 +454,16 @@ describe("POST /api/matches", () => {
     });
   });
 
-  it("요청자가 팀에 없으면 400을 반환한다", async () => {
+  it("요청자가 팀에 없어도 기록된다", async () => {
     const response = await postMatch([["player-m-1"], ["player-f-1"]]);
 
-    expect(response.status).toBe(400);
-    expect(response.body.error).toBe("매치 멤버에 본인이 포함되어야 합니다.");
+    expect(response.status).toBe(201);
+    expect(capturedCreatePayload?.creatorPlayerId).toBe(creator.id);
+    expect(
+      capturedCreatePayload?.teams.flatMap((team) =>
+        team.players.map((player) => player.id),
+      ),
+    ).toEqual(["player-m-1", "player-f-1"]);
   });
 
   it("요청자가 active가 아니면 403을 반환한다", async () => {
@@ -437,5 +475,126 @@ describe("POST /api/matches", () => {
     const response = await postMatch([[creator.id], ["player-f-1"]]);
 
     expect(response.status).toBe(403);
+  });
+
+  describe("세션 지정", () => {
+    const setNow = (iso: string) => {
+      vi.useFakeTimers({ toFake: ["Date"] });
+      vi.setSystemTime(new Date(iso));
+    };
+
+    const postDoublesMatch = (sessionId?: string) =>
+      request(app)
+        .post("/api/matches")
+        .set("Authorization", "Bearer test-token")
+        .send({
+          teams: validDoublesTeams,
+          location: "야탑초등학교",
+          scores: [{ scoreA: 11, scoreB: 7 }],
+          sessionId,
+        });
+
+    const allPlayerIds = [creator.id, "player-f-1", "player-m-1", "player-f-2"];
+
+    it("정기 시간대에 기록하면 그날 정기 세션에 넣고 선수 전원을 참여자로 추가한다", async () => {
+      // 2026-11-12(목) 19:00 KST
+      setNow("2026-11-12T10:00:00.000Z");
+      const regularSession = buildManagedSession();
+      findOrCreateRegularSession.mockResolvedValue(regularSession);
+
+      const response = await postDoublesMatch();
+
+      expect(response.status).toBe(201);
+      expect(findOrCreateRegularSession).toHaveBeenCalledWith("2026-11-12");
+      expect(addSessionParticipants).toHaveBeenCalledWith(
+        regularSession.id,
+        allPlayerIds,
+      );
+      expect(capturedCreatePayload?.session).toEqual({
+        id: regularSession.id,
+        name: regularSession.name,
+        date: regularSession.date,
+        location: regularSession.location,
+      });
+    });
+
+    it("22:00에 시작한 경기는 세션 없이 저장한다", async () => {
+      // 2026-11-12(목) 22:00 KST
+      setNow("2026-11-12T13:00:00.000Z");
+
+      const response = await postDoublesMatch();
+
+      expect(response.status).toBe(201);
+      expect(findOrCreateRegularSession).not.toHaveBeenCalled();
+      expect(addSessionParticipants).not.toHaveBeenCalled();
+      expect(capturedCreatePayload?.session).toBeUndefined();
+    });
+
+    it("정기 세션 id를 넘겨도 정기 시간대가 아니면 세션 없이 저장한다", async () => {
+      // 2026-11-12(목) 22:30 KST
+      setNow("2026-11-12T13:30:00.000Z");
+      findSessionById.mockResolvedValue(buildManagedSession());
+
+      const response = await postDoublesMatch("Sregular1");
+
+      expect(response.status).toBe(201);
+      expect(findOrCreateRegularSession).not.toHaveBeenCalled();
+      expect(capturedCreatePayload?.session).toBeUndefined();
+    });
+
+    it("오늘 회원 세션 id를 지정하면 그 세션에 넣는다", async () => {
+      // 2026-11-12(목) 19:00 KST — 정기 시간대여도 지정한 회원 세션이 우선한다
+      setNow("2026-11-12T10:00:00.000Z");
+      const customSession = buildManagedSession({
+        id: "Scustom1",
+        name: "번개",
+        // 2026-11-12 17:00 KST
+        date: new Date("2026-11-12T08:00:00.000Z"),
+        location: "탄천",
+        kind: "custom",
+      });
+      findSessionById.mockResolvedValue(customSession);
+
+      const response = await postDoublesMatch(customSession.id);
+
+      expect(response.status).toBe(201);
+      expect(findSessionById).toHaveBeenCalledWith(customSession.id);
+      expect(findOrCreateRegularSession).not.toHaveBeenCalled();
+      expect(addSessionParticipants).toHaveBeenCalledWith(
+        customSession.id,
+        allPlayerIds,
+      );
+      expect(capturedCreatePayload?.session).toMatchObject({
+        id: customSession.id,
+        name: "번개",
+        location: "탄천",
+      });
+    });
+
+    it("지난 회원 세션 id를 지정하면 403을 반환하고 저장하지 않는다", async () => {
+      // 2026-11-12(목) 19:00 KST
+      setNow("2026-11-12T10:00:00.000Z");
+      findSessionById.mockResolvedValue(
+        buildManagedSession({
+          id: "Scustom2",
+          // 2026-11-11 20:00 KST
+          date: new Date("2026-11-11T11:00:00.000Z"),
+          kind: "custom",
+        }),
+      );
+
+      const response = await postDoublesMatch("Scustom2");
+
+      expect(response.status).toBe(403);
+      expect(capturedCreatePayload).toBeNull();
+      expect(addSessionParticipants).not.toHaveBeenCalled();
+    });
+
+    it("없는 세션 id를 지정하면 404를 반환한다", async () => {
+      const response = await postDoublesMatch("Smissing");
+
+      expect(response.status).toBe(404);
+      expect(capturedCreatePayload).toBeNull();
+    });
   });
 });

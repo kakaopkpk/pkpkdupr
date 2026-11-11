@@ -59,11 +59,8 @@ const CreateMatchTeamGrid: React.FC<CreateMatchTeamGridProps> = ({
                   <UserChip
                     player={member}
                     chipWidthClass="w-[clamp(5.5rem,38vw,9rem)]"
-                    onRemove={
-                      isMe ? undefined : () => onRemoveMember(member.id)
-                    }
+                    onRemove={() => onRemoveMember(member.id)}
                     isMe={isMe}
-                    reserveRemoveSlot={isMe}
                     onPress={
                       interactive && isClickable
                         ? () => onPressMember(member)

@@ -1,7 +1,16 @@
 import type { Match, MatchFeedItem } from "@pkpkdupr/shared/match";
 import type { Player, PlayerRatingChangeLog } from "@pkpkdupr/shared/player";
 import request from "supertest";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+  type MockInstance,
+} from "vitest";
+import { db } from "../db";
 import { app } from "../index";
 import { MatchRepository } from "../repositories/MatchRepository";
 import {
@@ -47,7 +56,12 @@ const match: Match = {
 };
 
 describe("GET /api/matches/:matchId", () => {
+  let cleanupExpired: MockInstance<MatchRepository["cleanupExpired"]>;
+
   beforeEach(() => {
+    cleanupExpired = vi
+      .spyOn(MatchRepository.prototype, "cleanupExpired")
+      .mockResolvedValue(undefined);
     vi.spyOn(
       AuthService.prototype,
       "authenticateAccessToken",
@@ -83,6 +97,7 @@ describe("GET /api/matches/:matchId", () => {
       .set("Authorization", "Bearer test-token");
 
     expect(response.status).toBe(200);
+    expect(cleanupExpired).toHaveBeenCalledTimes(1);
     expect(response.body).toMatchObject({
       id: match.id,
       type: "singles",
@@ -115,10 +130,62 @@ describe("GET /api/matches/:matchId", () => {
     expect(response.status).toBe(404);
     expect(response.body).toEqual({ error: "매치를 찾을 수 없습니다." });
   });
+
+  it("빈 세션 정리가 실패해도 조회는 계속한다", async () => {
+    cleanupExpired.mockRestore();
+    const deleteExpiredInProgressMatches = vi
+      .spyOn(db.matches, "deleteExpiredInProgressMatches")
+      .mockRejectedValue(new Error("in-progress cleanup failure"));
+    const deleteExpiredEmptySessions = vi
+      .spyOn(db.matches, "deleteExpiredEmptySessions")
+      .mockRejectedValue(new Error("cleanup failure"));
+    const consoleError = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => undefined);
+    vi.spyOn(
+      MatchRepository.prototype,
+      "findByIdWithRatingChanges",
+    ).mockResolvedValue({ match, ratingChanges: [] });
+
+    const response = await request(app)
+      .get(`/api/matches/${match.id}`)
+      .set("Authorization", "Bearer test-token");
+
+    expect(response.status).toBe(200);
+    expect(deleteExpiredInProgressMatches).toHaveBeenCalledTimes(1);
+    expect(deleteExpiredEmptySessions).toHaveBeenCalledTimes(1);
+    expect(consoleError).toHaveBeenCalledTimes(2);
+  });
+
+  it("만료 정리는 진행 중 경기를 빈 세션보다 먼저 삭제한다", async () => {
+    cleanupExpired.mockRestore();
+    const deleteExpiredInProgressMatches = vi
+      .spyOn(db.matches, "deleteExpiredInProgressMatches")
+      .mockResolvedValue(1);
+    const deleteExpiredEmptySessions = vi
+      .spyOn(db.matches, "deleteExpiredEmptySessions")
+      .mockResolvedValue(1);
+    vi.spyOn(
+      MatchRepository.prototype,
+      "findByIdWithRatingChanges",
+    ).mockResolvedValue({ match, ratingChanges: [] });
+
+    const response = await request(app)
+      .get(`/api/matches/${match.id}`)
+      .set("Authorization", "Bearer test-token");
+
+    expect(response.status).toBe(200);
+    expect(
+      deleteExpiredInProgressMatches.mock.invocationCallOrder[0],
+    ).toBeLessThan(deleteExpiredEmptySessions.mock.invocationCallOrder[0]!);
+  });
 });
 
 describe("GET /api/matches", () => {
   beforeEach(() => {
+    vi.spyOn(MatchRepository.prototype, "cleanupExpired").mockResolvedValue(
+      undefined,
+    );
     vi.spyOn(
       AuthService.prototype,
       "authenticateAccessToken",
@@ -267,6 +334,9 @@ describe("GET /api/players/:playerId/profile-summary", () => {
 
 describe("GET /api/match-feed", () => {
   beforeEach(() => {
+    vi.spyOn(MatchRepository.prototype, "cleanupExpired").mockResolvedValue(
+      undefined,
+    );
     vi.spyOn(
       AuthService.prototype,
       "authenticateAccessToken",
@@ -348,6 +418,9 @@ describe("GET /api/match-feed", () => {
 
 describe("GET /api/match-sessions/:sessionId/matches", () => {
   beforeEach(() => {
+    vi.spyOn(MatchRepository.prototype, "cleanupExpired").mockResolvedValue(
+      undefined,
+    );
     vi.spyOn(
       AuthService.prototype,
       "authenticateAccessToken",

@@ -9,6 +9,7 @@ import type {
 } from "@pkpkdupr/shared/match";
 import { DEFAULT_MATCH_MODE } from "@pkpkdupr/shared/match";
 import { generateEntityId, isEntityId } from "@pkpkdupr/shared/entityId";
+import { kstDateKeyToDate } from "@pkpkdupr/shared/session";
 import type {
   PlayerRatingChangeLog,
   PlayerRatingHistory,
@@ -22,6 +23,8 @@ import {
   type UpdateRecordedMatchInput,
 } from "@pkpkdupr/db";
 import { db } from "../db";
+
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 /**
  * 저장소 호출 실패를 공개 API가 응답할 HTTP 상태와 함께 전달한다.
@@ -116,6 +119,7 @@ const hydrateManagedSession = (record: any): ManagedMatchSession => ({
   location: record.location,
   participantIds: record.participantIds ?? [],
   matchCount: Number(record.matchCount ?? 0),
+  kind: record.kind === "regular" ? "regular" : "custom",
   createdAt: new Date(record.createdAt),
   updatedAt: new Date(record.updatedAt),
 });
@@ -326,18 +330,32 @@ export class MatchRepository {
     return await this.createBatch(matches, true);
   }
 
+  /**
+   * 세션을 만든다. `conflictOnDuplicate`면 `(name, date)` 유니크 위반을 DB 원문 대신
+   * 안내 메시지의 409로 바꾼다. `date`는 초 단위로 저장되므로 같은 이름이 같은 초에
+   * 들어오는 동시 제출이 대상이며, 같은 날 다른 시각의 같은 이름은 막지 않는다.
+   */
   async createSession(
     session: Omit<Session, "id"> & { id?: string },
+    options: { conflictOnDuplicate?: boolean } = {},
   ): Promise<Session> {
-    const created = await this.run(
-      () =>
-        db.matches.createSession({
-          ...session,
-          id: session.id ?? generateEntityId("session"),
-          date: new Date(session.date),
-        }),
-      400,
-    );
+    let created;
+    try {
+      created = await this.run(
+        () =>
+          db.matches.createSession({
+            ...session,
+            id: session.id ?? generateEntityId("session"),
+            date: new Date(session.date),
+          }),
+        400,
+      );
+    } catch (error) {
+      if (options.conflictOnDuplicate && isUniqueViolation(error)) {
+        throw new MatchRepositoryError("같은 이름의 세션이 이미 있습니다.", 409);
+      }
+      throw error;
+    }
     return hydrateStandaloneSession(created);
   }
 
@@ -349,8 +367,83 @@ export class MatchRepository {
   async findSessionById(
     sessionId: string,
   ): Promise<ManagedMatchSession | undefined> {
-    const sessions = await this.findSessions();
-    return sessions.find((session) => session.id === sessionId);
+    const record = await this.run(
+      () => db.matches.findSessionById(sessionId),
+      500,
+    );
+    return record ? hydrateManagedSession(record) : undefined;
+  }
+
+  /** 그 KST 날짜의 정기 세션을 찾거나 만든다. 같은 날짜에 하나만 존재한다 */
+  async findOrCreateRegularSession(
+    dateKey: string,
+  ): Promise<ManagedMatchSession> {
+    const record = await this.run(
+      () => db.matches.findOrCreateRegularSession(dateKey),
+      500,
+    );
+    return hydrateManagedSession(record);
+  }
+
+  /** 참여자를 추가한다. 이미 있으면 무시한다(동시 호출에도 덮어쓰지 않음) */
+  async addSessionParticipants(
+    sessionId: string,
+    playerIds: string[],
+  ): Promise<void> {
+    await this.run(
+      () => db.matches.addSessionParticipants(sessionId, playerIds),
+      500,
+    );
+  }
+
+  /** 참여자 한 명을 뺀다. 참여 중이 아니어도 성공한다(멱등) */
+  async removeSessionParticipant(
+    sessionId: string,
+    playerId: string,
+  ): Promise<void> {
+    await this.run(
+      () => db.matches.removeSessionParticipant(sessionId, playerId),
+      500,
+    );
+  }
+
+  /** 그 KST 날짜의 세션을 시각 오름차순으로 돌려준다 */
+  async findSessionsByDateKey(
+    dateKey: string,
+  ): Promise<ManagedMatchSession[]> {
+    const from = kstDateKeyToDate(dateKey);
+    const to = new Date(from.getTime() + DAY_MS);
+    const records = await this.run(
+      () => db.matches.findSessionsInRange(from, to),
+      500,
+    );
+    return records.map(hydrateManagedSession);
+  }
+
+  /**
+   * 조회 시점 정리. 시작 후 2시간이 지나도록 점수 없는 진행 중 경기를 먼저 삭제하고,
+   * 그 결과 경기가 없어진 세션까지 포함해 만료된 빈 세션을 삭제한다.
+   * best-effort라 실패는 로그만 남기고 호출부 조회를 막지 않는다.
+   */
+  async cleanupExpired(now: Date = new Date()): Promise<void> {
+    try {
+      await db.matches.deleteExpiredInProgressMatches(now);
+    } catch (error) {
+      console.error("[MATCH] 만료된 진행 중 경기 정리 실패", error);
+    }
+    try {
+      await db.matches.deleteExpiredEmptySessions(now);
+    } catch (error) {
+      console.error("[MATCH] 빈 세션 정리 실패", error);
+    }
+  }
+
+  /** 만료되지 않은 진행 중(점수 없는 created) 경기의 선수 id */
+  async findInProgressPlayerIds(now: Date = new Date()): Promise<string[]> {
+    return await this.run(
+      () => db.matches.findInProgressPlayerIds(now),
+      500,
+    );
   }
 
   async deleteSession(sessionId: string): Promise<void> {

@@ -1,4 +1,10 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { Button } from "@heroui/react";
 import { IoCheckmarkCircle, IoSearch } from "react-icons/io5";
 import type {
@@ -18,6 +24,7 @@ import type {
   PlayerRatingChangeLog,
 } from "@pkpkdupr/shared/player";
 import { rememberRecentInputValue } from "@pkpkdupr/shared/recentInputHistory";
+import { DEFAULT_MATCH_LOCATION } from "@pkpkdupr/shared/session";
 import type { MatchInfo } from "@/components/Match";
 import MatchCard from "@/components/Match";
 import UserChip from "@/components/UserChip";
@@ -48,6 +55,10 @@ export interface RecordMatchDrawerBodyProps {
   editMatch?: MatchInfo;
   /** false면 저장을 막는다. 기본 true */
   isOnline?: boolean;
+  /** 새 기록을 이 세션 안의 경기로 저장한다(POST 바디 sessionId). 수정(PUT)에는 쓰지 않는다 */
+  sessionId?: string;
+  /** 새 기록의 장소 기본값. 없으면 DEFAULT_MATCH_LOCATION */
+  defaultLocation?: string;
   /** 입력 화면의 "취소" */
   onCancel: () => void;
   /** 저장 성공 직후 호출한다. 서버 응답(RecordedMatchResponse JSON, ratingChanges 포함)을 MatchInfo로 넘긴다. "한 판 더"로 만든 새 기록도 매번 호출한다 */
@@ -70,7 +81,6 @@ interface SetScoreDraft {
 
 type SetIndex = 0 | 1 | 2;
 
-const DEFAULT_LOCATION = "야탑초등학교";
 const MAX_MEMBER_COUNT = 4;
 /** 멤버 목록은 2열 5행까지만 보여 준다 */
 const RECENT_PLAYER_LIMIT = 10;
@@ -266,6 +276,8 @@ const swapTeamMembers = (
 const RecordMatchDrawerBody: React.FC<RecordMatchDrawerBodyProps> = ({
   editMatch,
   isOnline = true,
+  sessionId,
+  defaultLocation = DEFAULT_MATCH_LOCATION,
   onCancel,
   onRecorded,
   onDone,
@@ -299,7 +311,7 @@ const RecordMatchDrawerBody: React.FC<RecordMatchDrawerBodyProps> = ({
   const [sets, setSets] = useState<SetScoreDraft[]>(initialState.sets);
   const [activeSetIndex, setActiveSetIndex] = useState<SetIndex>(0);
   const [location, setLocation] = useState(
-    editMatch ? editMatch.location : DEFAULT_LOCATION,
+    editMatch ? editMatch.location : defaultLocation,
   );
   const [matchName, setMatchName] = useState(editMatch?.name ?? "");
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -353,12 +365,19 @@ const RecordMatchDrawerBody: React.FC<RecordMatchDrawerBodyProps> = ({
     setSaveError(null);
   }, []);
 
-  // 세션 복원이 늦어 마운트 시점에 내가 없었다면 들어오는 즉시 첫 멤버로 넣는다
+  // 본인은 기본값으로 한 번만 채운다. 세션 복원이 늦어 마운트 시점에 내가 없었다면
+  // 들어오는 즉시 한 번 채우고, 이후 사용자가 비운 자리는 다시 채우지 않는다
+  const hasSeededCurrentPlayerRef = useRef(
+    !!editMatch || !!currentPlayerMember,
+  );
   useEffect(() => {
-    if (currentPlayerMember && members.length === 0) {
-      applyMembers([currentPlayerMember]);
+    if (hasSeededCurrentPlayerRef.current || !currentPlayerMember) {
+      return;
     }
-  }, [applyMembers, currentPlayerMember, members.length]);
+
+    hasSeededCurrentPlayerRef.current = true;
+    applyMembers([currentPlayerMember]);
+  }, [applyMembers, currentPlayerMember]);
 
   const matchType = useMemo(
     () => resolveTeamMatchType(members, teams),
@@ -405,7 +424,6 @@ const RecordMatchDrawerBody: React.FC<RecordMatchDrawerBodyProps> = ({
     return players
       .filter(
         (candidate) =>
-          candidate.id !== player?.id &&
           candidate.status === "active" &&
           (!normalizedQuery ||
             candidate.username.toLocaleLowerCase().includes(normalizedQuery)),
@@ -415,7 +433,7 @@ const RecordMatchDrawerBody: React.FC<RecordMatchDrawerBodyProps> = ({
           getLastPlayedAtMs(b.lastPlayedAt) - getLastPlayedAtMs(a.lastPlayedAt),
       )
       .slice(0, RECENT_PLAYER_LIMIT);
-  }, [player?.id, players, query]);
+  }, [players, query]);
 
   const handlePickPlayer = (candidate: RecordablePlayer) => {
     const member = normalizeMatchMember(candidate);
@@ -432,10 +450,6 @@ const RecordMatchDrawerBody: React.FC<RecordMatchDrawerBodyProps> = ({
   };
 
   const handleRemoveMember = (memberId: string) => {
-    if (memberId === currentPlayerMember?.id) {
-      return;
-    }
-
     applyMembers(members.filter((member) => member.id !== memberId));
   };
 
@@ -495,6 +509,7 @@ const RecordMatchDrawerBody: React.FC<RecordMatchDrawerBodyProps> = ({
       ],
       location: trimmedLocation,
       scores: scoresForSave,
+      ...(!editingMatchId && sessionId ? { sessionId } : {}),
     };
 
     setIsSaving(true);

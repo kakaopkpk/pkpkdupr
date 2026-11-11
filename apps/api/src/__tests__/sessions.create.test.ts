@@ -46,6 +46,7 @@ const managedSession: ManagedMatchSession = {
   location: "PKELO Court A",
   participantIds: participants.map((player) => player.id),
   matchCount: 0,
+  kind: "custom",
   createdAt: now,
   updatedAt: now,
 };

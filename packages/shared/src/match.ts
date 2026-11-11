@@ -1,4 +1,5 @@
 import type { Player, PlayerRatingChangeLog } from "./player.js";
+import type { MatchSessionKind } from "./session.js";
 
 export const matchTypeValues = [
   "singles",
@@ -94,7 +95,7 @@ export const MATCH_RESULT_MAX_SCORE_COUNT = 3;
 
 export type MatchStatus = "created" | "completed" | "cancelled";
 
-/** 참가자가 기록을 고칠 수 있는 기간(경기 시작 시각 기준) */
+/** 참가자·생성자가 기록을 고칠 수 있는 기간(경기 시작 시각 기준) */
 export const MATCH_EDIT_WINDOW_MS = 24 * 60 * 60 * 1000;
 
 /** 경기 시작 후 24시간 이내(시작 전 포함)면 true */
@@ -102,6 +103,20 @@ export const isWithinMatchEditWindow = (
   matchStartsAt: Date,
   now: Date = new Date(),
 ): boolean => now.getTime() - matchStartsAt.getTime() <= MATCH_EDIT_WINDOW_MS;
+
+/** 기록을 고칠 수 있는 사람: 경기 참가자 또는 경기 생성자 */
+export const canEditMatchRecord = (
+  match: Pick<Match, "creatorPlayerId" | "teams">,
+  playerId: string,
+): boolean =>
+  match.creatorPlayerId === playerId ||
+  match.teams.some((team) =>
+    team.players.some((player) => player.id === playerId),
+  );
+
+/** 점수가 아직 없는 진행 중 경기(status "created")면 true */
+export const isMatchInProgress = (match: Pick<Match, "status">): boolean =>
+  match.status === "created";
 
 export type MatchSessionStatus = "created" | "completed";
 
@@ -139,6 +154,8 @@ export interface ManagedMatchSession {
   location: string;
   participantIds: string[];
   matchCount: number;
+  /** 정기 세션 날짜 키(regular_date_key)가 있으면 "regular" */
+  kind: MatchSessionKind;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -271,6 +288,8 @@ export interface RecordMatchRequest {
   location: string;
   /** 단판 1개, 2선승 2~3개. 세트마다 동점 불가 */
   scores: MatchScore[];
+  /** POST /api/matches 전용. 회원 세션(오늘) 안에서 기록할 때 지정. 정기 세션은 시작 시각 규칙으로 자동 지정되므로 무시된다 */
+  sessionId?: string;
 }
 
 /** 기록·수정 응답. GET /api/matches/:matchId 응답과 같은 형태다 */
