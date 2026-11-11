@@ -194,11 +194,7 @@ const Matches: React.FC<MatchesProps> = ({ reloadKey = 0 }) => {
   const previousIsMyMatchOnlyRef = useRef(isMyMatchOnly);
   const [pendingMatchAction, setPendingMatchAction] = useState<{
     matchId: string;
-    type:
-      | "submit-result"
-      | "approve-result"
-      | "cancel-approval"
-      | "reject-result";
+    type: "submit-result";
   } | null>(null);
 
   useEffect(() => {
@@ -529,87 +525,6 @@ const Matches: React.FC<MatchesProps> = ({ reloadKey = 0 }) => {
     [isOnline, refreshFeedAndSession, isAuthenticated],
   );
 
-  const handleApproveResult = useCallback(
-    async (matchId: string) => {
-      if (!isAuthenticated) throw new Error("로그인이 필요해요.");
-      if (!isOnline) {
-        throw new Error(
-          "오프라인에서는 결과를 승인할 수 없습니다. 온라인 연결이 필요합니다.",
-        );
-      }
-
-      try {
-        setPendingMatchAction({ matchId, type: "approve-result" });
-        const res = await apiFetch(
-          `/api/matches/${matchId}/approval`,
-          { method: "POST" },
-        );
-        if (!res.ok) {
-          const errorData = await res.json().catch(() => ({}));
-          throw new Error(errorData.error || "결과를 승인하지 못했어요.");
-        }
-        await refreshFeedAndSession();
-      } finally {
-        setPendingMatchAction(null);
-      }
-    },
-    [isOnline, refreshFeedAndSession, isAuthenticated],
-  );
-
-  const handleCancelApproval = useCallback(
-    async (matchId: string) => {
-      if (!isAuthenticated) throw new Error("로그인이 필요해요.");
-      if (!isOnline) {
-        throw new Error(
-          "오프라인에서는 합의를 취소할 수 없습니다. 온라인 연결이 필요합니다.",
-        );
-      }
-
-      try {
-        setPendingMatchAction({ matchId, type: "cancel-approval" });
-        const res = await apiFetch(
-          `/api/matches/${matchId}/approval`,
-          { method: "DELETE" },
-        );
-        if (!res.ok) {
-          const errorData = await res.json().catch(() => ({}));
-          throw new Error(errorData.error || "합의를 취소하지 못했어요.");
-        }
-        await refreshFeedAndSession();
-      } finally {
-        setPendingMatchAction(null);
-      }
-    },
-    [isOnline, refreshFeedAndSession, isAuthenticated],
-  );
-
-  const handleRejectResult = useCallback(
-    async (matchId: string) => {
-      if (!isAuthenticated) throw new Error("로그인이 필요해요.");
-      if (!isOnline) {
-        throw new Error(
-          "오프라인에서는 결과를 거부할 수 없습니다. 온라인 연결이 필요합니다.",
-        );
-      }
-
-      try {
-        setPendingMatchAction({ matchId, type: "reject-result" });
-        const res = await apiFetch(
-          `/api/matches/${matchId}/rejection`,
-          { method: "POST" },
-        );
-        if (!res.ok) {
-          const errorData = await res.json().catch(() => ({}));
-          throw new Error(errorData.error || "결과를 거부하지 못했어요.");
-        }
-        await refreshFeedAndSession();
-      } finally {
-        setPendingMatchAction(null);
-      }
-    },
-    [isOnline, refreshFeedAndSession, isAuthenticated],
-  );
-
   const completeMatchDetailClose = useCallback(() => {
     setSelectedMatchId(null);
     setSelectedMatch(null);
@@ -727,28 +642,10 @@ const Matches: React.FC<MatchesProps> = ({ reloadKey = 0 }) => {
         match={selectedMatch}
         currentPlayerId={player?.id}
         onSubmitResult={handleSubmitResult}
-        onApproveResult={handleApproveResult}
-        onCancelApproval={handleCancelApproval}
-        onRejectResult={handleRejectResult}
-        onAutoApprovalDue={() => {
-          void refreshFeedAndSession();
-        }}
         isOnline={isOnline}
         isSubmittingResult={
           pendingMatchAction?.matchId === selectedMatch.id &&
           pendingMatchAction.type === "submit-result"
-        }
-        isApprovingResult={
-          pendingMatchAction?.matchId === selectedMatch.id &&
-          pendingMatchAction.type === "approve-result"
-        }
-        isCancellingApproval={
-          pendingMatchAction?.matchId === selectedMatch.id &&
-          pendingMatchAction.type === "cancel-approval"
-        }
-        isRejectingResult={
-          pendingMatchAction?.matchId === selectedMatch.id &&
-          pendingMatchAction.type === "reject-result"
         }
         isLoading={isSelectedMatchLoading}
       />

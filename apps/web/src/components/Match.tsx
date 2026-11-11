@@ -34,16 +34,11 @@ export type MatchInfo = Omit<
   updatedAt: string;
   completedAt: string | null;
   resultSubmittedAt: string | null;
-  autoApprovalDueAt?: string | null;
   session?: {
     id: string;
     name?: string;
     date: string;
   };
-  approvals: Array<{
-    playerId: string;
-    approvedAt: string;
-  }>;
   ratingChanges?: PlayerRatingChangeLog[];
 };
 
