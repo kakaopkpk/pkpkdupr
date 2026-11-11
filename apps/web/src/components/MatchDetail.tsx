@@ -1,10 +1,8 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Button, Card, Separator } from "@heroui/react";
-import type { MatchScore } from "@pkpkdupr/shared/match";
 import {
   getMatchTopLevelType,
-  MATCH_RESULT_MAX_SCORE_COUNT,
-  validateMatchScoresForMode,
+  isWithinMatchEditWindow,
 } from "@pkpkdupr/shared/match";
 import type { PlayerRatingChangeLog } from "@pkpkdupr/shared/player";
 import BottomSheet from "@/components/BottomSheet";
@@ -12,8 +10,8 @@ import Match, { type MatchInfo } from "@/components/Match";
 import CopyableId from "@/components/CopyableId";
 import DetailPageHeader from "@/components/DetailPageHeader";
 import RatingDeltaChip from "@/components/RatingDeltaChip";
+import RecordMatchDrawerBody from "@/components/RecordMatchDrawerBody";
 import SkeletonBlock from "@/components/SkeletonBlock";
-import UserChip from "@/components/UserChip";
 import { type TabKey, useTabNavigation } from "@/context/TabNavigationContext";
 import { useMinimumLoading } from "@/hooks/useMinimumLoading";
 import { formatRating } from "@/utils/dupr";
@@ -22,59 +20,15 @@ interface MatchDetailProps {
   match: MatchInfo;
   tabKey?: TabKey;
   currentPlayerId?: string;
-  onSubmitResult?: (matchId: string, scores: MatchScore[]) => Promise<void>;
+  /** 기록 시트에서 저장할 때마다 호출한다. "한 판 더"로 만든 다른 경기도 넘어온다 */
+  onMatchRecorded?: (match: MatchInfo) => void;
   isOnline?: boolean;
-  isSubmittingResult?: boolean;
   isLoading?: boolean;
 }
 
 const subTextClassName = "text-pkpk-sub-font";
-
-const createEmptyScoreRow = () => ({ scoreA: "", scoreB: "" });
 const SCORE_TABLE_SET_COUNT = 3;
-const resultTeamChipWidthClass = "w-[clamp(6.6rem,35.2cqw,11rem)]";
 
-type ScoreRow = ReturnType<typeof createEmptyScoreRow>;
-
-const createScoreRows = (
-  mode: MatchInfo["mode"],
-  scores?: MatchScore[],
-): ScoreRow[] => {
-  if (mode === "best-of-3") {
-    return Array.from({ length: MATCH_RESULT_MAX_SCORE_COUNT }, (_, index) => {
-      const score = scores?.[index];
-      return score
-        ? { scoreA: String(score.scoreA), scoreB: String(score.scoreB) }
-        : createEmptyScoreRow();
-    });
-  }
-
-  return scores?.length
-    ? scores.map((score) => ({
-        scoreA: String(score.scoreA),
-        scoreB: String(score.scoreB),
-      }))
-    : [createEmptyScoreRow()];
-};
-
-const getScoreRowWinner = (row: ScoreRow): 0 | 1 | null => {
-  const scoreA = Number(row.scoreA);
-  const scoreB = Number(row.scoreB);
-
-  if (
-    row.scoreA.trim() === "" ||
-    row.scoreB.trim() === "" ||
-    !Number.isInteger(scoreA) ||
-    !Number.isInteger(scoreB) ||
-    scoreA < 0 ||
-    scoreB < 0 ||
-    scoreA === scoreB
-  ) {
-    return null;
-  }
-
-  return scoreA > scoreB ? 0 : 1;
-};
 
 export const MatchDetailSkeleton: React.FC = () => (
   <div
@@ -199,58 +153,29 @@ const MatchDetail: React.FC<MatchDetailProps> = ({
   match,
   tabKey = "match",
   currentPlayerId,
-  onSubmitResult,
+  onMatchRecorded,
   isOnline = true,
-  isSubmittingResult = false,
   isLoading = false,
 }) => {
-  const [scoreRows, setScoreRows] = useState(() =>
-    createScoreRows(match.mode, match.scores),
-  );
-  const [resultError, setResultError] = useState<string | null>(null);
   const isSectionsLoading = useMinimumLoading(isLoading);
   const [isResultSheetOpen, setIsResultSheetOpen] = useState(false);
+  // 시트를 열 때마다 RecordMatchDrawerBody를 리마운트해 최신 경기 값으로 채운다
+  const [resultSheetKey, setResultSheetKey] = useState(0);
   const { closeDepth, pushDepth, selectedTab } = useTabNavigation();
-  const isCreator = match.creatorPlayerId === currentPlayerId;
+  const isParticipant =
+    !!currentPlayerId &&
+    match.teams.some((team) =>
+      team.players.some((player) => player.id === currentPlayerId),
+    );
   const hasResultScores = !!match.scores?.length;
-  const canSubmitResult =
-    match.status === "created" &&
-    !match.session &&
-    isCreator &&
+  // 기한이 지나는 순간을 따로 감시하지 않는다. 열어 둔 채 지나면 서버가 거절한다
+  const canEditRecord =
+    isParticipant &&
+    match.status !== "cancelled" &&
+    isWithinMatchEditWindow(new Date(match.matchStartsAt)) &&
     isOnline &&
-    !!onSubmitResult;
-  const resultActionLabel = hasResultScores ? "결과 수정" : "결과 입력";
+    !!onMatchRecorded;
   const resultSheetDepthId = `match-result-sheet:${match.id}`;
-  const isBestOfThree = match.mode === "best-of-3";
-  const firstTwoSetWinners = scoreRows.slice(0, 2).map(getScoreRowWinner);
-  const isThirdSetEnabled =
-    isBestOfThree &&
-    firstTwoSetWinners.length === 2 &&
-    firstTwoSetWinners[0] !== null &&
-    firstTwoSetWinners[1] !== null &&
-    firstTwoSetWinners[0] !== firstTwoSetWinners[1];
-  const submittedScoreRows =
-    isBestOfThree && !isThirdSetEnabled ? scoreRows.slice(0, 2) : scoreRows;
-  const isResultScoreValid = (() => {
-    const scores = submittedScoreRows.map((row) => ({
-      scoreA: Number(row.scoreA),
-      scoreB: Number(row.scoreB),
-    }));
-
-    if (
-      scores.length > MATCH_RESULT_MAX_SCORE_COUNT ||
-      submittedScoreRows.some((row) => getScoreRowWinner(row) === null)
-    ) {
-      return false;
-    }
-
-    try {
-      validateMatchScoresForMode(match.mode, scores);
-      return true;
-    } catch {
-      return false;
-    }
-  })();
   const totalPoints = useMemo(
     () =>
       (match.scores ?? []).reduce<[number, number]>(
@@ -279,33 +204,20 @@ const MatchDetail: React.FC<MatchDetailProps> = ({
   const hasRatingChanges =
     match.status === "completed" && (match.ratingChanges?.length ?? 0) > 0;
 
+  // 저장 후 같은 경기의 값만 바뀔 때는 완료 화면을 보여 주도록 시트를 유지한다
   useEffect(() => {
-    setScoreRows(createScoreRows(match.mode, match.scores));
-    setResultError(null);
     setIsResultSheetOpen(false);
-  }, [match.id, match.mode, match.scores]);
-
-  const updateScoreRow = (
-    index: number,
-    field: keyof ReturnType<typeof createEmptyScoreRow>,
-    value: string,
-  ) => {
-    setScoreRows((rows) =>
-      rows.map((row, rowIndex) =>
-        rowIndex === index ? { ...row, [field]: value } : row,
-      ),
-    );
-  };
+  }, [match.id]);
 
   const openResultSheet = () => {
-    if (!canSubmitResult) return;
+    if (!canEditRecord) return;
 
     pushDepth(tabKey, {
       id: resultSheetDepthId,
       kind: "bottom-sheet",
       onClose: () => setIsResultSheetOpen(false),
     });
-    setResultError(null);
+    setResultSheetKey((key) => key + 1);
     setIsResultSheetOpen(true);
   };
 
@@ -322,46 +234,6 @@ const MatchDetail: React.FC<MatchDetailProps> = ({
     }
 
     closeResultSheet();
-  };
-
-  const handleSubmitResult = async () => {
-    if (!onSubmitResult) return;
-
-    try {
-      if (submittedScoreRows.length > MATCH_RESULT_MAX_SCORE_COUNT) {
-        throw new Error(
-          `스코어는 최대 ${MATCH_RESULT_MAX_SCORE_COUNT}개까지 입력할 수 있어요.`,
-        );
-      }
-
-      const scores = submittedScoreRows.map((row, index) => {
-        const scoreA = Number(row.scoreA);
-        const scoreB = Number(row.scoreB);
-
-        if (
-          row.scoreA.trim() === "" ||
-          row.scoreB.trim() === "" ||
-          !Number.isInteger(scoreA) ||
-          !Number.isInteger(scoreB) ||
-          scoreA < 0 ||
-          scoreB < 0 ||
-          scoreA === scoreB
-        ) {
-          throw new Error(`${index + 1}번째 스코어를 확인해주세요.`);
-        }
-
-        return { scoreA, scoreB };
-      });
-
-      validateMatchScoresForMode(match.mode, scores);
-      setResultError(null);
-      await onSubmitResult(match.id, scores);
-      closeResultSheet();
-    } catch (err) {
-      setResultError(
-        err instanceof Error ? err.message : "결과를 입력하지 못했어요.",
-      );
-    }
   };
 
   return (
@@ -480,7 +352,7 @@ const MatchDetail: React.FC<MatchDetailProps> = ({
                 </tbody>
               </table>
             </div>
-            {canSubmitResult ? (
+            {canEditRecord ? (
               <div className="mt-3 flex justify-end">
                 <Button
                   size="sm"
@@ -553,10 +425,6 @@ const MatchDetail: React.FC<MatchDetailProps> = ({
             </Card>
             </section>
 
-            {!isResultSheetOpen && resultError ? (
-            <p className="text-xs font-medium text-red-500">{resultError}</p>
-            ) : null}
-
           </div>
         </div>
       </div>
@@ -564,122 +432,17 @@ const MatchDetail: React.FC<MatchDetailProps> = ({
         isOpen={isResultSheetOpen}
         isActive={selectedTab === tabKey}
         onOpenChange={handleResultSheetOpenChange}
-        ariaLabel={hasResultScores ? "경기 결과 수정" : "경기 결과 입력"}
-        className="[container-type:inline-size]"
+        ariaLabel="Record match"
         layer={80}
       >
-        <BottomSheet.Header>
-          <h2 className="bs-text-head text-pkpk-main-font">
-            {hasResultScores ? "경기 결과 수정" : "경기 결과 입력"}
-          </h2>
-        </BottomSheet.Header>
-        <BottomSheet.Body>
-          <div className="flex flex-col">
-            <div className="grid grid-cols-[2.5rem_minmax(0,1fr)_1rem_minmax(0,1fr)] items-end gap-2">
-              <span aria-hidden="true" />
-              {match.teams.map((team, teamIndex) => (
-                <React.Fragment key={team.id}>
-                  {teamIndex === 1 ? <span aria-hidden="true" /> : null}
-                  <div className="flex min-w-0 flex-col items-center gap-1">
-                    <p className="w-full text-center bs-text-caption font-semibold text-pkpk-sub-font">
-                      {teamIndex === 0 ? "A팀" : "B팀"}
-                    </p>
-                    <div className="flex w-full flex-col items-center gap-1">
-                      {team.players.map((player) => (
-                        <UserChip
-                          key={player.id}
-                          player={player}
-                          isMe={player.id === currentPlayerId}
-                          size="match"
-                          chipWidthClass={resultTeamChipWidthClass}
-                          isMirrored={teamIndex === 1}
-                        />
-                      ))}
-                    </div>
-                  </div>
-                </React.Fragment>
-              ))}
-            </div>
-            <div className="mt-[1.2rem] flex flex-col gap-[0.84rem]">
-              {scoreRows.map((row, index) => {
-                const isThirdSet = isBestOfThree && index === 2;
-                const isSetDisabled = isThirdSet && !isThirdSetEnabled;
-
-                return (
-                  <div
-                    key={index}
-                    aria-disabled={isSetDisabled}
-                    className="grid grid-cols-[2.5rem_minmax(0,1fr)_1rem_minmax(0,1fr)] items-center gap-2"
-                  >
-                    <span
-                      className={`text-xs font-semibold ${
-                        isSetDisabled
-                          ? "text-pkpk-detail-font"
-                          : "text-[#888]"
-                      }`}
-                    >
-                      Set {index + 1}
-                    </span>
-                    <input
-                      type="number"
-                      inputMode="numeric"
-                      min={0}
-                      value={row.scoreA}
-                      onChange={(event) =>
-                        updateScoreRow(index, "scoreA", event.target.value)
-                      }
-                      disabled={isSetDisabled}
-                      className="app-mobile-input min-w-0 w-full rounded-xl border border-border px-3 py-2 text-center text-base font-semibold text-pkpk-sub-font outline-none disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-pkpk-detail-font"
-                      placeholder="점수"
-                      aria-label={`G${index + 1} A팀 점수`}
-                    />
-                    <span
-                      className={`text-center text-sm font-semibold ${
-                        isSetDisabled
-                          ? "text-pkpk-detail-font"
-                          : "text-[#888]"
-                      }`}
-                    >
-                      :
-                    </span>
-                    <input
-                      type="number"
-                      inputMode="numeric"
-                      min={0}
-                      value={row.scoreB}
-                      onChange={(event) =>
-                        updateScoreRow(index, "scoreB", event.target.value)
-                      }
-                      disabled={isSetDisabled}
-                      className="app-mobile-input min-w-0 w-full rounded-xl border border-border px-3 py-2 text-center text-base font-semibold text-pkpk-sub-font outline-none disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-pkpk-detail-font"
-                      placeholder="점수"
-                      aria-label={`G${index + 1} B팀 점수`}
-                    />
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-          {resultError ? (
-            <p className="text-xs font-medium text-red-500">{resultError}</p>
-          ) : null}
-          <div className="mt-2 grid grid-cols-2 gap-2">
-            <Button
-              className="app-action-button w-full rounded-2xl bg-slate-100 font-semibold text-pkpk-sub-font"
-              onPress={closeResultSheet}
-              isDisabled={isSubmittingResult}
-            >
-              취소
-            </Button>
-            <Button
-              className="app-action-button w-full rounded-2xl bg-[#409eff] font-semibold text-white disabled:bg-slate-200 disabled:text-slate-400"
-              onPress={() => void handleSubmitResult()}
-              isDisabled={isSubmittingResult || !isResultScoreValid}
-            >
-              {isSubmittingResult ? "입력 중..." : resultActionLabel}
-            </Button>
-          </div>
-        </BottomSheet.Body>
+        <RecordMatchDrawerBody
+          key={resultSheetKey}
+          editMatch={match}
+          isOnline={isOnline}
+          onCancel={closeResultSheet}
+          onRecorded={(recordedMatch) => onMatchRecorded?.(recordedMatch)}
+          onDone={closeResultSheet}
+        />
       </BottomSheet>
     </div>
   );

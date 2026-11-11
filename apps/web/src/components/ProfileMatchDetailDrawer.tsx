@@ -1,6 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@heroui/react";
-import type { MatchScore } from "@pkpkdupr/shared/match";
 import type { MatchInfo } from "@/components/Match";
 import MatchDetail, {
   MatchDetailSkeleton,
@@ -42,7 +41,6 @@ const ProfileMatchDetailDrawer: React.FC<ProfileMatchDetailDrawerProps> = ({
     match ?? null,
   );
   const [isLoading, setIsLoading] = useState(false);
-  const [isSubmittingResult, setIsSubmittingResult] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const requestIdRef = useRef(0);
   const targetMatchId = match?.id ?? matchId ?? null;
@@ -89,37 +87,12 @@ const ProfileMatchDetailDrawer: React.FC<ProfileMatchDetailDrawerProps> = ({
     [isOnline, isAuthenticated],
   );
 
-  const handleSubmitResult = useCallback(
-    async (matchId: string, scores: MatchScore[]) => {
-      if (!isAuthenticated) throw new Error("로그인이 필요해요.");
-      if (!isOnline) {
-        throw new Error(
-          "오프라인에서는 결과를 입력할 수 없습니다. 온라인 연결이 필요합니다.",
-        );
-      }
-
-      try {
-        setIsSubmittingResult(true);
-        const res = await apiFetch(`/api/matches/${matchId}/result`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ scores }),
-        });
-        if (!res.ok) {
-          const errorData = await res.json().catch(() => ({}));
-          throw new Error(errorData.error || "결과를 입력하지 못했어요.");
-        }
-
-        setDisplayedMatch((await res.json()) as MatchInfo);
-        await loadMatchDetail(matchId);
-      } finally {
-        setIsSubmittingResult(false);
-      }
-    },
-    [isOnline, loadMatchDetail, isAuthenticated],
-  );
+  const handleMatchRecorded = useCallback((recordedMatch: MatchInfo) => {
+    // "한 판 더"로 만든 새 경기는 이 드로어의 경기가 아니므로 무시한다
+    setDisplayedMatch((current) =>
+      current && current.id === recordedMatch.id ? recordedMatch : current,
+    );
+  }, []);
 
   useEffect(() => {
     requestIdRef.current += 1;
@@ -156,9 +129,8 @@ const ProfileMatchDetailDrawer: React.FC<ProfileMatchDetailDrawerProps> = ({
           match={displayedMatch}
           tabKey={tabKey}
           currentPlayerId={currentPlayerId}
-          onSubmitResult={handleSubmitResult}
+          onMatchRecorded={handleMatchRecorded}
           isOnline={isOnline}
-          isSubmittingResult={isSubmittingResult}
           isLoading={isLoading}
         />
       </>

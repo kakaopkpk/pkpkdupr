@@ -1,6 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Button, Card, Switch } from "@heroui/react";
-import type { MatchScore } from "@pkpkdupr/shared/match";
 import Match, {
   type MatchFeedItemInfo,
   type MatchInfo,
@@ -192,10 +191,6 @@ const Matches: React.FC<MatchesProps> = ({ reloadKey = 0 }) => {
   const pendingReloadRef = useRef(false);
   const previousReloadKeyRef = useRef(reloadKey);
   const previousIsMyMatchOnlyRef = useRef(isMyMatchOnly);
-  const [pendingMatchAction, setPendingMatchAction] = useState<{
-    matchId: string;
-    type: "submit-result";
-  } | null>(null);
 
   useEffect(() => {
     clearLegacyCachedMatches();
@@ -495,34 +490,19 @@ const Matches: React.FC<MatchesProps> = ({ reloadKey = 0 }) => {
     }
   }, [loadFeed, loadSessionMatches, selectedSession]);
 
-  const handleSubmitResult = useCallback(
-    async (matchId: string, scores: MatchScore[]) => {
-      if (!isAuthenticated) throw new Error("로그인이 필요해요.");
-      if (!isOnline) {
-        throw new Error(
-          "오프라인에서는 결과를 입력할 수 없습니다. 온라인 연결이 필요합니다.",
-        );
-      }
+  const handleMatchRecorded = useCallback(
+    (recordedMatch: MatchInfo) => {
+      const isSelected = recordedMatch.id === selectedMatchId;
+      // "한 판 더"로 만든 새 경기는 피드에만 반영하고 상세는 수정한 경기를 유지한다
+      if (isSelected) setSelectedMatch(recordedMatch);
 
-      try {
-        setPendingMatchAction({ matchId, type: "submit-result" });
-        const res = await apiFetch(`/api/matches/${matchId}/result`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ scores }),
-        });
-        if (!res.ok) {
-          const errorData = await res.json().catch(() => ({}));
-          throw new Error(errorData.error || "결과를 입력하지 못했어요.");
-        }
+      void (async () => {
         await refreshFeedAndSession();
-      } finally {
-        setPendingMatchAction(null);
-      }
+        // 피드 항목이 상세를 덮어쓰므로 상세 응답으로 다시 맞춘다
+        if (isSelected) await loadSelectedMatch(recordedMatch.id);
+      })().catch(() => {});
     },
-    [isOnline, refreshFeedAndSession, isAuthenticated],
+    [loadSelectedMatch, refreshFeedAndSession, selectedMatchId],
   );
 
   const completeMatchDetailClose = useCallback(() => {
@@ -641,12 +621,8 @@ const Matches: React.FC<MatchesProps> = ({ reloadKey = 0 }) => {
       <MatchDetail
         match={selectedMatch}
         currentPlayerId={player?.id}
-        onSubmitResult={handleSubmitResult}
+        onMatchRecorded={handleMatchRecorded}
         isOnline={isOnline}
-        isSubmittingResult={
-          pendingMatchAction?.matchId === selectedMatch.id &&
-          pendingMatchAction.type === "submit-result"
-        }
         isLoading={isSelectedMatchLoading}
       />
     );
