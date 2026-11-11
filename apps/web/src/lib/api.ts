@@ -25,7 +25,7 @@ const resolveApiBaseUrl = () => {
 const API_BASE_URL = resolveApiBaseUrl();
 
 // 값이 있으면 Edge Function 실행 리전을 고정한다(DB와 같은 리전에서 실행해 DB 왕복 지연을 줄인다).
-const FUNCTION_REGION = import.meta.env.VITE_FUNCTION_REGION?.trim() ?? "";
+const FUNCTION_REGION = (import.meta.env.VITE_FUNCTION_REGION ?? "").trim();
 
 const isLoopbackHostname = (hostname: string) =>
   hostname === "localhost" ||
