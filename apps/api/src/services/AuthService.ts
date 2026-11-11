@@ -74,6 +74,12 @@ import { db } from "../db";
 
 const DEV_MOCK_DATA_ENABLED = process.env.ENABLE_DEV_MOCK_DATA === "true";
 
+/** 같은 내부 이메일의 Auth 사용자가 이미 있으면 409 AccountRequestError로 바꾸고, 그 밖의 오류는 그대로 둔다. */
+const toDuplicateAuthEmailError = (error: unknown) =>
+  error instanceof AuthEmailExistsError
+    ? new AccountRequestError(409, "같은 아이디의 로그인 계정이 이미 있습니다.")
+    : error;
+
 /** 로컬 dev mock 회원 Auth 계정의 공통 비밀번호. dev mock이 켜졌을 때만 쓴다. */
 const DEV_MOCK_AUTH_PASSWORD = "devpass1234";
 
@@ -683,13 +689,7 @@ export class AuthService {
         password,
       });
     } catch (error) {
-      if (error instanceof AuthEmailExistsError) {
-        throw new AccountRequestError(
-          409,
-          "같은 아이디의 로그인 계정이 이미 있습니다.",
-        );
-      }
-      throw error;
+      throw toDuplicateAuthEmailError(error);
     }
   }
 
@@ -700,13 +700,7 @@ export class AuthService {
     try {
       await this.authAdmin.updateUser(authUserId, input);
     } catch (error) {
-      if (error instanceof AuthEmailExistsError) {
-        throw new AccountRequestError(
-          409,
-          "같은 아이디의 로그인 계정이 이미 있습니다.",
-        );
-      }
-      throw error;
+      throw toDuplicateAuthEmailError(error);
     }
   }
 
@@ -904,7 +898,11 @@ export class AuthService {
       });
       authUserId = existingId;
     }
-    await db.players.linkAuthUser(stored.id, authUserId, false);
+    if (!(await db.players.linkAuthUser(stored.id, authUserId, false))) {
+      throw new Error(
+        `회원에 Auth 사용자를 연결하지 못했습니다. 다음 기동에서 다시 연결합니다. (authUserId=${authUserId})`,
+      );
+    }
   }
 
   private async insertCreationLog(input: {

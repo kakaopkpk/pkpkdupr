@@ -1,9 +1,9 @@
 import type { NextFunction, Request, Response } from "express";
 
-/** 초기·임시 비밀번호를 응답 본문에 싣는 POST 경로. */
+/** 초기·임시 비밀번호를 응답 본문에 싣는 POST 경로. Express 라우팅처럼 대소문자를 구분하지 않는다. */
 const sensitiveRequestPathPatterns = [
-  /^\/api\/admin\/register$/,
-  /^\/api\/admin\/players\/[^/]+\/password-reset$/,
+  /^\/api\/admin\/register$/i,
+  /^\/api\/admin\/players\/[^/]+\/password-reset$/i,
 ];
 
 const normalizePath = (path: string) => path.replace(/\/+$/, "") || "/";

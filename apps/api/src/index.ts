@@ -683,7 +683,7 @@ app.post("/api/me/password-changed", async (req, res) => {
   try {
     res.json(toMeResponse(await authService.markPasswordChanged(session)));
   } catch (error) {
-    res.status(500).json({ error: (error as Error).message });
+    sendAccountRequestFailure(res, error);
   }
 });
 
