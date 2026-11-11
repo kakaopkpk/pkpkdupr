@@ -29,7 +29,6 @@ interface MatchDetailProps {
 }
 
 const subTextClassName = "text-pkpk-sub-font";
-const SCORE_TABLE_SET_COUNT = 3;
 
 export const MatchDetailSkeleton: React.FC = () => (
   <div
@@ -175,6 +174,9 @@ const MatchDetail: React.FC<MatchDetailProps> = ({
     isOnline &&
     !!onMatchRecorded;
   const resultSheetDepthId = `match-result-sheet:${match.id}`;
+  // 단판은 점수 열 하나만, 점수가 여러 개인 과거 2선승 기록은 게임마다 열과 Total을 둔다
+  const isMultiGame = isMultiGameMatchRecord(match);
+  const scoreColumnCount = isMultiGame ? match.scores!.length : 1;
   const totalPoints = useMemo(
     () =>
       (match.scores ?? []).reduce<[number, number]>(
@@ -278,10 +280,10 @@ const MatchDetail: React.FC<MatchDetailProps> = ({
               <table className="w-full table-fixed border-collapse text-sm text-pkpk-sub-font">
                 <colgroup>
                   <col className="w-[40%]" />
-                  {Array.from({ length: SCORE_TABLE_SET_COUNT }, (_, index) => (
+                  {Array.from({ length: scoreColumnCount }, (_, index) => (
                     <col key={index} />
                   ))}
-                  <col />
+                  {isMultiGame ? <col /> : null}
                 </colgroup>
                 <thead className="bg-pkpk-primary-bg/15 text-xs font-semibold text-pkpk-primary-bg">
                   <tr>
@@ -289,23 +291,28 @@ const MatchDetail: React.FC<MatchDetailProps> = ({
                       scope="col"
                       className="border-r border-pkpk-primary-bg/20 px-2 py-2 text-left"
                     >
-                      Sets
+                      {isMultiGame ? "Sets" : "Team"}
                     </th>
-                    {Array.from(
-                      { length: SCORE_TABLE_SET_COUNT },
-                      (_, index) => (
-                        <th
-                          key={index}
-                          scope="col"
-                          className="border-r border-pkpk-primary-bg/20 px-1 py-2 text-center"
-                        >
-                          {index + 1}
+                    {isMultiGame ? (
+                      <>
+                        {match.scores!.map((_, index) => (
+                          <th
+                            key={index}
+                            scope="col"
+                            className="border-r border-pkpk-primary-bg/20 px-1 py-2 text-center"
+                          >
+                            {index + 1}
+                          </th>
+                        ))}
+                        <th scope="col" className="px-1 py-2 text-center">
+                          Total
                         </th>
-                      ),
+                      </>
+                    ) : (
+                      <th scope="col" className="px-1 py-2 text-center">
+                        Score
+                      </th>
                     )}
-                    <th scope="col" className="px-1 py-2 text-center">
-                      Total
-                    </th>
                   </tr>
                 </thead>
                 <tbody>
@@ -324,7 +331,7 @@ const MatchDetail: React.FC<MatchDetailProps> = ({
                         </div>
                       </th>
                       {Array.from(
-                        { length: SCORE_TABLE_SET_COUNT },
+                        { length: scoreColumnCount },
                         (_, scoreIndex) => {
                           const score = match.scores?.[scoreIndex];
                           const value = score
@@ -336,16 +343,22 @@ const MatchDetail: React.FC<MatchDetailProps> = ({
                           return (
                             <td
                               key={scoreIndex}
-                              className="border-r border-pkpk-primary-bg/20 bg-white/80 px-1 py-1.5 text-center font-medium tabular-nums"
+                              className={`bg-white/80 px-1 py-1.5 text-center tabular-nums ${
+                                isMultiGame
+                                  ? "border-r border-pkpk-primary-bg/20 font-medium"
+                                  : "text-base font-bold"
+                              }`}
                             >
                               {value}
                             </td>
                           );
                         },
                       )}
-                      <td className="bg-white/80 px-1 py-1.5 text-center text-base font-bold tabular-nums">
-                        {hasResultScores ? totalPoints[teamIndex] : "-"}
-                      </td>
+                      {isMultiGame ? (
+                        <td className="bg-white/80 px-1 py-1.5 text-center text-base font-bold tabular-nums">
+                          {totalPoints[teamIndex]}
+                        </td>
+                      ) : null}
                     </tr>
                   ))}
                 </tbody>
