@@ -31,7 +31,8 @@ export const signInWithUsername = async (username: string, password: string) => 
   if (!error) {
     return;
   }
-  if (error.code === "invalid_credentials" || error.status === 400) {
+  // 400은 미확인 이메일·차단 등 다른 사유에도 오므로 코드로만 판별하고 나머지는 원문을 보여 준다.
+  if (error.code === "invalid_credentials") {
     throw new Error(INVALID_CREDENTIALS_MESSAGE);
   }
   throw new Error(error.message || "로그인하지 못했습니다.");

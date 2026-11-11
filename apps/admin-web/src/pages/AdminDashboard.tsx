@@ -569,9 +569,9 @@ const AdminDashboard: React.FC = () => {
     }
   };
 
-  const handlePasswordReset = async (player: PlayerInfo) => {
+  const handlePasswordReset = async (target: PlayerInfo) => {
     const confirmed = window.confirm(
-      `${player.username} 회원의 비밀번호를 초기화할까요?\n` +
+      `${target.username} 회원의 비밀번호를 초기화할까요?\n` +
         "기존 비밀번호로는 더 이상 로그인할 수 없습니다. 아직 계정이 없는 회원이면 이번에 계정이 발급됩니다.",
     );
     if (!confirmed) {
@@ -579,12 +579,12 @@ const AdminDashboard: React.FC = () => {
     }
 
     try {
-      setResettingPasswordPlayerId(player.id);
+      setResettingPasswordPlayerId(target.id);
       setError(null);
       setSuccess(null);
 
       const res = await apiFetch(
-        `/api/admin/players/${player.id}/password-reset`,
+        `/api/admin/players/${target.id}/password-reset`,
         { method: "POST" },
       );
       if (!res.ok) {
@@ -593,7 +593,7 @@ const AdminDashboard: React.FC = () => {
 
       const data = (await res.json()) as AdminPasswordResetResponse;
       setIssuedCredential({
-        username: player.username,
+        username: target.username,
         password: data.temporaryPassword,
         kind: "reset",
       });
@@ -2178,7 +2178,8 @@ const AdminDashboard: React.FC = () => {
                         <td className="px-4 py-4 min-w-[180px]">
                           <button
                             type="button"
-                            disabled={isResettingPassword}
+                            // 발급 비밀번호는 한 번만 보이므로, 응답이 서로 덮어쓰지 않게 초기화는 한 번에 하나만 한다.
+                            disabled={resettingPasswordPlayerId !== null}
                             onClick={() => void handlePasswordReset(p)}
                             className="px-3 py-2 rounded-lg border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 disabled:text-slate-300"
                           >
