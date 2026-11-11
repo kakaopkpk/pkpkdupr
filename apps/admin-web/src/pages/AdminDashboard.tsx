@@ -73,10 +73,6 @@ type MatchTeamInfo = {
   name: string;
   players: MatchPlayerInfo[];
 };
-type MatchApprovalInfo = {
-  playerId: string;
-  approvedAt: string;
-};
 type MatchSessionInfo = {
   id: string;
   name?: string;
@@ -104,7 +100,6 @@ type MatchInfo = {
   scores?: MatchScore[];
   resultSubmittedByPlayerId: string | null;
   resultSubmittedAt: string | null;
-  approvals: MatchApprovalInfo[];
   location?: string;
   matchStartsAt: string;
   createdAt: string;
@@ -166,14 +161,12 @@ const statusBadgeClassMap: Record<PlayerStatus, string> = {
 
 const matchStatusLabelMap: Record<MatchStatus, string> = {
   created: "예정",
-  "pending-approval": "합의중",
   completed: "완료",
   cancelled: "취소",
 };
 
 const matchStatusBadgeClassMap: Record<MatchStatus, string> = {
   created: "bg-sky-100 text-sky-700",
-  "pending-approval": "bg-violet-100 text-violet-700",
   completed: "bg-emerald-100 text-emerald-700",
   cancelled: "bg-slate-200 text-slate-700",
 };

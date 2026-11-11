@@ -250,14 +250,12 @@ const recentInputFieldKeys = {
 
 const matchStatusLabelMap: Record<MatchStatus, string> = {
   created: "예정",
-  "pending-approval": "합의중",
   completed: "완료",
   cancelled: "취소",
 };
 
 const matchStatusBadgeClassMap: Record<MatchStatus, string> = {
   created: "bg-sky-100 text-sky-700",
-  "pending-approval": "bg-violet-100 text-violet-700",
   completed: "bg-emerald-100 text-emerald-700",
   cancelled: "bg-slate-200 text-slate-700",
 };
@@ -992,7 +990,7 @@ const AdminSessionManager: React.FC<AdminSessionManagerProps> = ({
         match: SavedSessionMatchResult;
       };
       if (savedMatch.status !== "completed") {
-        throw new Error("관리자 자동 승인을 완료하지 못했습니다.");
+        throw new Error("경기 결과를 완료 처리하지 못했습니다.");
       }
 
       const [, matches] = await Promise.all([
@@ -1001,7 +999,7 @@ const AdminSessionManager: React.FC<AdminSessionManagerProps> = ({
       ]);
       setLoadedSessionMatches(matches);
       onMatchResultSaved?.(savedMatch);
-      setSuccess("경기 결과를 저장하고 관리자 승인 및 레이팅 반영을 완료했습니다.");
+      setSuccess("경기 결과를 저장하고 레이팅 반영을 완료했습니다.");
     } catch (submitError) {
       setError(
         submitError instanceof Error
@@ -1701,8 +1699,8 @@ const AdminSessionManager: React.FC<AdminSessionManagerProps> = ({
                                       className="text-xs font-semibold text-blue-600 disabled:text-slate-300"
                                     >
                                       {savingResultMatchId === match.id
-                                        ? "저장 및 승인 중..."
-                                        : "저장 및 승인"}
+                                        ? "저장 중..."
+                                        : "저장"}
                                     </button>
                                   </div>
                                 </div>
