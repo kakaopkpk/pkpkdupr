@@ -6,7 +6,7 @@ import type {
 } from "@pkpkdupr/shared/player";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { AuthService } from "../services/AuthService";
-import type { RatingServiceContract } from "../services/RatingService";
+import type { RatingServiceContract } from "../services/RatingContract";
 import { db } from "../db";
 
 const completedAt = new Date("2026-08-01T10:00:00.000Z");

@@ -1,4 +1,4 @@
-import type { MatchScore } from "@pkpkdupr/shared/match";
+import { getMatchTopLevelType, type MatchScore } from "@pkpkdupr/shared/match";
 import {
   getDuprMetricByCategory,
   getDuprRatingByCategory,
@@ -8,12 +8,10 @@ import {
   setDuprRatingByCategory,
   type StoredPlayerDupr,
 } from "@pkpkdupr/shared/player";
-import {
-  getDecayedConfidenceByInactivity,
-  getDuprCategoryForMatchType,
-  type MatchReplayInput,
-  type RatingServiceContract,
-} from "./RatingService";
+import type {
+  MatchReplayInput,
+  RatingServiceContract,
+} from "./RatingContract";
 
 export interface ScorePerformanceRatingCalculation {
   /** 팀 평균 레이팅으로 예상한 득점 비율 */
@@ -32,10 +30,10 @@ export interface ScorePerformanceRatingCalculation {
 }
 
 /**
- * 신규 득점률식의 confidence별 기본 K-factor입니다.
+ * 득점률식의 confidence별 기본 K-factor입니다.
  *
- * 실제 득점률 차이는 승패의 0/1 차이보다 작으므로 기존 승패식보다 큰
- * K-factor를 사용합니다. 최종 변화량은 별도로 ±0.2에서 제한합니다.
+ * 실제 득점률 차이는 승패의 0/1 차이보다 작으므로 K-factor를 크게 잡고,
+ * 최종 변화량은 별도로 ±0.2에서 제한합니다.
  */
 const CONFIDENCE_K_FACTORS = [
   { maxExclusive: 20, kFactor: 0.32 },
@@ -90,6 +88,45 @@ export const getTeamPointShares = (
   return [teamAPoints / totalPoints, teamBPoints / totalPoints];
 };
 
+const DAY_MS = 24 * 60 * 60 * 1000;
+/** 마지막 경기 후 14일까지는 confidence를 유지합니다. */
+const CONFIDENCE_DECAY_GRACE_PERIOD_MS = 14 * DAY_MS;
+/** 유예기간 이후 미참여 하루마다 감소하는 confidence입니다. */
+const CONFIDENCE_DECAY_PER_DAY = 1.5;
+const CONFIDENCE_DECAY_FLOOR = 0;
+
+/**
+ * 장기간 경기가 없었던 선수의 confidence를 경기 직전에 감쇠합니다.
+ *
+ * 저장된 confidence 자체를 매일 갱신하지 않고, 다음 경기를 재생하는 순간
+ * 경과일을 계산하기 때문에 배치 작업 없이도 동일한 결과를 재현할 수 있습니다.
+ */
+export const getDecayedConfidenceByInactivity = (
+  confidence: number,
+  elapsedMs?: number,
+): number => {
+  if (
+    elapsedMs == null ||
+    !Number.isFinite(elapsedMs) ||
+    elapsedMs <= CONFIDENCE_DECAY_GRACE_PERIOD_MS
+  ) {
+    return Math.max(CONFIDENCE_DECAY_FLOOR, confidence);
+  }
+
+  const decayDays = Math.floor(
+    (elapsedMs - CONFIDENCE_DECAY_GRACE_PERIOD_MS) / DAY_MS,
+  );
+
+  if (decayDays <= 0) {
+    return Math.max(CONFIDENCE_DECAY_FLOOR, confidence);
+  }
+
+  return Math.max(
+    CONFIDENCE_DECAY_FLOOR,
+    confidence - decayDays * CONFIDENCE_DECAY_PER_DAY,
+  );
+};
+
 /**
  * 두 팀의 평균 레이팅 차이를 0~1 기대 득점률로 변환합니다.
  *
@@ -103,17 +140,17 @@ export const getExpectedPointShare = (
 ) => 1 / (1 + Math.pow(10, (opponentTeamRating - teamRating) / scale));
 
 /**
- * 신규 득점률 기반 레이팅 구현체입니다.
+ * 득점률 기반 레이팅 구현체입니다.
  *
  * 팀 평균 레이팅으로 구한 기대 득점률과 실제 득점률의 차이를 반영합니다.
  * 예를 들어 강팀이 근소하게 이기면 기대보다 낮은 득점률일 수 있어 레이팅이
  * 내려갈 수 있고, 약팀이 패해도 접전을 만들면 올라갈 수 있습니다.
  *
  * 점수가 없는 과거 경기는 재계산 가능성을 유지하기 위해 승자=1, 패자=0인
- * 기존 승패 입력으로 fallback합니다.
+ * 승패 입력으로 fallback합니다.
  */
 export class ScorePerformanceRatingService implements RatingServiceContract {
-  /** confidence를 정규화한 뒤 신규 득점률식의 K-factor를 선택합니다. */
+  /** confidence를 정규화한 뒤 득점률식의 K-factor를 선택합니다. */
   getKFactor(confidence: number): number {
     const normalized = clamp(Math.round(confidence), 0, 100);
     return CONFIDENCE_K_FACTORS.find(
@@ -143,7 +180,7 @@ export class ScorePerformanceRatingService implements RatingServiceContract {
    *   = clamp((actualPointShare - expectedPointShare) × K-factor, -0.2, 0.2)
    *
    * 제한은 반올림 전에 적용하며, confidence는 자신을 제외한 경기 참가자들의
-   * 평균 confidence에 따라 기존 승패식과 같은 규칙으로 증가합니다.
+   * 평균 confidence가 높을수록 1~5만큼 증가합니다.
    */
   calculate(calcParams: {
     currentRating: number;
@@ -208,7 +245,7 @@ export class ScorePerformanceRatingService implements RatingServiceContract {
     match: MatchReplayInput,
     correctionWeightByPlayerId: Record<string, number> = {},
   ): Record<string, StoredPlayerDupr> {
-    const category = getDuprCategoryForMatchType(match.type);
+    const category = getMatchTopLevelType(match.type);
     const teamRatings = ([0, 1] as const).map((teamIndex) => {
       const ratings = match.participants
         .filter((participant) => participant.teamIndex === teamIndex)

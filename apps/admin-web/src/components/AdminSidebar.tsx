@@ -21,7 +21,7 @@ export const adminSectionInfo: Record<
   ratings: {
     label: "레이팅 관리",
     description:
-      "레이팅 알고리즘별 결과를 비교하고 전체 재계산과 공식 DUPR 반영을 관리합니다.",
+      "전체 레이팅 재계산과 공식 DUPR 반영을 관리합니다.",
   },
   sessions: {
     label: "세션 관리",

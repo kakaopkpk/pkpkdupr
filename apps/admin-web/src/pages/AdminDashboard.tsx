@@ -47,9 +47,6 @@ import AdminSidebar, {
   adminSectionInfo,
   type AdminSection,
 } from "../components/AdminSidebar";
-import RatingComparisonPanel, {
-  type RatingMethodComparison,
-} from "../components/RatingComparisonPanel";
 import RecentValueComboBox from "../components/RecentValueComboBox";
 
 type PlayerInfo = Pick<
@@ -264,13 +261,6 @@ const AdminDashboard: React.FC = () => {
   const [players, setPlayers] = useState<PlayerInfo[]>([]);
   const [matches, setMatches] = useState<MatchInfo[]>([]);
   const [sessions, setSessions] = useState<ManagedSessionInfo[]>([]);
-  const [ratingComparison, setRatingComparison] =
-    useState<RatingMethodComparison | null>(null);
-  const [isLoadingRatingComparison, setIsLoadingRatingComparison] =
-    useState(false);
-  const [ratingComparisonError, setRatingComparisonError] = useState<
-    string | null
-  >(null);
   const [isMatchListExpanded, setIsMatchListExpanded] = useState(true);
   const [statusLogsByPlayerId, setStatusLogsByPlayerId] =
     useState<PlayerStatusLogsByPlayerId>({});
@@ -454,27 +444,6 @@ const AdminDashboard: React.FC = () => {
     setSessions((await res.json()) as ManagedSessionInfo[]);
   };
 
-  const loadRatingComparison = async () => {
-    try {
-      setIsLoadingRatingComparison(true);
-      setRatingComparisonError(null);
-      const res = await apiFetch("/api/admin/ratings/comparison");
-      if (!res.ok) {
-        const errorData = await res.json().catch(() => ({}));
-        throw new Error(
-          errorData.error || "방법별 레이팅을 불러오지 못했습니다.",
-        );
-      }
-      setRatingComparison((await res.json()) as RatingMethodComparison);
-    } catch (err: unknown) {
-      setRatingComparisonError(
-        err instanceof Error ? err.message : "알 수 없는 오류",
-      );
-    } finally {
-      setIsLoadingRatingComparison(false);
-    }
-  };
-
   const loadDashboardData = async () => {
     try {
       setError(null);
@@ -507,24 +476,6 @@ const AdminDashboard: React.FC = () => {
       });
     }
   }, [activeSection, isAdmin]);
-
-  useEffect(() => {
-    if (
-      isAdmin &&
-      activeSection === "ratings" &&
-      !ratingComparison &&
-      !ratingComparisonError &&
-      !isLoadingRatingComparison
-    ) {
-      void loadRatingComparison();
-    }
-  }, [
-    isAdmin,
-    activeSection,
-    ratingComparison,
-    ratingComparisonError,
-    isLoadingRatingComparison,
-  ]);
 
   const handleAddPlayer = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -762,7 +713,6 @@ const AdminDashboard: React.FC = () => {
         restoredMatchDuprSnapshotMatchCount: number;
       };
       await loadDashboardData();
-      await loadRatingComparison();
       setSuccess(
         `레이팅 재계산이 완료되었습니다. 완료 매치 ${data.completedMatchCount}개 기준, ${data.changedPlayerCount}명 변동 (집계 ${data.ratingChangeLogs.length}건 + 매치별 ${data.perMatchLogCount}건 기록), 매치 레이팅 스냅샷 ${data.restoredMatchDuprSnapshotCount}건 복원 (${data.restoredMatchDuprSnapshotMatchCount}개 매치).`,
       );
@@ -1472,15 +1422,6 @@ const AdminDashboard: React.FC = () => {
         ) : null}
 
         {activeSection === "ratings" ? (
-          <RatingComparisonPanel
-            comparison={ratingComparison}
-            isLoading={isLoadingRatingComparison}
-            error={ratingComparisonError}
-            onReload={() => void loadRatingComparison()}
-          />
-        ) : null}
-
-        {activeSection === "ratings" ? (
         <section className="space-y-4">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
@@ -1488,7 +1429,7 @@ const AdminDashboard: React.FC = () => {
                 레이팅 재계산
               </h2>
               <p className="mt-1 text-sm text-gray-500">
-                현재 적용 중인 신규 득점률식으로 전체 완료 매치를 재생해 모든
+                득점률식으로 전체 완료 매치를 재생해 모든
                 회원의 저장 레이팅을 갱신합니다.
               </p>
             </div>

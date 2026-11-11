@@ -18,7 +18,7 @@ import {
   AuthService,
   getOfficialDuprRecencyWeight,
 } from "../services/AuthService";
-import type { RatingServiceContract } from "../services/RatingService";
+import type { RatingServiceContract } from "../services/RatingContract";
 import { db } from "../db";
 
 const NOW = new Date("2026-07-23T12:00:00.000Z");
