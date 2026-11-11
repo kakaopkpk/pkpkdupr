@@ -230,15 +230,6 @@ export const validateMatchScoresForMode = (
   }
 };
 
-export const computeMatchStartsAt = (from: Date = new Date()): Date => {
-  const ms = from.getTime();
-  const intervalMs = 30 * 60 * 1000;
-  const remainder = ms % intervalMs;
-  return remainder === 0
-    ? new Date(ms)
-    : new Date(ms + (intervalMs - remainder));
-};
-
 export interface Match {
   id: string;
   type: MatchType;
