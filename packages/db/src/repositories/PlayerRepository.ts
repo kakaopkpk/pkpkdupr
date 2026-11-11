@@ -10,7 +10,7 @@ import {
 } from "@pkpkdupr/shared/player";
 import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import { isEntityId } from "@pkpkdupr/shared/entityId";
-import { players } from "../db/schema";
+import { playerAdmins, players } from "../db/schema";
 import { firstRow } from "../db/client";
 
 export interface StoredPlayerRecord extends Player {
@@ -70,6 +70,22 @@ export class PlayerRepository {
       .limit(1)
       .then(firstRow);
     return player ? this.hydrate(player) : undefined;
+  }
+
+  /** 인증 경로에서 회원과 관리자 여부를 쿼리 1회(players LEFT JOIN player_admins)로 가져온다. */
+  async findByAuthUserIdWithAdmin(
+    authUserId: string,
+  ): Promise<{ player: StoredPlayerRecord; isAdmin: boolean } | undefined> {
+    const row = await this.db
+      .select({ player: players, adminPlayerId: playerAdmins.playerId })
+      .from(players)
+      .leftJoin(playerAdmins, eq(playerAdmins.playerId, players.id))
+      .where(eq(players.authUserId, authUserId))
+      .limit(1)
+      .then(firstRow);
+    return row
+      ? { player: this.hydrate(row.player), isAdmin: row.adminPlayerId != null }
+      : undefined;
   }
 
   /** username은 lower(username) 기준으로 unique이므로 대소문자 구분 없이 최대 한 명이다. */
