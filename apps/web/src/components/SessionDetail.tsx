@@ -465,6 +465,7 @@ const SessionDetail: React.FC<SessionDetailProps> = ({
             }
             ariaLabel="Record match"
             layer={SESSION_SHEET_LAYER}
+            isFixedHeight
           >
             <RecordMatchDrawerBody
               key={sheetKey}
