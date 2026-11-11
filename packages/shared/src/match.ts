@@ -103,6 +103,10 @@ export const isWithinMatchEditWindow = (
   now: Date = new Date(),
 ): boolean => now.getTime() - matchStartsAt.getTime() <= MATCH_EDIT_WINDOW_MS;
 
+/** 점수가 아직 없는 진행 중 경기(status "created")면 true */
+export const isMatchInProgress = (match: Pick<Match, "status">): boolean =>
+  match.status === "created";
+
 export type MatchSessionStatus = "created" | "completed";
 
 export const getMatchSessionStatus = (
@@ -271,6 +275,8 @@ export interface RecordMatchRequest {
   location: string;
   /** 단판 1개, 2선승 2~3개. 세트마다 동점 불가 */
   scores: MatchScore[];
+  /** POST /api/matches 전용. 회원 세션(오늘) 안에서 기록할 때 지정. 정기 세션은 시작 시각 규칙으로 자동 지정되므로 무시된다 */
+  sessionId?: string;
 }
 
 /** 기록·수정 응답. GET /api/matches/:matchId 응답과 같은 형태다 */
