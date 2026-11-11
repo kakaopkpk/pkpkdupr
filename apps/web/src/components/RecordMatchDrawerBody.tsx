@@ -8,16 +8,13 @@ import React, {
 import { Button } from "@heroui/react";
 import { IoCheckmarkCircle, IoSearch } from "react-icons/io5";
 import type {
-  MatchMode,
   MatchScore,
   MatchType,
   RecordMatchRequest,
 } from "@pkpkdupr/shared/match";
 import {
-  DEFAULT_MATCH_MODE,
   getMatchTopLevelType,
   isSinglesMatchType,
-  validateMatchScoresForMode,
 } from "@pkpkdupr/shared/match";
 import type {
   MemberListPlayer,
@@ -37,7 +34,6 @@ import {
 import { formatRating } from "@/utils/dupr";
 import BottomSheet from "./BottomSheet";
 import BottomSheetSection from "./BottomSheetSection";
-import CreateMatchModeSelector from "./CreateMatchModeSelector";
 import CreateMatchTeamGrid from "./CreateMatchTeamGrid";
 import HoldToConfirmButton from "./HoldToConfirmButton";
 import RatingDeltaChip from "./RatingDeltaChip";
@@ -80,93 +76,31 @@ type RecordablePlayer = Omit<
   lastPlayedAt: string | null;
 };
 
-interface SetScoreDraft {
+interface ScoreDraft {
   scoreA: number | null;
   scoreB: number | null;
 }
-
-type SetIndex = 0 | 1 | 2;
 
 const MAX_MEMBER_COUNT = 4;
 /** 멤버 목록은 2열 5행까지만 보여 준다 */
 const RECENT_PLAYER_LIMIT = 10;
 const SAVE_HOLD_DURATION_MS = 3000;
 const SAVE_ERROR_FALLBACK = "기록을 저장하지 못했어요.";
-const SET_INDEXES: SetIndex[] = [0, 1, 2];
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 const inputClassName =
   "app-mobile-input w-full rounded-2xl border border-border bg-white px-4 py-2 text-base text-pkpk-sub-font outline-none";
 
-const createEmptySets = (): SetScoreDraft[] =>
-  SET_INDEXES.map(() => ({ scoreA: null, scoreB: null }));
+const createEmptyScore = (): ScoreDraft => ({ scoreA: null, scoreB: null });
 
 const getTeamName = (teamIndex: number) =>
   `Team ${teamIndex === 0 ? "A" : "B"}`;
 
-const isSetComplete = (
-  set: SetScoreDraft | undefined,
-): set is MatchScore =>
-  !!set && set.scoreA !== null && set.scoreB !== null;
+const isScoreComplete = (score: ScoreDraft): score is MatchScore =>
+  score.scoreA !== null && score.scoreB !== null;
 
-const isSetDecided = (set: SetScoreDraft | undefined): set is MatchScore =>
-  isSetComplete(set) && set.scoreA !== set.scoreB;
-
-const getSetWinnerIndex = (set: MatchScore): 0 | 1 =>
-  set.scoreA > set.scoreB ? 0 : 1;
-
-/** 1·2세트 승자가 갈렸을 때만 3세트를 친다 */
-const isThirdSetNeeded = (sets: SetScoreDraft[]) =>
-  isSetDecided(sets[0]) &&
-  isSetDecided(sets[1]) &&
-  getSetWinnerIndex(sets[0]) !== getSetWinnerIndex(sets[1]);
-
-/** 앞 세트가 모두 승부가 났을 때만 다음 세트로 갈 수 있다 */
-const isSetSelectable = (sets: SetScoreDraft[], setIndex: SetIndex) =>
-  sets.slice(0, setIndex).every((set) => isSetDecided(set));
-
-/**
- * 실제로 치른 세트만 골라 저장할 점수 목록을 만든다.
- * 한 팀이 2세트를 먼저 이기면 이후 세트는 버리고, 승부가 안 났거나 동점 세트가 있으면 null이다.
- */
-const buildScoresForSave = (
-  mode: MatchMode,
-  sets: SetScoreDraft[],
-): MatchScore[] | null => {
-  if (mode === "single-game") {
-    const set = sets[0];
-    return isSetDecided(set)
-      ? [{ scoreA: set.scoreA, scoreB: set.scoreB }]
-      : null;
-  }
-
-  const wins: [number, number] = [0, 0];
-  const scores: MatchScore[] = [];
-
-  for (const set of sets) {
-    if (!isSetDecided(set)) {
-      return null;
-    }
-
-    scores.push({ scoreA: set.scoreA, scoreB: set.scoreB });
-    wins[getSetWinnerIndex(set)] += 1;
-
-    if (wins[0] === 2 || wins[1] === 2) {
-      return scores;
-    }
-  }
-
-  return null;
-};
-
-const isScoresValidForMode = (mode: MatchMode, scores: MatchScore[]) => {
-  try {
-    validateMatchScoresForMode(mode, scores);
-    return true;
-  } catch {
-    return false;
-  }
-};
+const isScoreDecided = (score: ScoreDraft): score is MatchScore =>
+  isScoreComplete(score) && score.scoreA !== score.scoreB;
 
 /**
  * 서버가 팀 구성으로 경기 타입을 추론하므로 화면은 팀 모양만 맞으면 된다.
@@ -245,17 +179,13 @@ const buildEditInitialState = (
     ...myTeam.filter((member) => member.id !== currentPlayerId),
     ...teams[myTeamIndex === 0 ? 1 : 0],
   ];
-  const sets = createEmptySets();
-  const savedScores =
-    editMatch.mode === "single-game"
-      ? (editMatch.scores ?? []).slice(0, 1)
-      : (editMatch.scores ?? []);
+  // 점수가 여러 개인 과거 기록은 첫 게임 점수만 불러온다
+  const savedScore = editMatch.scores?.[0];
+  const score: ScoreDraft = savedScore
+    ? { scoreA: savedScore.scoreA, scoreB: savedScore.scoreB }
+    : createEmptyScore();
 
-  savedScores.slice(0, SET_INDEXES.length).forEach((score, index) => {
-    sets[index] = { scoreA: score.scoreA, scoreB: score.scoreB };
-  });
-
-  return { members, teams, sets };
+  return { members, teams, score };
 };
 
 const swapTeamMembers = (
@@ -303,7 +233,7 @@ const RecordMatchDrawerBody: React.FC<RecordMatchDrawerBodyProps> = ({
     return {
       members,
       teams: buildInitialTeams(members, resolveSelectedMatchType(members)),
-      sets: createEmptySets(),
+      score: createEmptyScore(),
     };
   });
 
@@ -312,11 +242,7 @@ const RecordMatchDrawerBody: React.FC<RecordMatchDrawerBodyProps> = ({
   const [selectedSwapMemberId, setSelectedSwapMemberId] = useState<
     string | null
   >(null);
-  const [matchMode, setMatchMode] = useState<MatchMode>(
-    editMatch?.mode ?? DEFAULT_MATCH_MODE,
-  );
-  const [sets, setSets] = useState<SetScoreDraft[]>(initialState.sets);
-  const [activeSetIndex, setActiveSetIndex] = useState<SetIndex>(0);
+  const [score, setScore] = useState<ScoreDraft>(initialState.score);
   const [location, setLocation] = useState(
     editMatch ? editMatch.location : defaultLocation,
   );
@@ -442,33 +368,20 @@ const RecordMatchDrawerBody: React.FC<RecordMatchDrawerBodyProps> = ({
     [matchType, members, teams],
   );
   const isTeamReady = !!matchType && areTeamsValid(teams, matchType);
-  const isBestOfThree = matchMode === "best-of-3";
-  const visibleSetIndexes = useMemo(
-    () =>
-      isThirdSetNeeded(sets) ? SET_INDEXES : SET_INDEXES.slice(0, 2),
-    [sets],
-  );
-  const selectedSetIndex: SetIndex = isBestOfThree
-    ? visibleSetIndexes.includes(activeSetIndex)
-      ? activeSetIndex
-      : 0
-    : 0;
-  const selectedSet = sets[selectedSetIndex];
-  const isSelectedSetDraw =
-    isSetComplete(selectedSet) && selectedSet.scoreA === selectedSet.scoreB;
-  const selectedSetWinnerIndex = isSetDecided(selectedSet)
-    ? getSetWinnerIndex(selectedSet)
+  const isScoreDraw = isScoreComplete(score) && score.scoreA === score.scoreB;
+  const scoreWinnerIndex = isScoreDecided(score)
+    ? score.scoreA > score.scoreB
+      ? 0
+      : 1
     : null;
-  const scoresForSave = useMemo(
-    () => buildScoresForSave(matchMode, sets),
-    [matchMode, sets],
-  );
+  const scoresForSave: MatchScore[] | null = isScoreDecided(score)
+    ? [{ scoreA: score.scoreA, scoreB: score.scoreB }]
+    : null;
   const trimmedLocation = location.trim();
   const trimmedMatchName = matchName.trim();
   const canSave =
     isTeamReady &&
     !!scoresForSave &&
-    isScoresValidForMode(matchMode, scoresForSave) &&
     !!trimmedLocation &&
     isOnline &&
     !isSaving;
@@ -529,25 +442,10 @@ const RecordMatchDrawerBody: React.FC<RecordMatchDrawerBodyProps> = ({
   };
 
   const handleScoreChange = (teamIndex: 0 | 1, value: number) => {
-    setSets((prev) =>
-      prev.map((set, index) =>
-        index === selectedSetIndex
-          ? { ...set, [teamIndex === 0 ? "scoreA" : "scoreB"]: value }
-          : set,
-      ),
-    );
-    setSaveError(null);
-  };
-
-  const handleMatchModeChange = (nextMode: MatchMode) => {
-    if (nextMode === matchMode) {
-      return;
-    }
-
-    setMatchMode(nextMode);
-    // 모드를 바꾸면 기존 점수는 1세트로만 남는다
-    setSets((prev) => [prev[0], ...createEmptySets().slice(1)]);
-    setActiveSetIndex(0);
+    setScore((prev) => ({
+      ...prev,
+      [teamIndex === 0 ? "scoreA" : "scoreB"]: value,
+    }));
     setSaveError(null);
   };
 
@@ -558,7 +456,6 @@ const RecordMatchDrawerBody: React.FC<RecordMatchDrawerBodyProps> = ({
 
     const body: RecordMatchRequest = {
       ...(trimmedMatchName ? { name: trimmedMatchName } : {}),
-      mode: matchMode,
       teams: [
         { name: getTeamName(0), playerIds: teams[0].map((m) => m.id) },
         { name: getTeamName(1), playerIds: teams[1].map((m) => m.id) },
@@ -610,8 +507,7 @@ const RecordMatchDrawerBody: React.FC<RecordMatchDrawerBodyProps> = ({
   const handlePlayAgain = () => {
     setRecordedMatch(null);
     setEditingMatchId(null);
-    setSets(createEmptySets());
-    setActiveSetIndex(0);
+    setScore(createEmptyScore());
     setSelectedSwapMemberId(null);
     setSaveError(null);
   };
@@ -629,7 +525,6 @@ const RecordMatchDrawerBody: React.FC<RecordMatchDrawerBodyProps> = ({
 
   const settingsSummary = [
     trimmedLocation || "장소 없음",
-    isBestOfThree ? "2선승" : "단판",
     trimmedMatchName || "자동",
   ].join(" · ");
 
@@ -727,59 +622,22 @@ const RecordMatchDrawerBody: React.FC<RecordMatchDrawerBodyProps> = ({
         {isTeamReady ? (
           <BottomSheetSection>
             <p className="bs-text-title text-pkpk-sub-font">스코어</p>
-            {isBestOfThree ? (
-              <div
-                role="tablist"
-                aria-label="세트 선택"
-                className="flex gap-1.5"
-              >
-                {visibleSetIndexes.map((setIndex) => {
-                  const set = sets[setIndex];
-                  const isSelected = setIndex === selectedSetIndex;
-                  const isSelectable = isSetSelectable(sets, setIndex);
-
-                  return (
-                    <button
-                      key={setIndex}
-                      type="button"
-                      role="tab"
-                      aria-selected={isSelected}
-                      disabled={!isSelectable}
-                      onClick={() => setActiveSetIndex(setIndex)}
-                      className={`flex flex-1 flex-col items-center rounded-xl border px-2 py-1.5 text-sm font-semibold transition-colors disabled:opacity-40 ${
-                        isSelected
-                          ? "border-pkpk-main-font bg-pkpk-main-font text-white"
-                          : "border-border bg-white text-pkpk-sub-font"
-                      }`}
-                    >
-                      <span>{setIndex + 1}세트</span>
-                      <span className="text-xs font-medium tabular-nums">
-                        {isSetComplete(set)
-                          ? `${set.scoreA}:${set.scoreB}`
-                          : "—"}
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-            ) : null}
-            {isSelectedSetDraw ? (
+            {isScoreDraw ? (
               <p className="bs-text-caption text-error">
                 같은 점수는 저장할 수 없어요.
               </p>
             ) : null}
             {([0, 1] as const).map((teamIndex) => (
               <RecordMatchScoreStrip
-                // 세트를 바꾸면 리마운트해서 그 세트 값(없으면 9)을 다시 가운데로 맞춘다
-                key={`${selectedSetIndex}-${teamIndex}`}
+                key={teamIndex}
                 teamIndex={teamIndex}
                 names={teams[teamIndex]
                   .map((member) => member.username)
                   .join(" · ")}
                 value={
-                  teamIndex === 0 ? selectedSet.scoreA : selectedSet.scoreB
+                  teamIndex === 0 ? score.scoreA : score.scoreB
                 }
-                isWinner={selectedSetWinnerIndex === teamIndex}
+                isWinner={scoreWinnerIndex === teamIndex}
                 onChange={(value) => handleScoreChange(teamIndex, value)}
               />
             ))}
@@ -816,12 +674,6 @@ const RecordMatchDrawerBody: React.FC<RecordMatchDrawerBodyProps> = ({
                 placeholder="장소 입력"
                 className="w-full"
                 inputClassName={inputClassName}
-              />
-            </BottomSheetSection>
-            <BottomSheetSection>
-              <CreateMatchModeSelector
-                selectedMatchMode={matchMode}
-                onChange={handleMatchModeChange}
               />
             </BottomSheetSection>
             <BottomSheetSection>
