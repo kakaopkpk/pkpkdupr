@@ -2434,23 +2434,6 @@ app.post("/api/admin/ratings/recalculate", requireAdmin, async (_req, res) => {
   }
 });
 
-app.get("/api/admin/ratings/comparison", requireAdmin, async (_req, res) => {
-  try {
-    const { matches } = await matchRepository.findAll(0, 10000);
-    const completedMatches = matches.filter(
-      (match) => match.status === "completed",
-    );
-
-    // 이전에 추가된 테스트 매치는 참가자 당시의 DUPR 스냅샷과 저장 레이팅이
-    // 비어 있을 수 있다. 비교값을 만들기 전에 신규 득점률식으로 한 번 재생해
-    // 누락 데이터를 보강하고, 두 방식 모두 같은 완료 매치 집합에서 계산한다.
-    await authService.recalculateDuprRatings(completedMatches);
-    res.json(await authService.compareRatingMethods(completedMatches));
-  } catch (err) {
-    res.status(400).json({ error: (err as Error).message });
-  }
-});
-
 app.post(
   "/api/admin/players/:playerId/official-dupr",
   requireAdmin,

@@ -82,7 +82,9 @@ interface SetScoreDraft {
 type SetIndex = 0 | 1 | 2;
 
 const MAX_MEMBER_COUNT = 4;
-const RECENT_PLAYER_LIMIT = 8;
+/** 멤버 목록은 2열 5행까지만 보여 준다 */
+const RECENT_PLAYER_LIMIT = 10;
+const SAVE_HOLD_DURATION_MS = 3000;
 const SAVE_ERROR_FALLBACK = "기록을 저장하지 못했어요.";
 const SET_INDEXES: SetIndex[] = [0, 1, 2];
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -419,20 +421,18 @@ const RecordMatchDrawerBody: React.FC<RecordMatchDrawerBodyProps> = ({
 
   const recentPlayers = useMemo(() => {
     const normalizedQuery = query.trim().toLocaleLowerCase();
-    const candidates = players
-      .filter((candidate) => candidate.status === "active")
+    return players
+      .filter(
+        (candidate) =>
+          candidate.status === "active" &&
+          (!normalizedQuery ||
+            candidate.username.toLocaleLowerCase().includes(normalizedQuery)),
+      )
       .sort(
         (a, b) =>
           getLastPlayedAtMs(b.lastPlayedAt) - getLastPlayedAtMs(a.lastPlayedAt),
-      );
-
-    if (!normalizedQuery) {
-      return candidates.slice(0, RECENT_PLAYER_LIMIT);
-    }
-
-    return candidates.filter((candidate) =>
-      candidate.username.toLocaleLowerCase().includes(normalizedQuery),
-    );
+      )
+      .slice(0, RECENT_PLAYER_LIMIT);
   }, [players, query]);
 
   const handlePickPlayer = (candidate: RecordablePlayer) => {
@@ -623,7 +623,7 @@ const RecordMatchDrawerBody: React.FC<RecordMatchDrawerBodyProps> = ({
                 멤버 목록을 불러오지 못했어요.
               </p>
             ) : (
-              <div className="flex flex-wrap gap-x-2 gap-y-2.5 pt-1">
+              <div className="grid grid-cols-2 gap-x-2 gap-y-2.5 pt-1">
                 {recentPlayers.map((candidate) => {
                   const isPicked = members.some(
                     (member) => member.id === candidate.id,
@@ -635,7 +635,7 @@ const RecordMatchDrawerBody: React.FC<RecordMatchDrawerBodyProps> = ({
                   return (
                     <div
                       key={candidate.id}
-                      className={isPicked ? "opacity-35" : ""}
+                      className={`min-w-0 ${isPicked ? "opacity-35" : ""}`}
                     >
                       <UserChip
                         player={candidate}
@@ -653,7 +653,7 @@ const RecordMatchDrawerBody: React.FC<RecordMatchDrawerBodyProps> = ({
                             </span>
                           ) : undefined
                         }
-                        chipWidthClass="w-[6.6rem]"
+                        chipWidthClass="w-full"
                       />
                     </div>
                   );
@@ -805,31 +805,31 @@ const RecordMatchDrawerBody: React.FC<RecordMatchDrawerBodyProps> = ({
             </div>
           </BottomSheetSection>
         )}
-
-        <div className="flex flex-col gap-2">
-          {saveError ? (
-            <p className="bs-text-body text-error">{saveError}</p>
-          ) : null}
-          <div className="grid w-full grid-cols-3 gap-2">
-            <Button
-              className="app-action-button w-full rounded-2xl bg-red-50 py-3 text-base font-semibold text-red-500"
-              isDisabled={isSaving}
-              onPress={onCancel}
-            >
-              취소
-            </Button>
-            <HoldToConfirmButton
-              ariaLabel="길게 눌러 기록 저장"
-              onComplete={() => void handleSave()}
-              isDisabled={!canSave}
-              className="app-action-button col-span-2 w-full justify-center rounded-2xl bg-[#409eff] px-3 py-3 text-base font-semibold text-white disabled:bg-slate-200 disabled:text-slate-400"
-              progressClassName="bg-white/20"
-            >
-              {isOnline ? "길게 눌러 기록 저장" : "온라인 연결 필요"}
-            </HoldToConfirmButton>
-          </div>
-        </div>
       </BottomSheet.Body>
+      <BottomSheet.Footer className="flex flex-col gap-2">
+        {saveError ? (
+          <p className="bs-text-body text-error">{saveError}</p>
+        ) : null}
+        <div className="grid w-full grid-cols-3 gap-2">
+          <Button
+            className="app-action-button w-full rounded-2xl bg-red-50 py-3 text-base font-semibold text-red-500"
+            isDisabled={isSaving}
+            onPress={onCancel}
+          >
+            취소
+          </Button>
+          <HoldToConfirmButton
+            ariaLabel="길게 눌러 기록 저장"
+            holdDurationMs={SAVE_HOLD_DURATION_MS}
+            onComplete={() => void handleSave()}
+            isDisabled={!canSave}
+            className="app-action-button col-span-2 w-full justify-center rounded-2xl bg-[#409eff] px-3 py-3 text-base font-semibold text-white disabled:bg-slate-200 disabled:text-slate-400"
+            progressClassName="bg-white/20"
+          >
+            {isOnline ? "길게 눌러 기록 저장" : "온라인 연결 필요"}
+          </HoldToConfirmButton>
+        </div>
+      </BottomSheet.Footer>
     </>
   );
 };
@@ -915,6 +915,8 @@ const RecordMatchCompletion: React.FC<RecordMatchCompletionProps> = ({
             </p>
           )}
         </BottomSheetSection>
+      </BottomSheet.Body>
+      <BottomSheet.Footer>
         <div className="grid w-full grid-cols-3 gap-2">
           <Button
             className="app-action-button w-full rounded-2xl bg-slate-100 py-3 text-base font-semibold text-pkpk-sub-font"
@@ -929,7 +931,7 @@ const RecordMatchCompletion: React.FC<RecordMatchCompletionProps> = ({
             같은 멤버로 한 판 더
           </Button>
         </div>
-      </BottomSheet.Body>
+      </BottomSheet.Footer>
     </>
   );
 };

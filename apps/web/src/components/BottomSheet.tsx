@@ -13,6 +13,8 @@ interface BottomSheetProps {
   isDismissable?: boolean;
   isActive?: boolean;
   layer?: number;
+  /** true면 내용과 상관없이 시트를 최대 높이로 고정한다. 본문(Body)만 스크롤된다 */
+  isFixedHeight?: boolean;
 }
 
 interface BottomSheetBodyProps {
@@ -54,9 +56,22 @@ const BottomSheetBody: React.FC<BottomSheetBodyProps> = ({
   </div>
 );
 
+/** Body 아래에 두면 본문이 스크롤돼도 시트 하단에 고정된다 */
+const BottomSheetFooter: React.FC<BottomSheetBodyProps> = ({
+  children,
+  className,
+}) => (
+  <div
+    className={["shrink-0 bg-white pt-3", className].filter(Boolean).join(" ")}
+  >
+    {children}
+  </div>
+);
+
 type BottomSheetComponent = React.FC<BottomSheetProps> & {
   Header: typeof BottomSheetHeader;
   Body: typeof BottomSheetBody;
+  Footer: typeof BottomSheetFooter;
 };
 
 const BottomSheet: BottomSheetComponent = ({
@@ -68,6 +83,7 @@ const BottomSheet: BottomSheetComponent = ({
   isDismissable = true,
   isActive = true,
   layer = 50,
+  isFixedHeight = false,
 }) => {
   const [shouldRender, setShouldRender] = React.useState(isOpen);
   const [isVisible, setIsVisible] = React.useState(isOpen);
@@ -214,25 +230,12 @@ const BottomSheet: BottomSheetComponent = ({
         ].join(" ")}
         style={transitionStyle}
       >
-        <div className="pointer-events-none absolute inset-x-0 -top-10 z-20 flex justify-end px-4">
-          <button
-            type="button"
-            aria-label="Close"
-            onPointerDown={(event) => {
-              event.stopPropagation();
-            }}
-            onClick={() => onOpenChange(false)}
-            className="pointer-events-auto flex size-6 items-center justify-center text-2xl leading-none text-white transition-opacity opacity-60 hover:opacity-50"
-            style={transitionStyle}
-          >
-            ×
-          </button>
-        </div>
         <section
           role="dialog"
           aria-label={ariaLabel}
           className={[
             "app-bottom-sheet-surface relative flex min-h-0 w-full flex-col overflow-hidden rounded-t-3xl bg-white px-4 pt-5 pb-[calc(1rem+var(--safe-bottom)+var(--app-keyboard-offset))] shadow-2xl",
+            isFixedHeight ? "app-bottom-sheet-surface--fixed" : null,
             className,
           ]
             .filter(Boolean)
@@ -249,5 +252,6 @@ const BottomSheet: BottomSheetComponent = ({
 
 BottomSheet.Header = BottomSheetHeader;
 BottomSheet.Body = BottomSheetBody;
+BottomSheet.Footer = BottomSheetFooter;
 
 export default BottomSheet;

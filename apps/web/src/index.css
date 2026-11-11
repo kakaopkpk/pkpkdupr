@@ -165,11 +165,17 @@
   }
 
   .app-bottom-sheet-surface {
-    max-height: calc(
+    --app-bottom-sheet-max-height: calc(
       var(--app-shell-height) - var(--app-keyboard-offset) - 3rem -
         env(safe-area-inset-top)
     );
+    max-height: var(--app-bottom-sheet-max-height);
     overflow: hidden;
+  }
+
+  /* 내용이 바뀌어도 시트 크기가 흔들리지 않게 최대 높이로 고정한다 */
+  .app-bottom-sheet-surface--fixed {
+    height: var(--app-bottom-sheet-max-height);
   }
 
   .app-bottom-sheet-body {

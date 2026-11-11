@@ -1194,6 +1194,7 @@ const BottomNav: React.FC = () => {
         isActive={createMatchTabKey === selectedTab}
         onOpenChange={handleCreateMatchOpenChange}
         ariaLabel="Record match"
+        isFixedHeight
       >
         <RecordMatchDrawerBody
           key={createMatchSheetKey}

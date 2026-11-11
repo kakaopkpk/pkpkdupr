@@ -45,13 +45,14 @@ import {
   generateInitialPassword,
   SupabaseAuthAdmin,
 } from "./supabaseAuthAdmin";
-import {
-  getDuprCategoryForMatchType,
-  RatingService,
-  type RatingServiceContract,
-} from "./RatingService";
+import type { RatingServiceContract } from "./RatingContract";
 import { ScorePerformanceRatingService } from "./ScorePerformanceRatingService";
-import { matchTypeValues, type Match, type MatchType } from "@pkpkdupr/shared/match";
+import {
+  getMatchTopLevelType,
+  matchTypeValues,
+  type Match,
+  type MatchType,
+} from "@pkpkdupr/shared/match";
 import {
   getDevMockUsernames,
   isDevMockDataEnabled,
@@ -1196,7 +1197,6 @@ export class AuthService {
   private async calculateDuprRecalculation(
     completedMatches: Match[],
     additionalLogs: OfficialDuprAdjustmentLog[] = [],
-    ratingService: RatingServiceContract = this.ratingService,
   ): Promise<DuprRecalculationResult> {
     const players = (await db.players.findAll()).map(hydratePlayer);
     const storedLogs = await this.getOfficialDuprAdjustmentLogs();
@@ -1255,7 +1255,7 @@ export class AuthService {
         const preUpdateAccuracy = entry.getAccuracy(log.preUpdateAccuracy);
         correctionWeightByPlayerId[log.playerId] = Math.max(
           correctionWeightByPlayerId[log.playerId] ?? 0,
-          ratingService.getCorrectionWeight(
+          this.ratingService.getCorrectionWeight(
             preUpdateAccuracy == null ? null : Number(preUpdateAccuracy),
           ),
         );
@@ -1285,7 +1285,7 @@ export class AuthService {
       if (winnerTeamIndex == null) {
         continue;
       }
-      const category = getDuprCategoryForMatchType(match.type);
+      const category = getMatchTopLevelType(match.type);
       const completedAtMs = new Date(match.completedAt!).getTime();
 
       for (const [anchorKey, anchor] of officialAnchorByPlayerCategory) {
@@ -1402,7 +1402,7 @@ export class AuthService {
             (matchRecencyWeight || 1),
         ]),
       );
-      const replayResult = ratingService.replayMatch(
+      const replayResult = this.ratingService.replayMatch(
         {
           type: match.type,
           winnerTeamIndex,
@@ -1489,89 +1489,6 @@ export class AuthService {
     };
   }
 
-  async compareRatingMethods(completedMatches: Match[]): Promise<{
-    completedMatchCount: number;
-    players: Array<{
-      playerId: string;
-      username: string;
-      currentRating: PublicPlayerDupr | null;
-      legacyRating: PublicPlayerDupr | null;
-      scorePerformanceRating: PublicPlayerDupr | null;
-      difference: PublicPlayerDupr;
-      relatedMatchCount: number;
-    }>;
-  }> {
-    const [legacy, scorePerformance] = await Promise.all([
-      this.calculateDuprRecalculation(
-        completedMatches,
-        [],
-        new RatingService(),
-      ),
-      this.calculateDuprRecalculation(
-        completedMatches,
-        [],
-        new ScorePerformanceRatingService(),
-      ),
-    ]);
-
-    return {
-      completedMatchCount: completedMatches.length,
-      players: scorePerformance.players
-        .map((player) => {
-          const legacyState = legacy.stateByPlayerId.get(player.id);
-          const scorePerformanceState =
-            scorePerformance.stateByPlayerId.get(player.id);
-          if (!legacyState || !scorePerformanceState) {
-            return null;
-          }
-          const currentRating = toPublicPlayerDupr(player.duprState);
-          const legacyRating = toPublicPlayerDupr(legacyState);
-          const scorePerformanceRating =
-            toPublicPlayerDupr(scorePerformanceState);
-
-          return {
-            playerId: player.id,
-            username: player.username,
-            currentRating,
-            legacyRating,
-            scorePerformanceRating,
-            difference: {
-              singles:
-                legacyRating?.singles != null &&
-                scorePerformanceRating?.singles != null
-                  ? roundDuprRating(
-                      scorePerformanceRating.singles - legacyRating.singles,
-                    )
-                  : null,
-              doubles:
-                legacyRating?.doubles != null &&
-                scorePerformanceRating?.doubles != null
-                  ? roundDuprRating(
-                      scorePerformanceRating.doubles - legacyRating.doubles,
-                    )
-                  : null,
-            },
-            relatedMatchCount:
-              scorePerformance.relatedMatchCountByPlayerId.get(player.id) ?? 0,
-          };
-        })
-        .filter(
-          (
-            comparison,
-          ): comparison is {
-            playerId: string;
-            username: string;
-            currentRating: PublicPlayerDupr | null;
-            legacyRating: PublicPlayerDupr | null;
-            scorePerformanceRating: PublicPlayerDupr | null;
-            difference: PublicPlayerDupr;
-            relatedMatchCount: number;
-          } => Boolean(comparison),
-        )
-        .sort((a, b) => a.username.localeCompare(b.username)),
-    };
-  }
-
   private async fillMissingMatchParticipantDuprSnapshots(
     snapshots: MatchParticipantDuprSnapshot[],
   ): Promise<{
@@ -1595,7 +1512,7 @@ export class AuthService {
     currentMatch: Match,
   ): Promise<Date | null> {
     const matchTypes = matchTypeValues.filter(
-      (matchType) => getDuprCategoryForMatchType(matchType) === category,
+      (matchType) => getMatchTopLevelType(matchType) === category,
     ) as MatchType[];
     return await db.matches.findPreviousCompletedAt(
       playerId,
@@ -1864,7 +1781,7 @@ export class AuthService {
       };
     }
 
-    const category = getDuprCategoryForMatchType(match.type);
+    const category = getMatchTopLevelType(match.type);
     const participantEntries = match.teams.flatMap((team, teamIndex) =>
       team.players.map((player) => ({
         playerId: player.id,
