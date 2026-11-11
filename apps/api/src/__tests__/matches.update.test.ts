@@ -97,6 +97,8 @@ describe("PUT /api/matches/:matchId", () => {
   let addSessionParticipants: MockInstance<
     MatchRepository["addSessionParticipants"]
   >;
+  let cleanupExpired: MockInstance<MatchRepository["cleanupExpired"]>;
+  let findAll: MockInstance<MatchRepository["findAll"]>;
 
   const putMatch = (body: object = validBody, matchId = existing.id) =>
     request(app)
@@ -106,6 +108,9 @@ describe("PUT /api/matches/:matchId", () => {
 
   beforeEach(() => {
     existing = buildExistingMatch();
+    cleanupExpired = vi
+      .spyOn(MatchRepository.prototype, "cleanupExpired")
+      .mockResolvedValue(undefined);
     addSessionParticipants = vi
       .spyOn(MatchRepository.prototype, "addSessionParticipants")
       .mockResolvedValue(undefined);
@@ -138,9 +143,9 @@ describe("PUT /api/matches/:matchId", () => {
         resultSubmittedAt: input.resultSubmittedAt,
         completedAt: existing.completedAt ?? input.resultSubmittedAt,
       }));
-    vi.spyOn(MatchRepository.prototype, "findAll").mockImplementation(
-      async () => ({ matches: [existing], total: 1 }),
-    );
+    findAll = vi
+      .spyOn(MatchRepository.prototype, "findAll")
+      .mockImplementation(async () => ({ matches: [existing], total: 1 }));
     applyMatchResult = vi
       .spyOn(AuthService.prototype, "applyMatchResultToRatings")
       .mockImplementation(async (match) => ({
@@ -212,6 +217,86 @@ describe("PUT /api/matches/:matchId", () => {
     expect(applyMatchResult).toHaveBeenCalledTimes(1);
     expect(recalculate).not.toHaveBeenCalled();
     expect(response.body.ratingChanges).toHaveLength(1);
+  });
+
+  it("진행 중 경기에 첫 점수를 넣으면 입력 시각에 completed가 되고 증분 반영한다", async () => {
+    existing = buildExistingMatch({
+      status: "created",
+      scores: [],
+      completedAt: null,
+      resultSubmittedByPlayerId: null,
+      resultSubmittedAt: null,
+      matchStartsAt: new Date(Date.now() - 30 * 60 * 1000),
+    });
+
+    const before = Date.now();
+    const response = await putMatch();
+
+    expect(response.status).toBe(200);
+    expect(cleanupExpired).toHaveBeenCalledTimes(1);
+    const [, input] = updateRecordedMatch.mock.calls[0]!;
+    expect(input.resultSubmittedAt.getTime()).toBeGreaterThanOrEqual(before);
+    expect(response.body.status).toBe("completed");
+    expect(new Date(response.body.completedAt).getTime()).toBe(
+      input.resultSubmittedAt.getTime(),
+    );
+    expect(applyMatchResult).toHaveBeenCalledTimes(1);
+    expect(applyMatchResult.mock.calls[0]![0]).toMatchObject({
+      id: existing.id,
+      status: "completed",
+    });
+    expect(recalculate).not.toHaveBeenCalled();
+    expect(response.body.ratingChanges).toEqual([
+      expect.objectContaining({ id: `log-${existing.id}` }),
+    ]);
+  });
+
+  it("시작 2시간이 지난 점수 없는 진행 중 경기는 404를 반환한다", async () => {
+    existing = buildExistingMatch({
+      status: "created",
+      scores: [],
+      completedAt: null,
+      resultSubmittedByPlayerId: null,
+      resultSubmittedAt: null,
+      matchStartsAt: new Date(Date.now() - 2 * 60 * 60 * 1000 - 1000),
+    });
+
+    const response = await putMatch();
+
+    expect(response.status).toBe(404);
+    expect(updateRecordedMatch).not.toHaveBeenCalled();
+    expect(applyMatchResult).not.toHaveBeenCalled();
+  });
+
+  it("처리 전에 만료 정리를 먼저 호출한다", async () => {
+    const findById = vi.mocked(MatchRepository.prototype.findById);
+
+    await putMatch();
+
+    expect(cleanupExpired.mock.invocationCallOrder[0]).toBeLessThan(
+      findById.mock.invocationCallOrder[0]!,
+    );
+  });
+
+  it("completed 경기 수정의 전체 재계산 입력에서 진행 중 경기는 빠진다", async () => {
+    const inProgress = buildExistingMatch({
+      id: "match-in-progress",
+      status: "created",
+      scores: [],
+      completedAt: null,
+      resultSubmittedByPlayerId: null,
+      resultSubmittedAt: null,
+    });
+    findAll.mockImplementation(async () => ({
+      matches: [existing, inProgress],
+      total: 2,
+    }));
+
+    const response = await putMatch();
+
+    expect(response.status).toBe(200);
+    const [replayed] = recalculate.mock.calls[0]!;
+    expect(replayed.map((match) => match.id)).toEqual([existing.id]);
   });
 
   it("세션 경기 참가자도 기록을 입력할 수 있다", async () => {
