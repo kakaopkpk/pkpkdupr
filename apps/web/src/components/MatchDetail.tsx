@@ -29,7 +29,6 @@ interface MatchDetailProps {
 const subTextClassName = "text-pkpk-sub-font";
 const SCORE_TABLE_SET_COUNT = 3;
 
-
 export const MatchDetailSkeleton: React.FC = () => (
   <div
     className="min-h-full"

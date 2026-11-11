@@ -500,7 +500,10 @@ const Matches: React.FC<MatchesProps> = ({ reloadKey = 0 }) => {
         await refreshFeedAndSession();
         // 피드 항목이 상세를 덮어쓰므로 상세 응답으로 다시 맞춘다
         if (isSelected) await loadSelectedMatch(recordedMatch.id);
-      })().catch(() => {});
+      })().catch(() => {
+        // 저장은 이미 성공했으므로 상세 재조회 실패로 기록 시트의 완료 화면을 오류 화면으로 바꾸지 않는다.
+        // 피드 조회 오류는 loadFeed가 직접 표시한다
+      });
     },
     [loadSelectedMatch, refreshFeedAndSession, selectedMatchId],
   );
