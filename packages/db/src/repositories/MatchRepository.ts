@@ -926,10 +926,8 @@ export class MatchRepository {
     return created;
   }
 
-  async createScheduledBatch(
-    data: CreateMatchInput[],
-    options: { allowCompleted?: boolean } = {},
-  ): Promise<Match[]> {
+  /** 세션이 지정된 완료 경기를 단일 transaction으로 일괄 생성한다. */
+  async createCompletedBatch(data: CreateMatchInput[]): Promise<Match[]> {
     if (data.length === 0) {
       return [];
     }
@@ -952,20 +950,8 @@ export class MatchRepository {
       ) {
         throw new Error("유효한 세션 정보가 필요합니다.");
       }
-      if (
-        !options.allowCompleted &&
-        (match.status !== "created" || (match.scores?.length ?? 0) > 0)
-      ) {
-        throw new Error("예정 경기만 일괄 생성할 수 있습니다.");
-      }
-      if (
-        options.allowCompleted &&
-        (match.status !== "completed" || (match.scores?.length ?? 0) === 0)
-      ) {
+      if (match.status !== "completed" || (match.scores?.length ?? 0) === 0) {
         throw new Error("완료 경기만 일괄 생성할 수 있습니다.");
-      }
-      if (!options.allowCompleted && !match.courtName?.trim()) {
-        throw new Error("코트명이 필요합니다.");
       }
       if (Number.isNaN(new Date(match.matchStartsAt).getTime())) {
         throw new Error("유효한 경기 예정 일시가 필요합니다.");
@@ -1018,9 +1004,6 @@ export class MatchRepository {
         const courtName = match.courtName?.trim();
         if (Number.isNaN(sessionDate.getTime())) {
           throw new Error("유효한 세션 정보가 필요합니다.");
-        }
-        if (!options.allowCompleted && !courtName) {
-          throw new Error("코트명이 필요합니다.");
         }
 
         await transaction.execute({
