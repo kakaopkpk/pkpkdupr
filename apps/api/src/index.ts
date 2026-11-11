@@ -17,9 +17,11 @@ import {
   type RecordedMatchResponse,
   type Team,
   type Session,
+  type ManagedMatchSession,
   type MatchType,
   validateMatchScoresForMode,
 } from "@pkpkdupr/shared/match";
+import { isRegularSessionTime, toKstDateKey } from "@pkpkdupr/shared/session";
 import { generateEntityId, isEntityId } from "@pkpkdupr/shared/entityId";
 import {
   PLAYER_AFFILIATION_MAX_COUNT,
@@ -562,7 +564,7 @@ class MatchRecordRequestError extends Error {
 
 /**
  * 경기 기록·수정 요청(RecordMatchRequest)을 검증해 저장할 값으로 바꾼다.
- * 요청자는 active여야 하고 팀 구성에 본인이 포함돼야 한다.
+ * 요청자는 active여야 한다. 팀 구성에 본인이 없어도 된다.
  */
 const prepareRecordedMatch = async (
   body: Partial<RecordMatchRequest> | undefined,
@@ -598,14 +600,7 @@ const prepareRecordedMatch = async (
     [requester, ...publicPlayers].map((player) => [player.id, player]),
   );
   const requestedTeams = teams as [MatchTeamRequest, MatchTeamRequest];
-  const flatPlayerIds = normalizeRequestedTeamPlayerIds(requestedTeams);
-  if (!flatPlayerIds.includes(requesterPlayerId)) {
-    throw new MatchRecordRequestError(
-      "매치 멤버에 본인이 포함되어야 합니다.",
-      400,
-    );
-  }
-
+  normalizeRequestedTeamPlayerIds(requestedTeams);
   const matchTeams = buildMatchTeamsFromRequests(requestedTeams, playersById);
   const resolvedMatchType =
     type ??
@@ -631,6 +626,53 @@ const prepareRecordedMatch = async (
     scores: normalizedScores,
   };
 };
+
+/** RecordMatchRequest.sessionId를 읽는다. 생략·null·빈 문자열은 지정하지 않은 것으로 본다. */
+const parseRequestedSessionId = (value: unknown): string | undefined => {
+  if (value == null) {
+    return undefined;
+  }
+  if (typeof value !== "string") {
+    throw new MatchRecordRequestError("유효한 세션 ID가 필요합니다.", 400);
+  }
+  return value.trim() || undefined;
+};
+
+/**
+ * 새 경기의 세션을 정한다.
+ * 회원 세션 id면 경기 시작일(KST)과 같은 날 세션일 때만 쓰고, 그 외에는 정기 시간대 규칙을 따른다.
+ * 정기 세션 id를 넘겨도 시작 시각이 정기 시간대가 아니면 세션 없이 저장한다.
+ */
+const resolveSessionForNewMatch = async (
+  requestedSessionId: string | undefined,
+  matchStartsAt: Date,
+): Promise<ManagedMatchSession | undefined> => {
+  if (requestedSessionId) {
+    const requested = await matchRepository.findSessionById(requestedSessionId);
+    if (!requested) {
+      throw new MatchRecordRequestError("세션을 찾을 수 없습니다.", 404);
+    }
+    if (requested.kind !== "regular") {
+      if (toKstDateKey(requested.date) !== toKstDateKey(matchStartsAt)) {
+        throw new MatchRecordRequestError(
+          "오늘 세션에서만 경기를 기록할 수 있습니다.",
+          403,
+        );
+      }
+      return requested;
+    }
+  }
+
+  if (!isRegularSessionTime(matchStartsAt)) {
+    return undefined;
+  }
+  return await matchRepository.findOrCreateRegularSession(
+    toKstDateKey(matchStartsAt),
+  );
+};
+
+const getTeamPlayerIds = (teams: Team[]) =>
+  teams.flatMap((team) => team.players.map((player) => player.id));
 
 /** 검증·저장소 오류는 지정된 상태로, 그 밖의 검증 예외는 400으로 응답한다. */
 const sendMatchRecordFailure = (res: express.Response, error: unknown) => {
@@ -818,6 +860,7 @@ app.get("/api/matches", async (req, res) => {
     const playerId =
       typeof req.query.playerId === "string" ? req.query.playerId : undefined;
 
+    await matchRepository.cleanupExpired();
     const result = playerId
       ? await matchRepository.findByPlayerId(playerId, page, limit)
       : await matchRepository.findAll(page, limit);
@@ -850,6 +893,7 @@ app.get("/api/match-feed", async (req, res) => {
     const limit = Number(req.query.limit ?? 20);
     const playerId =
       typeof req.query.playerId === "string" ? req.query.playerId : undefined;
+    await matchRepository.cleanupExpired();
     res.json(await matchRepository.findFeed(page, limit, playerId));
   } catch (err) {
     res.status(500).json({ error: (err as Error).message });
@@ -868,6 +912,7 @@ app.get("/api/match-sessions/:sessionId/matches", async (req, res) => {
       return res.status(400).json({ error: "유효한 세션 ID가 필요합니다." });
     }
 
+    await matchRepository.cleanupExpired();
     res.json(await matchRepository.findBySession(sessionId));
   } catch (err) {
     res.status(500).json({ error: (err as Error).message });
@@ -882,14 +927,29 @@ app.post("/api/matches", async (req, res) => {
 
   let match: Match;
   try {
-    const prepared = await prepareRecordedMatch(
-      req.body as Partial<RecordMatchRequest>,
-      decoded.playerId,
-    );
-    // 시작 시각은 24시간 수정 기한의 기준이므로 클라이언트 값을 받지 않고 서버 now로 정한다.
+    const body = req.body as Partial<RecordMatchRequest> | undefined;
+    const requestedSessionId = parseRequestedSessionId(body?.sessionId);
+    const prepared = await prepareRecordedMatch(body, decoded.playerId);
+    // 시작 시각은 24시간 수정 기한·정기 세션 판정의 기준이므로 클라이언트 값을 받지 않고 서버 now로 정한다.
     const now = new Date();
+    const session = await resolveSessionForNewMatch(requestedSessionId, now);
+    if (session) {
+      // 경기 저장 전에 참여자를 넣어, 저장된 세션 경기의 선수는 항상 참여자이게 한다.
+      await matchRepository.addSessionParticipants(
+        session.id,
+        getTeamPlayerIds(prepared.teams),
+      );
+    }
     match = await matchRepository.create({
       ...prepared,
+      session: session
+        ? {
+            id: session.id,
+            name: session.name,
+            date: session.date,
+            location: session.location,
+          }
+        : undefined,
       source: "player_created",
       creatorPlayerId: decoded.playerId,
       status: "completed",
@@ -1422,6 +1482,7 @@ app.get("/api/matches/:matchId", async (req, res) => {
       return;
     }
 
+    await matchRepository.cleanupExpired();
     const result = await matchRepository.findByIdWithRatingChanges(
       req.params.matchId,
     );
@@ -1533,6 +1594,13 @@ app.put("/api/matches/:matchId", async (req, res) => {
       req.body as Partial<RecordMatchRequest>,
       decoded.playerId,
     );
+    if (existing.session) {
+      // 바뀐 팀의 새 선수도 세션 참여자로 넣는다. 빠진 선수는 참여자에서 지우지 않는다.
+      await matchRepository.addSessionParticipants(
+        existing.session.id,
+        getTeamPlayerIds(prepared.teams),
+      );
+    }
     wasCompleted = existing.status === "completed";
     match = await matchRepository.updateRecordedMatch(matchId, {
       ...prepared,

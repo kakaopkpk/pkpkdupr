@@ -1,7 +1,16 @@
 import type { Match, MatchFeedItem } from "@pkpkdupr/shared/match";
 import type { Player, PlayerRatingChangeLog } from "@pkpkdupr/shared/player";
 import request from "supertest";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+  type MockInstance,
+} from "vitest";
+import { db } from "../db";
 import { app } from "../index";
 import { MatchRepository } from "../repositories/MatchRepository";
 import {
@@ -47,7 +56,12 @@ const match: Match = {
 };
 
 describe("GET /api/matches/:matchId", () => {
+  let cleanupExpired: MockInstance<MatchRepository["cleanupExpired"]>;
+
   beforeEach(() => {
+    cleanupExpired = vi
+      .spyOn(MatchRepository.prototype, "cleanupExpired")
+      .mockResolvedValue(undefined);
     vi.spyOn(
       AuthService.prototype,
       "authenticateAccessToken",
@@ -83,6 +97,7 @@ describe("GET /api/matches/:matchId", () => {
       .set("Authorization", "Bearer test-token");
 
     expect(response.status).toBe(200);
+    expect(cleanupExpired).toHaveBeenCalledTimes(1);
     expect(response.body).toMatchObject({
       id: match.id,
       type: "singles",
@@ -115,10 +130,35 @@ describe("GET /api/matches/:matchId", () => {
     expect(response.status).toBe(404);
     expect(response.body).toEqual({ error: "매치를 찾을 수 없습니다." });
   });
+
+  it("빈 세션 정리가 실패해도 조회는 계속한다", async () => {
+    cleanupExpired.mockRestore();
+    const deleteExpiredEmptySessions = vi
+      .spyOn(db.matches, "deleteExpiredEmptySessions")
+      .mockRejectedValue(new Error("cleanup failure"));
+    const consoleError = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => undefined);
+    vi.spyOn(
+      MatchRepository.prototype,
+      "findByIdWithRatingChanges",
+    ).mockResolvedValue({ match, ratingChanges: [] });
+
+    const response = await request(app)
+      .get(`/api/matches/${match.id}`)
+      .set("Authorization", "Bearer test-token");
+
+    expect(response.status).toBe(200);
+    expect(deleteExpiredEmptySessions).toHaveBeenCalledTimes(1);
+    expect(consoleError).toHaveBeenCalled();
+  });
 });
 
 describe("GET /api/matches", () => {
   beforeEach(() => {
+    vi.spyOn(MatchRepository.prototype, "cleanupExpired").mockResolvedValue(
+      undefined,
+    );
     vi.spyOn(
       AuthService.prototype,
       "authenticateAccessToken",
@@ -267,6 +307,9 @@ describe("GET /api/players/:playerId/profile-summary", () => {
 
 describe("GET /api/match-feed", () => {
   beforeEach(() => {
+    vi.spyOn(MatchRepository.prototype, "cleanupExpired").mockResolvedValue(
+      undefined,
+    );
     vi.spyOn(
       AuthService.prototype,
       "authenticateAccessToken",
@@ -348,6 +391,9 @@ describe("GET /api/match-feed", () => {
 
 describe("GET /api/match-sessions/:sessionId/matches", () => {
   beforeEach(() => {
+    vi.spyOn(MatchRepository.prototype, "cleanupExpired").mockResolvedValue(
+      undefined,
+    );
     vi.spyOn(
       AuthService.prototype,
       "authenticateAccessToken",
