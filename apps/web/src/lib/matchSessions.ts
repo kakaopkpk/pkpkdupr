@@ -1,7 +1,9 @@
+import type { MatchSessionRecommendationResponse } from "@pkpkdupr/shared/matchmaking";
 import type {
   AddMatchSessionParticipantRequest,
   CreateMatchSessionRequest,
   MatchSessionDetail,
+  StartSessionMatchRequest,
   TodayMatchSessionsResponse,
 } from "@pkpkdupr/shared/session";
 import { apiFetch } from "@/lib/api";
@@ -90,6 +92,33 @@ export const removeMatchSessionParticipant = async (
     `${sessionPath(sessionId)}/participants/${encodeURIComponent(playerId)}`,
     "참여를 취소하지 못했어요.",
     jsonInit("DELETE"),
+  );
+};
+
+export const fetchSessionRecommendations = (
+  sessionId: string,
+  courts: number,
+  seed: number,
+) => {
+  const searchParams = new URLSearchParams({
+    courts: String(courts),
+    seed: String(seed),
+  });
+  return requestJson<MatchSessionRecommendationResponse>(
+    `${sessionPath(sessionId)}/recommendations?${searchParams.toString()}`,
+    "추천 매칭을 불러오지 못했어요.",
+  );
+};
+
+/** 점수 없는 진행 중 경기를 시작한다 */
+export const startSessionMatch = async (
+  sessionId: string,
+  body: StartSessionMatchRequest,
+) => {
+  await requestJson<unknown>(
+    `${sessionPath(sessionId)}/matches`,
+    "경기를 시작하지 못했어요.",
+    jsonInit("POST", body),
   );
 };
 

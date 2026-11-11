@@ -9,7 +9,8 @@ const sessionChipClassName =
   "inline-flex h-6 items-center rounded-full px-2 text-[clamp(0.625rem,2.8vw,0.75rem)] font-semibold leading-6";
 
 const sessionStatusLabelMap = {
-  created: "예정",
+  // 경기가 없거나 진행 중 경기가 남은 세션
+  created: "진행 중",
   completed: "완료",
 } as const;
 
