@@ -94,6 +94,9 @@ describe("PUT /api/matches/:matchId", () => {
     AuthService["applyMatchResultToRatings"]
   >;
   let recalculate: MockInstance<AuthService["recalculateDuprRatings"]>;
+  let addSessionParticipants: MockInstance<
+    MatchRepository["addSessionParticipants"]
+  >;
 
   const putMatch = (body: object = validBody, matchId = existing.id) =>
     request(app)
@@ -103,6 +106,9 @@ describe("PUT /api/matches/:matchId", () => {
 
   beforeEach(() => {
     existing = buildExistingMatch();
+    addSessionParticipants = vi
+      .spyOn(MatchRepository.prototype, "addSessionParticipants")
+      .mockResolvedValue(undefined);
     vi.spyOn(
       AuthService.prototype,
       "authenticateAccessToken",
@@ -232,6 +238,40 @@ describe("PUT /api/matches/:matchId", () => {
     expect(response.body.courtName).toBe("1번 코트");
   });
 
+  it("세션 경기 팀이 바뀌면 새 선수를 세션 참여자로 추가한다", async () => {
+    existing = buildExistingMatch({
+      session: {
+        id: "Ssession1",
+        name: "정기 세션",
+        date: now,
+        location: "야탑초등학교",
+      },
+    });
+
+    const response = await putMatch({
+      ...validBody,
+      teams: [
+        { playerIds: [requester.id, partner.id] },
+        { playerIds: [substitute.id, opponentF.id] },
+      ],
+    });
+
+    expect(response.status).toBe(200);
+    expect(addSessionParticipants).toHaveBeenCalledWith("Ssession1", [
+      requester.id,
+      partner.id,
+      substitute.id,
+      opponentF.id,
+    ]);
+  });
+
+  it("세션 없는 경기는 참여자를 추가하지 않는다", async () => {
+    const response = await putMatch();
+
+    expect(response.status).toBe(200);
+    expect(addSessionParticipants).not.toHaveBeenCalled();
+  });
+
   it("멤버를 바꾸면 새 팀 구성으로 저장한다", async () => {
     const response = await putMatch({
       ...validBody,
@@ -319,7 +359,7 @@ describe("PUT /api/matches/:matchId", () => {
     expect(updateRecordedMatch).not.toHaveBeenCalled();
   });
 
-  it("새 팀 구성에 본인이 없으면 400을 반환한다", async () => {
+  it("새 팀 구성에 본인이 없어도 수정된다", async () => {
     const response = await putMatch({
       ...validBody,
       teams: [
@@ -328,9 +368,12 @@ describe("PUT /api/matches/:matchId", () => {
       ],
     });
 
-    expect(response.status).toBe(400);
-    expect(response.body.error).toBe("매치 멤버에 본인이 포함되어야 합니다.");
-    expect(updateRecordedMatch).not.toHaveBeenCalled();
+    expect(response.status).toBe(200);
+    const input = updateRecordedMatch.mock.calls[0]![1];
+    expect(input.teams[0].players.map((player) => player.id)).toEqual([
+      substitute.id,
+      partner.id,
+    ]);
   });
 
   it("동점 점수면 400을 반환한다", async () => {
