@@ -291,10 +291,13 @@ describe("public match sessions", () => {
     expect(atLimit.status).toBe(201);
   });
 
-  it("같은 날 같은 이름의 회원 세션을 만들면 DB 원문 대신 안내 메시지로 409", async () => {
+  it("같은 이름·같은 시각의 (name, date) 유니크 위반이면 DB 원문 대신 안내 메시지로 409", async () => {
     vi.spyOn(db.matches, "createSession").mockRejectedValue(
-      new Error(
-        'duplicate key value violates unique constraint "match_sessions_name_date_key"',
+      Object.assign(
+        new Error(
+          'duplicate key value violates unique constraint "match_sessions_name_date_unique"',
+        ),
+        { code: "23505", constraint_name: "match_sessions_name_date_unique" },
       ),
     );
 
