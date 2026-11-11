@@ -299,32 +299,18 @@ export class MatchRepository {
     throw new Error("매치 ID 생성에 실패했습니다.");
   }
 
-  private async createBatch(
-    matches: NewMatchInput[],
-    allowCompleted: boolean,
-  ): Promise<Match[]> {
+  /** 세션이 지정된 완료 경기를 저장소의 단일 transaction으로 생성한다. */
+  async createCompletedBatch(matches: NewMatchInput[]): Promise<Match[]> {
     const inputs = matches.map(toCreateMatchInput);
     if (inputs.length === 0) {
-      throw new MatchRepositoryError(
-        "한 개 이상의 예정 경기가 필요합니다.",
-        400,
-      );
+      throw new MatchRepositoryError("한 개 이상의 경기가 필요합니다.", 400);
     }
     const created = await this.run(
-      () => db.matches.createScheduledBatch(inputs, { allowCompleted }),
+      () => db.matches.createCompletedBatch(inputs),
       400,
       (error) => (isUniqueViolation(error) ? 409 : undefined),
     );
     return created.map(hydrateMatch);
-  }
-
-  async createScheduledBatch(matches: NewMatchInput[]): Promise<Match[]> {
-    return await this.createBatch(matches, false);
-  }
-
-  /** 세션이 지정된 완료 경기를 저장소의 단일 transaction으로 생성한다. */
-  async createCompletedBatch(matches: NewMatchInput[]): Promise<Match[]> {
-    return await this.createBatch(matches, true);
   }
 
   /**

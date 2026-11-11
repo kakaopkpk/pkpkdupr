@@ -74,9 +74,6 @@ export const matchSourceLabels: Record<MatchSource, string> = {
   admin_created_result: "관리자 입력",
 };
 
-/** 세션 코트 일정에서 경기 하나가 차지하는 시간 */
-export const MATCH_SCHEDULE_DURATION_MS = 15 * 60 * 1000;
-
 /** 경기 하나에 기록하는 점수 개수. 경기는 단판만 지원한다 */
 export const MATCH_SCORE_COUNT = 1;
 

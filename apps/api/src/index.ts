@@ -79,12 +79,6 @@ import {
 } from "./services/PlayerRatingChartProjectionService";
 import { buildPlayerProfileSummary } from "./services/PlayerProfileSummaryService";
 import {
-  buildCourtSchedule,
-  findCourtScheduleConflicts,
-  normalizeCourtName,
-  normalizeCourtNames,
-} from "./services/SessionCourtSchedule";
-import {
   AvatarValidationError,
   buildAvatarObjectPath,
   buildAvatarPublicUrl,
@@ -178,11 +172,6 @@ type AdminScheduledMatchRequest = {
   matchStartsAt?: string;
 };
 
-type AdminScheduledMatchBatchRequest = {
-  courts?: unknown;
-  matches?: AdminScheduledMatchRequest[];
-};
-
 type SubmitMatchResultRequest = {
   scores?: MatchScore[];
 };
@@ -210,7 +199,7 @@ const normalizeNullableCourtName = (value: unknown): string | null => {
   if (typeof value !== "string") {
     throw new Error("코트명은 문자열이어야 합니다.");
   }
-  return normalizeCourtName(value) ?? null;
+  return normalizeOptionalName(value) ?? null;
 };
 
 const normalizeMatchStartsAt = (value: unknown) => {
@@ -433,100 +422,6 @@ const buildMatchTeamsFromRequests = (
     { id: string; name: string; players: Player[] },
     { id: string; name: string; players: Player[] },
   ];
-
-type PreparedAdminScheduledMatch = {
-  name?: string;
-  type: MatchType;
-  teams: [Team, Team];
-  matchStartsAt?: Date;
-  courtName?: string;
-};
-
-const prepareAdminScheduledMatches = ({
-  requestedMatches,
-  registeredPlayerIds,
-  playersById,
-  requireSchedule,
-}: {
-  requestedMatches: unknown;
-  registeredPlayerIds: Set<string>;
-  playersById: Map<string, Player>;
-  requireSchedule: boolean;
-}): PreparedAdminScheduledMatch[] => {
-  if (!Array.isArray(requestedMatches) || requestedMatches.length === 0) {
-    throw new Error("한 개 이상의 대진이 필요합니다.");
-  }
-
-  return requestedMatches.map((requested, index) => {
-    const label = `${index + 1}번 경기`;
-    const { name, type, teams, matchStartsAt, courtName } =
-      requested as AdminScheduledMatchRequest;
-    if (!isMatchType(type)) {
-      throw new Error(`${label}: 유효한 매치 타입이 필요합니다.`);
-    }
-    if (!teams || teams.length !== 2) {
-      throw new Error(`${label}: 두 팀 구성이 필요합니다.`);
-    }
-
-    const requestedPlayerIds = normalizeRequestedTeamPlayerIds(teams);
-    if (
-      requestedPlayerIds.length === 0 ||
-      requestedPlayerIds.some((playerId) => !registeredPlayerIds.has(playerId))
-    ) {
-      throw new Error(`${label}: 세션에 등록된 참여자만 경기에 배정할 수 있습니다.`);
-    }
-
-    const matchTeams = buildMatchTeamsFromRequests(teams, playersById);
-    if (
-      !validateCreateMatchTeams(type, [
-        matchTeams[0].players,
-        matchTeams[1].players,
-      ])
-    ) {
-      throw new Error(
-        `${label}: ${matchTypeLabels[type]}에 맞는 팀 구성이 필요합니다.`,
-      );
-    }
-
-    const prepared: PreparedAdminScheduledMatch = {
-      name: normalizeOptionalName(name),
-      type,
-      teams: matchTeams,
-    };
-    if (requireSchedule) {
-      const parsedMatchStartsAt = new Date(matchStartsAt ?? "");
-      if (Number.isNaN(parsedMatchStartsAt.getTime())) {
-        throw new Error(`${label}: 경기 예정 일시가 필요합니다.`);
-      }
-      const normalizedCourtName = normalizeCourtName(courtName);
-      if (!normalizedCourtName) {
-        throw new Error(`${label}: 코트명이 필요합니다.`);
-      }
-      prepared.matchStartsAt = parsedMatchStartsAt;
-      prepared.courtName = normalizedCourtName;
-    }
-    return prepared;
-  });
-};
-
-const loadAdminSessionMatchContext = async (sessionId: string) => {
-  const session = await matchRepository.findSessionById(sessionId);
-  if (!session) {
-    return undefined;
-  }
-
-  const registeredPlayerIds = new Set(session.participantIds);
-  const playersById = new Map<string, Player>(
-    (await authService.getAllPlayers())
-      .filter(
-        (player) =>
-          player.status === "active" && registeredPlayerIds.has(player.id),
-      )
-      .map((player) => [player.id, player]),
-  );
-
-  return { session, registeredPlayerIds, playersById };
-};
 
 const normalizeMatchScores = (scores: unknown): MatchScore[] => {
   if (!Array.isArray(scores)) {
@@ -1636,119 +1531,6 @@ app.post(
         completedAt: null,
       });
       res.status(201).json(match);
-    } catch (err) {
-      res.status(400).json({ error: (err as Error).message });
-    }
-  },
-);
-
-app.post(
-  "/api/admin/match-sessions/:sessionId/matches/schedule-preview",
-  requireAdmin,
-  async (req, res) => {
-    try {
-      const context = await loadAdminSessionMatchContext(req.params.sessionId);
-      if (!context) {
-        return res.status(404).json({ error: "세션을 찾을 수 없습니다." });
-      }
-
-      const body = req.body as AdminScheduledMatchBatchRequest;
-      const courts = normalizeCourtNames(body.courts);
-      const matches = prepareAdminScheduledMatches({
-        requestedMatches: body.matches,
-        registeredPlayerIds: context.registeredPlayerIds,
-        playersById: context.playersById,
-        requireSchedule: false,
-      });
-      const existingMatches = await matchRepository.findBySession(
-        context.session.id,
-      );
-      const schedule = buildCourtSchedule({
-        courts,
-        sessionStartsAt: context.session.date,
-        existingMatches,
-        matchCount: matches.length,
-      });
-
-      res.json({
-        schedule: schedule.map((slot) => ({
-          courtName: slot.courtName,
-          matchStartsAt: slot.matchStartsAt.toISOString(),
-        })),
-      });
-    } catch (err) {
-      res.status(400).json({ error: (err as Error).message });
-    }
-  },
-);
-
-app.post(
-  "/api/admin/match-sessions/:sessionId/matches/scheduled-batch",
-  requireAdmin,
-  async (req, res) => {
-    try {
-      const decoded = await getAuthPayload(req, res);
-      if (!decoded) {
-        return;
-      }
-
-      const context = await loadAdminSessionMatchContext(req.params.sessionId);
-      if (!context) {
-        return res.status(404).json({ error: "세션을 찾을 수 없습니다." });
-      }
-
-      const body = req.body as AdminScheduledMatchBatchRequest;
-      const courts = normalizeCourtNames(body.courts);
-      const matches = prepareAdminScheduledMatches({
-        requestedMatches: body.matches,
-        registeredPlayerIds: context.registeredPlayerIds,
-        playersById: context.playersById,
-        requireSchedule: true,
-      });
-      const existingMatches = await matchRepository.findBySession(
-        context.session.id,
-      );
-      const conflicts = findCourtScheduleConflicts({
-        courts,
-        existingMatches,
-        scheduledMatches: matches.map((match) => ({
-          name: match.name,
-          matchStartsAt: match.matchStartsAt!,
-          courtName: match.courtName,
-        })),
-      });
-      if (conflicts.length > 0) {
-        return res.status(400).json({ error: conflicts[0] });
-      }
-
-      const createdMatches = await matchRepository.createScheduledBatch(
-        matches.map((match) => ({
-          name: match.name,
-          session: {
-            id: context.session.id,
-            name: context.session.name,
-            date: context.session.date,
-            location: context.session.location,
-          },
-          type: match.type,
-          source: "admin_created" as const,
-          creatorPlayerId: decoded.playerId,
-          status: "created" as const,
-          teams: match.teams,
-          scores: [],
-          resultSubmittedByPlayerId: null,
-          resultSubmittedAt: null,
-          location: context.session.location,
-          courtName: match.courtName!,
-          matchStartsAt: match.matchStartsAt!,
-          completedAt: null,
-        })),
-      );
-
-      res.status(201).json({
-        matches: createdMatches,
-        createdCount: createdMatches.length,
-      });
     } catch (err) {
       res.status(400).json({ error: (err as Error).message });
     }

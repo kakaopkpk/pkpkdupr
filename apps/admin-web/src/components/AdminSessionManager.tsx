@@ -1,7 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   isSinglesMatchType,
-  MATCH_SCHEDULE_DURATION_MS,
   matchTypeLabels,
   matchTypeValues,
   type ManagedMatchSession,
@@ -44,23 +43,6 @@ type SavedSessionMatchResult = Pick<
 type ScoreDraft = { scoreA: string; scoreB: string };
 
 const EMPTY_SCORE_DRAFT: ScoreDraft = { scoreA: "", scoreB: "" };
-type AutoMatchKind = "singles" | "doubles";
-
-type AutoMatchDraft = {
-  type: MatchType;
-  teams: [string[], string[]];
-};
-
-type AutoScheduledMatch = AutoMatchDraft & {
-  courtName: string;
-  matchStartsAt: string;
-};
-
-type AutoSchedulePreview = {
-  kind: AutoMatchKind;
-  matches: AutoScheduledMatch[];
-};
-
 type MatchScheduleDraft = {
   courtName: string;
   matchStartsAt: string;
@@ -68,167 +50,18 @@ type MatchScheduleDraft = {
 
 const DELETE_HOLD_DURATION_MS = 800;
 
-const getMatchupKey = (teams: [string[], string[]]) =>
-  teams
-    .map((team) => [...team].sort().join(","))
-    .sort()
-    .join("|");
-
 const getCourtKey = (courtName: string) =>
   courtName.trim().toLocaleLowerCase();
 
-const getScheduleConflictMessages = (
-  existingMatches: SessionMatchInfo[],
-  preview: AutoSchedulePreview | null,
-) => {
-  if (!preview) {
-    return [];
-  }
-
-  const intervals = [
-    ...existingMatches
-      .filter((match) => match.status !== "cancelled" && match.courtName?.trim())
-      .map((match, index) => ({
-        label: match.name?.trim() || `${index + 1}번 경기`,
-        courtName: match.courtName!.trim(),
-        startsAt: new Date(match.matchStartsAt).getTime(),
-        endsAt:
-          new Date(match.matchStartsAt).getTime() + MATCH_SCHEDULE_DURATION_MS,
-      })),
-    ...preview.matches.map((match, index) => ({
-      label: `${index + 1}번 새 경기`,
-      courtName: match.courtName.trim(),
-      startsAt: new Date(match.matchStartsAt).getTime(),
-      endsAt:
-        new Date(match.matchStartsAt).getTime() + MATCH_SCHEDULE_DURATION_MS,
-    })),
-  ].filter((interval) => Number.isFinite(interval.startsAt));
-
-  const conflicts: string[] = [];
-  const courtKeys = [...new Set(intervals.map((interval) => getCourtKey(interval.courtName)))];
-  for (const courtKey of courtKeys) {
-    const courtIntervals = intervals
-      .filter((interval) => getCourtKey(interval.courtName) === courtKey)
-      .sort((left, right) => left.startsAt - right.startsAt);
-    for (let index = 1; index < courtIntervals.length; index += 1) {
-      const previous = courtIntervals[index - 1];
-      const current = courtIntervals[index];
-      if (previous && current && current.startsAt < previous.endsAt) {
-        conflicts.push(
-          `${current.courtName}: ${previous.label}와 ${current.label}의 시간이 겹칩니다.`,
-        );
-      }
-    }
-  }
-  return conflicts;
-};
-
-const inferSinglesType = (
-  players: Array<Pick<Player, "gender">>,
-): MatchType =>
-  players[0]?.gender !== players[1]?.gender
-    ? "singles"
-    : "unrestricted-singles";
-
-const inferDoublesType = (
-  teams: [
-    Array<Pick<Player, "gender">>,
-    Array<Pick<Player, "gender">>,
-  ],
-): MatchType => {
-  const players = teams.flat();
-  if (players.every((player) => player.gender === "M")) {
-    return "men-doubles";
-  }
-  if (players.every((player) => player.gender === "F")) {
-    return "women-doubles";
-  }
-  if (
-    teams.every(
-      (team) =>
-        team.some((player) => player.gender === "M") &&
-        team.some((player) => player.gender === "F"),
-    )
-  ) {
-    return "mixed-doubles";
-  }
-  return "unrestricted-doubles";
-};
-
-const buildAutoMatchDrafts = (
-  players: Array<Pick<Player, "id" | "gender">>,
-  kind: AutoMatchKind,
-): AutoMatchDraft[] => {
-  if (kind === "singles") {
-    if (players.length < 4 || players.length > 6) {
-      return [];
-    }
-
-    const drafts: AutoMatchDraft[] = [];
-    for (let leftIndex = 0; leftIndex < players.length; leftIndex += 1) {
-      for (
-        let rightIndex = leftIndex + 1;
-        rightIndex < players.length;
-        rightIndex += 1
-      ) {
-        const left = players[leftIndex];
-        const right = players[rightIndex];
-        drafts.push({
-          type: inferSinglesType([left, right]),
-          teams: [[left.id], [right.id]],
-        });
-      }
-    }
-    return drafts;
-  }
-
-  if (players.length < 4 || players.length > 5) {
-    return [];
-  }
-
-  const pairings: Array<[[number, number], [number, number]]> = [
-    [
-      [0, 1],
-      [2, 3],
-    ],
-    [
-      [0, 2],
-      [1, 3],
-    ],
-    [
-      [0, 3],
-      [1, 2],
-    ],
-  ];
-
-  const drafts: AutoMatchDraft[] = [];
-  for (let first = 0; first < players.length - 3; first += 1) {
-    for (let second = first + 1; second < players.length - 2; second += 1) {
-      for (let third = second + 1; third < players.length - 1; third += 1) {
-        for (let fourth = third + 1; fourth < players.length; fourth += 1) {
-          const group = [
-            players[first],
-            players[second],
-            players[third],
-            players[fourth],
-          ];
-          for (const [teamAIndexes, teamBIndexes] of pairings) {
-            const teamA = teamAIndexes.map((index) => group[index]);
-            const teamB = teamBIndexes.map((index) => group[index]);
-            drafts.push({
-              type: inferDoublesType([teamA, teamB]),
-              teams: [
-                teamA.map((player) => player.id),
-                teamB.map((player) => player.id),
-              ],
-            });
-          }
-        }
-      }
-    }
-  }
-  return drafts;
-};
+/** 세션 경기에 이미 쓰인 코트명을 대소문자 구분 없이 중복 제거해 등장 순서대로 반환한다. */
+const getSessionCourtNames = (matches: SessionMatchInfo[]) => [
+  ...new Map(
+    matches
+      .map((match) => match.courtName?.trim())
+      .filter((courtName): courtName is string => Boolean(courtName))
+      .map((courtName) => [getCourtKey(courtName), courtName]),
+  ).values(),
+];
 
 interface AdminSessionManagerProps {
   players: Array<Pick<Player, "id" | "username" | "gender" | "status">>;
@@ -289,7 +122,6 @@ const AdminSessionManager: React.FC<AdminSessionManagerProps> = ({
     useState<MatchType>("unrestricted-doubles");
   const [matchStartsAt, setMatchStartsAt] = useState("");
   const [matchCourtName, setMatchCourtName] = useState("코트 1");
-  const [courtNames, setCourtNames] = useState<string[]>(["코트 1"]);
   const [teams, setTeams] = useState<[string[], string[]]>(() =>
     createEmptyTeams("unrestricted-doubles"),
   );
@@ -299,12 +131,6 @@ const AdminSessionManager: React.FC<AdminSessionManagerProps> = ({
   const [isCreatingSession, setIsCreatingSession] = useState(false);
   const [isSavingParticipants, setIsSavingParticipants] = useState(false);
   const [isCreatingMatch, setIsCreatingMatch] = useState(false);
-  const [creatingAutoMatchKind, setCreatingAutoMatchKind] =
-    useState<AutoMatchKind | null>(null);
-  const [autoSchedulePreview, setAutoSchedulePreview] =
-    useState<AutoSchedulePreview | null>(null);
-  const [isConfirmingAutoSchedule, setIsConfirmingAutoSchedule] =
-    useState(false);
   const [matchScheduleDrafts, setMatchScheduleDrafts] = useState<
     Record<string, MatchScheduleDraft>
   >({});
@@ -351,16 +177,9 @@ const AdminSessionManager: React.FC<AdminSessionManagerProps> = ({
       .toLocaleLowerCase()
       .includes(participantQuery.trim().toLocaleLowerCase()),
   );
-  const autoScheduleConflicts = useMemo(
-    () => getScheduleConflictMessages(sessionMatches, autoSchedulePreview),
-    [autoSchedulePreview, sessionMatches],
-  );
-  const isAutoSchedulePreviewInvalid = Boolean(
-    autoSchedulePreview?.matches.some(
-      (match) =>
-        !match.courtName.trim() ||
-        Number.isNaN(new Date(match.matchStartsAt).getTime()),
-    ),
+  const courtNames = useMemo(
+    () => getSessionCourtNames(sessionMatches),
+    [sessionMatches],
   );
 
   const loadSessions = async (preferredSessionId?: string) => {
@@ -422,16 +241,7 @@ const AdminSessionManager: React.FC<AdminSessionManagerProps> = ({
         ]),
       ),
     );
-    const existingCourtNames = [
-      ...new Map(
-        matches
-          .map((match) => match.courtName?.trim())
-          .filter((courtName): courtName is string => Boolean(courtName))
-          .map((courtName) => [getCourtKey(courtName), courtName]),
-      ).values(),
-    ];
-    setCourtNames(existingCourtNames.length > 0 ? existingCourtNames : ["코트 1"]);
-    setMatchCourtName(existingCourtNames[0] ?? "코트 1");
+    setMatchCourtName(getSessionCourtNames(matches)[0] ?? "코트 1");
   };
 
   useEffect(() => {
@@ -469,8 +279,6 @@ const AdminSessionManager: React.FC<AdminSessionManagerProps> = ({
     setParticipantIds(selectedSession.participantIds);
     setMatchStartsAt(toLocalDateTimeValue(selectedSession.date));
     setMatchCourtName("코트 1");
-    setCourtNames(["코트 1"]);
-    setAutoSchedulePreview(null);
     setMatchScheduleDrafts({});
     setTeams(createEmptyTeams(matchType));
     setError(null);
@@ -672,172 +480,6 @@ const AdminSessionManager: React.FC<AdminSessionManagerProps> = ({
       );
     } finally {
       setIsCreatingMatch(false);
-    }
-  };
-
-  const handleCreateAllMatchups = async (kind: AutoMatchKind) => {
-    if (!selectedSession) {
-      return;
-    }
-
-    const drafts = buildAutoMatchDrafts(registeredPlayers, kind);
-    const existingMatchupKeys = new Set(
-      sessionMatches
-        .filter((match) => match.status !== "cancelled")
-        .map((match) =>
-          getMatchupKey(
-            match.teams.map((team) =>
-              team.players.map((player) => player.id),
-            ) as [string[], string[]],
-          ),
-        ),
-    );
-    const missingDrafts = drafts.filter(
-      (draft) => !existingMatchupKeys.has(getMatchupKey(draft.teams)),
-    );
-
-    setError(null);
-    setSuccess(null);
-    if (missingDrafts.length === 0) {
-      setSuccess(
-        drafts.length === 0
-          ? kind === "doubles"
-            ? "복식 전체 대진은 참여자가 4~5명일 때만 생성할 수 있습니다."
-            : "단식 전체 대진은 참여자가 4~6명일 때만 생성할 수 있습니다."
-          : "이미 모든 대진이 생성되어 있습니다.",
-      );
-      return;
-    }
-
-    try {
-      setCreatingAutoMatchKind(kind);
-      const response = await apiFetch(
-        `/api/admin/match-sessions/${selectedSession.id}/matches/schedule-preview`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            courts: courtNames,
-            matches: missingDrafts.map((draft) => ({
-              type: draft.type,
-              teams: [
-                { name: "Team A", playerIds: draft.teams[0] },
-                { name: "Team B", playerIds: draft.teams[1] },
-              ],
-            })),
-          }),
-        },
-      );
-      if (!response.ok) {
-        const data = await response.json().catch(() => ({}));
-        throw new Error(data.error || "전체 대진 시간표 계산 실패");
-      }
-      const { schedule } = (await response.json()) as {
-        schedule: Array<{ courtName: string; matchStartsAt: string }>;
-      };
-      if (schedule.length !== missingDrafts.length) {
-        throw new Error("전체 대진 시간표를 계산하지 못했습니다.");
-      }
-      setAutoSchedulePreview({
-        kind,
-        matches: missingDrafts.map((draft, index) => ({
-          ...draft,
-          courtName: schedule[index]!.courtName,
-          matchStartsAt: toLocalDateTimeValue(schedule[index]!.matchStartsAt),
-        })),
-      });
-      setSuccess(
-        `${kind === "singles" ? "단식" : "복식"} 전체 대진 ${missingDrafts.length}경기의 시간표를 확인해주세요.`,
-      );
-    } catch (submitError) {
-      setError(
-        submitError instanceof Error
-          ? submitError.message
-          : "전체 대진 시간표 계산에 실패했습니다.",
-      );
-    } finally {
-      setCreatingAutoMatchKind(null);
-    }
-  };
-
-  const updateAutoSchedulePreview = (
-    index: number,
-    update: Partial<Pick<AutoScheduledMatch, "courtName" | "matchStartsAt">>,
-  ) => {
-    setAutoSchedulePreview((currentPreview) =>
-      currentPreview
-        ? {
-            ...currentPreview,
-            matches: currentPreview.matches.map((match, matchIndex) =>
-              matchIndex === index ? { ...match, ...update } : match,
-            ),
-          }
-        : null,
-    );
-  };
-
-  const handleConfirmAutoSchedule = async () => {
-    if (!selectedSession || !autoSchedulePreview) {
-      return;
-    }
-    if (autoScheduleConflicts.length > 0) {
-      setError(autoScheduleConflicts[0]);
-      return;
-    }
-    if (isAutoSchedulePreviewInvalid) {
-      setError("모든 대진의 코트명과 예정 일시를 입력해주세요.");
-      return;
-    }
-
-    setError(null);
-    setSuccess(null);
-    try {
-      setIsConfirmingAutoSchedule(true);
-      const response = await apiFetch(
-        `/api/admin/match-sessions/${selectedSession.id}/matches/scheduled-batch`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            courts: courtNames,
-            matches: autoSchedulePreview.matches.map((match) => ({
-              type: match.type,
-              courtName: match.courtName,
-              matchStartsAt: new Date(match.matchStartsAt).toISOString(),
-              teams: [
-                { name: "Team A", playerIds: match.teams[0] },
-                { name: "Team B", playerIds: match.teams[1] },
-              ],
-            })),
-          }),
-        },
-      );
-      if (!response.ok) {
-        const data = await response.json().catch(() => ({}));
-        throw new Error(data.error || "전체 대진 생성 실패");
-      }
-
-      const [, matches] = await Promise.all([
-        loadSessions(selectedSession.id),
-        loadSessionMatches(selectedSession.id),
-      ]);
-      setLoadedSessionMatches(matches);
-      setAutoSchedulePreview(null);
-      setSuccess(
-        `${autoSchedulePreview.kind === "singles" ? "단식" : "복식"} 전체 대진 ${autoSchedulePreview.matches.length}경기를 생성했습니다.`,
-      );
-    } catch (submitError) {
-      setError(
-        submitError instanceof Error
-          ? submitError.message
-          : "전체 대진 생성에 실패했습니다.",
-      );
-    } finally {
-      setIsConfirmingAutoSchedule(false);
     }
   };
 
@@ -1277,242 +919,19 @@ const AdminSessionManager: React.FC<AdminSessionManagerProps> = ({
               </section>
 
               <section className="space-y-4">
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div className="flex items-start gap-3">
-                    <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-blue-100 text-xs font-bold text-blue-700">
-                      2
-                    </span>
-                    <div>
-                      <h3 className="font-semibold text-gray-700">
-                        세션 경기
-                      </h3>
-                      <p className="mt-1 text-sm text-gray-500">
-                        이 세션에 등록된 경기를 확인하고 새 경기를 추가합니다.
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex flex-wrap items-end justify-end gap-2">
-                    <div className="min-w-52 space-y-1">
-                      <span className="block text-xs font-medium text-slate-500">
-                        자동 배정 코트명
-                      </span>
-                      {courtNames.map((courtName, index) => (
-                        <div key={`court-${index}`} className="flex gap-1">
-                          <input
-                            type="text"
-                            value={courtName}
-                            disabled={
-                              creatingAutoMatchKind !== null ||
-                              isConfirmingAutoSchedule ||
-                              autoSchedulePreview !== null
-                            }
-                            onChange={(event) =>
-                              setCourtNames((currentCourts) =>
-                                currentCourts.map((currentCourt, courtIndex) =>
-                                  courtIndex === index
-                                    ? event.target.value
-                                    : currentCourt,
-                                ),
-                              )
-                            }
-                            placeholder={`코트 ${index + 1}`}
-                            className="min-w-0 flex-1 rounded-lg border bg-white px-3 py-2 text-sm text-slate-700 disabled:bg-slate-100"
-                          />
-                          {courtNames.length > 1 ? (
-                            <button
-                              type="button"
-                              disabled={
-                                creatingAutoMatchKind !== null ||
-                                isConfirmingAutoSchedule ||
-                                autoSchedulePreview !== null
-                              }
-                              onClick={() =>
-                                setCourtNames((currentCourts) =>
-                                  currentCourts.filter(
-                                    (_, courtIndex) => courtIndex !== index,
-                                  ),
-                                )
-                              }
-                              className="rounded-lg border px-2 text-sm text-slate-500 hover:bg-slate-50 disabled:text-slate-300"
-                              aria-label={`${courtName || index + 1} 코트 삭제`}
-                            >
-                              −
-                            </button>
-                          ) : null}
-                        </div>
-                      ))}
-                      <button
-                        type="button"
-                        disabled={
-                          creatingAutoMatchKind !== null ||
-                          isConfirmingAutoSchedule ||
-                          autoSchedulePreview !== null
-                        }
-                        onClick={() =>
-                          setCourtNames((currentCourts) => [
-                            ...currentCourts,
-                            `코트 ${currentCourts.length + 1}`,
-                          ])
-                        }
-                        className="text-xs font-semibold text-blue-600 hover:underline disabled:text-slate-300"
-                      >
-                        코트 추가
-                      </button>
-                    </div>
-                    <button
-                      type="button"
-                      disabled={
-                        registeredPlayers.length < 4 ||
-                        registeredPlayers.length > 6 ||
-                        creatingAutoMatchKind !== null ||
-                        isConfirmingAutoSchedule ||
-                        autoSchedulePreview !== null
-                      }
-                      onClick={() => void handleCreateAllMatchups("singles")}
-                      className="cursor-pointer rounded-lg border border-blue-200 px-3 py-2 text-sm font-semibold text-blue-700 hover:bg-blue-50 disabled:cursor-not-allowed disabled:border-slate-200 disabled:text-slate-300"
-                    >
-                      {creatingAutoMatchKind === "singles"
-                        ? "단식 생성 중..."
-                        : "단식 전체 대진 생성"}
-                    </button>
-                    <button
-                      type="button"
-                      disabled={
-                        registeredPlayers.length < 4 ||
-                        registeredPlayers.length > 5 ||
-                        creatingAutoMatchKind !== null ||
-                        isConfirmingAutoSchedule ||
-                        autoSchedulePreview !== null
-                      }
-                      onClick={() => void handleCreateAllMatchups("doubles")}
-                      className="cursor-pointer rounded-lg border border-indigo-200 px-3 py-2 text-sm font-semibold text-indigo-700 hover:bg-indigo-50 disabled:cursor-not-allowed disabled:border-slate-200 disabled:text-slate-300"
-                    >
-                      {creatingAutoMatchKind === "doubles"
-                        ? "복식 생성 중..."
-                        : "복식 전체 대진 생성"}
-                    </button>
+                <div className="flex items-start gap-3">
+                  <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-blue-100 text-xs font-bold text-blue-700">
+                    2
+                  </span>
+                  <div>
+                    <h3 className="font-semibold text-gray-700">
+                      세션 경기
+                    </h3>
+                    <p className="mt-1 text-sm text-gray-500">
+                      이 세션에 등록된 경기를 확인하고 새 경기를 추가합니다.
+                    </p>
                   </div>
                 </div>
-
-                <p className="text-xs text-slate-500">
-                  단식은 참여자 4~6명, 복식은 4~5명일 때만 생성하며 이미
-                  존재하는 동일 대진은 제외합니다. 코트명과 기존 일정으로
-                  시간표를 먼저 계산한 뒤 확인합니다.
-                </p>
-
-                {autoSchedulePreview ? (
-                  <div className="space-y-3 rounded-xl border border-blue-200 bg-blue-50/60 p-4">
-                    <div className="flex flex-wrap items-start justify-between gap-3">
-                      <div>
-                        <h4 className="font-semibold text-slate-800">
-                          {autoSchedulePreview.kind === "singles"
-                            ? "단식"
-                            : "복식"}{" "}
-                          전체 대진 시간표 미리보기
-                        </h4>
-                        <p className="mt-1 text-xs text-slate-500">
-                          코트와 시간을 조정할 수 있습니다. 같은 코트의 시간이
-                          겹치면 생성할 수 없습니다.
-                        </p>
-                      </div>
-                      <div className="flex gap-2">
-                        <button
-                          type="button"
-                          disabled={isConfirmingAutoSchedule}
-                          onClick={() => setAutoSchedulePreview(null)}
-                          className="rounded-lg px-3 py-2 text-sm font-medium text-slate-600 hover:bg-white disabled:text-slate-300"
-                        >
-                          취소
-                        </button>
-                        <button
-                          type="button"
-                          disabled={
-                            isConfirmingAutoSchedule ||
-                            isAutoSchedulePreviewInvalid ||
-                            autoScheduleConflicts.length > 0
-                          }
-                          onClick={() => void handleConfirmAutoSchedule()}
-                          className="rounded-lg bg-blue-600 px-3 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:bg-blue-300"
-                        >
-                          {isConfirmingAutoSchedule
-                            ? "생성 중..."
-                            : `${autoSchedulePreview.matches.length}경기 생성`}
-                        </button>
-                      </div>
-                    </div>
-                    {autoScheduleConflicts.length > 0 ? (
-                      <ul className="space-y-1 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700">
-                        {autoScheduleConflicts.map((conflict) => (
-                          <li key={conflict}>{conflict}</li>
-                        ))}
-                      </ul>
-                    ) : null}
-                    <div className="overflow-x-auto">
-                      <table className="w-full min-w-[680px] text-left text-sm">
-                        <thead className="text-xs text-slate-500">
-                          <tr>
-                            <th className="px-2 py-2">경기</th>
-                            <th className="px-2 py-2">대진</th>
-                            <th className="px-2 py-2">예정 일시</th>
-                            <th className="px-2 py-2">코트</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {autoSchedulePreview.matches.map((match, index) => (
-                            <tr key={`${match.type}-${index}`} className="border-t border-blue-100">
-                              <td className="px-2 py-2 font-medium text-slate-700">
-                                {index + 1}번
-                              </td>
-                              <td className="px-2 py-2 text-slate-600">
-                                {match.teams
-                                  .flat()
-                                  .map(
-                                    (playerId) =>
-                                      selectablePlayerById.get(playerId)
-                                        ?.username ?? playerId,
-                                  )
-                                  .join(" · ")}
-                              </td>
-                              <td className="px-2 py-2">
-                                <input
-                                  type="datetime-local"
-                                  value={match.matchStartsAt}
-                                  disabled={isConfirmingAutoSchedule}
-                                  onChange={(event) =>
-                                    updateAutoSchedulePreview(index, {
-                                      matchStartsAt: event.target.value,
-                                    })
-                                  }
-                                  className="rounded border bg-white px-2 py-1.5 text-sm"
-                                />
-                              </td>
-                              <td className="px-2 py-2">
-                                <select
-                                  value={match.courtName}
-                                  disabled={isConfirmingAutoSchedule}
-                                  onChange={(event) =>
-                                    updateAutoSchedulePreview(index, {
-                                      courtName: event.target.value,
-                                    })
-                                  }
-                                  className="rounded border bg-white px-2 py-1.5 text-sm"
-                                >
-                                  {courtNames
-                                    .filter((courtName) => courtName.trim())
-                                    .map((courtName) => (
-                                      <option key={courtName} value={courtName}>
-                                        {courtName}
-                                      </option>
-                                    ))}
-                                </select>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                ) : null}
 
                 {isLoadingSessionMatches ? (
                   <p className="bg-slate-50 px-4 py-5 text-sm text-slate-500">
@@ -1792,11 +1211,9 @@ const AdminSessionManager: React.FC<AdminSessionManagerProps> = ({
                           className="w-full rounded-lg border bg-white px-4 py-2"
                         />
                         <datalist id="session-court-names">
-                          {courtNames
-                            .filter((courtName) => courtName.trim())
-                            .map((courtName) => (
-                              <option key={courtName} value={courtName} />
-                            ))}
+                          {courtNames.map((courtName) => (
+                            <option key={courtName} value={courtName} />
+                          ))}
                         </datalist>
                       </div>
                     </div>
