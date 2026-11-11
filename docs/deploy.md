@@ -7,7 +7,6 @@ api는 Supabase Edge Function `api`로, DB 스키마는 `supabase/migrations/`�
                                                                         │ (apps/api Express app 번들)
                                                                         ▼
                                                   Supabase Postgres (커넥션 풀러, transaction mode)
-Supabase Cron (pg_cron + pg_net) ── 5분마다 POST /api/internal/cron/auto-approvals ──┘
 Edge Function `api` ── service role key ──> Supabase Storage `avatars` 버킷 (업로드·삭제)
 브라우저 ── https://<project-ref>.supabase.co/storage/v1/object/public/avatars/... (아바타 읽기)
 ```
@@ -29,9 +28,8 @@ pnpm build:edge   # apps/api/src/edge.ts → supabase/functions/api/dist/api.js
 
 ## Edge Runtime에서 달라지는 점
 
-- 부팅 작업(dev mock 시딩)과 자동 합의 interval은 Edge Runtime에서 실행하지 않습니다. 로컬 Node 개발(`pnpm dev`)에서는 기존처럼 실행합니다.
-  - 관리자는 별도 계정이 아니라 `player_admins`에 등록된 회원입니다. 첫 관리자는 대시보드와 SQL로 등록합니다(아래 6).
-- 자동 합의는 Supabase Cron이 5분마다 `POST /api/internal/cron/auto-approvals`를 호출해 처리합니다. 헤더 `x-cron-secret`이 함수 secret `CRON_SECRET`과 같을 때만 실행하고, 아니면 401을 돌려줍니다.
+- 부팅 작업(dev mock 시딩)은 Edge Runtime에서 실행하지 않습니다. 로컬 Node 개발(`pnpm dev`)에서는 기존처럼 실행합니다.
+  - 관리자는 별도 계정이 아니라 `player_admins`에 등록된 회원입니다. 첫 관리자는 대시보드와 SQL로 등록합니다(아래 5).
 - 아바타는 Supabase Storage에 저장합니다. 아래 "아바타 저장소"를 봅니다.
 
 ## 아바타 저장소 (Supabase Storage)
@@ -85,48 +83,20 @@ gh variable set SUPABASE_PROJECT_REF --body <project-ref>
 | --- | --- | --- |
 | `DATABASE_URL` | 예 | 커넥션 풀러 transaction mode 주소(위 1-3). 없으면 Supabase가 주입하는 `SUPABASE_DB_URL`(직접 연결)로 대신하며 경고를 남깁니다. |
 | `CORS_ALLOWED_ORIGINS` | 예 | 허용 origin(쉼표 구분). 운영값 `https://kakaopkpk.github.io` |
-| `CRON_SECRET` | 예 | 자동 합의 cron 호출 인증값. Vault의 `cron_secret`과 같은 값 |
-| `QR_TOTP_SECRET` | 예 | 플레이어 QR 토큰 서명 키. 다른 값으로 대신하지 않습니다. |
 | `STORAGE_PUBLIC_URL` | 아니오 | 아바타 공개 URL의 base. 없으면 `SUPABASE_URL`을 씁니다. 운영에서는 비워 두고, 로컬 `functions serve`에서만 `http://127.0.0.1:54321`로 넣습니다(함수 안의 `SUPABASE_URL`은 브라우저가 접근할 수 없는 `http://kong:8000`이기 때문). |
 
-직접 넣어야 기동하는 secret은 `QR_TOTP_SECRET`입니다. 없으면 함수가 기동하지 않습니다(로컬 `functions serve` 포함). `SUPABASE_URL`·`SUPABASE_ANON_KEY`·`SUPABASE_SERVICE_ROLE_KEY`는 Supabase가 함수에 자동으로 넣으므로 직접 설정하지 않습니다. 토큰 확인에는 앞의 둘을, 계정 발급·비밀번호 초기화·아이디 변경(Auth admin API)에는 service role key를 씁니다.
+`SUPABASE_URL`·`SUPABASE_ANON_KEY`·`SUPABASE_SERVICE_ROLE_KEY`는 Supabase가 함수에 자동으로 넣으므로 직접 설정하지 않습니다. 토큰 확인에는 앞의 둘을, 계정 발급·비밀번호 초기화·아이디 변경(Auth admin API)에는 service role key를 씁니다.
 
 ```bash
-CRON_SECRET="$(openssl rand -hex 32)"
 pnpm exec supabase secrets set --project-ref <project-ref> \
   DATABASE_URL='postgresql://postgres.<project-ref>:<DB 비밀번호>@aws-0-<region>.pooler.supabase.com:6543/postgres' \
-  CORS_ALLOWED_ORIGINS='https://kakaopkpk.github.io' \
-  CRON_SECRET="$CRON_SECRET" \
-  QR_TOTP_SECRET="$(openssl rand -hex 32)"
+  CORS_ALLOWED_ORIGINS='https://kakaopkpk.github.io'
 pnpm exec supabase secrets list --project-ref <project-ref>
 ```
 
-secret을 바꾼 뒤에는 함수를 다시 배포하지 않아도 새 요청부터 반영됩니다. `QR_TOTP_SECRET`을 바꾸면 이미 띄워 둔 QR 코드는 더 이상 검증되지 않습니다.
+secret을 바꾼 뒤에는 함수를 다시 배포하지 않아도 새 요청부터 반영됩니다.
 
-## 4. Supabase Cron용 Vault secrets
-
-`supabase/migrations/20261110010000_auto_approval_cron.sql`이 pg_cron 작업 `auto-approvals`(5분 주기)를 등록합니다. 호출 주소와 인증값은 Vault에서 읽으므로 SQL Editor에서 한 번 넣습니다. 두 값 중 하나라도 없으면 작업은 아무 요청도 보내지 않습니다.
-
-```sql
-SELECT vault.create_secret('https://<project-ref>.supabase.co', 'project_url');
-SELECT vault.create_secret('<CRON_SECRET과 같은 값>', 'cron_secret');
-
--- 값을 바꿀 때
-SELECT vault.update_secret(
-  (SELECT id FROM vault.secrets WHERE name = 'cron_secret'),
-  '<새 값>'
-);
-```
-
-실행 이력은 다음으로 확인합니다.
-
-```sql
-SELECT * FROM cron.job WHERE jobname = 'auto-approvals';
-SELECT * FROM cron.job_run_details ORDER BY start_time DESC LIMIT 10;
-SELECT id, status_code, content, error_msg FROM net._http_response ORDER BY created DESC LIMIT 10;
-```
-
-## 5. 로그인 설정 (최초 1회)
+## 4. 로그인 설정 (최초 1회)
 
 로그인은 관리자가 발급한 아이디·비밀번호만 씁니다. 소셜 로그인과 공개 가입은 쓰지 않습니다.
 
@@ -138,7 +108,7 @@ Supabase 대시보드 → Authentication
    - **Confirm email**: 내부 이메일로는 메일을 받을 수 없으므로 계정은 api가 확인 완료 상태로 만듭니다. 이 설정은 그대로 둬도 됩니다.
    - **Google**: 끕니다(다른 provider도 켜지 않습니다).
 2. Sign In / Providers → Email → **Secure password change**: 끕니다. 켜면 최근에 로그인하지 않은 사용자의 비밀번호 변경에 재인증이 필요해져, 첫 로그인 때 비밀번호 변경이 막힐 수 있습니다.
-3. URL Configuration은 아래 "8. GitHub Pages (web·admin)"의 "Supabase Auth URL"을 따릅니다.
+3. URL Configuration은 아래 "7. GitHub Pages (web·admin)"의 "Supabase Auth URL"을 따릅니다.
 
 ### 로그인과 회원 연결
 
@@ -152,7 +122,7 @@ Supabase 대시보드 → Authentication
 - 연결된 회원이 없는 Auth 사용자(예: 대시보드에서 직접 만든 사용자)는 403 `ACCOUNT_NOT_LINKED`이고, 앱이 관리자에게 문의하라고 안내합니다.
 - 로그인 provider와 이메일 도메인은 서버가 검사하지 않습니다. 계정을 만들 수 있는 주체를 막는 것(위 설정의 가입 끔, 관리자 발급)이 접근 통제입니다.
 
-## 6. 첫 관리자 등록
+## 5. 첫 관리자 등록
 
 관리자는 `player_admins`에 등록된 회원입니다. 첫 관리자는 admin-web에 들어갈 수 없으므로 대시보드와 SQL로 만들고, 그 뒤 다른 회원의 계정은 admin-web에서 발급합니다.
 
@@ -211,9 +181,9 @@ WHERE player_id = (SELECT id FROM players WHERE lower(username) = lower('<아이
 
 Google 로그인으로 운영 중인 프로젝트를 아이디·비밀번호 로그인으로 옮기는 절차입니다. 새 함수를 먼저 배포하고 그다음 대시보드에서 Google을 끕니다. 배포하면 web·admin-web에는 아이디·비밀번호 로그인 화면만 남으므로, 기존 회원은 4단계에서 비밀번호 초기화를 받기 전까지 새로 로그인할 수 없습니다. 회원에게 미리 알리고 1~4단계를 이어서 진행합니다.
 
-1. **배포**: 새 코드와 마이그레이션(`20261111000000_password_login.sql`)을 main에 머지해 `supabase-deploy`·`pages` workflow로 배포합니다(아래 7, 8). 마이그레이션이 `invite_codes`·`player_auth_link_logs` 테이블을 지우므로 미사용 초대 코드는 버려집니다.
-2. **대시보드 설정**: 위 5대로 Email 켬, Google 끔, 가입 허용 끔, Secure password change 끔으로 바꿉니다.
-3. **첫 관리자 등록**: 위 6대로 만듭니다. 기존 회원이 관리자가 될 때도 6의 SQL로 새 Auth 사용자와 연결합니다(기존 Google Auth 사용자의 연결은 이 `UPDATE`가 덮어씁니다).
+1. **배포**: 새 코드와 마이그레이션(`20261111000000_password_login.sql`)을 main에 머지해 `supabase-deploy`·`pages` workflow로 배포합니다(아래 6, 7). 마이그레이션이 `invite_codes`·`player_auth_link_logs` 테이블을 지우므로 미사용 초대 코드는 버려집니다.
+2. **대시보드 설정**: 위 4대로 Email 켬, Google 끔, 가입 허용 끔, Secure password change 끔으로 바꿉니다.
+3. **첫 관리자 등록**: 위 5대로 만듭니다. 기존 회원이 관리자가 될 때도 5의 SQL로 새 Auth 사용자와 연결합니다(기존 Google Auth 사용자의 연결은 이 `UPDATE`가 덮어씁니다).
 4. **기존 회원 계정 발급**: 관리자가 admin-web에서 회원마다 비밀번호 초기화를 하고 임시 비밀번호를 전달합니다.
    - 초기화하면 Google로 만든 계정도 아이디로 로그인하는 계정이 됩니다(Auth 사용자의 이메일이 내부 이메일로 바뀌고 비밀번호가 설정됩니다).
    - 쓰지 않는 Google Auth 사용자는 대시보드에서 지워도 됩니다. `players.auth_user_id`가 `ON DELETE SET NULL`이라 연결만 풀리고 회원 데이터는 그대로입니다.
@@ -230,7 +200,7 @@ Google 로그인으로 운영 중인 프로젝트를 아이디·비밀번호 로
 
 - 관리자가 회원 추가를 했을 때 이메일 형식 오류로 실패하면, 원격 Auth가 `INTERNAL_EMAIL_DOMAIN`(예약 TLD `.invalid`)을 거부하는 것입니다. `packages/shared/src/auth.ts`의 `INTERNAL_EMAIL_DOMAIN`을 허용되는 도메인으로 바꿔야 합니다. 바꾸면 기존 Auth 사용자의 이메일을 모두 옮겨야 하므로 계정을 많이 발급하기 전에 확인합니다.
 
-## 7. 배포
+## 6. 배포
 
 - 자동: main push에서 `supabase/**`, `apps/api/**`, `packages/**`가 바뀌면 `supabase-deploy` workflow가 실행됩니다.
 - 수동: Actions → `supabase-deploy` → Run workflow (`gh workflow run supabase-deploy.yml`).
@@ -250,9 +220,26 @@ pnpm exec supabase functions deploy api --project-ref <project-ref> --use-api
 curl -s https://<project-ref>.supabase.co/functions/v1/api/health
 curl -si -X OPTIONS https://<project-ref>.supabase.co/functions/v1/api/players \
   -H 'Origin: https://kakaopkpk.github.io' -H 'Access-Control-Request-Method: GET'
-# 401이어야 한다
-curl -si -X POST https://<project-ref>.supabase.co/functions/v1/api/internal/cron/auto-approvals
+# 토큰 없이 인증 경로를 호출하면 401이어야 한다
+curl -si https://<project-ref>.supabase.co/functions/v1/api/me
 ```
+
+### 이전 버전에서 올릴 때 (1회)
+
+경기 합의 단계·자동 합의 cron·QR 기능이 있던 운영 프로젝트에 이 변경을 처음 배포한 뒤 한 번만 하는 정리입니다.
+
+1. 배포 직후 admin-web에서 "평점 재계산"을 1회 실행합니다. 합의 대기 경기를 completed로 바꾸는 마이그레이션은 평점을 계산하지 못하므로, 재계산해야 이 경기가 평점에 반영됩니다.
+2. 더 이상 쓰지 않는 함수 secret을 지웁니다.
+
+   ```bash
+   pnpm exec supabase secrets unset --project-ref <project-ref> CRON_SECRET QR_TOTP_SECRET
+   ```
+
+3. SQL Editor에서 자동 합의 cron이 쓰던 Vault 값 `project_url`·`cron_secret`을 지웁니다. cron 작업 `auto-approvals`는 마이그레이션이 해제합니다.
+
+   ```sql
+   DELETE FROM vault.secrets WHERE name IN ('project_url', 'cron_secret');
+   ```
 
 ## 로컬에서 함수 실행
 
@@ -267,10 +254,10 @@ curl -s http://127.0.0.1:54321/functions/v1/api/players
 
 - api 소스를 바꾸면 `pnpm build:edge`로 번들을 다시 만들어야 함수에 반영됩니다.
 - dev mock 데이터는 `pnpm dev`(Node api)가 시작할 때 로컬 DB에 넣습니다. 함수는 시딩하지 않습니다.
-- 함수 secret은 `supabase/functions/.env`(커밋 금지)에 두거나 `--env-file`로 넘깁니다. `QR_TOTP_SECRET`은 필수이고, cron 경로를 호출하려면 `CRON_SECRET`도 넣습니다. `SUPABASE_URL`·`SUPABASE_ANON_KEY`·`SUPABASE_SERVICE_ROLE_KEY`는 로컬 함수 런타임이 넣어 줍니다. 아바타 업로드를 확인하려면 `STORAGE_PUBLIC_URL=http://127.0.0.1:54321`도 넣습니다.
+- 함수 secret은 `supabase/functions/.env`(커밋 금지)에 두거나 `--env-file`로 넘깁니다. 로컬에서는 직접 넣어야 하는 필수 secret이 없습니다. `SUPABASE_URL`·`SUPABASE_ANON_KEY`·`SUPABASE_SERVICE_ROLE_KEY`는 로컬 함수 런타임이 넣어 줍니다. 아바타 업로드를 확인하려면 `STORAGE_PUBLIC_URL=http://127.0.0.1:54321`도 넣습니다.
 - 로컬 로그인은 아이디·비밀번호입니다. 로컬 `functions serve`는 dev mock을 시딩하지 않으므로 dev 계정이 없습니다. 계정은 `pnpm dev`(Node api)를 한 번 띄워 만들거나 관리자 api로 발급합니다. 자세한 내용은 `docs/dev-environment.md`의 "로컬 로그인"을 따릅니다.
 
-## 8. GitHub Pages (web·admin)
+## 7. GitHub Pages (web·admin)
 
 web과 admin-web은 한 GitHub Pages 사이트에 같이 배포합니다. Pages는 저장소당 사이트가 하나라서 admin-web을 `admin/` 아래에 둡니다.
 
