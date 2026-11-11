@@ -16,6 +16,8 @@ interface CreateSessionSheetBodyProps {
   onCreated: (session: MatchSessionDetailInfo) => void;
 }
 
+const SESSION_NAME_MAX_LENGTH = 50;
+
 const inputClassName =
   "app-mobile-input w-full rounded-2xl border border-border bg-white px-4 py-2 text-base text-pkpk-sub-font outline-none";
 
@@ -43,10 +45,10 @@ const CreateSessionSheetBody: React.FC<CreateSessionSheetBodyProps> = ({
         location: trimmedLocation,
       });
       rememberRecentInputValue("web.match.location", trimmedLocation);
+      // 시트가 닫힐 때까지 다시 누르지 못하게 성공 후에도 저장 중 상태를 유지한다
       onCreated(session);
     } catch (err) {
       setError(err instanceof Error ? err.message : "세션을 만들지 못했어요.");
-    } finally {
       setIsSaving(false);
     }
   };
@@ -81,7 +83,7 @@ const CreateSessionSheetBody: React.FC<CreateSessionSheetBodyProps> = ({
                 setError(null);
               }}
               required
-              maxLength={50}
+              maxLength={SESSION_NAME_MAX_LENGTH}
               placeholder="예: 번개, 클럽 대회"
               className={inputClassName}
             />

@@ -37,6 +37,7 @@ interface TodaySessionSectionProps {
 const CREATE_SESSION_SHEET_DEPTH_ID = "create-session-sheet";
 /** 아직 만들어지지 않은 정기 세션 카드의 진행 상태 키 */
 const REGULAR_PLACEHOLDER_KEY = "regular-placeholder";
+const MAX_VISIBLE_AVATARS = 6;
 
 const kindBadgeClassName =
   "inline-flex h-6 shrink-0 items-center rounded-full px-2 text-[clamp(0.625rem,2.8vw,0.75rem)] font-semibold leading-6";
@@ -94,7 +95,7 @@ const TodaySessionCard: React.FC<TodaySessionCardProps> = ({
             avatarUrl: participant.avatarUrl,
             name: participant.username,
           }))}
-          max={6}
+          max={MAX_VISIBLE_AVATARS}
           size="session"
           ringClassName="ring-white"
         />

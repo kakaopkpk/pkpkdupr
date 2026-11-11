@@ -42,6 +42,7 @@ interface SessionDetailProps {
 }
 
 const SESSION_SHEET_LAYER = 70;
+const PARTICIPANT_SKELETON_COUNT = 4;
 
 const sectionTitleClassName =
   "px-1 text-[clamp(1rem,4.5cqw,1.25rem)] font-semibold tracking-wide text-pkpk-sub-title";
@@ -160,8 +161,13 @@ const SessionDetail: React.FC<SessionDetailProps> = ({
     closeSheet(recordSheetDepthId, setIsRecordSheetOpen);
 
   const refreshParticipants = async () => {
+    // 반영은 됐는데 다시 읽기만 실패하면 화면이 이전 참여 상태로 남으므로 알린다
     await onParticipantsChanged?.().catch(() => {
-      // 다시 읽기 실패는 상세 화면의 오류 표시가 맡는다
+      const refreshError =
+        "최신 참여자 정보를 불러오지 못했어요. 당겨서 새로고침해 주세요.";
+      setParticipantError((prev) =>
+        prev ? `${prev} ${refreshError}` : refreshError,
+      );
     });
   };
 
@@ -229,7 +235,7 @@ const SessionDetail: React.FC<SessionDetailProps> = ({
         role="status"
         aria-label="참여자 로딩 중"
       >
-        {Array.from({ length: 4 }, (_, index) => (
+        {Array.from({ length: PARTICIPANT_SKELETON_COUNT }, (_, index) => (
           <SkeletonBlock key={index} className="h-6 w-24 rounded-full" />
         ))}
       </div>

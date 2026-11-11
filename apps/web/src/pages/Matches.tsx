@@ -416,7 +416,9 @@ const Matches: React.FC<MatchesProps> = ({ reloadKey = 0 }) => {
         setSessionError(message);
         if (throwOnError) throw err;
       } finally {
-        setIsLoadingSession(false);
+        if (selectedSessionIdRef.current === sessionId) {
+          setIsLoadingSession(false);
+        }
       }
     },
     [isOnline, isAuthenticated],
@@ -645,6 +647,7 @@ const Matches: React.FC<MatchesProps> = ({ reloadKey = 0 }) => {
     setSelectedSessionDetail(null);
     setSessionDetailError(null);
     setIsLoadingSessionDetail(false);
+    setIsLoadingSession(false);
     setSelectedSessionMatches([]);
     setSessionError(null);
     restoreScrollTop("match");
