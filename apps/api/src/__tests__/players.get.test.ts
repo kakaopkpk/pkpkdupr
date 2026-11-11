@@ -26,6 +26,7 @@ const playerWithoutCompletedMatch: Player = {
 const session: AuthenticatedSession = {
   payload: { playerId: player.id, isAdmin: false },
   player,
+  isFirstLogin: false,
 };
 
 describe("GET /api/players", () => {

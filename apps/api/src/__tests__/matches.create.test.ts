@@ -80,6 +80,7 @@ const buildSession = (player: Player = creator): AuthenticatedSession => ({
     isAdmin: false,
   },
   player,
+  isFirstLogin: false,
 });
 
 const buildCreatedMatch = (

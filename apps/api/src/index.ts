@@ -32,10 +32,10 @@ import type {
 import type { VerifyPlayerQrTokenRequest } from "@pkpkdupr/shared/qr";
 import type {
   AdminRegisterPlayerRequest,
+  AdminUpdateUsernameRequest,
   AuthErrorCode,
   AuthErrorResponse,
   MeResponse,
-  RedeemInviteRequest,
 } from "@pkpkdupr/shared/auth";
 import { assertRequiredEnv } from "./config/env";
 import { initDatabase } from "./db";
@@ -44,6 +44,7 @@ import {
   MatchRepositoryError,
 } from "./repositories/MatchRepository";
 import {
+  AccountRequestError,
   AuthError,
   AuthService,
   type AuthenticatedSession,
@@ -656,40 +657,33 @@ const requireAdmin = async (
 const toMeResponse = (session: AuthenticatedSession): MeResponse => ({
   ...session.player,
   isAdmin: session.payload.isAdmin,
+  isFirstLogin: session.isFirstLogin,
 });
+
+/** 계정 관리 요청 오류는 지정한 상태로, 그 밖의 오류는 500으로 `{error}`를 응답한다. */
+const sendAccountRequestFailure = (res: express.Response, error: unknown) => {
+  const status = error instanceof AccountRequestError ? error.status : 500;
+  res.status(status).json({ error: (error as Error).message });
+};
 
 app.get("/api/me", async (req, res) => {
-  const token = getBearerToken(req, res);
-  if (!token) {
+  const session = await getAuthSession(req, res);
+  if (!session) {
     return;
   }
-
-  try {
-    const session = await authService.authenticateAccessToken(token, {
-      autoLink: true,
-    });
-    res.json(toMeResponse(session));
-  } catch (error) {
-    handleAuthFailure(res, error);
-  }
+  res.json(toMeResponse(session));
 });
 
-app.post("/api/auth/invite", async (req, res) => {
-  const token = getBearerToken(req, res);
-  if (!token) {
+app.post("/api/me/password-changed", async (req, res) => {
+  const session = await getAuthSession(req, res);
+  if (!session) {
     return;
   }
 
-  const { code } = (req.body ?? {}) as Partial<RedeemInviteRequest>;
-  if (typeof code !== "string" || !code.trim()) {
-    return sendAuthError(res, "INVITE_INVALID", "초대 코드를 입력해주세요.");
-  }
-
   try {
-    const session = await authService.redeemInviteCode(token, code);
-    res.status(201).json(toMeResponse(session));
+    res.json(toMeResponse(await authService.markPasswordChanged(session)));
   } catch (error) {
-    handleAuthFailure(res, error);
+    res.status(500).json({ error: (error as Error).message });
   }
 });
 
@@ -1993,36 +1987,48 @@ app.post("/api/admin/register", requireAdmin, async (req, res) => {
     if (!normalizedUsername || !isPlayerGender(gender)) {
       return res.status(400).json({ error: "username, gender는 필수입니다." });
     }
-    const player = await authService.registerAdmin(
+    const result = await authService.registerAdmin(
       { username: normalizedUsername, gender },
       decoded.playerId,
     );
-    res.json(player);
+    res.json(result);
   } catch (err) {
-    res.status(500).json({ error: (err as Error).message });
+    sendAccountRequestFailure(res, err);
   }
 });
 
-app.post("/api/admin/invite-codes", requireAdmin, async (req, res) => {
-  try {
-    const decoded = await getAuthPayload(req, res);
-    if (!decoded) {
-      return;
+app.post(
+  "/api/admin/players/:playerId/password-reset",
+  requireAdmin,
+  async (req, res) => {
+    try {
+      res.json(await authService.resetPlayerPassword(req.params.playerId));
+    } catch (err) {
+      sendAccountRequestFailure(res, err);
+    }
+  },
+);
+
+app.patch(
+  "/api/admin/players/:playerId/username",
+  requireAdmin,
+  async (req, res) => {
+    const { username } = (req.body ?? {}) as Partial<
+      Record<keyof AdminUpdateUsernameRequest, unknown>
+    >;
+    if (typeof username !== "string") {
+      return res.status(400).json({ error: "username은 필수입니다." });
     }
 
-    res.status(201).json(await authService.createInviteCode(decoded.playerId));
-  } catch (err) {
-    res.status(500).json({ error: (err as Error).message });
-  }
-});
-
-app.get("/api/admin/invite-codes", requireAdmin, async (_req, res) => {
-  try {
-    res.json(await authService.getInviteCodes());
-  } catch (err) {
-    res.status(500).json({ error: (err as Error).message });
-  }
-});
+    try {
+      res.json(
+        await authService.updatePlayerUsername(req.params.playerId, username),
+      );
+    } catch (err) {
+      sendAccountRequestFailure(res, err);
+    }
+  },
+);
 
 export const processAutoApprovals = (now: Date = new Date()) =>
   autoApprovalService.process(now);
@@ -2075,6 +2081,7 @@ const startAutoApprovalScheduler = () => {
 export const startServer = async () => {
   assertRequiredEnv();
   await initDatabase();
+  await authService.seedDevAuthAccounts();
   startAutoApprovalScheduler();
   return (app as any).listen(PORT, () => {
     console.log(`🚀 API Server running on http://localhost:${PORT}`);

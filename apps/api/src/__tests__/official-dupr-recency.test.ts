@@ -32,6 +32,7 @@ const players = ["anchor", "partner", "opponent-a", "opponent-b", "admin"].map(
     status: "active",
     duprRating: null,
     authUserId: null,
+    isFirstLogin: false,
     createdAt: NOW,
     updatedAt: NOW,
   }),

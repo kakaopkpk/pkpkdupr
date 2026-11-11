@@ -1,47 +1,43 @@
-import { createHash } from "crypto";
-import type {
-  CreateInviteCodeInput,
-  CreatePlayerAuthLinkLogInput,
-  RedeemInviteCodeInput,
-  StoredPlayerRecord,
-} from "@pkpkdupr/db";
+import { INTERNAL_EMAIL_DOMAIN, toInternalEmail } from "@pkpkdupr/shared/auth";
+import type { StoredPlayerRecord } from "@pkpkdupr/db";
 import request from "supertest";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { db } from "../db";
 import { app } from "../index";
+import { AuthService } from "../services/AuthService";
 import {
-  SupabaseAuthUserVerifier,
-  type SupabaseAuthUser,
-} from "../services/supabaseAuthUser";
+  AuthEmailExistsError,
+  generateInitialPassword,
+  SupabaseAuthAdmin,
+} from "../services/supabaseAuthAdmin";
+import { SupabaseAuthUserVerifier } from "../services/supabaseAuthUser";
 
 const NOW = new Date("2026-11-10T00:00:00.000Z");
-const DAY_MS = 24 * 60 * 60 * 1000;
 
-type StoredInvite = CreateInviteCodeInput & {
-  usedAt: Date | null;
-  usedByPlayerId: string | null;
-};
+interface FakeAuthAccount {
+  email: string;
+  password: string;
+}
 
 /**
- * Supabase Auth와 DB 저장소를 메모리로 대신한다.
- * 초대 코드 소비 조건(미사용·미만료)과 unique 제약은 InviteCodeRepository·마이그레이션과 같게 흉내 낸다.
+ * Supabase Auth(토큰 확인·service role 관리 API)와 DB 저장소를 메모리로 대신한다.
+ * Auth 이메일 중복과 lower(username) unique 제약은 실제 동작과 같게 흉내 낸다.
  */
 const setupAuthFixture = () => {
-  const authUsers = new Map<string, SupabaseAuthUser>();
+  const tokens = new Map<string, string>();
+  const authAccounts = new Map<string, FakeAuthAccount>();
   const players = new Map<string, StoredPlayerRecord>();
   const admins = new Set<string>();
-  const invites: StoredInvite[] = [];
-  const authLinkLogs: CreatePlayerAuthLinkLogInput[] = [];
+  let nextAuthUserNumber = 1;
 
   const addAuthUser = (
     token: string,
-    email: string | null,
-    emailConfirmed = true,
-    provider: string | null = "google",
-  ): SupabaseAuthUser => {
-    const user = { id: `auth-${token}`, email, emailConfirmed, provider };
-    authUsers.set(token, user);
-    return user;
+    email = `${token}@${INTERNAL_EMAIL_DOMAIN}`,
+  ) => {
+    const id = `auth-${token}`;
+    tokens.set(token, id);
+    authAccounts.set(id, { email, password: "current-password" });
+    return { id };
   };
 
   const addPlayer = (
@@ -56,6 +52,7 @@ const setupAuthFixture = () => {
       status: "active",
       duprRating: null,
       authUserId,
+      isFirstLogin: false,
       createdAt: NOW,
       updatedAt: NOW,
     };
@@ -63,9 +60,50 @@ const setupAuthFixture = () => {
     return player;
   };
 
+  const findByUsername = (username: string) =>
+    [...players.values()].find(
+      (player) => player.username.toLowerCase() === username.toLowerCase(),
+    );
+
+  const assertEmailFree = (email: string, exceptId?: string) => {
+    for (const [id, account] of authAccounts) {
+      if (id !== exceptId && account.email === email) {
+        throw new AuthEmailExistsError(email);
+      }
+    }
+  };
+
   vi.spyOn(SupabaseAuthUserVerifier.prototype, "getUser").mockImplementation(
-    async (token) => authUsers.get(token) ?? null,
+    async (token) => {
+      const id = tokens.get(token);
+      return id && authAccounts.has(id) ? { id } : null;
+    },
   );
+  const createAuthUser = vi
+    .spyOn(SupabaseAuthAdmin.prototype, "createUser")
+    .mockImplementation(async ({ email, password }) => {
+      assertEmailFree(email);
+      const id = `auth-created-${nextAuthUserNumber++}`;
+      authAccounts.set(id, { email, password });
+      return id;
+    });
+  const updateAuthUser = vi
+    .spyOn(SupabaseAuthAdmin.prototype, "updateUser")
+    .mockImplementation(async (id, input) => {
+      const account = authAccounts.get(id);
+      if (!account) throw new Error("User not found");
+      if (input.email) assertEmailFree(input.email, id);
+      Object.assign(account, input);
+    });
+  const deleteAuthUser = vi
+    .spyOn(SupabaseAuthAdmin.prototype, "deleteUser")
+    .mockImplementation(async (id) => {
+      authAccounts.delete(id);
+    });
+  vi.spyOn(SupabaseAuthAdmin.prototype, "getUserEmail").mockImplementation(
+    async (id) => authAccounts.get(id)?.email ?? null,
+  );
+
   vi.spyOn(db.players, "findById").mockImplementation(async (id) =>
     players.get(id),
   );
@@ -74,65 +112,72 @@ const setupAuthFixture = () => {
       [...players.values()].find((player) => player.authUserId === authUserId),
   );
   vi.spyOn(db.players, "findByUsernameIgnoringCase").mockImplementation(
-    async (username) =>
-      [...players.values()].find(
-        (player) => player.username.toLowerCase() === username.toLowerCase(),
-      ),
+    async (username) => findByUsername(username),
   );
   const linkAuthUser = vi
     .spyOn(db.players, "linkAuthUser")
-    .mockImplementation(async (id, authUserId) => {
+    .mockImplementation(async (id, authUserId, isFirstLogin) => {
       const player = players.get(id);
       if (!player || player.authUserId || player.status !== "active") {
         return false;
       }
       player.authUserId = authUserId;
+      player.isFirstLogin = isFirstLogin;
       return true;
     });
-  vi.spyOn(db.playerAuthLinkLogs, "create").mockImplementation(
-    async (input) => {
-      authLinkLogs.push(input);
+  vi.spyOn(db.players, "updateFirstLogin").mockImplementation(
+    async (id, isFirstLogin) => {
+      const player = players.get(id);
+      if (player) player.isFirstLogin = isFirstLogin;
+      return player;
     },
+  );
+  const updateUsername = vi
+    .spyOn(db.players, "updateUsername")
+    .mockImplementation(async (id, username) => {
+      const duplicate = findByUsername(username);
+      if (duplicate && duplicate.id !== id) {
+        throw Object.assign(
+          new Error(
+            'duplicate key value violates unique constraint "players_username_lower_unique"',
+          ),
+          { code: "23505" },
+        );
+      }
+      const player = players.get(id);
+      if (player) player.username = username;
+      return player;
+    });
+  const createPlayer = vi
+    .spyOn(db.players, "create")
+    .mockImplementation(async (input) => {
+      if (findByUsername(input.username)) {
+        throw Object.assign(new Error("duplicate key value"), { code: "23505" });
+      }
+      const player = addPlayer(input.id, input.username, input.authUserId ?? null);
+      player.gender = input.gender;
+      player.isFirstLogin = input.isFirstLogin ?? false;
+      return player;
+    });
+  vi.spyOn(db.playerCreationLogs, "create").mockImplementation(
+    async (input) => input,
   );
   vi.spyOn(db.playerAdmins, "isAdmin").mockImplementation(async (playerId) =>
     admins.has(playerId),
-  );
-  vi.spyOn(db.inviteCodes, "create").mockImplementation(async (input) => {
-    invites.push({ ...input, usedAt: null, usedByPlayerId: null });
-  });
-  vi.spyOn(db.inviteCodes, "redeemForNewPlayer").mockImplementation(
-    async ({ codeHash, usedAt, player }: RedeemInviteCodeInput) => {
-      const invite = invites.find(
-        (candidate) =>
-          candidate.codeHash === codeHash &&
-          candidate.usedAt === null &&
-          candidate.expiresAt.getTime() > usedAt.getTime(),
-      );
-      if (!invite) return false;
-      if (
-        [...players.values()].some(
-          (existing) =>
-            existing.username.toLowerCase() === player.username.toLowerCase() ||
-            existing.authUserId === player.authUserId,
-        )
-      ) {
-        throw new Error("duplicate key value violates unique constraint");
-      }
-      invite.usedAt = usedAt;
-      invite.usedByPlayerId = player.id;
-      addPlayer(player.id, player.username, player.authUserId);
-      return true;
-    },
   );
 
   return {
     addAuthUser,
     addPlayer,
     admins,
-    authLinkLogs,
-    invites,
+    authAccounts,
     players,
+    createAuthUser,
+    updateAuthUser,
+    deleteAuthUser,
     linkAuthUser,
+    updateUsername,
+    createPlayer,
   };
 };
 
@@ -144,7 +189,6 @@ describe("Supabase Auth 기반 인증", () => {
   beforeEach(() => {
     vi.useFakeTimers({ toFake: ["Date"] });
     vi.setSystemTime(NOW);
-    vi.stubEnv("ALLOWED_EMAIL_DOMAIN", "kakaocorp.com");
     fixture = setupAuthFixture();
   });
 
@@ -246,106 +290,10 @@ describe("Supabase Auth 기반 인증", () => {
     );
   });
 
-  describe("허용 도메인", () => {
-    it.each([
-      ["다른 도메인", "dev_alice@gmail.com", true],
-      ["허용 도메인으로 끝나는 다른 도메인", "dev_alice@notkakaocorp.com", true],
-      ["허용 도메인의 하위 도메인", "dev_alice@mail.kakaocorp.com", true],
-      ["이메일 미확인", "dev_alice@kakaocorp.com", false],
-    ])(
-      "%s 계정은 DOMAIN_NOT_ALLOWED로 거부하고 같은 앞부분의 회원과 연결하지 않는다",
-      async (_label, email, emailConfirmed) => {
-        fixture.addPlayer("Palice01", "dev_alice");
-        fixture.addAuthUser("outsider", email, emailConfirmed);
-
-        const response = await request(app)
-          .get("/api/me")
-          .set(bearer("outsider"));
-
-        expect(response.status).toBe(403);
-        expect(response.body.code).toBe("DOMAIN_NOT_ALLOWED");
-        expect(fixture.linkAuthUser).not.toHaveBeenCalled();
-        expect(fixture.players.get("Palice01")?.authUserId).toBeNull();
-      },
-    );
-
-    it("허용 도메인·확인된 이메일이어도 기본 설정에서는 Google 외 provider를 DOMAIN_NOT_ALLOWED로 거부한다", async () => {
-      fixture.addPlayer("Palice01", "dev_alice");
-      fixture.addAuthUser("magic", "dev_alice@kakaocorp.com", true, "email");
-
-      const response = await request(app).get("/api/me").set(bearer("magic"));
-
-      expect(response.status).toBe(403);
-      expect(response.body.code).toBe("DOMAIN_NOT_ALLOWED");
-      expect(fixture.linkAuthUser).not.toHaveBeenCalled();
-      expect(fixture.players.get("Palice01")?.authUserId).toBeNull();
-    });
-
-    it("provider를 알 수 없는 토큰도 거부한다", async () => {
-      fixture.addPlayer("Palice01", "dev_alice");
-      fixture.addAuthUser("unknown", "dev_alice@kakaocorp.com", true, null);
-
-      const response = await request(app).get("/api/me").set(bearer("unknown"));
-
-      expect(response.status).toBe(403);
-      expect(response.body.code).toBe("DOMAIN_NOT_ALLOWED");
-    });
-
-    it("허용되지 않은 provider는 초대 코드 가입 전에 거부한다", async () => {
-      fixture.addAuthUser("magic", "newbie@kakaocorp.com", true, "email");
-
-      const response = await request(app)
-        .post("/api/auth/invite")
-        .set(bearer("magic"))
-        .send({ code: "ABCD2345", username: "newbie" });
-
-      expect(response.status).toBe(403);
-      expect(response.body.code).toBe("DOMAIN_NOT_ALLOWED");
-      expect(fixture.players.size).toBe(0);
-    });
-
-    it("ALLOWED_AUTH_PROVIDERS 목록에 있는 provider는 통과하고 목록에 없는 provider(google)는 거부한다", async () => {
-      vi.stubEnv("ALLOWED_AUTH_PROVIDERS", " google , Email ");
-      fixture.addPlayer("Palice01", "dev_alice");
-      fixture.addAuthUser("magic", "dev_alice@kakaocorp.com", true, "email");
-
-      const allowed = await request(app).get("/api/me").set(bearer("magic"));
-      expect(allowed.status).toBe(200);
-
-      vi.stubEnv("ALLOWED_AUTH_PROVIDERS", "email");
-      fixture.addAuthUser("google", "dev_alice@kakaocorp.com", true, "google");
-      const denied = await request(app).get("/api/me").set(bearer("google"));
-      expect(denied.status).toBe(403);
-      expect(denied.body.code).toBe("DOMAIN_NOT_ALLOWED");
-    });
-
-    it("허용 provider여도 도메인이 다르면 거부한다", async () => {
-      vi.stubEnv("ALLOWED_AUTH_PROVIDERS", "google,email");
-      fixture.addPlayer("Palice01", "dev_alice");
-      fixture.addAuthUser("magic", "dev_alice@gmail.com", true, "email");
-
-      const response = await request(app).get("/api/me").set(bearer("magic"));
-
-      expect(response.status).toBe(403);
-      expect(response.body.code).toBe("DOMAIN_NOT_ALLOWED");
-    });
-
-    it("ALLOWED_EMAIL_DOMAIN이 비어 있으면 모든 계정을 거부한다", async () => {
-      vi.stubEnv("ALLOWED_EMAIL_DOMAIN", "");
-      fixture.addPlayer("Palice01", "dev_alice");
-      fixture.addAuthUser("alice", "dev_alice@kakaocorp.com");
-
-      const response = await request(app).get("/api/me").set(bearer("alice"));
-
-      expect(response.status).toBe(403);
-      expect(response.body.code).toBe("DOMAIN_NOT_ALLOWED");
-    });
-  });
-
-  describe("자동 연결", () => {
-    it("이메일 앞부분과 대소문자 구분 없이 같은 username의 미연결 회원과 연결한다", async () => {
-      fixture.addPlayer("Palice01", "dev_alice");
-      const authUser = fixture.addAuthUser("alice", "Dev_Alice@KakaoCorp.com");
+  describe("회원 연결", () => {
+    it("auth_user_id로 연결된 회원으로 인증하고 isFirstLogin을 준다", async () => {
+      const authUser = fixture.addAuthUser("alice");
+      fixture.addPlayer("Palice01", "dev_alice", authUser.id).isFirstLogin = true;
 
       const response = await request(app).get("/api/me").set(bearer("alice"));
 
@@ -354,136 +302,42 @@ describe("Supabase Auth 기반 인증", () => {
         id: "Palice01",
         username: "dev_alice",
         isAdmin: false,
+        isFirstLogin: true,
       });
-      expect(fixture.players.get("Palice01")?.authUserId).toBe(authUser.id);
-      expect(fixture.authLinkLogs).toEqual([
-        {
-          id: expect.stringMatching(/^player-auth-link-log-/),
-          playerId: "Palice01",
-          authUserId: authUser.id,
-          linkMethod: "email_local_part",
-          createdAt: NOW,
-        },
-      ]);
-      // 이메일·Auth 사용자 ID는 응답에 싣지 않는다.
-      expect(JSON.stringify(response.body)).not.toContain("@");
       expect(response.body).not.toHaveProperty("authUserId");
     });
 
-    it("같은 username의 회원이 inactive면 연결하지 않고 ACCOUNT_NOT_LINKED를 준다", async () => {
-      fixture.addPlayer("Palice01", "dev_alice").status = "inactive";
-      fixture.addAuthUser("alice", "dev_alice@kakaocorp.com");
-
-      const response = await request(app).get("/api/me").set(bearer("alice"));
-
-      expect(response.status).toBe(403);
-      expect(response.body.code).toBe("ACCOUNT_NOT_LINKED");
-      expect(fixture.linkAuthUser).not.toHaveBeenCalled();
-      expect(fixture.players.get("Palice01")?.authUserId).toBeNull();
-      expect(fixture.authLinkLogs).toHaveLength(0);
-    });
-
-    it("조회 후 inactive로 바뀐 회원은 연결·감사 로그 없이 ACCOUNT_NOT_LINKED를 준다", async () => {
-      const player = fixture.addPlayer("Palice01", "dev_alice");
-      fixture.addAuthUser("alice", "dev_alice@kakaocorp.com");
-      const findByUsername = vi.mocked(db.players.findByUsernameIgnoringCase);
-      const lookup = findByUsername.getMockImplementation()!;
-      findByUsername.mockImplementationOnce(async (username) => {
-        // 조회 시점에는 active였다가 연결 직전에 관리자가 inactive로 바꾼 상황.
-        const found = await lookup(username);
-        const snapshot = found && { ...found };
-        player.status = "inactive";
-        return snapshot;
-      });
-
-      const response = await request(app).get("/api/me").set(bearer("alice"));
-
-      expect(response.status).toBe(403);
-      expect(response.body.code).toBe("ACCOUNT_NOT_LINKED");
-      expect(fixture.linkAuthUser).toHaveBeenCalledTimes(1);
-      expect(fixture.players.get("Palice01")?.authUserId).toBeNull();
-      expect(fixture.authLinkLogs).toHaveLength(0);
-    });
-
-    it("다른 요청이 먼저 연결해 이 요청이 연결하지 못했으면 감사 로그를 남기지 않는다", async () => {
+    it("연결된 회원이 없으면 같은 username의 미연결 회원이 있어도 연결하지 않고 ACCOUNT_NOT_LINKED를 준다", async () => {
       fixture.addPlayer("Palice01", "dev_alice");
-      const authUser = fixture.addAuthUser("alice", "dev_alice@kakaocorp.com");
-      fixture.linkAuthUser.mockImplementationOnce(async (id, authUserId) => {
-        // 같은 요청자의 동시 요청이 조회와 연결 사이에 먼저 연결한 상황.
-        fixture.players.get(id)!.authUserId = authUserId;
-        return false;
-      });
+      fixture.addAuthUser("alice", `dev_alice@${INTERNAL_EMAIL_DOMAIN}`);
 
-      const response = await request(app).get("/api/me").set(bearer("alice"));
-
-      expect(response.status).toBe(200);
-      expect(response.body.id).toBe("Palice01");
-      expect(fixture.players.get("Palice01")?.authUserId).toBe(authUser.id);
-      expect(fixture.authLinkLogs).toHaveLength(0);
-    });
-
-    it("동시에 여러 번 요청해도 감사 로그는 한 번만 남긴다", async () => {
-      fixture.addPlayer("Palice01", "dev_alice");
-      fixture.addAuthUser("alice", "dev_alice@kakaocorp.com");
-
-      const responses = await Promise.all([
+      const [me, players] = await Promise.all([
         request(app).get("/api/me").set(bearer("alice")),
-        request(app).get("/api/me").set(bearer("alice")),
+        request(app).get("/api/players").set(bearer("alice")),
       ]);
 
-      expect(responses.map((response) => response.status)).toEqual([200, 200]);
-      expect(fixture.authLinkLogs).toHaveLength(1);
+      for (const response of [me, players]) {
+        expect(response.status).toBe(403);
+        expect(response.body).toEqual({
+          error: "연결된 회원이 없습니다. 관리자에게 문의해주세요.",
+          code: "ACCOUNT_NOT_LINKED",
+        });
+      }
+      expect(fixture.linkAuthUser).not.toHaveBeenCalled();
     });
 
-    it("이미 연결된 요청자는 같은 회원으로 계속 인증된다", async () => {
-      const authUser = fixture.addAuthUser("alice", "dev_alice@kakaocorp.com");
-      fixture.addPlayer("Palice01", "dev_alice", authUser.id);
+    it("provider·이메일 도메인과 무관하게 연결된 회원이면 통과한다", async () => {
+      const authUser = fixture.addAuthUser("legacy", "member@kakaocorp.com");
+      fixture.addPlayer("Pmember1", "member", authUser.id);
 
-      const response = await request(app).get("/api/me").set(bearer("alice"));
+      const response = await request(app).get("/api/me").set(bearer("legacy"));
 
       expect(response.status).toBe(200);
-      expect(response.body.id).toBe("Palice01");
-      expect(fixture.linkAuthUser).not.toHaveBeenCalled();
-      expect(fixture.authLinkLogs).toHaveLength(0);
-    });
-
-    it("같은 username이 다른 Auth 사용자와 연결돼 있으면 ACCOUNT_NOT_LINKED를 준다", async () => {
-      fixture.addPlayer("Palice01", "dev_alice", "auth-someone-else");
-      fixture.addAuthUser("alice", "dev_alice@kakaocorp.com");
-
-      const response = await request(app).get("/api/me").set(bearer("alice"));
-
-      expect(response.status).toBe(403);
-      expect(response.body.code).toBe("ACCOUNT_NOT_LINKED");
-      expect(fixture.players.get("Palice01")?.authUserId).toBe(
-        "auth-someone-else",
-      );
-    });
-
-    it("같은 username의 회원이 없으면 ACCOUNT_NOT_LINKED를 준다", async () => {
-      fixture.addAuthUser("newbie", "newbie@kakaocorp.com");
-
-      const response = await request(app).get("/api/me").set(bearer("newbie"));
-
-      expect(response.status).toBe(403);
-      expect(response.body.code).toBe("ACCOUNT_NOT_LINKED");
-    });
-
-    it("GET /api/me 밖의 API는 자동 연결하지 않는다", async () => {
-      fixture.addPlayer("Palice01", "dev_alice");
-      fixture.addAuthUser("alice", "dev_alice@kakaocorp.com");
-
-      const response = await request(app)
-        .get("/api/players")
-        .set(bearer("alice"));
-
-      expect(response.status).toBe(403);
-      expect(response.body.code).toBe("ACCOUNT_NOT_LINKED");
-      expect(fixture.linkAuthUser).not.toHaveBeenCalled();
+      expect(response.body.id).toBe("Pmember1");
     });
 
     it("비활성 회원은 SESSION_INVALID로 거부한다", async () => {
-      const authUser = fixture.addAuthUser("alice", "dev_alice@kakaocorp.com");
+      const authUser = fixture.addAuthUser("alice");
       fixture.addPlayer("Palice01", "dev_alice", authUser.id).status =
         "inactive";
 
@@ -494,374 +348,436 @@ describe("Supabase Auth 기반 인증", () => {
     });
   });
 
+  describe("첫 로그인 비밀번호 변경", () => {
+    it("POST /api/me/password-changed는 isFirstLogin을 해제하고 MeResponse를 준다", async () => {
+      const authUser = fixture.addAuthUser("alice");
+      fixture.addPlayer("Palice01", "dev_alice", authUser.id).isFirstLogin = true;
+      fixture.admins.add("Palice01");
+
+      const response = await request(app)
+        .post("/api/me/password-changed")
+        .set(bearer("alice"));
+
+      expect(response.status).toBe(200);
+      expect(response.body).toMatchObject({
+        id: "Palice01",
+        isAdmin: true,
+        isFirstLogin: false,
+      });
+      expect(fixture.players.get("Palice01")?.isFirstLogin).toBe(false);
+    });
+
+    it("토큰이 없으면 401을 준다", async () => {
+      const response = await request(app).post("/api/me/password-changed");
+
+      expect(response.status).toBe(401);
+      expect(response.body.code).toBe("SESSION_INVALID");
+    });
+  });
+
   describe("관리자 판정", () => {
     it("player_admins에 있는 회원만 관리자다", async () => {
-      const adminUser = fixture.addAuthUser("admin", "club_admin@kakaocorp.com");
+      const adminUser = fixture.addAuthUser("admin");
       fixture.addPlayer("Padmin01", "club_admin", adminUser.id);
       fixture.admins.add("Padmin01");
-      const memberUser = fixture.addAuthUser("member", "member@kakaocorp.com");
+      const memberUser = fixture.addAuthUser("member");
       fixture.addPlayer("Pmember1", "member", memberUser.id);
 
-      const [adminMe, memberMe, memberAdminApi] = await Promise.all([
+      const [adminMe, memberMe] = await Promise.all([
         request(app).get("/api/me").set(bearer("admin")),
         request(app).get("/api/me").set(bearer("member")),
-        request(app).get("/api/admin/invite-codes").set(bearer("member")),
       ]);
 
       expect(adminMe.body.isAdmin).toBe(true);
       expect(memberMe.body.isAdmin).toBe(false);
-      expect(memberAdminApi.status).toBe(403);
-      expect(memberAdminApi.body).toEqual({
-        error: "관리자 권한이 필요합니다.",
-        code: "FORBIDDEN",
-      });
     });
 
-    it("username이 admin이어도 player_admins에 없으면 관리자가 아니다", async () => {
-      const authUser = fixture.addAuthUser("admin", "admin@kakaocorp.com");
-      fixture.addPlayer("Padmin02", "admin", authUser.id);
+    it("관리자가 아니면 계정 관리 API를 FORBIDDEN으로 거부하고 Auth를 건드리지 않는다", async () => {
+      const memberUser = fixture.addAuthUser("member");
+      fixture.addPlayer("Pmember1", "member", memberUser.id);
+      fixture.addPlayer("Ptarget1", "target");
 
-      const response = await request(app)
-        .post("/api/admin/invite-codes")
-        .set(bearer("admin"));
+      const responses = await Promise.all([
+        request(app)
+          .post("/api/admin/register")
+          .set(bearer("member"))
+          .send({ username: "new_member", gender: "M" }),
+        request(app)
+          .post("/api/admin/players/Ptarget1/password-reset")
+          .set(bearer("member")),
+        request(app)
+          .patch("/api/admin/players/Ptarget1/username")
+          .set(bearer("member"))
+          .send({ username: "renamed" }),
+      ]);
 
-      expect(response.status).toBe(403);
-      expect(response.body.code).toBe("FORBIDDEN");
+      for (const response of responses) {
+        expect(response.status).toBe(403);
+        expect(response.body).toEqual({
+          error: "관리자 권한이 필요합니다.",
+          code: "FORBIDDEN",
+        });
+      }
+      expect(fixture.createAuthUser).not.toHaveBeenCalled();
+      expect(fixture.updateAuthUser).not.toHaveBeenCalled();
     });
   });
 
-  describe("초대 코드", () => {
-    const issueInviteCode = async () => {
-      const adminUser = fixture.addAuthUser("admin", "club_admin@kakaocorp.com");
-      fixture.addPlayer("Padmin01", "club_admin", adminUser.id);
-      fixture.admins.add("Padmin01");
-      const response = await request(app)
-        .post("/api/admin/invite-codes")
-        .set(bearer("admin"));
-      expect(response.status).toBe(201);
-      return response.body as { code: string; expiresAt: string };
-    };
-
-    it("관리자가 7일 뒤 만료되는 8자 코드를 발급하고 DB에는 해시만 저장한다", async () => {
-      const created = await issueInviteCode();
-
-      expect(created.code).toMatch(/^[A-HJKMNP-Z2-9]{8}$/);
-      expect(created.expiresAt).toBe(
-        new Date(NOW.getTime() + 7 * DAY_MS).toISOString(),
-      );
-      expect(fixture.invites).toHaveLength(1);
-      expect(fixture.invites[0].codeHash).toBe(
-        createHash("sha256").update(created.code).digest("hex"),
-      );
-      expect(JSON.stringify(fixture.invites[0])).not.toContain(created.code);
-    });
-
-    it("유효한 코드면 이메일 앞부분(소문자)으로 회원을 만들어 연결하고 201을 준다", async () => {
-      const { code } = await issueInviteCode();
-      const authUser = fixture.addAuthUser("newbie", "NewBie@kakaocorp.com");
-
-      const response = await request(app)
-        .post("/api/auth/invite")
-        .set(bearer("newbie"))
-        .send({ code: ` ${code.toLowerCase()} ` });
-
-      expect(response.status).toBe(201);
-      expect(response.body).toMatchObject({
-        username: "newbie",
-        status: "active",
-        isAdmin: false,
-      });
-      expect(response.body).not.toHaveProperty("authUserId");
-      const created = fixture.players.get(response.body.id);
-      expect(created?.authUserId).toBe(authUser.id);
-      expect(fixture.invites[0]).toMatchObject({
-        usedByPlayerId: response.body.id,
-        usedAt: NOW,
-      });
-
-      const me = await request(app).get("/api/me").set(bearer("newbie"));
-      expect(me.status).toBe(200);
-      expect(me.body.id).toBe(response.body.id);
-    });
-
-    it("이미 사용한 코드는 INVITE_INVALID로 거부한다", async () => {
-      const { code } = await issueInviteCode();
-      fixture.addAuthUser("first", "first@kakaocorp.com");
-      fixture.addAuthUser("second", "second@kakaocorp.com");
-
-      const first = await request(app)
-        .post("/api/auth/invite")
-        .set(bearer("first"))
-        .send({ code });
-      const second = await request(app)
-        .post("/api/auth/invite")
-        .set(bearer("second"))
-        .send({ code });
-
-      expect(first.status).toBe(201);
-      expect(second.status).toBe(400);
-      expect(second.body.code).toBe("INVITE_INVALID");
-      expect(
-        [...fixture.players.values()].some(
-          (player) => player.username === "second",
-        ),
-      ).toBe(false);
-    });
-
-    it("만료된 코드는 INVITE_INVALID로 거부한다", async () => {
-      const { code } = await issueInviteCode();
-      fixture.addAuthUser("late", "late@kakaocorp.com");
-      vi.setSystemTime(new Date(NOW.getTime() + 7 * DAY_MS));
-
-      const response = await request(app)
-        .post("/api/auth/invite")
-        .set(bearer("late"))
-        .send({ code });
-
-      expect(response.status).toBe(400);
-      expect(response.body.code).toBe("INVITE_INVALID");
-      expect(fixture.invites[0].usedAt).toBeNull();
-    });
-
-    it("없는 코드는 INVITE_INVALID로 거부한다", async () => {
-      await issueInviteCode();
-      fixture.addAuthUser("newbie", "newbie@kakaocorp.com");
-
-      const response = await request(app)
-        .post("/api/auth/invite")
-        .set(bearer("newbie"))
-        .send({ code: "ZZZZ9999" });
-
-      expect(response.status).toBe(400);
-      expect(response.body.code).toBe("INVITE_INVALID");
-    });
-
-    it("이미 연결된 요청자는 ALREADY_LINKED로 거부하고 코드를 쓰지 않는다", async () => {
-      const { code } = await issueInviteCode();
-
-      const response = await request(app)
-        .post("/api/auth/invite")
-        .set(bearer("admin"))
-        .send({ code });
-
-      expect(response.status).toBe(409);
-      expect(response.body.code).toBe("ALREADY_LINKED");
-      expect(fixture.invites[0].usedAt).toBeNull();
-    });
-
-    it("같은 username이 다른 Auth 사용자에게 연결돼 있으면 ALREADY_LINKED로 거부한다", async () => {
-      const { code } = await issueInviteCode();
-      fixture.addPlayer("Ptaken01", "taken", "auth-someone-else");
-      fixture.addAuthUser("taken", "Taken@kakaocorp.com");
-
-      const response = await request(app)
-        .post("/api/auth/invite")
-        .set(bearer("taken"))
-        .send({ code });
-
-      expect(response.status).toBe(409);
-      expect(response.body.code).toBe("ALREADY_LINKED");
-      expect(fixture.invites[0].usedAt).toBeNull();
-    });
-
-    it("대소문자만 다른 username이 다른 Auth 사용자에게 연결돼 있으면 ALREADY_LINKED로 거부한다", async () => {
-      const { code } = await issueInviteCode();
-      fixture.addPlayer("Ptaken01", "Taken", "auth-someone-else");
-      fixture.addAuthUser("taken", "taken@kakaocorp.com");
-      const playerCount = fixture.players.size;
-
-      const response = await request(app)
-        .post("/api/auth/invite")
-        .set(bearer("taken"))
-        .send({ code });
-
-      expect(response.status).toBe(409);
-      expect(response.body.code).toBe("ALREADY_LINKED");
-      expect(fixture.players.size).toBe(playerCount);
-      expect(fixture.invites[0].usedAt).toBeNull();
-    });
-
-    it("사전 검사 뒤 대소문자만 다른 username이 먼저 생기면 lower(username) 유니크 위반을 ALREADY_LINKED로 바꾸고 코드를 쓰지 않는다", async () => {
-      const { code } = await issueInviteCode();
-      fixture.addAuthUser("racer", "racer@kakaocorp.com");
-      vi.spyOn(db.inviteCodes, "redeemForNewPlayer").mockRejectedValue(
-        Object.assign(
-          new Error(
-            'duplicate key value violates unique constraint "players_username_lower_unique"',
-          ),
-          { code: "23505" },
-        ),
-      );
-
-      const response = await request(app)
-        .post("/api/auth/invite")
-        .set(bearer("racer"))
-        .send({ code });
-
-      expect(response.status).toBe(409);
-      expect(response.body.code).toBe("ALREADY_LINKED");
-      expect(fixture.invites[0].usedAt).toBeNull();
-    });
-
-    it("같은 username의 active 미연결 회원이 있으면 코드를 쓰지 않고 그 회원과 연결하며 감사 로그를 남긴다", async () => {
-      const { code } = await issueInviteCode();
-      fixture.addPlayer("Pmember1", "member");
-      const authUser = fixture.addAuthUser("member", "Member@kakaocorp.com");
-
-      const response = await request(app)
-        .post("/api/auth/invite")
-        .set(bearer("member"))
-        .send({ code });
-
-      expect(response.status).toBe(201);
-      expect(response.body.id).toBe("Pmember1");
-      expect(fixture.players.get("Pmember1")?.authUserId).toBe(authUser.id);
-      expect(fixture.invites[0].usedAt).toBeNull();
-      expect(fixture.authLinkLogs).toEqual([
-        expect.objectContaining({
-          playerId: "Pmember1",
-          authUserId: authUser.id,
-          linkMethod: "email_local_part",
-        }),
-      ]);
-    });
-
-    it("같은 username의 회원이 inactive면 연결·생성하지 않고 ALREADY_LINKED로 거부한다", async () => {
-      const { code } = await issueInviteCode();
-      fixture.addPlayer("Pleft001", "left_member").status = "inactive";
-      fixture.addAuthUser("left", "left_member@kakaocorp.com");
-      const playerCount = fixture.players.size;
-
-      const response = await request(app)
-        .post("/api/auth/invite")
-        .set(bearer("left"))
-        .send({ code });
-
-      expect(response.status).toBe(409);
-      expect(response.body.code).toBe("ALREADY_LINKED");
-      expect(fixture.players.get("Pleft001")?.authUserId).toBeNull();
-      expect(fixture.players.size).toBe(playerCount);
-      expect(fixture.invites[0].usedAt).toBeNull();
-      expect(fixture.authLinkLogs).toHaveLength(0);
-    });
-
-    it("다른 도메인 계정은 코드가 유효해도 DOMAIN_NOT_ALLOWED로 거부한다", async () => {
-      const { code } = await issueInviteCode();
-      fixture.addAuthUser("outsider", "newbie@gmail.com");
-
-      const response = await request(app)
-        .post("/api/auth/invite")
-        .set(bearer("outsider"))
-        .send({ code });
-
-      expect(response.status).toBe(403);
-      expect(response.body.code).toBe("DOMAIN_NOT_ALLOWED");
-      expect(fixture.invites[0].usedAt).toBeNull();
-    });
-
-    it("발급 목록은 평문 코드 없이 발급자·사용자 username만 준다", async () => {
-      const adminUser = fixture.addAuthUser("admin", "club_admin@kakaocorp.com");
-      fixture.addPlayer("Padmin01", "club_admin", adminUser.id);
-      fixture.admins.add("Padmin01");
-      vi.spyOn(db.inviteCodes, "findAllSummaries").mockResolvedValue([
-        {
-          id: "invite-code-1",
-          createdByUsername: "club_admin",
-          createdAt: NOW,
-          expiresAt: new Date(NOW.getTime() + 7 * DAY_MS),
-          usedByUsername: "newbie",
-          usedAt: NOW,
-        },
-      ]);
-
-      const response = await request(app)
-        .get("/api/admin/invite-codes")
-        .set(bearer("admin"));
-
-      expect(response.status).toBe(200);
-      expect(response.body).toEqual([
-        {
-          id: "invite-code-1",
-          createdByUsername: "club_admin",
-          createdAt: NOW.toISOString(),
-          expiresAt: new Date(NOW.getTime() + 7 * DAY_MS).toISOString(),
-          usedByUsername: "newbie",
-          usedAt: NOW.toISOString(),
-        },
-      ]);
-    });
-  });
-
-  describe("관리자 회원 추가", () => {
+  describe("관리자 계정 관리", () => {
     beforeEach(() => {
-      const adminUser = fixture.addAuthUser("admin", "club_admin@kakaocorp.com");
+      const adminUser = fixture.addAuthUser("admin");
       fixture.addPlayer("Padmin01", "club_admin", adminUser.id);
       fixture.admins.add("Padmin01");
     });
 
-    it("username·gender로 미연결 회원을 만든다", async () => {
-      const create = vi
-        .spyOn(db.players, "create")
-        .mockImplementation(async (input) => ({
-          ...fixture.addPlayer(input.id, input.username, null),
-          gender: input.gender,
-        }));
-      vi.spyOn(db.playerCreationLogs, "create").mockImplementation(
-        async (input) => input,
-      );
+    describe("POST /api/admin/register", () => {
+      it("Auth 사용자를 만들어 연결하고 초기 비밀번호를 응답으로만 준다", async () => {
+        const response = await request(app)
+          .post("/api/admin/register")
+          .set(bearer("admin"))
+          .send({ username: " New_Member ", gender: "M", password: "ignored" });
 
-      const response = await request(app)
-        .post("/api/admin/register")
-        .set(bearer("admin"))
-        .send({ username: " pre_member ", gender: "M", password: "ignored" });
+        expect(response.status).toBe(200);
+        expect(response.headers["cache-control"]).toBe("no-store");
+        const { player, initialPassword } = response.body;
+        expect(player).toMatchObject({ username: "New_Member", gender: "M" });
+        expect(player).not.toHaveProperty("authUserId");
+        expect(player).not.toHaveProperty("isFirstLogin");
+        expect(initialPassword).toMatch(/^[A-Za-z0-9]{10}$/);
+        expect(initialPassword).not.toBe("ignored");
 
-      expect(response.status).toBe(200);
-      expect(response.body).toMatchObject({ username: "pre_member", gender: "M" });
-      expect(create).toHaveBeenCalledWith(
-        expect.objectContaining({ username: "pre_member", authUserId: null }),
-      );
-      expect(create.mock.calls[0][0]).not.toHaveProperty("password");
+        expect(fixture.createAuthUser).toHaveBeenCalledWith({
+          email: `new_member@${INTERNAL_EMAIL_DOMAIN}`,
+          password: initialPassword,
+        });
+        const authUserId = await fixture.createAuthUser.mock.results[0].value;
+        expect(fixture.createPlayer).toHaveBeenCalledWith(
+          expect.objectContaining({
+            username: "New_Member",
+            authUserId,
+            isFirstLogin: true,
+          }),
+        );
+        expect(fixture.createPlayer.mock.calls[0][0]).not.toHaveProperty(
+          "password",
+        );
+      });
+
+      it("회원 생성이 실패하면 만든 Auth 사용자를 지운다", async () => {
+        fixture.createPlayer.mockRejectedValueOnce(new Error("connection lost"));
+
+        const response = await request(app)
+          .post("/api/admin/register")
+          .set(bearer("admin"))
+          .send({ username: "new_member", gender: "F" });
+
+        expect(response.status).toBe(500);
+        const authUserId = await fixture.createAuthUser.mock.results[0].value;
+        expect(fixture.deleteAuthUser).toHaveBeenCalledWith(authUserId);
+        expect(fixture.authAccounts.has(authUserId)).toBe(false);
+      });
+
+      it("대소문자만 다른 username은 409로 거부하고 Auth 사용자를 만들지 않는다", async () => {
+        fixture.addPlayer("Pmember1", "member");
+
+        const response = await request(app)
+          .post("/api/admin/register")
+          .set(bearer("admin"))
+          .send({ username: "Member", gender: "F" });
+
+        expect(response.status).toBe(409);
+        expect(response.body).toEqual({ error: "중복된 사용자명입니다." });
+        expect(fixture.createAuthUser).not.toHaveBeenCalled();
+      });
+
+      it("사전 검사 뒤 lower(username) 유니크 위반이 나도 409를 주고 Auth 사용자를 지운다", async () => {
+        fixture.createPlayer.mockRejectedValueOnce(
+          Object.assign(new Error("duplicate key value"), { code: "23505" }),
+        );
+
+        const response = await request(app)
+          .post("/api/admin/register")
+          .set(bearer("admin"))
+          .send({ username: "Member", gender: "F" });
+
+        expect(response.status).toBe(409);
+        expect(fixture.deleteAuthUser).toHaveBeenCalledOnce();
+      });
+
+      it.each([
+        [{ username: "pre_member", gender: "X" }],
+        [{ username: "", gender: "M" }],
+        [{ username: "김회원", gender: "M" }],
+        [{ username: "a".repeat(65), gender: "M" }],
+      ])("잘못된 요청 %j는 400을 준다", async (body) => {
+        const response = await request(app)
+          .post("/api/admin/register")
+          .set(bearer("admin"))
+          .send(body);
+
+        expect(response.status).toBe(400);
+        expect(response.body.error).toEqual(expect.any(String));
+        expect(fixture.createAuthUser).not.toHaveBeenCalled();
+      });
     });
 
-    it("대소문자만 다른 username도 중복으로 거부한다", async () => {
-      fixture.addPlayer("Pmember1", "member");
+    describe("POST /api/admin/players/:playerId/password-reset", () => {
+      it("연결된 회원은 비밀번호를 바꾸고 이메일을 현재 아이디로 맞춘다", async () => {
+        const memberUser = fixture.addAuthUser("member", "member@kakaocorp.com");
+        fixture.addPlayer("Pmember1", "Member", memberUser.id);
 
-      const response = await request(app)
-        .post("/api/admin/register")
-        .set(bearer("admin"))
-        .send({ username: "Member", gender: "F" });
+        const response = await request(app)
+          .post("/api/admin/players/Pmember1/password-reset")
+          .set(bearer("admin"));
 
-      expect(response.status).toBe(500);
-      expect(response.body.error).toBe("중복된 사용자명입니다.");
+        expect(response.status).toBe(200);
+        expect(response.headers["cache-control"]).toBe("no-store");
+        const { temporaryPassword } = response.body;
+        expect(temporaryPassword).toMatch(/^[A-Za-z0-9]{10}$/);
+        expect(fixture.updateAuthUser).toHaveBeenCalledWith(memberUser.id, {
+          email: `member@${INTERNAL_EMAIL_DOMAIN}`,
+          password: temporaryPassword,
+        });
+        expect(fixture.createAuthUser).not.toHaveBeenCalled();
+        expect(fixture.players.get("Pmember1")?.isFirstLogin).toBe(true);
+      });
+
+      it("연결되지 않은 회원은 Auth 사용자를 만들어 연결한다", async () => {
+        fixture.addPlayer("Pmember1", "member");
+
+        const response = await request(app)
+          .post("/api/admin/players/Pmember1/password-reset")
+          .set(bearer("admin"));
+
+        expect(response.status).toBe(200);
+        const { temporaryPassword } = response.body;
+        expect(fixture.createAuthUser).toHaveBeenCalledWith({
+          email: `member@${INTERNAL_EMAIL_DOMAIN}`,
+          password: temporaryPassword,
+        });
+        const authUserId = await fixture.createAuthUser.mock.results[0].value;
+        expect(fixture.players.get("Pmember1")).toMatchObject({
+          authUserId,
+          isFirstLogin: true,
+        });
+      });
+
+      it("연결하지 못하면 만든 Auth 사용자를 지운다", async () => {
+        fixture.addPlayer("Pmember1", "member");
+        fixture.linkAuthUser.mockResolvedValueOnce(false);
+
+        const response = await request(app)
+          .post("/api/admin/players/Pmember1/password-reset")
+          .set(bearer("admin"));
+
+        expect(response.status).toBe(409);
+        expect(fixture.deleteAuthUser).toHaveBeenCalledOnce();
+      });
+
+      it("없는 회원은 404를 준다", async () => {
+        const response = await request(app)
+          .post("/api/admin/players/Pnone001/password-reset")
+          .set(bearer("admin"));
+
+        expect(response.status).toBe(404);
+      });
+
+      it("inactive 회원과 형식에 맞지 않는 아이디의 회원은 400을 준다", async () => {
+        fixture.addPlayer("Pinact01", "inactive_member").status = "inactive";
+        fixture.addPlayer("Pkorean1", "김회원");
+
+        const responses = await Promise.all([
+          request(app)
+            .post("/api/admin/players/Pinact01/password-reset")
+            .set(bearer("admin")),
+          request(app)
+            .post("/api/admin/players/Pkorean1/password-reset")
+            .set(bearer("admin")),
+        ]);
+
+        expect(responses.map((response) => response.status)).toEqual([400, 400]);
+        expect(fixture.createAuthUser).not.toHaveBeenCalled();
+        expect(fixture.updateAuthUser).not.toHaveBeenCalled();
+      });
     });
 
-    it("사전 검사 뒤 lower(username) 유니크 인덱스 위반이 나도 중복 메시지를 준다", async () => {
-      // 동시 요청이 먼저 대소문자만 다른 username을 만든 경우를 흉내 낸다.
-      vi.spyOn(db.players, "create").mockRejectedValue(
-        Object.assign(
-          new Error(
-            'duplicate key value violates unique constraint "players_username_lower_unique"',
-          ),
-          { code: "23505" },
-        ),
-      );
+    describe("PATCH /api/admin/players/:playerId/username", () => {
+      it("연결된 회원은 Auth 이메일도 새 아이디로 바꾼다", async () => {
+        const memberUser = fixture.addAuthUser("member", toInternalEmail("member"));
+        fixture.addPlayer("Pmember1", "member", memberUser.id);
 
-      const response = await request(app)
-        .post("/api/admin/register")
-        .set(bearer("admin"))
-        .send({ username: "Member", gender: "F" });
+        const response = await request(app)
+          .patch("/api/admin/players/Pmember1/username")
+          .set(bearer("admin"))
+          .send({ username: " Renamed " });
 
-      expect(response.status).toBe(500);
-      expect(response.body.error).toBe("중복된 사용자명입니다.");
+        expect(response.status).toBe(200);
+        expect(response.body.player).toMatchObject({
+          id: "Pmember1",
+          username: "Renamed",
+        });
+        expect(fixture.updateAuthUser).toHaveBeenCalledWith(memberUser.id, {
+          email: `renamed@${INTERNAL_EMAIL_DOMAIN}`,
+        });
+        expect(fixture.authAccounts.get(memberUser.id)?.email).toBe(
+          `renamed@${INTERNAL_EMAIL_DOMAIN}`,
+        );
+      });
+
+      it("연결되지 않은 회원은 username만 바꾼다", async () => {
+        fixture.addPlayer("Pmember1", "member");
+
+        const response = await request(app)
+          .patch("/api/admin/players/Pmember1/username")
+          .set(bearer("admin"))
+          .send({ username: "renamed" });
+
+        expect(response.status).toBe(200);
+        expect(fixture.players.get("Pmember1")?.username).toBe("renamed");
+        expect(fixture.updateAuthUser).not.toHaveBeenCalled();
+      });
+
+      it("같은 회원의 대소문자만 바꾸면 허용하고 Auth 이메일은 그대로 둔다", async () => {
+        const memberUser = fixture.addAuthUser("member", toInternalEmail("member"));
+        fixture.addPlayer("Pmember1", "member", memberUser.id);
+
+        const response = await request(app)
+          .patch("/api/admin/players/Pmember1/username")
+          .set(bearer("admin"))
+          .send({ username: "Member" });
+
+        expect(response.status).toBe(200);
+        expect(fixture.players.get("Pmember1")?.username).toBe("Member");
+        expect(fixture.updateAuthUser).not.toHaveBeenCalled();
+      });
+
+      it("username 갱신이 실패하면 Auth 이메일을 되돌린다", async () => {
+        const memberUser = fixture.addAuthUser("member", toInternalEmail("member"));
+        fixture.addPlayer("Pmember1", "member", memberUser.id);
+        fixture.updateUsername.mockRejectedValueOnce(new Error("connection lost"));
+
+        const response = await request(app)
+          .patch("/api/admin/players/Pmember1/username")
+          .set(bearer("admin"))
+          .send({ username: "renamed" });
+
+        expect(response.status).toBe(500);
+        expect(fixture.players.get("Pmember1")?.username).toBe("member");
+        expect(fixture.authAccounts.get(memberUser.id)?.email).toBe(
+          toInternalEmail("member"),
+        );
+      });
+
+      it("Auth 이메일 갱신이 실패하면 username을 바꾸지 않는다", async () => {
+        const memberUser = fixture.addAuthUser("member", toInternalEmail("member"));
+        fixture.addPlayer("Pmember1", "member", memberUser.id);
+        fixture.updateAuthUser.mockRejectedValueOnce(new Error("auth down"));
+
+        const response = await request(app)
+          .patch("/api/admin/players/Pmember1/username")
+          .set(bearer("admin"))
+          .send({ username: "renamed" });
+
+        expect(response.status).toBe(500);
+        expect(fixture.updateUsername).not.toHaveBeenCalled();
+        expect(fixture.players.get("Pmember1")?.username).toBe("member");
+      });
+
+      it("다른 회원과 대소문자 구분 없이 같으면 409를 준다", async () => {
+        fixture.addPlayer("Pmember1", "member");
+        fixture.addPlayer("Pother01", "other");
+
+        const response = await request(app)
+          .patch("/api/admin/players/Pmember1/username")
+          .set(bearer("admin"))
+          .send({ username: "OTHER" });
+
+        expect(response.status).toBe(409);
+        expect(fixture.updateUsername).not.toHaveBeenCalled();
+      });
+
+      it("없는 회원은 404, 형식이 맞지 않으면 400을 준다", async () => {
+        fixture.addPlayer("Pmember1", "member");
+
+        const responses = await Promise.all([
+          request(app)
+            .patch("/api/admin/players/Pnone001/username")
+            .set(bearer("admin"))
+            .send({ username: "renamed" }),
+          request(app)
+            .patch("/api/admin/players/Pmember1/username")
+            .set(bearer("admin"))
+            .send({ username: "re named" }),
+          request(app)
+            .patch("/api/admin/players/Pmember1/username")
+            .set(bearer("admin"))
+            .send({}),
+        ]);
+
+        expect(responses.map((response) => response.status)).toEqual([
+          404, 400, 400,
+        ]);
+      });
     });
+  });
+});
 
-    it("gender가 M·F가 아니면 400을 준다", async () => {
-      const response = await request(app)
-        .post("/api/admin/register")
-        .set(bearer("admin"))
-        .send({ username: "pre_member", gender: "X" });
+describe("generateInitialPassword", () => {
+  it("헷갈리는 문자 없이 영문과 숫자를 각각 1자 이상 넣은 10자다", () => {
+    for (let i = 0; i < 200; i += 1) {
+      const password = generateInitialPassword();
+      expect(password).toMatch(/^[A-Za-z0-9]{10}$/);
+      expect(password).toMatch(/[A-Za-z]/);
+      expect(password).toMatch(/\d/);
+      expect(password).not.toMatch(/[0O1Il]/);
+    }
+  });
+});
 
-      expect(response.status).toBe(400);
+describe("dev mock Auth 계정 시딩", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.restoreAllMocks();
+  });
+
+  it("active dev mock 회원에게 공통 비밀번호 계정을 만들어 연결하고, 실패해도 다음 회원을 계속한다", async () => {
+    vi.stubEnv("ENABLE_DEV_MOCK_DATA", "true");
+    const fixture = setupAuthFixture();
+    fixture.addPlayer("Palice01", "dev_alice");
+    const linkedUser = fixture.addAuthUser("bob", toInternalEmail("dev_bob"));
+    fixture.addPlayer("Pbob0001", "dev_bob", linkedUser.id);
+    fixture.addPlayer("Pcara001", "dev_cara");
+    fixture.createAuthUser.mockImplementation(async ({ email, password }) => {
+      if (email === toInternalEmail("dev_cara")) throw new Error("auth down");
+      const id = `auth-${email}`;
+      fixture.authAccounts.set(id, { email, password });
+      return id;
     });
+    vi.spyOn(console, "warn").mockImplementation(() => undefined);
+
+    await new AuthService().seedDevAuthAccounts();
+
+    expect(fixture.createAuthUser).toHaveBeenCalledWith({
+      email: toInternalEmail("dev_alice"),
+      password: "devpass1234",
+    });
+    expect(fixture.players.get("Palice01")).toMatchObject({
+      authUserId: `auth-${toInternalEmail("dev_alice")}`,
+      isFirstLogin: false,
+    });
+    expect(fixture.createAuthUser).not.toHaveBeenCalledWith(
+      expect.objectContaining({ email: toInternalEmail("dev_bob") }),
+    );
+    expect(fixture.players.get("Pcara001")?.authUserId).toBeNull();
+    expect(console.warn).toHaveBeenCalled();
+  });
+
+  it("dev mock이 꺼져 있으면 아무것도 하지 않는다", async () => {
+    vi.stubEnv("ENABLE_DEV_MOCK_DATA", "false");
+    const fixture = setupAuthFixture();
+
+    await new AuthService().seedDevAuthAccounts();
+
+    expect(fixture.createAuthUser).not.toHaveBeenCalled();
   });
 });
