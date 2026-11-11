@@ -9,6 +9,7 @@ import type {
 } from "@pkpkdupr/shared/match";
 import { DEFAULT_MATCH_MODE } from "@pkpkdupr/shared/match";
 import { generateEntityId, isEntityId } from "@pkpkdupr/shared/entityId";
+import { kstDateKeyToDate } from "@pkpkdupr/shared/session";
 import type {
   PlayerRatingChangeLog,
   PlayerRatingHistory,
@@ -377,6 +378,30 @@ export class MatchRepository {
       () => db.matches.addSessionParticipants(sessionId, playerIds),
       500,
     );
+  }
+
+  /** 참여자 한 명을 뺀다. 참여 중이 아니어도 성공한다(멱등) */
+  async removeSessionParticipant(
+    sessionId: string,
+    playerId: string,
+  ): Promise<void> {
+    await this.run(
+      () => db.matches.removeSessionParticipant(sessionId, playerId),
+      500,
+    );
+  }
+
+  /** 그 KST 날짜의 세션을 시각 오름차순으로 돌려준다 */
+  async findSessionsByDateKey(
+    dateKey: string,
+  ): Promise<ManagedMatchSession[]> {
+    const from = kstDateKeyToDate(dateKey);
+    const to = new Date(from.getTime() + 24 * 60 * 60 * 1000);
+    const records = await this.run(
+      () => db.matches.findSessionsInRange(from, to),
+      500,
+    );
+    return records.map(hydrateManagedSession);
   }
 
   /**

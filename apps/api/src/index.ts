@@ -21,7 +21,16 @@ import {
   type MatchType,
   validateMatchScoresForMode,
 } from "@pkpkdupr/shared/match";
-import { isRegularSessionTime, toKstDateKey } from "@pkpkdupr/shared/session";
+import {
+  canOpenRegularSession,
+  isRegularSessionTime,
+  toKstDateKey,
+  type AddMatchSessionParticipantRequest,
+  type CreateMatchSessionRequest,
+  type MatchSessionDetail,
+  type MatchSessionMember,
+  type TodayMatchSessionsResponse,
+} from "@pkpkdupr/shared/session";
 import { generateEntityId, isEntityId } from "@pkpkdupr/shared/entityId";
 import {
   PLAYER_AFFILIATION_MAX_COUNT,
@@ -671,6 +680,109 @@ const resolveSessionForNewMatch = async (
   );
 };
 
+/** 공개 세션 API 요청 오류. status로 400·403·404·409를 구분해 응답한다 */
+class MatchSessionRequestError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+  ) {
+    super(message);
+    this.name = "MatchSessionRequestError";
+  }
+}
+
+const sendMatchSessionFailure = (res: express.Response, error: unknown) => {
+  const status =
+    error instanceof MatchSessionRequestError ||
+    error instanceof MatchRepositoryError
+      ? error.status
+      : 500;
+  res.status(status).json({ error: (error as Error).message });
+};
+
+const loadActivePlayersById = async () =>
+  new Map<string, Player>(
+    (await authService.getPublicPlayers()).map((player) => [player.id, player]),
+  );
+
+/** 참여자는 active 회원만 남긴다(inactive로 바뀐 참여자 행은 응답에서 뺀다) */
+const toMatchSessionDetail = (
+  session: ManagedMatchSession,
+  activePlayersById: Map<string, Player>,
+  now: Date,
+): MatchSessionDetail => {
+  const dateKey = toKstDateKey(session.date);
+  const participants = session.participantIds.flatMap(
+    (playerId): MatchSessionMember[] => {
+      const player = activePlayersById.get(playerId);
+      return player
+        ? [
+            {
+              id: player.id,
+              username: player.username,
+              avatarUrl: player.avatarUrl,
+              gender: player.gender,
+              duprRating: player.duprRating,
+            },
+          ]
+        : [];
+    },
+  );
+  return {
+    id: session.id,
+    name: session.name,
+    kind: session.kind,
+    date: session.date,
+    location: session.location,
+    dateKey,
+    isToday: dateKey === toKstDateKey(now),
+    participants,
+    matchCount: session.matchCount,
+  };
+};
+
+/** 세션 상세를 만든다. 없으면 undefined */
+const loadMatchSessionDetail = async (
+  sessionId: string,
+  now: Date,
+): Promise<MatchSessionDetail | undefined> => {
+  const [session, activePlayersById] = await Promise.all([
+    matchRepository.findSessionById(sessionId),
+    loadActivePlayersById(),
+  ]);
+  return session
+    ? toMatchSessionDetail(session, activePlayersById, now)
+    : undefined;
+};
+
+const requireMatchSessionDetail = async (sessionId: string, now: Date) => {
+  const detail = await loadMatchSessionDetail(sessionId, now);
+  if (!detail) {
+    throw new MatchSessionRequestError("세션을 찾을 수 없습니다.", 404);
+  }
+  return detail;
+};
+
+/** 참여자 추가·삭제 대상 세션을 확인한다. 오늘 세션이 아니면 403 */
+const requireTodaySessionForParticipants = async (
+  sessionId: string,
+  now: Date,
+) => {
+  if (!isEntityId(sessionId, "session")) {
+    throw new MatchSessionRequestError("유효한 세션 ID가 필요합니다.", 400);
+  }
+  const session = await matchRepository.findSessionById(sessionId);
+  if (!session) {
+    throw new MatchSessionRequestError("세션을 찾을 수 없습니다.", 404);
+  }
+  if (toKstDateKey(session.date) !== toKstDateKey(now)) {
+    throw new MatchSessionRequestError(
+      "오늘 세션에서만 참여자를 바꿀 수 있습니다.",
+      403,
+    );
+  }
+};
+
 const getTeamPlayerIds = (teams: Team[]) =>
   teams.flatMap((team) => team.players.map((player) => player.id));
 
@@ -918,6 +1030,160 @@ app.get("/api/match-sessions/:sessionId/matches", async (req, res) => {
     res.status(500).json({ error: (err as Error).message });
   }
 });
+
+app.get("/api/match-sessions/today", async (req, res) => {
+  try {
+    if (!(await getAuthPayload(req, res))) {
+      return;
+    }
+
+    const now = new Date();
+    await matchRepository.cleanupExpired(now);
+    const dateKey = toKstDateKey(now);
+    const [sessions, activePlayersById] = await Promise.all([
+      matchRepository.findSessionsByDateKey(dateKey),
+      loadActivePlayersById(),
+    ]);
+    // 저장소가 시각 오름차순으로 주므로 정기 세션만 맨 앞으로 옮긴다(정렬은 안정적이다).
+    const ordered = [...sessions].sort(
+      (a, b) => Number(b.kind === "regular") - Number(a.kind === "regular"),
+    );
+    const response: TodayMatchSessionsResponse = {
+      dateKey,
+      regularSessionOpen: canOpenRegularSession(now),
+      sessions: ordered.map((session) =>
+        toMatchSessionDetail(session, activePlayersById, now),
+      ),
+    };
+    res.json(response);
+  } catch (err) {
+    sendMatchSessionFailure(res, err);
+  }
+});
+
+app.post("/api/match-sessions/regular/today", async (req, res) => {
+  try {
+    if (!(await getAuthPayload(req, res))) {
+      return;
+    }
+
+    const now = new Date();
+    await matchRepository.cleanupExpired(now);
+    if (!canOpenRegularSession(now)) {
+      throw new MatchSessionRequestError(
+        "지금은 정기 세션을 열 수 없습니다.",
+        409,
+      );
+    }
+    const session = await matchRepository.findOrCreateRegularSession(
+      toKstDateKey(now),
+    );
+    res.json(await requireMatchSessionDetail(session.id, now));
+  } catch (err) {
+    sendMatchSessionFailure(res, err);
+  }
+});
+
+app.post("/api/match-sessions", async (req, res) => {
+  try {
+    if (!(await getAuthPayload(req, res))) {
+      return;
+    }
+
+    const body = req.body as Partial<CreateMatchSessionRequest> | undefined;
+    const name = normalizeOptionalName(body?.name);
+    const location = normalizeOptionalName(body?.location);
+    if (!name) {
+      throw new MatchSessionRequestError("세션 이름이 필요합니다.", 400);
+    }
+    if (!location) {
+      throw new MatchSessionRequestError("세션 장소가 필요합니다.", 400);
+    }
+
+    const now = new Date();
+    await matchRepository.cleanupExpired(now);
+    const created = await matchRepository.createSession({
+      name,
+      date: now,
+      location,
+    });
+    res.status(201).json(await requireMatchSessionDetail(created.id, now));
+  } catch (err) {
+    sendMatchSessionFailure(res, err);
+  }
+});
+
+app.get("/api/match-sessions/:sessionId", async (req, res) => {
+  try {
+    if (!(await getAuthPayload(req, res))) {
+      return;
+    }
+
+    const sessionId = req.params.sessionId;
+    if (!isEntityId(sessionId, "session")) {
+      throw new MatchSessionRequestError("유효한 세션 ID가 필요합니다.", 400);
+    }
+    const now = new Date();
+    await matchRepository.cleanupExpired(now);
+    res.json(await requireMatchSessionDetail(sessionId, now));
+  } catch (err) {
+    sendMatchSessionFailure(res, err);
+  }
+});
+
+app.post("/api/match-sessions/:sessionId/participants", async (req, res) => {
+  try {
+    if (!(await getAuthPayload(req, res))) {
+      return;
+    }
+
+    const body = req.body as
+      | Partial<AddMatchSessionParticipantRequest>
+      | undefined;
+    const playerId =
+      typeof body?.playerId === "string" ? body.playerId.trim() : "";
+    if (!playerId) {
+      throw new MatchSessionRequestError("참여할 회원이 필요합니다.", 400);
+    }
+
+    const sessionId = req.params.sessionId;
+    const now = new Date();
+    await matchRepository.cleanupExpired(now);
+    await requireTodaySessionForParticipants(sessionId, now);
+    const player = await authService.getPlayerById(playerId);
+    if (!player || player.status !== "active") {
+      throw new MatchSessionRequestError(
+        "활성 회원만 참여자로 추가할 수 있습니다.",
+        400,
+      );
+    }
+    // 한 명만 추가(ON CONFLICT DO NOTHING)하므로 동시에 다른 회원을 추가해도 서로 덮어쓰지 않는다.
+    await matchRepository.addSessionParticipants(sessionId, [playerId]);
+    res.json(await requireMatchSessionDetail(sessionId, now));
+  } catch (err) {
+    sendMatchSessionFailure(res, err);
+  }
+});
+
+app.delete(
+  "/api/match-sessions/:sessionId/participants/:playerId",
+  async (req, res) => {
+    try {
+      if (!(await getAuthPayload(req, res))) {
+        return;
+      }
+
+      const { sessionId, playerId } = req.params;
+      const now = new Date();
+      await matchRepository.cleanupExpired(now);
+      await requireTodaySessionForParticipants(sessionId, now);
+      await matchRepository.removeSessionParticipant(sessionId, playerId);
+      res.json(await requireMatchSessionDetail(sessionId, now));
+    } catch (err) {
+      sendMatchSessionFailure(res, err);
+    }
+  },
+);
 
 app.post("/api/matches", async (req, res) => {
   const decoded = await getAuthPayload(req, res);
