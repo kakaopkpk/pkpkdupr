@@ -8,6 +8,7 @@ import type {
 } from "@pkpkdupr/shared/match";
 import {
   getMatchTopLevelType,
+  isMultiGameMatchRecord,
   matchTopLevelTypeLabels,
 } from "@pkpkdupr/shared/match";
 import type {
@@ -90,7 +91,7 @@ interface MatchProps {
 const titleChipClassName =
   "inline-flex h-6 items-center rounded-full px-2 text-[clamp(0.625rem,2.8vw,0.75rem)] font-semibold leading-none";
 const teamChipWidthClass = "w-[clamp(6rem,32cqw,10rem)]";
-const teamSetScoreChipWidthClass = "w-[clamp(6.6rem,35.2cqw,11rem)]";
+const resultTeamChipWidthClass = "w-[clamp(6.6rem,35.2cqw,11rem)]";
 
 const statusLabelMap: Record<MatchStatus, string> = {
   // 점수 없는 created 경기는 시작 2시간 뒤 서버가 지우므로 "예정"으로 남지 않는다
@@ -123,10 +124,22 @@ const formatMatchDateTime = (value: string | Date) => {
   };
 };
 
-const getTeamSetScore = (scores: MatchInfo["scores"], teamIndex: 0 | 1) =>
-  (scores ?? []).filter((score) =>
-    teamIndex === 0 ? score.scoreA > score.scoreB : score.scoreB > score.scoreA,
-  ).length;
+/**
+ * 카드에 크게 보여 줄 두 팀의 결과. 단판은 점수, 점수가 여러 개인 과거 2선승 기록은 이긴 게임 수다.
+ */
+const getTeamResultScores = (
+  match: Pick<MatchInfo, "scores">,
+): [number, number] => {
+  const scores = match.scores ?? [];
+  if (!isMultiGameMatchRecord(match)) {
+    return [scores[0]?.scoreA ?? 0, scores[0]?.scoreB ?? 0];
+  }
+
+  return [
+    scores.filter((score) => score.scoreA > score.scoreB).length,
+    scores.filter((score) => score.scoreB > score.scoreA).length,
+  ];
+};
 
 const getTeamAverageDupr = (
   match: MatchInfo,
@@ -151,15 +164,12 @@ const Match: React.FC<MatchProps> = ({
   showChevron = true,
 }) => {
   const hasResultScores = !!match.scores?.length;
-  const teamSetScores = [
-    getTeamSetScore(match.scores, 0),
-    getTeamSetScore(match.scores, 1),
-  ] as const;
-  const displayedTeamSetScores =
-    match.status === "created" ? ([0, 0] as const) : teamSetScores;
-  const shouldShowTeamSetScores = hasResultScores || match.status === "created";
-  const isTeamALosing = hasResultScores && teamSetScores[0] < teamSetScores[1];
-  const isTeamBLosing = hasResultScores && teamSetScores[1] < teamSetScores[0];
+  const teamResultScores = getTeamResultScores(match);
+  const displayedTeamResultScores =
+    match.status === "created" ? ([0, 0] as const) : teamResultScores;
+  const shouldShowTeamResultScores = hasResultScores || match.status === "created";
+  const isTeamALosing = hasResultScores && teamResultScores[0] < teamResultScores[1];
+  const isTeamBLosing = hasResultScores && teamResultScores[1] < teamResultScores[0];
   const teamAverageDuprs = useMemo(
     () => match.teams.map((team) => getTeamAverageDupr(match, team)),
     [match],
@@ -198,7 +208,7 @@ const Match: React.FC<MatchProps> = ({
       </div>
 
       <div className="relative z-10 mt-1 w-full">
-        {shouldShowTeamSetScores ? (
+        {shouldShowTeamResultScores ? (
           <div className="grid w-full grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-1.5">
             {match.teams.map((team, index) => (
               <div
@@ -210,7 +220,7 @@ const Match: React.FC<MatchProps> = ({
                 }`}
               >
                 <p
-                  className={`${teamSetScoreChipWidthClass} text-center text-[clamp(0.625rem,2.8vw,0.75rem)] font-bold tabular-nums text-pkpk-dupr-font`}
+                  className={`${resultTeamChipWidthClass} text-center text-[clamp(0.625rem,2.8vw,0.75rem)] font-bold tabular-nums text-pkpk-dupr-font`}
                 >
                   {formatRating(teamAverageDuprs[index])}
                 </p>
@@ -221,7 +231,7 @@ const Match: React.FC<MatchProps> = ({
                       player={teamPlayer}
                       isMe={teamPlayer.id === currentPlayerId}
                       size="match"
-                      chipWidthClass={teamSetScoreChipWidthClass}
+                      chipWidthClass={resultTeamChipWidthClass}
                       isMirrored={index === 1}
                     />
                   ))}
@@ -234,7 +244,7 @@ const Match: React.FC<MatchProps> = ({
                   isTeamALosing ? "text-[#888]" : ""
                 }`}
               >
-                {displayedTeamSetScores[0]}
+                {displayedTeamResultScores[0]}
               </span>
               <span className="text-[clamp(1.25rem,5vw,1.5rem)] font-bold leading-none text-[#888]">
                 -
@@ -244,7 +254,7 @@ const Match: React.FC<MatchProps> = ({
                   isTeamBLosing ? "text-[#888]" : ""
                 }`}
               >
-                {displayedTeamSetScores[1]}
+                {displayedTeamResultScores[1]}
               </span>
             </div>
           </div>
