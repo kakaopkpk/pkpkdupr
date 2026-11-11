@@ -100,6 +100,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   const retryAttemptRef = useRef(0);
   const validationInFlightRef = useRef(false);
   const validateSessionRef = useRef<(() => Promise<void>) | null>(null);
+  // 강제 변경을 완료할 때마다 올린다. 그 전에 시작한 /api/me 응답(isFirstLogin=true)은 버린다.
+  const meGenerationRef = useRef(0);
+  // 강제 변경에서 updateUser까지 성공했고 password-changed가 아직 끝나지 않은 사용자.
+  // 이 사용자가 같은 비밀번호로 다시 제출하면 same_password를 성공으로 본다.
+  const pendingPasswordChangeUserIdRef = useRef<string | null>(null);
 
   const clearSessionRetry = useCallback((resetAttempt = true) => {
     if (retryTimeoutRef.current !== null) {
@@ -114,6 +119,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   const resetToSignedOut = useCallback(() => {
     clearSessionRetry();
     sessionUserIdRef.current = null;
+    pendingPasswordChangeUserIdRef.current = null;
     clearUserCaches();
     setPlayer(null);
     setStatus("signedOut");
@@ -141,7 +147,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     if (!userId) {
       return { status: "signedOut" };
     }
-    const isCurrentSession = () => sessionUserIdRef.current === userId;
+    const generation = meGenerationRef.current;
+    const isCurrentSession = () =>
+      sessionUserIdRef.current === userId &&
+      meGenerationRef.current === generation;
 
     try {
       // 토큰 갱신이 일시적으로 실패하면 세션은 남고 토큰만 없다. 이때는 401로 로그아웃하지 않고 다시 시도한다.
@@ -242,7 +251,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
       sessionUserIdRef.current = session.user.id;
 
       // 같은 사용자의 토큰 갱신·비밀번호 변경(USER_UPDATED)에는 /api/me를 다시 부르지 않는다.
-      // 강제 변경 중에 다시 부르면 password-changed 전의 isFirstLogin=true 응답이 늦게 도착해 상태를 되돌릴 수 있다.
       if (
         !isNewUser &&
         (event === "TOKEN_REFRESHED" || event === "USER_UPDATED")
@@ -295,11 +303,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     if (!isOnline()) {
       throw new Error(ONLINE_REQUIRED_MESSAGE);
     }
-    await updatePassword(newPassword);
+    const userId = sessionUserIdRef.current;
+    await updatePassword(newPassword, {
+      allowSamePassword:
+        userId !== null && pendingPasswordChangeUserIdRef.current === userId,
+    });
+    pendingPasswordChangeUserIdRef.current = userId;
 
     const res = await apiFetch("/api/me/password-changed", { method: "POST" });
     if (res.ok) {
-      applyMe((await res.json()) as MeResponse);
+      const me = (await res.json()) as MeResponse;
+      if (sessionUserIdRef.current !== userId) {
+        return;
+      }
+      pendingPasswordChangeUserIdRef.current = null;
+      meGenerationRef.current += 1;
+      applyMe(me);
       return;
     }
 

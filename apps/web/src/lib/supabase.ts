@@ -45,13 +45,22 @@ export const signInWithUsername = async (username: string, password: string) => 
 
 /**
  * 로그인 세션만으로 비밀번호를 바꾼다(현재 비밀번호를 묻지 않는다).
- * 이미 같은 비밀번호로 바뀌어 있으면(same_password) 성공으로 본다. 강제 변경에서
- * updateUser는 성공하고 다음 단계만 실패한 뒤 다시 제출하는 경우다.
+ * 현재 비밀번호와 같으면(same_password) 바뀐 것이 없으므로 오류로 본다.
+ * allowSamePassword는 이 세션에서 방금 같은 값으로 바꾼 뒤 다시 제출하는 경우에만 쓴다.
  */
-export const updatePassword = async (password: string) => {
+export const updatePassword = async (
+  password: string,
+  { allowSamePassword = false }: { allowSamePassword?: boolean } = {},
+) => {
   const { error } = await supabase.auth.updateUser({ password });
-  if (!error || error.code === "same_password") {
+  if (!error) {
     return;
+  }
+  if (error.code === "same_password") {
+    if (allowSamePassword) {
+      return;
+    }
+    throw new Error("현재 비밀번호와 다른 비밀번호를 입력해 주세요.");
   }
   if (error.code === "weak_password") {
     throw new Error(
