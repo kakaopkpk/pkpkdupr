@@ -176,7 +176,7 @@ const MatchDetail: React.FC<MatchDetailProps> = ({
   const resultSheetDepthId = `match-result-sheet:${match.id}`;
   // 단판은 점수 열 하나만, 점수가 여러 개인 과거 2선승 기록은 게임마다 열과 Total을 둔다
   const isMultiGame = isMultiGameMatchRecord(match);
-  const scoreColumnCount = isMultiGame ? match.scores!.length : 1;
+  const scoreColumnCount = isMultiGame ? (match.scores?.length ?? 1) : 1;
   const totalPoints = useMemo(
     () =>
       (match.scores ?? []).reduce<[number, number]>(
@@ -295,7 +295,7 @@ const MatchDetail: React.FC<MatchDetailProps> = ({
                     </th>
                     {isMultiGame ? (
                       <>
-                        {match.scores!.map((_, index) => (
+                        {Array.from({ length: scoreColumnCount }, (_, index) => (
                           <th
                             key={index}
                             scope="col"
