@@ -4,6 +4,7 @@ import { randomUUID } from "crypto";
 import {
   DEFAULT_MATCH_MODE,
   MATCH_RESULT_MAX_SCORE_COUNT,
+  isMatchInProgress,
   isSinglesMatchType,
   isWithinMatchEditWindow,
   inferMatchModeFromScores,
@@ -23,10 +24,12 @@ import {
 } from "@pkpkdupr/shared/match";
 import {
   canOpenRegularSession,
+  isInProgressMatchExpired,
   isRegularSessionTime,
   toKstDateKey,
   type AddMatchSessionParticipantRequest,
   type CreateMatchSessionRequest,
+  type StartSessionMatchRequest,
   type MatchSessionDetail,
   type MatchSessionMember,
   type TodayMatchSessionsResponse,
@@ -599,6 +602,31 @@ const prepareRecordedMatch = async (
   const resolvedMode = mode ?? inferMatchModeFromScores(normalizedScores);
   validateMatchScoresForMode(resolvedMode, normalizedScores);
 
+  const lineup = await prepareMatchLineup(
+    type,
+    teams as [MatchTeamRequest, MatchTeamRequest],
+    requesterPlayerId,
+  );
+
+  return {
+    name: normalizeOptionalName(name),
+    type: lineup.type,
+    mode: resolvedMode,
+    teams: lineup.teams,
+    location: normalizedLocation,
+    scores: normalizedScores,
+  };
+};
+
+/**
+ * 경기 기록·시작 요청의 팀 구성을 검증한다. 요청자는 active여야 하고 팀에 없어도 된다.
+ * 선수는 active 회원이어야 하며, type을 생략하면 팀 구성으로 추론한다.
+ */
+const prepareMatchLineup = async (
+  type: MatchType | undefined,
+  requestedTeams: [MatchTeamRequest, MatchTeamRequest],
+  requesterPlayerId: string,
+) => {
   const requester = await authService.getPlayerById(requesterPlayerId);
   if (!requester || requester.status !== "active") {
     throw new MatchRecordRequestError("경기를 기록할 수 없는 계정입니다.", 403);
@@ -608,7 +636,6 @@ const prepareRecordedMatch = async (
   const playersById = new Map<string, Player>(
     [requester, ...publicPlayers].map((player) => [player.id, player]),
   );
-  const requestedTeams = teams as [MatchTeamRequest, MatchTeamRequest];
   normalizeRequestedTeamPlayerIds(requestedTeams);
   const matchTeams = buildMatchTeamsFromRequests(requestedTeams, playersById);
   const resolvedMatchType =
@@ -626,14 +653,7 @@ const prepareRecordedMatch = async (
     );
   }
 
-  return {
-    name: normalizeOptionalName(name),
-    type: resolvedMatchType,
-    mode: resolvedMode,
-    teams: matchTeams,
-    location: normalizedLocation,
-    scores: normalizedScores,
-  };
+  return { type: resolvedMatchType, teams: matchTeams };
 };
 
 /** RecordMatchRequest.sessionId를 읽는다. 생략·null·빈 문자열은 지정하지 않은 것으로 본다. */
@@ -1184,6 +1204,86 @@ app.delete(
     }
   },
 );
+
+app.post("/api/match-sessions/:sessionId/matches", async (req, res) => {
+  const decoded = await getAuthPayload(req, res);
+  if (!decoded) {
+    return;
+  }
+
+  try {
+    const sessionId = req.params.sessionId;
+    if (!isEntityId(sessionId, "session")) {
+      throw new MatchRecordRequestError("유효한 세션 ID가 필요합니다.", 400);
+    }
+    const body = req.body as Partial<StartSessionMatchRequest> | undefined;
+    const { type, teams, location, courtName } = body ?? {};
+    if (type != null && !isMatchType(type)) {
+      throw new MatchRecordRequestError("유효한 매치 타입이 필요합니다.", 400);
+    }
+    if (!Array.isArray(teams) || teams.length !== 2) {
+      throw new MatchRecordRequestError("두 팀 구성이 필요합니다.", 400);
+    }
+
+    // 시작 시각은 진행 중 만료(2시간)·24시간 수정 기한·정기 세션 판정의 기준이라 서버 now로 정한다.
+    const now = new Date();
+    await matchRepository.cleanupExpired(now);
+    const requestedSession = await matchRepository.findSessionById(sessionId);
+    if (!requestedSession) {
+      throw new MatchRecordRequestError("세션을 찾을 수 없습니다.", 404);
+    }
+    if (toKstDateKey(requestedSession.date) !== toKstDateKey(now)) {
+      throw new MatchRecordRequestError(
+        "오늘 세션에서만 경기를 시작할 수 있습니다.",
+        403,
+      );
+    }
+
+    const lineup = await prepareMatchLineup(type, teams, decoded.playerId);
+    const playerIds = getTeamPlayerIds(lineup.teams);
+    const inProgressPlayerIds = new Set(
+      await matchRepository.findInProgressPlayerIds(now),
+    );
+    if (playerIds.some((playerId) => inProgressPlayerIds.has(playerId))) {
+      throw new MatchRecordRequestError(
+        "이미 진행 중인 경기에 들어간 선수가 있습니다.",
+        409,
+      );
+    }
+
+    // 정기 세션이라도 22:00 KST 이후 시작이면 세션 없이 저장된다.
+    const session = await resolveSessionForNewMatch(sessionId, now);
+    if (session) {
+      await matchRepository.addSessionParticipants(session.id, playerIds);
+    }
+    const match = await matchRepository.create({
+      type: lineup.type,
+      mode: DEFAULT_MATCH_MODE,
+      teams: lineup.teams,
+      scores: [],
+      session: session
+        ? {
+            id: session.id,
+            name: session.name,
+            date: session.date,
+            location: session.location,
+          }
+        : undefined,
+      source: "player_created",
+      creatorPlayerId: decoded.playerId,
+      status: "created",
+      resultSubmittedByPlayerId: null,
+      resultSubmittedAt: null,
+      location: normalizeOptionalName(location) ?? requestedSession.location,
+      courtName: normalizeNullableCourtName(courtName) ?? undefined,
+      matchStartsAt: now,
+      completedAt: null,
+    });
+    res.status(201).json(match);
+  } catch (err) {
+    sendMatchRecordFailure(res, err);
+  }
+});
 
 app.post("/api/matches", async (req, res) => {
   const decoded = await getAuthPayload(req, res);
@@ -1818,6 +1918,12 @@ app.delete(
   },
 );
 
+/** 점수 없는 created 경기가 시작 후 2시간을 넘겨 무효가 됐으면 true */
+const isExpiredInProgressMatch = (match: Match, now: Date) =>
+  isMatchInProgress(match) &&
+  (match.scores?.length ?? 0) === 0 &&
+  isInProgressMatchExpired(match.matchStartsAt, now);
+
 const isMatchParticipant = (match: Match, playerId: string) =>
   match.teams.some((team) =>
     team.players.some((player) => player.id === playerId),
@@ -1833,8 +1939,11 @@ app.put("/api/matches/:matchId", async (req, res) => {
   let wasCompleted: boolean;
   let match: Match;
   try {
+    const now = new Date();
+    await matchRepository.cleanupExpired(now);
     const existing = await matchRepository.findById(matchId);
-    if (!existing) {
+    // 정리가 실패해 남아 있어도 만료된 진행 중 경기는 없는 경기로 본다.
+    if (!existing || isExpiredInProgressMatch(existing, now)) {
       return res.status(404).json({ error: "매치를 찾을 수 없습니다." });
     }
     // 생성자·관리자 여부와 무관하게 수정 전 참가자만 고칠 수 있다(세션 경기 포함).
@@ -1843,7 +1952,6 @@ app.put("/api/matches/:matchId", async (req, res) => {
         .status(403)
         .json({ error: "경기 참가자만 기록을 수정할 수 있습니다." });
     }
-    const now = new Date();
     if (!isWithinMatchEditWindow(existing.matchStartsAt, now)) {
       return res.status(403).json({
         error:
