@@ -534,22 +534,21 @@ const normalizeMatchScores = (scores: unknown): MatchScore[] => {
   }
   validateMatchScores(scores);
 
-  return scores.map((score, index) => {
-    const scoreA = Number((score as MatchScore | undefined)?.scoreA);
-    const scoreB = Number((score as MatchScore | undefined)?.scoreB);
+  const [score] = scores as Array<MatchScore | undefined>;
+  const scoreA = Number(score?.scoreA);
+  const scoreB = Number(score?.scoreB);
 
-    if (
-      !Number.isInteger(scoreA) ||
-      !Number.isInteger(scoreB) ||
-      scoreA < 0 ||
-      scoreB < 0 ||
-      scoreA === scoreB
-    ) {
-      throw new Error(`${index + 1}번째 스코어가 유효하지 않습니다.`);
-    }
+  if (
+    !Number.isInteger(scoreA) ||
+    !Number.isInteger(scoreB) ||
+    scoreA < 0 ||
+    scoreB < 0 ||
+    scoreA === scoreB
+  ) {
+    throw new Error("스코어가 유효하지 않습니다.");
+  }
 
-    return { scoreA, scoreB };
-  });
+  return [{ scoreA, scoreB }];
 };
 
 const MATCH_RATING_APPLY_FAILURE_MESSAGE =

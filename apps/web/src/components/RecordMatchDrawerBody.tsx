@@ -32,6 +32,7 @@ import {
   getPrioritySessionMemberIds,
 } from "@/lib/matchSessions";
 import { formatRating } from "@/utils/dupr";
+import { getWinningTeamIndex } from "@/utils/matchStats";
 import BottomSheet from "./BottomSheet";
 import BottomSheetSection from "./BottomSheetSection";
 import CreateMatchTeamGrid from "./CreateMatchTeamGrid";
@@ -91,7 +92,7 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 const inputClassName =
   "app-mobile-input w-full rounded-2xl border border-border bg-white px-4 py-2 text-base text-pkpk-sub-font outline-none";
 
-const createEmptyScore = (): ScoreDraft => ({ scoreA: null, scoreB: null });
+const EMPTY_SCORE: ScoreDraft = { scoreA: null, scoreB: null };
 
 const getTeamName = (teamIndex: number) =>
   `Team ${teamIndex === 0 ? "A" : "B"}`;
@@ -179,10 +180,7 @@ const buildEditInitialState = (
     ...myTeam.filter((member) => member.id !== currentPlayerId),
     ...teams[myTeamIndex === 0 ? 1 : 0],
   ];
-  const savedScore = editMatch.scores?.[0];
-  const score: ScoreDraft = savedScore
-    ? { scoreA: savedScore.scoreA, scoreB: savedScore.scoreB }
-    : createEmptyScore();
+  const score: ScoreDraft = editMatch.scores?.[0] ?? EMPTY_SCORE;
 
   return { members, teams, score };
 };
@@ -232,7 +230,7 @@ const RecordMatchDrawerBody: React.FC<RecordMatchDrawerBodyProps> = ({
     return {
       members,
       teams: buildInitialTeams(members, resolveSelectedMatchType(members)),
-      score: createEmptyScore(),
+      score: EMPTY_SCORE,
     };
   });
 
@@ -368,14 +366,10 @@ const RecordMatchDrawerBody: React.FC<RecordMatchDrawerBodyProps> = ({
   );
   const isTeamReady = !!matchType && areTeamsValid(teams, matchType);
   const isScoreDraw = isScoreComplete(score) && score.scoreA === score.scoreB;
-  const scoreWinnerIndex = isScoreDecided(score)
-    ? score.scoreA > score.scoreB
-      ? 0
-      : 1
-    : null;
   const scoresForSave: MatchScore[] | null = isScoreDecided(score)
-    ? [{ scoreA: score.scoreA, scoreB: score.scoreB }]
+    ? [score]
     : null;
+  const scoreWinnerIndex = getWinningTeamIndex(scoresForSave ?? undefined);
   const trimmedLocation = location.trim();
   const trimmedMatchName = matchName.trim();
   const canSave =
@@ -506,7 +500,7 @@ const RecordMatchDrawerBody: React.FC<RecordMatchDrawerBodyProps> = ({
   const handlePlayAgain = () => {
     setRecordedMatch(null);
     setEditingMatchId(null);
-    setScore(createEmptyScore());
+    setScore(EMPTY_SCORE);
     setSelectedSwapMemberId(null);
     setSaveError(null);
   };

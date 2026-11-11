@@ -46,7 +46,7 @@ interface AdminMatchBatchFormProps {
   onSubmit: (payload: AdminBatchMatchSubmitPayload) => Promise<void>;
 }
 
-type ScoreRowDraft = {
+type ScoreDraft = {
   scoreA: string;
   scoreB: string;
 };
@@ -64,7 +64,7 @@ type MatchDraft = {
   courtName: string;
   matchStartsAt: string;
   teams: [string[], string[]];
-  score: ScoreRowDraft;
+  score: ScoreDraft;
 };
 
 type FormMode = "manual" | "paste";
@@ -112,7 +112,7 @@ type ImportHeader =
   | (typeof REQUIRED_IMPORT_HEADERS)[number]
   | (typeof OPTIONAL_IMPORT_HEADERS)[number];
 
-const createEmptyScoreRow = (): ScoreRowDraft => ({ scoreA: "", scoreB: "" });
+const EMPTY_SCORE_DRAFT: ScoreDraft = { scoreA: "", scoreB: "" };
 
 const toLocalDateTimeValue = (date = new Date()) => {
   const timezoneOffsetMs = date.getTimezoneOffset() * 60_000;
@@ -182,7 +182,7 @@ const createEmptyDraft = (): MatchDraft => ({
   courtName: "",
   matchStartsAt: toLocalDateTimeValue(),
   teams: createEmptyTeams("singles"),
-  score: createEmptyScoreRow(),
+  score: EMPTY_SCORE_DRAFT,
 });
 
 const normalizeOptionalText = (value: string) => {
@@ -592,7 +592,7 @@ const AdminMatchBatchForm: React.FC<AdminMatchBatchFormProps> = ({
 
   const handleScoreChange = (
     draftId: string,
-    field: keyof ScoreRowDraft,
+    field: keyof ScoreDraft,
     value: string,
   ) => {
     updateDraft(draftId, (draft) => ({

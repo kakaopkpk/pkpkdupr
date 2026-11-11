@@ -106,7 +106,6 @@ const getExistingIntervals = (
 const findEarliestStart = (
   intervals: CourtInterval[],
   from: number,
-  durationMs: number,
 ) => {
   let candidate = from;
   for (const interval of [...intervals].sort(
@@ -115,7 +114,7 @@ const findEarliestStart = (
     if (interval.endsAt <= candidate) {
       continue;
     }
-    if (candidate + durationMs <= interval.startsAt) {
+    if (candidate + MATCH_SCHEDULE_DURATION_MS <= interval.startsAt) {
       break;
     }
     candidate = interval.endsAt;
@@ -144,15 +143,13 @@ export const buildCourtSchedule = ({
   const intervals = getExistingIntervals(normalizedCourts, existingMatches);
   const slots: CourtScheduleSlot[] = [];
 
-  const durationMs = MATCH_SCHEDULE_DURATION_MS;
-  for (let matchIndex = 0; matchIndex < matchCount; matchIndex += 1) {
+  for (let created = 0; created < matchCount; created += 1) {
     const candidates = normalizedCourts.map((courtName, courtIndex) => ({
       courtName,
       courtIndex,
       startsAt: findEarliestStart(
         intervals.filter((interval) => interval.courtName === courtName),
         sessionStartMs,
-        durationMs,
       ),
     }));
     candidates.sort(
@@ -168,7 +165,7 @@ export const buildCourtSchedule = ({
       label: `${slots.length + 1}번 경기`,
       courtName: selected.courtName,
       startsAt: selected.startsAt,
-      endsAt: selected.startsAt + durationMs,
+      endsAt: selected.startsAt + MATCH_SCHEDULE_DURATION_MS,
     });
     slots.push({
       courtName: selected.courtName,
