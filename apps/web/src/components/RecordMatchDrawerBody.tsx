@@ -179,7 +179,6 @@ const buildEditInitialState = (
     ...myTeam.filter((member) => member.id !== currentPlayerId),
     ...teams[myTeamIndex === 0 ? 1 : 0],
   ];
-  // 점수가 여러 개인 과거 기록은 첫 게임 점수만 불러온다
   const savedScore = editMatch.scores?.[0];
   const score: ScoreDraft = savedScore
     ? { scoreA: savedScore.scoreA, scoreB: savedScore.scoreB }

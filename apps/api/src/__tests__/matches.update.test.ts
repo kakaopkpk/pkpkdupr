@@ -479,6 +479,34 @@ describe("PUT /api/matches/:matchId", () => {
     expect(updateRecordedMatch).not.toHaveBeenCalled();
   });
 
+  it("점수가 여러 개인 과거 2선승 기록이면 409를 반환한다", async () => {
+    existing = buildExistingMatch({
+      scores: [
+        { scoreA: 9, scoreB: 11 },
+        { scoreA: 11, scoreB: 8 },
+        { scoreA: 11, scoreB: 6 },
+      ],
+    });
+
+    const response = await putMatch();
+
+    expect(response.status).toBe(409);
+    expect(updateRecordedMatch).not.toHaveBeenCalled();
+  });
+
+  it("점수가 2개 이상이면 400을 반환한다", async () => {
+    const response = await putMatch({
+      ...validBody,
+      scores: [
+        { scoreA: 11, scoreB: 9 },
+        { scoreA: 11, scoreB: 7 },
+      ],
+    });
+
+    expect(response.status).toBe(400);
+    expect(updateRecordedMatch).not.toHaveBeenCalled();
+  });
+
   it("새 팀 구성에 본인이 없어도 수정된다", async () => {
     const response = await putMatch({
       ...validBody,

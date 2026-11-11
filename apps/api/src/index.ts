@@ -5,6 +5,7 @@ import {
   isMatchInProgress,
   isSinglesMatchType,
   canEditMatchRecord,
+  isMultiGameMatchRecord,
   isWithinMatchEditWindow,
   matchTypeLabels,
   matchTypeValues,
@@ -2060,6 +2061,12 @@ app.put("/api/matches/:matchId", async (req, res) => {
       return res
         .status(409)
         .json({ error: "취소된 경기는 기록을 수정할 수 없습니다." });
+    }
+    if (isMultiGameMatchRecord(existing)) {
+      return res.status(409).json({
+        error:
+          "여러 게임으로 기록된 경기는 수정할 수 없습니다. 관리자에게 요청해 주세요.",
+      });
     }
 
     const prepared = await prepareRecordedMatch(

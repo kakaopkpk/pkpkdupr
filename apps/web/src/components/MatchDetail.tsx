@@ -3,6 +3,7 @@ import { Button, Card, Separator } from "@heroui/react";
 import {
   getMatchTopLevelType,
   canEditMatchRecord,
+  isMultiGameMatchRecord,
   isWithinMatchEditWindow,
 } from "@pkpkdupr/shared/match";
 import type { PlayerRatingChangeLog } from "@pkpkdupr/shared/player";
@@ -169,6 +170,7 @@ const MatchDetail: React.FC<MatchDetailProps> = ({
   const canEditRecord =
     isEditor &&
     match.status !== "cancelled" &&
+    !isMultiGameMatchRecord(match) &&
     isWithinMatchEditWindow(new Date(match.matchStartsAt)) &&
     isOnline &&
     !!onMatchRecorded;

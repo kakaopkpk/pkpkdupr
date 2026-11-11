@@ -174,6 +174,10 @@ export const validateMatchScores = (scores: MatchScore[]) => {
   }
 };
 
+/** 점수가 여러 개인 과거 2선승 기록이면 true. 점수를 1개로 바꾸면 승패가 달라질 수 있어 참가자 수정을 막는다 */
+export const isMultiGameMatchRecord = (match: Pick<Match, "scores">): boolean =>
+  (match.scores?.length ?? 0) > MATCH_SCORE_COUNT;
+
 export interface Match {
   id: string;
   type: MatchType;
