@@ -192,9 +192,6 @@ type AdminBulkMatchMetadataUpdateRequest =
 const normalizeOptionalName = (value: unknown) =>
   typeof value === "string" && value.trim() ? value.trim() : undefined;
 
-const normalizeCourtName = (value: unknown): string | undefined =>
-  typeof value === "string" && value.trim() ? value.trim() : undefined;
-
 const normalizeNullableCourtName = (value: unknown): string | null => {
   if (value == null) {
     return null;
@@ -202,7 +199,7 @@ const normalizeNullableCourtName = (value: unknown): string | null => {
   if (typeof value !== "string") {
     throw new Error("코트명은 문자열이어야 합니다.");
   }
-  return normalizeCourtName(value) ?? null;
+  return normalizeOptionalName(value) ?? null;
 };
 
 const normalizeMatchStartsAt = (value: unknown) => {
