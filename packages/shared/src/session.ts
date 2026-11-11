@@ -72,6 +72,23 @@ export const getEmptySessionExpiresAt = (
     : new Date(dayStart.getTime() + DAY_MS);
 };
 
+/**
+ * 빈 세션 만료 판정을 세션 시각 비교 하나로 바꾼 기준 시각.
+ * 세션 시각이 이 값보다 이르면(미만) `getEmptySessionExpiresAt(kind, 세션 시각) <= now`와 같다.
+ * 만료 시각은 세션 날짜의 KST 0시에 고정 길이를 더한 값이므로, now에서 그 길이를 뺀 날의 다음 날 KST 0시가 경계가 된다.
+ */
+export const getEmptySessionExpiryCutoff = (
+  kind: MatchSessionKind,
+  now: Date,
+): Date => {
+  const lifetimeMs =
+    kind === "regular" ? REGULAR_SESSION_END_HOUR * HOUR_MS : DAY_MS;
+  const latestExpiredDayStart = kstDateKeyToDate(
+    toKstDateKey(new Date(now.getTime() - lifetimeMs)),
+  );
+  return new Date(latestExpiredDayStart.getTime() + DAY_MS);
+};
+
 /** 점수 없는 진행 중 경기가 시작 2시간을 넘겨 무효(삭제 대상)면 true */
 export const isInProgressMatchExpired = (
   matchStartsAt: Date,
