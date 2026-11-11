@@ -22,7 +22,7 @@ import {
   type Player,
   type PublicPlayerDupr,
 } from "@pkpkdupr/shared/player";
-import { and, desc, eq, isNotNull, max } from "drizzle-orm";
+import { and, asc, desc, eq, gte, isNotNull, lt, max } from "drizzle-orm";
 import {
   matchParticipants,
   matches,
@@ -436,6 +436,46 @@ export class MatchRepository {
         args: [now, sessionId],
       });
     }
+  }
+
+  /** 세션 참여자 한 명을 뺀다. 참여 중이 아니면 아무것도 하지 않는다. */
+  async removeSessionParticipant(
+    sessionId: string,
+    playerId: string,
+  ): Promise<void> {
+    if (!isEntityId(sessionId, "session")) {
+      throw new Error("유효한 세션 ID가 필요합니다.");
+    }
+    const deleted = await this.client.execute({
+      sql: `
+        DELETE FROM match_session_participants
+        WHERE session_id = $1 AND player_id = $2
+      `,
+      args: [sessionId, playerId],
+    });
+    if (deleted.rowsAffected > 0) {
+      await this.client.execute({
+        sql: "UPDATE match_sessions SET updated_at = $1 WHERE id = $2",
+        args: [toUnixTimestampSeconds(new Date()), sessionId],
+      });
+    }
+  }
+
+  /** 세션 시각이 [from, to) 범위인 세션을 시각 오름차순으로 돌려준다. */
+  async findSessionsInRange(
+    from: Date,
+    to: Date,
+  ): Promise<ManagedMatchSession[]> {
+    const storedSessions = await this.db
+      .select()
+      .from(matchSessions)
+      .where(and(gte(matchSessions.date, from), lt(matchSessions.date, to)))
+      .orderBy(asc(matchSessions.date));
+    return await Promise.all(
+      storedSessions.map((session: StoredMatchSession) =>
+        this.toManagedSession(session),
+      ),
+    );
   }
 
   /**
