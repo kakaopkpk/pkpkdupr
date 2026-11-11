@@ -33,6 +33,7 @@ import { apiFetch } from "@/lib/api";
 import {
   fetchMatchSession,
   fetchTodayMatchSessions,
+  getOtherParticipantIds,
   getPrioritySessionMemberIds,
 } from "@/lib/matchSessions";
 import { formatRating } from "@/utils/dupr";
@@ -370,16 +371,26 @@ const RecordMatchDrawerBody: React.FC<RecordMatchDrawerBodyProps> = ({
 
     const loadSessionMembers = async () => {
       try {
-        const sessions = sessionId
-          ? [await fetchMatchSession(sessionId)]
-          : (await fetchTodayMatchSessions()).sessions;
+        // 세션 화면에서 열었으면 시간대·내 참여 여부와 상관없이 그 세션 멤버를 쓴다
+        const nextIds = sessionId
+          ? new Set(
+              getOtherParticipantIds(
+                await fetchMatchSession(sessionId),
+                player?.id,
+              ),
+            )
+          : getPrioritySessionMemberIds(
+              (await fetchTodayMatchSessions()).sessions,
+              player?.id,
+            );
         if (!isCancelled) {
-          setSessionMemberIds(
-            getPrioritySessionMemberIds(sessions, player?.id),
-          );
+          setSessionMemberIds(nextIds);
         }
       } catch {
-        // 우선 추천은 부가 기능이라 실패해도 알리지 않는다
+        // 우선 추천은 부가 기능이라 실패를 알리지 않고 최근 함께 친 순서로 둔다
+        if (!isCancelled) {
+          setSessionMemberIds(new Set());
+        }
       }
     };
 

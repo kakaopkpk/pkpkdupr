@@ -130,9 +130,18 @@ export const isSessionParticipant = (
   !!playerId &&
   session.participants.some((participant) => participant.id === playerId);
 
+/** 세션 참여자 중 나를 뺀 id */
+export const getOtherParticipantIds = (
+  session: Pick<MatchSessionDetailInfo, "participants">,
+  playerId: string | undefined,
+): string[] =>
+  session.participants
+    .map((participant) => participant.id)
+    .filter((id) => id !== playerId);
+
 /**
- * 경기 기록 멤버 목록에서 먼저 보여 줄 세션 멤버 id.
- * 내가 참여한 오늘 세션만 보고, 나는 뺀다. 정기 세션은 월·목 18~22시(KST) 동안만, 회원 세션은 그날 하루 적용한다.
+ * 경기 기록 멤버 목록에서 먼저 보여 줄 오늘 세션 멤버 id(나 제외).
+ * 내가 참여한 오늘 세션만 본다. 정기 세션은 월·목 18~22시(KST) 동안만, 회원 세션은 그날 하루 적용한다.
  */
 export const getPrioritySessionMemberIds = (
   sessions: Pick<
@@ -150,9 +159,5 @@ export const getPrioritySessionMemberIds = (
           isSessionParticipant(session, playerId) &&
           (session.kind !== "regular" || isRegularSessionTime(now)),
       )
-      .flatMap((session) =>
-        session.participants
-          .map((participant) => participant.id)
-          .filter((id) => id !== playerId),
-      ),
+      .flatMap((session) => getOtherParticipantIds(session, playerId)),
   );
