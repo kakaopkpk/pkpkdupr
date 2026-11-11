@@ -85,6 +85,9 @@ export const matchModeLabels: Record<MatchMode, string> = {
   "best-of-3": "2선승",
 };
 
+/** 세션 코트 일정에서 경기 하나가 차지하는 시간 */
+export const MATCH_SCHEDULE_DURATION_MS = 15 * 60 * 1000;
+
 export const getMatchScheduleDurationMinutes = (mode: MatchMode) =>
   mode === "best-of-3" ? 30 : 15;
 

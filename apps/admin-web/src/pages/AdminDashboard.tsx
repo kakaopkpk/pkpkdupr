@@ -16,10 +16,8 @@ import {
 } from "@pkpkdupr/shared/player";
 import {
   getMatchTopLevelType,
-  matchModeLabels,
   matchSourceLabels,
   matchTypeLabels,
-  type MatchMode,
   type MatchScore,
   type MatchSource,
   type MatchStatus,
@@ -86,7 +84,6 @@ type ManagedSessionInfo = {
 type MatchInfo = {
   id: string;
   type: MatchType;
-  mode: MatchMode;
   source: MatchSource;
   creatorPlayerId: string;
   name?: string;
@@ -1837,7 +1834,6 @@ const AdminDashboard: React.FC = () => {
                       </th>
                       <th className="px-4 py-3 whitespace-nowrap">매치명</th>
                       <th className="px-4 py-3 whitespace-nowrap">타입</th>
-                      <th className="px-4 py-3 whitespace-nowrap">모드</th>
                       <th className="px-4 py-3 whitespace-nowrap">상태</th>
                       <th className="px-4 py-3 whitespace-nowrap">생성 방식</th>
                       <th className="px-4 py-3 whitespace-nowrap">A팀</th>
@@ -1965,9 +1961,6 @@ const AdminDashboard: React.FC = () => {
                           </td>
                           <td className="px-4 py-4 whitespace-nowrap text-xs text-gray-700">
                             {matchTypeLabels[match.type]}
-                          </td>
-                          <td className="px-4 py-4 whitespace-nowrap text-xs text-gray-700">
-                            {matchModeLabels[match.mode]}
                           </td>
                           <td className="px-4 py-4 whitespace-nowrap">
                             <span

@@ -1,15 +1,10 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
-  DEFAULT_MATCH_MODE,
-  getMatchScheduleDurationMs,
   isSinglesMatchType,
-  matchModeLabels,
-  matchModeValues,
+  MATCH_SCHEDULE_DURATION_MS,
   matchTypeLabels,
   matchTypeValues,
-  MATCH_RESULT_MAX_SCORE_COUNT,
   type ManagedMatchSession,
-  type MatchMode,
   type MatchStatus,
   type MatchType,
 } from "@pkpkdupr/shared/match";
@@ -31,7 +26,6 @@ type SessionMatchInfo = {
   id: string;
   name?: string;
   type: MatchType;
-  mode: MatchMode;
   status: MatchStatus;
   courtName?: string;
   matchStartsAt: string;
@@ -48,6 +42,8 @@ type SavedSessionMatchResult = Pick<
 >;
 
 type ScoreDraft = { scoreA: string; scoreB: string };
+
+const EMPTY_SCORE_DRAFT: ScoreDraft = { scoreA: "", scoreB: "" };
 type AutoMatchKind = "singles" | "doubles";
 
 type AutoMatchDraft = {
@@ -56,7 +52,6 @@ type AutoMatchDraft = {
 };
 
 type AutoScheduledMatch = AutoMatchDraft & {
-  mode: MatchMode;
   courtName: string;
   matchStartsAt: string;
 };
@@ -98,16 +93,14 @@ const getScheduleConflictMessages = (
         courtName: match.courtName!.trim(),
         startsAt: new Date(match.matchStartsAt).getTime(),
         endsAt:
-          new Date(match.matchStartsAt).getTime() +
-          getMatchScheduleDurationMs(match.mode),
+          new Date(match.matchStartsAt).getTime() + MATCH_SCHEDULE_DURATION_MS,
       })),
     ...preview.matches.map((match, index) => ({
       label: `${index + 1}번 새 경기`,
       courtName: match.courtName.trim(),
       startsAt: new Date(match.matchStartsAt).getTime(),
       endsAt:
-        new Date(match.matchStartsAt).getTime() +
-        getMatchScheduleDurationMs(match.mode),
+        new Date(match.matchStartsAt).getTime() + MATCH_SCHEDULE_DURATION_MS,
     })),
   ].filter((interval) => Number.isFinite(interval.startsAt));
 
@@ -294,7 +287,6 @@ const AdminSessionManager: React.FC<AdminSessionManagerProps> = ({
   const [matchName, setMatchName] = useState("");
   const [matchType, setMatchType] =
     useState<MatchType>("unrestricted-doubles");
-  const [matchMode, setMatchMode] = useState<MatchMode>(DEFAULT_MATCH_MODE);
   const [matchStartsAt, setMatchStartsAt] = useState("");
   const [matchCourtName, setMatchCourtName] = useState("코트 1");
   const [courtNames, setCourtNames] = useState<string[]>(["코트 1"]);
@@ -331,7 +323,7 @@ const AdminSessionManager: React.FC<AdminSessionManagerProps> = ({
   );
   const [deleteConfirmationMatch, setDeleteConfirmationMatch] =
     useState<SessionMatchInfo | null>(null);
-  const [scoreDrafts, setScoreDrafts] = useState<Record<string, ScoreDraft[]>>(
+  const [scoreDrafts, setScoreDrafts] = useState<Record<string, ScoreDraft>>(
     {},
   );
   const deleteHoldTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
@@ -410,12 +402,12 @@ const AdminSessionManager: React.FC<AdminSessionManagerProps> = ({
         matches.map((match) => [
           match.id,
           currentDrafts[match.id] ??
-            (match.scores?.length
-              ? match.scores.map((score) => ({
-                  scoreA: String(score.scoreA),
-                  scoreB: String(score.scoreB),
-                }))
-              : [{ scoreA: "", scoreB: "" }]),
+            (match.scores?.[0]
+              ? {
+                  scoreA: String(match.scores[0].scoreA),
+                  scoreB: String(match.scores[0].scoreB),
+                }
+              : EMPTY_SCORE_DRAFT),
         ]),
       ),
     );
@@ -650,7 +642,6 @@ const AdminSessionManager: React.FC<AdminSessionManagerProps> = ({
           body: JSON.stringify({
             name: matchName.trim() || undefined,
             type: matchType,
-            mode: matchMode,
             courtName: normalizedCourtName,
             matchStartsAt: new Date(matchStartsAt).toISOString(),
             teams: [
@@ -731,7 +722,6 @@ const AdminSessionManager: React.FC<AdminSessionManagerProps> = ({
             courts: courtNames,
             matches: missingDrafts.map((draft) => ({
               type: draft.type,
-              mode: matchMode,
               teams: [
                 { name: "Team A", playerIds: draft.teams[0] },
                 { name: "Team B", playerIds: draft.teams[1] },
@@ -754,7 +744,6 @@ const AdminSessionManager: React.FC<AdminSessionManagerProps> = ({
         kind,
         matches: missingDrafts.map((draft, index) => ({
           ...draft,
-          mode: matchMode,
           courtName: schedule[index]!.courtName,
           matchStartsAt: toLocalDateTimeValue(schedule[index]!.matchStartsAt),
         })),
@@ -817,7 +806,6 @@ const AdminSessionManager: React.FC<AdminSessionManagerProps> = ({
             courts: courtNames,
             matches: autoSchedulePreview.matches.map((match) => ({
               type: match.type,
-              mode: match.mode,
               courtName: match.courtName,
               matchStartsAt: new Date(match.matchStartsAt).toISOString(),
               teams: [
@@ -928,48 +916,26 @@ const AdminSessionManager: React.FC<AdminSessionManagerProps> = ({
 
   const updateScoreDraft = (
     matchId: string,
-    scoreIndex: number,
     key: keyof ScoreDraft,
     value: string,
   ) => {
-    setScoreDrafts((currentDrafts) => {
-      const nextDrafts = currentDrafts[matchId] ?? [
-        { scoreA: "", scoreB: "" },
-      ];
-      return {
-        ...currentDrafts,
-        [matchId]: nextDrafts.map((score, index) =>
-          index === scoreIndex ? { ...score, [key]: value } : score,
-        ),
-      };
-    });
-  };
-
-  const addScoreDraft = (matchId: string) => {
     setScoreDrafts((currentDrafts) => ({
       ...currentDrafts,
-      [matchId]: [
-        ...(currentDrafts[matchId] ?? [{ scoreA: "", scoreB: "" }]),
-        { scoreA: "", scoreB: "" },
-      ],
-    }));
-  };
-
-  const removeScoreDraft = (matchId: string, scoreIndex: number) => {
-    setScoreDrafts((currentDrafts) => ({
-      ...currentDrafts,
-      [matchId]: (currentDrafts[matchId] ?? []).filter(
-        (_, index) => index !== scoreIndex,
-      ),
+      [matchId]: {
+        ...(currentDrafts[matchId] ?? EMPTY_SCORE_DRAFT),
+        [key]: value,
+      },
     }));
   };
 
   const handleSaveMatchResult = async (match: SessionMatchInfo) => {
-    const scoreDraft = scoreDrafts[match.id] ?? [];
-    const scores = scoreDraft.map((score) => ({
-      scoreA: Number(score.scoreA),
-      scoreB: Number(score.scoreB),
-    }));
+    const scoreDraft = scoreDrafts[match.id] ?? EMPTY_SCORE_DRAFT;
+    const scores = [
+      {
+        scoreA: Number(scoreDraft.scoreA),
+        scoreB: Number(scoreDraft.scoreB),
+      },
+    ];
 
     setError(null);
     setSuccess(null);
@@ -1393,29 +1359,6 @@ const AdminSessionManager: React.FC<AdminSessionManagerProps> = ({
                         코트 추가
                       </button>
                     </div>
-                    <label className="min-w-36">
-                      <span className="mb-1 block text-xs font-medium text-slate-500">
-                        전체 대진 경기 모드
-                      </span>
-                      <select
-                        value={matchMode}
-                        disabled={
-                          creatingAutoMatchKind !== null ||
-                          isConfirmingAutoSchedule ||
-                          autoSchedulePreview !== null
-                        }
-                        onChange={(event) =>
-                          setMatchMode(event.target.value as MatchMode)
-                        }
-                        className="w-full rounded-lg border bg-white px-3 py-2 text-sm text-slate-700 disabled:bg-slate-100"
-                      >
-                        {matchModeValues.map((mode) => (
-                          <option key={mode} value={mode}>
-                            {matchModeLabels[mode]}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
                     <button
                       type="button"
                       disabled={
@@ -1599,12 +1542,8 @@ const AdminSessionManager: React.FC<AdminSessionManagerProps> = ({
                       <tbody>
                         {sessionMatches.map((match, matchIndex) => {
                           const isCompleted = match.status === "completed";
-                          const scoreDraft = scoreDrafts[match.id] ?? [
-                            { scoreA: "", scoreB: "" },
-                          ];
-                          const canAddScore =
-                            match.mode === "best-of-3" &&
-                            scoreDraft.length < MATCH_RESULT_MAX_SCORE_COUNT;
+                          const scoreDraft =
+                            scoreDrafts[match.id] ?? EMPTY_SCORE_DRAFT;
                           const scheduleDraft = matchScheduleDrafts[match.id] ?? {
                             courtName: match.courtName ?? "",
                             matchStartsAt: toLocalDateTimeValue(
@@ -1624,72 +1563,42 @@ const AdminSessionManager: React.FC<AdminSessionManagerProps> = ({
                                 </span>
                               ) : (
                                 <div className="space-y-2">
-                                  {scoreDraft.map((score, scoreIndex) => (
-                                    <div
-                                      key={`${match.id}-score-${scoreIndex}`}
-                                      className="flex items-center gap-1"
-                                    >
-                                      <input
-                                        type="number"
-                                        min="0"
-                                        inputMode="numeric"
-                                        aria-label={`A팀 ${scoreIndex + 1}세트 점수`}
-                                        placeholder="A팀"
-                                        value={score.scoreA}
-                                        onChange={(event) =>
-                                          updateScoreDraft(
-                                            match.id,
-                                            scoreIndex,
-                                            "scoreA",
-                                            event.target.value,
-                                          )
-                                        }
-                                        className="w-16 rounded border px-2 py-1.5 text-sm"
-                                      />
-                                      <span className="text-slate-400">:</span>
-                                      <input
-                                        type="number"
-                                        min="0"
-                                        inputMode="numeric"
-                                        aria-label={`B팀 ${scoreIndex + 1}세트 점수`}
-                                        placeholder="B팀"
-                                        value={score.scoreB}
-                                        onChange={(event) =>
-                                          updateScoreDraft(
-                                            match.id,
-                                            scoreIndex,
-                                            "scoreB",
-                                            event.target.value,
-                                          )
-                                        }
-                                        className="w-16 rounded border px-2 py-1.5 text-sm"
-                                      />
-                                      {scoreDraft.length > 1 ? (
-                                        <button
-                                          type="button"
-                                          onClick={() =>
-                                            removeScoreDraft(
-                                              match.id,
-                                              scoreIndex,
-                                            )
-                                          }
-                                          className="px-1 text-xs text-slate-500 hover:text-red-600"
-                                        >
-                                          삭제
-                                        </button>
-                                      ) : null}
-                                    </div>
-                                  ))}
+                                  <div className="flex items-center gap-1">
+                                    <input
+                                      type="number"
+                                      min="0"
+                                      inputMode="numeric"
+                                      aria-label="A팀 점수"
+                                      placeholder="A팀"
+                                      value={scoreDraft.scoreA}
+                                      onChange={(event) =>
+                                        updateScoreDraft(
+                                          match.id,
+                                          "scoreA",
+                                          event.target.value,
+                                        )
+                                      }
+                                      className="w-16 rounded border px-2 py-1.5 text-sm"
+                                    />
+                                    <span className="text-slate-400">:</span>
+                                    <input
+                                      type="number"
+                                      min="0"
+                                      inputMode="numeric"
+                                      aria-label="B팀 점수"
+                                      placeholder="B팀"
+                                      value={scoreDraft.scoreB}
+                                      onChange={(event) =>
+                                        updateScoreDraft(
+                                          match.id,
+                                          "scoreB",
+                                          event.target.value,
+                                        )
+                                      }
+                                      className="w-16 rounded border px-2 py-1.5 text-sm"
+                                    />
+                                  </div>
                                   <div className="flex flex-wrap gap-2">
-                                    {canAddScore ? (
-                                      <button
-                                        type="button"
-                                        onClick={() => addScoreDraft(match.id)}
-                                        className="text-xs font-medium text-blue-600 hover:underline"
-                                      >
-                                        세트 추가
-                                      </button>
-                                    ) : null}
                                     <button
                                       type="button"
                                       disabled={savingResultMatchId === match.id}
@@ -1714,8 +1623,7 @@ const AdminSessionManager: React.FC<AdminSessionManagerProps> = ({
                                 {match.name?.trim() || `${matchIndex + 1}번 경기`}
                               </td>
                               <td className="whitespace-nowrap px-4 py-3 text-slate-600">
-                                {matchTypeLabels[match.type]} ·{" "}
-                                {matchModeLabels[match.mode]}
+                                {matchTypeLabels[match.type]}
                               </td>
                               <td className="px-4 py-3 text-slate-600">
                                 {match.teams[0].players
@@ -1851,24 +1759,6 @@ const AdminSessionManager: React.FC<AdminSessionManagerProps> = ({
                           {matchTypeValues.map((type) => (
                             <option key={type} value={type}>
                               {matchTypeLabels[type]}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                      <div>
-                        <label className="mb-1 block text-sm font-medium text-gray-700">
-                          경기 모드
-                        </label>
-                        <select
-                          value={matchMode}
-                          onChange={(event) =>
-                            setMatchMode(event.target.value as MatchMode)
-                          }
-                          className="w-full rounded-lg border bg-white px-4 py-2"
-                        >
-                          {matchModeValues.map((mode) => (
-                            <option key={mode} value={mode}>
-                              {matchModeLabels[mode]}
                             </option>
                           ))}
                         </select>
