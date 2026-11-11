@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # GitHub Pages 산출물을 만든다: 루트=web, admin/=admin-web, 루트 404.html.
 # 사용: PAGES_BASE_PATH=/pkpkdupr/ bash scripts/pages/assemble.sh [출력 디렉터리]
-# VITE_API_BASE_URL·VITE_SUPABASE_URL·VITE_SUPABASE_ANON_KEY·VITE_ALLOWED_EMAIL_DOMAIN은 호출 환경에서 넘긴다.
+# VITE_API_BASE_URL·VITE_SUPABASE_URL·VITE_SUPABASE_ANON_KEY는 호출 환경에서 넘긴다.
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
