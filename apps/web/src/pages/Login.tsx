@@ -127,6 +127,17 @@ const Login: React.FC = () => {
         </button>
 
         {import.meta.env.DEV && <DevMagicLinkForm onError={handleError} />}
+
+        <p className="mt-6 text-center text-xs text-white/70">
+          <a
+            href={`${import.meta.env.BASE_URL}privacy.html`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="underline underline-offset-2"
+          >
+            개인정보처리방침
+          </a>
+        </p>
       </div>
     </div>
   );

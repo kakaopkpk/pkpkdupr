@@ -23,6 +23,8 @@ const escapeRegExp = (value: string) =>
 // admin-web은 같은 Pages 사이트의 `<base>admin/`에 배포된다. web 서비스워커 scope 안이므로
 // 이 경로의 탐색 요청을 web index.html로 가로채지 않도록 navigateFallback에서 뺀다.
 const adminPathPattern = new RegExp(`^${escapeRegExp(basePath)}admin(?:/|$)`);
+// 개인정보처리방침은 정적 페이지(public/privacy.html)라 SPA index.html로 대신 응답하지 않는다.
+const privacyPathPattern = new RegExp(`^${escapeRegExp(basePath)}privacy\\.html$`);
 
 const fallbackAppVersion =
   (
@@ -107,7 +109,7 @@ export default defineConfig({
         importScripts: [`${basePath}cleanup-outdated-caches.js`],
         globPatterns: ["**/*.{js,css,html,ico,png,svg,webmanifest}"],
         navigateFallback: `${basePath}index.html`,
-        navigateFallbackDenylist: [/^\/api\//, adminPathPattern],
+        navigateFallbackDenylist: [/^\/api\//, adminPathPattern, privacyPathPattern],
         runtimeCaching: [
           {
             urlPattern:

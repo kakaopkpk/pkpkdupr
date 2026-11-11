@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>개인정보처리방침 - pkpkdupr</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+      }
+      body {
+        margin: 0;
+        padding: 24px 16px 48px;
+        font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo",
+          "Noto Sans KR", sans-serif;
+        line-height: 1.7;
+        background: Canvas;
+        color: CanvasText;
+      }
+      main {
+        max-width: 720px;
+        margin: 0 auto;
+      }
+      h1 {
+        font-size: 1.4rem;
+      }
+      h2 {
+        font-size: 1.05rem;
+        margin-top: 2rem;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.95rem;
+      }
+      th,
+      td {
+        border: 1px solid color-mix(in srgb, CanvasText 25%, transparent);
+        padding: 8px;
+        text-align: left;
+        vertical-align: top;
+      }
+      .muted {
+        opacity: 0.7;
+        font-size: 0.9rem;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>pkpkdupr 개인정보처리방침</h1>
+      <p>
+        pkpkdupr는 피클볼 동호회 회원이 경기 기록과 랭킹(평점)을 관리하기 위해
+        동호회 안에서만 쓰는 서비스입니다. 이 방침은 서비스가 어떤 정보를 왜
+        처리하는지 설명합니다.
+      </p>
+
+      <h2>1. 처리하는 정보</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>구분</th>
+            <th>항목</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>로그인 정보</td>
+            <td>
+              Google 계정 이메일 주소, 이름, 계정 식별자. Google 로그인 시
+              인증 서비스(Supabase Auth)에 저장됩니다. 회원 정보에는 이메일을
+              저장하지 않고 인증 계정 식별자만 연결합니다.
+            </td>
+          </tr>
+          <tr>
+            <td>회원 정보</td>
+            <td>
+              닉네임(username), 성별, 프로필 이미지(직접 올린 경우), 소속,
+              상태 메시지
+            </td>
+          </tr>
+          <tr>
+            <td>활동 정보</td>
+            <td>경기 기록(참가자, 점수, 일시, 코트), 평점과 평점 변경 이력</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h2>2. 이용 목적</h2>
+      <ul>
+        <li>동호회 회원 확인과 로그인</li>
+        <li>경기 기록 등록·승인과 회원별 평점(랭킹) 계산·표시</li>
+      </ul>
+      <p>
+        회원 목록, 프로필 이미지, 경기 기록, 평점은 로그인한 동호회 회원에게
+        보입니다. 프로필 이미지는 링크를 아는 사람은 열어 볼 수 있습니다.
+        광고·마케팅에는 쓰지 않습니다.
+      </p>
+
+      <h2>3. 보관 기간</h2>
+      <p>
+        탈퇴하거나 삭제를 요청할 때까지 보관합니다. 다만 다른 회원의 평점
+        계산에 쓰인 경기 기록은 랭킹 정확성을 위해 남길 수 있습니다.
+      </p>
+
+      <h2>4. 처리 위탁</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>업체</th>
+            <th>위탁 업무</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Supabase</td>
+            <td>데이터베이스, 로그인 인증, 프로필 이미지 저장소 호스팅</td>
+          </tr>
+          <tr>
+            <td>Google</td>
+            <td>Google 계정 로그인</td>
+          </tr>
+        </tbody>
+      </table>
+      <p>이 외의 제3자에게 정보를 제공하지 않습니다.</p>
+
+      <h2>5. 삭제 요청과 문의</h2>
+      <p>
+        정보 열람·수정·삭제나 탈퇴는 동호회 운영진에게 요청해 주세요. 확인 후
+        처리합니다.
+      </p>
+
+      <p class="muted">시행일: 2026년 11월 11일</p>
+    </main>
+  </body>
+</html>
