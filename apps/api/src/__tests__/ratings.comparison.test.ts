@@ -106,7 +106,6 @@ describe("GET /api/admin/ratings/comparison", () => {
           status: "active",
           duprRating: { singles: 3, doubles },
           authUserId: null,
-          isFirstLogin: false,
           createdAt: now,
           updatedAt: now,
         }) satisfies Player & {

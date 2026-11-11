@@ -28,7 +28,6 @@ const createPlayer = (id: string, rating: number): Player & {
   status: "active",
   duprRating: { singles: rating, doubles: rating },
   authUserId: null,
-  isFirstLogin: false,
   createdAt: completedAt,
   updatedAt: completedAt,
 });
