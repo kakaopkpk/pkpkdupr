@@ -33,6 +33,7 @@ import {
 } from "../db/schema";
 import { generateEntityId, isEntityId } from "@pkpkdupr/shared/entityId";
 import {
+  IN_PROGRESS_MATCH_TIMEOUT_MS,
   REGULAR_SESSION_LOCATION,
   REGULAR_SESSION_NAME,
   REGULAR_SESSION_START_HOUR,
@@ -533,6 +534,79 @@ export class MatchRepository {
         transaction.close();
       }
     }
+  }
+
+  /**
+   * 점수 없는 created 경기 중 isInProgressMatchExpired인(시작 후 IN_PROGRESS_MATCH_TIMEOUT_MS가 지난) 경기를
+   * 참가자·점수 행과 함께 삭제한다. 삭제한 경기 수를 돌려준다.
+   */
+  async deleteExpiredInProgressMatches(now: Date): Promise<number> {
+    const cutoff = toUnixTimestampSeconds(
+      new Date(now.getTime() - IN_PROGRESS_MATCH_TIMEOUT_MS),
+    );
+    const transaction = await this.client.transaction("write");
+    let committed = false;
+    try {
+      // 같은 경기에 점수 입력(updateRecordedMatch)이 동시에 들어오면 행 잠금으로 순서를 정한다.
+      // 잠금을 얻은 뒤에도 created·점수 없음 조건을 다시 보므로 먼저 completed가 된 경기는 지우지 않는다.
+      const expired: RawQueryResult = await transaction.execute({
+        sql: `
+          SELECT m.id
+          FROM matches m
+          WHERE m.status = 'created'
+            AND m.match_starts_at <= $1
+            AND NOT EXISTS (SELECT 1 FROM match_scores s WHERE s.match_id = m.id)
+          FOR UPDATE
+        `,
+        args: [cutoff],
+      });
+      const expiredIds = expired.rows.map((row) => String(row.id));
+      if (expiredIds.length > 0) {
+        const idList = placeholders(expiredIds.length);
+        await transaction.execute({
+          sql: `DELETE FROM match_scores WHERE match_id IN (${idList})`,
+          args: expiredIds,
+        });
+        await transaction.execute({
+          sql: `DELETE FROM match_participants WHERE match_id IN (${idList})`,
+          args: expiredIds,
+        });
+        await transaction.execute({
+          sql: `DELETE FROM matches WHERE id IN (${idList})`,
+          args: expiredIds,
+        });
+      }
+      await transaction.commit();
+      committed = true;
+      return expiredIds.length;
+    } finally {
+      if (!committed) {
+        transaction.close();
+      }
+    }
+  }
+
+  /**
+   * 진행 중(점수 없는 created, 이미 시작했고 만료 전) 경기에 들어간 선수 id.
+   * 시작 시각이 아직 오지 않은 관리자 예정 경기는 진행 중으로 보지 않는다.
+   */
+  async findInProgressPlayerIds(now: Date): Promise<string[]> {
+    const cutoff = toUnixTimestampSeconds(
+      new Date(now.getTime() - IN_PROGRESS_MATCH_TIMEOUT_MS),
+    );
+    const result: RawQueryResult = await this.client.execute({
+      sql: `
+        SELECT DISTINCT p.player_id
+        FROM match_participants p
+        INNER JOIN matches m ON m.id = p.match_id
+        WHERE m.status = 'created'
+          AND m.match_starts_at > $1
+          AND m.match_starts_at <= $2
+          AND NOT EXISTS (SELECT 1 FROM match_scores s WHERE s.match_id = m.id)
+      `,
+      args: [cutoff, toUnixTimestampSeconds(now)],
+    });
+    return result.rows.map((row) => String(row.player_id));
   }
 
   async findById(id: string): Promise<Match | undefined> {
