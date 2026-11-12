@@ -104,7 +104,7 @@ const INITIAL_START_STATE: StartState = {
 
 /**
  * 홈 탭. 셸의 진행 중 세션이 있으면 진행 화면(참여자 Main / 미참여자 MainGuest),
- * 없으면 다가오는 첫 세션 카드와 지난 세션 요약을 보인다.
+ * 없으면 다가오는 첫 세션 카드, 세션 밖 진행 중 경기, 지난 세션 요약을 보인다.
  */
 const Home: React.FC = () => {
   const { player } = useAuth();
@@ -226,8 +226,25 @@ const Home: React.FC = () => {
   };
 
   // ── 진행 중 세션 ────────────────────────────────────
+  // 세션 밖 경기까지 포함한 진행 중 경기. 경기 중인 선수 판단(대기 인원·참여 취소 잠금)에 쓴다
   const inProgressMatches = live.inProgressMatches;
   const myInProgressMatch = live.myInProgressMatch;
+  const sessionInProgressMatches = useMemo(
+    () =>
+      liveSession
+        ? inProgressMatches.filter(
+            (match) => match.session?.id === liveSession.id,
+          )
+        : [],
+    [inProgressMatches, liveSession],
+  );
+  // 세션 머리의 진행 수. 세션 밖 내 경기도 진행 중 목록에 함께 보이므로 센다
+  const liveInProgressCount =
+    sessionInProgressMatches.length +
+    (myInProgressMatch &&
+    !sessionInProgressMatches.some((match) => match.id === myInProgressMatch.id)
+      ? 1
+      : 0);
   const busyPlayerIds = useMemo(
     () => inProgressMatches.flatMap(getMatchPlayerIds),
     [inProgressMatches],
@@ -330,15 +347,14 @@ const Home: React.FC = () => {
   );
 
   // ── 그리기 ─────────────────────────────────────────
-  const renderLive = () => {
-    const otherInProgress = isLiveParticipant
-      ? inProgressMatches.filter((match) => match.id !== myInProgressMatch?.id)
-      : inProgressMatches;
+  /** 진행 중 머리·내 경기 카드·남의 진행 중 경기 줄. 내 경기는 세션 밖 경기여도 맨 위에 온다 */
+  const renderInProgress = (otherMatches: MatchInfo[]) => {
+    const count = otherMatches.length + (myInProgressMatch ? 1 : 0);
 
     return (
       <>
-        <SectionLabel>진행 중 {inProgressMatches.length}</SectionLabel>
-        {isLiveParticipant && myInProgressMatch ? (
+        <SectionLabel>진행 중 {count}</SectionLabel>
+        {myInProgressMatch ? (
           <MyLiveMatchCard
             match={myInProgressMatch}
             now={now}
@@ -347,9 +363,9 @@ const Home: React.FC = () => {
             }
           />
         ) : null}
-        {otherInProgress.length > 0 ? (
+        {otherMatches.length > 0 ? (
           <Card>
-            {otherInProgress.map((match) => (
+            {otherMatches.map((match) => (
               <LiveMatchRow
                 key={match.id}
                 match={match}
@@ -358,37 +374,47 @@ const Home: React.FC = () => {
               />
             ))}
           </Card>
-        ) : inProgressMatches.length === 0 ? (
+        ) : count === 0 ? (
           <EmptyText>진행 중인 경기가 없어요</EmptyText>
         ) : null}
-        {isLiveParticipant ? (
-          <>
-            <Spacer />
-            <RecommendationSection
-              state={visibleRecommendations}
-              waitingCount={waitingCount}
-              startingKey={startState.startingKey}
-              startError={startState.error}
-              onStart={(court) => void startRecommendedMatch(court)}
-            />
-          </>
-        ) : null}
-        <Spacer />
-        <SectionLabel>오늘 기록 {completedMatches.length}</SectionLabel>
-        {completedMatches.length > 0 ? (
-          <MatchListCard
-            matches={completedMatches}
-            currentPlayerId={playerId}
-            onOpenMatch={openMatchDetail}
-          />
-        ) : (
-          <EmptyText>아직 기록된 경기가 없어요</EmptyText>
-        )}
-        {/* 미참여자의 참여하기는 셸의 알림 바가 맡는다. 그 바에 가리지 않게 여백을 둔다 */}
-        {!isLiveParticipant ? <div className="h-16" /> : null}
       </>
     );
   };
+
+  const renderLive = () => (
+    <>
+      {renderInProgress(
+        sessionInProgressMatches.filter(
+          (match) => match.id !== myInProgressMatch?.id,
+        ),
+      )}
+      {isLiveParticipant ? (
+        <>
+          <Spacer />
+          <RecommendationSection
+            state={visibleRecommendations}
+            waitingCount={waitingCount}
+            startingKey={startState.startingKey}
+            startError={startState.error}
+            onStart={(court) => void startRecommendedMatch(court)}
+          />
+        </>
+      ) : null}
+      <Spacer />
+      <SectionLabel>오늘 기록 {completedMatches.length}</SectionLabel>
+      {completedMatches.length > 0 ? (
+        <MatchListCard
+          matches={completedMatches}
+          currentPlayerId={playerId}
+          onOpenMatch={openMatchDetail}
+        />
+      ) : (
+        <EmptyText>아직 기록된 경기가 없어요</EmptyText>
+      )}
+      {/* 미참여자의 참여하기는 셸의 알림 바가 맡는다. 그 바에 가리지 않게 여백을 둔다 */}
+      {!isLiveParticipant ? <div className="h-16" /> : null}
+    </>
+  );
 
   const renderPreSession = () => {
     const { data, status, error } = preSession;
@@ -432,6 +458,16 @@ const Home: React.FC = () => {
         ) : (
           <EmptyText>다가오는 세션이 없어요</EmptyText>
         )}
+        {inProgressMatches.length > 0 ? (
+          <>
+            <Spacer />
+            {renderInProgress(
+              inProgressMatches.filter(
+                (match) => match.id !== myInProgressMatch?.id,
+              ),
+            )}
+          </>
+        ) : null}
         {isToday && lastSessionMe ? (
           <>
             <Spacer />
@@ -505,7 +541,7 @@ const Home: React.FC = () => {
           {[
             liveSession.location,
             `${completedMatches.length}경기`,
-            `진행 ${inProgressMatches.length}`,
+            `진행 ${liveInProgressCount}`,
           ]
             .filter(Boolean)
             .map((part) => `· ${part}`)

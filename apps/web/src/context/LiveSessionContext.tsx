@@ -16,6 +16,7 @@ import {
 } from "@pkpkdupr/shared/session";
 import type { MatchInfo } from "@/types/match";
 import { apiFetch } from "@/lib/api";
+import { fetchInProgressMatches } from "@/lib/matches";
 import {
   fetchTodayMatchSessions,
   isSessionParticipant,
@@ -32,9 +33,9 @@ export interface LiveSessionState {
   isParticipant: boolean;
   /** liveSession의 모든 경기(GET /api/match-sessions/:id/matches) */
   matches: MatchInfo[];
-  /** matches 중 status "created" */
+  /** 세션과 상관없는 모든 진행 중 경기(GET /api/matches/in-progress) */
   inProgressMatches: MatchInfo[];
-  /** inProgressMatches 중 내가 든 경기 */
+  /** inProgressMatches 중 내가 든 경기. 세션 밖 경기일 수 있다 */
   myInProgressMatch: MatchInfo | null;
   reload: () => Promise<void>;
 }
@@ -115,6 +116,7 @@ export const useLiveSessionState = (
   const [liveSession, setLiveSession] =
     useState<MatchSessionDetailInfo | null>(null);
   const [matches, setMatches] = useState<MatchInfo[]>([]);
+  const [inProgressMatches, setInProgressMatches] = useState<MatchInfo[]>([]);
   /** 마지막으로 받은 오늘 세션. 다음 경계 시각 계산용 */
   const [todaySessions, setTodaySessions] = useState<MatchSessionDetailInfo[]>(
     [],
@@ -128,13 +130,17 @@ export const useLiveSessionState = (
     if (!playerId) {
       setLiveSession(null);
       setMatches([]);
+      setInProgressMatches([]);
       setTodaySessions([]);
       setStatus("ready");
       return;
     }
 
     try {
-      const today = await fetchTodayMatchSessions();
+      const [today, nextInProgressMatches] = await Promise.all([
+        fetchTodayMatchSessions(),
+        fetchInProgressMatches(),
+      ]);
       const nextLiveSession = pickLiveSession(today.sessions);
       const nextMatches = nextLiveSession
         ? await fetchSessionMatches(nextLiveSession.id)
@@ -143,6 +149,7 @@ export const useLiveSessionState = (
 
       setLiveSession(nextLiveSession);
       setMatches(nextMatches);
+      setInProgressMatches(nextInProgressMatches);
       setTodaySessions(today.sessions);
       setStatus("ready");
     } catch {
@@ -190,9 +197,6 @@ export const useLiveSessionState = (
   }, [playerId, reload, todaySessions]);
 
   return useMemo(() => {
-    const inProgressMatches = matches.filter(
-      (match) => match.status === "created",
-    );
     const myInProgressMatch = playerId
       ? (inProgressMatches.find((match) =>
           match.teams.some((team) =>
@@ -210,7 +214,7 @@ export const useLiveSessionState = (
       myInProgressMatch,
       reload,
     };
-  }, [liveSession, matches, playerId, reload, status]);
+  }, [inProgressMatches, liveSession, matches, playerId, reload, status]);
 };
 
 export const LiveSessionProvider: React.FC<{
