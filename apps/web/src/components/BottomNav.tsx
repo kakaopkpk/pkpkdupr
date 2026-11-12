@@ -207,9 +207,6 @@ const BottomNav: React.FC = () => {
   const globalScreenSequenceRef = useRef(0);
   const pushScreenStack = usePushScreenStackState();
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
-  const depthScrollContainersRef = useRef(
-    new Map<string, HTMLDivElement>(),
-  );
   const selectedTabRef = useRef<TabKey>(selectedTab);
   const depthEntriesRef = useRef<Record<TabKey, TabDepthEntry[]>>(
     emptyDepthEntries(),
@@ -259,40 +256,15 @@ const BottomNav: React.FC = () => {
     return `${tabKey}:${activeDepth?.id ?? "root"}`;
   }, []);
 
+  // 화면 이동(PushScreen)은 자기 스크롤 영역을 따로 가지므로 셸은 탭 스크롤 영역만 다룬다
   const getActiveScrollContainer = useCallback(
-    (tabKey = selectedTabRef.current) => {
-      const tabDepthStack = depthEntriesRef.current[tabKey];
-      const activeDepth = tabDepthStack[tabDepthStack.length - 1];
-
-      if (activeDepth) {
-        const depthScrollContainer = depthScrollContainersRef.current.get(
-          `${tabKey}:${activeDepth.id}`,
-        );
-        if (depthScrollContainer) return depthScrollContainer;
-      }
-
-      return scrollContainerRef.current;
-    },
+    () => scrollContainerRef.current,
     [],
   );
 
   const getScrollTop = useCallback(
     () => getActiveScrollContainer()?.scrollTop ?? 0,
     [getActiveScrollContainer],
-  );
-
-  const registerScrollContainer = useCallback(
-    (tabKey: TabKey, depthId: string, element: HTMLDivElement | null) => {
-      const key = `${tabKey}:${depthId}`;
-
-      if (element) {
-        depthScrollContainersRef.current.set(key, element);
-        return;
-      }
-
-      depthScrollContainersRef.current.delete(key);
-    },
-    [],
   );
 
   const saveScrollPosition = useCallback(
@@ -309,7 +281,7 @@ const BottomNav: React.FC = () => {
       window.requestAnimationFrame(() => {
         if (selectedTabRef.current !== tabKey) return;
 
-        const scrollContainer = getActiveScrollContainer(tabKey);
+        const scrollContainer = getActiveScrollContainer();
         if (!scrollContainer) return;
 
         scrollContainer.scrollTop =
@@ -1074,7 +1046,6 @@ const BottomNav: React.FC = () => {
       restoreScrollTop,
       scrollToTop,
       getScrollTop,
-      registerScrollContainer,
       registerPullToRefresh,
     }),
     [
@@ -1083,7 +1054,6 @@ const BottomNav: React.FC = () => {
       getScrollTop,
       pushDepth,
       requestCloseTopDepth,
-      registerScrollContainer,
       registerPullToRefresh,
       restoreScrollTop,
       saveScrollPosition,
@@ -1292,7 +1262,7 @@ const BottomNav: React.FC = () => {
                         isGlobalMenuVisible ? "z-[60]" : "z-40"
                       }`}
                     >
-                      <div className="pointer-events-auto">
+                      <div className="pointer-events-auto relative">
                         <PlusMenu
                           isOpen={isGlobalMenuVisible}
                           isDisabled={!isOnline}
@@ -1307,6 +1277,10 @@ const BottomNav: React.FC = () => {
                           onCreateSession={() =>
                             closeGlobalMenu(openCreateSession)
                           }
+                        />
+                        <PushScreenCoverDim
+                          isCovered={isShellCovered}
+                          className="rounded-full"
                         />
                       </div>
                     </div>

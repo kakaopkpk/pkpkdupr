@@ -18,14 +18,17 @@ import {
   usePullToRefresh,
 } from "@/hooks/usePullToRefresh";
 
+// JS 타이머(닫힘 후 언마운트·transform 해제)용 시간. PUSH_SCREEN_MOTION_CLASS의 duration과 같아야 한다
 const TRANSITION_MS = 320;
 // 쌓인 순서만큼 레이어를 올리되, 화면 위 바텀시트(GLOBAL_LAYER.sheet)보다는 아래에 머문다
 const MAX_STACK_OFFSET = 20;
 const COVERED_TRANSFORM = "translateX(-30%)";
 
-/** 화면 이동과 뒤 화면 밀림에 같이 쓰는 움직임. 끝으로 갈수록 부드럽게 멈춘다 */
-export const PUSH_SCREEN_TRANSITION_CLASS =
-  "transition-transform duration-[320ms] ease-[cubic-bezier(0.32,0.72,0,1)] motion-reduce:transition-none";
+/** 화면 이동·뒤 화면 밀림·어두워짐이 함께 쓰는 시간과 곡선. 끝으로 갈수록 부드럽게 멈춘다 */
+const PUSH_SCREEN_MOTION_CLASS =
+  "duration-[320ms] ease-[cubic-bezier(0.32,0.72,0,1)] motion-reduce:transition-none";
+
+export const PUSH_SCREEN_TRANSITION_CLASS = `transition-transform ${PUSH_SCREEN_MOTION_CLASS}`;
 
 const getTransitionMs = () =>
   typeof window !== "undefined" &&
@@ -133,7 +136,8 @@ export const PushScreenCoverDim: React.FC<{
   <div
     aria-hidden="true"
     className={cx(
-      "pointer-events-none absolute inset-0 bg-[rgba(15,23,42,0.15)] transition-opacity duration-[320ms] ease-[cubic-bezier(0.32,0.72,0,1)] motion-reduce:transition-none",
+      "pointer-events-none absolute inset-0 bg-[rgba(15,23,42,0.15)] transition-opacity",
+      PUSH_SCREEN_MOTION_CLASS,
       isCovered ? "opacity-100" : "opacity-0",
       className,
     )}
@@ -169,7 +173,7 @@ export interface PushScreenProps {
   ariaLabel: string;
   title: React.ReactNode;
   onBack: () => void;
-  /** 헤더 오른쪽 슬롯(예: 경기 상세의 "삭제") */
+  /** 헤더 오른쪽 슬롯(텍스트 버튼 등) */
   headerRight?: React.ReactNode;
   /** 탭바 자리의 하단 고정 바 내용. 없으면 바를 그리지 않는다 */
   actions?: React.ReactNode;
