@@ -136,6 +136,28 @@ export const getRatingAt = ({
   return currentRating;
 };
 
+/**
+ * 세션 리포트용 세션 전 복식 평점. 세션 전에 NR이던 회원(첫 복식 평점 이벤트가 세션 중)은
+ * 그 첫 경기 완료 로그의 시작값(기본 3.0)을 세션 전 평점으로 본다.
+ * 세션 후에도 NR(첫 복식 이벤트가 세션 이후)이거나 첫 복식 이벤트가 경기 완료가 아니면 null이다.
+ */
+const getSessionRatingBefore = (
+  context: RankingContext,
+  playerId: string,
+  before: RankingPoint,
+  ratingAfter: number | null,
+): number | null => {
+  const ratingBefore = getPlayerRatingAt(context, playerId, "doubles", before);
+  if (ratingBefore != null || ratingAfter == null) return ratingBefore;
+
+  const firstDoublesLog = (context.logsByPlayerId.get(playerId) ?? []).find(
+    (log) => touchesCategory(log, "doubles", context.categoryByMatchId),
+  );
+  return firstDoublesLog?.source === "match_completed"
+    ? firstDoublesLog.previousRating.doubles
+    : null;
+};
+
 export const createRankingContext = (
   players: RankingSourcePlayer[],
   logs: PlayerRatingChangeLog[],
@@ -503,17 +525,17 @@ export const buildSessionReport = ({
     .flatMap(([playerId, stats]): SessionPlayerReport[] => {
       const player = context.playersById.get(playerId);
       if (!player) return [];
-      const ratingBefore = getPlayerRatingAt(
-        context,
-        playerId,
-        "doubles",
-        before,
-      );
       const ratingAfter = getPlayerRatingAt(
         context,
         playerId,
         "doubles",
         after,
+      );
+      const ratingBefore = getSessionRatingBefore(
+        context,
+        playerId,
+        before,
+        ratingAfter,
       );
       return [
         {

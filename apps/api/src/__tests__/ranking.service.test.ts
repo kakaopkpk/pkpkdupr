@@ -452,6 +452,68 @@ describe("buildSessionReport", () => {
     expect(report?.topRiser).toBeNull();
   });
 
+  it("세션 전 NR이던 회원은 첫 경기 완료 로그의 시작값(3.0)을 세션 전 평점으로 보고 topRiser가 되며 rankBefore는 null이다", () => {
+    const nrSession = makeSession("Ssessio2", at("2026-11-09T09:00:00Z"));
+    const nrPlayers = [
+      makePlayer("Palice01", "alice", 3.55),
+      makePlayer("Pbob0001", "bob", 3.45),
+      makePlayer("Perin001", "erin", 3.12),
+      makePlayer("Pnr00001", "nr", null),
+      // 이 세션에서는 단식만 하고 첫 복식은 세션 이후라 세션 리포트에서는 복식 NR이다
+      makePlayer("Psolo001", "solo", null, {
+        duprRating: { singles: 3.1, doubles: 3.06 },
+      }),
+    ];
+    const nrMatches = [
+      makeMatch(
+        "Mmatch01",
+        first,
+        [
+          ["Perin001", "Palice01"],
+          ["Pbob0001", "Pnr00001"],
+        ],
+        { sessionId: nrSession.id },
+      ),
+      makeMatch("Mmatch02", second, [["Psolo001"], ["Pbob0001"]], {
+        type: "unrestricted-singles",
+        sessionId: nrSession.id,
+      }),
+      makeMatch("Mlater01", at("2026-11-10T10:00:00Z"), [
+        ["Psolo001", "Pnr00001"],
+        ["Pother01", "Pother02"],
+      ]),
+    ];
+    const nrLogs = [
+      makeLog("Psolo001", "Mlater01", at("2026-11-10T10:00:00Z"), 3, 3.06),
+      makeLog("Perin001", "Mmatch01", first, 3, 3.12),
+      makeLog("Palice01", "Mmatch01", first, 3.5, 3.55),
+      makeLog("Pbob0001", "Mmatch01", first, 3.5, 3.45),
+    ];
+
+    const report = buildSessionReport({
+      context: createRankingContext(nrPlayers, nrLogs, nrMatches),
+      session: nrSession,
+    });
+
+    expect(report?.topRiser?.player.username).toBe("erin");
+    expect(
+      report?.players.map((entry) => [
+        entry.player.username,
+        entry.ratingBefore,
+        entry.ratingAfter,
+        entry.ratingDelta,
+        entry.rankBefore,
+        entry.rankAfter,
+      ]),
+    ).toEqual([
+      ["erin", 3, 3.12, 0.12, null, 3],
+      ["alice", 3.5, 3.55, 0.05, 1, 1],
+      ["nr", null, null, 0, null, null],
+      ["solo", null, null, 0, null, null],
+      ["bob", 3.5, 3.45, -0.05, 2, 2],
+    ]);
+  });
+
   it("완료 경기가 없는 세션은 null이다", () => {
     expect(
       buildSessionReport({

@@ -73,6 +73,7 @@ import type {
   MeResponse,
 } from "@pkpkdupr/shared/auth";
 import { assertRequiredEnv } from "./config/env";
+import { isDevMockDataEnabled } from "@pkpkdupr/db";
 import { initDatabase } from "./db";
 import {
   MatchRepository,
@@ -2599,10 +2600,26 @@ app.patch(
 
 export { app };
 
+/** dev mock 경기는 평점 변경 로그 없이 들어오므로 시딩 직후 관리자 재계산과 같은 경로로 로그를 채운다 */
+const recalculateDevMockRatings = async () => {
+  const { matches } = await matchRepository.findAll(0, 10000);
+  await authService.recalculateDuprRatings(
+    matches.filter((match) => match.status === "completed"),
+    {
+      source: "manual_recalculation",
+      sourceLogId: `dev-mock-recalculation-${Date.now()}-${randomUUID()}`,
+      perMatchLogs: true,
+    },
+  );
+};
+
 export const startServer = async () => {
   assertRequiredEnv();
   await initDatabase();
   await authService.seedDevAuthAccounts();
+  if (isDevMockDataEnabled()) {
+    await recalculateDevMockRatings();
+  }
   return (app as any).listen(PORT, () => {
     console.log(`🚀 API Server running on http://localhost:${PORT}`);
   });
