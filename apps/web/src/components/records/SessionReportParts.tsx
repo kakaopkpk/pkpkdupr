@@ -10,7 +10,7 @@ import type { MatchSessionHistoryInfo } from "@/lib/rankings";
 
 const WEEKDAYS = ["일", "월", "화", "수", "목", "금", "토"] as const;
 
-/** dateKey("2026-11-13")를 칩 라벨 "11/13 목"으로 바꾼다 */
+/** dateKey("2026-11-12")를 칩 라벨 "11/12 목"으로 바꾼다 */
 export const formatSessionChipLabel = (dateKey: string) => {
   const [year, month, day] = dateKey.split("-").map(Number);
   const weekday = WEEKDAYS[new Date(Date.UTC(year, month - 1, day)).getUTCDay()];
@@ -32,12 +32,13 @@ export const SessionChips: React.FC<{
   >
     {sessions.map((session) => {
       const isSelected = session.id === selectedId;
+      const label = formatSessionChipLabel(session.dateKey);
       return (
         <button
           key={session.id}
           type="button"
           aria-pressed={isSelected}
-          aria-label={session.name}
+          aria-label={`${label} ${session.name}`}
           onClick={() => {
             if (!isSelected) onSelect(session.id);
           }}
@@ -48,7 +49,7 @@ export const SessionChips: React.FC<{
               : "bg-white font-bold text-pk-sub",
           )}
         >
-          {formatSessionChipLabel(session.dateKey)}
+          {label}
         </button>
       );
     })}
