@@ -624,6 +624,8 @@ const resolveSessionForStartedMatch = async (
   return await resolveSessionForNewMatch(undefined, now);
 };
 
+type PreparedMatchLineup = Awaited<ReturnType<typeof prepareMatchLineup>>;
+
 /**
  * 점수 없는 진행 중 경기를 만든다. 세션이 있으면 선수를 참여자로 넣는다.
  * 선수 중 누구든 이미 진행 중 경기에 있으면 아무것도 만들지 않고 409로 막는다.
@@ -637,7 +639,7 @@ const startInProgressMatch = async ({
   now,
 }: {
   requesterPlayerId: string;
-  lineup: Awaited<ReturnType<typeof prepareMatchLineup>>;
+  lineup: PreparedMatchLineup;
   session: ManagedMatchSession | undefined;
   location: string;
   courtName?: string;
@@ -669,15 +671,41 @@ const startInProgressMatch = async ({
     now,
   );
   if ("conflictPlayerId" in result) {
-    const busyPlayer = lineup.teams
-      .flatMap((team) => team.players)
-      .find((player) => player.id === result.conflictPlayerId);
-    throw new MatchRecordRequestError(
-      `${busyPlayer?.username ?? result.conflictPlayerId}님이 다른 경기 중이에요`,
-      409,
-    );
+    throw toPlayerBusyError(lineup, result.conflictPlayerId);
   }
   return result.match;
+};
+
+const toPlayerBusyError = (
+  lineup: PreparedMatchLineup,
+  busyPlayerId: string,
+): MatchRecordRequestError => {
+  const busyPlayer = lineup.teams
+    .flatMap((team) => team.players)
+    .find((player) => player.id === busyPlayerId);
+  return new MatchRecordRequestError(
+    `${busyPlayer?.username ?? busyPlayerId}님이 다른 경기 중이에요`,
+    409,
+  );
+};
+
+/**
+ * 세션 find-or-create 같은 쓰기 전에 진행 중 경기에 있는 선수를 미리 막는다.
+ * 동시 요청의 최종 판정은 createInProgress의 잠금 트랜잭션이 한다.
+ */
+const assertPlayersNotInProgress = async (
+  lineup: PreparedMatchLineup,
+  now: Date,
+): Promise<void> => {
+  const inProgressPlayerIds = new Set(
+    await matchRepository.findInProgressPlayerIds(now),
+  );
+  const busyPlayerId = getTeamPlayerIds(lineup.teams).find((playerId) =>
+    inProgressPlayerIds.has(playerId),
+  );
+  if (busyPlayerId) {
+    throw toPlayerBusyError(lineup, busyPlayerId);
+  }
 };
 
 /** 공개 세션 API 요청 오류. status로 400·403·404·409를 구분해 응답한다 */
@@ -1508,6 +1536,7 @@ app.post("/api/matches/start", async (req, res) => {
     const now = new Date();
     await matchRepository.cleanupExpired(now);
     const lineup = await prepareMatchLineup(type, teams, decoded.playerId);
+    await assertPlayersNotInProgress(lineup, now);
     const session = await resolveSessionForStartedMatch(requestedSessionId, now);
     const match = await startInProgressMatch({
       requesterPlayerId: decoded.playerId,

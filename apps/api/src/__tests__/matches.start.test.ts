@@ -76,6 +76,9 @@ describe("POST /api/matches/start", () => {
   let findOrCreateRegularSession: MockInstance<
     MatchRepository["findOrCreateRegularSession"]
   >;
+  let findInProgressPlayerIds: MockInstance<
+    MatchRepository["findInProgressPlayerIds"]
+  >;
 
   const startMatch = (body: object) =>
     request(app)
@@ -109,6 +112,9 @@ describe("POST /api/matches/start", () => {
     findOrCreateRegularSession = vi
       .spyOn(MatchRepository.prototype, "findOrCreateRegularSession")
       .mockResolvedValue(regularSession);
+    findInProgressPlayerIds = vi
+      .spyOn(MatchRepository.prototype, "findInProgressPlayerIds")
+      .mockResolvedValue([]);
     createInProgress = vi
       .spyOn(MatchRepository.prototype, "createInProgress")
       .mockImplementation(async (input) => ({
@@ -214,6 +220,18 @@ describe("POST /api/matches/start", () => {
 
     expect(response.status).toBe(409);
     expect(response.body).toEqual({ error: "pplayerb님이 다른 경기 중이에요" });
+  });
+
+  it("진행 중인 선수가 있으면 정기 세션을 만들기 전에 409로 막는다", async () => {
+    vi.setSystemTime(thursdayEvening);
+    findInProgressPlayerIds.mockResolvedValue([playerC.id, playerB.id]);
+
+    const response = await startMatch({ teams: doublesTeams });
+
+    expect(response.status).toBe(409);
+    expect(response.body).toEqual({ error: "pplayerb님이 다른 경기 중이에요" });
+    expect(findOrCreateRegularSession).not.toHaveBeenCalled();
+    expect(createInProgress).not.toHaveBeenCalled();
   });
 
   it("두 팀 구성이 없으면 400을 반환한다", async () => {
