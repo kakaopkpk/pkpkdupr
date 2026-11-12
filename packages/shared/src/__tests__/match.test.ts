@@ -1,12 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
-  canEditMatchRecord,
   getMatchSessionStatus,
+  isMatchRecordEditable,
   isWithinMatchEditWindow,
   MATCH_EDIT_WINDOW_MS,
   type Match,
 } from "../match";
-import type { Player } from "../player";
 
 describe("getMatchSessionStatus", () => {
   it("모든 매치가 완료일 때만 완료 상태를 반환한다", () => {
@@ -46,22 +45,55 @@ describe("isWithinMatchEditWindow", () => {
   });
 });
 
-describe("canEditMatchRecord", () => {
-  const player = (id: string) => ({ id }) as Player;
+describe("isMatchRecordEditable", () => {
+  const startsAt = new Date("2026-07-31T10:00:00.000Z");
+  const now = new Date("2026-07-31T12:00:00.000Z");
   const match = {
-    creatorPlayerId: "creator",
-    teams: [
-      { id: "a", name: "A", players: [player("p1"), player("p2")] },
-      { id: "b", name: "B", players: [player("p3"), player("p4")] },
-    ],
-  } as Pick<Match, "creatorPlayerId" | "teams">;
+    status: "completed",
+    scores: [{ scoreA: 11, scoreB: 5 }],
+    matchStartsAt: startsAt,
+  } as Pick<Match, "status" | "scores" | "matchStartsAt">;
 
-  it("참가자나 생성자면 true를 반환한다", () => {
-    expect(canEditMatchRecord(match, "p3")).toBe(true);
-    expect(canEditMatchRecord(match, "creator")).toBe(true);
+  it("완료 경기와 점수 없는 진행 중 경기는 true를 반환한다", () => {
+    expect(isMatchRecordEditable(match, now)).toBe(true);
+    expect(
+      isMatchRecordEditable({ ...match, status: "created", scores: [] }, now),
+    ).toBe(true);
   });
 
-  it("참가자도 생성자도 아니면 false를 반환한다", () => {
-    expect(canEditMatchRecord(match, "outsider")).toBe(false);
+  it("취소된 경기면 false를 반환한다", () => {
+    expect(isMatchRecordEditable({ ...match, status: "cancelled" }, now)).toBe(
+      false,
+    );
+  });
+
+  it("점수가 여러 개인 과거 2선승 기록이면 false를 반환한다", () => {
+    expect(
+      isMatchRecordEditable(
+        {
+          ...match,
+          scores: [
+            { scoreA: 11, scoreB: 5 },
+            { scoreA: 7, scoreB: 11 },
+          ],
+        },
+        now,
+      ),
+    ).toBe(false);
+  });
+
+  it("시작 후 정확히 24시간이면 true, +1ms면 false를 반환한다", () => {
+    expect(
+      isMatchRecordEditable(
+        match,
+        new Date(startsAt.getTime() + MATCH_EDIT_WINDOW_MS),
+      ),
+    ).toBe(true);
+    expect(
+      isMatchRecordEditable(
+        match,
+        new Date(startsAt.getTime() + MATCH_EDIT_WINDOW_MS + 1),
+      ),
+    ).toBe(false);
   });
 });

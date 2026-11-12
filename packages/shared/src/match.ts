@@ -79,7 +79,7 @@ export const MATCH_SCORE_COUNT = 1;
 
 export type MatchStatus = "created" | "completed" | "cancelled";
 
-/** 참가자·생성자가 기록을 고칠 수 있는 기간(경기 시작 시각 기준) */
+/** 회원이 기록을 고칠 수 있는 기간(경기 시작 시각 기준) */
 export const MATCH_EDIT_WINDOW_MS = 24 * 60 * 60 * 1000;
 
 /** 경기 시작 후 24시간 이내(시작 전 포함)면 true */
@@ -87,16 +87,6 @@ export const isWithinMatchEditWindow = (
   matchStartsAt: Date,
   now: Date = new Date(),
 ): boolean => now.getTime() - matchStartsAt.getTime() <= MATCH_EDIT_WINDOW_MS;
-
-/** 기록을 고칠 수 있는 사람: 경기 참가자 또는 경기 생성자 */
-export const canEditMatchRecord = (
-  match: Pick<Match, "creatorPlayerId" | "teams">,
-  playerId: string,
-): boolean =>
-  match.creatorPlayerId === playerId ||
-  match.teams.some((team) =>
-    team.players.some((player) => player.id === playerId),
-  );
 
 /** 점수가 아직 없는 진행 중 경기(status "created")면 true */
 export const isMatchInProgress = (match: Pick<Match, "status">): boolean =>
@@ -171,9 +161,21 @@ export const validateMatchScores = (scores: MatchScore[]) => {
   }
 };
 
-/** 점수가 여러 개인 과거 2선승 기록이면 true. 점수를 1개로 바꾸면 승패가 달라질 수 있어 참가자 수정을 막는다 */
+/** 점수가 여러 개인 과거 2선승 기록이면 true. 점수를 1개로 바꾸면 승패가 달라질 수 있어 회원 수정을 막는다 */
 export const isMultiGameMatchRecord = (match: Pick<Match, "scores">): boolean =>
   (match.scores?.length ?? 0) > MATCH_SCORE_COUNT;
+
+/**
+ * 점수를 넣거나 고칠 수 있는 경기면 true. 회원 누구나 가능하며
+ * 취소 아님 · 과거 다중 점수 기록 아님 · 시작 후 24시간 이내(isWithinMatchEditWindow)일 때
+ */
+export const isMatchRecordEditable = (
+  match: Pick<Match, "status" | "scores" | "matchStartsAt">,
+  now: Date = new Date(),
+): boolean =>
+  match.status !== "cancelled" &&
+  !isMultiGameMatchRecord(match) &&
+  isWithinMatchEditWindow(match.matchStartsAt, now);
 
 export interface Match {
   id: string;
