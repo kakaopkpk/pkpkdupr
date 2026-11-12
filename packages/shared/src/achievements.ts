@@ -41,162 +41,217 @@ type AchievementMetric =
   | "attendedSessions"
   | "bestSessionMatches";
 
-const ACHIEVEMENT_METRIC_BY_ID: Record<string, AchievementMetric> = {};
-
-const define = (
-  metric: AchievementMetric,
-  definition: AchievementDefinition,
-): AchievementDefinition => {
-  ACHIEVEMENT_METRIC_BY_ID[definition.id] = metric;
-  return definition;
-};
-
-export const ACHIEVEMENTS: readonly AchievementDefinition[] = [
-  define("matches", {
-    id: "matches-1",
-    category: "matches",
-    name: "첫 경기",
-    condition: "경기 1개 완료",
-    badgeNumber: null,
-    target: 1,
-  }),
-  define("matches", {
-    id: "matches-10",
-    category: "matches",
-    name: "10경기",
-    condition: "경기 10개 완료",
-    badgeNumber: 10,
-    target: 10,
-  }),
-  define("matches", {
-    id: "matches-50",
-    category: "matches",
-    name: "50경기",
-    condition: "경기 50개 완료",
-    badgeNumber: 50,
-    target: 50,
-  }),
-  define("matches", {
-    id: "matches-100",
-    category: "matches",
-    name: "100경기",
-    condition: "경기 100개 완료",
-    badgeNumber: 100,
-    target: 100,
-  }),
-  define("matches", {
-    id: "matches-300",
-    category: "matches",
-    name: "300경기",
-    condition: "경기 300개 완료",
-    badgeNumber: 300,
-    target: 300,
-  }),
-  define("wins", {
-    id: "wins-1",
-    category: "wins",
-    name: "첫 승",
-    condition: "처음 이긴 경기",
-    badgeNumber: null,
-    target: 1,
-  }),
-  define("wins", {
-    id: "wins-10",
-    category: "wins",
-    name: "10승",
-    condition: "이긴 경기 10개",
-    badgeNumber: 10,
-    target: 10,
-  }),
-  define("wins", {
-    id: "wins-50",
-    category: "wins",
-    name: "50승",
-    condition: "이긴 경기 50개",
-    badgeNumber: 50,
-    target: 50,
-  }),
-  define("wins", {
-    id: "wins-100",
-    category: "wins",
-    name: "100승",
-    condition: "이긴 경기 100개",
-    badgeNumber: 100,
-    target: 100,
-  }),
-  define("bestStreak", {
-    id: "streak-3",
-    category: "streak",
-    name: "3연승",
-    condition: "세 경기 연달아 승리",
-    badgeNumber: 3,
-    target: 3,
-  }),
-  define("bestStreak", {
-    id: "streak-5",
-    category: "streak",
-    name: "5연승",
-    condition: "다섯 경기 연달아 승리",
-    badgeNumber: 5,
-    target: 5,
-  }),
-  define("bestStreak", {
-    id: "streak-10",
-    category: "streak",
-    name: "10연승",
-    condition: "열 경기 연달아 승리",
-    badgeNumber: 10,
-    target: 10,
-  }),
-  define("perfectWins", {
-    id: "perfect-win",
-    category: "special",
-    name: "퍼펙트 승리",
-    condition: "1점도 주지 않고 승리",
-    badgeNumber: null,
-    target: 1,
-  }),
-  define("hardWonWins", {
-    id: "hard-won-10",
-    category: "special",
-    name: "힘겹게 쟁취한 승리",
-    condition: "양 팀 10점 이상 경기에서 10번 승리",
-    badgeNumber: 10,
-    target: 10,
-  }),
-  define("bestPartnerMatches", {
-    id: "partner-20",
-    category: "special",
-    name: "단짝",
-    condition: "같은 파트너와 복식 20경기",
-    badgeNumber: 20,
-    target: 20,
-  }),
-  define("attendedSessions", {
-    id: "attendance-10",
-    category: "session",
-    name: "개근 10회",
-    condition: "경기를 한 세션 10번",
-    badgeNumber: 10,
-    target: 10,
-  }),
-  define("attendedSessions", {
-    id: "attendance-30",
-    category: "session",
-    name: "개근 30회",
-    condition: "경기를 한 세션 30번",
-    badgeNumber: 30,
-    target: 30,
-  }),
-  define("bestSessionMatches", {
-    id: "iron-8",
-    category: "session",
-    name: "철인",
-    condition: "한 세션에서 8경기",
-    badgeNumber: 8,
-    target: 8,
-  }),
+/** 업적 정의와 진행도 지표를 한 행에 함께 둔 표(표 순서) */
+const ACHIEVEMENT_TABLE: readonly {
+  metric: AchievementMetric;
+  definition: AchievementDefinition;
+}[] = [
+  {
+    metric: "matches",
+    definition: {
+      id: "matches-1",
+      category: "matches",
+      name: "첫 경기",
+      condition: "경기 1개 완료",
+      badgeNumber: null,
+      target: 1,
+    },
+  },
+  {
+    metric: "matches",
+    definition: {
+      id: "matches-10",
+      category: "matches",
+      name: "10경기",
+      condition: "경기 10개 완료",
+      badgeNumber: 10,
+      target: 10,
+    },
+  },
+  {
+    metric: "matches",
+    definition: {
+      id: "matches-50",
+      category: "matches",
+      name: "50경기",
+      condition: "경기 50개 완료",
+      badgeNumber: 50,
+      target: 50,
+    },
+  },
+  {
+    metric: "matches",
+    definition: {
+      id: "matches-100",
+      category: "matches",
+      name: "100경기",
+      condition: "경기 100개 완료",
+      badgeNumber: 100,
+      target: 100,
+    },
+  },
+  {
+    metric: "matches",
+    definition: {
+      id: "matches-300",
+      category: "matches",
+      name: "300경기",
+      condition: "경기 300개 완료",
+      badgeNumber: 300,
+      target: 300,
+    },
+  },
+  {
+    metric: "wins",
+    definition: {
+      id: "wins-1",
+      category: "wins",
+      name: "첫 승",
+      condition: "처음 이긴 경기",
+      badgeNumber: null,
+      target: 1,
+    },
+  },
+  {
+    metric: "wins",
+    definition: {
+      id: "wins-10",
+      category: "wins",
+      name: "10승",
+      condition: "이긴 경기 10개",
+      badgeNumber: 10,
+      target: 10,
+    },
+  },
+  {
+    metric: "wins",
+    definition: {
+      id: "wins-50",
+      category: "wins",
+      name: "50승",
+      condition: "이긴 경기 50개",
+      badgeNumber: 50,
+      target: 50,
+    },
+  },
+  {
+    metric: "wins",
+    definition: {
+      id: "wins-100",
+      category: "wins",
+      name: "100승",
+      condition: "이긴 경기 100개",
+      badgeNumber: 100,
+      target: 100,
+    },
+  },
+  {
+    metric: "bestStreak",
+    definition: {
+      id: "streak-3",
+      category: "streak",
+      name: "3연승",
+      condition: "세 경기 연달아 승리",
+      badgeNumber: 3,
+      target: 3,
+    },
+  },
+  {
+    metric: "bestStreak",
+    definition: {
+      id: "streak-5",
+      category: "streak",
+      name: "5연승",
+      condition: "다섯 경기 연달아 승리",
+      badgeNumber: 5,
+      target: 5,
+    },
+  },
+  {
+    metric: "bestStreak",
+    definition: {
+      id: "streak-10",
+      category: "streak",
+      name: "10연승",
+      condition: "열 경기 연달아 승리",
+      badgeNumber: 10,
+      target: 10,
+    },
+  },
+  {
+    metric: "perfectWins",
+    definition: {
+      id: "perfect-win",
+      category: "special",
+      name: "퍼펙트 승리",
+      condition: "1점도 주지 않고 승리",
+      badgeNumber: null,
+      target: 1,
+    },
+  },
+  {
+    metric: "hardWonWins",
+    definition: {
+      id: "hard-won-10",
+      category: "special",
+      name: "힘겹게 쟁취한 승리",
+      condition: "양 팀 10점 이상 경기에서 10번 승리",
+      badgeNumber: 10,
+      target: 10,
+    },
+  },
+  {
+    metric: "bestPartnerMatches",
+    definition: {
+      id: "partner-20",
+      category: "special",
+      name: "단짝",
+      condition: "같은 파트너와 복식 20경기",
+      badgeNumber: 20,
+      target: 20,
+    },
+  },
+  {
+    metric: "attendedSessions",
+    definition: {
+      id: "attendance-10",
+      category: "session",
+      name: "개근 10회",
+      condition: "경기를 한 세션 10번",
+      badgeNumber: 10,
+      target: 10,
+    },
+  },
+  {
+    metric: "attendedSessions",
+    definition: {
+      id: "attendance-30",
+      category: "session",
+      name: "개근 30회",
+      condition: "경기를 한 세션 30번",
+      badgeNumber: 30,
+      target: 30,
+    },
+  },
+  {
+    metric: "bestSessionMatches",
+    definition: {
+      id: "iron-8",
+      category: "session",
+      name: "철인",
+      condition: "한 세션에서 8경기",
+      badgeNumber: 8,
+      target: 8,
+    },
+  },
 ];
+
+export const ACHIEVEMENTS: readonly AchievementDefinition[] =
+  ACHIEVEMENT_TABLE.map((row) => row.definition);
+
+const ACHIEVEMENT_METRIC_BY_ID = new Map<string, AchievementMetric>(
+  ACHIEVEMENT_TABLE.map((row) => [row.definition.id, row.metric]),
+);
 
 export const ACHIEVEMENT_CATEGORY_LABEL: Record<AchievementCategory, string> = {
   matches: "경기 수",
@@ -298,7 +353,7 @@ const isHardFought = (scores: readonly MatchScore[]) =>
  * 한 회원의 업적 18개 진행 상태(ACHIEVEMENTS 순서).
  * 완료 경기만(진행 중·취소 제외) 완료 시각 순으로 훑어, 진행도가 목표에 처음 닿은
  * 경기를 받게 된 경기로, 그 경기 완료 시각을 받은 날로 정한다.
- * 승패가 갈리지 않은 경기는 경기 수·세션에만 세고 연승은 끊는다.
+ * 승패가 갈리지 않은 경기는 승리에는 세지 않고 연승은 끊는다. 경기 수·단짝·세션 진행도에는 센다.
  */
 export function computeAchievements(
   playerId: string,
@@ -371,7 +426,7 @@ export function computeAchievements(
 
     for (const item of progress) {
       if (item.earned) continue;
-      if (metrics[ACHIEVEMENT_METRIC_BY_ID[item.id]] >= item.target) {
+      if (metrics[ACHIEVEMENT_METRIC_BY_ID.get(item.id)!] >= item.target) {
         item.earned = true;
         item.earnedAt = match.completedAt;
         item.earnedMatchId = match.id;
@@ -380,7 +435,7 @@ export function computeAchievements(
   }
 
   for (const item of progress) {
-    item.current = metrics[ACHIEVEMENT_METRIC_BY_ID[item.id]];
+    item.current = metrics[ACHIEVEMENT_METRIC_BY_ID.get(item.id)!];
   }
   return progress;
 }
