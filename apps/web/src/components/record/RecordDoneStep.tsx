@@ -12,11 +12,10 @@ import { CheckIcon, FooterError } from "./RecordMatchParts";
 
 export interface RecordDoneStepProps {
   match: MatchInfo;
-  /** 진행 중 세션이 있으면 왼쪽 버튼이 "같은 멤버로 바로 시작" */
-  hasLiveSession: boolean;
   isBusy: boolean;
+  /** 버튼 위에 보일 서버 문구(같은 선수가 다른 경기 중이면 409 문구) */
   error: string | null;
-  /** 세션: 같은 팀으로 진행 중 경기 시작. 세션 없음: 같은 선수로 점수 입력 다시 열기 */
+  /** 같은 팀으로 진행 중 경기를 시작한다(세션과 상관없음) */
   onPlayAgain: () => void;
   /** 시트를 닫는다 */
   onDone: () => void;
@@ -24,7 +23,6 @@ export interface RecordDoneStepProps {
 
 export default function RecordDoneStep({
   match,
-  hasLiveSession,
   isBusy,
   error,
   onPlayAgain,
@@ -124,7 +122,7 @@ export default function RecordDoneStep({
             disabled={isBusy}
             onClick={onPlayAgain}
           >
-            {hasLiveSession ? "같은 멤버로 바로 시작" : "같은 멤버로 한 판 더"}
+            같은 멤버로 한 판 더
           </PkButton>
           <PkButton size="lg" fullWidth disabled={isBusy} onClick={onDone}>
             닫기

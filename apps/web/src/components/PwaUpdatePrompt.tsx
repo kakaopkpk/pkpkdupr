@@ -3,7 +3,7 @@ import SystemToast from "@/components/SystemToast";
 import { PkButton } from "@/components/ui/Button";
 import { useAppUpdate } from "@/context/AppUpdateContext";
 import { useAuth } from "@/context/AuthContext";
-import { useIsSaveFailureNoticeVisible } from "@/context/SystemNoticeContext";
+import { useIsSystemNoticeVisible } from "@/context/SystemNoticeContext";
 import { useOnlineStatus } from "@/hooks/useOnlineStatus";
 
 const isStandaloneDisplay = () =>
@@ -27,7 +27,7 @@ const PwaUpdatePrompt: React.FC = () => {
     checkForUpdate,
     applyUpdate,
   } = useAppUpdate();
-  const isSaveFailureVisible = useIsSaveFailureNoticeVisible();
+  const isSystemNoticeVisible = useIsSystemNoticeVisible();
   const lastAutoCheckAtRef = useRef(0);
 
   const isStandalone =
@@ -84,7 +84,7 @@ const PwaUpdatePrompt: React.FC = () => {
     isLoading ||
     !isAuthenticated ||
     !isUpdateAvailable ||
-    isSaveFailureVisible
+    isSystemNoticeVisible
   ) {
     return null;
   }

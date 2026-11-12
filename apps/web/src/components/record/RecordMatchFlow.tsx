@@ -8,8 +8,8 @@ import React, {
 import {
   isMatchRecordEditable,
   type RecordMatchRequest,
+  type StartMatchRequest,
 } from "@pkpkdupr/shared/match";
-import type { StartSessionMatchRequest } from "@pkpkdupr/shared/session";
 import type { MatchInfo } from "@/types/match";
 import type { AvatarPlayer } from "@/components/ui/PlayerAvatar";
 import { useAppNavigation } from "@/context/AppNavigationContext";
@@ -21,16 +21,19 @@ import {
 } from "@/context/TabNavigationContext";
 import { useLayerDepth } from "@/hooks/useLayerDepth";
 import { usePlayers } from "@/hooks/usePlayers";
+import { useStartedMatchToast } from "@/hooks/useStartedMatchToast";
 import { apiFetch } from "@/lib/api";
-import { startSessionMatch } from "@/lib/matchSessions";
+import {
+  getMatchTeamPlayerIds,
+  startMatch,
+  toTeamRequests,
+} from "@/lib/matches";
 import PickPlayersStep from "./PickPlayersStep";
 import RecordDoneStep from "./RecordDoneStep";
 import {
-  EMPTY_SCORE,
   getErrorMessage,
   getSlotTeams,
   isNetworkError,
-  slotsFromTeams,
   toDecidedScore,
   type RecordSlots,
   type ScoreDraft,
@@ -40,7 +43,6 @@ import ScoreStep from "./ScoreStep";
 const SAVE_ERROR_FALLBACK = "기록을 저장하지 못했어요.";
 const START_ERROR_FALLBACK = "경기를 시작하지 못했어요.";
 const NOT_EDITABLE_MESSAGE = "고칠 수 없는 경기예요";
-const TEAM_NAMES = ["Team A", "Team B"] as const;
 /** 점수 단계에서 기기 뒤로가기로 플레이어 선택에 돌아가도록 쌓는 깊이 */
 export const SCORE_STEP_DEPTH_ID = "global-record-match-score-step";
 
@@ -63,13 +65,6 @@ export interface RecordMatchFlowProps {
 }
 
 type Step = "pick" | "score" | "done";
-
-const toTeamRequests = (
-  teams: [string[], string[]],
-): StartSessionMatchRequest["teams"] => [
-  { name: TEAM_NAMES[0], playerIds: teams[0] },
-  { name: TEAM_NAMES[1], playerIds: teams[1] },
-];
 
 const saveMatch = async (
   editingMatchId: string | null,
@@ -109,6 +104,7 @@ export default function RecordMatchFlow({
   const { notifyDataChanged, selectTab } = useAppNavigation();
   const { liveSession, inProgressMatches } = useLiveSession();
   const { showSaveFailure } = useSystemNotice();
+  const showStartedMatchToast = useStartedMatchToast();
   const { closeDepth } = useTabNavigation();
   const { players, status: playersStatus } = usePlayers();
 
@@ -116,12 +112,8 @@ export default function RecordMatchFlow({
   const [slots, setSlots] = useState(initial.slots);
   const [score, setScore] = useState(initial.score);
   const [location, setLocation] = useState(initial.location);
-  // "한 판 더" 이후에는 수정으로 열었더라도 새 기록이다
-  const [editingMatchId, setEditingMatchId] = useState(
-    initial.editMatch?.id ?? null,
-  );
+  const editingMatchId = initial.editMatch?.id ?? null;
   const [recordedMatch, setRecordedMatch] = useState<MatchInfo | null>(null);
-  const [scrollKey, setScrollKey] = useState(0);
   const [isBusy, setIsBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -137,10 +129,7 @@ export default function RecordMatchFlow({
     [],
   );
 
-  const editMatch =
-    editingMatchId && initial.editMatch?.id === editingMatchId
-      ? initial.editMatch
-      : null;
+  const editMatch = initial.editMatch;
   const [now] = useState(() => new Date());
   const isEditable =
     !editMatch ||
@@ -235,13 +224,18 @@ export default function RecordMatchFlow({
     }
   };
 
-  const startMatch = (teams: [string[], string[]]) => {
-    if (!liveSession || isBusy) return;
-    const sessionId = liveSession.id;
-    const body: StartSessionMatchRequest = { teams: toTeamRequests(teams) };
+  /** 점수 없는 진행 중 경기를 시작하고 홈 탭으로 간다. 세션이 없어도 시작할 수 있다 */
+  const startInProgressMatch = (
+    body: StartMatchRequest,
+    onStarted?: (match: MatchInfo) => void,
+  ) => {
+    if (isBusy) return;
     void attempt(
-      () => startSessionMatch(sessionId, body),
-      goHome,
+      () => startMatch(body),
+      (startedMatch) => {
+        goHome();
+        onStarted?.(startedMatch);
+      },
       START_ERROR_FALLBACK,
     );
   };
@@ -257,6 +251,8 @@ export default function RecordMatchFlow({
       ...(!matchId && liveSession?.kind === "custom"
         ? { sessionId: liveSession.id }
         : {}),
+      // 마지막으로 본 경기와 그사이 다른 회원이 고쳤으면 서버가 409로 막는다
+      ...(editMatch ? { expectedUpdatedAt: editMatch.updatedAt } : {}),
     };
     void attempt(
       () => saveMatch(matchId, body),
@@ -292,28 +288,21 @@ export default function RecordMatchFlow({
   });
 
   if (step === "done" && recordedMatch) {
-    const recordedTeams: [string[], string[]] = [
-      recordedMatch.teams[0].players.map((player) => player.id),
-      recordedMatch.teams[1].players.map((player) => player.id),
-    ];
-
     return (
       <RecordDoneStep
         match={recordedMatch}
-        hasLiveSession={!!liveSession}
         isBusy={isBusy}
         error={error}
-        onPlayAgain={() => {
-          if (liveSession) {
-            startMatch(recordedTeams);
-            return;
-          }
-          setSlots(slotsFromTeams(recordedTeams));
-          setEditingMatchId(null);
-          setScore(EMPTY_SCORE);
-          setScrollKey((key) => key + 1);
-          goToStep("score");
-        }}
+        onPlayAgain={() =>
+          startInProgressMatch(
+            {
+              teams: toTeamRequests(getMatchTeamPlayerIds(recordedMatch)),
+              sessionId: recordedMatch.session?.id,
+              location: recordedMatch.location,
+            },
+            showStartedMatchToast,
+          )
+        }
         onDone={onClose}
       />
     );
@@ -333,7 +322,6 @@ export default function RecordMatchFlow({
           setLocation(nextLocation);
           setError(null);
         }}
-        scrollKey={scrollKey}
         error={isEditable ? error : NOT_EDITABLE_MESSAGE}
         canSave={canSave}
         isSaving={isBusy}
@@ -357,7 +345,7 @@ export default function RecordMatchFlow({
       playerById={playerById}
       participantIds={participantIds}
       busyIds={busyIds}
-      footerMode={liveSession && !editingMatchId ? "session" : "plain"}
+      footerMode={editingMatchId ? "edit" : "new"}
       isBusy={isBusy}
       error={error}
       onCancel={onClose}
@@ -365,7 +353,11 @@ export default function RecordMatchFlow({
         if (slotTeams) goToStep("score");
       }}
       onStartMatch={() => {
-        if (slotTeams) startMatch(slotTeams);
+        if (!slotTeams) return;
+        startInProgressMatch({
+          teams: toTeamRequests(slotTeams),
+          sessionId: liveSession?.id,
+        });
       }}
     />
   );

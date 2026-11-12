@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { getMatchTopLevelType } from "@pkpkdupr/shared/match";
 import { getTeamResultScores, type MatchInfo } from "@/types/match";
 import SkeletonBlock from "@/components/SkeletonBlock";
+import { FooterError } from "@/components/record/RecordMatchParts";
 import { PkButton } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { RatingDelta } from "@/components/ui/Delta";
@@ -284,19 +285,43 @@ export const CompletedMatchDetail: React.FC<CompletedMatchDetailProps> = ({
   </div>
 );
 
-/** 완료 경기 하단 고정 바 내용. 2칸 같은 너비 */
+/** 완료 경기 하단 고정 바 내용. 2칸 같은 너비이며, 한 판 더가 거절되면 버튼 위에 서버 문구를 보인다 */
 export const CompletedMatchActions: React.FC<{
+  isBusy: boolean;
+  error: string | null;
   onEdit: () => void;
   onPlayAgain: () => void;
-}> = ({ onEdit, onPlayAgain }) => (
-  <div className="grid grid-cols-2 gap-2">
-    <PkButton variant="soft" size="lg" fullWidth onClick={onEdit}>
-      수정
-    </PkButton>
-    <PkButton size="lg" fullWidth onClick={onPlayAgain}>
-      한 판 더
-    </PkButton>
-  </div>
+}> = ({ isBusy, error, onEdit, onPlayAgain }) => (
+  <>
+    <FooterError message={error} />
+    <div className="grid grid-cols-2 gap-2">
+      <PkButton
+        variant="soft"
+        size="lg"
+        fullWidth
+        disabled={isBusy}
+        onClick={onEdit}
+      >
+        수정
+      </PkButton>
+      <PkButton size="lg" fullWidth disabled={isBusy} onClick={onPlayAgain}>
+        같은 멤버로 한 판 더
+      </PkButton>
+    </div>
+  </>
+);
+
+/** 경기 상세 헤더 오른쪽 "삭제" 글자 버튼 */
+export const DeleteMatchHeaderButton: React.FC<{ onPress: () => void }> = ({
+  onPress,
+}) => (
+  <button
+    type="button"
+    onClick={onPress}
+    className="inline-flex min-h-11 items-center px-2 text-pk-15 font-bold text-pk-sub active:opacity-70"
+  >
+    삭제
+  </button>
 );
 
 /** 불러오는 동안 자리만 그린다 */
