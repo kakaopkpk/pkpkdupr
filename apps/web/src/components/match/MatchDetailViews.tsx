@@ -7,7 +7,11 @@ import { Card } from "@/components/ui/Card";
 import { RatingDelta } from "@/components/ui/Delta";
 import { PlayerAvatar, TeamAvatars } from "@/components/ui/PlayerAvatar";
 import { cx } from "@/components/ui/cx";
-import { formatKstShortDate, formatKstTime } from "@/lib/format";
+import {
+  formatKstShortDate,
+  formatKstTime,
+  formatKstWeekdayTime,
+} from "@/lib/format";
 import { formatRating } from "@/utils/dupr";
 
 type MatchTeam = MatchInfo["teams"][number];
@@ -94,7 +98,7 @@ export interface LiveMatchDetailProps {
   onEnterScore: () => void;
 }
 
-/** 진행 중 경기. 참가자가 아니어도 같은 화면과 점수 입력 버튼을 본다 */
+/** 진행 중(또는 시작 전 예정) 경기. 참가자가 아니어도 같은 화면과 점수 입력 버튼을 본다 */
 export const LiveMatchDetail: React.FC<LiveMatchDetailProps> = ({
   match,
   creatorUsername,
@@ -102,17 +106,30 @@ export const LiveMatchDetail: React.FC<LiveMatchDetailProps> = ({
   onEnterScore,
 }) => {
   const now = useMinuteClock();
-  const elapsedMinutes = Math.max(
-    0,
-    Math.floor((now - new Date(match.matchStartsAt).getTime()) / MINUTE_MS),
-  );
+  const startsAtMs = new Date(match.matchStartsAt).getTime();
+  // 관리자 예정 경기처럼 시작 시각 전의 created 경기는 진행 중이 아니라 예정으로 보인다
+  const isScheduled = startsAtMs > now;
+  const elapsedMinutes = Math.floor((now - startsAtMs) / MINUTE_MS);
 
   return (
     <>
       <div className="flex flex-col gap-4 px-4 pt-1">
-        <span className="inline-flex items-center gap-1.5 self-center rounded-full bg-pk-primary-soft px-3 py-1 text-pk-13 font-bold text-pk-primary tabular-nums">
-          <span aria-hidden="true" className="size-[7px] rounded-full bg-pk-primary" />
-          진행 중 · {elapsedMinutes}분째
+        <span
+          className={cx(
+            "inline-flex items-center gap-1.5 self-center rounded-full px-3 py-1 text-pk-13 font-bold tabular-nums",
+            isScheduled ? "bg-pk-neutral text-pk-sub" : "bg-pk-primary-soft text-pk-primary",
+          )}
+        >
+          <span
+            aria-hidden="true"
+            className={cx(
+              "size-[7px] rounded-full",
+              isScheduled ? "bg-pk-muted" : "bg-pk-primary",
+            )}
+          />
+          {isScheduled
+            ? `예정 · ${formatKstWeekdayTime(match.matchStartsAt)}`
+            : `진행 중 · ${elapsedMinutes}분째`}
         </span>
         <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2">
           <TeamColumn team={match.teams[0]} tone="strong" />
