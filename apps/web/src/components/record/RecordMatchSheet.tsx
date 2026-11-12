@@ -24,10 +24,12 @@ export interface RecordMatchSheetProps {
 
 const DEPTH_ID = "global-record-match-sheet";
 
-type ScoreMatchState =
+// sheetKey는 이 상태를 받은 요청. 요청이 바뀐 직후 한 렌더 동안 남는 이전 결과를 거르는 데 쓴다
+type ScoreMatchState = { sheetKey: number } & (
   | { status: "loading" }
   | { status: "ready"; match: MatchInfo }
-  | { status: "error"; message: string };
+  | { status: "error"; message: string }
+);
 
 /**
  * 전역 경기 기록 시트. 지금은 기존 RecordMatchDrawerBody를 감싼다.
@@ -55,6 +57,8 @@ export default function RecordMatchSheet({
   });
   const scoreMatchId =
     displayedRequest?.kind === "score" ? displayedRequest.matchId : null;
+  const currentScoreMatch =
+    scoreMatchId && scoreMatch?.sheetKey === sheetKey ? scoreMatch : null;
 
   useEffect(() => {
     if (!request) return;
@@ -69,7 +73,7 @@ export default function RecordMatchSheet({
     }
 
     let isCancelled = false;
-    setScoreMatch({ status: "loading" });
+    setScoreMatch({ sheetKey, status: "loading" });
     void (async () => {
       try {
         const res = await apiFetch(
@@ -80,10 +84,11 @@ export default function RecordMatchSheet({
           throw new Error(errorData.error || "경기를 불러오지 못했어요.");
         }
         const match = (await res.json()) as MatchInfo;
-        if (!isCancelled) setScoreMatch({ status: "ready", match });
+        if (!isCancelled) setScoreMatch({ sheetKey, status: "ready", match });
       } catch (err) {
         if (!isCancelled) {
           setScoreMatch({
+            sheetKey,
             status: "error",
             message:
               err instanceof Error ? err.message : "경기를 불러오지 못했어요.",
@@ -110,7 +115,7 @@ export default function RecordMatchSheet({
   );
 
   let content: React.ReactElement;
-  if (scoreMatchId && scoreMatch?.status !== "ready") {
+  if (scoreMatchId && currentScoreMatch?.status !== "ready") {
     content = (
       <>
         <BottomSheet.Header>
@@ -119,9 +124,9 @@ export default function RecordMatchSheet({
           </h2>
         </BottomSheet.Header>
         <BottomSheet.Body>
-          {scoreMatch?.status === "error" ? (
+          {currentScoreMatch?.status === "error" ? (
             <p className="text-sm font-medium text-error" role="alert">
-              {scoreMatch.message}
+              {currentScoreMatch.message}
             </p>
           ) : (
             <div role="status" aria-label="경기 불러오는 중">
@@ -135,7 +140,11 @@ export default function RecordMatchSheet({
     content = (
       <RecordMatchDrawerBody
         key={`${sheetKey}:${scoreMatchId ?? "new"}`}
-        editMatch={scoreMatch?.status === "ready" ? scoreMatch.match : undefined}
+        editMatch={
+          currentScoreMatch?.status === "ready"
+            ? currentScoreMatch.match
+            : undefined
+        }
         isOnline={isOnline}
         onCancel={close}
         onRecorded={notifyDataChanged}
