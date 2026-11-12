@@ -178,7 +178,6 @@ const BottomNav: React.FC = () => {
   const [pullToRefreshStatus, setPullToRefreshStatus] =
     useState<PullToRefreshStatus>("idle");
   const [isPullRefreshSlow, setIsPullRefreshSlow] = useState(false);
-  const [isInstallPromptVisible, setIsInstallPromptVisible] = useState(false);
   const handledDeepLinkRef = useRef(false);
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
   const depthScrollContainersRef = useRef(
@@ -1132,12 +1131,7 @@ const BottomNav: React.FC = () => {
                     id={getTabPanelId(key)}
                     aria-labelledby={getTabId(key)}
                     hidden={selectedTab !== key}
-                    className={`min-h-full bg-pk-bg ${
-                      key === "home" && isInstallPromptVisible
-                        ? // 떠 있는 설치 안내가 마지막 콘텐츠를 가리지 않게 안내 높이만큼 더 띄운다
-                          "pb-[calc(var(--app-bottom-dock-height)+6rem)]"
-                        : "pb-[calc(var(--app-bottom-dock-height)+1rem)]"
-                    }`}
+                    className="min-h-full bg-pk-bg pb-[calc(var(--app-bottom-dock-height)+var(--app-bottom-toast-height)+1rem)]"
                   >
                     <TabPage />
                   </div>
@@ -1184,10 +1178,7 @@ const BottomNav: React.FC = () => {
             </div>
           </div>
 
-          <PwaInstallPrompt
-            isActive={isHomeTabUncovered}
-            onVisibleChange={setIsInstallPromptVisible}
-          />
+          <PwaInstallPrompt isActive={isHomeTabUncovered} />
 
           <MatchDetailDrawer
             matchId={matchDetailLayer.value}

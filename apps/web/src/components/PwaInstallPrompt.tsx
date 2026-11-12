@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useReducer, useState } from "react";
 import { IoShareOutline } from "react-icons/io5";
 import { toKstDateKey } from "@pkpkdupr/shared/session";
 import SystemToast from "@/components/SystemToast";
@@ -67,14 +67,9 @@ type InstallPromptKind = "ios-safari" | "installable";
 interface PwaInstallPromptProps {
   /** 홈 탭이 보이고 그 위를 덮는 화면·메뉴가 없을 때 true */
   isActive: boolean;
-  /** 안내가 실제로 보이는지 바뀔 때 호출한다 */
-  onVisibleChange?: (isVisible: boolean) => void;
 }
 
-const PwaInstallPrompt: React.FC<PwaInstallPromptProps> = ({
-  isActive,
-  onVisibleChange,
-}) => {
+const PwaInstallPrompt: React.FC<PwaInstallPromptProps> = ({ isActive }) => {
   const isSaveFailureVisible = useIsSaveFailureNoticeVisible();
   const [deferredPrompt, setDeferredPrompt] =
     useState<BeforeInstallPromptEvent | null>(null);
@@ -84,8 +79,8 @@ const PwaInstallPrompt: React.FC<PwaInstallPromptProps> = ({
   const [dismissedDateKey, setDismissedDateKey] = useState(() =>
     typeof window === "undefined" ? null : readInstallPromptDismissedDate(),
   );
-  // 앱을 켜 둔 채 날짜가 바뀌어도 다시 보이게 화면으로 돌아올 때 오늘 날짜를 새로 읽는다
-  const [todayKey, setTodayKey] = useState(() => toKstDateKey(new Date()));
+  // 앱을 켜 둔 채 날짜가 바뀌어도 다시 보이게 화면으로 돌아올 때 다시 그려 오늘 날짜를 새로 읽는다
+  const [, rerender] = useReducer((count: number) => count + 1, 0);
   // iOS Safari에서 "추가"를 누르면 공유 메뉴 안내로 바뀐다
   const [isIosGuideOpen, setIsIosGuideOpen] = useState(false);
 
@@ -131,32 +126,22 @@ const PwaInstallPrompt: React.FC<PwaInstallPromptProps> = ({
   }, []);
 
   useEffect(() => {
-    const refreshTodayKey = () => {
-      if (document.visibilityState === "visible") {
-        setTodayKey(toKstDateKey(new Date()));
-      }
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") rerender();
     };
 
-    document.addEventListener("visibilitychange", refreshTodayKey);
-    window.addEventListener("focus", refreshTodayKey);
-
-    return () => {
-      document.removeEventListener("visibilitychange", refreshTodayKey);
-      window.removeEventListener("focus", refreshTodayKey);
-    };
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () =>
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
   }, []);
 
-  const isDismissedToday = dismissedDateKey === todayKey;
+  const isDismissedToday = dismissedDateKey === toKstDateKey(new Date());
   const isVisible =
     isActive &&
     !isInstalled &&
     (!isDismissedToday || isIosGuideOpen) &&
     !!installPromptKind &&
     !isSaveFailureVisible;
-
-  useEffect(() => {
-    onVisibleChange?.(isVisible);
-  }, [isVisible, onVisibleChange]);
 
   if (!isVisible) {
     return null;
@@ -166,7 +151,6 @@ const PwaInstallPrompt: React.FC<PwaInstallPromptProps> = ({
     const dateKey = toKstDateKey(new Date());
     rememberInstallPromptDismissedDate(dateKey);
     setDismissedDateKey(dateKey);
-    setTodayKey(dateKey);
   };
 
   const dismiss = () => {
