@@ -459,8 +459,9 @@ describe("buildSessionReport", () => {
       makePlayer("Pbob0001", "bob", 3.45),
       makePlayer("Perin001", "erin", 3.12),
       makePlayer("Pnr00001", "nr", null),
+      // 이 세션에서는 단식만 하고 첫 복식은 세션 이후라 세션 리포트에서는 복식 NR이다
       makePlayer("Psolo001", "solo", null, {
-        duprRating: { singles: 3.1, doubles: null },
+        duprRating: { singles: 3.1, doubles: 3.06 },
       }),
     ];
     const nrMatches = [
@@ -477,8 +478,13 @@ describe("buildSessionReport", () => {
         type: "unrestricted-singles",
         sessionId: nrSession.id,
       }),
+      makeMatch("Mlater01", at("2026-11-10T10:00:00Z"), [
+        ["Psolo001", "Pnr00001"],
+        ["Pother01", "Pother02"],
+      ]),
     ];
     const nrLogs = [
+      makeLog("Psolo001", "Mlater01", at("2026-11-10T10:00:00Z"), 3, 3.06),
       makeLog("Perin001", "Mmatch01", first, 3, 3.12),
       makeLog("Palice01", "Mmatch01", first, 3.5, 3.55),
       makeLog("Pbob0001", "Mmatch01", first, 3.5, 3.45),
