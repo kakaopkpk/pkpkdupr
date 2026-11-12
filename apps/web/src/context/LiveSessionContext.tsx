@@ -8,7 +8,7 @@ import React, {
   useState,
 } from "react";
 import { getEmptySessionExpiresAt } from "@pkpkdupr/shared/session";
-import type { MatchInfo } from "@/components/Match";
+import type { MatchInfo } from "@/types/match";
 import { apiFetch } from "@/lib/api";
 import {
   fetchTodayMatchSessions,

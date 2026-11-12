@@ -1,5 +1,5 @@
 import React from "react";
-import type { MatchInfo } from "@/components/Match";
+import type { MatchInfo } from "@/types/match";
 import { PkButton } from "@/components/ui/Button";
 import { TeamsVersus } from "./TeamBlock";
 

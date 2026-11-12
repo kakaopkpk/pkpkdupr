@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { getMatchTopLevelType } from "@pkpkdupr/shared/match";
-import { getTeamResultScores, type MatchInfo } from "@/components/Match";
+import { getTeamResultScores, type MatchInfo } from "@/types/match";
 import SkeletonBlock from "@/components/SkeletonBlock";
 import { PkButton } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";

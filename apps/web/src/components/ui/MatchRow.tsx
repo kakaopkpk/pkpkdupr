@@ -1,5 +1,5 @@
 import React from "react";
-import { getTeamResultScores, type MatchInfo } from "@/components/Match";
+import { getTeamResultScores, type MatchInfo } from "@/types/match";
 import { formatKstTime, formatKstWeekdayTime } from "@/lib/format";
 import { ChevronRightIcon } from "./Icons";
 import { TeamAvatars } from "./PlayerAvatar";

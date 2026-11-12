@@ -4,7 +4,7 @@ import {
   type RecordMatchRequest,
 } from "@pkpkdupr/shared/match";
 import type { StartSessionMatchRequest } from "@pkpkdupr/shared/session";
-import type { MatchInfo } from "@/components/Match";
+import type { MatchInfo } from "@/types/match";
 import type { AvatarPlayer } from "@/components/ui/PlayerAvatar";
 import { useAppNavigation } from "@/context/AppNavigationContext";
 import { useLiveSession } from "@/context/LiveSessionContext";

@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { DEFAULT_MATCH_LOCATION } from "@pkpkdupr/shared/session";
 import BottomSheet from "@/components/BottomSheet";
-import type { MatchInfo } from "@/components/Match";
+import type { MatchInfo } from "@/types/match";
 import SkeletonBlock from "@/components/SkeletonBlock";
 import { SheetTitle } from "@/components/ui/SheetTitle";
 import {
