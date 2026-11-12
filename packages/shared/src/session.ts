@@ -10,7 +10,6 @@ export const REGULAR_SESSION_WEEKDAYS: readonly number[] = [1, 4];
 /** 정기 세션에 묶이는 경기 시작 시각 범위(KST 시). 시작 포함, 끝 미포함 */
 export const REGULAR_SESSION_START_HOUR = 18;
 export const REGULAR_SESSION_END_HOUR = 22;
-export const REGULAR_SESSION_NAME = "정기 세션";
 export const REGULAR_SESSION_LOCATION = "야탑초등학교";
 /** 경기 기록·세션 만들기의 장소 기본값 */
 export const DEFAULT_MATCH_LOCATION = REGULAR_SESSION_LOCATION;
@@ -61,6 +60,32 @@ export const canOpenRegularSession = (now: Date): boolean => {
   );
 };
 
+const WEEKDAY_LABELS = ["일", "월", "화", "수", "목", "금", "토"];
+
+/** 정기 세션 이름. 날짜 키의 KST 요일로 "월요 정기운동" | "목요 정기운동" */
+export const getRegularSessionName = (dateKey: string): string =>
+  `${WEEKDAY_LABELS[toKstShifted(kstDateKeyToDate(dateKey)).getUTCDay()]}요 정기운동`;
+
+/** 다음 정기 회차의 KST 날짜 키. 오늘이 정기 요일이고 22:00 KST 전이면 오늘 */
+export const getNextRegularSessionDateKey = (now: Date): string => {
+  if (canOpenRegularSession(now)) {
+    return toKstDateKey(now);
+  }
+  const todayStart = kstDateKeyToDate(toKstDateKey(now));
+  for (let offset = 1; offset <= 7; offset += 1) {
+    const day = new Date(todayStart.getTime() + offset * DAY_MS);
+    if (REGULAR_SESSION_WEEKDAYS.includes(toKstShifted(day).getUTCDay())) {
+      return toKstDateKey(day);
+    }
+  }
+  throw new Error("정기 세션 요일이 없습니다.");
+};
+
+/** YYYY-MM-DD 형식이고 실제 있는 날짜면 true */
+export const isValidKstDateKey = (value: string): boolean =>
+  /^\d{4}-\d{2}-\d{2}$/.test(value) &&
+  toKstDateKey(kstDateKeyToDate(value)) === value;
+
 /** 경기가 하나도 없는 세션이 사라지는 시각. 정기=그날 22:00 KST, 그 외=다음 날 00:00 KST */
 export const getEmptySessionExpiresAt = (
   kind: MatchSessionKind,
@@ -107,12 +132,12 @@ export interface MatchSessionDetail {
   id: string;
   name: string;
   kind: MatchSessionKind;
-  /** 세션 시각. 정기 세션은 그날 18:00 KST, 회원 세션은 만든 시각 */
+  /** 세션 시각. 정기 세션은 그날 18:00 KST, 회원 세션은 고른 날 00:00 KST */
   date: Date;
   location: string;
   /** date의 KST 날짜 키 */
   dateKey: string;
-  /** 오늘(KST) 세션이면 true. 체크인·취소·세션 경기 기록/시작·추천은 오늘 세션에서만 된다 */
+  /** 오늘(KST) 세션이면 true. 세션 경기 기록/시작·추천은 오늘 세션에서만 되고, 참여자 추가·삭제는 오늘·미래 세션에서 된다 */
   isToday: boolean;
   /** active 회원만 */
   participants: MatchSessionMember[];
@@ -129,10 +154,20 @@ export interface TodayMatchSessionsResponse {
   sessions: MatchSessionDetail[];
 }
 
-/** POST /api/match-sessions 요청. 날짜는 오늘(서버 now)로 정해진다 */
+/** POST /api/match-sessions 요청 */
 export interface CreateMatchSessionRequest {
   name: string;
   location: string;
+  /** 세션 날짜(KST, YYYY-MM-DD). 생략하면 오늘. 오늘보다 이르면 400 */
+  dateKey?: string;
+}
+
+/** GET /api/match-sessions/upcoming 응답 */
+export interface UpcomingMatchSessionsResponse {
+  /** 오늘 KST 날짜 키 */
+  dateKey: string;
+  /** 만료 전인 오늘·미래 세션. 날짜 키 오름차순, 같은 날은 정기 세션 먼저 */
+  sessions: MatchSessionDetail[];
 }
 
 /** POST /api/match-sessions/:sessionId/participants 요청 */

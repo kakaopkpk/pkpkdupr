@@ -1,7 +1,9 @@
-import React, { useEffect, useRef, useState } from "react";
-import { Alert, Button } from "@heroui/react";
+import React, { useEffect, useRef } from "react";
+import SystemToast from "@/components/SystemToast";
+import { PkButton } from "@/components/ui/Button";
 import { useAppUpdate } from "@/context/AppUpdateContext";
 import { useAuth } from "@/context/AuthContext";
+import { useIsSaveFailureNoticeVisible } from "@/context/SystemNoticeContext";
 import { useOnlineStatus } from "@/hooks/useOnlineStatus";
 
 const isStandaloneDisplay = () =>
@@ -25,8 +27,8 @@ const PwaUpdatePrompt: React.FC = () => {
     checkForUpdate,
     applyUpdate,
   } = useAppUpdate();
+  const isSaveFailureVisible = useIsSaveFailureNoticeVisible();
   const lastAutoCheckAtRef = useRef(0);
-  const [error, setError] = useState<string | null>(null);
 
   const isStandalone =
     typeof window !== "undefined" ? isStandaloneDisplay() : false;
@@ -81,48 +83,35 @@ const PwaUpdatePrompt: React.FC = () => {
     !isStandalone ||
     isLoading ||
     !isAuthenticated ||
-    !isUpdateAvailable
+    !isUpdateAvailable ||
+    isSaveFailureVisible
   ) {
     return null;
   }
 
   const handleApplyUpdate = async () => {
-    setError(null);
-
     try {
       await applyUpdate();
     } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "업데이트 적용에 실패했습니다.",
-      );
+      console.error("Failed to apply app update", err);
     }
   };
 
   return (
-    <div className="fixed bottom-[calc(5.47rem+var(--safe-bottom)+var(--app-keyboard-offset))] left-1/2 z-30 app-shell-width -translate-x-1/2 px-3">
-      <Alert
-        status="accent"
-        className="items-center rounded-2xl border border-pkpk-primary-bg/20 bg-white/95 px-3 py-2 shadow-lg backdrop-blur"
-      >
-        <Alert.Indicator className="shrink-0 self-center" />
-        <Alert.Content className="min-w-0 gap-0 self-center">
-          <Alert.Title className="text-sm font-bold text-pkpk-sub-font">
-            새 버전이 있어요.
-          </Alert.Title>
-          <Alert.Description className="text-xs font-semibold text-[#888]">
-            {error ?? "업데이트 후 다시 불러올게요."}
-          </Alert.Description>
-        </Alert.Content>
-        <Button
-          size="sm"
-          className="shrink-0 rounded-full bg-pkpk-primary-bg px-3 text-white"
-          isDisabled={isCheckingForUpdate || isApplyingUpdate}
-          onPress={() => void handleApplyUpdate()}
+    <SystemToast
+      className="z-30"
+      actions={
+        <PkButton
+          size="md"
+          disabled={isCheckingForUpdate || isApplyingUpdate}
+          onClick={() => void handleApplyUpdate()}
         >
-          {isApplyingUpdate ? "업데이트 중..." : "업데이트"}
-        </Button>
-      </Alert>
-    </div>
+          업데이트
+        </PkButton>
+      }
+    >
+      새 버전이 있어요
+    </SystemToast>
   );
 };
 

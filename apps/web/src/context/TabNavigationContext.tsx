@@ -1,15 +1,14 @@
 import React, { createContext, useContext } from "react";
 
-export type TabKey = "match" | "members" | "me";
+export type TabKey = "home" | "records" | "ranking" | "me";
 
 export type TabDepthKind =
   | "match-detail"
   | "match-history"
-  | "session-detail"
-  | "session-recommendation"
   | "member-profile"
   | "bottom-sheet"
-  | "dropdown";
+  | "dropdown"
+  | "settings";
 
 export interface TabDepthEntry {
   id: string;

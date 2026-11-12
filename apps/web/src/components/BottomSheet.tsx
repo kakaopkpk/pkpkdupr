@@ -13,7 +13,10 @@ interface BottomSheetProps {
   isDismissable?: boolean;
   isActive?: boolean;
   layer?: number;
-  /** true면 내용과 상관없이 시트를 최대 높이로 고정한다. 본문(Body)만 스크롤된다 */
+  /**
+   * 기본 true: 내용과 상관없이 시트를 고정 높이(화면의 약 3/4, 상한 620px)로 둔다.
+   * Header·Footer는 고정이고 Body만 스크롤된다. false면 내용 높이를 따른다.
+   */
   isFixedHeight?: boolean;
 }
 
@@ -83,7 +86,7 @@ const BottomSheet: BottomSheetComponent = ({
   isDismissable = true,
   isActive = true,
   layer = 50,
-  isFixedHeight = false,
+  isFixedHeight = true,
 }) => {
   const [shouldRender, setShouldRender] = React.useState(isOpen);
   const [isVisible, setIsVisible] = React.useState(isOpen);
@@ -211,7 +214,7 @@ const BottomSheet: BottomSheetComponent = ({
       <div
         aria-hidden="true"
         className={[
-          "pointer-events-none absolute inset-0 bg-black/30 backdrop-blur-sm transition-opacity ease-out",
+          "pointer-events-none absolute inset-0 bg-[rgba(15,23,42,0.45)] transition-opacity ease-out",
           isVisible ? "opacity-100" : "opacity-0",
         ].join(" ")}
         style={transitionStyle}
@@ -234,7 +237,7 @@ const BottomSheet: BottomSheetComponent = ({
           role="dialog"
           aria-label={ariaLabel}
           className={[
-            "app-bottom-sheet-surface relative flex min-h-0 w-full flex-col overflow-hidden rounded-t-3xl bg-white px-4 pt-5 pb-[calc(1rem+var(--safe-bottom)+var(--app-keyboard-offset))] shadow-2xl",
+            "app-bottom-sheet-surface relative flex min-h-0 w-full flex-col overflow-hidden rounded-t-pk-lg bg-white px-4 pt-2.5 pb-[calc(1rem+var(--safe-bottom)+var(--app-keyboard-offset))] text-pk-ink shadow-[0_-10px_40px_rgba(15,23,42,0.2)]",
             isFixedHeight ? "app-bottom-sheet-surface--fixed" : null,
             className,
           ]
@@ -242,6 +245,10 @@ const BottomSheet: BottomSheetComponent = ({
             .join(" ")}
           onMouseDown={(event) => event.stopPropagation()}
         >
+          <div
+            aria-hidden="true"
+            className="mb-3 h-[5px] w-10 shrink-0 self-center rounded-full bg-[#d3d9e6]"
+          />
           {children}
         </section>
       </div>

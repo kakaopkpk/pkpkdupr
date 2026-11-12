@@ -3,6 +3,7 @@ import type { ManagedMatchSession, Session } from "@pkpkdupr/shared/match";
 import request from "supertest";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  kstDateKeyToDate,
   MATCH_SESSION_LOCATION_MAX_LENGTH,
   MATCH_SESSION_NAME_MAX_LENGTH,
 } from "@pkpkdupr/shared/session";
@@ -59,7 +60,7 @@ const makeSession = (
 
 const regularSession = makeSession({
   id: "Sregular",
-  name: "정기 세션",
+  name: "목요 정기운동",
   date: new Date("2026-11-12T18:00:00+09:00"),
   location: "야탑초등학교",
   kind: "regular",
@@ -194,11 +195,11 @@ describe("public match sessions", () => {
     expect(findOrCreate).not.toHaveBeenCalled();
   });
 
-  it("회원 세션을 오늘 날짜로 만들고 요청자를 자동 체크인하지 않는다", async () => {
+  it("dateKey를 생략하면 회원 세션을 오늘 00:00 KST로 만들고 요청자를 자동 체크인하지 않는다", async () => {
     const created: Session = {
       id: "Scustom1",
       name: "번개",
-      date: thursdayMorning,
+      date: kstDateKeyToDate("2026-11-12"),
       location: "탄천",
     };
     const createSession = vi
@@ -219,7 +220,11 @@ describe("public match sessions", () => {
 
     expect(response.status).toBe(201);
     expect(createSession).toHaveBeenCalledWith(
-      { name: "번개", date: thursdayMorning, location: "탄천" },
+      {
+        name: "번개",
+        date: new Date("2026-11-12T00:00:00+09:00"),
+        location: "탄천",
+      },
       { conflictOnDuplicate: true },
     );
     expect(addParticipants).not.toHaveBeenCalled();
@@ -229,6 +234,70 @@ describe("public match sessions", () => {
       isToday: true,
       participants: [],
     });
+  });
+
+  it("dateKey로 오늘이나 미래 날짜 세션을 그날 00:00 KST로 만든다", async () => {
+    const createSession = vi
+      .spyOn(MatchRepository.prototype, "createSession")
+      .mockImplementation(async (session) => ({
+        id: "Sfuture1",
+        name: session.name,
+        date: session.date,
+        location: session.location,
+      }));
+    vi.spyOn(MatchRepository.prototype, "findSessionById").mockResolvedValue(
+      makeSession({
+        id: "Sfuture1",
+        date: new Date("2026-11-20T00:00:00+09:00"),
+      }),
+    );
+
+    for (const dateKey of ["2026-11-12", "2026-11-20"]) {
+      const response = await request(app)
+        .post("/api/match-sessions")
+        .set("Authorization", "Bearer token")
+        .send({ name: "번개", location: "탄천", dateKey });
+      expect(response.status).toBe(201);
+      expect(createSession).toHaveBeenLastCalledWith(
+        {
+          name: "번개",
+          date: new Date(`${dateKey}T00:00:00+09:00`),
+          location: "탄천",
+        },
+        { conflictOnDuplicate: true },
+      );
+    }
+    const future = await request(app)
+      .post("/api/match-sessions")
+      .set("Authorization", "Bearer token")
+      .send({ name: "번개", location: "탄천", dateKey: "2026-11-20" });
+    expect(future.body).toMatchObject({
+      id: "Sfuture1",
+      dateKey: "2026-11-20",
+      isToday: false,
+    });
+  });
+
+  it("dateKey 형식이 틀리거나 없는 날짜면 400, 오늘보다 이르면 400", async () => {
+    const createSession = vi.spyOn(MatchRepository.prototype, "createSession");
+
+    for (const dateKey of ["2026/11/20", "2026-02-30", "내일", 20261120]) {
+      const response = await request(app)
+        .post("/api/match-sessions")
+        .set("Authorization", "Bearer token")
+        .send({ name: "번개", location: "탄천", dateKey });
+      expect(response.status).toBe(400);
+    }
+
+    const past = await request(app)
+      .post("/api/match-sessions")
+      .set("Authorization", "Bearer token")
+      .send({ name: "번개", location: "탄천", dateKey: "2026-11-11" });
+    expect(past.status).toBe(400);
+    expect(past.body).toEqual({
+      error: "오늘이나 이후 날짜로만 세션을 만들 수 있습니다.",
+    });
+    expect(createSession).not.toHaveBeenCalled();
   });
 
   it("회원 세션 이름·장소가 비어 있으면 400", async () => {
@@ -338,6 +407,123 @@ describe("public match sessions", () => {
     expect(invalid.status).toBe(400);
   });
 
+  describe("다가오는 세션 조회", () => {
+    const upcoming = () =>
+      request(app)
+        .get("/api/match-sessions/upcoming")
+        .set("Authorization", "Bearer token");
+
+    it("다음 정기 회차를 find-or-create 하고, 반복 조회에도 같은 세션 하나만 돌려준다", async () => {
+      const stored: ManagedMatchSession[] = [];
+      const findOrCreate = vi
+        .spyOn(MatchRepository.prototype, "findOrCreateRegularSession")
+        .mockImplementation(async (dateKey) => {
+          let session = stored.find(
+            (candidate) =>
+              candidate.kind === "regular" &&
+              candidate.date.getTime() ===
+                kstDateKeyToDate(dateKey, 18).getTime(),
+          );
+          if (!session) {
+            session = makeSession({
+              id: "Snextreg",
+              name: "월요 정기운동",
+              kind: "regular",
+              date: kstDateKeyToDate(dateKey, 18),
+              location: "야탑초등학교",
+            });
+            stored.push(session);
+          }
+          return session;
+        });
+      const findFrom = vi
+        .spyOn(MatchRepository.prototype, "findSessionsFromDateKey")
+        .mockImplementation(async () => [...stored]);
+      // 목 22:00 이후에는 다음 월요일이 다음 정기 회차다
+      vi.setSystemTime(thursdayNight);
+
+      const first = await upcoming();
+      const second = await upcoming();
+
+      for (const response of [first, second]) {
+        expect(response.status).toBe(200);
+        expect(response.body.dateKey).toBe("2026-11-12");
+        expect(response.body.sessions).toHaveLength(1);
+        expect(response.body.sessions[0]).toMatchObject({
+          id: "Snextreg",
+          kind: "regular",
+          name: "월요 정기운동",
+          dateKey: "2026-11-16",
+          isToday: false,
+        });
+      }
+      expect(findOrCreate).toHaveBeenCalledTimes(2);
+      expect(findOrCreate).toHaveBeenCalledWith("2026-11-16");
+      expect(findFrom).toHaveBeenCalledWith("2026-11-12");
+    });
+
+    it("정기 요일 22시 전이면 오늘 정기 세션을 보장한다", async () => {
+      const findOrCreate = vi
+        .spyOn(MatchRepository.prototype, "findOrCreateRegularSession")
+        .mockResolvedValue(regularSession);
+      vi.spyOn(
+        MatchRepository.prototype,
+        "findSessionsFromDateKey",
+      ).mockResolvedValue([regularSession]);
+
+      const response = await upcoming();
+
+      expect(response.status).toBe(200);
+      expect(findOrCreate).toHaveBeenCalledWith("2026-11-12");
+      expect(response.body.sessions[0]).toMatchObject({
+        id: "Sregular",
+        isToday: true,
+      });
+    });
+
+    it("날짜 키 오름차순, 같은 날은 정기 세션 먼저, 만료된 세션은 빼고 정렬한다", async () => {
+      const nextMonday = makeSession({
+        id: "Smonreg1",
+        name: "월요 정기운동",
+        kind: "regular",
+        date: new Date("2026-11-16T18:00:00+09:00"),
+      });
+      vi.spyOn(
+        MatchRepository.prototype,
+        "findOrCreateRegularSession",
+      ).mockResolvedValue(nextMonday);
+      // 저장소는 시각 오름차순으로 준다
+      vi.spyOn(
+        MatchRepository.prototype,
+        "findSessionsFromDateKey",
+      ).mockResolvedValue([
+        makeSession({
+          id: "Stoday01",
+          date: new Date("2026-11-12T00:00:00+09:00"),
+        }),
+        { ...regularSession, matchCount: 1 },
+        makeSession({
+          id: "Sfri0001",
+          date: new Date("2026-11-13T00:00:00+09:00"),
+        }),
+        makeSession({
+          id: "Smon0001",
+          date: new Date("2026-11-16T00:00:00+09:00"),
+        }),
+        nextMonday,
+      ]);
+      // 목 22:00이면 오늘 정기 세션은 만료됐고 오늘 회원 세션은 자정까지 남는다
+      vi.setSystemTime(thursdayNight);
+
+      const response = await upcoming();
+
+      expect(response.status).toBe(200);
+      expect(
+        response.body.sessions.map((session: { id: string }) => session.id),
+      ).toEqual(["Stoday01", "Sfri0001", "Smonreg1", "Smon0001"]);
+    });
+  });
+
   describe("참여자 추가·삭제", () => {
     let participantIds: Set<string>;
     let sessionDate: Date;
@@ -414,10 +600,30 @@ describe("public match sessions", () => {
       expect(again.status).toBe(200);
     });
 
-    it("오늘 세션이 아니면 추가·삭제 모두 403", async () => {
+    it("미래 세션도 추가·삭제할 수 있다", async () => {
+      sessionDate = new Date("2026-11-16T18:00:00+09:00");
+
+      const added = await add(other.id);
+      expect(added.status).toBe(200);
+      expect(added.body).toMatchObject({
+        dateKey: "2026-11-16",
+        isToday: false,
+        participants: [{ id: other.id }],
+      });
+
+      const removed = await remove(other.id);
+      expect(removed.status).toBe(200);
+      expect(removed.body.participants).toEqual([]);
+    });
+
+    it("지난 세션이면 추가·삭제 모두 403", async () => {
       sessionDate = new Date("2026-11-09T18:00:00+09:00");
 
-      expect((await add(other.id)).status).toBe(403);
+      const added = await add(other.id);
+      expect(added.status).toBe(403);
+      expect(added.body).toEqual({
+        error: "지난 세션은 참여자를 바꿀 수 없습니다.",
+      });
       expect((await remove(other.id)).status).toBe(403);
       expect(
         MatchRepository.prototype.addSessionParticipants,

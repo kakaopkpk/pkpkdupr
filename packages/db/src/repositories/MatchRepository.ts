@@ -32,10 +32,11 @@ import { generateEntityId, isEntityId } from "@pkpkdupr/shared/entityId";
 import {
   IN_PROGRESS_MATCH_TIMEOUT_MS,
   REGULAR_SESSION_LOCATION,
-  REGULAR_SESSION_NAME,
+  getRegularSessionName,
   REGULAR_SESSION_START_HOUR,
   getEmptySessionExpiryCutoff,
   kstDateKeyToDate,
+  type MatchSessionKind,
 } from "@pkpkdupr/shared/session";
 import { firstRow, placeholders, type RawQueryResult } from "../db/client";
 
@@ -67,6 +68,26 @@ export class SessionHasMatchesError extends Error {
     super("연결된 경기가 있는 세션은 삭제할 수 없습니다.");
     this.name = "SessionHasMatchesError";
   }
+}
+
+/** 랭킹·세션 리포트 계산에 필요한 완료 경기 요약 */
+export interface CompletedMatchOutcome {
+  id: string;
+  type: MatchType;
+  sessionId: string | null;
+  completedAt: Date;
+  /** 팀별 선수 id. [0]=팀 A, [1]=팀 B */
+  teamPlayerIds: [string[], string[]];
+  scores: MatchScore[];
+}
+
+export interface SessionWithParticipantIds {
+  id: string;
+  name: string;
+  date: Date;
+  location: string;
+  kind: ManagedMatchSession["kind"];
+  participantIds: string[];
 }
 
 export interface CreateMatchInput {
@@ -131,6 +152,11 @@ const toDateOrNull = (value: Date | string | number | null | undefined) =>
   value == null ? null : new Date(value);
 
 const toDate = (value: Date | string | number) => new Date(value);
+
+/** 정기 날짜 키가 있으면 정기 세션이다 */
+const toSessionKind = (
+  stored: Pick<StoredMatchSession, "regularDateKey">,
+): MatchSessionKind => (stored.regularDateKey ? "regular" : "custom");
 
 // schema의 unixTimestamp 컬럼은 Unix 초로 저장한다. raw SQL은 그 변환을
 // 거치지 않으므로 경기 변경 타임스탬프를 여기서 직접 초로 바꾼다.
@@ -247,7 +273,7 @@ export class MatchRepository {
           participant.playerId,
       ),
       matchCount: sessionMatches.length,
-      kind: stored.regularDateKey ? "regular" : "custom",
+      kind: toSessionKind(stored),
       createdAt: toDate(stored.createdAt),
       updatedAt: toDate(stored.updatedAt),
     };
@@ -377,14 +403,14 @@ export class MatchRepository {
 
     const sessionDate = kstDateKeyToDate(dateKey, REGULAR_SESSION_START_HOUR);
     // 새 id가 기존 세션 id와 겹치면 행이 들어가지 않으므로 다른 id로 다시 시도한다.
-    // 같은 날 18:00 KST에 이름이 '정기 세션'인 다른 세션이 있으면 (name, date) 유니크 충돌로 끝까지 실패한다.
+    // 같은 날 18:00 KST에 정기 세션과 이름이 같은 다른 세션이 있으면 (name, date) 유니크 충돌로 끝까지 실패한다.
     for (let attempt = 0; attempt < 8; attempt += 1) {
       const now = new Date();
       await this.db
         .insert(matchSessions)
         .values({
           id: generateEntityId("session"),
-          name: REGULAR_SESSION_NAME,
+          name: getRegularSessionName(dateKey),
           date: sessionDate,
           location: REGULAR_SESSION_LOCATION,
           regularDateKey: dateKey,
@@ -485,6 +511,20 @@ export class MatchRepository {
     );
   }
 
+  /** 세션 시각이 from 이상인 세션을 시각 오름차순으로 돌려준다. */
+  async findSessionsFrom(from: Date): Promise<ManagedMatchSession[]> {
+    const storedSessions = await this.db
+      .select()
+      .from(matchSessions)
+      .where(gte(matchSessions.date, from))
+      .orderBy(asc(matchSessions.date));
+    return await Promise.all(
+      storedSessions.map((session: StoredMatchSession) =>
+        this.toManagedSession(session),
+      ),
+    );
+  }
+
   /**
    * 조회 시점 만료 정리를 단일 SQL 문(data-modifying CTE) 한 번으로 실행한다.
    * - 점수 없는 created 경기 중 isInProgressMatchExpired인 경기(관리자 예정 경기 포함)를 참가자·점수 행과 함께 삭제한다.
@@ -493,7 +533,7 @@ export class MatchRepository {
    *   그래서 만료된 진행 중 경기만 있던 세션도 같은 호출에서 빈 세션으로 지워진다.
    * 명시적 트랜잭션 없이 문장 하나라 DB 왕복은 대상 유무와 관계없이 1회다.
    * 빈 세션 판정은 문장 시작 스냅샷 기준이고 세션 행을 잠그지 않으므로, 그 뒤 같은 세션에 커밋된 경기는 보지 못한다.
-   * 정리 대상은 이미 만료된 과거 세션이고 경기 생성은 오늘 세션만 허용하므로 이 경계는 허용한다.
+   * 정리 대상은 만료 시각이 지난 세션뿐이라 미래 세션은 지우지 않고, 경기 생성은 오늘 세션만 허용하므로 이 경계는 허용한다.
    */
   async deleteExpiredInProgressMatchesAndEmptySessions(
     now: Date,
@@ -697,6 +737,124 @@ export class MatchRepository {
       }) =>
         lastPlayedAt == null ? [] : [[playerId, toDate(lastPlayedAt)]],
       ),
+    );
+  }
+
+  /**
+   * 완료 경기의 분류·세션·팀 구성·점수만 쿼리 3번으로 읽는다.
+   * 경기마다 참가자·점수·세션을 따로 읽는 hydrate를 거치지 않아 랭킹처럼 전체 경기를 훑는 조회에 쓴다.
+   */
+  async findCompletedMatchOutcomes(): Promise<CompletedMatchOutcome[]> {
+    const completedFilter = and(
+      eq(matches.status, "completed"),
+      isNotNull(matches.completedAt),
+    );
+    const [matchRows, participantRows, scoreRows] = await Promise.all([
+      this.db
+        .select({
+          id: matches.id,
+          type: matches.type,
+          sessionId: matches.sessionId,
+          completedAt: matches.completedAt,
+        })
+        .from(matches)
+        .where(completedFilter),
+      this.db
+        .select({
+          matchId: matchParticipants.matchId,
+          teamIndex: matchParticipants.teamIndex,
+          playerId: matchParticipants.playerId,
+        })
+        .from(matchParticipants)
+        .innerJoin(matches, eq(matchParticipants.matchId, matches.id))
+        .where(completedFilter)
+        .orderBy(asc(matchParticipants.id)),
+      this.db
+        .select({
+          matchId: matchScores.matchId,
+          scoreA: matchScores.scoreA,
+          scoreB: matchScores.scoreB,
+        })
+        .from(matchScores)
+        .innerJoin(matches, eq(matchScores.matchId, matches.id))
+        .where(completedFilter)
+        .orderBy(asc(matchScores.id)),
+    ]);
+
+    const teamsByMatchId = new Map<string, [string[], string[]]>();
+    for (const row of participantRows as Array<{
+      matchId: string;
+      teamIndex: number;
+      playerId: string;
+    }>) {
+      if (row.teamIndex !== 0 && row.teamIndex !== 1) continue;
+      const teams: [string[], string[]] = teamsByMatchId.get(row.matchId) ?? [
+        [],
+        [],
+      ];
+      teams[row.teamIndex].push(row.playerId);
+      teamsByMatchId.set(row.matchId, teams);
+    }
+    const scoresByMatchId = new Map<string, MatchScore[]>();
+    for (const row of scoreRows as Array<{
+      matchId: string;
+      scoreA: number;
+      scoreB: number;
+    }>) {
+      const scores = scoresByMatchId.get(row.matchId) ?? [];
+      scores.push({ scoreA: row.scoreA, scoreB: row.scoreB });
+      scoresByMatchId.set(row.matchId, scores);
+    }
+
+    return (
+      matchRows as Array<{
+        id: string;
+        type: string;
+        sessionId: string | null;
+        completedAt: Date | string | number;
+      }>
+    ).map((row): CompletedMatchOutcome => ({
+      id: row.id,
+      type: row.type as MatchType,
+      sessionId: row.sessionId ?? null,
+      completedAt: toDate(row.completedAt),
+      teamPlayerIds: teamsByMatchId.get(row.id) ?? [[], []],
+      scores: scoresByMatchId.get(row.id) ?? [],
+    }));
+  }
+
+  /** 모든 세션과 참여자 id를 쿼리 2번으로 읽는다(세션 날짜 내림차순) */
+  async findSessionsWithParticipantIds(): Promise<SessionWithParticipantIds[]> {
+    const [sessionRows, participantRows] = await Promise.all([
+      this.db.select().from(matchSessions).orderBy(desc(matchSessions.date)),
+      this.db
+        .select({
+          sessionId: matchSessionParticipants.sessionId,
+          playerId: matchSessionParticipants.playerId,
+        })
+        .from(matchSessionParticipants)
+        .orderBy(asc(matchSessionParticipants.id)),
+    ]);
+
+    const participantIdsBySessionId = new Map<string, string[]>();
+    for (const row of participantRows as Array<{
+      sessionId: string;
+      playerId: string;
+    }>) {
+      const ids = participantIdsBySessionId.get(row.sessionId) ?? [];
+      ids.push(row.playerId);
+      participantIdsBySessionId.set(row.sessionId, ids);
+    }
+
+    return (sessionRows as StoredMatchSession[]).map(
+      (session): SessionWithParticipantIds => ({
+        id: session.id,
+        name: session.name,
+        date: toDate(session.date),
+        location: session.location,
+        kind: toSessionKind(session),
+        participantIds: participantIdsBySessionId.get(session.id) ?? [],
+      }),
     );
   }
 

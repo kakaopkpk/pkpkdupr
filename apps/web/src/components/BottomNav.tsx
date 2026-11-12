@@ -6,39 +6,39 @@ import React, {
   useState,
 } from "react";
 import { createPortal } from "react-dom";
+import { Alert, CloseButton } from "@heroui/react";
 import {
-  Alert,
-  Button,
-  CloseButton,
-  Dropdown,
-  Label,
-  Separator,
-  Tabs,
-} from "@heroui/react";
-import {
-  IoAdd,
-  IoAddCircleOutline,
-  IoLogOutOutline,
-  IoPeople,
-  IoPeopleOutline,
-  IoPersonCircle,
-  IoPersonCircleOutline,
-  IoSettingsOutline,
-  IoTennisball,
-  IoTennisballOutline,
-} from "react-icons/io5";
-import AppSettingsSheetBody from "@/components/AppSettingsSheetBody";
-import BottomSheet from "@/components/BottomSheet";
-import HoldToConfirmButton from "@/components/HoldToConfirmButton";
-import RecordMatchDrawerBody from "@/components/RecordMatchDrawerBody";
-import ProfileMatchDetailDrawer from "@/components/ProfileMatchDetailDrawer";
+  JoinSessionBar,
+  MyMatchBar,
+  NavPill,
+  PlusMenu,
+  getTabId,
+  getTabPanelId,
+  TAB_ITEMS,
+} from "@/components/BottomDock";
 import PullToRefreshIndicator, {
   type PullToRefreshStatus,
 } from "@/components/PullToRefreshIndicator";
+import MatchDetailDrawer from "@/components/match/MatchDetailDrawer";
+import MemberProfileDrawer from "@/components/profile/MemberProfileDrawer";
+import RecordMatchSheet from "@/components/record/RecordMatchSheet";
+import CreateSessionSheet from "@/components/session/CreateSessionSheet";
+import SettingsDrawer from "@/components/settings/SettingsDrawer";
+import {
+  AppNavigationProvider,
+  type AppNavigationContextValue,
+  type RecordMatchSheetRequest,
+  type SessionReportRequest,
+} from "@/context/AppNavigationContext";
 import { useAuth } from "@/context/AuthContext";
+import {
+  LiveSessionProvider,
+  useLiveSessionState,
+} from "@/context/LiveSessionContext";
 import {
   TabNavigationProvider,
   type TabDepthEntry,
+  type TabDepthKind,
   type TabDepthStacks,
   type TabKey,
   type PullToRefreshHandler,
@@ -50,29 +50,51 @@ import {
   PULL_TO_REFRESH_THRESHOLD,
 } from "@/hooks/usePullToRefresh";
 import { triggerHapticFeedback } from "@/lib/haptics";
+import { addMatchSessionParticipant } from "@/lib/matchSessions";
 import { DEFAULT_THEME_COLOR, DIMMED_THEME_COLOR } from "@/lib/themeColor";
-import Matches from "@/pages/Matches";
-import Members from "@/pages/Members";
+import Home from "@/pages/Home";
 import Me from "@/pages/Me";
+import Ranking from "@/pages/Ranking";
+import Records from "@/pages/Records";
 
-const TAB_KEYS: TabKey[] = ["match", "members", "me"];
-const TAB_THEME_COLOR_MAP: Record<TabKey, string> = {
-  match: DEFAULT_THEME_COLOR,
-  members: DEFAULT_THEME_COLOR,
-  me: DEFAULT_THEME_COLOR,
+const TAB_KEYS: TabKey[] = TAB_ITEMS.map((item) => item.key);
+const TAB_PAGES: Record<TabKey, React.FC> = {
+  home: Home,
+  records: Records,
+  ranking: Ranking,
+  me: Me,
 };
 
 const emptyDepthStacks = (): TabDepthStacks => ({
-  match: [],
-  members: [],
+  home: [],
+  records: [],
+  ranking: [],
+  me: [],
+});
+
+const emptyDepthEntries = (): Record<TabKey, TabDepthEntry[]> => ({
+  home: [],
+  records: [],
+  ranking: [],
   me: [],
 });
 
 const initiallyVisitedTabs = (): Record<TabKey, boolean> => ({
-  match: false,
-  members: false,
-  me: true,
+  home: true,
+  records: false,
+  ranking: false,
+  me: false,
 });
+
+/** 탭 루트의 당겨서 새로고침과 터치를 막는 깊이 */
+const BLOCKING_DEPTH_KINDS: TabDepthKind[] = ["bottom-sheet", "dropdown"];
+const GLOBAL_MENU_DEPTH_ID = "global-menu";
+
+/** 하단 바 높이·미니바 높이·둘 사이 간격·화면 아래(safe-area 위) 여백(px) */
+const NAV_BAR_HEIGHT_PX = 66;
+const DOCK_BAR_HEIGHT_PX = 60;
+const DOCK_BAR_GAP_PX = 10;
+const NAV_BOTTOM_GAP_PX = 8;
 
 const HISTORY_DEPTH_STATE_KEY = "__pkpkduprTabDepth";
 const PULL_TO_REFRESH_SLOW_REQUEST_MS = 8_000;
@@ -114,43 +136,56 @@ const isTabDepthHistoryState = (
   );
 };
 
+/** 전역 화면 하나의 열림 상태. tabKey는 연 탭이며 닫힌 뒤에도 닫히는 애니메이션을 위해 유지한다 */
+interface GlobalLayerState<T> {
+  value: T | null;
+  tabKey: TabKey;
+}
+
+const closedLayer = <T,>(): GlobalLayerState<T> => ({
+  value: null,
+  tabKey: "home",
+});
+
 const BottomNav: React.FC = () => {
-  const { logout, player } = useAuth();
+  const { player } = useAuth();
   const isOnline = useOnlineStatus();
-  const [selectedTab, setSelectedTab] = useState<TabKey>("me");
+  const liveSessionState = useLiveSessionState(player?.id);
+  const [selectedTab, setSelectedTab] = useState<TabKey>("home");
   const [visitedTabs, setVisitedTabs] =
     useState<Record<TabKey, boolean>>(initiallyVisitedTabs);
   const [depthStacks, setDepthStacks] =
     useState<TabDepthStacks>(emptyDepthStacks);
   const [isGlobalMenuOpen, setIsGlobalMenuOpen] = useState(false);
-  const [globalMenuTabKey, setGlobalMenuTabKey] = useState<TabKey>("me");
-  const [isCreateMatchOpen, setIsCreateMatchOpen] = useState(false);
-  // 열 때마다 올려서 기록 시트를 초기 상태로 리마운트한다
-  const [createMatchSheetKey, setCreateMatchSheetKey] = useState(0);
-  const [createMatchTabKey, setCreateMatchTabKey] = useState<TabKey>("me");
-  const [isAppSettingsOpen, setIsAppSettingsOpen] = useState(false);
-  const [appSettingsTabKey, setAppSettingsTabKey] = useState<TabKey>("me");
-  const [matchesReloadKey, setMatchesReloadKey] = useState(0);
-  const [deepLinkMatchId, setDeepLinkMatchId] = useState<string | null>(
-    getDeepLinkMatchId,
-  );
-  const [deepLinkMatchTabKey, setDeepLinkMatchTabKey] =
-    useState<TabKey>("me");
+  const [globalMenuTabKey, setGlobalMenuTabKey] = useState<TabKey>("home");
+  const [dataVersion, setDataVersion] = useState(0);
+  const [sessionReportRequest, setSessionReportRequest] =
+    useState<SessionReportRequest | null>(null);
+  const [matchDetailLayer, setMatchDetailLayer] =
+    useState<GlobalLayerState<string>>(closedLayer);
+  const [memberProfileLayer, setMemberProfileLayer] =
+    useState<GlobalLayerState<string>>(closedLayer);
+  const [recordMatchLayer, setRecordMatchLayer] =
+    useState<GlobalLayerState<RecordMatchSheetRequest>>(closedLayer);
+  const [createSessionLayer, setCreateSessionLayer] =
+    useState<GlobalLayerState<true>>(closedLayer);
+  const [settingsLayer, setSettingsLayer] =
+    useState<GlobalLayerState<true>>(closedLayer);
+  const [isJoiningLiveSession, setIsJoiningLiveSession] = useState(false);
+  const [joinLiveSessionError, setJoinLiveSessionError] = useState(false);
   const [pullDistance, setPullDistance] = useState(0);
   const [pullToRefreshStatus, setPullToRefreshStatus] =
     useState<PullToRefreshStatus>("idle");
   const [isPullRefreshSlow, setIsPullRefreshSlow] = useState(false);
-  const handledDeepLinkMatchIdRef = useRef<string | null>(null);
+  const handledDeepLinkRef = useRef(false);
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
   const depthScrollContainersRef = useRef(
     new Map<string, HTMLDivElement>(),
   );
   const selectedTabRef = useRef<TabKey>(selectedTab);
-  const depthEntriesRef = useRef<Record<TabKey, TabDepthEntry[]>>({
-    match: [],
-    members: [],
-    me: [],
-  });
+  const depthEntriesRef = useRef<Record<TabKey, TabDepthEntry[]>>(
+    emptyDepthEntries(),
+  );
   const scrollPositionsRef = useRef<Record<string, number>>({});
   const historySequenceRef = useRef(0);
   const currentHistoryDepthRef = useRef<TabDepthHistoryState | null>(null);
@@ -182,8 +217,9 @@ const BottomNav: React.FC = () => {
 
   const syncDepthStacks = useCallback(() => {
     setDepthStacks({
-      match: depthEntriesRef.current.match.map((entry) => entry.id),
-      members: depthEntriesRef.current.members.map((entry) => entry.id),
+      home: depthEntriesRef.current.home.map((entry) => entry.id),
+      records: depthEntriesRef.current.records.map((entry) => entry.id),
+      ranking: depthEntriesRef.current.ranking.map((entry) => entry.id),
       me: depthEntriesRef.current.me.map((entry) => entry.id),
     });
   }, []);
@@ -412,160 +448,6 @@ const BottomNav: React.FC = () => {
     [restoreScrollTop, saveScrollPosition],
   );
 
-  const handleSelectionChange = useCallback(
-    (key: React.Key) => {
-      selectTab(String(key) as TabKey);
-    },
-    [selectTab],
-  );
-
-  const clearDeepLinkMatchIdFromUrl = useCallback((matchId: string) => {
-    const url = new URL(window.location.href);
-    if (url.searchParams.get(DEEP_LINK_MATCH_ID_PARAM) !== matchId) return;
-
-    url.searchParams.delete(DEEP_LINK_MATCH_ID_PARAM);
-    window.history.replaceState(
-      window.history.state,
-      "",
-      `${url.pathname}${url.search}${url.hash}`,
-    );
-  }, []);
-
-  useEffect(() => {
-    if (
-      !deepLinkMatchId ||
-      handledDeepLinkMatchIdRef.current === deepLinkMatchId
-    ) {
-      return;
-    }
-
-    const targetMatchId = deepLinkMatchId;
-    const targetTabKey = selectedTabRef.current;
-    const depthId = `deep-link-match-detail:${targetMatchId}`;
-    const linkedUrl = window.location.href;
-
-    // Keep a clean history entry underneath the drawer. The depth entry then
-    // retains the shareable URL, so closing it with the app back button or the
-    // browser back gesture removes matchId instead of reopening the drawer.
-    window.history.replaceState(
-      window.history.state,
-      "",
-      getUrlWithoutDeepLinkMatchId(),
-    );
-
-    handledDeepLinkMatchIdRef.current = targetMatchId;
-    setDeepLinkMatchTabKey(targetTabKey);
-    saveScrollPosition(targetTabKey);
-    pushDepth(targetTabKey, {
-      id: depthId,
-      kind: "match-detail",
-      onClose: () => {
-        handledDeepLinkMatchIdRef.current = null;
-        clearDeepLinkMatchIdFromUrl(targetMatchId);
-        setDeepLinkMatchId((current) =>
-          current === targetMatchId ? null : current,
-        );
-        restoreScrollTop(targetTabKey);
-      },
-    });
-    window.history.replaceState(window.history.state, "", linkedUrl);
-  }, [
-    clearDeepLinkMatchIdFromUrl,
-    deepLinkMatchId,
-    pushDepth,
-    restoreScrollTop,
-    saveScrollPosition,
-  ]);
-
-  // Capture the pre-selection tab before HeroUI handles the press so moving to
-  // a tab cannot be mistaken for a re-tap.
-  const handleActiveTabPointerDown = useCallback(
-    (tabKey: TabKey) => {
-      if (selectedTabRef.current !== tabKey) return;
-
-      if (getScrollTop() > 0) {
-        scrollToTop("smooth");
-        return;
-      }
-
-      requestCloseTopDepth(tabKey);
-    },
-    [getScrollTop, requestCloseTopDepth, scrollToTop],
-  );
-
-  const openGlobalMenu = useCallback(() => {
-    const tabKey = selectedTabRef.current;
-    setGlobalMenuTabKey(tabKey);
-    pushDepth(tabKey, {
-      id: "global-menu",
-      kind: "dropdown",
-      onClose: () => setIsGlobalMenuOpen(false),
-    });
-    setIsGlobalMenuOpen(true);
-  }, [pushDepth]);
-
-  const openCreateMatchSheet = useCallback(() => {
-    const tabKey = selectedTabRef.current;
-    setCreateMatchTabKey(tabKey);
-    setCreateMatchSheetKey((prev) => prev + 1);
-    pushDepth(tabKey, {
-      id: "create-match-sheet",
-      kind: "bottom-sheet",
-      onClose: () => setIsCreateMatchOpen(false),
-    });
-    setIsCreateMatchOpen(true);
-  }, [pushDepth]);
-
-  const openAppSettingsSheet = useCallback(() => {
-    const tabKey = selectedTabRef.current;
-    setAppSettingsTabKey(tabKey);
-    pushDepth(tabKey, {
-      id: "app-settings-sheet",
-      kind: "bottom-sheet",
-      onClose: () => setIsAppSettingsOpen(false),
-    });
-    setIsAppSettingsOpen(true);
-  }, [pushDepth]);
-
-  const handleGlobalMenuOpenChange = useCallback(
-    (isOpen: boolean) => {
-      if (isOpen) {
-        openGlobalMenu();
-        return;
-      }
-
-      closeDepth(globalMenuTabKey, "global-menu");
-      setIsGlobalMenuOpen(false);
-    },
-    [closeDepth, globalMenuTabKey, openGlobalMenu],
-  );
-
-  const handleCreateMatchOpenChange = useCallback(
-    (isOpen: boolean) => {
-      if (isOpen) {
-        openCreateMatchSheet();
-        return;
-      }
-
-      closeDepth(createMatchTabKey, "create-match-sheet");
-      setIsCreateMatchOpen(false);
-    },
-    [closeDepth, createMatchTabKey, openCreateMatchSheet],
-  );
-
-  const handleAppSettingsOpenChange = useCallback(
-    (isOpen: boolean) => {
-      if (isOpen) {
-        openAppSettingsSheet();
-        return;
-      }
-
-      closeDepth(appSettingsTabKey, "app-settings-sheet");
-      setIsAppSettingsOpen(false);
-    },
-    [appSettingsTabKey, closeDepth, openAppSettingsSheet],
-  );
-
   useEffect(() => {
     selectedTabRef.current = selectedTab;
   }, [selectedTab]);
@@ -601,109 +483,218 @@ const BottomNav: React.FC = () => {
       window.removeEventListener("popstate", handlePopState);
     };
   }, [removeDepthEntry]);
-
-  const handleGlobalAction = (key: React.Key) => {
-    const action = () => {
-      switch (String(key)) {
-        case "create-match":
-          if (!isOnline) return;
-          openCreateMatchSheet();
-          break;
-        case "settings":
-          openAppSettingsSheet();
-          break;
-        default:
-          break;
+  const handleTabPress = useCallback(
+    (tabKey: TabKey) => {
+      if (selectedTabRef.current !== tabKey) {
+        selectTab(tabKey);
+        return;
       }
-    };
 
-    if (!closeDepth(globalMenuTabKey, "global-menu", action)) {
-      setIsGlobalMenuOpen(false);
-      action();
-    }
-  };
+      // 활성 탭을 다시 누르면 맨 위로, 이미 맨 위면 가장 위 깊이를 닫는다
+      if (getScrollTop() > 0) {
+        scrollToTop("smooth");
+        return;
+      }
 
-  const handleLogout = useCallback(() => {
-    const action = () => {
-      void logout();
-    };
+      requestCloseTopDepth(tabKey);
+    },
+    [getScrollTop, requestCloseTopDepth, scrollToTop, selectTab],
+  );
 
-    if (!closeDepth(globalMenuTabKey, "global-menu", action)) {
-      setIsGlobalMenuOpen(false);
-      action();
-    }
-  }, [closeDepth, globalMenuTabKey, logout]);
+  const openGlobalMenu = useCallback(() => {
+    const tabKey = selectedTabRef.current;
+    setGlobalMenuTabKey(tabKey);
+    pushDepth(tabKey, {
+      id: GLOBAL_MENU_DEPTH_ID,
+      kind: "dropdown",
+      onClose: () => setIsGlobalMenuOpen(false),
+    });
+    setIsGlobalMenuOpen(true);
+  }, [pushDepth]);
 
-  const handleRecordMatch = useCallback(() => {
-    setMatchesReloadKey((prev) => prev + 1);
+  /** 메뉴를 닫고, 히스토리 정리가 끝난 뒤 afterClose를 실행한다 */
+  const closeGlobalMenu = useCallback(
+    (afterClose?: () => void) => {
+      if (!closeDepth(globalMenuTabKey, GLOBAL_MENU_DEPTH_ID, afterClose)) {
+        setIsGlobalMenuOpen(false);
+        afterClose?.();
+      }
+    },
+    [closeDepth, globalMenuTabKey],
+  );
+
+  const openMatchDetail = useCallback((matchId: string) => {
+    setMatchDetailLayer((current) => ({
+      value: matchId,
+      tabKey: current.value ? current.tabKey : selectedTabRef.current,
+    }));
   }, []);
 
-  const handleRecordMatchDone = () => {
-    if (
-      !closeDepth(createMatchTabKey, "create-match-sheet", () =>
-        selectTab("match"),
-      )
-    ) {
-      setIsCreateMatchOpen(false);
-      selectTab("match");
-    }
-  };
+  const openMemberProfile = useCallback(
+    (playerId: string) => {
+      if (playerId === player?.id) {
+        selectTab("me");
+        return;
+      }
 
-  const handleCancelCreateMatch = () => {
-    if (!closeDepth(createMatchTabKey, "create-match-sheet")) {
-      setIsCreateMatchOpen(false);
+      setMemberProfileLayer((current) => ({
+        value: playerId,
+        tabKey: current.value ? current.tabKey : selectedTabRef.current,
+      }));
+    },
+    [player?.id, selectTab],
+  );
+
+  const openRecordMatch = useCallback((request: RecordMatchSheetRequest) => {
+    setRecordMatchLayer((current) => ({
+      value: request,
+      tabKey: current.value ? current.tabKey : selectedTabRef.current,
+    }));
+  }, []);
+
+  const openCreateSession = useCallback(() => {
+    setCreateSessionLayer((current) =>
+      current.value ? current : { value: true, tabKey: selectedTabRef.current },
+    );
+  }, []);
+
+  const openSettings = useCallback(() => {
+    setSettingsLayer((current) =>
+      current.value ? current : { value: true, tabKey: selectedTabRef.current },
+    );
+  }, []);
+
+  const openSessionReport = useCallback(
+    (sessionId: string) => {
+      setSessionReportRequest({ sessionId, requestedAt: Date.now() });
+      selectTab("records");
+    },
+    [selectTab],
+  );
+
+  const reloadLiveSession = liveSessionState.reload;
+  const notifyDataChanged = useCallback(() => {
+    setDataVersion((version) => version + 1);
+    void reloadLiveSession();
+  }, [reloadLiveSession]);
+
+  const closeMatchDetail = useCallback(
+    () => setMatchDetailLayer((current) => ({ ...current, value: null })),
+    [],
+  );
+  const closeMemberProfile = useCallback(
+    () => setMemberProfileLayer((current) => ({ ...current, value: null })),
+    [],
+  );
+  const closeRecordMatch = useCallback(
+    () => setRecordMatchLayer((current) => ({ ...current, value: null })),
+    [],
+  );
+  const closeCreateSession = useCallback(
+    () => setCreateSessionLayer((current) => ({ ...current, value: null })),
+    [],
+  );
+  const closeSettings = useCallback(
+    () => setSettingsLayer((current) => ({ ...current, value: null })),
+    [],
+  );
+
+  const handleSessionCreated = useCallback(() => {
+    notifyDataChanged();
+    selectTab("home");
+  }, [notifyDataChanged, selectTab]);
+
+  // ?matchId= 딥링크는 아래에 matchId 없는 히스토리를 남기고 경기 상세를 연다.
+  // 그래서 뒤로가기로 닫으면 주소에서 matchId가 빠지고 드로어가 다시 열리지 않는다
+  useEffect(() => {
+    if (handledDeepLinkRef.current) return;
+    handledDeepLinkRef.current = true;
+
+    const matchId = getDeepLinkMatchId();
+    if (!matchId) return;
+
+    window.history.replaceState(
+      window.history.state,
+      "",
+      getUrlWithoutDeepLinkMatchId(),
+    );
+    openMatchDetail(matchId);
+  }, [openMatchDetail]);
+
+  const joinLiveSession = useCallback(async () => {
+    const sessionId = liveSessionState.liveSession?.id;
+    if (!sessionId || !player?.id || isJoiningLiveSession) return;
+
+    setIsJoiningLiveSession(true);
+    setJoinLiveSessionError(false);
+    try {
+      await addMatchSessionParticipant(sessionId, player.id);
+      setDataVersion((version) => version + 1);
+      // 참여자 목록이 바뀐 세션을 받아야 알림 바가 사라진다
+      await reloadLiveSession();
+    } catch {
+      setJoinLiveSessionError(true);
+    } finally {
+      setIsJoiningLiveSession(false);
     }
-  };
+  }, [
+    isJoiningLiveSession,
+    liveSessionState.liveSession?.id,
+    player?.id,
+    reloadLiveSession,
+  ]);
 
   const isGlobalMenuVisible =
     isGlobalMenuOpen && globalMenuTabKey === selectedTab;
-  const hasActiveBottomSheet = depthEntriesRef.current[selectedTab].some(
-    (entry) => entry.kind === "bottom-sheet",
-  );
-  const isDimmedOverlayVisible =
-    hasActiveBottomSheet ||
-    isGlobalMenuVisible ||
-    (isCreateMatchOpen && createMatchTabKey === selectedTab) ||
-    (isAppSettingsOpen && appSettingsTabKey === selectedTab);
-  const hasBlockingLayer = useMemo(() => {
-    const activeDepthEntries = depthEntriesRef.current[selectedTab];
-    const hasBlockingDepth = activeDepthEntries.some(
-      (entry) => entry.kind === "bottom-sheet" || entry.kind === "dropdown",
-    );
-
-    return (
-      hasBlockingDepth ||
+  const hasBlockingLayer = useMemo(
+    () =>
       isGlobalMenuVisible ||
-      (isCreateMatchOpen && createMatchTabKey === selectedTab) ||
-      (isAppSettingsOpen && appSettingsTabKey === selectedTab)
-    );
-  }, [
-    appSettingsTabKey,
-    createMatchTabKey,
-    depthStacks,
-    isAppSettingsOpen,
-    isCreateMatchOpen,
-    isGlobalMenuVisible,
-    selectedTab,
-  ]);
-
-  const deepLinkMatchDepthId = deepLinkMatchId
-    ? `deep-link-match-detail:${deepLinkMatchId}`
-    : null;
-  const isDeepLinkMatchDrawerOpen =
-    !!deepLinkMatchDepthId &&
-    depthStacks[deepLinkMatchTabKey].includes(deepLinkMatchDepthId);
-  const registerDeepLinkMatchScrollContainer = useCallback(
-    (element: HTMLDivElement | null) => {
-      if (!deepLinkMatchDepthId) return;
-      registerScrollContainer(
-        deepLinkMatchTabKey,
-        deepLinkMatchDepthId,
-        element,
-      );
-    },
-    [deepLinkMatchDepthId, deepLinkMatchTabKey, registerScrollContainer],
+      depthEntriesRef.current[selectedTab].some((entry) =>
+        BLOCKING_DEPTH_KINDS.includes(entry.kind),
+      ),
+    // depthStacks는 depthEntriesRef가 바뀔 때마다 함께 바뀐다
+    [depthStacks, isGlobalMenuVisible, selectedTab],
   );
+
+  const myInProgressMatch = liveSessionState.myInProgressMatch;
+  const liveSession = liveSessionState.liveSession;
+  const isMyMatchBarVisible =
+    selectedTab !== "home" && !!myInProgressMatch && !!player?.id;
+  const isJoinSessionBarVisible =
+    selectedTab === "home" && !!liveSession && !liveSessionState.isParticipant;
+  const isDockBarVisible = isMyMatchBarVisible || isJoinSessionBarVisible;
+
+  useEffect(() => {
+    if (!isJoinSessionBarVisible) setJoinLiveSessionError(false);
+  }, [isJoinSessionBarVisible]);
+
+  // 페이지·시트가 하단 바에 가리지 않게 화면 아래에서 바(미니바·알림 바 포함) 윗변까지 거리를 알린다
+  useEffect(() => {
+    const dockHeightPx =
+      NAV_BAR_HEIGHT_PX +
+      NAV_BOTTOM_GAP_PX +
+      (isDockBarVisible ? DOCK_BAR_HEIGHT_PX + DOCK_BAR_GAP_PX : 0);
+    const rootStyle = document.documentElement.style;
+    rootStyle.setProperty(
+      "--app-bottom-dock-height",
+      `calc(${dockHeightPx}px + var(--safe-bottom))`,
+    );
+
+    return () => {
+      rootStyle.removeProperty("--app-bottom-dock-height");
+    };
+  }, [isDockBarVisible]);
+
+  useEffect(() => {
+    if (!isGlobalMenuVisible) return;
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") closeGlobalMenu();
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [closeGlobalMenu, isGlobalMenuVisible]);
 
   useEffect(() => {
     if (typeof document === "undefined") {
@@ -714,21 +705,16 @@ const BottomNav: React.FC = () => {
       'meta[name="theme-color"]',
     );
 
-    if (!themeColorMeta) {
+    if (!themeColorMeta || !isGlobalMenuVisible) {
       return;
     }
 
-    themeColorMeta.setAttribute(
-      "content",
-      isDimmedOverlayVisible
-        ? DIMMED_THEME_COLOR
-        : TAB_THEME_COLOR_MAP[selectedTab],
-    );
+    themeColorMeta.setAttribute("content", DIMMED_THEME_COLOR);
 
     return () => {
       themeColorMeta.setAttribute("content", DEFAULT_THEME_COLOR);
     };
-  }, [isDimmedOverlayVisible, selectedTab]);
+  }, [isGlobalMenuVisible]);
 
   const resetPullToRefresh = useCallback(
     (status: PullToRefreshStatus = "idle") => {
@@ -994,7 +980,8 @@ const BottomNav: React.FC = () => {
     setPullToRefreshStatus("refreshing");
 
     try {
-      await refreshHandler();
+      // 진행 중 세션(미니바·참여 알림 바)도 함께 새로 읽는다. reload는 실패해도 throw하지 않는다
+      await Promise.all([refreshHandler(), liveSessionState.reload()]);
       if (pullRefreshRequestIdRef.current !== requestId) return;
       clearPullRefreshSlowWarning();
       schedulePullToRefreshReset("refreshing", 350);
@@ -1006,6 +993,7 @@ const BottomNav: React.FC = () => {
   }, [
     hasBlockingLayer,
     clearPullRefreshSlowWarning,
+    liveSessionState,
     resetPullToRefresh,
     schedulePullToRefreshReset,
     selectedTab,
@@ -1055,284 +1043,206 @@ const BottomNav: React.FC = () => {
     ],
   );
 
+  const appNavigationContextValue = useMemo<AppNavigationContextValue>(
+    () => ({
+      selectTab,
+      openMatchDetail,
+      openMemberProfile,
+      openRecordMatch,
+      openCreateSession,
+      openSettings,
+      openSessionReport,
+      sessionReportRequest,
+      notifyDataChanged,
+      dataVersion,
+    }),
+    [
+      dataVersion,
+      notifyDataChanged,
+      openCreateSession,
+      openMatchDetail,
+      openMemberProfile,
+      openRecordMatch,
+      openSessionReport,
+      openSettings,
+      selectTab,
+      sessionReportRequest,
+    ],
+  );
+
+  const dockBottom =
+    "bottom-[calc(var(--safe-bottom)+var(--app-keyboard-offset)+8px)]";
+
   return (
     <TabNavigationProvider value={navigationContextValue}>
-      <Tabs
-        selectedKey={selectedTab}
-        onSelectionChange={handleSelectionChange}
-        className="relative flex h-full w-full flex-col overflow-hidden bg-white pb-[var(--safe-bottom)]"
-      >
-        <div className="fixed bottom-[calc(var(--safe-bottom)+var(--app-keyboard-offset))] left-1/2 z-20 flex app-shell-width -translate-x-1/2 items-end px-3 pb-3 pt-3">
-          <Tabs.ListContainer className="mr-[5.07rem] min-w-0 flex-1 border-0 bg-transparent p-0 shadow-none backdrop-blur-0">
-            <Tabs.List
-              aria-label="Bottom navigation"
-              className="grid grid-cols-3 gap-1 rounded-full shadow-[0_3px_10px_rgba(15,23,42,0.12)] *:min-w-0"
-            >
-              <Tabs.Tab
-                id="match"
-                onPointerDownCapture={() =>
-                  handleActiveTabPointerDown("match")
-                }
-                className="min-h-[3.2rem] w-full first:rounded-l-full last:rounded-r-full text-default-500 data-[selected=true]:text-pkpk-primary-bg"
-              >
-                <div className="flex flex-col items-center gap-1 py-1.5">
-                  {selectedTab === "match" ? (
-                    <IoTennisball className="text-lg" />
-                  ) : (
-                    <IoTennisballOutline className="text-lg" />
-                  )}
-                  <span className="text-[13.2px] leading-none">Matches</span>
-                </div>
-                <Tabs.Indicator />
-              </Tabs.Tab>
-              <Tabs.Tab
-                id="members"
-                onPointerDownCapture={() =>
-                  handleActiveTabPointerDown("members")
-                }
-                className="min-h-[3.2rem] w-full text-default-500 data-[selected=true]:text-pkpk-primary-bg"
-              >
-                <div className="flex flex-col items-center gap-1 py-1.5">
-                  {selectedTab === "members" ? (
-                    <IoPeople className="text-lg" />
-                  ) : (
-                    <IoPeopleOutline className="text-lg" />
-                  )}
-                  <span className="text-[13.2px] leading-none">Members</span>
-                </div>
-                <Tabs.Indicator />
-              </Tabs.Tab>
-              <Tabs.Tab
-                id="me"
-                onPointerDownCapture={() => handleActiveTabPointerDown("me")}
-                className="min-h-[3.2rem] w-full first:rounded-l-full last:rounded-r-full text-default-500 data-[selected=true]:text-pkpk-primary-bg"
-              >
-                <div className="flex flex-col items-center gap-1 py-1.5">
-                  {selectedTab === "me" ? (
-                    <IoPersonCircle className="text-lg" />
-                  ) : (
-                    <IoPersonCircleOutline className="text-lg" />
-                  )}
-                  <span className="text-[13.2px] leading-none">Me</span>
-                </div>
-                <Tabs.Indicator />
-              </Tabs.Tab>
-            </Tabs.List>
-          </Tabs.ListContainer>
-        </div>
-
-        <div
-          ref={scrollContainerRef}
-          className="app-tab-panel-scroll-area relative flex-1"
-          onTouchMove={handlePullTouchMove}
-          onTouchEnd={handlePullTouchEnd}
-          onTouchCancel={() => resetPullToRefresh()}
-        >
-          <PullToRefreshIndicator
-            distance={pullDistance}
-            status={pullToRefreshStatus}
-            threshold={PULL_TO_REFRESH_THRESHOLD}
-          />
-          {isPullRefreshSlow ? (
-            <div className="absolute inset-x-0 top-14 z-30 px-3">
-              <Alert
-                status="warning"
-                className="items-center rounded-2xl border border-amber-200 bg-white/95 px-3 py-2 shadow-lg backdrop-blur"
-              >
-                <Alert.Indicator className="shrink-0 self-center" />
-                <Alert.Content className="min-w-0 gap-0 self-center">
-                  <Alert.Title className="text-sm font-bold text-pkpk-sub-font">
-                    응답이 지연되고 있어요.
-                  </Alert.Title>
-                  <Alert.Description className="text-xs font-semibold text-[#888]">
-                    네트워크 연결 상태를 확인해주세요.
-                  </Alert.Description>
-                </Alert.Content>
-                <CloseButton
-                  className="shrink-0 self-center"
-                  aria-label="지연 안내 닫기"
-                  onClick={() => setIsPullRefreshSlow(false)}
-                />
-              </Alert>
-            </div>
-          ) : null}
-          <Tabs.Panel
-            id="match"
-            shouldForceMount={visitedTabs.match}
-            className="min-h-full bg-pkpk-bg p-0 pb-[calc(5rem+var(--safe-bottom))] data-[inert=true]:hidden"
-          >
-            <Matches reloadKey={matchesReloadKey} />
-          </Tabs.Panel>
-          <Tabs.Panel
-            id="members"
-            shouldForceMount={visitedTabs.members}
-            className="min-h-full bg-pkpk-bg p-0 pb-[calc(5rem+var(--safe-bottom))] data-[inert=true]:hidden"
-          >
-            <Members />
-          </Tabs.Panel>
-          <Tabs.Panel
-            id="me"
-            shouldForceMount={visitedTabs.me}
-            className="min-h-full bg-pkpk-bg p-0 pb-[calc(5rem+var(--safe-bottom))] data-[inert=true]:hidden"
-          >
-            <Me />
-          </Tabs.Panel>
-          {/* <div
-            aria-hidden="true"
-            className="h-[calc(5.5rem+env(safe-area-inset-bottom))] shrink-0"
-          /> */}
-        </div>
-
-        <div
-          aria-hidden="true"
-          className="pointer-events-none absolute inset-x-0 bottom-0 z-10 h-[calc(5.5rem+env(safe-area-inset-bottom)+var(--app-keyboard-offset))] bg-gradient-to-t from-white via-white/100 to-transparent"
-        />
-
-      </Tabs>
-      <BottomSheet
-        isOpen={isCreateMatchOpen}
-        isActive={createMatchTabKey === selectedTab}
-        onOpenChange={handleCreateMatchOpenChange}
-        ariaLabel="Record match"
-        isFixedHeight
-      >
-        <RecordMatchDrawerBody
-          key={createMatchSheetKey}
-          isOnline={isOnline}
-          onCancel={handleCancelCreateMatch}
-          onRecorded={handleRecordMatch}
-          onDone={handleRecordMatchDone}
-        />
-      </BottomSheet>
-
-      <BottomSheet
-        isOpen={isAppSettingsOpen}
-        isActive={appSettingsTabKey === selectedTab}
-        onOpenChange={handleAppSettingsOpenChange}
-        ariaLabel="앱 설정"
-      >
-        <AppSettingsSheetBody />
-      </BottomSheet>
-      {deepLinkMatchId && deepLinkMatchDepthId ? (
-        <ProfileMatchDetailDrawer
-          isOpen={isDeepLinkMatchDrawerOpen}
-          isActive={deepLinkMatchTabKey === selectedTab}
-          tabKey={deepLinkMatchTabKey}
-          match={null}
-          matchId={deepLinkMatchId}
-          currentPlayerId={player?.id}
-          onExited={() => undefined}
-          onScrollContainerChange={registerDeepLinkMatchScrollContainer}
-          layer={70}
-        />
-      ) : null}
-      {typeof document !== "undefined"
-        ? createPortal(
+      <AppNavigationProvider value={appNavigationContextValue}>
+        <LiveSessionProvider value={liveSessionState}>
+          <div className="relative flex h-full w-full flex-col overflow-hidden bg-pk-bg">
             <div
-              className={`pointer-events-none fixed bottom-[calc(var(--safe-bottom)+var(--app-keyboard-offset)+0.75rem)] left-1/2 flex app-shell-width -translate-x-1/2 justify-end px-3 ${
-                isGlobalMenuVisible ? "z-[60]" : "z-40"
-              }`}
+              ref={scrollContainerRef}
+              className="app-tab-panel-scroll-area relative flex-1"
+              onTouchMove={handlePullTouchMove}
+              onTouchEnd={handlePullTouchEnd}
+              onTouchCancel={() => resetPullToRefresh()}
             >
-              <div className="pointer-events-auto">
-                <Dropdown
-                  isOpen={isGlobalMenuVisible}
-                  onOpenChange={handleGlobalMenuOpenChange}
-                >
-                  <Button
-                    isIconOnly
-                    aria-label="Global plus menu"
-                    className={`h-[4.32rem] w-[4.32rem] shrink-0 rounded-full text-white shadow-[0_3px_10px_rgba(15,23,42,0.22)] transition-colors duration-[84ms] ${
+              <PullToRefreshIndicator
+                distance={pullDistance}
+                status={pullToRefreshStatus}
+                threshold={PULL_TO_REFRESH_THRESHOLD}
+              />
+              {isPullRefreshSlow ? (
+                <div className="absolute inset-x-0 top-14 z-30 px-3">
+                  <Alert
+                    status="warning"
+                    className="items-center rounded-2xl border border-amber-200 bg-white/95 px-3 py-2 shadow-lg backdrop-blur"
+                  >
+                    <Alert.Indicator className="shrink-0 self-center" />
+                    <Alert.Content className="min-w-0 gap-0 self-center">
+                      <Alert.Title className="text-sm font-bold text-pk-sub">
+                        응답이 지연되고 있어요.
+                      </Alert.Title>
+                      <Alert.Description className="text-xs font-semibold text-[#888]">
+                        네트워크 연결 상태를 확인해주세요.
+                      </Alert.Description>
+                    </Alert.Content>
+                    <CloseButton
+                      className="shrink-0 self-center"
+                      aria-label="지연 안내 닫기"
+                      onClick={() => setIsPullRefreshSlow(false)}
+                    />
+                  </Alert>
+                </div>
+              ) : null}
+              {/* 한 번 연 탭은 숨겨도 마운트를 유지한다(keep-alive) */}
+              {TAB_ITEMS.map(({ key }) => {
+                if (!visitedTabs[key]) return null;
+                const TabPage = TAB_PAGES[key];
+
+                return (
+                  <div
+                    key={key}
+                    role="tabpanel"
+                    id={getTabPanelId(key)}
+                    aria-labelledby={getTabId(key)}
+                    hidden={selectedTab !== key}
+                    className="min-h-full bg-pk-bg pb-[calc(var(--app-bottom-dock-height)+1rem)]"
+                  >
+                    <TabPage />
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* 바 뒤 콘텐츠가 흐려지며 끝나게 한다 */}
+            <div
+              aria-hidden="true"
+              className="pointer-events-none absolute inset-x-0 bottom-0 z-10 h-[calc(var(--app-bottom-dock-height)+var(--app-keyboard-offset)+5.5rem)] bg-[linear-gradient(to_bottom,rgba(243,245,249,0),#f3f5f9_62%)]"
+            />
+
+            <div
+              className={`fixed left-1/2 z-20 flex app-shell-width -translate-x-1/2 flex-col gap-2.5 px-4 ${dockBottom}`}
+            >
+              {isMyMatchBarVisible && myInProgressMatch && player?.id ? (
+                <MyMatchBar
+                  match={myInProgressMatch}
+                  playerId={player.id}
+                  isActionDisabled={!isOnline}
+                  onEnterScore={() =>
+                    openRecordMatch({
+                      kind: "score",
+                      matchId: myInProgressMatch.id,
+                    })
+                  }
+                />
+              ) : null}
+              {isJoinSessionBarVisible && liveSession ? (
+                <JoinSessionBar
+                  sessionName={liveSession.name}
+                  isPending={isJoiningLiveSession}
+                  hasError={joinLiveSessionError}
+                  isActionDisabled={!isOnline || !player?.id}
+                  onJoin={() => void joinLiveSession()}
+                />
+              ) : null}
+              <div className="flex items-center gap-2.5">
+                <NavPill selectedTab={selectedTab} onPressTab={handleTabPress} />
+                {/* + 버튼 자리. 버튼은 dim 위에 올라와야 해서 따로 그린다 */}
+                <div aria-hidden="true" className="size-[66px] shrink-0" />
+              </div>
+            </div>
+          </div>
+
+          <MatchDetailDrawer
+            matchId={matchDetailLayer.value}
+            tabKey={matchDetailLayer.tabKey}
+            onClose={closeMatchDetail}
+          />
+          <MemberProfileDrawer
+            playerId={memberProfileLayer.value}
+            tabKey={memberProfileLayer.tabKey}
+            onClose={closeMemberProfile}
+          />
+          <RecordMatchSheet
+            request={recordMatchLayer.value}
+            tabKey={recordMatchLayer.tabKey}
+            onClose={closeRecordMatch}
+          />
+          <CreateSessionSheet
+            isOpen={!!createSessionLayer.value}
+            tabKey={createSessionLayer.tabKey}
+            onClose={closeCreateSession}
+            onCreated={handleSessionCreated}
+          />
+          <SettingsDrawer
+            isOpen={!!settingsLayer.value}
+            tabKey={settingsLayer.tabKey}
+            onClose={closeSettings}
+          />
+
+          {typeof document !== "undefined"
+            ? createPortal(
+                <>
+                  <button
+                    type="button"
+                    aria-label="새로 만들기 메뉴 닫기"
+                    aria-hidden={!isGlobalMenuVisible}
+                    tabIndex={-1}
+                    onClick={() => closeGlobalMenu()}
+                    className={`fixed inset-0 z-50 cursor-default bg-[rgba(15,23,42,0.3)] transition-opacity duration-[84ms] ease-out ${
                       isGlobalMenuVisible
-                        ? "bg-[#f8626c] hover:bg-[#f8626c]/90"
-                        : "bg-pkpk-primary-bg hover:bg-pkpk-primary-bg/90"
+                        ? "opacity-100"
+                        : "pointer-events-none opacity-0"
+                    }`}
+                  />
+                  <div
+                    className={`pointer-events-none fixed left-1/2 flex app-shell-width -translate-x-1/2 justify-end px-4 ${dockBottom} ${
+                      isGlobalMenuVisible ? "z-[60]" : "z-40"
                     }`}
                   >
-                    <IoAdd
-                      className={`h-7 w-7 shrink-0 transition-transform duration-[84ms] ${
-                        isGlobalMenuVisible ? "rotate-45" : "rotate-0"
-                      }`}
-                      style={{ width: "33.6px", height: "33.6px" }}
-                    />
-                  </Button>
-                  <Dropdown.Popover
-                    className="global-plus-menu-popover relative z-[70] min-w-[194px] overflow-visible border-0 bg-transparent p-0 shadow-none"
-                    offset={12}
-                    placement="top end"
-                  >
-                    <div className="overflow-hidden rounded-2xl border border-border bg-white shadow-lg">
-                      <div className="px-1.5 py-1.5">
-                        <HoldToConfirmButton
-                          holdDurationMs={1000}
-                          ariaLabel="길게 눌러 로그아웃"
-                          onComplete={handleLogout}
-                          className="rounded-lg text-[#f8626c] hover:bg-[#f8626c]/6"
-                          progressClassName="bg-[#f8626c]/18"
-                        >
-                          <IoLogOutOutline className="size-4 shrink-0 text-[#f8626c]" />
-                          <span className="truncate text-[1.05rem] font-medium leading-5 text-[#f8626c]">
-                            길게 눌러 로그아웃
-                          </span>
-                        </HoldToConfirmButton>
-                      </div>
-                      <Separator className="mx-[3%] w-[94%]" />
-                      <Dropdown.Menu
-                        onAction={handleGlobalAction}
-                        className="bg-transparent"
-                      >
-                        <Dropdown.Item
-                          id="settings"
-                          textValue="Settings"
-                          className="data-[focused]:bg-pkpk-primary-bg/5 data-[hovered]:bg-pkpk-primary-bg/5"
-                        >
-                          <IoSettingsOutline className="size-4 shrink-0 text-pkpk-sub-font" />
-                          <Label className="text-[1.05rem] font-medium leading-5">
-                            설정
-                          </Label>
-                        </Dropdown.Item>
-                      </Dropdown.Menu>
+                    <div className="pointer-events-auto">
+                      <PlusMenu
+                        isOpen={isGlobalMenuVisible}
+                        isDisabled={!isOnline}
+                        onToggle={() =>
+                          isGlobalMenuVisible
+                            ? closeGlobalMenu()
+                            : openGlobalMenu()
+                        }
+                        onRecordMatch={() =>
+                          closeGlobalMenu(() => openRecordMatch({ kind: "new" }))
+                        }
+                        onCreateSession={() =>
+                          closeGlobalMenu(openCreateSession)
+                        }
+                      />
                     </div>
-                    <div className="mt-2 overflow-hidden rounded-2xl border border-border bg-white shadow-lg">
-                      <Dropdown.Menu
-                        onAction={handleGlobalAction}
-                        className="bg-transparent"
-                      >
-                        <Dropdown.Item
-                          id="create-match"
-                          textValue="Record match"
-                          isDisabled={!isOnline}
-                          className="data-[focused]:bg-pkpk-primary-bg/5 data-[hovered]:bg-pkpk-primary-bg/5"
-                        >
-                          <IoAddCircleOutline className="size-4 shrink-0 text-pkpk-sub-font" />
-                          <Label className="text-[1.05rem] font-medium leading-5">
-                            경기 기록
-                          </Label>
-                        </Dropdown.Item>
-                      </Dropdown.Menu>
-                    </div>
-                  </Dropdown.Popover>
-                </Dropdown>
-              </div>
-            </div>,
-            document.body,
-          )
-        : null}
-      {typeof document !== "undefined"
-        ? createPortal(
-            <button
-              type="button"
-              aria-label="전역 메뉴 닫기"
-              aria-hidden={!isGlobalMenuVisible}
-              tabIndex={-1}
-              onClick={() => handleGlobalMenuOpenChange(false)}
-              className={`fixed inset-0 z-50 cursor-default bg-black/30 backdrop-blur-sm transition-opacity duration-[84ms] ease-out ${
-                isGlobalMenuVisible
-                  ? "opacity-100"
-                  : "pointer-events-none opacity-0"
-              }`}
-            />,
-            document.body,
-          )
-        : null}
+                  </div>
+                </>,
+                document.body,
+              )
+            : null}
+        </LiveSessionProvider>
+      </AppNavigationProvider>
     </TabNavigationProvider>
   );
 };

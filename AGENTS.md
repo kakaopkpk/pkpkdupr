@@ -17,7 +17,7 @@ apps/admin-web (:3100) ─┼─> apps/api (:4000) ─함수 호출─> packages
 
 | 영역 | 책임 |
 | --- | --- |
-| `apps/web` | React 19 사용자 앱. 인증, Match / Members / Me 탭, PWA를 담당합니다. |
+| `apps/web` | React 19 사용자 앱. 인증, 홈 / 기록 / 랭킹 / 나 4탭, PWA를 담당합니다. |
 | `apps/admin-web` | React 18 관리자 로그인과 회원·경기·평점 운영 화면을 담당합니다. |
 | `apps/api` | Express 공개 API, Supabase Auth access token 확인(`Authorization: Bearer`)과 회원 연결, 관리자 권한 검사, 관리자의 계정 발급·비밀번호 초기화·아이디 변경(Auth admin API)을 담당합니다. 같은 `app`을 로컬 Node(`index.ts`가 listen)와 Supabase Edge Function `api`(`edge.ts` 번들)가 서비스합니다. Node 시작 시에만 `initDatabase()`(dev mock 시딩)·관리자 동기화를 실행하고(스키마는 Supabase CLI가 적용), 저장소 인스턴스는 `apps/api/src/db.ts`에서만 만듭니다. 저장소 예외를 공개 API 상태 코드로 바꾸는 처리도 api가 맡습니다. |
 | `packages/db` | `@pkpkdupr/db` 워크스페이스 라이브러리. postgres.js + Drizzle(`pg-core`) 기반 저장소와 dev mock 데이터를 제공합니다. 연결은 env `DATABASE_URL`로 정하며 없으면 기동 시 오류가 납니다. 단, Edge 런타임에서는 `apps/api/src/db.ts`가 `DATABASE_URL`이 없을 때 `SUPABASE_DB_URL`로 대체합니다. Node·Deno 모두에서 동작합니다. HTTP 서버는 없습니다. |
@@ -57,8 +57,11 @@ pnpm lint
 
 - 전역 라우트는 `/`, `/login`, `/force-change-password`(첫 로그인·비밀번호 초기화 직후 비밀번호 변경 강제)입니다. 인증 상태(`AuthContext`의 `status`)에 따라 접근 가능한 라우트가 정해집니다.
 - 로그인은 Supabase Auth 아이디·비밀번호(`toInternalEmail(아이디)`로 `signInWithPassword`)이며, API 호출은 `lib/api.ts`의 `apiFetch`로 해서 access token을 붙입니다. 컴포넌트가 `Authorization` 헤더를 직접 만들지 않습니다.
-- 로그인 뒤의 Match / Members / Me는 `BottomNav.tsx`의 keep-alive 탭 셸이 소유합니다. 탭 상태와 URL 라우트를 무분별하게 중복하지 않습니다.
-- `apps/web/AGENTS.md`의 모바일·PWA·UI 세부 규칙을 함께 따릅니다.
+- 로그인 뒤의 홈 / 기록 / 랭킹 / 나 4탭(`TabKey` `home`·`records`·`ranking`·`me`, 시작 탭 홈)은 `BottomNav.tsx`의 keep-alive 탭 셸이 소유합니다. 탭 상태와 URL 라우트를 무분별하게 중복하지 않습니다. 회원 탭은 없고 회원 찾기는 랭킹 목록이 맡습니다.
+- 하단 바는 유리 알약 4탭과 원형 + 버튼이며, + 메뉴는 경기 기록·세션 만들기만 엽니다(설정·로그아웃은 나 탭의 설정에서). 경기 상세·회원 프로필·경기 기록 시트·세션 만들기·설정 같은 전역 화면은 `useAppNavigation()`(`context/AppNavigationContext.tsx`)으로 열고, 진행 중 세션 상태는 `useLiveSession()`(`context/LiveSessionContext.tsx`)으로 읽습니다. 데이터를 바꾼 화면은 `notifyDataChanged()`를 부르고, 탭 페이지는 `dataVersion`을 재조회 의존성으로 씁니다.
+- 저장 실패(네트워크 오류) 알림은 `useSystemNotice()`(`context/SystemNoticeContext.tsx`)의 `showSaveFailure`로 띄웁니다.
+- 공통 UI는 `apps/web/src/components/ui/`, 색·둥글기·글자 크기는 `index.css`의 `pk-*` 토큰을 씁니다. 하드코딩 색을 쓰지 않습니다.
+- `apps/web/AGENTS.md`의 모바일·PWA·UI 세부 규칙을 함께 따릅니다.(디자인 규칙 포함)
 - 모바일 고정 하단 UI는 `env(safe-area-inset-bottom)`과 `--app-keyboard-offset`을 고려합니다. 스크롤 소유자는 `app-tab-panel-scroll-area`입니다.
 - PWA 아이콘은 URL 기반입니다. 아이콘을 변경하면 `apps/web/index.html`의 favicon/Apple touch icon과 `apps/web/vite.config.ts`의 manifest·`includeAssets`를 같이 확인합니다.
 
@@ -68,9 +71,10 @@ pnpm lint
 
 - 상태: `GET /api/health`, `GET /api/ping`
 - 인증/프로필: `GET /api/me`, `POST /api/me/password-changed`(첫 로그인 비밀번호 변경 완료), `PATCH /api/me/profile`, avatar API. 로그인과 비밀번호 변경은 클라이언트가 Supabase Auth로 직접 합니다.
-- 플레이어: `GET /api/players`
-- 경기: `GET /api/matches`, 경기 기록 `POST /api/matches`·수정 `PUT /api/matches/:matchId`, `GET /api/match-feed`, 세션 조회 API
-- 세션: 오늘 세션 `GET /api/match-sessions/today`, 오늘 정기 세션 열기 `POST /api/match-sessions/regular/today`(정기 요일 22시 전만), 회원 세션 생성 `POST /api/match-sessions`, 상세 `GET /api/match-sessions/:sessionId`, 세션 경기 `GET /api/match-sessions/:sessionId/matches`, 점수 없이 진행 중 경기 시작 `POST /api/match-sessions/:sessionId/matches`(오늘 세션만, 이미 진행 중인 선수 포함 시 409, 선수 자동 참여), 복식 추천 매칭 `GET /api/match-sessions/:sessionId/recommendations?courts=N&seed=S`(오늘 세션만, courts 기본 3·1~4로 자름, seed 생략 시 서버가 정해 응답에 포함·같은 seed면 같은 결과, 진행 중 경기 선수 제외), 참여자 한 명씩 추가 `POST /api/match-sessions/:sessionId/participants`·삭제 `DELETE /api/match-sessions/:sessionId/participants/:playerId`(활성 회원 누구나·대리 가능, 오늘 세션만, 멱등)
+- 플레이어: `GET /api/players`, 프로필 요약 `GET /api/players/:playerId/profile-summary`(승패·평점 변화·최근 7일 경기 수·파트너 궁합·요청자 기준 상대 전적)
+- 경기: `GET /api/matches`(`playerId`와 함께 `category=singles|doubles`로 분류 필터), 경기 기록 `POST /api/matches`·수정 `PUT /api/matches/:matchId`, `GET /api/match-feed`, 세션 조회 API
+- 세션: 오늘 세션 `GET /api/match-sessions/today`, 다가오는 세션 `GET /api/match-sessions/upcoming`(만료 전 오늘·미래 세션, 날짜 키 오름차순·같은 날은 정기 세션 먼저, 조회 때 다음 정기 회차를 find-or-create), 오늘 정기 세션 열기 `POST /api/match-sessions/regular/today`(정기 요일 22시 전만), 회원 세션 생성 `POST /api/match-sessions`(`dateKey` 생략 시 오늘·과거 날짜 400, 세션 시각은 그날 00:00 KST라 같은 날 같은 이름은 409), 상세 `GET /api/match-sessions/:sessionId`, 세션 경기 `GET /api/match-sessions/:sessionId/matches`, 점수 없이 진행 중 경기 시작 `POST /api/match-sessions/:sessionId/matches`(오늘 세션만, 이미 진행 중인 선수 포함 시 409, 선수 자동 참여), 복식 추천 매칭 `GET /api/match-sessions/:sessionId/recommendations?courts=N&seed=S`(오늘 세션만, courts 기본 3·1~4로 자름, seed 생략 시 서버가 정해 응답에 포함·같은 seed면 같은 결과, 진행 중 경기 선수 제외), 참여자 한 명씩 추가 `POST /api/match-sessions/:sessionId/participants`·삭제 `DELETE /api/match-sessions/:sessionId/participants/:playerId`(활성 회원 누구나·대리 가능, 오늘·미래 세션만·지난 세션 403, 멱등)
+- 랭킹·세션 리포트(스냅샷 저장 없이 평점 변경 로그로 조회 시 계산): 랭킹 `GET /api/rankings?category=doubles|singles`(기본 doubles, 순위·완료 경기 수·90일 추이·가장 최근 세션 시작 직전 대비 순위 변동 `rankChange`, NR 회원은 `unrated`), 세션 기록 목록 `GET /api/session-reports?limit=&playerId=`(완료 경기가 있는 세션 최신순, limit 기본 20·최대 100), 세션 리포트 `GET /api/session-reports/:sessionId`(선수별 경기·승패와 복식 평점·순위 전후, 최대 상승자 `topRiser`)
 - 관리자: 선수/감사 로그, 회원 추가(`POST /api/admin/register`)·비밀번호 초기화·아이디 변경, 경기 일괄 등록·메타데이터, 평점 재계산, 공식 DUPR 조정 API
 
 도메인 규칙:
@@ -78,8 +82,9 @@ pnpm lint
 - `Player.duprRating`은 단일 숫자가 아니라 singles/doubles 분류와 metric을 포함하는 상태입니다. `null`인 NR 값도 허용합니다.
 - api 저장소 어댑터(`apps/api/src/repositories/MatchRepository.ts`, `AuthService`)는 `@pkpkdupr/db` 결과를 공개 계약 형태로 hydrate 합니다.
 - 경기 타입·스코어·세션 계약은 `packages/shared/src/match.ts`가 기준입니다.
-- 경기는 기록 즉시 completed가 되어 평점에 반영됩니다. 참가자 또는 경기 생성자(`creatorPlayerId`, 관리자 일괄 등록·예정 경기는 등록한 관리자)는 경기 시작 후 24시간 이내(`isWithinMatchEditWindow`)에만 수정할 수 있고(`canEditMatchRecord`, API·웹 공통), 이후 정정은 관리자가 합니다.
-- 예외로 세션에서 시작한 경기는 점수 없는 진행 중 경기(`status: "created"`)입니다. 참가자가 `PUT /api/matches/:matchId`로 첫 점수를 넣는 순간 completed(`completedAt`=입력 시각)가 되고 평점에 증분 반영됩니다. 진행 중 경기는 평점·평점 이력·통계·`lastPlayedAt`에서 빠지고, 시작 2시간(`isInProgressMatchExpired`)이 지나도록 점수가 없으면 조회 시점 정리(`cleanupExpired`)에서 빈 세션 정리보다 먼저 삭제됩니다. 이 정리는 관리자 예정 경기를 포함한 점수 없는 created 경기 전부에 적용됩니다.
+- 경기는 기록 즉시 completed가 되어 평점에 반영됩니다. 활성 회원이면 참가자·생성자 여부와 상관없이 누구나 경기 시작 후 24시간 이내(`isWithinMatchEditWindow`)에만 수정할 수 있고(`isMatchRecordEditable`, 취소·과거 다중 점수 경기는 제외, 웹 버튼 노출 기준), 이후 정정은 관리자가 합니다. 마지막으로 입력·수정한 회원은 `resultSubmittedByPlayerId`에 기록됩니다.
+- 예외로 세션에서 시작한 경기는 점수 없는 진행 중 경기(`status: "created"`)입니다. 회원 누구나 `PUT /api/matches/:matchId`로 첫 점수를 넣는 순간 completed(`completedAt`=입력 시각)가 되고 평점에 증분 반영됩니다. 진행 중 경기는 평점·평점 이력·통계·`lastPlayedAt`에서 빠지고, 시작 2시간(`isInProgressMatchExpired`)이 지나도록 점수가 없으면 조회 시점 정리(`cleanupExpired`)에서 빈 세션 정리보다 먼저 삭제됩니다. 이 정리는 관리자 예정 경기를 포함한 점수 없는 created 경기 전부에 적용됩니다.
+- 정기 세션은 월·목 18:00 KST 세션이며 이름은 요일별 `getRegularSessionName`("월요 정기운동"/"목요 정기운동")이다. 다음 정기 회차(`getNextRegularSessionDateKey`, 오늘이 정기 요일이고 22시 전이면 오늘)는 `GET /upcoming` 조회 때만 미리 만들어지고, 그 밖의 세션 조회는 정기 세션을 만들지 않는다. 경기가 없는 세션은 그날 만료 시각(정기 22:00, 회원 다음 날 0시)이 지나면 참여자와 함께 정리되므로, 미래 세션은 그날이 지나기 전에는 지워지지 않는다.
 - `packages/shared` 변경 시 web, admin-web, api, db 전체 소비처를 같은 변경 단위에서 점검합니다.
 
 ## 운영과 배포

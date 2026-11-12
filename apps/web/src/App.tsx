@@ -7,6 +7,7 @@ import PwaInstallPrompt from "./components/PwaInstallPrompt";
 import PwaUpdatePrompt from "./components/PwaUpdatePrompt";
 import { AppUpdateProvider } from "./context/AppUpdateContext";
 import { AuthProvider, useAuth } from "./context/AuthContext";
+import { SystemNoticeProvider } from "./context/SystemNoticeContext";
 import ForceChangePassword from "./pages/ForceChangePassword";
 import Login from "./pages/Login";
 
@@ -63,7 +64,7 @@ function AppRoutes() {
       <div className="flex h-full w-full items-center justify-center overflow-hidden">
         <Spinner
           aria-label="앱 로딩 중"
-          className="text-[#409eff]"
+          className="text-pk-primary"
           color="current"
           size="md"
         />
@@ -227,10 +228,12 @@ function App() {
       >
         <AppUpdateProvider>
           <AuthProvider>
-            <OfflineBanner />
-            <PwaInstallPrompt />
-            <PwaUpdatePrompt />
-            <AppRoutes />
+            <SystemNoticeProvider>
+              <OfflineBanner />
+              <PwaInstallPrompt />
+              <PwaUpdatePrompt />
+              <AppRoutes />
+            </SystemNoticeProvider>
           </AuthProvider>
         </AppUpdateProvider>
       </main>

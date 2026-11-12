@@ -36,6 +36,8 @@ export {
   type UpdateRecordedMatchInput,
   type MatchParticipantDuprSnapshot,
   type TimestampUnitAudit,
+  type CompletedMatchOutcome,
+  type SessionWithParticipantIds,
 } from "./repositories/MatchRepository";
 export {
   TestDataRepository,

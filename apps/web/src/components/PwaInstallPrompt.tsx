@@ -1,7 +1,10 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Alert, Button, CloseButton } from "@heroui/react";
 import { IoShareOutline } from "react-icons/io5";
+import SystemToast from "@/components/SystemToast";
+import { PkButton } from "@/components/ui/Button";
+import { useAppUpdate } from "@/context/AppUpdateContext";
 import { useAuth } from "@/context/AuthContext";
+import { useIsSaveFailureNoticeVisible } from "@/context/SystemNoticeContext";
 
 interface BeforeInstallPromptEvent extends Event {
   prompt: () => Promise<void>;
@@ -40,62 +43,56 @@ const isAndroidLike = () => /android/i.test(window.navigator.userAgent);
 
 const isMobileInstallTarget = () => isIosLike() || isAndroidLike();
 
-type InstallPrompt =
-  | {
-      kind: "ios-safari";
-      title: string;
-    }
-  | {
-      kind: "installable";
-      title: string;
-    }
-  | {
-      kind: "android-manual" | "unsupported";
-      title: string;
-      message: string;
-    };
+// 닫거나 추가하면 기억해 다시 띄우지 않는다
+const INSTALL_PROMPT_DISMISSED_STORAGE_KEY = "pkpkdupr:install-prompt-dismissed";
+
+const readInstallPromptDismissed = () => {
+  try {
+    return localStorage.getItem(INSTALL_PROMPT_DISMISSED_STORAGE_KEY) === "true";
+  } catch {
+    return false;
+  }
+};
+
+const rememberInstallPromptDismissed = () => {
+  try {
+    localStorage.setItem(INSTALL_PROMPT_DISMISSED_STORAGE_KEY, "true");
+  } catch {
+    // 저장소를 쓸 수 없으면 이번 실행 동안만 닫힌다
+  }
+};
+
+type InstallPromptKind = "ios-safari" | "installable";
 
 const PwaInstallPrompt: React.FC = () => {
   const { isAuthenticated, isLoading } = useAuth();
+  const { isUpdateAvailable } = useAppUpdate();
+  const isSaveFailureVisible = useIsSaveFailureNoticeVisible();
   const [deferredPrompt, setDeferredPrompt] =
     useState<BeforeInstallPromptEvent | null>(null);
   const [isInstalled, setIsInstalled] = useState(() =>
     typeof window === "undefined" ? false : isStandaloneDisplay(),
   );
-  const [isDismissed, setIsDismissed] = useState(false);
+  const [isDismissed, setIsDismissed] = useState(() =>
+    typeof window === "undefined" ? true : readInstallPromptDismissed(),
+  );
+  // iOS Safari에서 "추가"를 누르면 공유 메뉴 안내로 바뀐다
+  const [isIosGuideOpen, setIsIosGuideOpen] = useState(false);
 
-  const installPrompt = useMemo<InstallPrompt | null>(() => {
-    if (typeof window === "undefined") {
+  const installPromptKind = useMemo<InstallPromptKind | null>(() => {
+    if (typeof window === "undefined" || !isMobileInstallTarget()) {
       return null;
     }
 
-    if (!isMobileInstallTarget()) {
+    if (!window.isSecureContext && !isLocalhost()) {
       return null;
     }
 
-    if (window.isSecureContext || isLocalhost()) {
-      if (isIosSafari()) {
-        return {
-          kind: "ios-safari",
-          title: "앱처럼 설치할 수 있어요.",
-        };
-      }
-
-      if (deferredPrompt) {
-        return {
-          kind: "installable",
-          title: "앱처럼 설치할 수 있어요.",
-        };
-      }
-
-      return null;
+    if (isIosSafari()) {
+      return "ios-safari";
     }
 
-    return {
-      kind: "unsupported",
-      title: "앱 설치 안내",
-      message: "앱 설치는 HTTPS 또는 localhost에서만 가능합니다.",
-    };
+    return deferredPrompt ? "installable" : null;
   }, [deferredPrompt]);
 
   useEffect(() => {
@@ -104,7 +101,6 @@ const PwaInstallPrompt: React.FC = () => {
     const handleBeforeInstallPrompt = (event: Event) => {
       event.preventDefault();
       setDeferredPrompt(event as BeforeInstallPromptEvent);
-      setIsDismissed(false);
     };
 
     const handleAppInstalled = () => {
@@ -128,76 +124,90 @@ const PwaInstallPrompt: React.FC = () => {
     isLoading ||
     !isAuthenticated ||
     isInstalled ||
-    isDismissed ||
-    !installPrompt
+    (isDismissed && !isIosGuideOpen) ||
+    !installPromptKind ||
+    isUpdateAvailable ||
+    isSaveFailureVisible
   ) {
     return null;
   }
 
-  const handleInstall = async () => {
+  const dismiss = () => {
+    rememberInstallPromptDismissed();
+    setIsDismissed(true);
+    setIsIosGuideOpen(false);
+  };
+
+  const handleAdd = async () => {
+    rememberInstallPromptDismissed();
+    setIsDismissed(true);
+
+    if (installPromptKind === "ios-safari") {
+      setIsIosGuideOpen(true);
+      return;
+    }
+
     if (!deferredPrompt) {
       return;
     }
 
-    await deferredPrompt.prompt();
-    const choice = await deferredPrompt.userChoice;
-    setDeferredPrompt(null);
-
-    if (choice.outcome !== "accepted") {
-      setIsDismissed(true);
+    try {
+      await deferredPrompt.prompt();
+      await deferredPrompt.userChoice;
+    } catch (err) {
+      console.error("Failed to show install prompt", err);
     }
+    // 한 번 쓴 beforeinstallprompt 이벤트는 다시 prompt()할 수 없다
+    setDeferredPrompt(null);
   };
 
-  return (
-    <div className="fixed bottom-[calc(5.47rem+var(--safe-bottom)+var(--app-keyboard-offset))] left-1/2 z-30 app-shell-width -translate-x-1/2 px-3">
-      <Alert
-        status={installPrompt.kind === "installable" ? "accent" : "warning"}
-        className="items-center rounded-2xl border border-pkpk-primary-bg/20 bg-white/95 px-3 py-2 shadow-lg backdrop-blur"
-      >
-        <Alert.Indicator className="shrink-0 self-center" />
-        <Alert.Content className="min-w-0 gap-0 self-center">
-          <Alert.Title className="text-sm font-bold text-pkpk-sub-font">
-            {installPrompt.title}
-          </Alert.Title>
-          {installPrompt.kind === "ios-safari" ? (
-            <Alert.Description className="text-xs font-semibold text-[#888]">
-              <>
-                Safari 하단 중앙의{" "}
-                <span
-                  className="inline-flex translate-y-0.5 items-center gap-0.5 rounded-md border border-border bg-white px-1 py-0.5 text-pkpk-primary-bg"
-                  aria-label="공유하기 버튼"
-                  role="img"
-                >
-                  <IoShareOutline className="size-3.5" />
-                  <span className="text-[10px] font-bold">공유</span>
-                </span>{" "}
-                버튼을 누른 뒤,
-                <br />
-                [홈 화면에 추가]를 선택해주세요.
-              </>
-            </Alert.Description>
-          ) : "message" in installPrompt ? (
-            <Alert.Description className="text-xs font-semibold text-[#888]">
-              {installPrompt.message}
-            </Alert.Description>
-          ) : null}
-        </Alert.Content>
-        {installPrompt.kind === "installable" && deferredPrompt ? (
-          <Button
-            size="sm"
-            className="shrink-0 rounded-full bg-pkpk-primary-bg px-3 text-white"
-            onPress={() => void handleInstall()}
+  const closeButton = (
+    <button
+      type="button"
+      aria-label="닫기"
+      className="flex size-11 shrink-0 items-center justify-center text-xl text-pk-muted touch-manipulation"
+      onClick={dismiss}
+    >
+      ×
+    </button>
+  );
+
+  if (isIosGuideOpen) {
+    return (
+      <SystemToast className="z-30" actions={closeButton}>
+        <span className="text-pk-13 font-semibold text-pk-sub">
+          Safari 하단의{" "}
+          <span
+            className="inline-flex translate-y-0.5 items-center gap-0.5 rounded-md border border-border bg-white px-1 py-0.5 text-pk-primary"
+            aria-label="공유하기 버튼"
+            role="img"
           >
-            앱 설치
-          </Button>
-        ) : null}
-        <CloseButton
-          className="shrink-0 self-center"
-          aria-label="설치 안내 닫기"
-          onClick={() => setIsDismissed(true)}
-        />
-      </Alert>
-    </div>
+            <IoShareOutline className="size-3.5" />
+            <span className="text-[10px] font-bold">공유</span>
+          </span>{" "}
+          버튼을 누른 뒤 [홈 화면에 추가]를 선택해주세요.
+        </span>
+      </SystemToast>
+    );
+  }
+
+  return (
+    <SystemToast
+      className="z-30"
+      actions={
+        <>
+          <PkButton
+            size="md"
+            onClick={() => void handleAdd()}
+          >
+            추가
+          </PkButton>
+          {closeButton}
+        </>
+      }
+    >
+      홈 화면에 추가하면 앱처럼 열려요
+    </SystemToast>
   );
 };
 

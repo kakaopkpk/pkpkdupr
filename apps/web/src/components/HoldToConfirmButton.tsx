@@ -1,5 +1,8 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 
+/** 경기 저장처럼 되돌리기 어려운 저장을 확정하는 길게 누르기 시간 */
+export const SAVE_HOLD_DURATION_MS = 2000;
+
 interface HoldToConfirmButtonProps {
   onComplete: () => void;
   holdDurationMs?: number;
@@ -8,7 +11,28 @@ interface HoldToConfirmButtonProps {
   progressClassName?: string;
   isDisabled?: boolean;
   ariaLabel?: string;
+  /**
+   * primary(기본): 블루 채움 버튼 위로 누르는 동안 진행이 찬다.
+   * plain: 바탕 없는 행 모양. 색은 className·progressClassName으로 정한다.
+   */
+  variant?: "primary" | "plain";
 }
+
+const variantClassName: Record<
+  NonNullable<HoldToConfirmButtonProps["variant"]>,
+  { button: string; progress: string }
+> = {
+  primary: {
+    button:
+      "h-[52px] justify-center rounded-pk-sm bg-pk-primary px-4 text-pk-15 font-extrabold text-white disabled:cursor-not-allowed disabled:bg-pk-neutral disabled:text-pk-muted",
+    progress: "bg-white/25",
+  },
+  plain: {
+    button:
+      "rounded-xl px-3 py-2 text-left disabled:cursor-not-allowed disabled:opacity-50",
+    progress: "bg-pk-down/14",
+  },
+};
 
 const HoldToConfirmButton: React.FC<HoldToConfirmButtonProps> = ({
   onComplete,
@@ -18,7 +42,9 @@ const HoldToConfirmButton: React.FC<HoldToConfirmButtonProps> = ({
   progressClassName,
   isDisabled = false,
   ariaLabel,
+  variant = "primary",
 }) => {
+  const variantClasses = variantClassName[variant];
   const [progress, setProgress] = useState(0);
   const animationFrameRef = useRef<number | null>(null);
   const holdStartTimeRef = useRef<number | null>(null);
@@ -112,8 +138,8 @@ const HoldToConfirmButton: React.FC<HoldToConfirmButtonProps> = ({
       onPointerCancel={stopHold}
       onContextMenu={(event) => event.preventDefault()}
       className={[
-        "relative flex w-full select-none items-center overflow-hidden rounded-xl px-3 py-2 text-left transition-colors touch-manipulation",
-        "disabled:cursor-not-allowed disabled:opacity-50",
+        "relative flex w-full select-none items-center overflow-hidden transition-colors touch-manipulation",
+        variantClasses.button,
         className,
       ]
         .filter(Boolean)
@@ -123,8 +149,8 @@ const HoldToConfirmButton: React.FC<HoldToConfirmButtonProps> = ({
       <span
         aria-hidden="true"
         className={[
-          "pointer-events-none absolute inset-y-0 left-0 w-full origin-left bg-[#f8626c]/14",
-          progressClassName,
+          "pointer-events-none absolute inset-y-0 left-0 w-full origin-left",
+          progressClassName ?? variantClasses.progress,
         ]
           .filter(Boolean)
           .join(" ")}

@@ -5,6 +5,7 @@ import type {
   MatchSessionDetail,
   StartSessionMatchRequest,
   TodayMatchSessionsResponse,
+  UpcomingMatchSessionsResponse,
 } from "@pkpkdupr/shared/session";
 import { isRegularSessionTime } from "@pkpkdupr/shared/session";
 import { apiFetch } from "@/lib/api";
@@ -16,6 +17,13 @@ export type MatchSessionDetailInfo = Omit<MatchSessionDetail, "date"> & {
 
 export type TodayMatchSessionsInfo = Omit<
   TodayMatchSessionsResponse,
+  "sessions"
+> & {
+  sessions: MatchSessionDetailInfo[];
+};
+
+export type UpcomingMatchSessionsInfo = Omit<
+  UpcomingMatchSessionsResponse,
   "sessions"
 > & {
   sessions: MatchSessionDetailInfo[];
@@ -52,6 +60,13 @@ export const fetchTodayMatchSessions = () =>
     "오늘 세션을 불러오지 못했어요.",
   );
 
+/** 만료 전인 오늘·미래 세션. 조회할 때 서버가 다음 정기 회차를 미리 만든다 */
+export const fetchUpcomingMatchSessions = () =>
+  requestJson<UpcomingMatchSessionsInfo>(
+    "/api/match-sessions/upcoming",
+    "다가오는 세션을 불러오지 못했어요.",
+  );
+
 export const fetchMatchSession = (sessionId: string) =>
   requestJson<MatchSessionDetailInfo>(
     sessionPath(sessionId),
@@ -66,6 +81,7 @@ export const openTodayRegularSession = () =>
     jsonInit("POST"),
   );
 
+/** body.dateKey를 생략하면 오늘 세션을 만든다 */
 export const createMatchSession = (body: CreateMatchSessionRequest) =>
   requestJson<MatchSessionDetailInfo>(
     "/api/match-sessions",

@@ -2,14 +2,16 @@ import cors from "cors";
 import express from "express";
 import { randomUUID } from "crypto";
 import {
+  getMatchTopLevelType,
   isMatchInProgress,
   isSinglesMatchType,
-  canEditMatchRecord,
   isMultiGameMatchRecord,
   isWithinMatchEditWindow,
   matchTypeLabels,
+  matchTopLevelTypeValues,
   matchTypeValues,
   type Match,
+  type MatchTopLevelType,
   type MatchScore,
   type RecordMatchRequest,
   type RecordedMatchResponse,
@@ -21,8 +23,12 @@ import {
 } from "@pkpkdupr/shared/match";
 import {
   canOpenRegularSession,
+  getEmptySessionExpiresAt,
+  getNextRegularSessionDateKey,
   isInProgressMatchExpired,
   isRegularSessionTime,
+  isValidKstDateKey,
+  kstDateKeyToDate,
   MATCH_SESSION_LOCATION_MAX_LENGTH,
   MATCH_SESSION_NAME_MAX_LENGTH,
   toKstDateKey,
@@ -32,6 +38,7 @@ import {
   type MatchSessionDetail,
   type MatchSessionMember,
   type TodayMatchSessionsResponse,
+  type UpcomingMatchSessionsResponse,
 } from "@pkpkdupr/shared/session";
 import { generateEntityId, isEntityId } from "@pkpkdupr/shared/entityId";
 import {
@@ -54,6 +61,10 @@ import type {
   PlayerRatingChangeLog,
   PlayerStatus,
 } from "@pkpkdupr/shared/player";
+import type {
+  MatchSessionHistoryResponse,
+  RankingResponse,
+} from "@pkpkdupr/shared/ranking";
 import type {
   AdminRegisterPlayerRequest,
   AdminUpdateUsernameRequest,
@@ -78,6 +89,15 @@ import {
   PlayerRatingChartProjectionService,
 } from "./services/PlayerRatingChartProjectionService";
 import { buildPlayerProfileSummary } from "./services/PlayerProfileSummaryService";
+import {
+  SESSION_HISTORY_DEFAULT_LIMIT,
+  SESSION_HISTORY_MAX_LIMIT,
+  buildRankingResponse,
+  buildSessionHistory,
+  buildSessionReport,
+  createRankingContext,
+  rankPlayersAt,
+} from "./services/RankingService";
 import {
   AvatarValidationError,
   buildAvatarObjectPath,
@@ -663,8 +683,8 @@ const requireMatchSessionDetail = async (sessionId: string, now: Date) => {
   return detail;
 };
 
-/** 참여자 추가·삭제 대상 세션을 확인한다. 오늘 세션이 아니면 403 */
-const requireTodaySessionForParticipants = async (
+/** 참여자 추가·삭제 대상 세션을 확인한다. 오늘·미래 세션만 되고 지난 세션은 403 */
+const requireOpenSessionForParticipants = async (
   sessionId: string,
   now: Date,
 ) => {
@@ -675,9 +695,10 @@ const requireTodaySessionForParticipants = async (
   if (!session) {
     throw new MatchSessionRequestError("세션을 찾을 수 없습니다.", 404);
   }
-  if (toKstDateKey(session.date) !== toKstDateKey(now)) {
+  // YYYY-MM-DD 날짜 키는 문자열 비교가 날짜 순서와 같다
+  if (toKstDateKey(session.date) < toKstDateKey(now)) {
     throw new MatchSessionRequestError(
-      "오늘 세션에서만 참여자를 바꿀 수 있습니다.",
+      "지난 세션은 참여자를 바꿀 수 없습니다.",
       403,
     );
   }
@@ -843,7 +864,8 @@ app.get("/api/players", async (req, res) => {
 
 app.get("/api/players/:playerId/profile-summary", async (req, res) => {
   try {
-    if (!(await getAuthPayload(req, res))) {
+    const decoded = await getAuthPayload(req, res);
+    if (!decoded) {
       return;
     }
 
@@ -854,11 +876,43 @@ app.get("/api/players/:playerId/profile-summary", async (req, res) => {
       playerRatingChartProjectionService.getOrRebuild(playerId),
     ]);
     const matches = attachMatchRatingChanges(result.matches, ratingChangeLogs);
-    res.json(buildPlayerProfileSummary(matches, playerId, projection.history));
+    res.json(
+      buildPlayerProfileSummary(
+        matches,
+        playerId,
+        projection.history,
+        decoded.playerId,
+      ),
+    );
   } catch (err) {
     res.status(500).json({ error: (err as Error).message });
   }
 });
+
+/** 분류 필터용으로 한 선수의 경기를 한 번에 읽는 상한. 넘는 경기는 필터·total에서 빠진다(동호회 규모라 닿지 않는다). */
+const MAX_CATEGORY_FILTER_SCAN = 10_000;
+
+/** 선수 경기를 모두 읽어 메모리에서 분류로 거른 뒤 페이지를 나눈다(동호회 규모). */
+const findPlayerMatchesByCategory = async (
+  playerId: string,
+  category: MatchTopLevelType,
+  page: number,
+  limit: number,
+) => {
+  const { matches } = await matchRepository.findByPlayerId(
+    playerId,
+    0,
+    MAX_CATEGORY_FILTER_SCAN,
+  );
+  const filtered = matches.filter(
+    (match) => getMatchTopLevelType(match.type) === category,
+  );
+  const start = page * limit;
+  return {
+    matches: filtered.slice(start, start + limit),
+    total: filtered.length,
+  };
+};
 
 app.get("/api/matches", async (req, res) => {
   try {
@@ -871,11 +925,34 @@ app.get("/api/matches", async (req, res) => {
     const limit = Number(req.query.limit ?? 20);
     const playerId =
       typeof req.query.playerId === "string" ? req.query.playerId : undefined;
+    const rawCategory = req.query.category;
+    let category: MatchTopLevelType | undefined;
+    if (rawCategory !== undefined) {
+      if (
+        typeof rawCategory !== "string" ||
+        !(matchTopLevelTypeValues as readonly string[]).includes(rawCategory)
+      ) {
+        return res
+          .status(400)
+          .json({ error: "category는 singles 또는 doubles여야 합니다." });
+      }
+      if (!playerId) {
+        return res
+          .status(400)
+          .json({ error: "category 필터는 playerId와 함께 써야 합니다." });
+      }
+      category = rawCategory as MatchTopLevelType;
+    }
 
     await matchRepository.cleanupExpired();
-    const result = playerId
-      ? await matchRepository.findByPlayerId(playerId, page, limit)
-      : await matchRepository.findAll(page, limit);
+    let result: { matches: Match[]; total: number };
+    if (!playerId) {
+      result = await matchRepository.findAll(page, limit);
+    } else if (category) {
+      result = await findPlayerMatchesByCategory(playerId, category, page, limit);
+    } else {
+      result = await matchRepository.findByPlayerId(playerId, page, limit);
+    }
 
     if (playerId) {
       const ratingChangeLogs = await matchRepository.getPlayerRatingChangeLogs(
@@ -961,6 +1038,46 @@ app.get("/api/match-sessions/today", async (req, res) => {
   }
 });
 
+app.get("/api/match-sessions/upcoming", async (req, res) => {
+  try {
+    if (!(await getAuthPayload(req, res))) {
+      return;
+    }
+
+    const now = new Date();
+    await matchRepository.cleanupExpired(now);
+    // 크론 없이 조회 때 다음 정기 회차 1개를 보장한다(날짜당 하나는 regular_date_key 유니크가 보장).
+    await matchRepository.findOrCreateRegularSession(
+      getNextRegularSessionDateKey(now),
+    );
+    const dateKey = toKstDateKey(now);
+    const [sessions, activePlayersById] = await Promise.all([
+      matchRepository.findSessionsFromDateKey(dateKey),
+      loadActivePlayersById(),
+    ]);
+    // 정리가 best-effort라 만료됐지만 아직 남은 빈 세션도 응답에서 뺀다.
+    // 경기가 있는 세션은 만료 후에도 남지만, 다가오는 세션 목록에는 넣지 않는다.
+    const details = sessions
+      .filter(
+        (session) => getEmptySessionExpiresAt(session.kind, session.date) > now,
+      )
+      .map((session) => toMatchSessionDetail(session, activePlayersById, now));
+    // 저장소가 시각 오름차순으로 주므로 날짜 키·정기 여부로만 다시 정렬한다(정렬은 안정적이다).
+    details.sort(
+      (a, b) =>
+        a.dateKey.localeCompare(b.dateKey) ||
+        Number(b.kind === "regular") - Number(a.kind === "regular"),
+    );
+    const response: UpcomingMatchSessionsResponse = {
+      dateKey,
+      sessions: details,
+    };
+    res.json(response);
+  } catch (err) {
+    sendMatchSessionFailure(res, err);
+  }
+});
+
 app.post("/api/match-sessions/regular/today", async (req, res) => {
   try {
     if (!(await getAuthPayload(req, res))) {
@@ -1013,9 +1130,31 @@ app.post("/api/match-sessions", async (req, res) => {
     }
 
     const now = new Date();
+    const todayKey = toKstDateKey(now);
+    const dateKey =
+      body?.dateKey == null
+        ? todayKey
+        : typeof body.dateKey === "string"
+          ? body.dateKey.trim()
+          : "";
+    if (!isValidKstDateKey(dateKey)) {
+      throw new MatchSessionRequestError(
+        "세션 날짜는 YYYY-MM-DD 형식의 실제 날짜여야 합니다.",
+        400,
+      );
+    }
+    // YYYY-MM-DD 날짜 키는 문자열 비교가 날짜 순서와 같다
+    if (dateKey < todayKey) {
+      throw new MatchSessionRequestError(
+        "오늘이나 이후 날짜로만 세션을 만들 수 있습니다.",
+        400,
+      );
+    }
+
     await matchRepository.cleanupExpired(now);
+    // 회원 세션 시각은 고른 날 00:00 KST로 고정해 같은 날 같은 이름은 (name, date) 유니크로 막는다.
     const created = await matchRepository.createSession(
-      { name, date: now, location },
+      { name, date: kstDateKeyToDate(dateKey), location },
       { conflictOnDuplicate: true },
     );
     res.status(201).json(await requireMatchSessionDetail(created.id, now));
@@ -1180,7 +1319,7 @@ app.post("/api/match-sessions/:sessionId/participants", async (req, res) => {
     const sessionId = req.params.sessionId;
     const now = new Date();
     await matchRepository.cleanupExpired(now);
-    await requireTodaySessionForParticipants(sessionId, now);
+    await requireOpenSessionForParticipants(sessionId, now);
     const player = await authService.getPlayerById(playerId);
     if (!player || player.status !== "active") {
       throw new MatchSessionRequestError(
@@ -1207,7 +1346,7 @@ app.delete(
       const { sessionId, playerId } = req.params;
       const now = new Date();
       await matchRepository.cleanupExpired(now);
-      await requireTodaySessionForParticipants(sessionId, now);
+      await requireOpenSessionForParticipants(sessionId, now);
       await matchRepository.removeSessionParticipant(sessionId, playerId);
       res.json(await requireMatchSessionDetail(sessionId, now));
     } catch (err) {
@@ -1826,12 +1965,7 @@ app.put("/api/matches/:matchId", async (req, res) => {
     if (!existing || isExpiredInProgressMatch(existing, now)) {
       return res.status(404).json({ error: "매치를 찾을 수 없습니다." });
     }
-    // 관리자 여부와 무관하게 수정 전 참가자 또는 경기 생성자만 고칠 수 있다(세션 경기 포함).
-    if (!canEditMatchRecord(existing, decoded.playerId)) {
-      return res.status(403).json({
-        error: "경기 참가자 또는 생성자만 기록을 수정할 수 있습니다.",
-      });
-    }
+    // 참가자·생성자·관리자 여부와 무관하게 활성 회원이면 누구나 고칠 수 있다(세션 경기 포함).
     if (!isWithinMatchEditWindow(existing.matchStartsAt, now)) {
       return res.status(403).json({
         error:
@@ -2080,6 +2214,162 @@ app.delete("/api/me/avatar", async (req, res) => {
   } catch (err) {
     console.error("[Avatar] 삭제 실패", err);
     res.status(500).json({ error: "프로필 이미지를 삭제하지 못했습니다." });
+  }
+});
+
+/** 랭킹·세션 리포트 요청 오류. status로 400·404를 구분해 응답한다 */
+class RankingRequestError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+  ) {
+    super(message);
+    this.name = "RankingRequestError";
+  }
+}
+
+const sendRankingFailure = (res: express.Response, error: unknown) => {
+  const status =
+    error instanceof RankingRequestError ||
+    error instanceof MatchRepositoryError
+      ? error.status
+      : 500;
+  res.status(status).json({ error: (error as Error).message });
+};
+
+/** 랭킹·세션 리포트 계산 원천. 회원 약 20명 규모라 로그·경기·세션을 모두 메모리로 읽는다 */
+const loadRankingSource = async () => {
+  const [players, logs, matches, sessions] = await Promise.all([
+    authService.getAllPlayers(),
+    matchRepository.getAllRatingChangeLogs(),
+    matchRepository.findCompletedMatchOutcomes(),
+    matchRepository.findSessionsWithParticipantIds(),
+  ]);
+  return { context: createRankingContext(players, logs, matches), sessions };
+};
+
+/** 프로필 차트와 같은 90일 projection의 평점 값. 없는 선수만 하나씩 다시 만든다 */
+const loadRatingTrends = async (
+  playerIds: string[],
+  category: MatchTopLevelType,
+) => {
+  const projections = await Promise.all(
+    playerIds.map((playerId) =>
+      matchRepository.getPlayerRatingChartProjection(playerId),
+    ),
+  );
+  const trends = new Map<string, number[]>();
+  for (const [index, playerId] of playerIds.entries()) {
+    const projection =
+      projections[index] ??
+      (await playerRatingChartProjectionService.rebuildPlayer(playerId));
+    trends.set(
+      playerId,
+      projection.history[category].map((point) => point.rating),
+    );
+  }
+  return trends;
+};
+
+const parseRankingCategory = (value: unknown): MatchTopLevelType => {
+  if (value === undefined) {
+    return "doubles";
+  }
+  if (value === "doubles" || value === "singles") {
+    return value;
+  }
+  throw new RankingRequestError(
+    "category는 doubles 또는 singles여야 합니다.",
+    400,
+  );
+};
+
+/** limit 쿼리: 생략이면 기본값, 양의 정수가 아니면 400, 최대값으로 자른다 */
+const parseSessionHistoryLimit = (value: unknown): number => {
+  if (value === undefined) {
+    return SESSION_HISTORY_DEFAULT_LIMIT;
+  }
+  const limit =
+    typeof value === "string" && /^\d+$/.test(value.trim())
+      ? Number(value)
+      : NaN;
+  if (!Number.isSafeInteger(limit) || limit < 1) {
+    throw new RankingRequestError("limit은 1 이상의 정수여야 합니다.", 400);
+  }
+  return Math.min(limit, SESSION_HISTORY_MAX_LIMIT);
+};
+
+app.get("/api/rankings", async (req, res) => {
+  try {
+    if (!(await getAuthPayload(req, res))) {
+      return;
+    }
+
+    const category = parseRankingCategory(req.query.category);
+    const now = new Date();
+    const { context, sessions } = await loadRankingSource();
+    const rankedPlayerIds = rankPlayersAt(context, category, null).map(
+      (entry) => entry.player.id,
+    );
+    const trendByPlayerId = await loadRatingTrends(rankedPlayerIds, category);
+    const response: RankingResponse = buildRankingResponse({
+      context,
+      category,
+      sessions,
+      trendByPlayerId,
+      now,
+    });
+    res.json(response);
+  } catch (err) {
+    sendRankingFailure(res, err);
+  }
+});
+
+app.get("/api/session-reports", async (req, res) => {
+  try {
+    if (!(await getAuthPayload(req, res))) {
+      return;
+    }
+
+    const limit = parseSessionHistoryLimit(req.query.limit);
+    const playerId = req.query.playerId;
+    if (playerId !== undefined && typeof playerId !== "string") {
+      throw new RankingRequestError("playerId는 문자열이어야 합니다.", 400);
+    }
+    const { context, sessions } = await loadRankingSource();
+    const response: MatchSessionHistoryResponse = {
+      sessions: buildSessionHistory({
+        context,
+        sessions,
+        limit,
+        playerId: playerId?.trim() || undefined,
+      }),
+    };
+    res.json(response);
+  } catch (err) {
+    sendRankingFailure(res, err);
+  }
+});
+
+app.get("/api/session-reports/:sessionId", async (req, res) => {
+  try {
+    if (!(await getAuthPayload(req, res))) {
+      return;
+    }
+
+    const sessionId = req.params.sessionId;
+    if (!isEntityId(sessionId, "session")) {
+      throw new RankingRequestError("유효한 세션 ID가 필요합니다.", 400);
+    }
+    const { context, sessions } = await loadRankingSource();
+    const session = sessions.find((candidate) => candidate.id === sessionId);
+    const report = session ? buildSessionReport({ context, session }) : null;
+    if (!report) {
+      throw new RankingRequestError("세션 리포트를 찾을 수 없습니다.", 404);
+    }
+    res.json(report);
+  } catch (err) {
+    sendRankingFailure(res, err);
   }
 });
 
