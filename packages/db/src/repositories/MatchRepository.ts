@@ -1235,6 +1235,201 @@ export class MatchRepository {
     return createdMatches as Match[];
   }
 
+  /**
+   * 점수 없는 진행 중 경기를 만든다. 선수 중 누구든 이미 진행 중 경기(findInProgressPlayerIds와 같은 조건)에 있으면
+   * 아무것도 쓰지 않고 겹치는 첫 선수 id를 돌려준다.
+   * 확인과 생성(세션 참여자 추가 포함)을 advisory 트랜잭션 잠금 하나로 직렬화해, 같은 선수로 동시에 와도 하나만 생긴다.
+   * data.session은 이미 있는 세션이어야 한다.
+   */
+  async createInProgressMatch(
+    data: CreateMatchInput,
+    now: Date,
+  ): Promise<
+    { match: Match; conflictPlayerId?: undefined } | { conflictPlayerId: string }
+  > {
+    if (!isEntityId(data.id, "match")) {
+      throw new Error("유효한 매치 ID가 필요합니다.");
+    }
+    if (data.status !== "created" || (data.scores?.length ?? 0) > 0) {
+      throw new Error("점수 없는 진행 중 경기만 만들 수 있습니다.");
+    }
+    if (data.session && !isEntityId(data.session.id, "session")) {
+      throw new Error("유효한 세션 ID가 필요합니다.");
+    }
+    const playerIds = [
+      ...new Set(data.teams.flatMap((team) => team.players.map((p) => p.id))),
+    ];
+    if (playerIds.length === 0) {
+      throw new Error("경기 선수가 필요합니다.");
+    }
+
+    const transaction = await this.client.transaction("write");
+    let committed = false;
+    try {
+      await transaction.execute(
+        "SELECT pg_advisory_xact_lock(hashtext('pkpkdupr:start-in-progress-match'))",
+      );
+
+      const busy = await transaction.execute({
+        sql: `
+          SELECT DISTINCT p.player_id
+          FROM match_participants p
+          INNER JOIN matches m ON m.id = p.match_id
+          WHERE m.status = 'created'
+            AND m.match_starts_at > $1
+            AND m.match_starts_at <= $2
+            AND NOT EXISTS (SELECT 1 FROM match_scores s WHERE s.match_id = m.id)
+            AND p.player_id IN (${placeholders(playerIds.length, 3)})
+        `,
+        args: [
+          inProgressExpiryCutoff(now),
+          toUnixTimestampSeconds(now),
+          ...playerIds,
+        ],
+      });
+      const busyPlayerIds = new Set(
+        busy.rows.map((row: Record<string, unknown>) => String(row.player_id)),
+      );
+      const conflictPlayerId = playerIds.find((id) => busyPlayerIds.has(id));
+      if (conflictPlayerId) {
+        return { conflictPlayerId };
+      }
+
+      const nowSeconds = toUnixTimestampSeconds(now);
+      const session = data.session;
+      if (session) {
+        // 경기 저장 전에 참여자를 넣어, 저장된 세션 경기의 선수는 항상 참여자이게 한다.
+        const inserted = await transaction.execute({
+          sql: `
+            INSERT INTO match_session_participants (
+              id, session_id, player_id, created_at
+            )
+            VALUES ${playerIds
+              .map((_, index) => `(${placeholders(4, index * 4 + 1)})`)
+              .join(", ")}
+            ON CONFLICT DO NOTHING
+          `,
+          args: playerIds.flatMap((playerId) => [
+            `${session.id}-${playerId}`,
+            session.id,
+            playerId,
+            nowSeconds,
+          ]),
+        });
+        if (inserted.rowsAffected > 0) {
+          await transaction.execute({
+            sql: "UPDATE match_sessions SET updated_at = $1 WHERE id = $2",
+            args: [nowSeconds, session.id],
+          });
+        }
+      }
+
+      await transaction.execute({
+        sql: `
+          INSERT INTO matches (
+            id,
+            type,
+            source,
+            creator_player_id,
+            name,
+            session_id,
+            session_name,
+            session_date,
+            status,
+            location,
+            court_name,
+            match_starts_at,
+            completed_at,
+            result_submitted_by_player_id,
+            result_submitted_at,
+            created_at,
+            updated_at
+          )
+          VALUES (${placeholders(17)})
+        `,
+        args: [
+          data.id,
+          data.type,
+          data.source ?? "player_created",
+          data.creatorPlayerId,
+          data.name?.trim() || null,
+          session?.id ?? null,
+          session?.name?.trim() || null,
+          session ? toUnixTimestampSeconds(toDate(session.date)) : null,
+          data.status,
+          data.location,
+          data.courtName?.trim() || null,
+          toUnixTimestampSeconds(new Date(data.matchStartsAt)),
+          null,
+          null,
+          null,
+          nowSeconds,
+          nowSeconds,
+        ],
+      });
+
+      for (const [teamIndex, team] of data.teams.entries()) {
+        for (const player of team.players) {
+          await transaction.execute({
+            sql: `
+              INSERT INTO match_participants (
+                id,
+                match_id,
+                team_index,
+                player_id,
+                dupr_rating_json
+              )
+              VALUES ($1, $2, $3, $4, $5)
+            `,
+            args: [
+              `${data.id}-team-${teamIndex}-${player.id}`,
+              data.id,
+              teamIndex,
+              player.id,
+              JSON.stringify(player.duprRating ?? null),
+            ],
+          });
+        }
+      }
+
+      await transaction.commit();
+      committed = true;
+    } finally {
+      if (!committed) {
+        transaction.close();
+      }
+    }
+
+    const created = await this.findById(data.id);
+    if (!created) {
+      throw new Error("매치 생성에 실패했습니다.");
+    }
+    return { match: created };
+  }
+
+  /**
+   * 진행 중(점수 없는 created, 이미 시작했고 만료 전) 경기 전부를 시작 시각 최신순으로 돌려준다.
+   * 조건은 findInProgressPlayerIds와 같아 시작 시각이 아직 오지 않은 관리자 예정 경기는 빠진다.
+   */
+  async findInProgressMatches(now: Date): Promise<Match[]> {
+    const result: RawQueryResult = await this.client.execute({
+      sql: `
+        SELECT m.id
+        FROM matches m
+        WHERE m.status = 'created'
+          AND m.match_starts_at > $1
+          AND m.match_starts_at <= $2
+          AND NOT EXISTS (SELECT 1 FROM match_scores s WHERE s.match_id = m.id)
+        ORDER BY m.match_starts_at DESC, m.created_at DESC, m.id DESC
+      `,
+      args: [inProgressExpiryCutoff(now), toUnixTimestampSeconds(now)],
+    });
+    const found = await Promise.all(
+      result.rows.map((row) => this.findById(String(row.id))),
+    );
+    return found.filter((match): match is Match => match !== undefined);
+  }
+
   async fillMissingParticipantDuprSnapshots(
     snapshots: MatchParticipantDuprSnapshot[],
   ): Promise<{

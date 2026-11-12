@@ -437,6 +437,50 @@ export class MatchRepository {
     );
   }
 
+  /**
+   * 점수 없는 진행 중 경기를 만든다(세션 참여자 추가 포함).
+   * 선수 중 누구든 이미 진행 중 경기에 있으면 아무것도 만들지 않고 겹치는 첫 선수 id를 돌려준다.
+   */
+  async createInProgress(
+    match: NewMatchInput,
+    now: Date,
+  ): Promise<{ match: Match } | { conflictPlayerId: string }> {
+    for (let attempt = 0; attempt < 8; attempt += 1) {
+      try {
+        const result = await this.run(
+          () =>
+            db.matches.createInProgressMatch(toCreateMatchInput(match), now),
+          500,
+          (error) => (isUniqueViolation(error) ? 409 : undefined),
+        );
+        return result.conflictPlayerId !== undefined
+          ? { conflictPlayerId: result.conflictPlayerId }
+          : { match: hydrateMatch(result.match) };
+      } catch (error) {
+        // 생성한 경기 id가 겹친 경우만 새 id로 다시 시도한다.
+        if (
+          match.id ||
+          attempt === 7 ||
+          !(error instanceof MatchRepositoryError) ||
+          error.status !== 409
+        ) {
+          throw error;
+        }
+      }
+    }
+
+    throw new MatchRepositoryError("매치 ID 생성에 실패했습니다.", 500);
+  }
+
+  /** 세션과 상관없이 지금 진행 중인(만료 전, 시작한, 점수 없는) 경기 */
+  async findInProgress(now: Date = new Date()): Promise<Match[]> {
+    const records = await this.run(
+      () => db.matches.findInProgressMatches(now),
+      500,
+    );
+    return records.map(hydrateMatch);
+  }
+
   async deleteSession(sessionId: string): Promise<void> {
     if (!isEntityId(sessionId, "session")) {
       throw new MatchRepositoryError("유효한 세션 ID가 필요합니다.", 400);
