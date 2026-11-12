@@ -3,7 +3,7 @@ import type { MatchInfo } from "@/components/Match";
 import { PkButton } from "@/components/ui/Button";
 import { TeamsVersus } from "./TeamBlock";
 
-export const getElapsedMinutes = (startsAt: string, now: Date) =>
+const getElapsedMinutes = (startsAt: string, now: Date) =>
   Math.max(0, Math.floor((now.getTime() - new Date(startsAt).getTime()) / 60_000));
 
 /** 진행 중인 내 경기. 2px 연한 블루 테두리와 "점수 입력" 버튼 */

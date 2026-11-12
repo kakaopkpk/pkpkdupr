@@ -38,7 +38,8 @@ export interface PreSessionData {
   lastSession: LastSessionMatches | null;
 }
 
-const byLatestStart = (a: MatchInfo, b: MatchInfo) =>
+/** 시작 시각 최신순 정렬 비교 함수 */
+export const byLatestStart = (a: MatchInfo, b: MatchInfo) =>
   new Date(b.matchStartsAt).getTime() - new Date(a.matchStartsAt).getTime();
 
 const takeRecentCompleted = (matches: MatchInfo[]) =>

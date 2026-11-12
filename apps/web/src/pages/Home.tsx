@@ -10,7 +10,10 @@ import NextSessionCard, {
 import RecommendationSection, {
   getCourtKey,
 } from "@/components/home/RecommendationSection";
-import { usePreSessionData } from "@/components/home/usePreSessionData";
+import {
+  byLatestStart,
+  usePreSessionData,
+} from "@/components/home/usePreSessionData";
 import { useSessionRecommendations } from "@/components/home/useSessionRecommendations";
 import ParticipantsSheet from "@/components/session/ParticipantsSheet";
 import { getErrorMessage, isNetworkError } from "@/components/session/saveError";
@@ -48,9 +51,6 @@ const useMinuteClock = () => {
   return now;
 };
 
-const byLatestStart = (a: MatchInfo, b: MatchInfo) =>
-  new Date(b.matchStartsAt).getTime() - new Date(a.matchStartsAt).getTime();
-
 const getMatchPlayerIds = (match: MatchInfo) =>
   match.teams.flatMap((team) => team.players.map((player) => player.id));
 
@@ -61,6 +61,26 @@ const EmptyText: React.FC<{ children: React.ReactNode }> = ({ children }) => (
 );
 
 const Spacer: React.FC = () => <div className="h-1.5" />;
+
+/** 누르면 경기 상세를 여는 경기 목록 카드 */
+const MatchListCard: React.FC<{
+  matches: MatchInfo[];
+  currentPlayerId: string | undefined;
+  timeLabel?: React.ComponentProps<typeof MatchRow>["timeLabel"];
+  onOpenMatch: (matchId: string) => void;
+}> = ({ matches, currentPlayerId, timeLabel, onOpenMatch }) => (
+  <Card>
+    {matches.map((match) => (
+      <MatchRow
+        key={match.id}
+        match={match}
+        currentPlayerId={currentPlayerId}
+        timeLabel={timeLabel}
+        onPress={() => onOpenMatch(match.id)}
+      />
+    ))}
+  </Card>
+);
 
 /** 참여자 시트 대상. 닫힌 뒤에도 닫힘 애니메이션 동안 마지막 세션을 그린다 */
 interface ParticipantsTarget {
@@ -100,6 +120,9 @@ const Home: React.FC = () => {
   const { registerPullToRefresh } = useTabNavigation();
   const { showSaveFailure } = useSystemNotice();
   const now = useMinuteClock();
+  // 비동기 요청이 끝난 시점에 최신 dataVersion을 읽기 위한 ref
+  const dataVersionRef = useRef(dataVersion);
+  dataVersionRef.current = dataVersion;
 
   const liveSession = live.liveSession;
   const isLiveResolved = live.status !== "loading" || liveSession !== null;
@@ -169,19 +192,26 @@ const Home: React.FC = () => {
       } else {
         await removeMatchSessionParticipant(sessionId, playerId);
       }
+      // notifyDataChanged가 dataVersion을 1 올리고 그 값으로 다시 받는다.
+      // 요청 중 다른 곳에서 올린 버전도 반영하도록 호출 직전의 최신 값을 기준으로 삼는다
+      const awaitVersion = dataVersionRef.current + 1;
       notifyDataChanged();
+      return awaitVersion;
     };
 
     setParticipation({ action, awaitVersion: null });
     setParticipationError(null);
     try {
-      await run();
-      // notifyDataChanged가 dataVersion을 1 올리고 그 값으로 다시 받는다
-      setParticipation({ action, awaitVersion: dataVersion + 1 });
+      const awaitVersion = await run();
+      setParticipation({ action, awaitVersion });
     } catch (err) {
       setParticipation(null);
       if (isNetworkError(err)) {
-        showSaveFailure({ onRetry: run });
+        showSaveFailure({
+          onRetry: async () => {
+            await run();
+          },
+        });
       } else {
         setParticipationError(
           getErrorMessage(
@@ -348,16 +378,11 @@ const Home: React.FC = () => {
         <Spacer />
         <SectionLabel>오늘 기록 {completedMatches.length}</SectionLabel>
         {completedMatches.length > 0 ? (
-          <Card>
-            {completedMatches.map((match) => (
-              <MatchRow
-                key={match.id}
-                match={match}
-                currentPlayerId={playerId}
-                onPress={() => openMatchDetail(match.id)}
-              />
-            ))}
-          </Card>
+          <MatchListCard
+            matches={completedMatches}
+            currentPlayerId={playerId}
+            onOpenMatch={openMatchDetail}
+          />
         ) : (
           <EmptyText>아직 기록된 경기가 없어요</EmptyText>
         )}
@@ -388,6 +413,12 @@ const Home: React.FC = () => {
 
     return (
       <>
+        {/* 다시 받기에 실패하면 이전 데이터를 둔 채 실패를 알린다 */}
+        {status === "error" ? (
+          <p role="alert" className="px-1 text-pk-13 font-medium text-pk-down">
+            {error ?? "다가오는 세션을 불러오지 못했어요."}
+          </p>
+        ) : null}
         {nextSession ? (
           <NextSessionCard
             session={nextSession}
@@ -416,17 +447,12 @@ const Home: React.FC = () => {
           <>
             <Spacer />
             <SectionLabel>최근 기록</SectionLabel>
-            <Card>
-              {recentMatches.map((match) => (
-                <MatchRow
-                  key={match.id}
-                  match={match}
-                  currentPlayerId={playerId}
-                  timeLabel="weekday-time"
-                  onPress={() => openMatchDetail(match.id)}
-                />
-              ))}
-            </Card>
+            <MatchListCard
+              matches={recentMatches}
+              currentPlayerId={playerId}
+              timeLabel="weekday-time"
+              onOpenMatch={openMatchDetail}
+            />
           </>
         ) : null}
         {!isToday && lastSession ? (
@@ -444,17 +470,12 @@ const Home: React.FC = () => {
               지난 세션 · {formatKstShortDate(lastSession.session.date)}
             </SectionLabel>
             {lastSession.matches.length > 0 ? (
-              <Card>
-                {lastSession.matches.map((match) => (
-                  <MatchRow
-                    key={match.id}
-                    match={match}
-                    currentPlayerId={playerId}
-                    timeLabel="weekday-time"
-                    onPress={() => openMatchDetail(match.id)}
-                  />
-                ))}
-              </Card>
+              <MatchListCard
+                matches={lastSession.matches}
+                currentPlayerId={playerId}
+                timeLabel="weekday-time"
+                onOpenMatch={openMatchDetail}
+              />
             ) : null}
           </>
         ) : null}

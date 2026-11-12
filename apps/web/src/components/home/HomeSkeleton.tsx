@@ -3,11 +3,8 @@ import SkeletonBlock from "@/components/SkeletonBlock";
 
 /** 홈 첫 로드 자리: 230px 카드, 짧은 알약, 줄 3개 카드 */
 const HomeSkeleton: React.FC = () => (
-  <div
-    aria-busy="true"
-    aria-label="불러오는 중"
-    className="flex flex-col gap-2.5"
-  >
+  <div role="status" aria-busy="true" className="flex flex-col gap-2.5">
+    <span className="sr-only">불러오는 중</span>
     <SkeletonBlock className="h-[230px] w-full rounded-pk-lg" />
     <div className="h-1.5" />
     <SkeletonBlock className="h-3.5 w-2/5 rounded-full" />
