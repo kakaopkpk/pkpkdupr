@@ -135,7 +135,7 @@ const SessionDetail: React.FC<SessionDetailProps> = ({
   ) => {
     if (!isEditable || !isOnline) return;
 
-    pushDepth("match", {
+    pushDepth("home", {
       id: depthId,
       kind: "bottom-sheet",
       onClose: () => setOpen(false),
@@ -148,7 +148,7 @@ const SessionDetail: React.FC<SessionDetailProps> = ({
     depthId: string,
     setOpen: (isOpen: boolean) => void,
   ) => {
-    if (!closeDepth("match", depthId)) setOpen(false);
+    if (!closeDepth("home", depthId)) setOpen(false);
   };
 
   const openParticipantSheet = () =>
@@ -274,7 +274,7 @@ const SessionDetail: React.FC<SessionDetailProps> = ({
 
   return (
     <div className="min-h-full">
-      <DetailPageHeader title="Session Detail" tabKey="match" />
+      <DetailPageHeader title="Session Detail" tabKey="home" />
       <div className="p-2">
         <div className="mx-auto flex w-full flex-col gap-3">
           <SessionCard
@@ -438,7 +438,7 @@ const SessionDetail: React.FC<SessionDetailProps> = ({
         <>
           <BottomSheet
             isOpen={isParticipantSheetOpen}
-            isActive={selectedTab === "match"}
+            isActive={selectedTab === "home"}
             onOpenChange={(isOpen) =>
               isOpen ? openParticipantSheet() : closeParticipantSheet()
             }
@@ -459,7 +459,7 @@ const SessionDetail: React.FC<SessionDetailProps> = ({
           </BottomSheet>
           <BottomSheet
             isOpen={isRecordSheetOpen}
-            isActive={selectedTab === "match"}
+            isActive={selectedTab === "home"}
             onOpenChange={(isOpen) =>
               isOpen ? openRecordSheet() : closeRecordSheet()
             }

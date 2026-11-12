@@ -4,8 +4,9 @@
 
 - 일반 사용자용 웹 앱입니다.
 - 엔트리 라우트는 `/`, `/login`, `/force-change-password`(첫 로그인·비밀번호 초기화 직후)입니다. `AuthContext`의 `status`(`signedOut`·`mustChangePassword`·`authenticated`)가 열 수 있는 라우트를 정합니다.
-- `/`에서는 `BottomNav`가 내부 state로 `Match`, `Player`, `Me` 화면을 전환합니다.
-- 상단 + 메뉴는 `설정`과 `경기 기록` 시트를 엽니다.
+- `/`에서는 `BottomNav`가 내부 state로 홈(`Home`)·기록(`Records`)·랭킹(`Ranking`)·나(`Me`) 4탭을 전환합니다. 시작 탭은 홈이고, 한 번 연 탭은 숨겨도 마운트를 유지합니다(keep-alive).
+- 하단 바는 떠 있는 유리 알약 4탭과 66px 원형 + 버튼입니다. + 메뉴(`새로 만들기`)는 `경기 기록`과 `세션 만들기`만 엽니다. 설정(로그아웃 포함)은 나 탭에서 `openSettings()`로 엽니다.
+- 내가 든 진행 중 경기가 있으면 홈 외 탭에서 하단 바 위에 미니바(`점수 입력`)가, 홈 탭에서 진행 중 세션에 참여하지 않았으면 같은 자리에 참여 알림 바가 뜹니다. `BottomNav`가 이 표시에 맞춰 `--app-bottom-dock-height`를 갱신하므로 하단 고정 UI와 여백은 이 변수를 기준으로 잡습니다.
 
 ## 기술 스택
 
@@ -24,9 +25,12 @@
 - `src/context/`
   - 인증/세션 상태
   - `AuthContext.tsx`가 Supabase 세션 구독, `/api/me` 검증, `status`·`player`, 비밀번호 변경, `logout` 담당
+  - `TabNavigationContext.tsx`: 탭(`TabKey`)·깊이 스택(`pushDepth`/`closeDepth`, 브라우저 뒤로가기 연동)·스크롤 복원·당겨서 새로고침 등록
+  - `AppNavigationContext.tsx`: 전역 화면 열기(`openMatchDetail`, `openMemberProfile`(내 id면 나 탭), `openRecordMatch`, `openCreateSession`, `openSettings`, `openSessionReport`), `notifyDataChanged`·`dataVersion`, 전역 화면 레이어 번호 `GLOBAL_LAYER`
+  - `LiveSessionContext.tsx`: 오늘 진행 중 세션·그 경기·내 진행 중 경기(`useLiveSession`)
 - `src/pages/`
   - 화면 단위 컴포넌트
-  - 현재 `Login`, `Match`, `Player`, `Me`, `Home`
+  - 탭 페이지 `Home`·`Records`·`Ranking`·`Me`(props 없음), 그 밖에 `Login`, `ForceChangePassword`
 - 타입은 반드시 `@pkpkdupr/shared/*`에서 import합니다.
 
 ## 현재 UX / 상태 관리 규칙
@@ -36,7 +40,8 @@
 - 세션 저장·토큰 갱신은 supabase-js가 맡습니다. 세션이 바뀌면 `/api/me`로 회원을 확인하고, `isFirstLogin`이 true면 `/force-change-password`만 엽니다.
 - 비밀번호 변경은 `supabase.auth.updateUser({ password })`로 하며 현재 비밀번호는 묻지 않습니다. 강제 변경은 이어서 `POST /api/me/password-changed`까지 성공해야 끝납니다.
 - `/api/me`가 403 `ACCOUNT_NOT_LINKED`면 로그아웃하고 로그인 화면에 안내합니다. 401·`SESSION_INVALID`만 로그아웃하고, 일시 오류(`SESSION_UNAVAILABLE`, 네트워크)는 세션을 유지한 채 재시도합니다.
-- `Match`, `Player`, `Me`는 아직 플레이스홀더 성격이 강하므로, 기능 추가 시 탭 상태와 실제 라우트 분리가 필요한지 먼저 판단합니다.
+- 전역 화면(경기 상세·회원 프로필·경기 기록 시트·세션 만들기·설정)은 `BottomNav`가 한 번씩 렌더하는 래퍼(`components/{match,profile,record,session,settings}/`)이며, 열려 있는 동안 연 탭에 깊이를 쌓아 브라우저 뒤로가기로 닫힙니다. 탭 페이지는 래퍼를 직접 렌더하지 말고 `useAppNavigation()`으로 엽니다.
+- `?matchId=` 딥링크는 시작할 때 `openMatchDetail`로 경기 상세를 엽니다.
 
 ## 라우팅 규칙
 

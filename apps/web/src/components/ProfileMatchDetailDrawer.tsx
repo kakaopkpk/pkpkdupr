@@ -19,6 +19,8 @@ interface ProfileMatchDetailDrawerProps {
   match?: MatchInfo | null;
   matchId?: string;
   currentPlayerId?: string;
+  /** 이 드로어에서 결과를 기록·수정한 뒤 호출한다("한 판 더" 새 기록 포함) */
+  onMatchRecorded?: (match: MatchInfo) => void;
   onExited: () => void;
   onScrollContainerChange: (element: HTMLDivElement | null) => void;
   layer: number;
@@ -31,6 +33,7 @@ const ProfileMatchDetailDrawer: React.FC<ProfileMatchDetailDrawerProps> = ({
   match,
   matchId,
   currentPlayerId,
+  onMatchRecorded,
   onExited,
   onScrollContainerChange,
   layer,
@@ -87,12 +90,16 @@ const ProfileMatchDetailDrawer: React.FC<ProfileMatchDetailDrawerProps> = ({
     [isOnline, isAuthenticated],
   );
 
-  const handleMatchRecorded = useCallback((recordedMatch: MatchInfo) => {
-    // "한 판 더"로 만든 새 경기는 이 드로어의 경기가 아니므로 무시한다
-    setDisplayedMatch((current) =>
-      current && current.id === recordedMatch.id ? recordedMatch : current,
-    );
-  }, []);
+  const handleMatchRecorded = useCallback(
+    (recordedMatch: MatchInfo) => {
+      // "한 판 더"로 만든 새 경기는 이 드로어의 경기가 아니므로 무시한다
+      setDisplayedMatch((current) =>
+        current && current.id === recordedMatch.id ? recordedMatch : current,
+      );
+      onMatchRecorded?.(recordedMatch);
+    },
+    [onMatchRecorded],
+  );
 
   useEffect(() => {
     requestIdRef.current += 1;
