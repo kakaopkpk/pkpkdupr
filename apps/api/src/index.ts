@@ -2119,9 +2119,15 @@ const parseExpectedUpdatedAt = (value: unknown): Date | undefined => {
 const isSameUpdatedAt = (expected: Date, actual: Date) =>
   Math.floor(expected.getTime() / 1000) === Math.floor(actual.getTime() / 1000);
 
+/** 평점 재계산이 읽는 경기 수 상한 */
+const MAX_RECALCULATION_MATCHES = 10000;
+
 /** 평점 재계산 입력. 평점 쓰기 잠금 안에서 불려 최신 완료 경기 목록을 읽는다 */
 const loadCompletedMatches = async () => {
-  const { matches } = await matchRepository.findAll(0, 10000);
+  const { matches } = await matchRepository.findAll(
+    0,
+    MAX_RECALCULATION_MATCHES,
+  );
   return matches.filter((match) => match.status === "completed");
 };
 
@@ -2162,7 +2168,10 @@ const getMatchDeleteForbiddenReason = (
   if (!isWithinMatchEditWindow(match.matchStartsAt, now)) {
     return "경기 시작 후 24시간이 지나 지울 수 없습니다. 관리자에게 요청해 주세요.";
   }
-  return "아직 시작하지 않은 예정 경기는 지울 수 없습니다.";
+  if (match.matchStartsAt.getTime() > now.getTime()) {
+    return "아직 시작하지 않은 예정 경기는 지울 수 없습니다.";
+  }
+  return "완료되지 않은 관리자 예정 경기는 회원이 지울 수 없습니다.";
 };
 
 /**

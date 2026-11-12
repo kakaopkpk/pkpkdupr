@@ -329,13 +329,14 @@ describe("official DUPR recency propagation", () => {
   it("전체 재계산은 기존 경기별 로그를 누적하지 않고 한 번에 교체한다", async () => {
     const service = new AuthService();
     const completedMatches = [buildMatch(new Date(NOW.getTime() - DAY_MS))];
+    const loadCompletedMatches = async () => completedMatches;
 
-    const first = await service.recalculateDuprRatings(async () => completedMatches, {
+    const first = await service.recalculateDuprRatings(loadCompletedMatches, {
       perMatchLogs: true,
     });
     const firstIds = first.perMatchLogs.map((log) => log.id);
 
-    const second = await service.recalculateDuprRatings(async () => completedMatches, {
+    const second = await service.recalculateDuprRatings(loadCompletedMatches, {
       perMatchLogs: true,
     });
 

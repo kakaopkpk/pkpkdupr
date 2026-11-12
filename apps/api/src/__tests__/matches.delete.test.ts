@@ -245,18 +245,20 @@ describe("DELETE /api/matches/:matchId", () => {
     });
 
     it("아직 시작하지 않은 경기는 403", async () => {
-      await expectForbidden(
+      const response = await expectForbidden(
         buildInProgressMatch({ matchStartsAt: new Date(Date.now() + HOUR_MS) }),
       );
+      expect(response.body.error).toContain("아직 시작하지 않은");
     });
 
     it("완료되지 않은 관리자 예정 경기는 이미 시작했어도 403", async () => {
-      await expectForbidden(
+      const response = await expectForbidden(
         buildInProgressMatch({
           source: "admin_created",
           creatorPlayerId: "admin-001",
         }),
       );
+      expect(response.body.error).toContain("관리자 예정 경기");
     });
 
     it("취소된 경기는 403", async () => {
