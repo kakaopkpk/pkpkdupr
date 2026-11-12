@@ -15,6 +15,17 @@ export type MatchSessionReportInfo = Omit<MatchSessionReport, "session"> & {
   session: MatchSessionHistoryInfo;
 };
 
+/** requestJson이 던지는 HTTP 오류. 메시지는 서버 오류 문구이고 status로 응답 코드를 구분한다. */
+export class RequestError extends Error {
+  readonly status: number;
+
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = "RequestError";
+    this.status = status;
+  }
+}
+
 const requestJson = async <T>(
   path: string,
   fallbackMessage: string,
@@ -24,7 +35,7 @@ const requestJson = async <T>(
     const errorData = (await res.json().catch(() => ({}))) as {
       error?: string;
     };
-    throw new Error(errorData.error || fallbackMessage);
+    throw new RequestError(errorData.error || fallbackMessage, res.status);
   }
 
   return (await res.json()) as T;
