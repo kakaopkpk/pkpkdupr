@@ -164,7 +164,12 @@ const MatchDetail: React.FC<MatchDetailProps> = ({
   const hasResultScores = !!match.scores?.length;
   // 기한이 지나는 순간을 따로 감시하지 않는다. 열어 둔 채 지나면 서버가 거절한다
   const canEditRecord =
-    isMatchRecordEditable(match) && isOnline && !!onMatchRecorded;
+    isMatchRecordEditable({
+      ...match,
+      matchStartsAt: new Date(match.matchStartsAt),
+    }) &&
+    isOnline &&
+    !!onMatchRecorded;
   const resultSheetDepthId = `match-result-sheet:${match.id}`;
   // 단판은 점수 열 하나만, 점수가 여러 개인 과거 2선승 기록은 게임마다 열과 Total을 둔다
   const isMultiGame = isMultiGameMatchRecord(match);

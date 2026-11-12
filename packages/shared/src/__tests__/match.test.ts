@@ -96,16 +96,4 @@ describe("isMatchRecordEditable", () => {
       ),
     ).toBe(false);
   });
-
-  it("matchStartsAt이 문자열(JSON 응답)이어도 판단한다", () => {
-    expect(
-      isMatchRecordEditable(
-        {
-          ...match,
-          matchStartsAt: startsAt.toISOString() as unknown as Date,
-        },
-        now,
-      ),
-    ).toBe(true);
-  });
 });

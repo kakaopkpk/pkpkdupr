@@ -175,7 +175,7 @@ export const isMatchRecordEditable = (
 ): boolean =>
   match.status !== "cancelled" &&
   !isMultiGameMatchRecord(match) &&
-  isWithinMatchEditWindow(new Date(match.matchStartsAt), now);
+  isWithinMatchEditWindow(match.matchStartsAt, now);
 
 export interface Match {
   id: string;
