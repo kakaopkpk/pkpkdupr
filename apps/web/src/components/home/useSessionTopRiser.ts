@@ -11,9 +11,9 @@ export const useSessionTopRiser = (
   sessionId: string | null,
   dataVersion: number,
 ): SessionPlayerReport | null => {
-  const [topRiser, setTopRiser] = useState<{
+  const [result, setResult] = useState<{
     sessionId: string;
-    report: SessionPlayerReport | null;
+    topRiser: SessionPlayerReport | null;
   } | null>(null);
   const requestIdRef = useRef(0);
 
@@ -23,12 +23,12 @@ export const useSessionTopRiser = (
     fetchSessionReport(sessionId).then(
       (report) => {
         if (requestIdRef.current !== requestId) return;
-        setTopRiser({ sessionId, report: report.topRiser });
+        setResult({ sessionId, topRiser: report.topRiser });
       },
       () => {},
     );
   }, [sessionId, dataVersion]);
 
   // 다른 세션의 이전 결과는 보이지 않는다
-  return topRiser && topRiser.sessionId === sessionId ? topRiser.report : null;
+  return result && result.sessionId === sessionId ? result.topRiser : null;
 };
