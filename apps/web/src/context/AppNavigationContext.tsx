@@ -31,17 +31,16 @@ export interface AppNavigationContextValue {
 }
 
 /**
- * 셸(BottomNav)이 한 번씩 렌더하는 전역 화면의 레이어(z-index).
- * 래퍼 내부를 갈아 끼우는 단위도 이 값을 그대로 쓴다.
- * 경기 상세(70)는 그 안의 결과 수정 시트(MatchDetail, 80)보다 아래여야 한다.
+ * 셸(BottomNav)이 렌더하는 전역 레이어(z-index).
+ * 화면 이동(PushScreen)은 pushScreen부터 쌓인 순서만큼 1씩 올라가고(최대 +20),
+ * 화면 위에서 여는 바텀시트(sheet·recordMatch·createSession)는 그보다 위다.
+ * pushScreen은 + 메뉴(60)보다 위여야 하단 바·+ 버튼을 모두 덮는다.
  */
 export const GLOBAL_LAYER = {
-  memberProfile: 62,
-  memberMatchHistory: 64,
-  matchDetail: 70,
+  pushScreen: 62,
+  sheet: 90,
   recordMatch: 90,
   createSession: 90,
-  settings: 90,
 } as const;
 
 const AppNavigationContext = createContext<AppNavigationContextValue | null>(

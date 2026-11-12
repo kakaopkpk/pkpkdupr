@@ -29,7 +29,7 @@
   - `ui/`: 새 디자인 공통 컴포넌트. 새 화면은 여기 것을 먼저 씁니다.
     - `Button.tsx`(`PkButton`, variant `primary`·`soft`·`outline`·`ghost`), `Card.tsx`, `SegmentedControl.tsx`, `Headers.tsx`(`TabHeader`·`DetailHeader`), `Form.tsx`(`TextField`), `Section.tsx`(`ListRow`·`SectionLabel`·`TextLink`), `SheetTitle.tsx`
     - `MatchRow.tsx`(`MatchRow`·`LiveMatchRow`), `PlayerAvatar.tsx`(`PlayerAvatar`·`TeamAvatars`), `Delta.tsx`(`RatingDelta`·`RankChange`), `RankBadge.tsx`, `Badges.tsx`(`LivePill`·`HighlightBadge`), `StatusMessageChip.tsx`, `Icons.tsx`, `cx.ts`
-  - 공용 레이어·상태: `BottomSheet.tsx`, `RightDrawer.tsx`, `SkeletonBlock.tsx`, `TabPanelStatus.tsx`, `HoldToConfirmButton.tsx`, `SystemToast.tsx`, `OfflineBanner.tsx`, `PwaInstallPrompt.tsx`, `PwaUpdatePrompt.tsx`
+  - 공용 레이어·상태: `BottomSheet.tsx`, `PushScreen.tsx`, `SkeletonBlock.tsx`, `TabPanelStatus.tsx`, `HoldToConfirmButton.tsx`, `SystemToast.tsx`, `OfflineBanner.tsx`, `PwaInstallPrompt.tsx`, `PwaUpdatePrompt.tsx`
 - `src/context/`
   - `AuthContext.tsx`: Supabase 세션 구독, `/api/me` 검증, `status`·`player`, 비밀번호 변경, `logout`
   - `TabNavigationContext.tsx`: 탭(`TabKey`: `home`·`records`·`ranking`·`me`)·깊이 스택(`pushDepth`/`closeDepth`, 브라우저 뒤로가기 연동)·스크롤 복원·당겨서 새로고침 등록
@@ -48,7 +48,8 @@
 - 세션 저장·토큰 갱신은 supabase-js가 맡습니다. 세션이 바뀌면 `/api/me`로 회원을 확인하고, `isFirstLogin`이 true면 `/force-change-password`만 엽니다.
 - 비밀번호 변경은 `supabase.auth.updateUser({ password })`로 하며 현재 비밀번호는 묻지 않습니다. 강제 변경은 이어서 `POST /api/me/password-changed`까지 성공해야 끝납니다.
 - `/api/me`가 403 `ACCOUNT_NOT_LINKED`면 로그아웃하고 로그인 화면에 안내합니다. 401·`SESSION_INVALID`만 로그아웃하고, 일시 오류(`SESSION_UNAVAILABLE`, 네트워크)는 세션을 유지한 채 재시도합니다.
-- 전역 화면(경기 상세·회원 프로필·경기 기록 시트·세션 만들기·설정)은 `BottomNav`가 한 번씩 렌더하는 래퍼(`components/{match,profile,record,session,settings}/`)이며, 열려 있는 동안 연 탭에 깊이를 쌓아 브라우저 뒤로가기로 닫힙니다. 탭 페이지는 래퍼를 직접 렌더하지 말고 `useAppNavigation()`으로 엽니다.
+- 전역 화면(경기 상세·회원 프로필·경기 기록 시트·세션 만들기·설정)은 `BottomNav`가 렌더하는 래퍼(`components/{match,profile,record,session,settings}/`)이며, 열려 있는 동안 연 탭에 깊이를 쌓아 브라우저 뒤로가기로 닫힙니다. 탭 페이지는 래퍼를 직접 렌더하지 말고 `useAppNavigation()`으로 엽니다.
+- 보는 화면(경기 상세·회원 프로필·회원 경기 전체·설정·비밀번호 변경)은 `PushScreen`으로 엽니다. 하단 바(탭바·미니바·알림 바·+ 버튼)까지 덮고, 오른쪽에서 들어오며 뒤 화면(탭 셸 또는 아래 화면)은 왼쪽으로 30% 밀려 어두워집니다(320ms, 움직임 줄이기면 없음). 헤더(‹ 뒤로·제목·`headerRight`)는 `PushScreen`이 그리고, 버튼은 `actions`로 탭바 자리 하단 고정 바에 둡니다. 돌아가기는 ‹ 버튼과 기기 뒤로가기뿐이며(가장자리 끌기 없음) 맨 위 화면 하나씩 닫힙니다. 경기 상세·회원 프로필은 화면 위에 계속 쌓을 수 있습니다(`BottomNav`의 화면 스택). 짧은 입력은 바텀시트로 하며, 화면에서 연 시트는 `GLOBAL_LAYER.sheet` 이상 레이어로 그 화면 위에 뜹니다.
 - `?matchId=` 딥링크는 시작할 때 `openMatchDetail`로 경기 상세를 엽니다.
 - 홈 화면 추가 안내(`PwaInstallPrompt`)는 `BottomNav`가 렌더하며, 설치 안 된 모바일 브라우저에서 홈 탭이 보이고 전역 화면·메뉴가 하나도 열려 있지 않을 때만 뜹니다. 업데이트 감지와 무관하게 유지하고 저장 실패 알림이 떠 있는 동안만 숨깁니다. 닫으면 KST 날짜를 `pkpkdupr:install-prompt-dismissed-date`에 저장해 그날만 숨깁니다.
 

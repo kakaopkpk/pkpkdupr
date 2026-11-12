@@ -21,8 +21,6 @@ import { useTabNavigation } from "@/context/TabNavigationContext";
 import { isTabRefreshDue } from "@/lib/tabRefresh";
 
 const MATCH_HISTORY_DEPTH_ID = "me-match-history";
-// 나 탭 깊이 화면이라 전역 회원 프로필(62)보다 아래에 둔다
-const MATCH_HISTORY_LAYER = 60;
 
 const Me: React.FC = () => {
   const { player, isAuthenticated, refreshMe } = useAuth();
@@ -141,7 +139,6 @@ const Me: React.FC = () => {
         title="내 경기"
         initialCategory={category}
         depthId={MATCH_HISTORY_DEPTH_ID}
-        layer={MATCH_HISTORY_LAYER}
         onClose={closeMatchHistory}
       />
     </>

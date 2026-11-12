@@ -3,12 +3,10 @@ import React, { createContext, useContext } from "react";
 export type TabKey = "home" | "records" | "ranking" | "me";
 
 export type TabDepthKind =
-  | "match-detail"
-  | "match-history"
-  | "member-profile"
+  /** 하단 바까지 덮는 화면 이동(PushScreen) */
+  | "push-screen"
   | "bottom-sheet"
-  | "dropdown"
-  | "settings";
+  | "dropdown";
 
 export interface TabDepthEntry {
   id: string;
