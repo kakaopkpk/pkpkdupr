@@ -1,6 +1,7 @@
 import React, { useCallback, useMemo, useState } from "react";
 import type { MatchTopLevelType } from "@pkpkdupr/shared/match";
 import PushScreen from "@/components/PushScreen";
+import AchievementsSection from "@/components/profile/AchievementsSection";
 import SkeletonBlock from "@/components/SkeletonBlock";
 import PlayerMatchesDrawer from "@/components/profile/PlayerMatchesDrawer";
 import ProfileStatTile from "@/components/profile/ProfileStatTile";
@@ -33,7 +34,7 @@ export interface MemberProfileDrawerProps {
   onExited: () => void;
 }
 
-/** 전역 회원 프로필 화면. 평점 카드·경기 승률·나와의 상대 전적·최근 경기 */
+/** 전역 회원 프로필 화면. 평점 카드·경기 승률·나와의 상대 전적·받은 업적·최근 경기 */
 export default function MemberProfileDrawer({
   playerId,
   isOpen: isRequested,
@@ -155,6 +156,12 @@ export default function MemberProfileDrawer({
                   foot={`내 기준 · ${headToHead?.matchCount ?? 0}경기`}
                 />
               </div>
+              <AchievementsSection
+                playerId={playerId}
+                progress={overview.summary.achievements}
+                variant="member"
+                badgeSize={44}
+              />
               <RecentMatchesSection
                 title="최근 경기"
                 matches={overview.summary.recentMatches}

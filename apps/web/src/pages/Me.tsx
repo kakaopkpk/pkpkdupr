@@ -1,6 +1,8 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import type { MatchTopLevelType } from "@pkpkdupr/shared/match";
 import { IoSettingsOutline } from "react-icons/io5";
+import AchievementsScreen from "@/components/profile/AchievementsScreen";
+import AchievementsSection from "@/components/profile/AchievementsSection";
 import PartnerChemistryCard from "@/components/profile/PartnerChemistryCard";
 import PlayerMatchesDrawer from "@/components/profile/PlayerMatchesDrawer";
 import ProfileStatTile from "@/components/profile/ProfileStatTile";
@@ -23,6 +25,7 @@ import { useTabNavigation } from "@/context/TabNavigationContext";
 import { isTabRefreshDue } from "@/lib/tabRefresh";
 
 const MATCH_HISTORY_DEPTH_ID = "me-match-history";
+const ACHIEVEMENTS_DEPTH_ID = "me-achievements";
 
 const Me: React.FC = () => {
   const { player, isAuthenticated, refreshMe } = useAuth();
@@ -33,6 +36,7 @@ const Me: React.FC = () => {
     useProfileOverview(playerId);
   const [category, setCategory] = useState<MatchTopLevelType>("doubles");
   const [isMatchHistoryRequested, setIsMatchHistoryRequested] = useState(false);
+  const [isAchievementsRequested, setIsAchievementsRequested] = useState(false);
   const wasTabActiveRef = useRef(false);
 
   useEffect(
@@ -59,11 +63,16 @@ const Me: React.FC = () => {
     () => setIsMatchHistoryRequested(false),
     [],
   );
+  const closeAchievements = useCallback(
+    () => setIsAchievementsRequested(false),
+    [],
+  );
 
   const username = player?.username ?? "";
   const ratingDelta = overview?.summary.ratingDelta[category];
   const partners = overview?.summary.partners ?? [];
   const rivals = overview?.summary.rivals ?? [];
+  const achievements = overview?.summary.achievements ?? [];
 
   return (
     <>
@@ -129,6 +138,14 @@ const Me: React.FC = () => {
               <SectionLabel>상성 · 자주 진 상대</SectionLabel>
               <RivalCard rivals={rivals} />
             </section>
+            {playerId ? (
+              <AchievementsSection
+                playerId={playerId}
+                progress={achievements}
+                variant="me"
+                onViewAll={() => setIsAchievementsRequested(true)}
+              />
+            ) : null}
             <RecentMatchesSection
               title="최근 경기"
               matches={overview.summary.recentMatches}
@@ -150,6 +167,14 @@ const Me: React.FC = () => {
         initialCategory={category}
         depthId={MATCH_HISTORY_DEPTH_ID}
         onClose={closeMatchHistory}
+      />
+      <AchievementsScreen
+        isOpen={isAchievementsRequested}
+        tabKey="me"
+        depthId={ACHIEVEMENTS_DEPTH_ID}
+        playerId={playerId}
+        progress={achievements}
+        onClose={closeAchievements}
       />
     </>
   );

@@ -2,11 +2,15 @@ import React, { useMemo } from "react";
 import { getMatchTopLevelType } from "@pkpkdupr/shared/match";
 import type { PlayerRatingChangeLog } from "@pkpkdupr/shared/player";
 import BottomSheet from "@/components/BottomSheet";
+import { AchievementBadge } from "@/components/profile/AchievementBadge";
 import type { MatchInfo } from "@/types/match";
 import { PkButton } from "@/components/ui/Button";
 import { RatingDelta } from "@/components/ui/Delta";
 import { PlayerAvatar, TeamAvatars } from "@/components/ui/PlayerAvatar";
 import { cx } from "@/components/ui/cx";
+import { useAppNavigation } from "@/context/AppNavigationContext";
+import { useAuth } from "@/context/AuthContext";
+import { getAchievementDefinition } from "@/lib/achievements";
 import { formatRating } from "@/utils/dupr";
 import { CheckIcon, FooterError } from "./RecordMatchParts";
 
@@ -28,6 +32,8 @@ export default function RecordDoneStep({
   onPlayAgain,
   onDone,
 }: RecordDoneStepProps): React.ReactElement {
+  const { player: viewer } = useAuth();
+  const { openAchievementDetail } = useAppNavigation();
   const score = match.scores?.[0];
   const ratingCategory = getMatchTopLevelType(match.type);
   const ratingRows = useMemo(() => {
@@ -42,6 +48,20 @@ export default function RecordDoneStep({
         return change ? [{ player: teamPlayer, change }] : [];
       });
   }, [match]);
+  // 참가자 전원이 받은 업적 중 내 것만 띠로 보인다
+  const myNewAchievements = useMemo(
+    () =>
+      viewer
+        ? (match.newAchievements ?? []).flatMap((item) => {
+            const definition =
+              item.playerId === viewer.id
+                ? getAchievementDefinition(item.achievementId)
+                : null;
+            return definition ? [definition] : [];
+          })
+        : [],
+    [match.newAchievements, viewer],
+  );
 
   return (
     <>
@@ -83,6 +103,33 @@ export default function RecordDoneStep({
               players={match.teams[1].players}
               isWinner={score.scoreB > score.scoreA}
             />
+          </div>
+        ) : null}
+        {viewer && myNewAchievements.length > 0 ? (
+          <div className="flex shrink-0 flex-col gap-2">
+            {myNewAchievements.map((definition) => (
+              <button
+                key={definition.id}
+                type="button"
+                onClick={() =>
+                  openAchievementDetail({
+                    playerId: viewer.id,
+                    achievementId: definition.id,
+                  })
+                }
+                className="flex items-center gap-3 rounded-pk-sm bg-pk-primary-soft px-3.5 py-3 text-left active:opacity-80"
+              >
+                <AchievementBadge achievement={definition} earned size={40} />
+                <span className="flex min-w-0 flex-col gap-0.5">
+                  <span className="truncate text-pk-15 font-extrabold text-pk-ink">
+                    새 업적 · {definition.name}
+                  </span>
+                  <span className="truncate text-pk-13 text-pk-sub">
+                    {definition.condition}
+                  </span>
+                </span>
+              </button>
+            ))}
           </div>
         ) : null}
         {ratingRows.length > 0 ? (
