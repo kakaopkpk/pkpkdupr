@@ -2,13 +2,16 @@ import cors from "cors";
 import express from "express";
 import { randomUUID } from "crypto";
 import {
+  getMatchTopLevelType,
   isMatchInProgress,
   isSinglesMatchType,
   isMultiGameMatchRecord,
   isWithinMatchEditWindow,
   matchTypeLabels,
+  matchTopLevelTypeValues,
   matchTypeValues,
   type Match,
+  type MatchTopLevelType,
   type MatchScore,
   type RecordMatchRequest,
   type RecordedMatchResponse,
@@ -842,7 +845,8 @@ app.get("/api/players", async (req, res) => {
 
 app.get("/api/players/:playerId/profile-summary", async (req, res) => {
   try {
-    if (!(await getAuthPayload(req, res))) {
+    const decoded = await getAuthPayload(req, res);
+    if (!decoded) {
       return;
     }
 
@@ -853,11 +857,43 @@ app.get("/api/players/:playerId/profile-summary", async (req, res) => {
       playerRatingChartProjectionService.getOrRebuild(playerId),
     ]);
     const matches = attachMatchRatingChanges(result.matches, ratingChangeLogs);
-    res.json(buildPlayerProfileSummary(matches, playerId, projection.history));
+    res.json(
+      buildPlayerProfileSummary(
+        matches,
+        playerId,
+        projection.history,
+        decoded.playerId,
+      ),
+    );
   } catch (err) {
     res.status(500).json({ error: (err as Error).message });
   }
 });
+
+/** 분류 필터용으로 한 선수의 경기를 한 번에 읽는 상한. 넘는 경기는 필터·total에서 빠진다(동호회 규모라 닿지 않는다). */
+const MAX_CATEGORY_FILTER_SCAN = 10_000;
+
+/** 선수 경기를 모두 읽어 메모리에서 분류로 거른 뒤 페이지를 나눈다(동호회 규모). */
+const findPlayerMatchesByCategory = async (
+  playerId: string,
+  category: MatchTopLevelType,
+  page: number,
+  limit: number,
+) => {
+  const { matches } = await matchRepository.findByPlayerId(
+    playerId,
+    0,
+    MAX_CATEGORY_FILTER_SCAN,
+  );
+  const filtered = matches.filter(
+    (match) => getMatchTopLevelType(match.type) === category,
+  );
+  const start = page * limit;
+  return {
+    matches: filtered.slice(start, start + limit),
+    total: filtered.length,
+  };
+};
 
 app.get("/api/matches", async (req, res) => {
   try {
@@ -870,11 +906,34 @@ app.get("/api/matches", async (req, res) => {
     const limit = Number(req.query.limit ?? 20);
     const playerId =
       typeof req.query.playerId === "string" ? req.query.playerId : undefined;
+    const rawCategory = req.query.category;
+    let category: MatchTopLevelType | undefined;
+    if (rawCategory !== undefined) {
+      if (
+        typeof rawCategory !== "string" ||
+        !(matchTopLevelTypeValues as readonly string[]).includes(rawCategory)
+      ) {
+        return res
+          .status(400)
+          .json({ error: "category는 singles 또는 doubles여야 합니다." });
+      }
+      if (!playerId) {
+        return res
+          .status(400)
+          .json({ error: "category 필터는 playerId와 함께 써야 합니다." });
+      }
+      category = rawCategory as MatchTopLevelType;
+    }
 
     await matchRepository.cleanupExpired();
-    const result = playerId
-      ? await matchRepository.findByPlayerId(playerId, page, limit)
-      : await matchRepository.findAll(page, limit);
+    let result: { matches: Match[]; total: number };
+    if (!playerId) {
+      result = await matchRepository.findAll(page, limit);
+    } else if (category) {
+      result = await findPlayerMatchesByCategory(playerId, category, page, limit);
+    } else {
+      result = await matchRepository.findByPlayerId(playerId, page, limit);
+    }
 
     if (playerId) {
       const ratingChangeLogs = await matchRepository.getPlayerRatingChangeLogs(
