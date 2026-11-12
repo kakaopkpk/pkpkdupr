@@ -219,6 +219,22 @@ export interface RecordMatchRequest {
   sessionId?: string;
 }
 
+/** POST /api/matches/start 요청. 세션과 상관없이 점수 없는 진행 중 경기를 시작한다 */
+export interface StartMatchRequest {
+  teams: [RecordMatchTeamRequest, RecordMatchTeamRequest];
+  /** 원래 경기의 세션(한 판 더) 또는 지금 세션. 오늘 세션일 때만 그 세션에 넣는다 */
+  sessionId?: string;
+  /** 생략하면 팀 구성으로 추론 */
+  type?: MatchType;
+  /** 생략하면 세션 장소, 세션도 없으면 기본 장소 */
+  location?: string;
+}
+
+/** GET /api/matches/in-progress 응답 */
+export interface InProgressMatchesResponse {
+  matches: Match[];
+}
+
 /** 기록·수정 응답. GET /api/matches/:matchId 응답과 같은 형태다 */
 export type RecordedMatchResponse = Match & {
   ratingChanges: PlayerRatingChangeLog[];
