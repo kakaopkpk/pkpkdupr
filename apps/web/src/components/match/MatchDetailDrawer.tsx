@@ -196,6 +196,21 @@ export default function MatchDetailDrawer({
     }
   };
 
+  /**
+   * 저장 실패 알림의 다시 시도용. 서버 거절(4xx 등)이면 버튼 위 문구로 보이고,
+   * 알림은 그대로 두도록 오류를 다시 던진다(RecordMatchFlow와 같은 처리).
+   */
+  const withRejectionMessage =
+    (run: () => Promise<void>, onRejected: (err: unknown) => void) =>
+    async () => {
+      try {
+        await run();
+      } catch (err) {
+        if (!isNetworkError(err)) onRejected(err);
+        throw err;
+      }
+    };
+
   /** 같은 팀으로 진행 중 경기를 만들고, 이 화면을 닫고 홈 탭으로 가서 취소 토스트를 띄운다 */
   const playAgain = async (match: MatchInfo) => {
     if (isStartingRematch) return;
@@ -218,7 +233,13 @@ export default function MatchDetailDrawer({
       await run();
     } catch (err) {
       if (isNetworkError(err)) {
-        showSaveFailure({ onRetry: run });
+        showSaveFailure({
+          onRetry: withRejectionMessage(run, (retryError) =>
+            setRematchError(
+              getErrorMessage(retryError, "경기를 시작하지 못했어요."),
+            ),
+          ),
+        });
       } else {
         setRematchError(getErrorMessage(err, "경기를 시작하지 못했어요."));
       }
@@ -265,7 +286,13 @@ export default function MatchDetailDrawer({
       await run();
     } catch (err) {
       if (isNetworkError(err)) {
-        showSaveFailure({ onRetry: run });
+        showSaveFailure({
+          onRetry: withRejectionMessage(run, (retryError) =>
+            setDeleteError(
+              getErrorMessage(retryError, "경기를 지우지 못했어요."),
+            ),
+          ),
+        });
       } else {
         setDeleteError(getErrorMessage(err, "경기를 지우지 못했어요."));
       }
@@ -290,7 +317,8 @@ export default function MatchDetailDrawer({
   // 탭바 자리의 하단 고정 바. 버튼이 없으면 바를 그리지 않는다
   let actions: React.ReactNode = null;
   const loadedMatch = loadState.kind === "ready" ? loadState.match : null;
-  // 오프라인이거나 지울 수 없는 경기면 "삭제"를 숨긴다(기한 경과는 수정과 같이 서버가 거절한다)
+  // 오프라인이거나 지울 수 없는 경기면 "삭제"를 숨긴다. 24시간 창과 삭제 조건은 isMatchRecordDeletable이
+  // 렌더 시점 기준으로 판단하고, 열어 둔 사이 기한이 지나거나 다른 회원이 먼저 바꾼 경우는 서버가 거절한다
   const canDelete =
     isOnline &&
     !!loadedMatch &&

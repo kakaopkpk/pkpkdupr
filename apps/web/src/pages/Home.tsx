@@ -418,15 +418,30 @@ const Home: React.FC = () => {
 
   const renderPreSession = () => {
     const { data, status, error } = preSession;
+    // 진행 중 경기는 다가오는 세션 조회와 따로 받으므로 그 조회가 실패해도 보인다
+    const inProgressSection =
+      inProgressMatches.length > 0 ? (
+        <>
+          <Spacer />
+          {renderInProgress(
+            inProgressMatches.filter(
+              (match) => match.id !== myInProgressMatch?.id,
+            ),
+          )}
+        </>
+      ) : null;
     if (!data) {
       if (status === "error") {
         return (
-          <p
-            role="alert"
-            className="px-1 py-6 text-center text-pk-13 font-medium text-pk-down"
-          >
-            {error ?? "다가오는 세션을 불러오지 못했어요."}
-          </p>
+          <>
+            <p
+              role="alert"
+              className="px-1 py-6 text-center text-pk-13 font-medium text-pk-down"
+            >
+              {error ?? "다가오는 세션을 불러오지 못했어요."}
+            </p>
+            {inProgressSection}
+          </>
         );
       }
       return <HomeSkeleton />;
@@ -458,16 +473,7 @@ const Home: React.FC = () => {
         ) : (
           <EmptyText>다가오는 세션이 없어요</EmptyText>
         )}
-        {inProgressMatches.length > 0 ? (
-          <>
-            <Spacer />
-            {renderInProgress(
-              inProgressMatches.filter(
-                (match) => match.id !== myInProgressMatch?.id,
-              ),
-            )}
-          </>
-        ) : null}
+        {inProgressSection}
         {isToday && lastSessionMe ? (
           <>
             <Spacer />

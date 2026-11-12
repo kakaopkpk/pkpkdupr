@@ -136,20 +136,21 @@ export const useLiveSessionState = (
       return;
     }
 
+    // 진행 중 경기 조회가 실패해도 세션은 반영하고, 진행 중 경기는 이전 값을 둔다
+    const inProgressRequest = fetchInProgressMatches().catch(() => null);
     try {
-      const [today, nextInProgressMatches] = await Promise.all([
-        fetchTodayMatchSessions(),
-        fetchInProgressMatches(),
-      ]);
+      const today = await fetchTodayMatchSessions();
       const nextLiveSession = pickLiveSession(today.sessions);
-      const nextMatches = nextLiveSession
-        ? await fetchSessionMatches(nextLiveSession.id)
-        : [];
+      // 세션 경기와 진행 중 경기를 같은 때 받아 둘의 시점 차이를 줄인다
+      const [nextMatches, nextInProgressMatches] = await Promise.all([
+        nextLiveSession ? fetchSessionMatches(nextLiveSession.id) : [],
+        inProgressRequest,
+      ]);
       if (requestIdRef.current !== requestId) return;
 
       setLiveSession(nextLiveSession);
       setMatches(nextMatches);
-      setInProgressMatches(nextInProgressMatches);
+      if (nextInProgressMatches) setInProgressMatches(nextInProgressMatches);
       setTodaySessions(today.sessions);
       setStatus("ready");
     } catch {
