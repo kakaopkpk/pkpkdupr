@@ -2,6 +2,7 @@ import React from "react";
 import type { PartnerStat, StatPlayer } from "@pkpkdupr/shared/profileStats";
 import { Card } from "@/components/ui/Card";
 import { PlayerAvatar } from "@/components/ui/PlayerAvatar";
+import { cx } from "@/components/ui/cx";
 import { useAppNavigation } from "@/context/AppNavigationContext";
 
 /** 비율을 정수 %로 바꾼다. 분모가 0이면 0 */
@@ -38,7 +39,7 @@ export const StatBarRow: React.FC<{
             className="block h-2 min-w-0 flex-1 overflow-hidden rounded-full bg-pk-divider"
           >
             <span
-              className={`block h-2 rounded-full ${barClassName}`}
+              className={cx("block h-2 rounded-full", barClassName)}
               style={{ width: `${percent}%` }}
             />
           </span>

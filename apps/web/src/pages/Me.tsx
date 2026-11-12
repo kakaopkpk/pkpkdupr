@@ -14,8 +14,8 @@ import {
 } from "@/components/profile/ProfileSections";
 import { useProfileOverview } from "@/components/profile/useProfileOverview";
 import { RatingDelta } from "@/components/ui/Delta";
-import { SectionLabel } from "@/components/ui/Section";
 import { PlayerAvatar } from "@/components/ui/PlayerAvatar";
+import { SectionLabel } from "@/components/ui/Section";
 import { StatusMessageChip } from "@/components/ui/StatusMessageChip";
 import { useAppNavigation } from "@/context/AppNavigationContext";
 import { useAuth } from "@/context/AuthContext";

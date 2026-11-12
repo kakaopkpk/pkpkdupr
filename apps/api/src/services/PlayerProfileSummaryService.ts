@@ -192,7 +192,7 @@ export const buildPlayerProfileSummary = (
         }
       }
 
-      // 복식이면 상대 두 명 각각과 1경기를 한 것으로 센다.
+      // 상대 팀 선수 각각과 1경기씩 센다(복식은 두 명, 단식은 한 명).
       for (const opponent of match.teams[playerTeamIndex === 0 ? 1 : 0]
         .players) {
         const stat = opponentStatsById.get(opponent.id) ?? {
@@ -263,6 +263,7 @@ export const buildPlayerProfileSummary = (
     .filter(
       (stat) =>
         stat.matchCount >= RIVAL_MIN_MATCHES &&
+        // 진 비율 50% 이상. 나눗셈 대신 정수 비교로 쓴다.
         stat.losses * 2 >= stat.matchCount,
     )
     .sort(sortRivalStats)
