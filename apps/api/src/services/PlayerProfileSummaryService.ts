@@ -95,10 +95,13 @@ const getPlayerTeamIndex = (match: Match, playerId: string): 0 | 1 | null => {
   return index === 0 || index === 1 ? index : null;
 };
 
-const getMatchStartsAtMs = (match: Match) => {
-  const value = match.matchStartsAt.getTime();
+/** 잘못된 날짜는 가장 오래된 시각으로 취급한다. */
+const toTimeMs = (date: Date) => {
+  const value = date.getTime();
   return Number.isNaN(value) ? Number.NEGATIVE_INFINITY : value;
 };
+
+const getMatchStartsAtMs = (match: Match) => toTimeMs(match.matchStartsAt);
 
 const toStatPlayer = (player: Player): StatPlayer => ({
   id: player.id,
@@ -106,10 +109,8 @@ const toStatPlayer = (player: Player): StatPlayer => ({
   avatarUrl: player.avatarUrl,
 });
 
-const getMatchEndedAtMs = (match: Match) => {
-  const value = (match.completedAt ?? match.matchStartsAt).getTime();
-  return Number.isNaN(value) ? Number.NEGATIVE_INFINITY : value;
-};
+const getMatchEndedAtMs = (match: Match) =>
+  toTimeMs(match.completedAt ?? match.matchStartsAt);
 
 /** 승률 내림차순 → 경기 수 내림차순 → 아이디(username) 오름차순 */
 const sortPartnerStats = (left: PartnerStat, right: PartnerStat) => {
