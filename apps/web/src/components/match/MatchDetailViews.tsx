@@ -114,17 +114,23 @@ export const LiveMatchDetail: React.FC<LiveMatchDetailProps> = ({
   return (
     <>
       <div className="flex flex-col gap-4 px-4 pt-1">
-        {isScheduled ? (
-          <span className="inline-flex items-center gap-1.5 self-center rounded-full bg-pk-neutral px-3 py-1 text-pk-13 font-bold text-pk-sub tabular-nums">
-            <span aria-hidden="true" className="size-[7px] rounded-full bg-pk-muted" />
-            예정 · {formatKstWeekdayTime(match.matchStartsAt)}
-          </span>
-        ) : (
-          <span className="inline-flex items-center gap-1.5 self-center rounded-full bg-pk-primary-soft px-3 py-1 text-pk-13 font-bold text-pk-primary tabular-nums">
-            <span aria-hidden="true" className="size-[7px] rounded-full bg-pk-primary" />
-            진행 중 · {elapsedMinutes}분째
-          </span>
-        )}
+        <span
+          className={cx(
+            "inline-flex items-center gap-1.5 self-center rounded-full px-3 py-1 text-pk-13 font-bold tabular-nums",
+            isScheduled ? "bg-pk-neutral text-pk-sub" : "bg-pk-primary-soft text-pk-primary",
+          )}
+        >
+          <span
+            aria-hidden="true"
+            className={cx(
+              "size-[7px] rounded-full",
+              isScheduled ? "bg-pk-muted" : "bg-pk-primary",
+            )}
+          />
+          {isScheduled
+            ? `예정 · ${formatKstWeekdayTime(match.matchStartsAt)}`
+            : `진행 중 · ${elapsedMinutes}분째`}
+        </span>
         <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2">
           <TeamColumn team={match.teams[0]} tone="strong" />
           <span className="text-pk-15 font-bold text-pk-muted">vs</span>
