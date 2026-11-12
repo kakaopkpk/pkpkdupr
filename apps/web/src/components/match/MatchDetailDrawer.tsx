@@ -1,10 +1,18 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { isMatchRecordEditable } from "@pkpkdupr/shared/match";
+import {
+  isMatchRecordDeletable,
+  isMatchRecordEditable,
+} from "@pkpkdupr/shared/match";
 import type { MatchInfo } from "@/types/match";
 import PushScreen from "@/components/PushScreen";
+import {
+  getErrorMessage,
+  isNetworkError,
+} from "@/components/record/recordMatch.utils";
 import { PkButton } from "@/components/ui/Button";
 import { useAppNavigation } from "@/context/AppNavigationContext";
 import { useAuth } from "@/context/AuthContext";
+import { useSystemNotice } from "@/context/SystemNoticeContext";
 import {
   type TabKey,
   useTabNavigation,
@@ -12,10 +20,19 @@ import {
 import { useLayerDepth } from "@/hooks/useLayerDepth";
 import { useOnlineStatus } from "@/hooks/useOnlineStatus";
 import { usePlayers } from "@/hooks/usePlayers";
+import { useStartedMatchToast } from "@/hooks/useStartedMatchToast";
 import { apiFetch } from "@/lib/api";
+import {
+  deleteMatch,
+  getMatchTeamPlayerIds,
+  startMatch,
+  toTeamRequests,
+} from "@/lib/matches";
+import DeleteMatchSheet from "./DeleteMatchSheet";
 import {
   CompletedMatchActions,
   CompletedMatchDetail,
+  DeleteMatchHeaderButton,
   LiveMatchActions,
   LiveMatchDetail,
   MatchDetailSkeleton,
@@ -62,9 +79,17 @@ export default function MatchDetailDrawer({
   onExited,
 }: MatchDetailDrawerProps): React.ReactElement {
   const { isAuthenticated } = useAuth();
-  const { openMemberProfile, openRecordMatch, openSessionReport, dataVersion } =
-    useAppNavigation();
+  const {
+    openMemberProfile,
+    openRecordMatch,
+    openSessionReport,
+    notifyDataChanged,
+    selectTab,
+    dataVersion,
+  } = useAppNavigation();
   const { closeDepth, restoreScrollTop, selectedTab } = useTabNavigation();
+  const { showSaveFailure, showToast } = useSystemNotice();
+  const showStartedMatchToast = useStartedMatchToast();
   const { players } = usePlayers();
   const isOnline = useOnlineStatus();
   const [loadState, setLoadState] = useState<LoadState>({ kind: "loading" });
@@ -76,6 +101,26 @@ export default function MatchDetailDrawer({
     kind: "push-screen",
     onClose,
     saveScroll: true,
+  });
+  const isActive = tabKey === selectedTab;
+
+  // 한 판 더 요청 상태. 거절 문구는 하단 버튼 위에 보인다
+  const [isStartingRematch, setIsStartingRematch] = useState(false);
+  const [rematchError, setRematchError] = useState<string | null>(null);
+
+  // 삭제 확인 시트. 지운 뒤에는 닫히는 동안 다시 받지 않는다(이미 없는 경기라 404다)
+  const deleteDepthId = `${depthId}:delete`;
+  const [isDeleteRequested, setIsDeleteRequested] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const isDeletedRef = useRef(false);
+  const closeDeleteSheet = useCallback(() => setIsDeleteRequested(false), []);
+  const isDeleteSheetOpen = useLayerDepth({
+    isOpen: isDeleteRequested && isRequested,
+    tabKey,
+    depthId: deleteDepthId,
+    kind: "bottom-sheet",
+    onClose: closeDeleteSheet,
   });
 
   /** keepVisible이면 보이던 경기를 둔 채 다시 받는다(재조회·당겨서 새로고침) */
@@ -124,6 +169,7 @@ export default function MatchDetailDrawer({
   useEffect(() => {
     if (lastDataVersionRef.current === dataVersion) return;
     lastDataVersionRef.current = dataVersion;
+    if (isDeletedRef.current) return;
     void loadMatch(matchId, true);
   }, [dataVersion, loadMatch, matchId]);
 
@@ -142,6 +188,92 @@ export default function MatchDetailDrawer({
     if (!closeDepth(tabKey, depthId)) onClose();
   }, [closeDepth, depthId, onClose, tabKey]);
 
+  /** 이 화면을 닫고, 브라우저 기록 정리가 끝난 뒤 afterClose를 실행한다 */
+  const closeThen = (afterClose: () => void) => {
+    if (!closeDepth(tabKey, depthId, afterClose)) {
+      onClose();
+      afterClose();
+    }
+  };
+
+  /** 같은 팀으로 진행 중 경기를 만들고, 이 화면을 닫고 홈 탭으로 가서 취소 토스트를 띄운다 */
+  const playAgain = async (match: MatchInfo) => {
+    if (isStartingRematch) return;
+    const run = async () => {
+      const startedMatch = await startMatch({
+        teams: toTeamRequests(getMatchTeamPlayerIds(match)),
+        sessionId: match.session?.id,
+        location: match.location,
+      });
+      notifyDataChanged();
+      closeThen(() => {
+        selectTab("home");
+        showStartedMatchToast(startedMatch);
+      });
+    };
+
+    setIsStartingRematch(true);
+    setRematchError(null);
+    try {
+      await run();
+    } catch (err) {
+      if (isNetworkError(err)) {
+        showSaveFailure({ onRetry: run });
+      } else {
+        setRematchError(getErrorMessage(err, "경기를 시작하지 못했어요."));
+      }
+    } finally {
+      setIsStartingRematch(false);
+    }
+  };
+
+  const openDeleteSheet = () => {
+    setDeleteError(null);
+    setIsDeleteRequested(true);
+  };
+
+  const cancelDelete = () => {
+    if (!closeDepth(tabKey, deleteDepthId)) closeDeleteSheet();
+  };
+
+  /**
+   * 지우고 시트와 화면을 닫은 뒤 이전 화면에서 토스트를 띄운다.
+   * 다른 회원이 먼저 지운 경기(404)도 지운 것으로 본다(deleteMatch가 처리).
+   */
+  const confirmDelete = async (match: MatchInfo) => {
+    if (isDeleting) return;
+    const finish = () => {
+      isDeletedRef.current = true;
+      const closeScreen = () =>
+        closeThen(() => {
+          showToast({ message: "경기를 지웠어요" });
+          notifyDataChanged();
+        });
+      if (!closeDepth(tabKey, deleteDepthId, closeScreen)) {
+        closeDeleteSheet();
+        closeScreen();
+      }
+    };
+    const run = async () => {
+      await deleteMatch(match.id, match.updatedAt);
+      finish();
+    };
+
+    setIsDeleting(true);
+    setDeleteError(null);
+    try {
+      await run();
+    } catch (err) {
+      if (isNetworkError(err)) {
+        showSaveFailure({ onRetry: run });
+      } else {
+        setDeleteError(getErrorMessage(err, "경기를 지우지 못했어요."));
+      }
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
   const usernameById = useMemo(
     () => new Map(players.map((member) => [member.id, member.username])),
     [players],
@@ -157,6 +289,15 @@ export default function MatchDetailDrawer({
   let content: React.ReactNode;
   // 탭바 자리의 하단 고정 바. 버튼이 없으면 바를 그리지 않는다
   let actions: React.ReactNode = null;
+  const loadedMatch = loadState.kind === "ready" ? loadState.match : null;
+  // 오프라인이거나 지울 수 없는 경기면 "삭제"를 숨긴다(기한 경과는 수정과 같이 서버가 거절한다)
+  const canDelete =
+    isOnline &&
+    !!loadedMatch &&
+    isMatchRecordDeletable({
+      ...loadedMatch,
+      matchStartsAt: new Date(loadedMatch.matchStartsAt),
+    });
   if (loadState.kind === "loading") {
     content = <MatchDetailSkeleton />;
   } else if (loadState.kind === "not-found") {
@@ -223,16 +364,10 @@ export default function MatchDetailDrawer({
       if (canEdit) {
         actions = (
           <CompletedMatchActions
+            isBusy={isStartingRematch}
+            error={rematchError}
             onEdit={() => openRecordMatch({ kind: "score", matchId: match.id })}
-            onPlayAgain={() =>
-              openRecordMatch({
-                kind: "new",
-                presetTeams: [
-                  match.teams[0].players.map((player) => player.id),
-                  match.teams[1].players.map((player) => player.id),
-                ],
-              })
-            }
+            onPlayAgain={() => void playAgain(match)}
           />
         );
       }
@@ -240,17 +375,33 @@ export default function MatchDetailDrawer({
   }
 
   return (
-    <PushScreen
-      isOpen={isOpen}
-      isActive={tabKey === selectedTab}
-      ariaLabel="경기 상세"
-      title="경기"
-      onBack={close}
-      actions={actions}
-      onExited={handleExited}
-      onPullToRefresh={handlePullToRefresh}
-    >
-      {content}
-    </PushScreen>
+    <>
+      <PushScreen
+        isOpen={isOpen}
+        isActive={isActive}
+        ariaLabel="경기 상세"
+        title="경기"
+        onBack={close}
+        headerRight={
+          canDelete ? <DeleteMatchHeaderButton onPress={openDeleteSheet} /> : null
+        }
+        actions={actions}
+        onExited={handleExited}
+        onPullToRefresh={handlePullToRefresh}
+      >
+        {content}
+      </PushScreen>
+      <DeleteMatchSheet
+        isOpen={isDeleteSheetOpen}
+        isActive={isActive}
+        match={loadedMatch}
+        isDeleting={isDeleting}
+        error={deleteError}
+        onCancel={cancelDelete}
+        onConfirm={() => {
+          if (loadedMatch) void confirmDelete(loadedMatch);
+        }}
+      />
+    </>
   );
 }
