@@ -68,7 +68,9 @@ const createEmptyRatingDelta = (): PlayerProfileRatingDelta => ({
   },
 });
 
-const getWinningTeamIndex = (match: Match): 0 | 1 | null => {
+export const getWinningTeamIndex = (
+  match: Pick<Match, "scores">,
+): 0 | 1 | null => {
   if (!match.scores?.length) return null;
 
   const setWins = match.scores.reduce<[number, number]>(
