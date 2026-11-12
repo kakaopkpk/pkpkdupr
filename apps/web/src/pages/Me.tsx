@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@heroui/react";
 import { IoSettingsOutline } from "react-icons/io5";
-import BottomSheet from "@/components/BottomSheet";
 import type {
   MatchInfo,
   MatchListResponse,
@@ -10,8 +9,8 @@ import type {
 import MemberProfile from "@/components/MemberProfile";
 import ProfileMatchDetailDrawer from "@/components/ProfileMatchDetailDrawer";
 import ProfileMatchHistoryDrawer from "@/components/ProfileMatchHistoryDrawer";
-import ProfileSettingsSheetBody from "@/components/ProfileSettingsSheetBody";
 import TabPanelHeader from "@/components/TabPanelHeader";
+import { useAppNavigation } from "@/context/AppNavigationContext";
 import { useAuth } from "@/context/AuthContext";
 import { useTabNavigation } from "@/context/TabNavigationContext";
 import { apiFetch } from "@/lib/api";
@@ -31,8 +30,8 @@ const MATCH_HISTORY_PAGE_SIZE = 20;
 
 const Me: React.FC = () => {
   const { player, isAuthenticated, refreshMe } = useAuth();
+  const { openSettings } = useAppNavigation();
   const {
-    closeDepth,
     depthStacks,
     pushDepth,
     registerPullToRefresh,
@@ -42,7 +41,6 @@ const Me: React.FC = () => {
     scrollToTop,
     selectedTab,
   } = useTabNavigation();
-  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [matchStats, setMatchStats] = useState(createEmptyMatchStats);
   const [ratingDelta, setRatingDelta] = useState(createEmptyRatingDelta);
   const [ratingHistory, setRatingHistory] = useState(createEmptyRatingHistory);
@@ -57,10 +55,6 @@ const Me: React.FC = () => {
   const lastSuccessfulLoadAtRef = useRef<number | null>(null);
   const wasTabActiveRef = useRef(false);
   const playerId = player?.id;
-
-  const closeSettings = useCallback(() => {
-    setIsSettingsOpen(false);
-  }, []);
 
   const loadMatchStats = useCallback(
     async (
@@ -198,25 +192,6 @@ const Me: React.FC = () => {
     [loadMatchStats, refreshMe, registerPullToRefresh],
   );
 
-  const openSettings = () => {
-    pushDepth("me", {
-      id: "me-settings",
-      kind: "bottom-sheet",
-      onClose: closeSettings,
-    });
-    setIsSettingsOpen(true);
-  };
-
-  const handleSettingsOpenChange = (isOpen: boolean) => {
-    if (isOpen) {
-      openSettings();
-      return;
-    }
-
-    closeDepth("me", "me-settings");
-    setIsSettingsOpen(false);
-  };
-
   const profileMatchList = useMemo(
     () => (playerId ? buildProfileMatchList(profileMatches, playerId) : []),
     [playerId, profileMatches],
@@ -335,15 +310,6 @@ const Me: React.FC = () => {
         onScrollContainerChange={registerProfileMatchDetailScrollContainer}
         layer={70}
       />
-
-      <BottomSheet
-        isOpen={isSettingsOpen}
-        isActive={selectedTab === "me"}
-        onOpenChange={handleSettingsOpenChange}
-        ariaLabel="설정"
-      >
-        <ProfileSettingsSheetBody />
-      </BottomSheet>
     </>
   );
 };

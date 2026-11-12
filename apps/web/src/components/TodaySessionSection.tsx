@@ -179,7 +179,7 @@ const TodaySessionSection: React.FC<TodaySessionSectionProps> = ({
   const openCreateSheet = () => {
     if (!isOnline) return;
 
-    pushDepth("match", {
+    pushDepth("home", {
       id: CREATE_SESSION_SHEET_DEPTH_ID,
       kind: "bottom-sheet",
       onClose: () => setIsCreateSheetOpen(false),
@@ -189,7 +189,7 @@ const TodaySessionSection: React.FC<TodaySessionSectionProps> = ({
   };
 
   const closeCreateSheet = (afterClose?: () => void) => {
-    if (!closeDepth("match", CREATE_SESSION_SHEET_DEPTH_ID, afterClose)) {
+    if (!closeDepth("home", CREATE_SESSION_SHEET_DEPTH_ID, afterClose)) {
       setIsCreateSheetOpen(false);
       afterClose?.();
     }
@@ -331,7 +331,7 @@ const TodaySessionSection: React.FC<TodaySessionSectionProps> = ({
       ) : null}
       <BottomSheet
         isOpen={isCreateSheetOpen}
-        isActive={selectedTab === "match"}
+        isActive={selectedTab === "home"}
         onOpenChange={(isOpen) => {
           if (isOpen) {
             openCreateSheet();

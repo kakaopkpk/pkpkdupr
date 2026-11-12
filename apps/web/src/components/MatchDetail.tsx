@@ -35,7 +35,7 @@ export const MatchDetailSkeleton: React.FC = () => (
     role="status"
     aria-label="매치 상세 로딩 중"
   >
-    <DetailPageHeader title="Match Detail" tabKey="match" />
+    <DetailPageHeader title="Match Detail" tabKey="home" />
     <div className="p-2">
       <div className="mx-auto flex w-full flex-col gap-3">
         <Card className="rounded-3xl bg-white p-4">
@@ -150,7 +150,7 @@ const MatchDetailSectionsSkeleton: React.FC = () => (
 
 const MatchDetail: React.FC<MatchDetailProps> = ({
   match,
-  tabKey = "match",
+  tabKey = "home",
   currentPlayerId,
   onMatchRecorded,
   isOnline = true,

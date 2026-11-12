@@ -393,7 +393,7 @@ const SessionRecommendation: React.FC<SessionRecommendationProps> = ({
 
   return (
     <div className="min-h-full">
-      <DetailPageHeader title="추천 매칭" tabKey="match" />
+      <DetailPageHeader title="추천 매칭" tabKey="home" />
       <div className="p-2">
         <div className="mx-auto flex w-full flex-col gap-3">
           <div className="px-1">
