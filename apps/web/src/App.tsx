@@ -3,7 +3,6 @@ import { useEffect } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
 import BottomNav from "./components/BottomNav";
 import OfflineBanner from "./components/OfflineBanner";
-import PwaInstallPrompt from "./components/PwaInstallPrompt";
 import PwaUpdatePrompt from "./components/PwaUpdatePrompt";
 import { AppUpdateProvider } from "./context/AppUpdateContext";
 import { AuthProvider, useAuth } from "./context/AuthContext";
@@ -230,7 +229,6 @@ function App() {
           <AuthProvider>
             <SystemNoticeProvider>
               <OfflineBanner />
-              <PwaInstallPrompt />
               <PwaUpdatePrompt />
               <AppRoutes />
             </SystemNoticeProvider>

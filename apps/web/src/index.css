@@ -40,6 +40,8 @@
   --safe-bottom: max(12px, env(safe-area-inset-bottom));
   /* 화면 아래 끝에서 하단 바(미니바·알림 바 포함) 윗변까지 거리. BottomNav가 미니바·알림 바 표시에 맞춰 덮어쓰며, 이 값은 하단 바(66px)만 있을 때의 기본값이다 */
   --app-bottom-dock-height: calc(66px + 8px + var(--safe-bottom));
+  /* 하단 토스트(SystemToast)가 떠 있으면 그 높이와 바와의 간격. 떠 있는 동안 SystemToast가 덮어쓴다 */
+  --app-bottom-toast-height: 0px;
 }
 
 @supports (height: 100svh) {
