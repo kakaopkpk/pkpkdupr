@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import BottomSheet from "@/components/BottomSheet";
 import { PkButton } from "@/components/ui/Button";
 import { PlayerAvatar, type AvatarPlayer } from "@/components/ui/PlayerAvatar";
@@ -8,9 +8,11 @@ import type { MemberListPlayerInfo } from "@/hooks/usePlayers";
 import {
   addSlotPlayer,
   buildPickList,
+  getNextSlotIndex,
   getSlotPlayerIds,
   getSlotTeams,
   removeSlotPlayer,
+  swapSlots,
   type RecordSlots,
 } from "./recordMatch.utils";
 import { CheckIcon, FooterError } from "./RecordMatchParts";
@@ -20,13 +22,13 @@ export interface PickPlayersStepProps {
   onSlotsChange: (slots: RecordSlots) => void;
   players: MemberListPlayerInfo[];
   playersStatus: "loading" | "ready" | "error";
-  /** 자리에 그릴 선수. 회원 목록에 없는 선수(불러오는 중 등)도 찾을 수 있게 셸이 모아 준다 */
+  /** 자리에 그릴 플레이어. 회원 목록에 없는 플레이어(불러오는 중 등)도 찾을 수 있게 셸이 모아 준다 */
   playerById: ReadonlyMap<string, AvatarPlayer>;
   participantIds: readonly string[];
   busyIds: ReadonlySet<string>;
   /**
    * session: 진행 중 세션의 새 경기. "경기 시작"·"점수 입력"
-   * plain: 세션 없는 새 경기나 기존 경기의 선수 바꾸기. "취소"·"다음"
+   * plain: 세션 없는 새 경기나 기존 경기의 플레이어 바꾸기. "취소"·"다음"
    */
   footerMode: "session" | "plain";
   isBusy: boolean;
@@ -35,6 +37,25 @@ export interface PickPlayersStepProps {
   onNext: () => void;
   onStartMatch: () => void;
 }
+
+/** 자리 아바타를 감싸는 원(아바타 44px + 링 안쪽 여백 3px) */
+const SLOT_CIRCLE_CLASS =
+  "relative flex size-[50px] items-center justify-center rounded-full";
+
+const CloseMarkIcon: React.FC = () => (
+  <svg
+    width="20"
+    height="20"
+    viewBox="0 0 24 24"
+    aria-hidden="true"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2.6"
+    strokeLinecap="round"
+  >
+    <path d="M7 7l10 10M17 7L7 17" />
+  </svg>
+);
 
 export default function PickPlayersStep({
   slots,
@@ -52,54 +73,144 @@ export default function PickPlayersStep({
   onStartMatch,
 }: PickPlayersStepProps): React.ReactElement {
   const [query, setQuery] = useState("");
+  // 사용자가 누른 빈자리. 비어 있는 동안만 다음 자리가 된다
+  const [preferredIndex, setPreferredIndex] = useState<number | null>(null);
+  const [rawSelectedIndex, setSelectedIndex] = useState<number | null>(null);
+  const slotRowRef = useRef<HTMLDivElement>(null);
+  // 목록에서 빼서 비게 된 자리는 선택으로 보지 않는다
+  const selectedIndex =
+    rawSelectedIndex !== null && slots[rawSelectedIndex] !== null
+      ? rawSelectedIndex
+      : null;
+  const isSelecting = selectedIndex !== null;
+  const nextIndex = getNextSlotIndex(slots, preferredIndex);
   const pickedIds = useMemo(() => new Set(getSlotPlayerIds(slots)), [slots]);
   const isFull = pickedIds.size >= slots.length;
-  const isTeamReady = !!getSlotTeams(slots);
+  const slotTeams = getSlotTeams(slots);
+  const isTeamReady = !!slotTeams;
   const list = useMemo(
     () => buildPickList(players, { query, participantIds, busyIds }),
     [busyIds, participantIds, players, query],
   );
 
+  // 누른 빈자리가 채워지면 선호를 소모해, 나중에 그 자리가 다시 비어도 왼쪽부터 첫 빈자리가 다음 자리가 된다
+  useEffect(() => {
+    if (preferredIndex !== null && slots[preferredIndex] !== null) {
+      setPreferredIndex(null);
+    }
+  }, [preferredIndex, slots]);
+
+  // 선택 중에 자리 줄 밖을 누르면 선택만 푼다
+  useEffect(() => {
+    if (!isSelecting) return;
+    const handlePointerDown = (event: PointerEvent) => {
+      if (
+        event.target instanceof Node &&
+        slotRowRef.current?.contains(event.target)
+      ) {
+        return;
+      }
+      setSelectedIndex(null);
+    };
+    document.addEventListener("pointerdown", handlePointerDown, true);
+    return () =>
+      document.removeEventListener("pointerdown", handlePointerDown, true);
+  }, [isSelecting]);
+
   const togglePlayer = (playerId: string) => {
     onSlotsChange(
       pickedIds.has(playerId)
         ? removeSlotPlayer(slots, playerId)
-        : addSlotPlayer(slots, playerId),
+        : addSlotPlayer(slots, playerId, preferredIndex),
     );
+  };
+
+  const handleSlotPress = (index: number) => {
+    const playerId = slots[index];
+
+    if (selectedIndex === null) {
+      if (playerId) setSelectedIndex(index);
+      else setPreferredIndex(index);
+      return;
+    }
+
+    setSelectedIndex(null);
+    if (selectedIndex === index) {
+      if (playerId) onSlotsChange(removeSlotPlayer(slots, playerId));
+      return;
+    }
+    onSlotsChange(swapSlots(slots, selectedIndex, index));
   };
 
   const renderSlot = (index: number) => {
     const playerId = slots[index];
-    if (!playerId) {
-      return (
-        <span key={index} className="flex w-16 flex-col items-center gap-1">
-          <span className="size-10 rounded-full border-[1.5px] border-dashed border-[#c5ccda]" />
-          <span className="text-pk-12 text-pk-muted">빈 자리</span>
-        </span>
-      );
+    const player = playerId
+      ? (playerById.get(playerId) ?? { id: playerId, username: "…" })
+      : null;
+    const isSelected = selectedIndex === index;
+    const isTarget = isSelecting && !isSelected;
+
+    let ariaLabel = `${index + 1}번 자리`;
+    if (player) {
+      ariaLabel = isSelected
+        ? `${player.username} 빼기`
+        : isTarget
+          ? `${player.username}와 자리 바꾸기`
+          : `${player.username} 선택`;
+    } else if (isTarget) {
+      ariaLabel = `${index + 1}번 자리로 옮기기`;
     }
 
-    const player = playerById.get(playerId) ?? { id: playerId, username: "…" };
     return (
       <button
         key={index}
         type="button"
-        aria-label={`${player.username} 빼기`}
-        onClick={() => onSlotsChange(removeSlotPlayer(slots, playerId))}
-        className="flex w-16 flex-col items-center gap-1 text-pk-ink"
+        aria-label={ariaLabel}
+        aria-pressed={player ? isSelected : undefined}
+        onClick={() => handleSlotPress(index)}
+        className="flex h-20 min-w-0 flex-col items-center gap-1 text-pk-ink"
       >
-        <span className="relative inline-flex">
-          <PlayerAvatar player={player} size={40} />
+        {player ? (
+          <>
+            <span
+              className={cx(
+                SLOT_CIRCLE_CLASS,
+                isSelected && "shadow-[inset_0_0_0_2px_var(--color-pk-primary)]",
+                isTarget && "border-2 border-dashed border-pk-primary",
+              )}
+            >
+              <PlayerAvatar player={player} size={44} />
+              {isSelected ? (
+                <span
+                  aria-hidden="true"
+                  className="absolute top-1/2 left-1/2 flex size-11 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-pk-ink/55 text-white"
+                >
+                  <CloseMarkIcon />
+                </span>
+              ) : null}
+            </span>
+            <span
+              className={cx(
+                "max-w-full truncate text-pk-12 font-bold",
+                isSelected && "text-pk-primary",
+              )}
+            >
+              {player.username}
+            </span>
+          </>
+        ) : (
           <span
-            aria-hidden="true"
-            className="absolute -right-1 -top-1 size-[18px] rounded-full bg-white text-center text-pk-12 leading-[18px] text-pk-muted shadow-[0_0_0_1px_#dde2ec]"
-          >
-            ×
-          </span>
-        </span>
-        <span className="max-w-16 truncate text-pk-12 font-bold">
-          {player.username}
-        </span>
+            className={cx(
+              SLOT_CIRCLE_CLASS,
+              "border-2",
+              isTarget
+                ? "border-dashed border-pk-primary bg-pk-primary-soft"
+                : !isSelecting && index === nextIndex
+                  ? "border-solid border-pk-primary"
+                  : "border-dashed border-pk-muted",
+            )}
+          />
+        )}
       </button>
     );
   };
@@ -107,13 +218,24 @@ export default function PickPlayersStep({
   return (
     <>
       <BottomSheet.Header>
-        <SheetTitle title="선수 고르기" />
-        <div className="flex items-center justify-between px-1 pt-3">
-          <div className="flex gap-1">{[0, 1].map(renderSlot)}</div>
-          <span className="pb-[18px] text-pk-12 font-bold text-pk-muted">
-            vs
+        <SheetTitle title="플레이어 선택" />
+        <div
+          ref={slotRowRef}
+          className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_30px_minmax(0,1fr)_minmax(0,1fr)] gap-1.5 pt-3"
+        >
+          {[0, 1].map(renderSlot)}
+          <span className="flex h-[50px] items-center justify-center text-pk-12 font-bold text-pk-muted">
+            {/* 단식/복식 글자는 높이를 차지하지 않게 vs 위에 띄워 자리가 움직이지 않게 한다 */}
+            <span className="relative">
+              {slotTeams ? (
+                <span className="absolute bottom-full left-1/2 -translate-x-1/2 whitespace-nowrap text-pk-12 font-extrabold text-pk-ink">
+                  {slotTeams[0].length === 1 ? "단식" : "복식"}
+                </span>
+              ) : null}
+              vs
+            </span>
           </span>
-          <div className="flex gap-1">{[2, 3].map(renderSlot)}</div>
+          {[2, 3].map(renderSlot)}
         </div>
         <label className="mt-3 flex h-11 items-center gap-2 rounded-pk-sm bg-pk-bg px-3.5 text-pk-muted">
           <svg
@@ -158,7 +280,7 @@ export default function PickPlayersStep({
             {list.map((player) => {
               const isPicked = pickedIds.has(player.id);
               const isPlaying = busyIds.has(player.id);
-              // 경기 중인 사람은 고를 수 없다. 이미 자리에 있으면 자리를 눌러 뺀다
+              // 경기 중인 사람은 고를 수 없다. 이미 자리에 있으면 목록이나 자리를 눌러 뺀다
               const isDisabled = isPlaying || (!isPicked && isFull);
 
               return (

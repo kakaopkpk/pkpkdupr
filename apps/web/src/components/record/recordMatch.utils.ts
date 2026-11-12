@@ -1,6 +1,6 @@
 import type { MatchScore } from "@pkpkdupr/shared/match";
 
-/** 자리 [A, B, C, D]. A·B가 왼쪽 팀, C·D가 오른쪽 팀이다. 값은 선수 id */
+/** 자리 [A, B, C, D]. A·B가 왼쪽 팀, C·D가 오른쪽 팀이다. 값은 플레이어 id */
 export type RecordSlots = [
   string | null,
   string | null,
@@ -10,65 +10,68 @@ export type RecordSlots = [
 
 export const EMPTY_SLOTS: RecordSlots = [null, null, null, null];
 
-/** A → C → B → D. 2명이면 A vs C 단식, 4명이면 복식이 된다 */
-const SLOT_FILL_ORDER = [0, 2, 1, 3] as const;
-
 export const slotsFromTeams = (
   teams: readonly [readonly string[], readonly string[]],
-): RecordSlots =>
-  normalizeSlots([
-    teams[0][0] ?? null,
-    teams[0][1] ?? null,
-    teams[1][0] ?? null,
-    teams[1][1] ?? null,
-  ]);
+): RecordSlots => [
+  teams[0][0] ?? null,
+  teams[0][1] ?? null,
+  teams[1][0] ?? null,
+  teams[1][1] ?? null,
+];
 
 export const getSlotPlayerIds = (slots: RecordSlots) =>
   slots.filter((id): id is string => id !== null);
 
 /**
- * 두 명이 한쪽 팀에만 남으면 뒷자리 선수를 반대편 첫 자리로 옮겨 단식 모양을 유지한다.
- * 예: A·C·B를 고른 뒤 C를 빼면 B가 C 자리로 간다.
+ * 목록에서 고른 플레이어가 들어갈 자리. 사용자가 고른 빈자리(preferredIndex)가 있으면 그 자리,
+ * 없으면 왼쪽부터 첫 빈자리다. 빈자리가 없으면 null
  */
-const normalizeSlots = (slots: RecordSlots): RecordSlots => {
-  if (getSlotPlayerIds(slots).length !== 2) return slots;
-
-  const [a, b, c, d] = slots;
-  if (a !== null && b !== null) return [a, null, b, null];
-  if (c !== null && d !== null) return [d, null, c, null];
-  if (a === null && b !== null) return normalizeLeadingSlot([b, null, c, d]);
-  return normalizeLeadingSlot(slots);
+export const getNextSlotIndex = (
+  slots: RecordSlots,
+  preferredIndex: number | null = null,
+): number | null => {
+  if (preferredIndex !== null && slots[preferredIndex] === null) {
+    return preferredIndex;
+  }
+  const index = slots.indexOf(null);
+  return index === -1 ? null : index;
 };
-
-/** 한 팀에 한 명씩이면 그 팀의 첫 자리에 둔다 */
-const normalizeLeadingSlot = ([a, b, c, d]: RecordSlots): RecordSlots => [
-  a ?? b,
-  a === null ? null : b,
-  c ?? d,
-  c === null ? null : d,
-];
 
 export const addSlotPlayer = (
   slots: RecordSlots,
   playerId: string,
+  preferredIndex: number | null = null,
 ): RecordSlots => {
   if (slots.includes(playerId)) return slots;
 
-  const index = SLOT_FILL_ORDER.find((slotIndex) => slots[slotIndex] === null);
-  if (index === undefined) return slots;
+  const index = getNextSlotIndex(slots, preferredIndex);
+  if (index === null) return slots;
 
   const next = [...slots] as RecordSlots;
   next[index] = playerId;
   return next;
 };
 
+/** 그 플레이어 자리만 비운다. 다른 플레이어는 움직이지 않는다 */
 export const removeSlotPlayer = (
   slots: RecordSlots,
   playerId: string,
 ): RecordSlots =>
-  normalizeSlots(
-    slots.map((id) => (id === playerId ? null : id)) as RecordSlots,
-  );
+  slots.map((id) => (id === playerId ? null : id)) as RecordSlots;
+
+/** 두 자리를 맞바꾼다. 한쪽이 빈자리면 그 자리로 옮기는 것과 같다 */
+export const swapSlots = (
+  slots: RecordSlots,
+  fromIndex: number,
+  toIndex: number,
+): RecordSlots => {
+  if (fromIndex === toIndex) return slots;
+
+  const next = [...slots] as RecordSlots;
+  next[fromIndex] = slots[toIndex];
+  next[toIndex] = slots[fromIndex];
+  return next;
+};
 
 /** 단식(1:1)이나 복식(2:2)이면 두 팀 id, 아니면 null */
 export const getSlotTeams = (
@@ -117,7 +120,7 @@ const getLastPlayedAtMs = (lastPlayedAt: string | null) => {
 const compareNumbers = (a: number, b: number) => (a < b ? -1 : a > b ? 1 : 0);
 
 /**
- * 선수 고르기 목록. 활성 회원을 아이디 부분 일치로 거른 뒤
+ * 플레이어 선택 목록. 활성 회원을 아이디 부분 일치로 거른 뒤
  * 세션 참여자(경기 중 아님) → 경기 중인 사람 → 나머지(최근 경기 순) 한 목록으로 세운다.
  */
 export const buildPickList = <T extends PickListPlayer>(
