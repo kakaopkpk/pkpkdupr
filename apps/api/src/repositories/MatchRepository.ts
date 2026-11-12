@@ -315,8 +315,7 @@ export class MatchRepository {
 
   /**
    * 세션을 만든다. `conflictOnDuplicate`면 `(name, date)` 유니크 위반을 DB 원문 대신
-   * 안내 메시지의 409로 바꾼다. `date`는 초 단위로 저장되므로 같은 이름이 같은 초에
-   * 들어오는 동시 제출이 대상이며, 같은 날 다른 시각의 같은 이름은 막지 않는다.
+   * 안내 메시지의 409로 바꾼다. 회원 세션은 `date`가 그날 00:00 KST라 같은 날 같은 이름이 대상이다.
    */
   async createSession(
     session: Omit<Session, "id"> & { id?: string },
@@ -398,6 +397,18 @@ export class MatchRepository {
     const to = new Date(from.getTime() + DAY_MS);
     const records = await this.run(
       () => db.matches.findSessionsInRange(from, to),
+      500,
+    );
+    return records.map(hydrateManagedSession);
+  }
+
+  /** 그 KST 날짜 0시 이후의 세션을 시각 오름차순으로 돌려준다 */
+  async findSessionsFromDateKey(
+    dateKey: string,
+  ): Promise<ManagedMatchSession[]> {
+    const from = kstDateKeyToDate(dateKey);
+    const records = await this.run(
+      () => db.matches.findSessionsFrom(from),
       500,
     );
     return records.map(hydrateManagedSession);

@@ -23,8 +23,12 @@ import {
 } from "@pkpkdupr/shared/match";
 import {
   canOpenRegularSession,
+  getEmptySessionExpiresAt,
+  getNextRegularSessionDateKey,
   isInProgressMatchExpired,
   isRegularSessionTime,
+  isValidKstDateKey,
+  kstDateKeyToDate,
   MATCH_SESSION_LOCATION_MAX_LENGTH,
   MATCH_SESSION_NAME_MAX_LENGTH,
   toKstDateKey,
@@ -34,6 +38,7 @@ import {
   type MatchSessionDetail,
   type MatchSessionMember,
   type TodayMatchSessionsResponse,
+  type UpcomingMatchSessionsResponse,
 } from "@pkpkdupr/shared/session";
 import { generateEntityId, isEntityId } from "@pkpkdupr/shared/entityId";
 import {
@@ -665,8 +670,8 @@ const requireMatchSessionDetail = async (sessionId: string, now: Date) => {
   return detail;
 };
 
-/** 참여자 추가·삭제 대상 세션을 확인한다. 오늘 세션이 아니면 403 */
-const requireTodaySessionForParticipants = async (
+/** 참여자 추가·삭제 대상 세션을 확인한다. 오늘·미래 세션만 되고 지난 세션은 403 */
+const requireOpenSessionForParticipants = async (
   sessionId: string,
   now: Date,
 ) => {
@@ -677,9 +682,10 @@ const requireTodaySessionForParticipants = async (
   if (!session) {
     throw new MatchSessionRequestError("세션을 찾을 수 없습니다.", 404);
   }
-  if (toKstDateKey(session.date) !== toKstDateKey(now)) {
+  // YYYY-MM-DD 날짜 키는 문자열 비교가 날짜 순서와 같다
+  if (toKstDateKey(session.date) < toKstDateKey(now)) {
     throw new MatchSessionRequestError(
-      "오늘 세션에서만 참여자를 바꿀 수 있습니다.",
+      "지난 세션은 참여자를 바꿀 수 없습니다.",
       403,
     );
   }
@@ -1019,6 +1025,46 @@ app.get("/api/match-sessions/today", async (req, res) => {
   }
 });
 
+app.get("/api/match-sessions/upcoming", async (req, res) => {
+  try {
+    if (!(await getAuthPayload(req, res))) {
+      return;
+    }
+
+    const now = new Date();
+    await matchRepository.cleanupExpired(now);
+    // 크론 없이 조회 때 다음 정기 회차 1개를 보장한다(날짜당 하나는 regular_date_key 유니크가 보장).
+    await matchRepository.findOrCreateRegularSession(
+      getNextRegularSessionDateKey(now),
+    );
+    const dateKey = toKstDateKey(now);
+    const [sessions, activePlayersById] = await Promise.all([
+      matchRepository.findSessionsFromDateKey(dateKey),
+      loadActivePlayersById(),
+    ]);
+    // 정리가 best-effort라 만료됐지만 아직 남은 빈 세션도 응답에서 뺀다.
+    // 경기가 있는 세션은 만료 후에도 남지만, 다가오는 세션 목록에는 넣지 않는다.
+    const details = sessions
+      .filter(
+        (session) => getEmptySessionExpiresAt(session.kind, session.date) > now,
+      )
+      .map((session) => toMatchSessionDetail(session, activePlayersById, now));
+    // 저장소가 시각 오름차순으로 주므로 날짜 키·정기 여부로만 다시 정렬한다(정렬은 안정적이다).
+    details.sort(
+      (a, b) =>
+        a.dateKey.localeCompare(b.dateKey) ||
+        Number(b.kind === "regular") - Number(a.kind === "regular"),
+    );
+    const response: UpcomingMatchSessionsResponse = {
+      dateKey,
+      sessions: details,
+    };
+    res.json(response);
+  } catch (err) {
+    sendMatchSessionFailure(res, err);
+  }
+});
+
 app.post("/api/match-sessions/regular/today", async (req, res) => {
   try {
     if (!(await getAuthPayload(req, res))) {
@@ -1071,9 +1117,31 @@ app.post("/api/match-sessions", async (req, res) => {
     }
 
     const now = new Date();
+    const todayKey = toKstDateKey(now);
+    const dateKey =
+      body?.dateKey == null
+        ? todayKey
+        : typeof body.dateKey === "string"
+          ? body.dateKey.trim()
+          : "";
+    if (!isValidKstDateKey(dateKey)) {
+      throw new MatchSessionRequestError(
+        "세션 날짜는 YYYY-MM-DD 형식의 실제 날짜여야 합니다.",
+        400,
+      );
+    }
+    // YYYY-MM-DD 날짜 키는 문자열 비교가 날짜 순서와 같다
+    if (dateKey < todayKey) {
+      throw new MatchSessionRequestError(
+        "오늘이나 이후 날짜로만 세션을 만들 수 있습니다.",
+        400,
+      );
+    }
+
     await matchRepository.cleanupExpired(now);
+    // 회원 세션 시각은 고른 날 00:00 KST로 고정해 같은 날 같은 이름은 (name, date) 유니크로 막는다.
     const created = await matchRepository.createSession(
-      { name, date: now, location },
+      { name, date: kstDateKeyToDate(dateKey), location },
       { conflictOnDuplicate: true },
     );
     res.status(201).json(await requireMatchSessionDetail(created.id, now));
@@ -1238,7 +1306,7 @@ app.post("/api/match-sessions/:sessionId/participants", async (req, res) => {
     const sessionId = req.params.sessionId;
     const now = new Date();
     await matchRepository.cleanupExpired(now);
-    await requireTodaySessionForParticipants(sessionId, now);
+    await requireOpenSessionForParticipants(sessionId, now);
     const player = await authService.getPlayerById(playerId);
     if (!player || player.status !== "active") {
       throw new MatchSessionRequestError(
@@ -1265,7 +1333,7 @@ app.delete(
       const { sessionId, playerId } = req.params;
       const now = new Date();
       await matchRepository.cleanupExpired(now);
-      await requireTodaySessionForParticipants(sessionId, now);
+      await requireOpenSessionForParticipants(sessionId, now);
       await matchRepository.removeSessionParticipant(sessionId, playerId);
       res.json(await requireMatchSessionDetail(sessionId, now));
     } catch (err) {

@@ -2,8 +2,8 @@ import React, { useState } from "react";
 import { Button, Card } from "@heroui/react";
 import { IoAdd, IoPeopleOutline } from "react-icons/io5";
 import {
+  getRegularSessionName,
   REGULAR_SESSION_LOCATION,
-  REGULAR_SESSION_NAME,
 } from "@pkpkdupr/shared/session";
 import AvatarGroup from "@/components/AvatarGroup";
 import BottomSheet from "@/components/BottomSheet";
@@ -278,7 +278,7 @@ const TodaySessionSection: React.FC<TodaySessionSectionProps> = ({
         </div>
         {showRegularPlaceholder ? (
           <TodaySessionCard
-            name={REGULAR_SESSION_NAME}
+            name={getRegularSessionName(today?.dateKey ?? "")}
             location={REGULAR_SESSION_LOCATION}
             isRegular
             participants={[]}
