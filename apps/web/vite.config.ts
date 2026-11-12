@@ -81,8 +81,8 @@ export default defineConfig({
         start_url: basePath,
         scope: basePath,
         display: "standalone",
-        background_color: "#ffffff",
-        theme_color: "#ffffff",
+        background_color: "#f3f5f9",
+        theme_color: "#f3f5f9",
         icons: [
           {
             src: `${basePath}pwa-192x192-v2.png`,
@@ -116,6 +116,22 @@ export default defineConfig({
             handler: "StaleWhileRevalidate",
             options: {
               cacheName: "pkpkdupr-pretendard-v1",
+              expiration: {
+                maxEntries: 20,
+                maxAgeSeconds: 365 * 24 * 60 * 60,
+              },
+              cacheableResponse: {
+                statuses: [0, 200],
+              },
+            },
+          },
+          {
+            // Barlow Condensed(숫자 폰트): CSS는 fonts.googleapis.com, 글꼴 파일은 fonts.gstatic.com에서 받는다.
+            urlPattern:
+              /^https:\/\/fonts\.(?:googleapis|gstatic)\.com\/.+$/,
+            handler: "StaleWhileRevalidate",
+            options: {
+              cacheName: "pkpkdupr-barlow-v1",
               expiration: {
                 maxEntries: 20,
                 maxAgeSeconds: 365 * 24 * 60 * 60,
