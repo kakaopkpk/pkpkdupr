@@ -58,7 +58,7 @@ const CheckMark: React.FC<{ isChecked: boolean; isLocked: boolean }> = ({
     <span
       aria-hidden="true"
       className={cx(
-        "inline-flex size-[22px] shrink-0 items-center justify-center rounded-full",
+        "inline-flex size-[22px] shrink-0 items-center justify-center rounded-full text-white",
         isLocked ? "bg-pk-quiet" : "bg-pk-primary",
       )}
     >
@@ -67,7 +67,7 @@ const CheckMark: React.FC<{ isChecked: boolean; isLocked: boolean }> = ({
         height="12"
         viewBox="0 0 24 24"
         fill="none"
-        stroke="#ffffff"
+        stroke="currentColor"
         strokeWidth="3"
         strokeLinecap="round"
         strokeLinejoin="round"
@@ -112,7 +112,7 @@ const ParticipantsForm: React.FC<ParticipantsFormProps> = ({
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // 정렬은 열 때의 참여자 기준으로 고정해 체크를 바꿔도 행이 움직이지 않게 한다
-  const [initialIds] = useState(() => savedIds);
+  const [sortAnchorIds] = useState(() => savedIds);
   const lockedIds = useMemo(() => new Set(lockedPlayerIds), [lockedPlayerIds]);
 
   const rows = useMemo(() => {
@@ -125,11 +125,11 @@ const ParticipantsForm: React.FC<ParticipantsFormProps> = ({
           player.username.toLocaleLowerCase().includes(normalizedQuery),
       )
       .sort((a, b) => {
-        const rankA = initialIds.has(a.id) ? 0 : 1;
-        const rankB = initialIds.has(b.id) ? 0 : 1;
+        const rankA = sortAnchorIds.has(a.id) ? 0 : 1;
+        const rankB = sortAnchorIds.has(b.id) ? 0 : 1;
         return rankA - rankB || a.username.localeCompare(b.username, "ko");
       });
-  }, [initialIds, players, query]);
+  }, [players, query, sortAnchorIds]);
 
   const toggle = (playerId: string) => {
     if (lockedIds.has(playerId) || isSaving) return;
