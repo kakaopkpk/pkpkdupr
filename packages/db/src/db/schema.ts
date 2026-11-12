@@ -4,6 +4,7 @@ import {
   doublePrecision,
   integer,
   index,
+  jsonb,
   pgTable,
   text,
   uniqueIndex,
@@ -242,5 +243,21 @@ export const officialDuprAdjustmentLogs = pgTable(
     playerIdIndex: index("official_dupr_adjustment_logs_player_id_idx").on(
       table.playerId,
     ),
+  }),
+);
+
+/** 경기 삭제 감사 로그. matchSnapshot은 지운 시점의 경기 전체(shared Match를 JSON으로 직렬화한 값)다. */
+export const matchDeletionLogs = pgTable(
+  "match_deletion_logs",
+  {
+    id: id("id").primaryKey(),
+    matchId: id("match_id").notNull(),
+    deletedByPlayerId: id("deleted_by_player_id").notNull(),
+    deletedByAdmin: boolean("deleted_by_admin").notNull().default(false),
+    matchSnapshot: jsonb("match_snapshot").notNull(),
+    deletedAt: unixTimestamp("deleted_at").notNull(),
+  },
+  (table) => ({
+    matchIdIndex: index("match_deletion_logs_match_id_idx").on(table.matchId),
   }),
 );

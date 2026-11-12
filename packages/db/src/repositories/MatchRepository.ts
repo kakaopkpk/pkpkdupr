@@ -39,6 +39,7 @@ import {
   type MatchSessionKind,
 } from "@pkpkdupr/shared/session";
 import { firstRow, placeholders, type RawQueryResult } from "../db/client";
+import { buildMatchDeletionLogInsert } from "./MatchDeletionLogRepository";
 
 type StoredMatch = typeof matches.$inferSelect;
 type StoredMatchParticipant = typeof matchParticipants.$inferSelect;
@@ -60,6 +61,24 @@ export class MatchRecordUpdateConflictError extends Error {
   constructor() {
     super("기록을 수정할 수 없는 매치 상태입니다.");
     this.name = "MatchRecordUpdateConflictError";
+  }
+}
+
+/** 경기가 없거나 이미 지워졌다 */
+export class MatchNotFoundError extends Error {
+  constructor() {
+    super("매치를 찾을 수 없습니다.");
+    this.name = "MatchNotFoundError";
+  }
+}
+
+export const MATCH_STALE_UPDATE_ERROR_MESSAGE = "다른 회원이 먼저 고쳤어요";
+
+/** 요청이 기준으로 삼은 updatedAt(expectedUpdatedAt)과 저장된 updated_at이 다르다 */
+export class MatchStaleUpdateError extends Error {
+  constructor() {
+    super(MATCH_STALE_UPDATE_ERROR_MESSAGE);
+    this.name = "MatchStaleUpdateError";
   }
 }
 
@@ -117,6 +136,25 @@ export interface UpdateRecordedMatchInput {
   scores: MatchScore[];
   resultSubmittedByPlayerId: string;
   resultSubmittedAt: Date;
+  /** 주면 저장된 updated_at(초 단위)과 같을 때만 고치고, 다르면 MatchStaleUpdateError */
+  expectedUpdatedAt?: Date;
+}
+
+export interface DeleteRecordedMatchInput {
+  /** 감사 로그 id */
+  logId: string;
+  deletedByPlayerId: string;
+  deletedByAdmin: boolean;
+  deletedAt: Date;
+  /** 주면 저장된 updated_at(초 단위)과 같을 때만 지우고, 다르면 MatchStaleUpdateError */
+  expectedUpdatedAt?: Date;
+}
+
+export interface DeletedMatchResult {
+  /** 실제로 지운 행의 상태(DELETE … RETURNING). completed였으면 평점에 반영돼 있던 경기다 */
+  status: MatchStatus;
+  /** 지운 시점의 경기 전체(감사 로그 스냅샷과 같다) */
+  match: Match;
 }
 
 export interface UpdateMatchMetadataInput {
@@ -214,6 +252,30 @@ const parseParticipantDuprSnapshot = (
 };
 
 const REGULAR_DATE_KEY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+
+const toExpectedUpdatedAtSeconds = (expectedUpdatedAt: Date | undefined) =>
+  expectedUpdatedAt ? toUnixTimestampSeconds(expectedUpdatedAt) : null;
+
+const matchesExpectedUpdatedAt = (
+  row: Record<string, unknown>,
+  expectedUpdatedAt: Date | undefined,
+) =>
+  !expectedUpdatedAt ||
+  Number(row.updated_at) === toUnixTimestampSeconds(expectedUpdatedAt);
+
+/** 조건부 쓰기가 아무 행도 바꾸지 못했을 때, 현재 행으로 원인(없음·먼저 고침·상태)을 가른다 */
+const toRecordedMatchWriteError = (
+  row: Record<string, unknown> | undefined,
+  expectedUpdatedAt: Date | undefined,
+) => {
+  if (!row) {
+    return new MatchNotFoundError();
+  }
+  if (!matchesExpectedUpdatedAt(row, expectedUpdatedAt)) {
+    return new MatchStaleUpdateError();
+  }
+  return new MatchRecordUpdateConflictError();
+};
 
 /**
  * MatchRepository - `packages/db`의 경기 저장소.
@@ -1587,9 +1649,10 @@ export class MatchRepository {
             result_submitted_by_player_id = $4,
             result_submitted_at = $5,
             completed_at = COALESCE(completed_at, $5),
-            updated_at = $5
+            updated_at = GREATEST($5, updated_at + 1)
           WHERE id = $6
             AND status IN ('created', 'completed')
+            AND ($7::bigint IS NULL OR updated_at = $7)
         `,
         args: [
           data.type,
@@ -1598,10 +1661,18 @@ export class MatchRepository {
           data.resultSubmittedByPlayerId,
           submittedAtSeconds,
           matchId,
+          toExpectedUpdatedAtSeconds(data.expectedUpdatedAt),
         ],
       });
       if (!updateResult.rowsAffected) {
-        throw new MatchRecordUpdateConflictError();
+        const current = await transaction.execute({
+          sql: `SELECT status, updated_at FROM matches WHERE id = $1`,
+          args: [matchId],
+        });
+        throw toRecordedMatchWriteError(
+          current.rows[0],
+          data.expectedUpdatedAt,
+        );
       }
 
       const existingParticipants = await transaction.execute({
@@ -1663,11 +1734,38 @@ export class MatchRepository {
     return updated;
   }
 
-  async delete(matchId: string): Promise<void> {
+  /**
+   * 경기를 지우고 같은 트랜잭션에서 감사 로그(match_deletion_logs)를 남긴다.
+   * 행을 FOR UPDATE로 잠근 뒤 스냅샷을 읽으므로, 같은 경기에 점수 입력(updateRecordedMatch)이 겹치면
+   * 둘 중 하나가 먼저 끝난 상태를 기준으로 처리된다. 지운 행의 상태는 DELETE … RETURNING으로 돌려준다.
+   * 세션은 건드리지 않는다. 경기가 없어진 세션은 빈 세션 정리 규칙(만료 시각 이후 정리)을 따른다.
+   */
+  async deleteRecordedMatch(
+    matchId: string,
+    input: DeleteRecordedMatchInput,
+  ): Promise<DeletedMatchResult> {
     const transaction = await this.client.transaction("write");
     let committed = false;
 
     try {
+      const locked = await transaction.execute({
+        sql: `SELECT status, updated_at FROM matches WHERE id = $1 FOR UPDATE`,
+        args: [matchId],
+      });
+      const lockedRow = locked.rows[0];
+      if (
+        !lockedRow ||
+        !matchesExpectedUpdatedAt(lockedRow, input.expectedUpdatedAt)
+      ) {
+        throw toRecordedMatchWriteError(lockedRow, input.expectedUpdatedAt);
+      }
+
+      // 행 잠금을 쥐고 있어 다른 쓰기가 끼어들 수 없으므로, 풀의 다른 커넥션으로 읽어도 지울 상태와 같다.
+      const snapshot = await this.findById(matchId);
+      if (!snapshot) {
+        throw new MatchNotFoundError();
+      }
+
       await transaction.execute({
         sql: `DELETE FROM match_scores WHERE match_id = $1`,
         args: [matchId],
@@ -1677,18 +1775,30 @@ export class MatchRepository {
         args: [matchId],
       });
       const deleted = await transaction.execute({
-        sql: `DELETE FROM matches WHERE id = $1`,
+        sql: `DELETE FROM matches WHERE id = $1 RETURNING status`,
         args: [matchId],
       });
-      if (!deleted.rowsAffected) {
-        throw new Error("MATCH_NOT_FOUND");
+      const deletedRow = deleted.rows[0];
+      if (!deletedRow) {
+        throw new MatchNotFoundError();
       }
+      await transaction.execute(
+        buildMatchDeletionLogInsert({
+          id: input.logId,
+          matchId,
+          deletedByPlayerId: input.deletedByPlayerId,
+          deletedByAdmin: input.deletedByAdmin,
+          matchSnapshot: snapshot,
+          deletedAt: input.deletedAt,
+        }),
+      );
 
       await transaction.commit();
       committed = true;
-    } catch (error) {
-      transaction.close();
-      throw error;
+      return {
+        status: String(deletedRow.status) as MatchStatus,
+        match: snapshot,
+      };
     } finally {
       if (!committed) {
         transaction.close();

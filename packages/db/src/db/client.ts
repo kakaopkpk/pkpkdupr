@@ -96,6 +96,33 @@ class PostgresClient {
     return new PostgresTransaction(connection);
   }
 
+  /**
+   * 트랜잭션 advisory 잠금(`pg_advisory_xact_lock`)을 잡은 채 fn을 실행하고, 끝나면 COMMIT/ROLLBACK으로 놓는다.
+   * 잠금은 상호 배제용이라 fn 안의 쿼리는 이 트랜잭션이 아닌 풀의 다른 커넥션으로 실행된다.
+   * 세션 잠금이 아니라 트랜잭션 잠금이라 풀러(transaction mode)에서도 커넥션 반납과 함께 풀린다.
+   * 같은 키로 중첩 호출하면 다른 커넥션이 같은 잠금을 기다리며 교착되므로 바깥에서 한 번만 잡는다.
+   */
+  async withAdvisoryXactLock<T>(key: number, fn: () => Promise<T>): Promise<T> {
+    const transaction = await this.transaction();
+    let result: T;
+    try {
+      await transaction.execute({
+        sql: "SELECT pg_advisory_xact_lock($1)",
+        args: [key],
+      });
+      result = await fn();
+    } catch (error) {
+      transaction.close();
+      throw error;
+    }
+    try {
+      await transaction.commit();
+    } finally {
+      transaction.close();
+    }
+    return result;
+  }
+
   async close() {
     await this.sql.end();
   }

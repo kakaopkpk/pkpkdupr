@@ -3,6 +3,7 @@ import {
   getDbClient,
   getDevMockUsernames,
   isDevMockDataEnabled,
+  MatchDeletionLogRepository,
   MatchRepository,
   OfficialDuprAdjustmentLogRepository,
   PlayerAdminRepository,
@@ -11,6 +12,7 @@ import {
   PlayerRatingChartProjectionRepository,
   PlayerRepository,
   PlayerStatusChangeLogRepository,
+  RatingWriteLock,
   TestDataRepository,
 } from "@pkpkdupr/db";
 import { isEdgeRuntime } from "./runtime";
@@ -46,6 +48,8 @@ export const db: {
   playerRatingChartProjections: PlayerRatingChartProjectionRepository;
   officialDuprAdjustmentLogs: OfficialDuprAdjustmentLogRepository;
   matches: MatchRepository;
+  matchDeletionLogs: MatchDeletionLogRepository;
+  ratingWriteLock: RatingWriteLock;
   testData: TestDataRepository;
 } = {
   players,
@@ -60,6 +64,8 @@ export const db: {
     drizzleDb,
   ),
   matches: new MatchRepository(drizzleDb, client),
+  matchDeletionLogs: new MatchDeletionLogRepository(drizzleDb),
+  ratingWriteLock: new RatingWriteLock(client),
   testData: new TestDataRepository(
     drizzleDb,
     client,
