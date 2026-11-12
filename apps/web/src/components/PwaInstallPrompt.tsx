@@ -151,8 +151,13 @@ const PwaInstallPrompt: React.FC = () => {
       return;
     }
 
-    await deferredPrompt.prompt();
-    await deferredPrompt.userChoice;
+    try {
+      await deferredPrompt.prompt();
+      await deferredPrompt.userChoice;
+    } catch (err) {
+      console.error("Failed to show install prompt", err);
+    }
+    // 한 번 쓴 beforeinstallprompt 이벤트는 다시 prompt()할 수 없다
     setDeferredPrompt(null);
   };
 

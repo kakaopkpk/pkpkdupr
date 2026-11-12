@@ -13,7 +13,10 @@ import { PkButton } from "@/components/ui/Button";
 const SAVE_FAILURE_IDLE_DISMISS_MS = 10_000;
 
 export interface SaveFailureNoticeOptions {
-  /** "다시 시도"를 누르면 실행. 성공(resolve)하면 토스트가 닫힌다 */
+  /**
+   * "다시 시도"를 누르면 실행. 정상 종료(resolve)하면 토스트가 닫힌다.
+   * 실패는 throw(reject)로 알려야 하며, 그러면 토스트가 남아 다시 시도할 수 있다.
+   */
   onRetry: () => void | Promise<void>;
 }
 
