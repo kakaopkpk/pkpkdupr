@@ -18,3 +18,16 @@ export interface HeadToHeadStat {
   wins: number;
   losses: number;
 }
+
+/** 상성에 넣는 최소 맞대결 완료 경기 수 */
+export const RIVAL_MIN_MATCHES = 3;
+/** 상성에 보이는 최대 회원 수 */
+export const RIVAL_MAX_COUNT = 3;
+
+/** 상대 팀으로 만난 회원별 승패(대상 선수 기준) */
+export interface OpponentStat {
+  opponent: StatPlayer;
+  matchCount: number;
+  wins: number;
+  losses: number;
+}

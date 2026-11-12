@@ -1,6 +1,10 @@
 import type { MatchTopLevelType } from "@pkpkdupr/shared/match";
 import type { PlayerRatingHistory } from "@pkpkdupr/shared/player";
-import type { HeadToHeadStat, PartnerStat } from "@pkpkdupr/shared/profileStats";
+import type {
+  HeadToHeadStat,
+  OpponentStat,
+  PartnerStat,
+} from "@pkpkdupr/shared/profileStats";
 import type { MatchInfo, MatchListResponse } from "@/types/match";
 import { apiFetch } from "@/lib/api";
 
@@ -22,6 +26,8 @@ export interface PlayerProfileSummaryInfo {
   ratingHistory: PlayerRatingHistory;
   recentMatches: MatchInfo[];
   partners: PartnerStat[];
+  /** 자주 진 상대(상성) */
+  rivals: OpponentStat[];
   /** 보는 사람 기준 맞대결 승패. 본인 프로필이면 null */
   headToHead: HeadToHeadStat | null;
 }
