@@ -7,7 +7,6 @@ import { cx } from "./cx";
 
 type MatchTeam = MatchInfo["teams"][number];
 
-const PRIMARY_SOFT = "var(--color-pk-primary-soft)";
 const rowDividerClassName =
   "not-last:shadow-[inset_0_-1px_0_var(--color-pk-divider)]";
 
@@ -68,11 +67,11 @@ const TeamLine: React.FC<{
 
 /**
  * 경기 한 줄. 이긴 팀이 위에 오고 이긴 쪽만 굵게·블루 점수로 강조한다.
- * 내 경기는 연한 파랑 배경이다. 코트 번호는 보이지 않는다.
+ * 내 경기는 다른 줄과 같은 모양에 시간 아래 "내 경기" 글자만 붙는다. 코트 번호는 보이지 않는다.
  */
 export const MatchRow: React.FC<{
   match: MatchInfo;
-  /** 이 선수가 든 경기면 연한 파랑 배경 */
+  /** 이 선수가 든 경기면 시간 아래 "내 경기"를 붙인다 */
   currentPlayerId?: string;
   onPress?: () => void;
   /** 기본 "time"("20:01"), "weekday-time"은 "목 20:01". 기준은 matchStartsAt */
@@ -97,7 +96,6 @@ export const MatchRow: React.FC<{
         { team: teamB, score: scoreB },
         { team: teamA, score: scoreA },
       ];
-  const ringColor = isMine ? PRIMARY_SOFT : "#ffffff";
   const time =
     timeLabel === "weekday-time"
       ? formatKstWeekdayTime(match.matchStartsAt)
@@ -107,8 +105,8 @@ export const MatchRow: React.FC<{
     <RowContainer
       onPress={onPress}
       className={cx(
-        "-mx-2 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 px-2 py-3 text-pk-ink",
-        isMine ? "rounded-pk-sm bg-pk-primary-soft" : rowDividerClassName,
+        "grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 py-3 text-pk-ink",
+        rowDividerClassName,
       )}
     >
       <div className="flex min-w-0 flex-col gap-1.5">
@@ -118,13 +116,16 @@ export const MatchRow: React.FC<{
             team={team}
             score={hasScores ? score : undefined}
             emphasis={hasWinner ? (index === 0 ? "win" : "lose") : "none"}
-            ringColor={ringColor}
+            ringColor="#ffffff"
           />
         ))}
       </div>
-      <span className="justify-self-end whitespace-nowrap text-pk-12 text-pk-muted tabular-nums">
-        {time}
-      </span>
+      <div className="flex flex-col items-end gap-1 justify-self-end whitespace-nowrap text-right">
+        <span className="text-pk-12 text-pk-muted tabular-nums">{time}</span>
+        {isMine ? (
+          <span className="text-pk-12 font-bold text-pk-sub">내 경기</span>
+        ) : null}
+      </div>
     </RowContainer>
   );
 };

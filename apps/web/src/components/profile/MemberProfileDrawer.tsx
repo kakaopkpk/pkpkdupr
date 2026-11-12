@@ -16,6 +16,7 @@ import { DetailHeader } from "@/components/ui/Headers";
 import { PlayerAvatar } from "@/components/ui/PlayerAvatar";
 import { StatusMessageChip } from "@/components/ui/StatusMessageChip";
 import { GLOBAL_LAYER } from "@/context/AppNavigationContext";
+import { useAuth } from "@/context/AuthContext";
 import {
   type TabKey,
   useTabNavigation,
@@ -45,6 +46,7 @@ export default function MemberProfileDrawer({
     selectedTab,
   } = useTabNavigation();
   const { players, reload: reloadPlayers } = usePlayers();
+  const { player: viewer } = useAuth();
   // 닫히는 애니메이션 동안 마지막 회원을 계속 보여 준다
   const [displayedPlayerId, setDisplayedPlayerId] = useState(playerId);
   const [category, setCategory] = useState<MatchTopLevelType>("doubles");
@@ -179,6 +181,7 @@ export default function MemberProfileDrawer({
               <RecentMatchesSection
                 title="최근 경기"
                 matches={overview.summary.recentMatches}
+                viewerPlayerId={viewer?.id}
                 onViewAll={() => setIsMatchHistoryRequested(true)}
               />
             </>

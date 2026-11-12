@@ -66,8 +66,10 @@ export const WinRateTile: React.FC<{
 export const RecentMatchesSection: React.FC<{
   title: string;
   matches: readonly MatchInfo[];
+  /** 보는 사람 id. 주면 그 사람이 뛴 경기에 "내 경기"를 붙인다 */
+  viewerPlayerId?: string;
   onViewAll: () => void;
-}> = ({ title, matches, onViewAll }) => {
+}> = ({ title, matches, viewerPlayerId, onViewAll }) => {
   const { openMatchDetail } = useAppNavigation();
   // 진행 중 경기는 빼고 보인다
   const recentMatches = matches
@@ -76,7 +78,13 @@ export const RecentMatchesSection: React.FC<{
 
   return (
     <section className="flex flex-col gap-2.5 pt-1">
-      <SectionLabel right={<TextLink onPress={onViewAll}>전체 보기 ›</TextLink>}>
+      <SectionLabel
+        right={
+          <TextLink onPress={onViewAll} chevron>
+            전체 보기
+          </TextLink>
+        }
+      >
         {title}
       </SectionLabel>
       <Card>
@@ -85,6 +93,7 @@ export const RecentMatchesSection: React.FC<{
             <MatchRow
               key={match.id}
               match={match}
+              currentPlayerId={viewerPlayerId}
               timeLabel="weekday-time"
               onPress={() => openMatchDetail(match.id)}
             />

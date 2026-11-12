@@ -1,7 +1,7 @@
 import React from "react";
 import type { SessionPlayerReport } from "@pkpkdupr/shared/ranking";
 import SkeletonBlock from "@/components/SkeletonBlock";
-import { HighlightBadge } from "@/components/ui/Badges";
+import { SessionDominatorBadge } from "@/components/ui/Badges";
 import { Card } from "@/components/ui/Card";
 import { RatingDelta } from "@/components/ui/Delta";
 import { PlayerAvatar } from "@/components/ui/PlayerAvatar";
@@ -75,14 +75,14 @@ export const SessionSummary: React.FC<{ session: MatchSessionHistoryInfo }> = ({
   </div>
 );
 
-/** 그 세션에서 평점이 가장 많이 오른 사람. 과거 세션이어도 라벨은 "오늘의 급상승"이다 */
+/** 그 세션에서 평점이 가장 많이 오른 사람(세션 지배자) */
 export const TopRiserCard: React.FC<{ report: SessionPlayerReport }> = ({
   report,
 }) => (
   <Card className="flex items-center gap-3 px-4 py-3.5">
     <PlayerAvatar player={report.player} size={44} />
     <div className="flex min-w-0 flex-1 flex-col items-start gap-0.5">
-      <HighlightBadge>오늘의 급상승</HighlightBadge>
+      <SessionDominatorBadge />
       <span className="max-w-full truncate text-pk-17 font-extrabold text-pk-ink">
         {report.player.username}
       </span>

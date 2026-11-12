@@ -56,7 +56,7 @@ const isPlayerInMatch = (match: MatchInfo, playerId: string) =>
     team.players.some((player) => player.id === playerId),
   );
 
-/** 기록 탭: 세션 날짜 칩으로 세션을 골라 요약·오늘의 급상승·완료 경기를 본다 */
+/** 기록 탭: 세션 날짜 칩으로 세션을 골라 요약·세션 지배자·완료 경기를 본다 */
 const Records: React.FC = () => {
   const { player } = useAuth();
   const playerId = player?.id;
