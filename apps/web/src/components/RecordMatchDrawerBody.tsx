@@ -36,7 +36,9 @@ import { getWinningTeamIndex } from "@/utils/matchStats";
 import BottomSheet from "./BottomSheet";
 import BottomSheetSection from "./BottomSheetSection";
 import CreateMatchTeamGrid from "./CreateMatchTeamGrid";
-import HoldToConfirmButton from "./HoldToConfirmButton";
+import HoldToConfirmButton, {
+  SAVE_HOLD_DURATION_MS,
+} from "./HoldToConfirmButton";
 import RatingDeltaChip from "./RatingDeltaChip";
 import RecentValueComboBox from "./RecentValueComboBox";
 import RecordMatchScoreStrip from "./RecordMatchScoreStrip";
@@ -85,7 +87,6 @@ interface ScoreDraft {
 const MAX_MEMBER_COUNT = 4;
 /** 멤버 목록은 2열 5행까지만 보여 준다 */
 const RECENT_PLAYER_LIMIT = 10;
-const SAVE_HOLD_DURATION_MS = 3000;
 const SAVE_ERROR_FALLBACK = "기록을 저장하지 못했어요.";
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -729,8 +730,7 @@ const RecordMatchDrawerBody: React.FC<RecordMatchDrawerBodyProps> = ({
             holdDurationMs={SAVE_HOLD_DURATION_MS}
             onComplete={() => void handleSave()}
             isDisabled={!canSave}
-            className="app-action-button col-span-2 w-full justify-center rounded-2xl bg-[#409eff] px-3 py-3 text-base font-semibold text-white disabled:bg-slate-200 disabled:text-slate-400"
-            progressClassName="bg-white/20"
+            className="col-span-2"
           >
             {isOnline ? "길게 눌러 기록 저장" : "온라인 연결 필요"}
           </HoldToConfirmButton>

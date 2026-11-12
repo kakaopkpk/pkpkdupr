@@ -1262,6 +1262,7 @@ const BottomNav: React.FC = () => {
                     <div className="overflow-hidden rounded-2xl border border-border bg-white shadow-lg">
                       <div className="px-1.5 py-1.5">
                         <HoldToConfirmButton
+                          variant="plain"
                           holdDurationMs={1000}
                           ariaLabel="길게 눌러 로그아웃"
                           onComplete={handleLogout}
