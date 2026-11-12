@@ -95,12 +95,13 @@ const fetchPlayers = (ownerId: string): Promise<void> => {
       if (state.players.length === 0) {
         setState({ ...state, status: "error" });
       }
-    } finally {
-      if (inFlight === request) inFlight = null;
     }
   })();
 
   inFlight = request;
+  void request.finally(() => {
+    if (inFlight === request) inFlight = null;
+  });
   return request;
 };
 
