@@ -62,6 +62,10 @@ import type {
   PlayerStatus,
 } from "@pkpkdupr/shared/player";
 import type {
+  MatchSessionHistoryResponse,
+  RankingResponse,
+} from "@pkpkdupr/shared/ranking";
+import type {
   AdminRegisterPlayerRequest,
   AdminUpdateUsernameRequest,
   AuthErrorCode,
@@ -85,6 +89,15 @@ import {
   PlayerRatingChartProjectionService,
 } from "./services/PlayerRatingChartProjectionService";
 import { buildPlayerProfileSummary } from "./services/PlayerProfileSummaryService";
+import {
+  SESSION_HISTORY_DEFAULT_LIMIT,
+  SESSION_HISTORY_MAX_LIMIT,
+  buildRankingResponse,
+  buildSessionHistory,
+  buildSessionReport,
+  createRankingContext,
+  rankPlayersAt,
+} from "./services/RankingService";
 import {
   AvatarValidationError,
   buildAvatarObjectPath,
@@ -2201,6 +2214,162 @@ app.delete("/api/me/avatar", async (req, res) => {
   } catch (err) {
     console.error("[Avatar] 삭제 실패", err);
     res.status(500).json({ error: "프로필 이미지를 삭제하지 못했습니다." });
+  }
+});
+
+/** 랭킹·세션 리포트 요청 오류. status로 400·404를 구분해 응답한다 */
+class RankingRequestError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+  ) {
+    super(message);
+    this.name = "RankingRequestError";
+  }
+}
+
+const sendRankingFailure = (res: express.Response, error: unknown) => {
+  const status =
+    error instanceof RankingRequestError ||
+    error instanceof MatchRepositoryError
+      ? error.status
+      : 500;
+  res.status(status).json({ error: (error as Error).message });
+};
+
+/** 랭킹·세션 리포트 계산 원천. 회원 약 20명 규모라 로그·경기·세션을 모두 메모리로 읽는다 */
+const loadRankingSource = async () => {
+  const [players, logs, matches, sessions] = await Promise.all([
+    authService.getAllPlayers(),
+    matchRepository.getAllRatingChangeLogs(),
+    matchRepository.findCompletedMatchOutcomes(),
+    matchRepository.findSessionsWithParticipantIds(),
+  ]);
+  return { context: createRankingContext(players, logs, matches), sessions };
+};
+
+/** 프로필 차트와 같은 90일 projection의 평점 값. 없는 선수만 하나씩 다시 만든다 */
+const loadRatingTrends = async (
+  playerIds: string[],
+  category: MatchTopLevelType,
+) => {
+  const projections = await Promise.all(
+    playerIds.map((playerId) =>
+      matchRepository.getPlayerRatingChartProjection(playerId),
+    ),
+  );
+  const trends = new Map<string, number[]>();
+  for (const [index, playerId] of playerIds.entries()) {
+    const projection =
+      projections[index] ??
+      (await playerRatingChartProjectionService.rebuildPlayer(playerId));
+    trends.set(
+      playerId,
+      projection.history[category].map((point) => point.rating),
+    );
+  }
+  return trends;
+};
+
+const parseRankingCategory = (value: unknown): MatchTopLevelType => {
+  if (value === undefined) {
+    return "doubles";
+  }
+  if (value === "doubles" || value === "singles") {
+    return value;
+  }
+  throw new RankingRequestError(
+    "category는 doubles 또는 singles여야 합니다.",
+    400,
+  );
+};
+
+/** limit 쿼리: 생략이면 기본값, 양의 정수가 아니면 400, 최대값으로 자른다 */
+const parseSessionHistoryLimit = (value: unknown): number => {
+  if (value === undefined) {
+    return SESSION_HISTORY_DEFAULT_LIMIT;
+  }
+  const limit =
+    typeof value === "string" && /^\d+$/.test(value.trim())
+      ? Number(value)
+      : NaN;
+  if (!Number.isSafeInteger(limit) || limit < 1) {
+    throw new RankingRequestError("limit은 1 이상의 정수여야 합니다.", 400);
+  }
+  return Math.min(limit, SESSION_HISTORY_MAX_LIMIT);
+};
+
+app.get("/api/rankings", async (req, res) => {
+  try {
+    if (!(await getAuthPayload(req, res))) {
+      return;
+    }
+
+    const category = parseRankingCategory(req.query.category);
+    const now = new Date();
+    const { context, sessions } = await loadRankingSource();
+    const rankedPlayerIds = rankPlayersAt(context, category, null).map(
+      (entry) => entry.player.id,
+    );
+    const trendByPlayerId = await loadRatingTrends(rankedPlayerIds, category);
+    const response: RankingResponse = buildRankingResponse({
+      context,
+      category,
+      sessions,
+      trendByPlayerId,
+      now,
+    });
+    res.json(response);
+  } catch (err) {
+    sendRankingFailure(res, err);
+  }
+});
+
+app.get("/api/session-reports", async (req, res) => {
+  try {
+    if (!(await getAuthPayload(req, res))) {
+      return;
+    }
+
+    const limit = parseSessionHistoryLimit(req.query.limit);
+    const playerId = req.query.playerId;
+    if (playerId !== undefined && typeof playerId !== "string") {
+      throw new RankingRequestError("playerId는 문자열이어야 합니다.", 400);
+    }
+    const { context, sessions } = await loadRankingSource();
+    const response: MatchSessionHistoryResponse = {
+      sessions: buildSessionHistory({
+        context,
+        sessions,
+        limit,
+        playerId: playerId?.trim() || undefined,
+      }),
+    };
+    res.json(response);
+  } catch (err) {
+    sendRankingFailure(res, err);
+  }
+});
+
+app.get("/api/session-reports/:sessionId", async (req, res) => {
+  try {
+    if (!(await getAuthPayload(req, res))) {
+      return;
+    }
+
+    const sessionId = req.params.sessionId;
+    if (!isEntityId(sessionId, "session")) {
+      throw new RankingRequestError("유효한 세션 ID가 필요합니다.", 400);
+    }
+    const { context, sessions } = await loadRankingSource();
+    const session = sessions.find((candidate) => candidate.id === sessionId);
+    const report = session ? buildSessionReport({ context, session }) : null;
+    if (!report) {
+      throw new RankingRequestError("세션 리포트를 찾을 수 없습니다.", 404);
+    }
+    res.json(report);
+  } catch (err) {
+    sendRankingFailure(res, err);
   }
 });
 
