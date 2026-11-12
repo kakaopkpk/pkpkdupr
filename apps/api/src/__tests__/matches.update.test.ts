@@ -432,6 +432,24 @@ describe("PUT /api/matches/:matchId", () => {
     expect(recalculate).not.toHaveBeenCalled();
   });
 
+  it("관리자도 회원과 같은 기준으로 참가자가 아니어도 수정할 수 있다", async () => {
+    vi.spyOn(
+      AuthService.prototype,
+      "authenticateAccessToken",
+    ).mockResolvedValue({
+      ...buildSession(outsider),
+      payload: { playerId: outsider.id, isAdmin: true },
+    });
+    vi.spyOn(AuthService.prototype, "getPlayerById").mockResolvedValue(
+      outsider,
+    );
+
+    const response = await putMatch(bodyWithoutRequester);
+
+    expect(response.status).toBe(200);
+    expect(updateRecordedMatch).toHaveBeenCalledTimes(1);
+  });
+
   it("참가자가 아니어도 경기 생성자면 수정할 수 있다", async () => {
     existing = buildExistingMatch({ creatorPlayerId: outsider.id });
     vi.spyOn(

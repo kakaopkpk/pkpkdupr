@@ -162,8 +162,10 @@ const MatchDetail: React.FC<MatchDetailProps> = ({
   const [resultSheetKey, setResultSheetKey] = useState(0);
   const { closeDepth, pushDepth, selectedTab } = useTabNavigation();
   const hasResultScores = !!match.scores?.length;
-  // 기한이 지나는 순간을 따로 감시하지 않는다. 열어 둔 채 지나면 서버가 거절한다
+  // 기한이 지나는 순간을 따로 감시하지 않는다. 열어 둔 채 지나면 서버가 거절한다.
+  // 참가자 여부는 따지지 않지만, 회원 정보가 확인되기 전에는 버튼을 숨긴다
   const canEditRecord =
+    !!currentPlayerId &&
     isMatchRecordEditable({
       ...match,
       matchStartsAt: new Date(match.matchStartsAt),
