@@ -5,6 +5,7 @@ import {
   getMatchTopLevelType,
   isMatchInProgress,
   isSinglesMatchType,
+  isMatchRecordDeletable,
   isMultiGameMatchRecord,
   isWithinMatchEditWindow,
   matchTypeLabels,
@@ -76,7 +77,10 @@ import type {
   MeResponse,
 } from "@pkpkdupr/shared/auth";
 import { assertRequiredEnv } from "./config/env";
-import { isDevMockDataEnabled } from "@pkpkdupr/db";
+import {
+  isDevMockDataEnabled,
+  MATCH_STALE_UPDATE_ERROR_MESSAGE,
+} from "@pkpkdupr/db";
 import { initDatabase } from "./db";
 import {
   MatchRepository,
@@ -87,6 +91,7 @@ import {
   AuthError,
   AuthService,
   type AuthenticatedSession,
+  type DuprRecalculationSummary,
 } from "./services/AuthService";
 import {
   attachMatchRatingChanges,
@@ -2059,18 +2064,25 @@ app.delete(
   requireAdmin,
   async (req, res) => {
     try {
-      await matchRepository.delete(req.params.matchId);
-      const { matches } = await matchRepository.findAll(0, 10000);
-      const recalculation = await authService.recalculateDuprRatings(
-        matches.filter((candidate) => candidate.status === "completed"),
-        {
-          source: "manual_recalculation",
-          sourceLogId: `admin-match-delete-${req.params.matchId}-${Date.now()}-${randomUUID()}`,
-          perMatchLogs: true,
-        },
-      );
+      const decoded = await getAuthPayload(req, res);
+      if (!decoded) {
+        return;
+      }
 
-      res.json({ deletedMatchId: req.params.matchId, ...recalculation });
+      const matchId = req.params.matchId;
+      const deleted = await matchRepository.deleteRecorded(matchId, {
+        deletedByPlayerId: decoded.playerId,
+        deletedByAdmin: true,
+      });
+      const recalculation =
+        deleted.status === "completed"
+          ? await recalculateRatingsAfterMatchDelete(
+              matchId,
+              "admin-match-delete",
+            )
+          : EMPTY_DUPR_RECALCULATION_SUMMARY;
+
+      res.json({ deletedMatchId: matchId, ...recalculation });
     } catch (err) {
       if (err instanceof MatchRepositoryError && err.status === 404) {
         return res.status(404).json({ error: err.message });
@@ -2086,6 +2098,138 @@ const isExpiredInProgressMatch = (match: Match, now: Date) =>
   (match.scores?.length ?? 0) === 0 &&
   isInProgressMatchExpired(match.matchStartsAt, now);
 
+const MATCH_ALREADY_DELETED_MESSAGE = "다른 회원이 지운 경기예요";
+
+/** 요청의 expectedUpdatedAt(ISO 문자열). 없으면 undefined, 형식이 틀리면 400 */
+const parseExpectedUpdatedAt = (value: unknown): Date | undefined => {
+  if (value == null || value === "") {
+    return undefined;
+  }
+  const date = typeof value === "string" ? new Date(value) : null;
+  if (!date || Number.isNaN(date.getTime())) {
+    throw new MatchRecordRequestError(
+      "expectedUpdatedAt은 ISO 날짜 문자열이어야 합니다.",
+      400,
+    );
+  }
+  return date;
+};
+
+/** updated_at은 초 단위로 저장되므로 같은 초면 같은 값으로 본다 */
+const isSameUpdatedAt = (expected: Date, actual: Date) =>
+  Math.floor(expected.getTime() / 1000) === Math.floor(actual.getTime() / 1000);
+
+/** 평점 재계산이 읽는 경기 수 상한 */
+const MAX_RECALCULATION_MATCHES = 10000;
+
+/** 평점 재계산 입력. 평점 쓰기 잠금 안에서 불려 최신 완료 경기 목록을 읽는다 */
+const loadCompletedMatches = async () => {
+  const { matches } = await matchRepository.findAll(
+    0,
+    MAX_RECALCULATION_MATCHES,
+  );
+  return matches.filter((match) => match.status === "completed");
+};
+
+const EMPTY_DUPR_RECALCULATION_SUMMARY: DuprRecalculationSummary = {
+  ratingChangeLogs: [],
+  perMatchLogs: [],
+  changedPlayerCount: 0,
+  restoredMatchDuprSnapshotCount: 0,
+  restoredMatchDuprSnapshotMatchCount: 0,
+  perMatchLogCount: 0,
+};
+
+/** 평점에 반영돼 있던(completed) 경기를 지운 뒤 평점을 처음부터 다시 계산한다 */
+const recalculateRatingsAfterMatchDelete = (
+  matchId: string,
+  sourceLogIdPrefix: string,
+) =>
+  authService.recalculateDuprRatings(loadCompletedMatches, {
+    source: "manual_recalculation",
+    sourceLogId: `${sourceLogIdPrefix}-${matchId}-${Date.now()}-${randomUUID()}`,
+    perMatchLogs: true,
+  });
+
+/** 회원이 지울 수 없는 경기면 그 이유(403 응답 문구), 지울 수 있으면 null */
+const getMatchDeleteForbiddenReason = (
+  match: Match,
+  now: Date,
+): string | null => {
+  if (isMatchRecordDeletable(match, now)) {
+    return null;
+  }
+  if (match.status === "cancelled") {
+    return "취소된 경기는 지울 수 없습니다.";
+  }
+  if (isMultiGameMatchRecord(match)) {
+    return "여러 게임으로 기록된 경기는 지울 수 없습니다. 관리자에게 요청해 주세요.";
+  }
+  if (!isWithinMatchEditWindow(match.matchStartsAt, now)) {
+    return "경기 시작 후 24시간이 지나 지울 수 없습니다. 관리자에게 요청해 주세요.";
+  }
+  if (match.matchStartsAt.getTime() > now.getTime()) {
+    return "아직 시작하지 않은 예정 경기는 지울 수 없습니다.";
+  }
+  return "완료되지 않은 관리자 예정 경기는 회원이 지울 수 없습니다.";
+};
+
+/**
+ * 회원 경기 삭제. 활성 회원 누구나 isMatchRecordDeletable인 경기를 지울 수 있다.
+ * 평점 재계산 여부는 미리 읽은 상태가 아니라 실제로 지운 행의 상태로 정한다.
+ * 경기가 없어진 세션은 빈 세션 정리 규칙(조회 시점 cleanupExpired)을 그대로 따른다.
+ */
+app.delete("/api/matches/:matchId", async (req, res) => {
+  const decoded = await getAuthPayload(req, res);
+  if (!decoded) {
+    return;
+  }
+
+  const matchId = req.params.matchId;
+  let deletedStatus: Match["status"];
+  try {
+    const expectedUpdatedAt = parseExpectedUpdatedAt(
+      req.query.expectedUpdatedAt,
+    );
+    const now = new Date();
+    await matchRepository.cleanupExpired(now);
+    const existing = await matchRepository.findById(matchId);
+    // 정리가 실패해 남아 있어도 만료된 진행 중 경기는 이미 없는 경기로 본다.
+    if (!existing || isExpiredInProgressMatch(existing, now)) {
+      return res.status(404).json({ error: MATCH_ALREADY_DELETED_MESSAGE });
+    }
+    if (
+      expectedUpdatedAt &&
+      !isSameUpdatedAt(expectedUpdatedAt, existing.updatedAt)
+    ) {
+      return res.status(409).json({ error: MATCH_STALE_UPDATE_ERROR_MESSAGE });
+    }
+    const forbiddenReason = getMatchDeleteForbiddenReason(existing, now);
+    if (forbiddenReason) {
+      return res.status(403).json({ error: forbiddenReason });
+    }
+
+    ({ status: deletedStatus } = await matchRepository.deleteRecorded(matchId, {
+      deletedByPlayerId: decoded.playerId,
+      deletedByAdmin: false,
+      expectedUpdatedAt,
+      notFoundMessage: MATCH_ALREADY_DELETED_MESSAGE,
+    }));
+  } catch (err) {
+    return sendMatchRecordFailure(res, err);
+  }
+
+  try {
+    if (deletedStatus === "completed") {
+      await recalculateRatingsAfterMatchDelete(matchId, "match-delete");
+    }
+    res.status(204).end();
+  } catch (err) {
+    console.error("[MATCH] 경기 삭제 후 평점 재계산 실패", matchId, err);
+    res.status(500).json({ error: MATCH_RATING_APPLY_FAILURE_MESSAGE });
+  }
+});
+
 app.put("/api/matches/:matchId", async (req, res) => {
   const decoded = await getAuthPayload(req, res);
   if (!decoded) {
@@ -2096,12 +2240,20 @@ app.put("/api/matches/:matchId", async (req, res) => {
   let wasCompleted: boolean;
   let match: Match;
   try {
+    const body = req.body as Partial<RecordMatchRequest> | undefined;
+    const expectedUpdatedAt = parseExpectedUpdatedAt(body?.expectedUpdatedAt);
     const now = new Date();
     await matchRepository.cleanupExpired(now);
     const existing = await matchRepository.findById(matchId);
     // 정리가 실패해 남아 있어도 만료된 진행 중 경기는 없는 경기로 본다.
     if (!existing || isExpiredInProgressMatch(existing, now)) {
       return res.status(404).json({ error: "매치를 찾을 수 없습니다." });
+    }
+    if (
+      expectedUpdatedAt &&
+      !isSameUpdatedAt(expectedUpdatedAt, existing.updatedAt)
+    ) {
+      return res.status(409).json({ error: MATCH_STALE_UPDATE_ERROR_MESSAGE });
     }
     // 참가자·생성자·관리자 여부와 무관하게 활성 회원이면 누구나 고칠 수 있다(세션 경기 포함).
     if (!isWithinMatchEditWindow(existing.matchStartsAt, now)) {
@@ -2122,10 +2274,7 @@ app.put("/api/matches/:matchId", async (req, res) => {
       });
     }
 
-    const prepared = await prepareRecordedMatch(
-      req.body as Partial<RecordMatchRequest>,
-      decoded.playerId,
-    );
+    const prepared = await prepareRecordedMatch(body, decoded.playerId);
     if (existing.session) {
       // 바뀐 팀의 새 선수도 세션 참여자로 넣는다. 빠진 선수는 참여자에서 지우지 않는다.
       await matchRepository.addSessionParticipants(
@@ -2134,10 +2283,13 @@ app.put("/api/matches/:matchId", async (req, res) => {
       );
     }
     wasCompleted = existing.status === "completed";
+    // 요청에 없어도 미리 읽은 updatedAt을 조건으로 저장해, 그사이 다른 회원이 고쳤으면 409로 막는다.
+    // 그래서 아래 재계산 여부(wasCompleted)는 실제로 고친 행의 이전 상태와 같다.
     match = await matchRepository.updateRecordedMatch(matchId, {
       ...prepared,
       resultSubmittedByPlayerId: decoded.playerId,
       resultSubmittedAt: now,
+      expectedUpdatedAt: expectedUpdatedAt ?? existing.updatedAt,
     });
   } catch (err) {
     return sendMatchRecordFailure(res, err);
@@ -2147,9 +2299,8 @@ app.put("/api/matches/:matchId", async (req, res) => {
     let ratingChanges: PlayerRatingChangeLog[];
     if (wasCompleted) {
       // 증분 반영은 같은 경기의 로그가 이미 있으면 아무것도 하지 않으므로, 반영된 경기를 고치면 전체 재계산한다.
-      const { matches } = await matchRepository.findAll(0, 10000);
       const { perMatchLogs } = await authService.recalculateDuprRatings(
-        matches.filter((candidate) => candidate.status === "completed"),
+        loadCompletedMatches,
         {
           source: "manual_recalculation",
           sourceLogId: `match-edit-${matchId}-${Date.now()}-${randomUUID()}`,
@@ -2600,19 +2751,23 @@ app.patch(
 
 app.post("/api/admin/ratings/recalculate", requireAdmin, async (_req, res) => {
   try {
-    const { matches } = await matchRepository.findAll(0, 10000);
-    const completedMatches = matches.filter(
-      (match) => match.status === "completed",
+    let completedMatchCount = 0;
+    const result = await authService.recalculateDuprRatings(
+      async () => {
+        const completedMatches = await loadCompletedMatches();
+        completedMatchCount = completedMatches.length;
+        return completedMatches;
+      },
+      {
+        source: "manual_recalculation",
+        sourceLogId: `manual-recalculation-${Date.now()}-${randomUUID()}`,
+        perMatchLogs: true,
+      },
     );
-    const result = await authService.recalculateDuprRatings(completedMatches, {
-      source: "manual_recalculation",
-      sourceLogId: `manual-recalculation-${Date.now()}-${randomUUID()}`,
-      perMatchLogs: true,
-    });
 
     res.json({
       ...result,
-      completedMatchCount: completedMatches.length,
+      completedMatchCount,
     });
   } catch (err) {
     res.status(400).json({ error: (err as Error).message });
@@ -2629,7 +2784,6 @@ app.post(
         return;
       }
 
-      const { matches } = await matchRepository.findAll(0, 10000);
       const result = await authService.applyOfficialDuprAdjustment(
         {
           playerId: req.params.playerId,
@@ -2638,7 +2792,7 @@ app.post(
           confidence: req.body.confidence,
           reason: req.body.reason,
         },
-        matches.filter((match) => match.status === "completed"),
+        loadCompletedMatches,
       );
 
       res.json(result);
@@ -2658,7 +2812,6 @@ app.post(
         return;
       }
 
-      const { matches } = await matchRepository.findAll(0, 10000);
       const result = await authService.previewOfficialDuprAdjustment(
         {
           playerId: req.params.playerId,
@@ -2667,7 +2820,7 @@ app.post(
           confidence: req.body.confidence,
           reason: req.body.reason,
         },
-        matches.filter((match) => match.status === "completed"),
+        await loadCompletedMatches(),
       );
 
       res.json(result);
@@ -2739,9 +2892,8 @@ export { app };
 
 /** dev mock 경기는 평점 변경 로그 없이 들어오므로 시딩 직후 관리자 재계산과 같은 경로로 로그를 채운다 */
 const recalculateDevMockRatings = async () => {
-  const { matches } = await matchRepository.findAll(0, 10000);
   await authService.recalculateDuprRatings(
-    matches.filter((match) => match.status === "completed"),
+    loadCompletedMatches,
     {
       source: "manual_recalculation",
       sourceLogId: `dev-mock-recalculation-${Date.now()}-${randomUUID()}`,

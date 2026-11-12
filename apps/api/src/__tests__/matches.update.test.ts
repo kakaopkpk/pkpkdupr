@@ -301,7 +301,8 @@ describe("PUT /api/matches/:matchId", () => {
     const response = await putMatch();
 
     expect(response.status).toBe(200);
-    const [replayed] = recalculate.mock.calls[0]!;
+    const [loadCompletedMatches] = recalculate.mock.calls[0]!;
+    const replayed = await loadCompletedMatches();
     expect(replayed.map((match) => match.id)).toEqual([existing.id]);
   });
 

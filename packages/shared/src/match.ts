@@ -177,6 +177,19 @@ export const isMatchRecordEditable = (
   !isMultiGameMatchRecord(match) &&
   isWithinMatchEditWindow(match.matchStartsAt, now);
 
+/**
+ * 회원이 지울 수 있는 경기면 true. 회원 누구나 가능하며
+ * 수정 가능 조건(취소 아님 · 과거 다중 점수 기록 아님 · 시작 후 24시간 이내)에 더해
+ * 이미 시작했고(시작 시각 ≤ now) 완료되지 않은 관리자 예정 경기가 아닐 때
+ */
+export const isMatchRecordDeletable = (
+  match: Pick<Match, "status" | "scores" | "matchStartsAt" | "source">,
+  now: Date = new Date(),
+): boolean =>
+  isMatchRecordEditable(match, now) &&
+  match.matchStartsAt.getTime() <= now.getTime() &&
+  (match.source !== "admin_created" || match.status === "completed");
+
 export interface Match {
   id: string;
   type: MatchType;
@@ -217,6 +230,8 @@ export interface RecordMatchRequest {
   scores: MatchScore[];
   /** POST /api/matches 전용. 회원 세션(오늘) 안에서 기록할 때 지정. 정기 세션은 시작 시각 규칙으로 자동 지정되므로 무시된다 */
   sessionId?: string;
+  /** PUT /api/matches/:matchId 전용. 마지막으로 본 updatedAt(ISO). 서버 값과 다르면 409 */
+  expectedUpdatedAt?: string;
 }
 
 /** POST /api/matches/start 요청. 세션과 상관없이 점수 없는 진행 중 경기를 시작한다 */

@@ -85,6 +85,10 @@ describe("incremental match rating", () => {
       updatedAt: completedAt,
     };
 
+    vi.spyOn(db.ratingWriteLock, "run").mockImplementation((fn) => fn());
+    vi.spyOn(db.matches, "findById").mockImplementation(async (matchId) =>
+      matchId === match.id ? match : undefined,
+    );
     vi.spyOn(db.playerRatingChangeLogs, "findByMatchId").mockImplementation(
       async (matchId) => (matchId === match.id ? [...persistedLogs] : []),
     );
