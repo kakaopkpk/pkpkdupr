@@ -12,13 +12,13 @@ import { CheckIcon, FooterError } from "./RecordMatchParts";
 
 export interface RecordDoneStepProps {
   match: MatchInfo;
-  /** 진행 중 세션이 있으면 "같은 멤버로 바로 시작"·"세션으로 돌아가기" */
+  /** 진행 중 세션이 있으면 왼쪽 버튼이 "같은 멤버로 바로 시작" */
   hasLiveSession: boolean;
   isBusy: boolean;
   error: string | null;
   /** 세션: 같은 팀으로 진행 중 경기 시작. 세션 없음: 같은 선수로 점수 입력 다시 열기 */
   onPlayAgain: () => void;
-  /** 세션: 홈으로 돌아가기. 세션 없음: 닫기 */
+  /** 시트를 닫는다 */
   onDone: () => void;
 }
 
@@ -47,8 +47,9 @@ export default function RecordDoneStep({
 
   return (
     <>
-      <BottomSheet.Header>
-        <div className="flex flex-col gap-0.5 px-1 pt-0.5">
+      {/* 제목까지 본문에 넣어 그랩바 아래 전부가 함께 스크롤된다 */}
+      <BottomSheet.Body className="pb-2">
+        <div className="flex shrink-0 flex-col gap-0.5 px-1 pt-0.5">
           <h2 className="flex items-center gap-1.5 text-pk-22 font-extrabold tracking-[-0.02em] text-pk-ink">
             <CheckIcon size={22} className="text-pk-up" />
             기록했어요
@@ -57,8 +58,6 @@ export default function RecordDoneStep({
             <p className="text-pk-13 text-pk-sub">{match.session.name}</p>
           ) : null}
         </div>
-      </BottomSheet.Header>
-      <BottomSheet.Body className="pb-2">
         {score ? (
           <div className="grid shrink-0 grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2">
             <ScoreSide
@@ -128,7 +127,7 @@ export default function RecordDoneStep({
             {hasLiveSession ? "같은 멤버로 바로 시작" : "같은 멤버로 한 판 더"}
           </PkButton>
           <PkButton size="lg" fullWidth disabled={isBusy} onClick={onDone}>
-            {hasLiveSession ? "세션으로 돌아가기" : "닫기"}
+            닫기
           </PkButton>
         </div>
       </BottomSheet.Footer>
