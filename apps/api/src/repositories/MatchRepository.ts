@@ -16,7 +16,9 @@ import {
   CompletedMatchResultEditError,
   MatchRecordUpdateConflictError,
   SessionHasMatchesError,
+  type CompletedMatchOutcome,
   type CreateMatchInput,
+  type SessionWithParticipantIds,
   type UpdateMatchMetadataInput,
   type UpdateRecordedMatchInput,
 } from "@pkpkdupr/db";
@@ -525,6 +527,28 @@ export class MatchRepository {
       500,
     );
     return (records ?? []).map(hydrateRatingChangeLog);
+  }
+
+  /** 전체 rating 변동 로그(최신순) */
+  async getAllRatingChangeLogs(): Promise<PlayerRatingChangeLog[]> {
+    const records = await this.run(
+      () => db.playerRatingChangeLogs.findAll(),
+      500,
+    );
+    return (records ?? []).map(hydrateRatingChangeLog);
+  }
+
+  /** 랭킹·세션 리포트 계산용 완료 경기 요약 */
+  async findCompletedMatchOutcomes(): Promise<CompletedMatchOutcome[]> {
+    return await this.run(() => db.matches.findCompletedMatchOutcomes(), 500);
+  }
+
+  /** 모든 세션과 참여자 id(세션 날짜 내림차순) */
+  async findSessionsWithParticipantIds(): Promise<SessionWithParticipantIds[]> {
+    return await this.run(
+      () => db.matches.findSessionsWithParticipantIds(),
+      500,
+    );
   }
 
   async getPlayerRatingChartProjection(

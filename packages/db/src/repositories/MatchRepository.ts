@@ -69,6 +69,26 @@ export class SessionHasMatchesError extends Error {
   }
 }
 
+/** 랭킹·세션 리포트 계산에 필요한 완료 경기 요약 */
+export interface CompletedMatchOutcome {
+  id: string;
+  type: MatchType;
+  sessionId: string | null;
+  completedAt: Date;
+  /** 팀별 선수 id. [0]=팀 A, [1]=팀 B */
+  teamPlayerIds: [string[], string[]];
+  scores: MatchScore[];
+}
+
+export interface SessionWithParticipantIds {
+  id: string;
+  name: string;
+  date: Date;
+  location: string;
+  kind: ManagedMatchSession["kind"];
+  participantIds: string[];
+}
+
 export interface CreateMatchInput {
   id: string;
   type: MatchType;
@@ -711,6 +731,124 @@ export class MatchRepository {
       }) =>
         lastPlayedAt == null ? [] : [[playerId, toDate(lastPlayedAt)]],
       ),
+    );
+  }
+
+  /**
+   * 완료 경기의 분류·세션·팀 구성·점수만 쿼리 3번으로 읽는다.
+   * 경기마다 참가자·점수·세션을 따로 읽는 hydrate를 거치지 않아 랭킹처럼 전체 경기를 훑는 조회에 쓴다.
+   */
+  async findCompletedMatchOutcomes(): Promise<CompletedMatchOutcome[]> {
+    const completedFilter = and(
+      eq(matches.status, "completed"),
+      isNotNull(matches.completedAt),
+    );
+    const [matchRows, participantRows, scoreRows] = await Promise.all([
+      this.db
+        .select({
+          id: matches.id,
+          type: matches.type,
+          sessionId: matches.sessionId,
+          completedAt: matches.completedAt,
+        })
+        .from(matches)
+        .where(completedFilter),
+      this.db
+        .select({
+          matchId: matchParticipants.matchId,
+          teamIndex: matchParticipants.teamIndex,
+          playerId: matchParticipants.playerId,
+        })
+        .from(matchParticipants)
+        .innerJoin(matches, eq(matchParticipants.matchId, matches.id))
+        .where(completedFilter)
+        .orderBy(asc(matchParticipants.id)),
+      this.db
+        .select({
+          matchId: matchScores.matchId,
+          scoreA: matchScores.scoreA,
+          scoreB: matchScores.scoreB,
+        })
+        .from(matchScores)
+        .innerJoin(matches, eq(matchScores.matchId, matches.id))
+        .where(completedFilter)
+        .orderBy(asc(matchScores.id)),
+    ]);
+
+    const teamsByMatchId = new Map<string, [string[], string[]]>();
+    for (const row of participantRows as Array<{
+      matchId: string;
+      teamIndex: number;
+      playerId: string;
+    }>) {
+      if (row.teamIndex !== 0 && row.teamIndex !== 1) continue;
+      const teams: [string[], string[]] = teamsByMatchId.get(row.matchId) ?? [
+        [],
+        [],
+      ];
+      teams[row.teamIndex].push(row.playerId);
+      teamsByMatchId.set(row.matchId, teams);
+    }
+    const scoresByMatchId = new Map<string, MatchScore[]>();
+    for (const row of scoreRows as Array<{
+      matchId: string;
+      scoreA: number;
+      scoreB: number;
+    }>) {
+      const scores = scoresByMatchId.get(row.matchId) ?? [];
+      scores.push({ scoreA: row.scoreA, scoreB: row.scoreB });
+      scoresByMatchId.set(row.matchId, scores);
+    }
+
+    return (
+      matchRows as Array<{
+        id: string;
+        type: string;
+        sessionId: string | null;
+        completedAt: Date | string | number;
+      }>
+    ).map((row): CompletedMatchOutcome => ({
+      id: row.id,
+      type: row.type as MatchType,
+      sessionId: row.sessionId ?? null,
+      completedAt: toDate(row.completedAt),
+      teamPlayerIds: teamsByMatchId.get(row.id) ?? [[], []],
+      scores: scoresByMatchId.get(row.id) ?? [],
+    }));
+  }
+
+  /** 모든 세션과 참여자 id를 쿼리 2번으로 읽는다(세션 날짜 내림차순) */
+  async findSessionsWithParticipantIds(): Promise<SessionWithParticipantIds[]> {
+    const [sessionRows, participantRows] = await Promise.all([
+      this.db.select().from(matchSessions).orderBy(desc(matchSessions.date)),
+      this.db
+        .select({
+          sessionId: matchSessionParticipants.sessionId,
+          playerId: matchSessionParticipants.playerId,
+        })
+        .from(matchSessionParticipants)
+        .orderBy(asc(matchSessionParticipants.id)),
+    ]);
+
+    const participantIdsBySessionId = new Map<string, string[]>();
+    for (const row of participantRows as Array<{
+      sessionId: string;
+      playerId: string;
+    }>) {
+      const ids = participantIdsBySessionId.get(row.sessionId) ?? [];
+      ids.push(row.playerId);
+      participantIdsBySessionId.set(row.sessionId, ids);
+    }
+
+    return (sessionRows as StoredMatchSession[]).map(
+      (session): SessionWithParticipantIds => ({
+        id: session.id,
+        name: session.name,
+        date: toDate(session.date),
+        location: session.location,
+        kind: session.regularDateKey ? "regular" : "custom",
+        participantIds: participantIdsBySessionId.get(session.id) ?? [],
+      }),
     );
   }
 
