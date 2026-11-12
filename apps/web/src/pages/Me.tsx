@@ -4,6 +4,7 @@ import { IoSettingsOutline } from "react-icons/io5";
 import PartnerChemistryCard from "@/components/profile/PartnerChemistryCard";
 import PlayerMatchesDrawer from "@/components/profile/PlayerMatchesDrawer";
 import ProfileStatTile from "@/components/profile/ProfileStatTile";
+import RivalCard from "@/components/profile/RivalCard";
 import {
   ProfileBodySkeleton,
   ProfileLoadError,
@@ -14,6 +15,7 @@ import {
 import { useProfileOverview } from "@/components/profile/useProfileOverview";
 import { RatingDelta } from "@/components/ui/Delta";
 import { PlayerAvatar } from "@/components/ui/PlayerAvatar";
+import { SectionLabel } from "@/components/ui/Section";
 import { StatusMessageChip } from "@/components/ui/StatusMessageChip";
 import { useAppNavigation } from "@/context/AppNavigationContext";
 import { useAuth } from "@/context/AuthContext";
@@ -63,6 +65,7 @@ const Me: React.FC = () => {
   const username = player?.username ?? "";
   const ratingDelta = overview?.summary.ratingDelta[category];
   const partners = overview?.summary.partners ?? [];
+  const rivals = overview?.summary.rivals ?? [];
 
   return (
     <>
@@ -119,8 +122,15 @@ const Me: React.FC = () => {
               />
             </div>
             {partners.length > 0 ? (
-              <PartnerChemistryCard partners={partners} />
+              <section className="flex flex-col gap-2.5 pt-1">
+                <SectionLabel>파트너 궁합</SectionLabel>
+                <PartnerChemistryCard partners={partners} />
+              </section>
             ) : null}
+            <section className="flex flex-col gap-2.5 pt-1">
+              <SectionLabel>상성 · 자주 진 상대</SectionLabel>
+              <RivalCard rivals={rivals} />
+            </section>
             <RecentMatchesSection
               title="최근 경기"
               matches={overview.summary.recentMatches}

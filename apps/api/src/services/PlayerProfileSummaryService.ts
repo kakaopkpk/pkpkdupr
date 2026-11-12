@@ -10,7 +10,10 @@ import type {
 } from "@pkpkdupr/shared/player";
 import {
   PARTNER_STAT_MIN_MATCHES,
+  RIVAL_MAX_COUNT,
+  RIVAL_MIN_MATCHES,
   type HeadToHeadStat,
+  type OpponentStat,
   type PartnerStat,
   type StatPlayer,
 } from "@pkpkdupr/shared/profileStats";
@@ -45,6 +48,8 @@ export interface PlayerProfileSummary {
   ratingHistory: PlayerRatingHistory;
   recentMatches: MatchWithRatingChanges[];
   partners: PartnerStat[];
+  /** 자주 진 상대(상성) */
+  rivals: OpponentStat[];
   headToHead: HeadToHeadStat | null;
 }
 
@@ -125,6 +130,17 @@ const sortPartnerStats = (left: PartnerStat, right: PartnerStat) => {
   return left.partner.username.localeCompare(right.partner.username);
 };
 
+/** 진 비율 내림차순 → 경기 수 내림차순 → 아이디(username) 오름차순 */
+const sortRivalStats = (left: OpponentStat, right: OpponentStat) => {
+  const lossRateDiff =
+    right.losses / right.matchCount - left.losses / left.matchCount;
+  if (lossRateDiff !== 0) return lossRateDiff;
+  if (right.matchCount !== left.matchCount) {
+    return right.matchCount - left.matchCount;
+  }
+  return left.opponent.username.localeCompare(right.opponent.username);
+};
+
 export const buildPlayerProfileSummary = (
   matches: MatchWithRatingChanges[],
   playerId: string,
@@ -138,6 +154,7 @@ export const buildPlayerProfileSummary = (
   const thirtyDaysMs = 30 * 24 * 60 * 60 * 1000;
   const ninetyDaysMs = 90 * 24 * 60 * 60 * 1000;
   const partnerStatsById = new Map<string, PartnerStat>();
+  const opponentStatsById = new Map<string, OpponentStat>();
   const headToHead: HeadToHeadStat | null =
     viewerPlayerId === playerId ? null : { matchCount: 0, wins: 0, losses: 0 };
 
@@ -155,7 +172,7 @@ export const buildPlayerProfileSummary = (
       ratingDelta[category].last7DaysMatchCount += 1;
     }
 
-    // 승패·파트너 궁합·상대 전적은 승패가 갈린 경기만 센다.
+    // 승패·파트너 궁합·상성·상대 전적은 승패가 갈린 경기만 센다.
     if (playerTeamIndex !== null && winningTeamIndex !== null) {
       const won = playerTeamIndex === winningTeamIndex;
 
@@ -173,6 +190,21 @@ export const buildPlayerProfileSummary = (
           else stat.losses += 1;
           partnerStatsById.set(partner.id, stat);
         }
+      }
+
+      // 상대 팀 선수 각각과 1경기씩 센다(복식은 두 명, 단식은 한 명).
+      for (const opponent of match.teams[playerTeamIndex === 0 ? 1 : 0]
+        .players) {
+        const stat = opponentStatsById.get(opponent.id) ?? {
+          opponent: toStatPlayer(opponent),
+          matchCount: 0,
+          wins: 0,
+          losses: 0,
+        };
+        stat.matchCount += 1;
+        if (won) stat.wins += 1;
+        else stat.losses += 1;
+        opponentStatsById.set(opponent.id, stat);
       }
 
       const viewerTeamIndex = headToHead
@@ -227,6 +259,16 @@ export const buildPlayerProfileSummary = (
     .filter((stat) => stat.matchCount >= PARTNER_STAT_MIN_MATCHES)
     .sort(sortPartnerStats);
 
+  const rivals = [...opponentStatsById.values()]
+    .filter(
+      (stat) =>
+        stat.matchCount >= RIVAL_MIN_MATCHES &&
+        // 진 비율 50% 이상. 나눗셈 대신 정수 비교로 쓴다.
+        stat.losses * 2 >= stat.matchCount,
+    )
+    .sort(sortRivalStats)
+    .slice(0, RIVAL_MAX_COUNT);
+
   const recentMatches = matches
     .filter((match) => match.status === "completed")
     .sort((left, right) => getMatchStartsAtMs(right) - getMatchStartsAtMs(left))
@@ -238,6 +280,7 @@ export const buildPlayerProfileSummary = (
     ratingHistory,
     recentMatches,
     partners,
+    rivals,
     headToHead,
   };
 };
