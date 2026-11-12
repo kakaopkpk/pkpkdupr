@@ -29,11 +29,13 @@ import PullToRefreshIndicator, {
   type PullToRefreshStatus,
 } from "@/components/PullToRefreshIndicator";
 import MatchDetailDrawer from "@/components/match/MatchDetailDrawer";
+import AchievementDetailSheet from "@/components/profile/AchievementDetailSheet";
 import MemberProfileDrawer from "@/components/profile/MemberProfileDrawer";
 import RecordMatchSheet from "@/components/record/RecordMatchSheet";
 import CreateSessionSheet from "@/components/session/CreateSessionSheet";
 import SettingsDrawer from "@/components/settings/SettingsDrawer";
 import {
+  type AchievementDetailRequest,
   AppNavigationProvider,
   type AppNavigationContextValue,
   type RecordMatchSheetRequest,
@@ -197,6 +199,8 @@ const BottomNav: React.FC = () => {
     useState<GlobalLayerState<true>>(closedLayer);
   const [settingsLayer, setSettingsLayer] =
     useState<GlobalLayerState<true>>(closedLayer);
+  const [achievementDetailLayer, setAchievementDetailLayer] =
+    useState<GlobalLayerState<AchievementDetailRequest>>(closedLayer);
   const [isJoiningLiveSession, setIsJoiningLiveSession] = useState(false);
   const [joinLiveSessionError, setJoinLiveSessionError] = useState(false);
   const [pullDistance, setPullDistance] = useState(0);
@@ -574,6 +578,16 @@ const BottomNav: React.FC = () => {
     );
   }, []);
 
+  const openAchievementDetail = useCallback(
+    (request: AchievementDetailRequest) => {
+      setAchievementDetailLayer((current) => ({
+        value: { playerId: request.playerId, achievementId: request.achievementId },
+        tabKey: current.value ? current.tabKey : selectedTabRef.current,
+      }));
+    },
+    [],
+  );
+
   const openSessionReport = useCallback(
     (sessionId: string) => {
       setSessionReportRequest({ sessionId, requestedAt: Date.now() });
@@ -608,6 +622,10 @@ const BottomNav: React.FC = () => {
   );
   const closeSettings = useCallback(
     () => setSettingsLayer((current) => ({ ...current, value: null })),
+    [],
+  );
+  const closeAchievementDetail = useCallback(
+    () => setAchievementDetailLayer((current) => ({ ...current, value: null })),
     [],
   );
 
@@ -1070,6 +1088,7 @@ const BottomNav: React.FC = () => {
       openRecordMatch,
       openCreateSession,
       openSettings,
+      openAchievementDetail,
       openSessionReport,
       sessionReportRequest,
       notifyDataChanged,
@@ -1078,6 +1097,7 @@ const BottomNav: React.FC = () => {
     [
       dataVersion,
       notifyDataChanged,
+      openAchievementDetail,
       openCreateSession,
       openMatchDetail,
       openMemberProfile,
@@ -1238,6 +1258,12 @@ const BottomNav: React.FC = () => {
               isOpen={!!settingsLayer.value}
               tabKey={settingsLayer.tabKey}
               onClose={closeSettings}
+            />
+            <AchievementDetailSheet
+              request={achievementDetailLayer.value}
+              tabKey={achievementDetailLayer.tabKey}
+              canOpenMatch={!recordMatchLayer.value}
+              onClose={closeAchievementDetail}
             />
 
             {typeof document !== "undefined"

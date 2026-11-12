@@ -7,6 +7,12 @@ export type RecordMatchSheetRequest =
   /** 진행 중 경기 점수 입력 또는 완료 경기 수정(같은 화면) */
   | { kind: "score"; matchId: string };
 
+export interface AchievementDetailRequest {
+  /** 업적 주인 */
+  playerId: string;
+  achievementId: string;
+}
+
 export interface SessionReportRequest {
   sessionId: string;
   requestedAt: number;
@@ -20,6 +26,8 @@ export interface AppNavigationContextValue {
   openRecordMatch: (request: RecordMatchSheetRequest) => void;
   openCreateSession: () => void;
   openSettings: () => void;
+  /** 업적 상세 바텀시트. 열린 화면·경기 기록 시트 위에 뜬다 */
+  openAchievementDetail: (params: AchievementDetailRequest) => void;
   /** 기록 탭으로 바꾸고 그 세션을 고르게 한다 */
   openSessionReport: (sessionId: string) => void;
   /** 마지막 openSessionReport 요청. 기록 탭이 읽어 세션을 고른다 */
@@ -34,6 +42,7 @@ export interface AppNavigationContextValue {
  * 셸(BottomNav)이 렌더하는 전역 레이어(z-index).
  * 화면 이동(PushScreen)은 pushScreen부터 쌓인 순서만큼 1씩 올라가고(최대 +20),
  * 화면 위에서 여는 바텀시트(sheet·recordMatch·createSession)는 그보다 위다.
+ * 업적 상세(achievementDetail)는 경기 기록 시트의 기록 완료 화면에서도 열리므로 그보다 위다.
  * pushScreen은 + 메뉴(60)보다 위여야 하단 바·+ 버튼을 모두 덮는다.
  */
 export const GLOBAL_LAYER = {
@@ -41,6 +50,7 @@ export const GLOBAL_LAYER = {
   sheet: 90,
   recordMatch: 90,
   createSession: 90,
+  achievementDetail: 95,
 } as const;
 
 const AppNavigationContext = createContext<AppNavigationContextValue | null>(

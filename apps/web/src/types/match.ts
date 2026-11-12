@@ -4,6 +4,7 @@ import type {
   PlayerRatingChangeLog,
   PlayerRatingHistory,
 } from "@pkpkdupr/shared/player";
+import type { EarnedAchievementInfo } from "@/lib/achievements";
 
 /** API JSON 응답 기준 경기. 날짜 필드는 ISO 문자열이다. */
 export type MatchInfo = Omit<
@@ -26,6 +27,8 @@ export type MatchInfo = Omit<
     date: string;
   };
   ratingChanges?: PlayerRatingChangeLog[];
+  /** 기록·수정 응답에만 있다. 이 저장으로 참가자들이 새로 받은 업적 */
+  newAchievements?: EarnedAchievementInfo[];
 };
 
 export interface MatchListResponse {
