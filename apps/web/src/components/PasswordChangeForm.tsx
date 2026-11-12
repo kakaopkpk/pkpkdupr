@@ -31,7 +31,8 @@ const PasswordChangeForm: React.FC<PasswordChangeFormProps> = ({
     confirmPassword.length > 0 && newPassword !== confirmPassword
       ? "새 비밀번호 확인이 일치하지 않습니다."
       : null;
-  const message = newPasswordError || confirmPasswordError || submitError;
+  const validationMessage = newPasswordError || confirmPasswordError;
+  const message = validationMessage || submitError;
   const isSubmitDisabled =
     isSubmitting ||
     !isOnline ||
@@ -98,7 +99,11 @@ const PasswordChangeForm: React.FC<PasswordChangeFormProps> = ({
       />
 
       {message ? (
-        <p role="alert" className="-mt-1 text-pk-13 font-bold text-pk-down">
+        // 입력 중 바뀌는 검증 문구는 status로 두고, 제출 실패만 alert로 즉시 알린다.
+        <p
+          role={validationMessage ? "status" : "alert"}
+          className="-mt-1 text-pk-13 font-bold text-pk-down"
+        >
           {message}
         </p>
       ) : null}

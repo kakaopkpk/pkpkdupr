@@ -21,11 +21,6 @@ const Login: React.FC = () => {
     e.preventDefault();
     clearNotice();
     setError(null);
-    if (!isOnline) {
-      setError(OFFLINE_LOGIN_MESSAGE);
-      return;
-    }
-
     setIsSubmitting(true);
     try {
       // 성공하면 AuthContext가 세션 변화를 받아 /api/me로 다음 화면을 정한다.
@@ -37,8 +32,14 @@ const Login: React.FC = () => {
   };
 
   const isInvalidCredentials = error === INVALID_CREDENTIALS_MESSAGE;
-  const message = error ?? (!isOnline ? OFFLINE_LOGIN_MESSAGE : notice);
-  const isMessageError = !!error || !isOnline;
+  // 오프라인이면 로그인 버튼이 비활성이라 제출되지 않고, 안내는 이 메시지가 맡는다.
+  const message: { text: string; isError: boolean } | null = error
+    ? { text: error, isError: true }
+    : !isOnline
+      ? { text: OFFLINE_LOGIN_MESSAGE, isError: true }
+      : notice
+        ? { text: notice, isError: false }
+        : null;
 
   return (
     <div className="flex h-full w-full flex-col overflow-y-auto bg-pk-bg px-4 pt-[calc(env(safe-area-inset-top)+4rem)] pb-[calc(var(--safe-bottom)+var(--app-keyboard-offset)+1.5rem)] text-pk-ink">
@@ -85,14 +86,14 @@ const Login: React.FC = () => {
 
           {message ? (
             <p
-              role={isMessageError ? "alert" : "status"}
+              role={message.isError ? "alert" : "status"}
               className={
-                isMessageError
+                message.isError
                   ? "-mt-1 text-pk-13 font-bold text-pk-down"
                   : "-mt-1 text-pk-13 font-bold text-pk-sub"
               }
             >
-              {message}
+              {message.text}
             </p>
           ) : null}
 
