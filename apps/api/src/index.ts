@@ -18,7 +18,6 @@ import {
   type Team,
   type Session,
   type ManagedMatchSession,
-  type MatchTopLevelType,
   type MatchType,
   validateMatchScores,
 } from "@pkpkdupr/shared/match";
