@@ -18,7 +18,7 @@ const Stat: React.FC<{ label: string; children: React.ReactNode }> = ({
   </div>
 );
 
-/** "지난 세션의 나" 카드: 복식 평점과 변화량, 경기 수·승패·랭킹 변화 */
+/** 지난 세션 피드의 내 변동 카드: 복식 평점과 변화량, 경기 수·승패·랭킹 변화 */
 const LastSessionMeCard: React.FC<{ report: SessionPlayerReport }> = ({
   report,
 }) => {
@@ -31,7 +31,7 @@ const LastSessionMeCard: React.FC<{ report: SessionPlayerReport }> = ({
   return (
     <Card className="flex flex-col gap-3 p-4">
       <div className="flex items-baseline justify-between gap-2">
-        <span className="text-pk-13 text-pk-sub">복식 평점</span>
+        <span className="text-pk-13 font-bold text-pk-sub">내 복식 평점</span>
         <span className="inline-flex items-baseline gap-2">
           <span className="text-pk-22 font-extrabold text-pk-ink tabular-nums">
             {formatRating(report.ratingAfter)}

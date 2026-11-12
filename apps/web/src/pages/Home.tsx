@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import type { RecommendedCourt } from "@pkpkdupr/shared/matchmaking";
 import type { MatchInfo } from "@/types/match";
 import HomeSkeleton from "@/components/home/HomeSkeleton";
-import LastSessionMeCard from "@/components/home/LastSessionMeCard";
+import LastSessionFeed from "@/components/home/LastSessionFeed";
 import MyLiveMatchCard from "@/components/home/MyLiveMatchCard";
 import NextSessionCard, {
   type ParticipationAction,
@@ -15,19 +15,20 @@ import {
   usePreSessionData,
 } from "@/components/home/usePreSessionData";
 import { useSessionRecommendations } from "@/components/home/useSessionRecommendations";
+import { useSessionTopRiser } from "@/components/home/useSessionTopRiser";
+import { TopRiserCard } from "@/components/records/SessionReportParts";
 import ParticipantsSheet from "@/components/session/ParticipantsSheet";
 import { getErrorMessage, isNetworkError } from "@/components/session/saveError";
 import { LivePill } from "@/components/ui/Badges";
 import { Card } from "@/components/ui/Card";
 import { LiveMatchRow, MatchRow } from "@/components/ui/MatchRow";
-import { LinkChevron, SectionLabel, TextLink } from "@/components/ui/Section";
+import { LinkChevron, SectionLabel } from "@/components/ui/Section";
 import { cx } from "@/components/ui/cx";
 import { useAppNavigation } from "@/context/AppNavigationContext";
 import { useAuth } from "@/context/AuthContext";
 import { useLiveSession } from "@/context/LiveSessionContext";
 import { useSystemNotice } from "@/context/SystemNoticeContext";
 import { useTabNavigation } from "@/context/TabNavigationContext";
-import { formatKstShortDate } from "@/lib/format";
 import {
   addMatchSessionParticipant,
   isSessionParticipant,
@@ -66,16 +67,14 @@ const Spacer: React.FC = () => <div className="h-1.5" />;
 const MatchListCard: React.FC<{
   matches: MatchInfo[];
   currentPlayerId: string | undefined;
-  timeLabel?: React.ComponentProps<typeof MatchRow>["timeLabel"];
   onOpenMatch: (matchId: string) => void;
-}> = ({ matches, currentPlayerId, timeLabel, onOpenMatch }) => (
+}> = ({ matches, currentPlayerId, onOpenMatch }) => (
   <Card>
     {matches.map((match) => (
       <MatchRow
         key={match.id}
         match={match}
         currentPlayerId={currentPlayerId}
-        timeLabel={timeLabel}
         onPress={() => onOpenMatch(match.id)}
       />
     ))}
@@ -104,7 +103,7 @@ const INITIAL_START_STATE: StartState = {
 
 /**
  * 홈 탭. 셸의 진행 중 세션이 있으면 진행 화면(참여자 Main / 미참여자 MainGuest),
- * 없으면 다가오는 첫 세션 카드, 세션 밖 진행 중 경기, 지난 세션 요약을 보인다.
+ * 없으면 다가오는 첫 세션 카드, 세션 밖 진행 중 경기, 지난 세션 피드를 보인다.
  */
 const Home: React.FC = () => {
   const { player } = useAuth();
@@ -113,7 +112,6 @@ const Home: React.FC = () => {
   const {
     openRecordMatch,
     openMatchDetail,
-    openSessionReport,
     notifyDataChanged,
     dataVersion,
   } = useAppNavigation();
@@ -131,9 +129,9 @@ const Home: React.FC = () => {
 
   const preSession = usePreSessionData({
     enabled: isPreSession,
-    playerId,
     dataVersion,
   });
+  const liveTopRiser = useSessionTopRiser(liveSession?.id ?? null, dataVersion);
   const recommendations = useSessionRecommendations(
     isLiveParticipant && liveSession ? liveSession.id : null,
     dataVersion,
@@ -383,6 +381,12 @@ const Home: React.FC = () => {
 
   const renderLive = () => (
     <>
+      {liveTopRiser ? (
+        <>
+          <TopRiserCard report={liveTopRiser} />
+          <Spacer />
+        </>
+      ) : null}
       {renderInProgress(
         sessionInProgressMatches.filter(
           (match) => match.id !== myInProgressMatch?.id,
@@ -447,8 +451,7 @@ const Home: React.FC = () => {
       return <HomeSkeleton />;
     }
 
-    const { upcoming, lastSessionMe, recentMatches, lastSession } = data;
-    const isToday = !!nextSession?.isToday;
+    const { upcoming, lastSessionReport } = data;
 
     return (
       <>
@@ -474,50 +477,10 @@ const Home: React.FC = () => {
           <EmptyText>다가오는 세션이 없어요</EmptyText>
         )}
         {inProgressSection}
-        {isToday && lastSessionMe ? (
+        {lastSessionReport ? (
           <>
             <Spacer />
-            <SectionLabel>
-              지난 세션의 나 · {formatKstShortDate(lastSessionMe.session.date)}
-            </SectionLabel>
-            <LastSessionMeCard report={lastSessionMe.report} />
-          </>
-        ) : null}
-        {isToday && recentMatches.length > 0 ? (
-          <>
-            <Spacer />
-            <SectionLabel>최근 기록</SectionLabel>
-            <MatchListCard
-              matches={recentMatches}
-              currentPlayerId={playerId}
-              timeLabel="weekday-time"
-              onOpenMatch={openMatchDetail}
-            />
-          </>
-        ) : null}
-        {!isToday && lastSession ? (
-          <>
-            <Spacer />
-            <SectionLabel
-              right={
-                <TextLink
-                  onPress={() => openSessionReport(lastSession.session.id)}
-                  chevron
-                >
-                  리포트
-                </TextLink>
-              }
-            >
-              지난 세션 · {formatKstShortDate(lastSession.session.date)}
-            </SectionLabel>
-            {lastSession.matches.length > 0 ? (
-              <MatchListCard
-                matches={lastSession.matches}
-                currentPlayerId={playerId}
-                timeLabel="weekday-time"
-                onOpenMatch={openMatchDetail}
-              />
-            ) : null}
+            <LastSessionFeed report={lastSessionReport} playerId={playerId} />
           </>
         ) : null}
       </>
