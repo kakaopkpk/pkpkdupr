@@ -53,8 +53,26 @@ const execute = async (
  */
 class PostgresTransaction {
   private closed = false;
+  private drizzleDb: Db | undefined;
 
-  constructor(private readonly connection: ReservedSql) {}
+  constructor(
+    private readonly connection: ReservedSql,
+    private readonly options: Sql["options"],
+  ) {}
+
+  /**
+   * 이 트랜잭션이 잡은 커넥션으로 실행되는 drizzle 인스턴스.
+   * 행 잠금을 쥔 채 풀의 다른 커넥션을 기다리지 않고 같은 트랜잭션 안에서 조회할 때 쓴다.
+   */
+  get db(): Db {
+    if (!this.drizzleDb) {
+      // 예약 커넥션에는 options가 없는데 drizzle이 타임스탬프 파서를 설정하려고 읽으므로, 풀과 같은 options를 붙인다.
+      this.drizzleDb = drizzle(
+        Object.assign(this.connection, { options: this.options }) as Sql,
+      );
+    }
+    return this.drizzleDb;
+  }
 
   async execute(statement: RawStatement): Promise<RawQueryResult> {
     return await execute(this.connection, statement);
@@ -93,7 +111,7 @@ class PostgresClient {
       connection.release();
       throw error;
     }
-    return new PostgresTransaction(connection);
+    return new PostgresTransaction(connection, this.sql.options);
   }
 
   /**

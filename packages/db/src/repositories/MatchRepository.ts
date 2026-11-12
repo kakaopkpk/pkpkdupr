@@ -683,7 +683,15 @@ export class MatchRepository {
   }
 
   async findById(id: string): Promise<Match | undefined> {
-    const match = await this.db
+    return await this.findByIdWith(this.db, id);
+  }
+
+  /** `executor`(풀 또는 트랜잭션 커넥션)로 경기를 조회·조립한다. */
+  private async findByIdWith(
+    executor: any,
+    id: string,
+  ): Promise<Match | undefined> {
+    const match = await executor
       .select()
       .from(matches)
       .where(eq(matches.id, id))
@@ -694,7 +702,7 @@ export class MatchRepository {
       return undefined;
     }
 
-    return await this.hydrateMatch(match);
+    return await this.hydrateMatch(match, executor);
   }
 
   async findAll(
@@ -1760,8 +1768,8 @@ export class MatchRepository {
         throw toRecordedMatchWriteError(lockedRow, input.expectedUpdatedAt);
       }
 
-      // 행 잠금을 쥐고 있어 다른 쓰기가 끼어들 수 없으므로, 풀의 다른 커넥션으로 읽어도 지울 상태와 같다.
-      const snapshot = await this.findById(matchId);
+      // 풀의 다른 커넥션을 기다리면 동시 삭제가 풀을 다 점유했을 때 교착하므로 트랜잭션 커넥션으로 읽는다.
+      const snapshot = await this.findByIdWith(transaction.db, matchId);
       if (!snapshot) {
         throw new MatchNotFoundError();
       }
@@ -1911,20 +1919,23 @@ export class MatchRepository {
     return await this.findById(id);
   }
 
-  private async hydrateMatch(match: StoredMatch): Promise<Match> {
+  private async hydrateMatch(
+    match: StoredMatch,
+    executor: any = this.db,
+  ): Promise<Match> {
     const [participants, scores, session] = await Promise.all([
-      this.db
+      executor
         .select()
         .from(matchParticipants)
         .where(eq(matchParticipants.matchId, match.id))
         .orderBy(matchParticipants.id),
-      this.db
+      executor
         .select()
         .from(matchScores)
         .where(eq(matchScores.matchId, match.id))
         .orderBy(matchScores.id),
       match.sessionId
-        ? this.db
+        ? executor
             .select()
             .from(matchSessions)
             .where(eq(matchSessions.id, match.sessionId))
@@ -1934,7 +1945,7 @@ export class MatchRepository {
     ]);
     const playerRecords = await Promise.all(
       participants.map((participant: StoredMatchParticipant) =>
-        this.db
+        executor
           .select()
           .from(players)
           .where(eq(players.id, participant.playerId))
