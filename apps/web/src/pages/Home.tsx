@@ -19,15 +19,15 @@ import ParticipantsSheet from "@/components/session/ParticipantsSheet";
 import { getErrorMessage, isNetworkError } from "@/components/session/saveError";
 import { LivePill } from "@/components/ui/Badges";
 import { Card } from "@/components/ui/Card";
-import { TabHeader } from "@/components/ui/Headers";
 import { LiveMatchRow, MatchRow } from "@/components/ui/MatchRow";
-import { SectionLabel, TextLink } from "@/components/ui/Section";
+import { LinkChevron, SectionLabel, TextLink } from "@/components/ui/Section";
+import { cx } from "@/components/ui/cx";
 import { useAppNavigation } from "@/context/AppNavigationContext";
 import { useAuth } from "@/context/AuthContext";
 import { useLiveSession } from "@/context/LiveSessionContext";
 import { useSystemNotice } from "@/context/SystemNoticeContext";
 import { useTabNavigation } from "@/context/TabNavigationContext";
-import { formatKstLongDate, formatKstShortDate } from "@/lib/format";
+import { formatKstShortDate } from "@/lib/format";
 import {
   addMatchSessionParticipant,
   isSessionParticipant,
@@ -330,8 +330,6 @@ const Home: React.FC = () => {
   );
 
   // ── 그리기 ─────────────────────────────────────────
-  const todayLabel = formatKstLongDate(now);
-
   const renderLive = () => {
     const otherInProgress = isLiveParticipant
       ? inProgressMatches.filter((match) => match.id !== myInProgressMatch?.id)
@@ -462,8 +460,9 @@ const Home: React.FC = () => {
               right={
                 <TextLink
                   onPress={() => openSessionReport(lastSession.session.id)}
+                  chevron
                 >
-                  리포트 ›
+                  리포트
                 </TextLink>
               }
             >
@@ -483,40 +482,43 @@ const Home: React.FC = () => {
     );
   };
 
+  // 세션 중에만 세션 머리를 둔다. 세션 없는 날·세션 전에는 탭 제목 없이 첫 카드부터 보인다
   const header = liveSession ? (
-    <TabHeader
-      title="홈"
-      right={
-        <span className="mt-1.5">
-          <LivePill />
+    <header className="flex flex-col gap-1 px-5 pt-4 pb-4">
+      <div className="flex items-center justify-between gap-3">
+        <h1 className="min-w-0 truncate text-pk-17 font-extrabold text-pk-ink">
+          {liveSession.name}
+        </h1>
+        <LivePill />
+      </div>
+      <p className="flex min-w-0 items-center text-pk-13 text-pk-sub tabular-nums">
+        <button
+          type="button"
+          onClick={() => openParticipants(liveSession, busyPlayerIds)}
+          className="inline-flex shrink-0 items-center gap-0.5 font-bold text-pk-primary"
+        >
+          {liveSession.participants.length}명 참여
+          <LinkChevron />
+        </button>
+        {/* flex 항목의 앞 공백은 사라지므로 버튼과의 간격은 pl로 둔다 */}
+        <span className="min-w-0 truncate pl-1">
+          {[
+            liveSession.location,
+            `${completedMatches.length}경기`,
+            `진행 ${inProgressMatches.length}`,
+          ]
+            .filter(Boolean)
+            .map((part) => `· ${part}`)
+            .join(" ")}
         </span>
-      }
-      sub={
-        <>
-          <p className="truncate text-pk-15 font-bold text-pk-ink">
-            {liveSession.name} · {liveSession.location}
-          </p>
-          <p className="tabular-nums">
-            <button
-              type="button"
-              onClick={() => openParticipants(liveSession, busyPlayerIds)}
-              className="font-bold text-pk-primary"
-            >
-              {liveSession.participants.length}명 참여 ›
-            </button>
-            {` · ${completedMatches.length}경기 · 진행 ${inProgressMatches.length}`}
-          </p>
-        </>
-      }
-    />
-  ) : (
-    <TabHeader title="홈" sub={todayLabel} />
-  );
+      </p>
+    </header>
+  ) : null;
 
   return (
     <>
       {header}
-      <div className="flex flex-col gap-2.5 px-4 pb-6">
+      <div className={cx("flex flex-col gap-2.5 px-4 pb-6", !header && "pt-4")}>
         {liveSession ? renderLive() : null}
         {isPreSession ? renderPreSession() : null}
         {!isLiveResolved ? <HomeSkeleton /> : null}
