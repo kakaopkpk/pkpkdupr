@@ -60,33 +60,42 @@ export const pickLiveSession = (
   );
 };
 
+const DAY_MS = 24 * 60 * 60 * 1000;
+
 /**
- * 진행 중 세션이 바뀔 수 있는 다음 시각. 오늘 세션들의 시작·만료 시각과 오늘 정기 회차 시작(18:00) 중
- * now보다 늦은 가장 이른 시각이다. 없으면 null
+ * 진행 중 세션이 바뀔 수 있는 다음 시각. 오늘 세션들의 시작·만료 시각, 오늘 정기 회차 시작(18:00),
+ * 다음 날 KST 0시 중 now보다 늦은 가장 이른 시각이다.
+ * 0시를 넣어 날짜가 바뀌면 새 날의 오늘 세션을 다시 읽고 그날 경계를 다시 잡는다.
  */
 export const getNextLiveSessionBoundary = (
   sessions: MatchSessionDetailInfo[],
   now: Date = new Date(),
-): Date | null => {
+): Date => {
+  const todayKey = toKstDateKey(now);
   const candidates = sessions.flatMap((session) => {
     const startsAt = new Date(session.date);
     return [startsAt, getEmptySessionExpiresAt(session.kind, startsAt)];
   });
+  candidates.push(new Date(kstDateKeyToDate(todayKey).getTime() + DAY_MS));
 
   // 정기 회차는 다가오는 세션 조회 때 서버가 만들어서, 오늘 세션 응답에 아직 없을 수 있다
-  const todayKey = toKstDateKey(now);
   if (getNextRegularSessionDateKey(now) === todayKey) {
     candidates.push(kstDateKeyToDate(todayKey, REGULAR_SESSION_START_HOUR));
   }
 
-  const upcomingTimes = candidates
-    .map((date) => date.getTime())
-    .filter((time) => time > now.getTime());
-  return upcomingTimes.length > 0 ? new Date(Math.min(...upcomingTimes)) : null;
+  return new Date(
+    Math.min(
+      ...candidates
+        .map((date) => date.getTime())
+        .filter((time) => time > now.getTime()),
+    ),
+  );
 };
 
 // 경계 시각을 확실히 넘긴 뒤 다시 고르도록 조금 늦게 다시 읽는다
 const BOUNDARY_RELOAD_DELAY_MS = 1_000;
+// 경계 시각 재조회가 실패하면 이만큼 뒤 한 번 더 읽는다
+const BOUNDARY_RETRY_DELAY_MS = 30_000;
 
 const fetchSessionMatches = async (sessionId: string) => {
   const res = await apiFetch(
@@ -113,7 +122,8 @@ export const useLiveSessionState = (
   );
   const requestIdRef = useRef(0);
 
-  const reload = useCallback(async () => {
+  /** 다시 읽는다. 받기에 실패하면 false, 성공했거나 더 최근 요청에 밀렸으면 true */
+  const load = useCallback(async (): Promise<boolean> => {
     const requestId = requestIdRef.current + 1;
     requestIdRef.current = requestId;
 
@@ -122,7 +132,7 @@ export const useLiveSessionState = (
       setMatches([]);
       setTodaySessions([]);
       setStatus("ready");
-      return;
+      return true;
     }
 
     try {
@@ -131,18 +141,24 @@ export const useLiveSessionState = (
       const nextMatches = nextLiveSession
         ? await fetchSessionMatches(nextLiveSession.id)
         : [];
-      if (requestIdRef.current !== requestId) return;
+      if (requestIdRef.current !== requestId) return true;
 
       setLiveSession(nextLiveSession);
       setMatches(nextMatches);
       setTodaySessions(today.sessions);
       setStatus("ready");
+      return true;
     } catch {
-      if (requestIdRef.current !== requestId) return;
+      if (requestIdRef.current !== requestId) return true;
       // 이전에 받은 세션은 그대로 두고 상태만 오류로 바꾼다
       setStatus("error");
+      return false;
     }
   }, [playerId]);
+
+  const reload = useCallback(async () => {
+    await load();
+  }, [load]);
 
   useEffect(() => {
     void reload();
@@ -159,18 +175,29 @@ export const useLiveSessionState = (
     };
   }, [reload]);
 
-  // 다음 경계 시각 하나만 예약한다. 다시 읽으면 todaySessions가 바뀌어 그다음 경계를 다시 예약한다
+  // 다음 경계 시각 하나만 예약한다. 다시 읽으면 todaySessions가 바뀌어 그다음 경계를 다시 예약한다.
+  // 경계 재조회가 실패하면 한 번만 더 시도한다(그래도 실패하면 화면 복귀·데이터 변경 때 맞춰진다)
   useEffect(() => {
     if (!playerId) return;
     const boundary = getNextLiveSessionBoundary(todaySessions);
-    if (!boundary) return;
+    let isCancelled = false;
+    let retryTimeoutId: number | undefined;
 
-    const timeoutId = window.setTimeout(
-      () => void reload(),
-      boundary.getTime() - Date.now() + BOUNDARY_RELOAD_DELAY_MS,
-    );
-    return () => window.clearTimeout(timeoutId);
-  }, [playerId, reload, todaySessions]);
+    const timeoutId = window.setTimeout(async () => {
+      const ok = await load();
+      if (ok || isCancelled) return;
+      retryTimeoutId = window.setTimeout(
+        () => void load(),
+        BOUNDARY_RETRY_DELAY_MS,
+      );
+    }, boundary.getTime() - Date.now() + BOUNDARY_RELOAD_DELAY_MS);
+
+    return () => {
+      isCancelled = true;
+      window.clearTimeout(timeoutId);
+      window.clearTimeout(retryTimeoutId);
+    };
+  }, [load, playerId, todaySessions]);
 
   return useMemo(() => {
     const inProgressMatches = matches.filter(
