@@ -21,6 +21,8 @@ import { formatKstShortDate } from "@/lib/format";
 import { fetchPlayerMatches } from "@/lib/playerProfile";
 
 const PAGE_SIZE = 20;
+// 바닥에 닿기 전 이만큼 남았을 때 다음 페이지를 미리 불러온다
+const PREFETCH_MARGIN_PX = 240;
 
 interface MatchGroup {
   key: string;
@@ -75,7 +77,7 @@ const InfiniteScrollTrigger: React.FC<{
       (entries) => {
         if (entries.some((entry) => entry.isIntersecting)) onReach();
       },
-      { root: scrollContainer, rootMargin: "0px 0px 240px 0px" },
+      { root: scrollContainer, rootMargin: `0px 0px ${PREFETCH_MARGIN_PX}px 0px` },
     );
     observer.observe(target);
     return () => observer.disconnect();
@@ -177,7 +179,8 @@ export default function PlayerMatchesDrawer({
         setLoadedCount((current) =>
           page === 0 ? data.matches.length : current + data.matches.length,
         );
-        setTotal(data.total);
+        // 빈 페이지면 total과 실제 행 수가 어긋난 것이므로 더 불러오지 않는다
+        setTotal(data.matches.length > 0 ? data.total : 0);
         setNextPage(page + 1);
       } catch (err) {
         if (requestIdRef.current !== requestId) return;
@@ -206,14 +209,16 @@ export default function PlayerMatchesDrawer({
 
   // 열 때마다 프로필에서 고른 분류로 처음부터 불러온다. 분류는 여는 시점 값만 쓴다
   const initialCategoryRef = useRef(initialCategory);
-  initialCategoryRef.current = initialCategory;
+  useEffect(() => {
+    initialCategoryRef.current = initialCategory;
+  }, [initialCategory]);
   useEffect(() => {
     if (!isOpen || !playerId) return;
     setCategory(initialCategoryRef.current);
     resetAndLoad(initialCategoryRef.current);
   }, [isOpen, playerId, resetAndLoad]);
 
-  // 경기 기록·수정 뒤에는 보이는 목록을 유지한 채 첫 페이지부터 다시 받는다
+  // 경기 기록·수정 뒤에는 스켈레톤 없이 첫 페이지부터 다시 받는다. 뒤쪽 페이지는 스크롤하면 이어서 받는다
   const dataVersionRef = useRef(dataVersion);
   useEffect(() => {
     if (dataVersionRef.current === dataVersion) return;

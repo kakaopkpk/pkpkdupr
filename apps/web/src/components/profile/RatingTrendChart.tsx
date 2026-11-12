@@ -15,6 +15,9 @@ const GRID_YS = [14, 54, 94] as const;
 const PLOT_TOP = GRID_YS[0];
 const PLOT_BOTTOM = GRID_YS[GRID_YS.length - 1];
 const AREA_BOTTOM = 104;
+const X_LABEL_Y = 118;
+const EMPTY_TEXT_Y = 58;
+const GRID_COLOR = "#e6e9f0";
 // 변동이 아주 작아도 선이 위아래 끝까지 튀지 않게 하는 최소 세로 범위
 const MIN_RATING_SPAN = 0.1;
 
@@ -73,7 +76,7 @@ const RatingTrendChart: React.FC<{
     .map(([x, y]) => `${x} ${y}`)
     .join(" L")} L${lastX} ${AREA_BOTTOM} L${firstX} ${AREA_BOTTOM} Z`;
   const labelProps = {
-    y: 118,
+    y: X_LABEL_Y,
     fill: "var(--color-pk-muted)",
     fontSize: 11,
   } as const;
@@ -94,7 +97,7 @@ const RatingTrendChart: React.FC<{
           y1={y}
           x2={WIDTH}
           y2={y}
-          stroke="#e6e9f0"
+          stroke={GRID_COLOR}
           strokeWidth={1}
         />
       ))}
@@ -114,7 +117,7 @@ const RatingTrendChart: React.FC<{
       ) : (
         <text
           x={(PLOT_LEFT + WIDTH) / 2}
-          y={58}
+          y={EMPTY_TEXT_Y}
           textAnchor="middle"
           fill="var(--color-pk-muted)"
           fontSize={13}

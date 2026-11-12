@@ -7,15 +7,15 @@ import RatingTrendChart, {
   type RatingTrendPoint,
 } from "@/components/profile/RatingTrendChart";
 
-export const PROFILE_CATEGORY_OPTIONS = [
-  { value: "doubles", label: "복식" },
-  { value: "singles", label: "단식" },
-] as const satisfies readonly { value: MatchTopLevelType; label: string }[];
-
-const CATEGORY_LABELS: Record<MatchTopLevelType, string> = {
+const CATEGORY_LABELS = {
   doubles: "복식",
   singles: "단식",
-};
+} as const satisfies Record<MatchTopLevelType, string>;
+
+export const PROFILE_CATEGORY_OPTIONS = [
+  { value: "doubles", label: CATEGORY_LABELS.doubles },
+  { value: "singles", label: CATEGORY_LABELS.singles },
+] as const satisfies readonly { value: MatchTopLevelType; label: string }[];
 
 /** 랭킹·평점·90일 변화·90일 추이 차트와 복식/단식 전환 */
 const ProfileRatingCard: React.FC<{
