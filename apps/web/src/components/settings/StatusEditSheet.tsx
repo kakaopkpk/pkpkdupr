@@ -45,6 +45,11 @@ export const StatusEditSheetBody: React.FC<StatusEditSheetBodyProps> = ({
     STATUS_MESSAGE_PALETTE[0];
   const trimmed = statusMessage.trim();
   const username = player.username ?? "";
+  const save = () =>
+    onSave({
+      statusMessage: trimmed || null,
+      statusMessageBackgroundColor: selected.bg,
+    });
 
   return (
     <>
@@ -57,7 +62,14 @@ export const StatusEditSheetBody: React.FC<StatusEditSheetBodyProps> = ({
           value={statusMessage}
           maxLength={PLAYER_STATUS_MESSAGE_MAX_LENGTH}
           disabled={isSaving}
+          enterKeyHint="done"
           onChange={(event) => setStatusMessage(event.target.value)}
+          onKeyDown={(event) => {
+            // 한글 조합 중 Enter는 조합 확정이므로 저장하지 않는다
+            if (event.key !== "Enter" || event.nativeEvent.isComposing) return;
+            event.preventDefault();
+            if (!isSaving) save();
+          }}
         />
 
         <div className="flex shrink-0 flex-col gap-1.5">
@@ -131,12 +143,7 @@ export const StatusEditSheetBody: React.FC<StatusEditSheetBodyProps> = ({
           size="lg"
           className="flex-1"
           disabled={isSaving}
-          onClick={() =>
-            onSave({
-              statusMessage: trimmed || null,
-              statusMessageBackgroundColor: selected.bg,
-            })
-          }
+          onClick={save}
         >
           {isSaving ? "저장 중..." : "저장"}
         </PkButton>

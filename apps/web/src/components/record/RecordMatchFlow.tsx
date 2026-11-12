@@ -279,7 +279,7 @@ export default function RecordMatchFlow({
           setScrollKey((key) => key + 1);
           goToStep("score");
         }}
-        onDone={liveSession ? goHome : onClose}
+        onDone={onClose}
       />
     );
   }

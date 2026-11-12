@@ -202,6 +202,11 @@
     max-height: var(--app-bottom-sheet-fixed-height);
   }
 
+  /* 키보드가 열려 있는 동안 하단 버튼을 숨겨 본문이 키보드 바로 위까지 보이게 한다 */
+  html[data-keyboard-open] .app-bottom-sheet-footer {
+    display: none;
+  }
+
   .app-bottom-sheet-body {
     min-height: 0;
     overflow-y: auto;
