@@ -55,7 +55,7 @@ const PullToRefreshIndicator: React.FC<PullToRefreshIndicatorProps> = ({
         }
         className={`flex size-[46.8px] items-center justify-center rounded-full border shadow-sm backdrop-blur transition-transform ${
           isArmed
-            ? "scale-110 border-[#409eff] bg-[#409eff]"
+            ? "scale-110 border-pk-primary bg-pk-primary"
             : "border-sky-100/90 bg-white/90"
         }`}
       >
@@ -67,7 +67,7 @@ const PullToRefreshIndicator: React.FC<PullToRefreshIndicatorProps> = ({
         ) : (
           <span
             aria-hidden="true"
-            className={`size-[20.8px] rounded-full border-2 border-sky-100 border-t-[#409eff] ${
+            className={`size-[20.8px] rounded-full border-2 border-sky-100 border-t-pk-primary ${
               isRefreshing ? "animate-spin" : ""
             }`}
             style={

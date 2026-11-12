@@ -1098,7 +1098,7 @@ const BottomNav: React.FC = () => {
                   >
                     <Alert.Indicator className="shrink-0 self-center" />
                     <Alert.Content className="min-w-0 gap-0 self-center">
-                      <Alert.Title className="text-sm font-bold text-pkpk-sub-font">
+                      <Alert.Title className="text-sm font-bold text-pk-sub">
                         응답이 지연되고 있어요.
                       </Alert.Title>
                       <Alert.Description className="text-xs font-semibold text-[#888]">

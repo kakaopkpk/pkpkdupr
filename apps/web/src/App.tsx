@@ -64,7 +64,7 @@ function AppRoutes() {
       <div className="flex h-full w-full items-center justify-center overflow-hidden">
         <Spinner
           aria-label="앱 로딩 중"
-          className="text-[#409eff]"
+          className="text-pk-primary"
           color="current"
           size="md"
         />
