@@ -56,7 +56,7 @@
   --app-shell-height: 100vh;
   --app-keyboard-offset: 0px;
   --safe-bottom: max(12px, env(safe-area-inset-bottom));
-  /* 화면 아래 끝에서 하단 바(미니바·알림 바 포함) 윗변까지 거리. 기본값은 하단 바(66px)만 있을 때. 탭 셸이 실제 값으로 갱신한다 */
+  /* 화면 아래 끝에서 하단 바(미니바·알림 바 포함) 윗변까지 거리. 아직 갱신하는 곳이 없어 하단 바(66px)만 있을 때의 기본값을 쓴다 */
   --app-bottom-dock-height: calc(66px + 8px + var(--safe-bottom));
 }
 

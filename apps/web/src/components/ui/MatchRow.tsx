@@ -7,7 +7,7 @@ import { cx } from "./cx";
 
 type MatchTeam = MatchInfo["teams"][number];
 
-const PRIMARY_SOFT = "#e6ebf8";
+const PRIMARY_SOFT = "var(--color-pk-primary-soft)";
 const rowDividerClassName =
   "not-last:shadow-[inset_0_-1px_0_var(--color-pk-divider)]";
 

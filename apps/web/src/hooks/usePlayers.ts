@@ -50,7 +50,10 @@ const getSnapshot = () => state;
 const readCachedPlayers = (): MemberListPlayerInfo[] | null => {
   try {
     const cached = localStorage.getItem(CACHED_MEMBERS_KEY);
-    return cached ? (JSON.parse(cached) as MemberListPlayerInfo[]) : null;
+    if (!cached) return null;
+    const parsed: unknown = JSON.parse(cached);
+    // 이전 형식이나 손상된 값은 캐시가 없는 것으로 본다
+    return Array.isArray(parsed) ? (parsed as MemberListPlayerInfo[]) : null;
   } catch {
     return null;
   }
@@ -117,10 +120,18 @@ export const usePlayers = (): {
   const isCurrentOwner = ownerId !== null && snapshot.ownerId === ownerId;
 
   useEffect(() => {
-    if (!ownerId) return;
+    if (!ownerId) {
+      // 로그아웃하면 같은 계정으로 다시 로그인해도 새로 받도록 메모리 목록을 버린다
+      if (state.ownerId !== null) {
+        inFlight = null;
+        setState(INITIAL_STATE);
+      }
+      return;
+    }
     const isFirstLoad = state.ownerId !== ownerId;
     ensureOwner(ownerId);
-    if (isFirstLoad) {
+    // 첫 로드이거나 이전 요청이 실패했으면 마운트 때 다시 받는다
+    if (isFirstLoad || state.status === "error") {
       void fetchPlayers(ownerId);
     }
   }, [ownerId]);
