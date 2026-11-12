@@ -36,6 +36,7 @@ import {
   REGULAR_SESSION_START_HOUR,
   getEmptySessionExpiryCutoff,
   kstDateKeyToDate,
+  type MatchSessionKind,
 } from "@pkpkdupr/shared/session";
 import { firstRow, placeholders, type RawQueryResult } from "../db/client";
 
@@ -152,6 +153,11 @@ const toDateOrNull = (value: Date | string | number | null | undefined) =>
 
 const toDate = (value: Date | string | number) => new Date(value);
 
+/** 정기 날짜 키가 있으면 정기 세션이다 */
+const toSessionKind = (
+  stored: Pick<StoredMatchSession, "regularDateKey">,
+): MatchSessionKind => (stored.regularDateKey ? "regular" : "custom");
+
 // schema의 unixTimestamp 컬럼은 Unix 초로 저장한다. raw SQL은 그 변환을
 // 거치지 않으므로 경기 변경 타임스탬프를 여기서 직접 초로 바꾼다.
 const toUnixTimestampSeconds = (value: Date) =>
@@ -267,7 +273,7 @@ export class MatchRepository {
           participant.playerId,
       ),
       matchCount: sessionMatches.length,
-      kind: stored.regularDateKey ? "regular" : "custom",
+      kind: toSessionKind(stored),
       createdAt: toDate(stored.createdAt),
       updatedAt: toDate(stored.updatedAt),
     };
@@ -846,7 +852,7 @@ export class MatchRepository {
         name: session.name,
         date: toDate(session.date),
         location: session.location,
-        kind: session.regularDateKey ? "regular" : "custom",
+        kind: toSessionKind(session),
         participantIds: participantIdsBySessionId.get(session.id) ?? [],
       }),
     );

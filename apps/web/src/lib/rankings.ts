@@ -1,7 +1,6 @@
 import type { MatchTopLevelType } from "@pkpkdupr/shared/match";
 import type {
   MatchSessionHistoryItem,
-  MatchSessionHistoryResponse,
   MatchSessionReport,
   RankingResponse,
 } from "@pkpkdupr/shared/ranking";
@@ -44,11 +43,7 @@ export const fetchSessionHistory = async (
   if (options.limit !== undefined) params.set("limit", String(options.limit));
   if (options.playerId) params.set("playerId", options.playerId);
   const query = params.toString();
-  const response = await requestJson<
-    Omit<MatchSessionHistoryResponse, "sessions"> & {
-      sessions: MatchSessionHistoryInfo[];
-    }
-  >(
+  const response = await requestJson<{ sessions: MatchSessionHistoryInfo[] }>(
     `/api/session-reports${query ? `?${query}` : ""}`,
     "세션 기록을 불러오지 못했어요.",
   );

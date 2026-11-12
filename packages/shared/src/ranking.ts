@@ -56,6 +56,7 @@ export interface SessionPlayerReport {
   /** 복식 평점: 세션 시작 직전 / 세션 마지막 완료 경기 반영 직후 */
   ratingBefore: number | null;
   ratingAfter: number | null;
+  /** ratingAfter - ratingBefore. 둘 중 하나라도 NR(null)이면 0이라 세션 중 처음 평점을 얻은 선수는 topRiser 후보가 아니다 */
   ratingDelta: number;
   /** 복식 순위: 같은 두 시점 */
   rankBefore: number | null;
