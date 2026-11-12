@@ -3,7 +3,7 @@ import { IoShareOutline } from "react-icons/io5";
 import { toKstDateKey } from "@pkpkdupr/shared/session";
 import SystemToast from "@/components/SystemToast";
 import { PkButton } from "@/components/ui/Button";
-import { useIsSaveFailureNoticeVisible } from "@/context/SystemNoticeContext";
+import { useIsSystemNoticeVisible } from "@/context/SystemNoticeContext";
 
 interface BeforeInstallPromptEvent extends Event {
   prompt: () => Promise<void>;
@@ -70,7 +70,7 @@ interface PwaInstallPromptProps {
 }
 
 const PwaInstallPrompt: React.FC<PwaInstallPromptProps> = ({ isActive }) => {
-  const isSaveFailureVisible = useIsSaveFailureNoticeVisible();
+  const isSystemNoticeVisible = useIsSystemNoticeVisible();
   const [deferredPrompt, setDeferredPrompt] =
     useState<BeforeInstallPromptEvent | null>(null);
   const [isInstalled, setIsInstalled] = useState(() =>
@@ -141,7 +141,7 @@ const PwaInstallPrompt: React.FC<PwaInstallPromptProps> = ({ isActive }) => {
     !isInstalled &&
     (!isDismissedToday || isIosGuideOpen) &&
     !!installPromptKind &&
-    !isSaveFailureVisible;
+    !isSystemNoticeVisible;
 
   if (!isVisible) {
     return null;
