@@ -19,19 +19,27 @@
 
 ## 구조 가이드
 
-- `src/components/`
-  - 재사용 UI와 레이아웃 컴포넌트
-  - 예: `BottomNav.tsx`
-- `src/context/`
-  - 인증/세션 상태
-  - `AuthContext.tsx`가 Supabase 세션 구독, `/api/me` 검증, `status`·`player`, 비밀번호 변경, `logout` 담당
-  - `TabNavigationContext.tsx`: 탭(`TabKey`)·깊이 스택(`pushDepth`/`closeDepth`, 브라우저 뒤로가기 연동)·스크롤 복원·당겨서 새로고침 등록
-  - `AppNavigationContext.tsx`: 전역 화면 열기(`openMatchDetail`, `openMemberProfile`(내 id면 나 탭), `openRecordMatch`, `openCreateSession`, `openSettings`, `openSessionReport`), `notifyDataChanged`·`dataVersion`, 전역 화면 레이어 번호 `GLOBAL_LAYER`
-  - `LiveSessionContext.tsx`: 오늘 진행 중 세션·그 경기·내 진행 중 경기(`useLiveSession`)
 - `src/pages/`
-  - 화면 단위 컴포넌트
-  - 탭 페이지 `Home`·`Records`·`Ranking`·`Me`(props 없음), 그 밖에 `Login`, `ForceChangePassword`
-- 타입은 반드시 `@pkpkdupr/shared/*`에서 import합니다.
+  - 탭 페이지: `Home.tsx`(홈)·`Records.tsx`(기록, 세션 리포트)·`Ranking.tsx`(랭킹)·`Me.tsx`(나). props 없이 컨텍스트로 데이터를 받습니다.
+  - 그 밖의 전역 라우트: `Login.tsx`, `ForceChangePassword.tsx`
+- `src/components/`
+  - `BottomNav.tsx`: 4탭 keep-alive 셸, 하단 바(`BottomDock.tsx`)와 + 메뉴, 전역 화면 래퍼 렌더, 진행 중 경기 미니바·참여 알림 바
+  - 전역 화면 래퍼: `match/`(경기 상세), `profile/`(회원 프로필·경기 목록), `record/`(경기 기록 시트), `session/`(세션 만들기·참여자 편집), `settings/`(설정·비밀번호 변경·프로필 사진 확인·상태메시지 편집)
+  - 탭 전용 조각: `home/`, `records/`, `ranking/`
+  - `ui/`: 새 디자인 공통 컴포넌트. 새 화면은 여기 것을 먼저 씁니다.
+    - `Button.tsx`(`PkButton`, variant `primary`·`soft`·`outline`·`ghost`), `Card.tsx`, `SegmentedControl.tsx`, `Headers.tsx`(`TabHeader`·`DetailHeader`), `Form.tsx`(`TextField`), `Section.tsx`(`ListRow`·`SectionLabel`·`TextLink`), `SheetTitle.tsx`
+    - `MatchRow.tsx`(`MatchRow`·`LiveMatchRow`), `PlayerAvatar.tsx`(`PlayerAvatar`·`TeamAvatars`), `Delta.tsx`(`RatingDelta`·`RankChange`), `RankBadge.tsx`, `Badges.tsx`(`LivePill`·`HighlightBadge`), `StatusMessageChip.tsx`, `Icons.tsx`, `cx.ts`
+  - 공용 레이어·상태: `BottomSheet.tsx`, `RightDrawer.tsx`, `SkeletonBlock.tsx`, `TabPanelStatus.tsx`, `HoldToConfirmButton.tsx`, `SystemToast.tsx`, `OfflineBanner.tsx`, `PwaInstallPrompt.tsx`, `PwaUpdatePrompt.tsx`
+- `src/context/`
+  - `AuthContext.tsx`: Supabase 세션 구독, `/api/me` 검증, `status`·`player`, 비밀번호 변경, `logout`
+  - `TabNavigationContext.tsx`: 탭(`TabKey`: `home`·`records`·`ranking`·`me`)·깊이 스택(`pushDepth`/`closeDepth`, 브라우저 뒤로가기 연동)·스크롤 복원·당겨서 새로고침 등록
+  - `AppNavigationContext.tsx`: `useAppNavigation()`으로 전역 화면 열기(`openMatchDetail`, `openMemberProfile`(내 id면 나 탭), `openRecordMatch`, `openCreateSession`, `openSettings`, `openSessionReport`), `notifyDataChanged`·`dataVersion`, 전역 화면 레이어 번호 `GLOBAL_LAYER`
+  - `LiveSessionContext.tsx`: `useLiveSession()`으로 오늘 진행 중 세션·그 경기·내 진행 중 경기
+  - `SystemNoticeContext.tsx`: `useSystemNotice().showSaveFailure({ onRetry })`로 저장 실패 토스트(네트워크 오류에만, 서버 4xx·5xx는 화면 인라인)
+  - `AppUpdateContext.tsx`: `useAppUpdate()`로 PWA 업데이트 확인·적용 상태
+- `src/types/match.ts`: API JSON 응답 기준 경기 타입(`MatchInfo`, `MatchListResponse`)과 `getTeamResultScores`
+- `src/lib/`: API 호출(`api.ts`)·Supabase 클라이언트·도메인별 요청 함수·포맷터, `src/utils/`: 평점(`dupr.ts`)·아바타 유틸
+- 도메인 타입은 `@pkpkdupr/shared/*`에서 import합니다. 웹 전용 응답 형태만 `src/types/`에 둡니다.
 
 ## 현재 UX / 상태 관리 규칙
 
@@ -79,3 +87,16 @@
 - Tailwind v4 기준이라 별도 `tailwind.config.*` 없이 Vite 플러그인으로 동작합니다.
 - 모바일 중심 화면이므로 고정 폭/하단 탭/오버레이가 깨지지 않게 확인합니다.
 - HeroUI를 사용할 때도 기존 Tailwind 클래스 기반 레이아웃 규칙과 충돌하지 않게 유지합니다.
+- 색·둥글기·글자 크기는 `src/index.css` `@theme`의 `pk-*` 토큰만 씁니다(예: `bg-pk-primary`, `text-pk-sub`, `rounded-pk-lg`, `text-pk-15`, `font-num`). 16진수 색을 클래스에 직접 쓰지 않습니다.
+
+## 디자인 규칙
+
+- 기본색은 블루 `pk-primary`(#2346a8)입니다. 버튼은 모두 블루 계열(채움, 연한 `pk-primary-soft` 바탕, `pk-primary-line` 테두리)이며 하이라이트 색을 버튼에 쓰지 않습니다.
+- 테두리가 필요한 곳(진행 중인 내 경기 카드, 테두리 버튼)은 옅은 파랑 `pk-primary-line`입니다.
+- 하이라이트 `pk-hl`(#d4f04a)은 테두리 없이 LIVE 표시와 오늘의 급상승에만 씁니다. 평점 추세선 끝점은 블루 점입니다.
+- 랭킹 1~3위는 금·은·동(`pk-gold`·`pk-silver`·`pk-bronze`) 원입니다. 상승은 `pk-up`, 하락은 모두 `pk-down`, 보합은 회색입니다.
+- 카드에는 테두리가 없습니다. 둥글기는 12/20/999만, 글자 크기는 12/13/15/17/22/26만 씁니다.
+- Barlow Condensed(`font-num`)는 화면당 주인공 큰 숫자 하나에만 쓰고, 본문은 Pretendard입니다.
+- 경기 행은 팀 아바타 쌍을 넣고 이긴 쪽만 강조합니다(A·B팀 색 구분·승 배지 없음). 내 경기는 연한 파랑 배경이며, 코트 번호는 어디에도 표시하지 않습니다.
+- 바텀시트는 고정 높이(화면의 약 3/4)이고 헤더·하단 버튼은 고정, 가운데만 스크롤합니다. 경기 저장은 2초 길게 누르기입니다.
+- 다크 테마는 만들지 않습니다.

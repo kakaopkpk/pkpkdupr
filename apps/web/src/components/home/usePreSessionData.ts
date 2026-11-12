@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { SessionPlayerReport } from "@pkpkdupr/shared/ranking";
-import type { MatchInfo } from "@/components/Match";
+import type { MatchInfo } from "@/types/match";
 import { apiFetch } from "@/lib/api";
 import {
   fetchUpcomingMatchSessions,

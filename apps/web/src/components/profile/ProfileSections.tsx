@@ -1,6 +1,6 @@
 import React from "react";
 import type { MatchTopLevelType } from "@pkpkdupr/shared/match";
-import type { MatchInfo } from "@/components/Match";
+import type { MatchInfo } from "@/types/match";
 import SkeletonBlock from "@/components/SkeletonBlock";
 import ProfileRatingCard from "@/components/profile/ProfileRatingCard";
 import ProfileStatTile from "@/components/profile/ProfileStatTile";

@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { isMatchRecordEditable } from "@pkpkdupr/shared/match";
-import type { MatchInfo } from "@/components/Match";
+import type { MatchInfo } from "@/types/match";
 import RightDrawer from "@/components/RightDrawer";
 import { PkButton } from "@/components/ui/Button";
 import { DetailHeader } from "@/components/ui/Headers";

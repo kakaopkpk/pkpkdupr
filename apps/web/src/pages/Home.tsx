@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { RecommendedCourt } from "@pkpkdupr/shared/matchmaking";
-import type { MatchInfo } from "@/components/Match";
+import type { MatchInfo } from "@/types/match";
 import HomeSkeleton from "@/components/home/HomeSkeleton";
 import LastSessionMeCard from "@/components/home/LastSessionMeCard";
 import MyLiveMatchCard from "@/components/home/MyLiveMatchCard";

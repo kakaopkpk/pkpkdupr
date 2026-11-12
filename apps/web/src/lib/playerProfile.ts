@@ -1,7 +1,7 @@
 import type { MatchTopLevelType } from "@pkpkdupr/shared/match";
 import type { PlayerRatingHistory } from "@pkpkdupr/shared/player";
 import type { HeadToHeadStat, PartnerStat } from "@pkpkdupr/shared/profileStats";
-import type { MatchInfo, MatchListResponse } from "@/components/Match";
+import type { MatchInfo, MatchListResponse } from "@/types/match";
 import { apiFetch } from "@/lib/api";
 
 /** `GET /api/players/:playerId/profile-summary` JSON 응답(날짜는 문자열) */

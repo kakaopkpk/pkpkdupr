@@ -19,7 +19,7 @@ const TabPanelStatus: React.FC<TabPanelStatusProps> = ({
       {isLoading ? (
         <Spinner
           aria-label={ariaLabel ?? message ?? "로딩 중"}
-          className="text-[#409eff]"
+          className="text-pk-primary"
           color="current"
           size="md"
         />
@@ -27,7 +27,7 @@ const TabPanelStatus: React.FC<TabPanelStatusProps> = ({
       {message ? (
         <p
           className={`text-sm font-medium ${
-            tone === "error" ? "text-error" : "text-pkpk-sub-font"
+            tone === "error" ? "text-error" : "text-pk-sub"
           }`}
         >
           {message}

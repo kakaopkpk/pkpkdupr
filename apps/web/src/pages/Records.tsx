@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { MatchInfo } from "@/components/Match";
+import type { MatchInfo } from "@/types/match";
 import TabPanelStatus from "@/components/TabPanelStatus";
 import {
   SessionChips,

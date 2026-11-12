@@ -185,7 +185,7 @@ const RightDrawer: React.FC<RightDrawerProps> = ({
           aria-label={ariaLabel}
           className={`app-right-drawer-scroll-area relative ${
             isOpen && isActive ? "pointer-events-auto" : "pointer-events-none"
-          } h-[calc(var(--app-shell-height)-var(--app-keyboard-offset))] w-full bg-pkpk-bg pb-[calc(1rem+var(--safe-bottom)+var(--app-keyboard-offset))] shadow-2xl ${transformClassName} ${className ?? ""}`}
+          } h-[calc(var(--app-shell-height)-var(--app-keyboard-offset))] w-full bg-pk-bg pb-[calc(1rem+var(--safe-bottom)+var(--app-keyboard-offset))] shadow-2xl ${transformClassName} ${className ?? ""}`}
         >
           {refreshHandler ? (
             <PullToRefreshIndicator

@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import type { MatchInfo } from "@/components/Match";
+import type { MatchInfo } from "@/types/match";
 import type { TabKey } from "@/context/TabNavigationContext";
 
 /** 하단 바·미니바 공통 유리 알약 */

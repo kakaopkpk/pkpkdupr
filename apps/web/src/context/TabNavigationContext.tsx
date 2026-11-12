@@ -5,8 +5,6 @@ export type TabKey = "home" | "records" | "ranking" | "me";
 export type TabDepthKind =
   | "match-detail"
   | "match-history"
-  | "session-detail"
-  | "session-recommendation"
   | "member-profile"
   | "bottom-sheet"
   | "dropdown"
