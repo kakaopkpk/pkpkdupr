@@ -17,7 +17,7 @@ apps/admin-web (:3100) ─┼─> apps/api (:4000) ─함수 호출─> packages
 
 | 영역 | 책임 |
 | --- | --- |
-| `apps/web` | React 19 사용자 앱. 인증, Match / Members / Me 탭, PWA를 담당합니다. |
+| `apps/web` | React 19 사용자 앱. 인증, 홈 / 기록 / 랭킹 / 나 4탭, PWA를 담당합니다. |
 | `apps/admin-web` | React 18 관리자 로그인과 회원·경기·평점 운영 화면을 담당합니다. |
 | `apps/api` | Express 공개 API, Supabase Auth access token 확인(`Authorization: Bearer`)과 회원 연결, 관리자 권한 검사, 관리자의 계정 발급·비밀번호 초기화·아이디 변경(Auth admin API)을 담당합니다. 같은 `app`을 로컬 Node(`index.ts`가 listen)와 Supabase Edge Function `api`(`edge.ts` 번들)가 서비스합니다. Node 시작 시에만 `initDatabase()`(dev mock 시딩)·관리자 동기화를 실행하고(스키마는 Supabase CLI가 적용), 저장소 인스턴스는 `apps/api/src/db.ts`에서만 만듭니다. 저장소 예외를 공개 API 상태 코드로 바꾸는 처리도 api가 맡습니다. |
 | `packages/db` | `@pkpkdupr/db` 워크스페이스 라이브러리. postgres.js + Drizzle(`pg-core`) 기반 저장소와 dev mock 데이터를 제공합니다. 연결은 env `DATABASE_URL`로 정하며 없으면 기동 시 오류가 납니다. 단, Edge 런타임에서는 `apps/api/src/db.ts`가 `DATABASE_URL`이 없을 때 `SUPABASE_DB_URL`로 대체합니다. Node·Deno 모두에서 동작합니다. HTTP 서버는 없습니다. |
@@ -59,7 +59,9 @@ pnpm lint
 - 로그인은 Supabase Auth 아이디·비밀번호(`toInternalEmail(아이디)`로 `signInWithPassword`)이며, API 호출은 `lib/api.ts`의 `apiFetch`로 해서 access token을 붙입니다. 컴포넌트가 `Authorization` 헤더를 직접 만들지 않습니다.
 - 로그인 뒤의 홈 / 기록 / 랭킹 / 나 4탭(`TabKey` `home`·`records`·`ranking`·`me`, 시작 탭 홈)은 `BottomNav.tsx`의 keep-alive 탭 셸이 소유합니다. 탭 상태와 URL 라우트를 무분별하게 중복하지 않습니다. 회원 탭은 없고 회원 찾기는 랭킹 목록이 맡습니다.
 - 하단 바는 유리 알약 4탭과 원형 + 버튼이며, + 메뉴는 경기 기록·세션 만들기만 엽니다(설정·로그아웃은 나 탭의 설정에서). 경기 상세·회원 프로필·경기 기록 시트·세션 만들기·설정 같은 전역 화면은 `useAppNavigation()`(`context/AppNavigationContext.tsx`)으로 열고, 진행 중 세션 상태는 `useLiveSession()`(`context/LiveSessionContext.tsx`)으로 읽습니다. 데이터를 바꾼 화면은 `notifyDataChanged()`를 부르고, 탭 페이지는 `dataVersion`을 재조회 의존성으로 씁니다.
-- `apps/web/AGENTS.md`의 모바일·PWA·UI 세부 규칙을 함께 따릅니다.
+- 저장 실패(네트워크 오류) 알림은 `useSystemNotice()`(`context/SystemNoticeContext.tsx`)의 `showSaveFailure`로 띄웁니다.
+- 공통 UI는 `apps/web/src/components/ui/`, 색·둥글기·글자 크기는 `index.css`의 `pk-*` 토큰을 씁니다. 하드코딩 색을 쓰지 않습니다.
+- `apps/web/AGENTS.md`의 모바일·PWA·UI 세부 규칙을 함께 따릅니다.(디자인 규칙 포함)
 - 모바일 고정 하단 UI는 `env(safe-area-inset-bottom)`과 `--app-keyboard-offset`을 고려합니다. 스크롤 소유자는 `app-tab-panel-scroll-area`입니다.
 - PWA 아이콘은 URL 기반입니다. 아이콘을 변경하면 `apps/web/index.html`의 favicon/Apple touch icon과 `apps/web/vite.config.ts`의 manifest·`includeAssets`를 같이 확인합니다.
 
