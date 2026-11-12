@@ -1,9 +1,8 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { IoShareOutline } from "react-icons/io5";
+import { toKstDateKey } from "@pkpkdupr/shared/session";
 import SystemToast from "@/components/SystemToast";
 import { PkButton } from "@/components/ui/Button";
-import { useAppUpdate } from "@/context/AppUpdateContext";
-import { useAuth } from "@/context/AuthContext";
 import { useIsSaveFailureNoticeVisible } from "@/context/SystemNoticeContext";
 
 interface BeforeInstallPromptEvent extends Event {
@@ -43,20 +42,21 @@ const isAndroidLike = () => /android/i.test(window.navigator.userAgent);
 
 const isMobileInstallTarget = () => isIosLike() || isAndroidLike();
 
-// 닫거나 추가하면 기억해 다시 띄우지 않는다
-const INSTALL_PROMPT_DISMISSED_STORAGE_KEY = "pkpkdupr:install-prompt-dismissed";
+// 닫거나 추가한 KST 날짜를 기억해 그날은 다시 띄우지 않는다
+const INSTALL_PROMPT_DISMISSED_DATE_STORAGE_KEY =
+  "pkpkdupr:install-prompt-dismissed-date";
 
-const readInstallPromptDismissed = () => {
+const readInstallPromptDismissedDate = (): string | null => {
   try {
-    return localStorage.getItem(INSTALL_PROMPT_DISMISSED_STORAGE_KEY) === "true";
+    return localStorage.getItem(INSTALL_PROMPT_DISMISSED_DATE_STORAGE_KEY);
   } catch {
-    return false;
+    return null;
   }
 };
 
-const rememberInstallPromptDismissed = () => {
+const rememberInstallPromptDismissedDate = (dateKey: string) => {
   try {
-    localStorage.setItem(INSTALL_PROMPT_DISMISSED_STORAGE_KEY, "true");
+    localStorage.setItem(INSTALL_PROMPT_DISMISSED_DATE_STORAGE_KEY, dateKey);
   } catch {
     // 저장소를 쓸 수 없으면 이번 실행 동안만 닫힌다
   }
@@ -64,18 +64,28 @@ const rememberInstallPromptDismissed = () => {
 
 type InstallPromptKind = "ios-safari" | "installable";
 
-const PwaInstallPrompt: React.FC = () => {
-  const { isAuthenticated, isLoading } = useAuth();
-  const { isUpdateAvailable } = useAppUpdate();
+interface PwaInstallPromptProps {
+  /** 홈 탭이 보이고 그 위를 덮는 화면·메뉴가 없을 때 true */
+  isActive: boolean;
+  /** 안내가 실제로 보이는지 바뀔 때 호출한다 */
+  onVisibleChange?: (isVisible: boolean) => void;
+}
+
+const PwaInstallPrompt: React.FC<PwaInstallPromptProps> = ({
+  isActive,
+  onVisibleChange,
+}) => {
   const isSaveFailureVisible = useIsSaveFailureNoticeVisible();
   const [deferredPrompt, setDeferredPrompt] =
     useState<BeforeInstallPromptEvent | null>(null);
   const [isInstalled, setIsInstalled] = useState(() =>
     typeof window === "undefined" ? false : isStandaloneDisplay(),
   );
-  const [isDismissed, setIsDismissed] = useState(() =>
-    typeof window === "undefined" ? true : readInstallPromptDismissed(),
+  const [dismissedDateKey, setDismissedDateKey] = useState(() =>
+    typeof window === "undefined" ? null : readInstallPromptDismissedDate(),
   );
+  // 앱을 켜 둔 채 날짜가 바뀌어도 다시 보이게 화면으로 돌아올 때 오늘 날짜를 새로 읽는다
+  const [todayKey, setTodayKey] = useState(() => toKstDateKey(new Date()));
   // iOS Safari에서 "추가"를 누르면 공유 메뉴 안내로 바뀐다
   const [isIosGuideOpen, setIsIosGuideOpen] = useState(false);
 
@@ -120,27 +130,52 @@ const PwaInstallPrompt: React.FC = () => {
     };
   }, []);
 
-  if (
-    isLoading ||
-    !isAuthenticated ||
-    isInstalled ||
-    (isDismissed && !isIosGuideOpen) ||
-    !installPromptKind ||
-    isUpdateAvailable ||
-    isSaveFailureVisible
-  ) {
+  useEffect(() => {
+    const refreshTodayKey = () => {
+      if (document.visibilityState === "visible") {
+        setTodayKey(toKstDateKey(new Date()));
+      }
+    };
+
+    document.addEventListener("visibilitychange", refreshTodayKey);
+    window.addEventListener("focus", refreshTodayKey);
+
+    return () => {
+      document.removeEventListener("visibilitychange", refreshTodayKey);
+      window.removeEventListener("focus", refreshTodayKey);
+    };
+  }, []);
+
+  const isDismissedToday = dismissedDateKey === todayKey;
+  const isVisible =
+    isActive &&
+    !isInstalled &&
+    (!isDismissedToday || isIosGuideOpen) &&
+    !!installPromptKind &&
+    !isSaveFailureVisible;
+
+  useEffect(() => {
+    onVisibleChange?.(isVisible);
+  }, [isVisible, onVisibleChange]);
+
+  if (!isVisible) {
     return null;
   }
 
+  const rememberDismissedToday = () => {
+    const dateKey = toKstDateKey(new Date());
+    rememberInstallPromptDismissedDate(dateKey);
+    setDismissedDateKey(dateKey);
+    setTodayKey(dateKey);
+  };
+
   const dismiss = () => {
-    rememberInstallPromptDismissed();
-    setIsDismissed(true);
+    rememberDismissedToday();
     setIsIosGuideOpen(false);
   };
 
   const handleAdd = async () => {
-    rememberInstallPromptDismissed();
-    setIsDismissed(true);
+    rememberDismissedToday();
 
     if (installPromptKind === "ios-safari") {
       setIsIosGuideOpen(true);

@@ -16,6 +16,7 @@ import {
   getTabPanelId,
   TAB_ITEMS,
 } from "@/components/BottomDock";
+import PwaInstallPrompt from "@/components/PwaInstallPrompt";
 import PullToRefreshIndicator, {
   type PullToRefreshStatus,
 } from "@/components/PullToRefreshIndicator";
@@ -177,6 +178,7 @@ const BottomNav: React.FC = () => {
   const [pullToRefreshStatus, setPullToRefreshStatus] =
     useState<PullToRefreshStatus>("idle");
   const [isPullRefreshSlow, setIsPullRefreshSlow] = useState(false);
+  const [isInstallPromptVisible, setIsInstallPromptVisible] = useState(false);
   const handledDeepLinkRef = useRef(false);
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
   const depthScrollContainersRef = useRef(
@@ -656,6 +658,11 @@ const BottomNav: React.FC = () => {
     [depthStacks, isGlobalMenuVisible, selectedTab],
   );
 
+  // 전역 화면은 연 탭과 상관없이 셸 전체를 덮으므로 모든 탭의 깊이가 비어야 홈 탭이 드러난다
+  const isHomeTabUncovered =
+    selectedTab === "home" &&
+    TAB_KEYS.every((tabKey) => depthStacks[tabKey].length === 0);
+
   const myInProgressMatch = liveSessionState.myInProgressMatch;
   const liveSession = liveSessionState.liveSession;
   const isMyMatchBarVisible =
@@ -1125,7 +1132,12 @@ const BottomNav: React.FC = () => {
                     id={getTabPanelId(key)}
                     aria-labelledby={getTabId(key)}
                     hidden={selectedTab !== key}
-                    className="min-h-full bg-pk-bg pb-[calc(var(--app-bottom-dock-height)+1rem)]"
+                    className={`min-h-full bg-pk-bg ${
+                      key === "home" && isInstallPromptVisible
+                        ? // 떠 있는 설치 안내가 마지막 콘텐츠를 가리지 않게 안내 높이만큼 더 띄운다
+                          "pb-[calc(var(--app-bottom-dock-height)+6rem)]"
+                        : "pb-[calc(var(--app-bottom-dock-height)+1rem)]"
+                    }`}
                   >
                     <TabPage />
                   </div>
@@ -1171,6 +1183,11 @@ const BottomNav: React.FC = () => {
               </div>
             </div>
           </div>
+
+          <PwaInstallPrompt
+            isActive={isHomeTabUncovered}
+            onVisibleChange={setIsInstallPromptVisible}
+          />
 
           <MatchDetailDrawer
             matchId={matchDetailLayer.value}
