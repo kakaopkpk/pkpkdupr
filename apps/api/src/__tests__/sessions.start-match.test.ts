@@ -71,13 +71,7 @@ const doublesBody = {
 describe("POST /api/match-sessions/:sessionId/matches", () => {
   let sessions: ManagedMatchSession[];
   let cleanupExpired: MockInstance<MatchRepository["cleanupExpired"]>;
-  let findInProgressPlayerIds: MockInstance<
-    MatchRepository["findInProgressPlayerIds"]
-  >;
-  let addSessionParticipants: MockInstance<
-    MatchRepository["addSessionParticipants"]
-  >;
-  let create: MockInstance<MatchRepository["create"]>;
+  let createInProgress: MockInstance<MatchRepository["createInProgress"]>;
   let applyMatchResult: MockInstance<AuthService["applyMatchResultToRatings"]>;
 
   const startMatch = (sessionId: string, body: object = doublesBody) =>
@@ -119,23 +113,16 @@ describe("POST /api/match-sessions/:sessionId/matches", () => {
       MatchRepository.prototype,
       "findOrCreateRegularSession",
     ).mockResolvedValue(regularSession);
-    findInProgressPlayerIds = vi
-      .spyOn(MatchRepository.prototype, "findInProgressPlayerIds")
-      .mockResolvedValue([]);
-    addSessionParticipants = vi
-      .spyOn(MatchRepository.prototype, "addSessionParticipants")
-      .mockResolvedValue();
-    create = vi
-      .spyOn(MatchRepository.prototype, "create")
-      .mockImplementation(
-        async (input) =>
-          ({
-            ...input,
-            id: "Mstarted",
-            createdAt: new Date(),
-            updatedAt: new Date(),
-          }) as Match,
-      );
+    createInProgress = vi
+      .spyOn(MatchRepository.prototype, "createInProgress")
+      .mockImplementation(async (input) => ({
+        match: {
+          ...input,
+          id: "Mstarted",
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        } as Match,
+      }));
   });
 
   afterEach(() => {
@@ -152,9 +139,10 @@ describe("POST /api/match-sessions/:sessionId/matches", () => {
     expect(response.status).toBe(201);
     expect(cleanupExpired).toHaveBeenCalledWith(thursdayEvening);
     expect(cleanupExpired.mock.invocationCallOrder[0]).toBeLessThan(
-      create.mock.invocationCallOrder[0]!,
+      createInProgress.mock.invocationCallOrder[0]!,
     );
-    const [input] = create.mock.calls[0]!;
+    const [input, now] = createInProgress.mock.calls[0]!;
+    expect(now).toEqual(thursdayEvening);
     expect(input).toMatchObject({
       type: "mixed-doubles",
       status: "created",
@@ -169,12 +157,9 @@ describe("POST /api/match-sessions/:sessionId/matches", () => {
       session: { id: "Scustom1" },
     });
     expect(input.matchStartsAt).toEqual(thursdayEvening);
-    expect(addSessionParticipants).toHaveBeenCalledWith("Scustom1", [
-      playerA.id,
-      playerB.id,
-      playerC.id,
-      playerD.id,
-    ]);
+    expect(
+      input.teams.flatMap((team) => team.players.map((player) => player.id)),
+    ).toEqual([playerA.id, playerB.id, playerC.id, playerD.id]);
     expect(applyMatchResult).not.toHaveBeenCalled();
     expect(response.body).toMatchObject({
       id: "Mstarted",
@@ -191,18 +176,14 @@ describe("POST /api/match-sessions/:sessionId/matches", () => {
     });
 
     expect(response.status).toBe(201);
-    expect(create.mock.calls[0]![0].location).toBe("다른 코트");
+    expect(createInProgress.mock.calls[0]![0].location).toBe("다른 코트");
   });
 
   it("오늘 정기 세션 시간대면 정기 세션에 저장한다", async () => {
     const response = await startMatch("Sregular");
 
     expect(response.status).toBe(201);
-    expect(create.mock.calls[0]![0].session?.id).toBe("Sregular");
-    expect(addSessionParticipants).toHaveBeenCalledWith(
-      "Sregular",
-      expect.any(Array),
-    );
+    expect(createInProgress.mock.calls[0]![0].session?.id).toBe("Sregular");
   });
 
   it("22:00 KST 이후 정기 세션에서 시작하면 세션 없이 저장한다", async () => {
@@ -211,16 +192,15 @@ describe("POST /api/match-sessions/:sessionId/matches", () => {
     const response = await startMatch("Sregular");
 
     expect(response.status).toBe(201);
-    expect(create.mock.calls[0]![0].session).toBeUndefined();
-    expect(create.mock.calls[0]![0].location).toBe("야탑초등학교");
-    expect(addSessionParticipants).not.toHaveBeenCalled();
+    expect(createInProgress.mock.calls[0]![0].session).toBeUndefined();
+    expect(createInProgress.mock.calls[0]![0].location).toBe("야탑초등학교");
   });
 
   it("세션이 없으면 404를 반환한다", async () => {
     const response = await startMatch("Smissing");
 
     expect(response.status).toBe(404);
-    expect(create).not.toHaveBeenCalled();
+    expect(createInProgress).not.toHaveBeenCalled();
   });
 
   it("오늘 세션이 아니면 정기·회원 세션 모두 403을 반환한다", async () => {
@@ -234,7 +214,7 @@ describe("POST /api/match-sessions/:sessionId/matches", () => {
 
     expect(custom.status).toBe(403);
     expect(regular.status).toBe(403);
-    expect(create).not.toHaveBeenCalled();
+    expect(createInProgress).not.toHaveBeenCalled();
   });
 
   it("유효하지 않은 세션 ID면 400을 반환한다", async () => {
@@ -248,21 +228,19 @@ describe("POST /api/match-sessions/:sessionId/matches", () => {
 
     expect(response.status).toBe(201);
     expect(
-      create.mock.calls[0]![0].teams.flatMap((team) =>
+      createInProgress.mock.calls[0]![0].teams.flatMap((team) =>
         team.players.map((player) => player.id),
       ),
     ).not.toContain(requester.id);
   });
 
   it("이미 진행 중인 경기에 들어간 선수가 있으면 409를 반환한다", async () => {
-    findInProgressPlayerIds.mockResolvedValue([playerC.id]);
+    createInProgress.mockResolvedValue({ conflictPlayerId: playerC.id });
 
     const response = await startMatch("Scustom1");
 
     expect(response.status).toBe(409);
-    expect(findInProgressPlayerIds).toHaveBeenCalledWith(thursdayEvening);
-    expect(create).not.toHaveBeenCalled();
-    expect(addSessionParticipants).not.toHaveBeenCalled();
+    expect(response.body).toEqual({ error: "Pplayerc님이 다른 경기 중이에요" });
   });
 
   it("유형에 맞지 않는 팀 구성이면 400을 반환한다", async () => {
@@ -272,7 +250,7 @@ describe("POST /api/match-sessions/:sessionId/matches", () => {
     });
 
     expect(response.status).toBe(400);
-    expect(create).not.toHaveBeenCalled();
+    expect(createInProgress).not.toHaveBeenCalled();
   });
 
   it("활성 회원이 아닌 선수가 있으면 400을 반환한다", async () => {
@@ -284,6 +262,6 @@ describe("POST /api/match-sessions/:sessionId/matches", () => {
     });
 
     expect(response.status).toBe(400);
-    expect(create).not.toHaveBeenCalled();
+    expect(createInProgress).not.toHaveBeenCalled();
   });
 });

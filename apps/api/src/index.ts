@@ -15,6 +15,8 @@ import {
   type MatchScore,
   type RecordMatchRequest,
   type RecordedMatchResponse,
+  type StartMatchRequest,
+  type InProgressMatchesResponse,
   type Team,
   type Session,
   type ManagedMatchSession,
@@ -23,6 +25,7 @@ import {
 } from "@pkpkdupr/shared/match";
 import {
   canOpenRegularSession,
+  DEFAULT_MATCH_LOCATION,
   getEmptySessionExpiresAt,
   getNextRegularSessionDateKey,
   isInProgressMatchExpired,
@@ -598,6 +601,83 @@ const resolveSessionForNewMatch = async (
   return await matchRepository.findOrCreateRegularSession(
     toKstDateKey(matchStartsAt),
   );
+};
+
+/**
+ * 진행 중 경기 시작(POST /api/matches/start)의 세션을 정한다.
+ * 요청 세션이 오늘(KST) 회원 세션이면 그 세션, 그 밖(정기 세션·지난 세션·없는 세션·생략)은 기록과 같은 시간 규칙을 따른다.
+ */
+const resolveSessionForStartedMatch = async (
+  requestedSessionId: string | undefined,
+  now: Date,
+): Promise<ManagedMatchSession | undefined> => {
+  if (requestedSessionId && isEntityId(requestedSessionId, "session")) {
+    const requested = await matchRepository.findSessionById(requestedSessionId);
+    if (
+      requested &&
+      requested.kind !== "regular" &&
+      toKstDateKey(requested.date) === toKstDateKey(now)
+    ) {
+      return requested;
+    }
+  }
+  return await resolveSessionForNewMatch(undefined, now);
+};
+
+/**
+ * 점수 없는 진행 중 경기를 만든다. 세션이 있으면 선수를 참여자로 넣는다.
+ * 선수 중 누구든 이미 진행 중 경기에 있으면 아무것도 만들지 않고 409로 막는다.
+ */
+const startInProgressMatch = async ({
+  requesterPlayerId,
+  lineup,
+  session,
+  location,
+  courtName,
+  now,
+}: {
+  requesterPlayerId: string;
+  lineup: Awaited<ReturnType<typeof prepareMatchLineup>>;
+  session: ManagedMatchSession | undefined;
+  location: string;
+  courtName?: string;
+  now: Date;
+}): Promise<Match> => {
+  const result = await matchRepository.createInProgress(
+    {
+      type: lineup.type,
+      teams: lineup.teams,
+      scores: [],
+      session: session
+        ? {
+            id: session.id,
+            name: session.name,
+            date: session.date,
+            location: session.location,
+          }
+        : undefined,
+      source: "player_created",
+      creatorPlayerId: requesterPlayerId,
+      status: "created",
+      resultSubmittedByPlayerId: null,
+      resultSubmittedAt: null,
+      location,
+      courtName,
+      matchStartsAt: now,
+      completedAt: null,
+    },
+    now,
+  );
+  if ("conflictPlayerId" in result) {
+    const busyPlayer = lineup.teams
+      .flatMap((team) => team.players)
+      .find((player) => player.id === result.conflictPlayerId);
+    throw new MatchRecordRequestError(
+      `${busyPlayer?.username ?? result.conflictPlayerId}님이 다른 경기 중이에요`,
+      409,
+    );
+  }
+  return result.match;
 };
 
 /** 공개 세션 API 요청 오류. status로 400·403·404·409를 구분해 응답한다 */
@@ -1392,44 +1472,72 @@ app.post("/api/match-sessions/:sessionId/matches", async (req, res) => {
     }
 
     const lineup = await prepareMatchLineup(type, teams, decoded.playerId);
-    const playerIds = getTeamPlayerIds(lineup.teams);
-    const inProgressPlayerIds = new Set(
-      await matchRepository.findInProgressPlayerIds(now),
-    );
-    if (playerIds.some((playerId) => inProgressPlayerIds.has(playerId))) {
-      throw new MatchRecordRequestError(
-        "이미 진행 중인 경기에 들어간 선수가 있습니다.",
-        409,
-      );
-    }
-
     const session = await resolveSessionForNewMatch(sessionId, now);
-    if (session) {
-      await matchRepository.addSessionParticipants(session.id, playerIds);
-    }
-    const match = await matchRepository.create({
-      type: lineup.type,
-      teams: lineup.teams,
-      scores: [],
-      session: session
-        ? {
-            id: session.id,
-            name: session.name,
-            date: session.date,
-            location: session.location,
-          }
-        : undefined,
-      source: "player_created",
-      creatorPlayerId: decoded.playerId,
-      status: "created",
-      resultSubmittedByPlayerId: null,
-      resultSubmittedAt: null,
+    const match = await startInProgressMatch({
+      requesterPlayerId: decoded.playerId,
+      lineup,
+      session,
       location: normalizeOptionalName(location) ?? requestedSession.location,
       courtName: normalizedCourtName ?? undefined,
-      matchStartsAt: now,
-      completedAt: null,
+      now,
     });
     res.status(201).json(match);
+  } catch (err) {
+    sendMatchRecordFailure(res, err);
+  }
+});
+
+app.post("/api/matches/start", async (req, res) => {
+  const decoded = await getAuthPayload(req, res);
+  if (!decoded) {
+    return;
+  }
+
+  try {
+    const body = req.body as Partial<StartMatchRequest> | undefined;
+    const { type, teams, location } = body ?? {};
+    const requestedSessionId = parseRequestedSessionId(body?.sessionId);
+    if (type != null && !isMatchType(type)) {
+      throw new MatchRecordRequestError("유효한 매치 타입이 필요합니다.", 400);
+    }
+    if (!Array.isArray(teams) || teams.length !== 2) {
+      throw new MatchRecordRequestError("두 팀 구성이 필요합니다.", 400);
+    }
+
+    // 시작 시각은 진행 중 만료(2시간)·24시간 수정 기한·정기 세션 판정의 기준이라 서버 now로 정한다.
+    const now = new Date();
+    await matchRepository.cleanupExpired(now);
+    const lineup = await prepareMatchLineup(type, teams, decoded.playerId);
+    const session = await resolveSessionForStartedMatch(requestedSessionId, now);
+    const match = await startInProgressMatch({
+      requesterPlayerId: decoded.playerId,
+      lineup,
+      session,
+      location:
+        normalizeOptionalName(location) ??
+        session?.location ??
+        DEFAULT_MATCH_LOCATION,
+      now,
+    });
+    res.status(201).json(match);
+  } catch (err) {
+    sendMatchRecordFailure(res, err);
+  }
+});
+
+// "/api/matches/:matchId"보다 먼저 등록해야 "in-progress"를 경기 id로 읽지 않는다.
+app.get("/api/matches/in-progress", async (req, res) => {
+  try {
+    if (!(await getAuthPayload(req, res))) {
+      return;
+    }
+
+    const now = new Date();
+    await matchRepository.cleanupExpired(now);
+    const response: InProgressMatchesResponse = {
+      matches: await matchRepository.findInProgress(now),
+    };
+    res.json(response);
   } catch (err) {
     sendMatchRecordFailure(res, err);
   }
