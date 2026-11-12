@@ -6,6 +6,7 @@ import { PkButton } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { RatingDelta } from "@/components/ui/Delta";
 import { PlayerAvatar, TeamAvatars } from "@/components/ui/PlayerAvatar";
+import { LinkChevron } from "@/components/ui/Section";
 import { cx } from "@/components/ui/cx";
 import {
   formatKstShortDate,
@@ -62,9 +63,10 @@ const SessionLink: React.FC<{
   <button
     type="button"
     onClick={() => onOpen(session.id)}
-    className="font-bold text-pk-primary active:opacity-70"
+    className="inline-flex items-center gap-0.5 font-bold text-pk-primary active:opacity-70"
   >
-    {getSessionLabel(session)} ›
+    {getSessionLabel(session)}
+    <LinkChevron />
   </button>
 );
 

@@ -4,7 +4,6 @@ import {
   type RecommendedCourt,
 } from "@pkpkdupr/shared/matchmaking";
 import SkeletonBlock from "@/components/SkeletonBlock";
-import { PkButton } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { SectionLabel, TextLink } from "@/components/ui/Section";
 import { cx } from "@/components/ui/cx";
@@ -33,14 +32,15 @@ const RecommendationRow: React.FC<{
         팀 평균 {court.teams[0].averageRating.toFixed(2)} :{" "}
         {court.teams[1].averageRating.toFixed(2)}
       </span>
-      <PkButton
-        variant="outline"
-        size="sm"
+      {/* 연한 파랑 36px·둥글기 12px·13/800. PkButton sm(알약·700)과 모양이 달라 직접 그린다 */}
+      <button
+        type="button"
         disabled={isStartDisabled}
         onClick={onStart}
+        className="inline-flex h-9 shrink-0 select-none items-center justify-center whitespace-nowrap rounded-pk-sm bg-pk-primary-soft px-4 text-pk-13 font-extrabold text-pk-primary transition-opacity touch-manipulation active:opacity-80 disabled:cursor-not-allowed disabled:bg-pk-neutral disabled:text-pk-muted disabled:active:opacity-100"
       >
         {isStarting ? "시작하는 중…" : "시작"}
-      </PkButton>
+      </button>
     </div>
     {error ? (
       <p role="alert" className="text-pk-13 font-medium text-pk-down">

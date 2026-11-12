@@ -122,7 +122,7 @@ const Me: React.FC = () => {
               <PartnerChemistryCard partners={partners} />
             ) : null}
             <RecentMatchesSection
-              title="내 경기"
+              title="최근 경기"
               matches={overview.summary.recentMatches}
               onViewAll={() => setIsMatchHistoryRequested(true)}
             />
