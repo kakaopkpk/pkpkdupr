@@ -363,6 +363,10 @@ describe("PUT /api/matches/:matchId expectedUpdatedAt", () => {
 
   beforeEach(() => {
     existing = buildInProgressMatch();
+    vi.spyOn(
+      MatchRepository.prototype,
+      "findCompletedMatchOutcomes",
+    ).mockResolvedValue([]);
     vi.spyOn(MatchRepository.prototype, "cleanupExpired").mockResolvedValue(
       undefined,
     );

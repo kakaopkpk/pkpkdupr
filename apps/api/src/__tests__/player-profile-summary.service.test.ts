@@ -77,6 +77,37 @@ describe("buildPlayerProfileSummary", () => {
     ]);
   });
 
+  it("업적 18개 진행 상태를 정의 순서로 넣고 진행 중 경기는 세지 않는다", () => {
+    const completed = makeMatch({ id: "Mcomplet" });
+    const inProgress = makeMatch({
+      id: "Minprogr",
+      status: "created",
+      scores: [],
+      completedAt: null,
+    });
+
+    const { achievements } = buildPlayerProfileSummary(
+      [inProgress, completed],
+      me.id,
+      emptyHistory,
+      me.id,
+      now,
+    );
+
+    expect(achievements).toHaveLength(18);
+    expect(achievements[0]).toEqual({
+      id: "matches-1",
+      earned: true,
+      earnedAt: now,
+      earnedMatchId: "Mcomplet",
+      current: 1,
+      target: 1,
+    });
+    expect(achievements.find((item) => item.id === "matches-10")).toMatchObject(
+      { earned: false, current: 1, target: 10 },
+    );
+  });
+
   describe("파트너 궁합", () => {
     let seq = 0;
     const doubles = (partner: Player, won: boolean, extra: Partial<Match> = {}) =>

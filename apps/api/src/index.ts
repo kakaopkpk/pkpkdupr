@@ -46,6 +46,11 @@ import {
 } from "@pkpkdupr/shared/session";
 import { generateEntityId, isEntityId } from "@pkpkdupr/shared/entityId";
 import {
+  findNewAchievements,
+  type AchievementHoldersResponse,
+  type EarnedAchievement,
+} from "@pkpkdupr/shared/achievements";
+import {
   MATCHMAKING_DEFAULT_COURTS,
   clampMatchmakingCourts,
   recommendDoublesMatches,
@@ -104,8 +109,10 @@ import {
   buildRankingResponse,
   buildSessionHistory,
   buildSessionReport,
+  countAchievementHolders,
   createRankingContext,
   rankPlayersAt,
+  toAchievementMatch,
 } from "./services/RankingService";
 import {
   AvatarValidationError,
@@ -820,6 +827,34 @@ const requireOpenSessionForParticipants = async (
 
 const getTeamPlayerIds = (teams: Team[]) =>
   teams.flatMap((team) => team.players.map((player) => player.id));
+
+/**
+ * 경기 저장으로 참가자 전원이 새로 받은 업적. 저장 후 완료 경기 전체와, 그중 이 경기만
+ * 저장 전 상태(previous, 완료 경기가 아니었으면 뺌)로 되돌린 목록의 계산 차이로 구한다.
+ * 저장은 이미 끝났으므로 업적 계산이 실패하면 빈 배열로 응답한다.
+ */
+const findNewAchievementsForSavedMatch = async (
+  match: Match,
+  previous: Match | null,
+): Promise<EarnedAchievement[]> => {
+  try {
+    const after = (await matchRepository.findCompletedMatchOutcomes()).map(
+      toAchievementMatch,
+    );
+    const before = [
+      ...after.filter((candidate) => candidate.id !== match.id),
+      ...(previous?.status === "completed" ? [previous] : []),
+    ];
+    return findNewAchievements({
+      playerIds: getTeamPlayerIds(match.teams),
+      before,
+      after,
+    });
+  } catch (err) {
+    console.error("[MATCH] 새 업적 계산 실패", match.id, err);
+    return [];
+  }
+};
 
 /** 검증·저장소 오류는 지정된 상태로, 그 밖의 검증 예외는 400으로 응답한다. */
 const sendMatchRecordFailure = (res: express.Response, error: unknown) => {
@@ -1627,6 +1662,7 @@ app.post("/api/matches", async (req, res) => {
     const response: RecordedMatchResponse = {
       ...match,
       ratingChanges: ratingChangeLogs,
+      newAchievements: await findNewAchievementsForSavedMatch(match, null),
     };
     res.status(201).json(response);
   } catch (err) {
@@ -2238,6 +2274,7 @@ app.put("/api/matches/:matchId", async (req, res) => {
 
   const matchId = req.params.matchId;
   let wasCompleted: boolean;
+  let previous: Match;
   let match: Match;
   try {
     const body = req.body as Partial<RecordMatchRequest> | undefined;
@@ -2283,6 +2320,7 @@ app.put("/api/matches/:matchId", async (req, res) => {
       );
     }
     wasCompleted = existing.status === "completed";
+    previous = existing;
     // 요청에 없어도 미리 읽은 updatedAt을 조건으로 저장해, 그사이 다른 회원이 고쳤으면 409로 막는다.
     // 그래서 아래 재계산 여부(wasCompleted)는 실제로 고친 행의 이전 상태와 같다.
     match = await matchRepository.updateRecordedMatch(matchId, {
@@ -2315,7 +2353,11 @@ app.put("/api/matches/:matchId", async (req, res) => {
       ({ ratingChangeLogs: ratingChanges } =
         await authService.applyMatchResultToRatings(match));
     }
-    const response: RecordedMatchResponse = { ...match, ratingChanges };
+    const response: RecordedMatchResponse = {
+      ...match,
+      ratingChanges,
+      newAchievements: await findNewAchievementsForSavedMatch(match, previous),
+    };
     res.json(response);
   } catch (err) {
     console.error("[MATCH] 경기 기록 수정 후 평점 반영 실패", matchId, err);
@@ -2657,6 +2699,27 @@ app.get("/api/session-reports/:sessionId", async (req, res) => {
       throw new RankingRequestError("세션 리포트를 찾을 수 없습니다.", 404);
     }
     res.json(report);
+  } catch (err) {
+    sendRankingFailure(res, err);
+  }
+});
+
+app.get("/api/achievements/holders", async (req, res) => {
+  try {
+    if (!(await getAuthPayload(req, res))) {
+      return;
+    }
+
+    const [players, matches] = await Promise.all([
+      authService.getAllPlayers(),
+      matchRepository.findCompletedMatchOutcomes(),
+    ]);
+    const response: AchievementHoldersResponse = {
+      counts: countAchievementHolders(
+        createRankingContext(players, [], matches),
+      ),
+    };
+    res.json(response);
   } catch (err) {
     sendRankingFailure(res, err);
   }

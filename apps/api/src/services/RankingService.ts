@@ -1,5 +1,13 @@
 import {
+  ACHIEVEMENTS,
+  computeAchievements,
+  toEarnedAchievements,
+  type AchievementMatch,
+  type EarnedAchievement,
+} from "@pkpkdupr/shared/achievements";
+import {
   getMatchTopLevelType,
+  getWinningTeamIndex,
   type MatchScore,
   type MatchTopLevelType,
   type MatchType,
@@ -20,7 +28,6 @@ import type {
   UnratedRankingEntry,
 } from "@pkpkdupr/shared/ranking";
 import { toKstDateKey, type MatchSessionKind } from "@pkpkdupr/shared/session";
-import { getWinningTeamIndex } from "./PlayerProfileSummaryService";
 
 /**
  * 랭킹·세션 리포트 계산. 순위 스냅샷을 저장하지 않고 평점 변경 로그로
@@ -564,5 +571,69 @@ export const buildSessionReport = ({
     ),
     players,
     topRiser,
+    achievements: buildSessionAchievements(
+      context,
+      sessionMatches,
+      players.map((report) => report.player.id),
+    ),
   };
+};
+
+/** 완료 경기 요약을 업적 계산 입력으로 바꾼다 */
+export const toAchievementMatch = (match: RankingMatch): AchievementMatch => ({
+  id: match.id,
+  type: match.type,
+  status: "completed",
+  completedAt: match.completedAt,
+  teams: [
+    { players: match.teamPlayerIds[0].map((id) => ({ id })) },
+    { players: match.teamPlayerIds[1].map((id) => ({ id })) },
+  ],
+  scores: match.scores,
+  session: match.sessionId ? { id: match.sessionId } : null,
+});
+
+const ACHIEVEMENT_ORDER = new Map(
+  ACHIEVEMENTS.map((definition, index) => [definition.id, index]),
+);
+
+/**
+ * 세션 경기로 받은 업적. 각 참가자의 전체 완료 경기로 계산해, 받게 된 경기가
+ * 이 세션 경기인 업적만 고른다. 받은 시각 → 업적 정의 순서 → 회원 id 순이다.
+ */
+const buildSessionAchievements = (
+  context: RankingContext,
+  sessionMatches: RankingMatch[],
+  playerIds: string[],
+): EarnedAchievement[] => {
+  const sessionMatchIds = new Set(sessionMatches.map((match) => match.id));
+  const matches = context.matches.map(toAchievementMatch);
+  return playerIds
+    .flatMap((playerId) =>
+      toEarnedAchievements(playerId, computeAchievements(playerId, matches)),
+    )
+    .filter((item) => sessionMatchIds.has(item.earnedMatchId))
+    .sort(
+      (left, right) =>
+        left.earnedAt.getTime() - right.earnedAt.getTime() ||
+        (ACHIEVEMENT_ORDER.get(left.achievementId) ?? 0) -
+          (ACHIEVEMENT_ORDER.get(right.achievementId) ?? 0) ||
+        compareText(left.playerId, right.playerId),
+    );
+};
+
+/** 업적 id별 받은 활성 회원 수. 아무도 받지 않은 업적도 0으로 넣는다 */
+export const countAchievementHolders = (
+  context: RankingContext,
+): Record<string, number> => {
+  const counts: Record<string, number> = Object.fromEntries(
+    ACHIEVEMENTS.map((definition) => [definition.id, 0]),
+  );
+  const matches = context.matches.map(toAchievementMatch);
+  for (const playerId of getActivePlayerIds(context)) {
+    for (const item of computeAchievements(playerId, matches)) {
+      if (item.earned) counts[item.id] += 1;
+    }
+  }
+  return counts;
 };
