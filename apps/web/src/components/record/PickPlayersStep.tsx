@@ -73,7 +73,7 @@ export default function PickPlayersStep({
   onStartMatch,
 }: PickPlayersStepProps): React.ReactElement {
   const [query, setQuery] = useState("");
-  // 사용자가 누른 빈자리. 채워지면 다시 왼쪽부터 첫 빈자리가 다음 자리가 된다
+  // 사용자가 누른 빈자리. 비어 있는 동안만 다음 자리가 된다
   const [preferredIndex, setPreferredIndex] = useState<number | null>(null);
   const [rawSelectedIndex, setSelectedIndex] = useState<number | null>(null);
   const slotRowRef = useRef<HTMLDivElement>(null);
@@ -92,6 +92,13 @@ export default function PickPlayersStep({
     () => buildPickList(players, { query, participantIds, busyIds }),
     [busyIds, participantIds, players, query],
   );
+
+  // 누른 빈자리가 채워지면 선호를 소모해, 나중에 그 자리가 다시 비어도 왼쪽부터 첫 빈자리가 다음 자리가 된다
+  useEffect(() => {
+    if (preferredIndex !== null && slots[preferredIndex] !== null) {
+      setPreferredIndex(null);
+    }
+  }, [preferredIndex, slots]);
 
   // 선택 중에 자리 줄 밖을 누르면 선택만 푼다
   useEffect(() => {

@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 
-/** 길게 눌러 확인 공통 시간(저장·삭제) */
+/** 길게 눌러 확인하는 기본 시간 */
 export const HOLD_TO_CONFIRM_DURATION_MS = 1000;
 
 interface HoldToConfirmButtonProps {
@@ -36,7 +36,7 @@ const variantClassName: Record<
 
 const HoldToConfirmButton: React.FC<HoldToConfirmButtonProps> = ({
   onComplete,
-  holdDurationMs = 500,
+  holdDurationMs = HOLD_TO_CONFIRM_DURATION_MS,
   children,
   className,
   progressClassName,
