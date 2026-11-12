@@ -28,7 +28,6 @@ export type MatchInfo = Omit<
   ratingChanges?: PlayerRatingChangeLog[];
 };
 
-
 export interface MatchListResponse {
   matches: MatchInfo[];
   total: number;
@@ -54,4 +53,3 @@ export const getTeamResultScores = (
     scores.filter((score) => score.scoreB > score.scoreA).length,
   ];
 };
-
