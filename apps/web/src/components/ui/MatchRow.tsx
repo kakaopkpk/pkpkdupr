@@ -38,10 +38,9 @@ const TeamLine: React.FC<{
   team: MatchTeam;
   score?: number;
   emphasis: "win" | "lose" | "none";
-  ringColor: string;
-}> = ({ team, score, emphasis, ringColor }) => (
+}> = ({ team, score, emphasis }) => (
   <div className="flex min-w-0 items-center gap-2.5">
-    <TeamAvatars players={team.players} size={22} ringColor={ringColor} />
+    <TeamAvatars players={team.players} size={22} />
     <span
       className={cx(
         "min-w-0 flex-1 truncate text-pk-15",
@@ -116,7 +115,6 @@ export const MatchRow: React.FC<{
             team={team}
             score={hasScores ? score : undefined}
             emphasis={hasWinner ? (index === 0 ? "win" : "lose") : "none"}
-            ringColor="#ffffff"
           />
         ))}
       </div>
@@ -157,7 +155,6 @@ export const LiveMatchRow: React.FC<{
             key={team.id}
             team={team}
             emphasis="none"
-            ringColor="#ffffff"
           />
         ))}
       </div>
