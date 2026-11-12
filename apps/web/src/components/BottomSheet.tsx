@@ -1,8 +1,10 @@
 import React from "react";
 import { createPortal } from "react-dom";
+import { prefersReducedMotion, useSheetDrag } from "@/hooks/useSheetDrag";
 import { DIMMED_THEME_COLOR } from "@/lib/themeColor";
 
-const TRANSITION_DURATION_MS = 84;
+const OPEN_DURATION_MS = 240;
+const CLOSE_DURATION_MS = 180;
 
 interface BottomSheetProps {
   isOpen: boolean;
@@ -59,13 +61,18 @@ const BottomSheetBody: React.FC<BottomSheetBodyProps> = ({
   </div>
 );
 
-/** Body 아래에 두면 본문이 스크롤돼도 시트 하단에 고정된다 */
+/**
+ * Body 아래에 두면 본문이 스크롤돼도 시트 하단에 고정된다.
+ * 키보드가 열려 있는 동안은 숨는다(index.css `html[data-keyboard-open]`).
+ */
 const BottomSheetFooter: React.FC<BottomSheetBodyProps> = ({
   children,
   className,
 }) => (
   <div
-    className={["shrink-0 bg-white pt-3", className].filter(Boolean).join(" ")}
+    className={["app-bottom-sheet-footer shrink-0 bg-white pt-3", className]
+      .filter(Boolean)
+      .join(" ")}
   >
     {children}
   </div>
@@ -92,12 +99,24 @@ const BottomSheet: BottomSheetComponent = ({
   const [isVisible, setIsVisible] = React.useState(isOpen);
   const [isSheetTransitionEnabled, setIsSheetTransitionEnabled] =
     React.useState(false);
+  const [transitionDurationMs, setTransitionDurationMs] =
+    React.useState(OPEN_DURATION_MS);
   const openAnimationFrameRef = React.useRef<number | null>(null);
   const transitionTimeoutRef = React.useRef<number | null>(null);
+  const surfaceRef = React.useRef<HTMLElement | null>(null);
+  const dimRef = React.useRef<HTMLDivElement | null>(null);
   const transitionStyle = React.useMemo(
-    () => ({ transitionDuration: `${TRANSITION_DURATION_MS}ms` }),
-    [],
+    () => ({ transitionDuration: `${transitionDurationMs}ms` }),
+    [transitionDurationMs],
   );
+
+  useSheetDrag({
+    surfaceRef,
+    dimRef,
+    enabled: shouldRender && isActive && isDismissable,
+    isOpen,
+    onDismiss: () => onOpenChange(false),
+  });
 
   React.useLayoutEffect(() => {
     if (!shouldRender || !isActive || typeof document === "undefined") {
@@ -140,6 +159,14 @@ const BottomSheet: BottomSheetComponent = ({
       transitionTimeoutRef.current = null;
     }
 
+    // 움직임 줄이기 설정이면 애니메이션 없이 열고 닫는다
+    const durationMs = prefersReducedMotion()
+      ? 0
+      : isOpen
+        ? OPEN_DURATION_MS
+        : CLOSE_DURATION_MS;
+    setTransitionDurationMs(durationMs);
+
     if (isOpen) {
       setShouldRender(true);
       setIsSheetTransitionEnabled(true);
@@ -152,7 +179,7 @@ const BottomSheet: BottomSheetComponent = ({
         transitionTimeoutRef.current = window.setTimeout(() => {
           setIsSheetTransitionEnabled(false);
           transitionTimeoutRef.current = null;
-        }, TRANSITION_DURATION_MS);
+        }, durationMs);
       });
 
       return undefined;
@@ -168,7 +195,7 @@ const BottomSheet: BottomSheetComponent = ({
         setShouldRender(false);
         setIsSheetTransitionEnabled(false);
         transitionTimeoutRef.current = null;
-      }, TRANSITION_DURATION_MS);
+      }, durationMs);
     });
 
     return undefined;
@@ -214,11 +241,17 @@ const BottomSheet: BottomSheetComponent = ({
       <div
         aria-hidden="true"
         className={[
-          "pointer-events-none absolute inset-0 bg-[rgba(15,23,42,0.45)] transition-opacity ease-out",
+          "pointer-events-none absolute inset-0 transition-opacity ease-out",
           isVisible ? "opacity-100" : "opacity-0",
         ].join(" ")}
         style={transitionStyle}
-      />
+      >
+        {/* 끄는 동안의 옅어짐은 안쪽에 따로 둬서 열림·닫힘 전환과 겹쳐 적용된다 */}
+        <div
+          ref={dimRef}
+          className="absolute inset-0 bg-[rgba(15,23,42,0.45)]"
+        />
+      </div>
       <div
         className={[
           "app-shell-width relative z-10 mx-auto w-full",
@@ -234,6 +267,7 @@ const BottomSheet: BottomSheetComponent = ({
         style={transitionStyle}
       >
         <section
+          ref={surfaceRef}
           role="dialog"
           aria-label={ariaLabel}
           className={[
