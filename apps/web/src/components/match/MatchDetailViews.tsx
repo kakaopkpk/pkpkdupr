@@ -152,13 +152,15 @@ const ScoreBlock: React.FC<{ match: MatchInfo }> = ({ match }) => {
         team={match.teams[0]}
         tone={winnerIndex === 1 ? "weak" : "strong"}
       />
-      <div
-        className="font-num text-[64px] leading-none font-bold tabular-nums"
-        aria-label={hasScores ? `${scoreA} 대 ${scoreB}` : "점수 없음"}
-      >
-        <span className={scoreClassName(0)}>{hasScores ? scoreA : "–"}</span>
-        <span className="px-2 text-[#c5ccda]">:</span>
-        <span className={scoreClassName(1)}>{hasScores ? scoreB : "–"}</span>
+      <div className="font-num text-[64px] leading-none font-bold tabular-nums">
+        <span className="sr-only">
+          {hasScores ? `${scoreA} 대 ${scoreB}` : "점수 없음"}
+        </span>
+        <span aria-hidden="true">
+          <span className={scoreClassName(0)}>{hasScores ? scoreA : "–"}</span>
+          <span className="px-2 text-[#c5ccda]">:</span>
+          <span className={scoreClassName(1)}>{hasScores ? scoreB : "–"}</span>
+        </span>
       </div>
       <TeamColumn
         team={match.teams[1]}

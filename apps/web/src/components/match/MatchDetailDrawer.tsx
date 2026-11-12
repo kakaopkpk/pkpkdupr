@@ -60,8 +60,12 @@ export default function MatchDetailDrawer({
   const { isAuthenticated } = useAuth();
   const { openRecordMatch, openSessionReport, dataVersion } =
     useAppNavigation();
-  const { registerScrollContainer, requestCloseTopDepth, restoreScrollTop, selectedTab } =
-    useTabNavigation();
+  const {
+    registerScrollContainer,
+    requestCloseTopDepth,
+    restoreScrollTop,
+    selectedTab,
+  } = useTabNavigation();
   const { players } = usePlayers();
   const isOnline = useOnlineStatus();
   // 닫히는 애니메이션 동안 마지막 경기를 계속 보여 준다
