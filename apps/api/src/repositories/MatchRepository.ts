@@ -2,10 +2,12 @@ import type {
   Match,
   MatchFeedItem,
   MatchScore,
+  MatchStatus,
   MatchSessionSummary,
   ManagedMatchSession,
   Session,
 } from "@pkpkdupr/shared/match";
+import { randomUUID } from "crypto";
 import { generateEntityId, isEntityId } from "@pkpkdupr/shared/entityId";
 import { kstDateKeyToDate } from "@pkpkdupr/shared/session";
 import type {
@@ -14,7 +16,9 @@ import type {
 } from "@pkpkdupr/shared/player";
 import {
   CompletedMatchResultEditError,
+  MatchNotFoundError,
   MatchRecordUpdateConflictError,
+  MatchStaleUpdateError,
   SessionHasMatchesError,
   type CompletedMatchOutcome,
   type CreateMatchInput,
@@ -536,7 +540,10 @@ export class MatchRepository {
     return hydrateMatch(updated);
   }
 
-  /** 참가자의 경기 기록 수정. cancelled 등 수정할 수 없는 상태로 바뀌었으면 409로 응답한다. */
+  /**
+   * 참가자의 경기 기록 수정. 그사이 지워졌으면 404, expectedUpdatedAt이 저장된 값과 다르거나
+   * cancelled 등 수정할 수 없는 상태로 바뀌었으면 409로 응답한다.
+   */
   async updateRecordedMatch(
     matchId: string,
     input: UpdateRecordedMatchInput,
@@ -545,20 +552,50 @@ export class MatchRepository {
       () => db.matches.updateRecordedMatch(matchId, input),
       400,
       (error) =>
-        error instanceof MatchRecordUpdateConflictError ? 409 : undefined,
+        error instanceof MatchNotFoundError
+          ? 404
+          : error instanceof MatchRecordUpdateConflictError ||
+              error instanceof MatchStaleUpdateError
+            ? 409
+            : undefined,
     );
 
     return hydrateMatch(updated);
   }
 
-  async delete(matchId: string): Promise<void> {
+  /**
+   * 경기를 지우고 감사 로그를 남긴다. 이미 지워졌으면 404(notFoundMessage),
+   * expectedUpdatedAt이 저장된 값과 다르면 409로 응답한다.
+   * 반환하는 status는 실제로 지운 행의 상태라 평점 재계산 여부는 이 값으로 정한다.
+   */
+  async deleteRecorded(
+    matchId: string,
+    input: {
+      deletedByPlayerId: string;
+      deletedByAdmin: boolean;
+      expectedUpdatedAt?: Date;
+      notFoundMessage?: string;
+    },
+  ): Promise<{ status: MatchStatus; match: Match }> {
+    const { notFoundMessage, ...deleteInput } = input;
     try {
-      await db.matches.delete(matchId);
+      const deleted = await db.matches.deleteRecordedMatch(matchId, {
+        ...deleteInput,
+        logId: `match-deletion-${randomUUID()}`,
+        deletedAt: new Date(),
+      });
+      return { status: deleted.status, match: hydrateMatch(deleted.match) };
     } catch (error) {
-      if ((error as Error).message === "MATCH_NOT_FOUND") {
-        throw new MatchRepositoryError("매치를 찾을 수 없습니다.", 404);
+      if (error instanceof MatchNotFoundError) {
+        throw new MatchRepositoryError(
+          notFoundMessage ?? error.message,
+          404,
+        );
       }
-      throw toRepositoryError(error, 400);
+      if (error instanceof MatchStaleUpdateError) {
+        throw new MatchRepositoryError(error.message, 409);
+      }
+      throw toRepositoryError(error, 500);
     }
   }
 

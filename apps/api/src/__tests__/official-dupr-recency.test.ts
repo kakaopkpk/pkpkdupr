@@ -100,6 +100,7 @@ describe("official DUPR recency propagation", () => {
     persistedDuprStateByPlayerId = new Map();
     replacedMatchCompletedLogs = [];
 
+    vi.spyOn(db.ratingWriteLock, "run").mockImplementation((fn) => fn());
     vi.spyOn(db.players, "findAll").mockImplementation(
       async () => [...storedPlayerById.values()] as any,
     );
@@ -302,7 +303,7 @@ describe("official DUPR recency propagation", () => {
     clearRepositoryWrites();
     const applied = await service.applyOfficialDuprAdjustment(
       input,
-      completedMatches,
+      async () => completedMatches,
     );
     const appliedNextRatingByPlayerId = new Map(
       applied.ratingChangeLogs.map((log) => [log.playerId, log.nextRating]),
@@ -329,12 +330,12 @@ describe("official DUPR recency propagation", () => {
     const service = new AuthService();
     const completedMatches = [buildMatch(new Date(NOW.getTime() - DAY_MS))];
 
-    const first = await service.recalculateDuprRatings(completedMatches, {
+    const first = await service.recalculateDuprRatings(async () => completedMatches, {
       perMatchLogs: true,
     });
     const firstIds = first.perMatchLogs.map((log) => log.id);
 
-    const second = await service.recalculateDuprRatings(completedMatches, {
+    const second = await service.recalculateDuprRatings(async () => completedMatches, {
       perMatchLogs: true,
     });
 
@@ -359,7 +360,7 @@ describe("official DUPR recency propagation", () => {
     const service = new AuthService(unchangedRatingService);
 
     const recalculation = await service.recalculateDuprRatings(
-      [buildMatch(new Date(NOW.getTime() - DAY_MS))],
+      async () => [buildMatch(new Date(NOW.getTime() - DAY_MS))],
       { perMatchLogs: true },
     );
 
