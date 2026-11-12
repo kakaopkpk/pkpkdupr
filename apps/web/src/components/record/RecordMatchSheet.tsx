@@ -15,7 +15,10 @@ import {
 } from "@/context/TabNavigationContext";
 import { useLayerDepth } from "@/hooks/useLayerDepth";
 import { apiFetch } from "@/lib/api";
-import RecordMatchFlow, { type RecordMatchFlowInitial } from "./RecordMatchFlow";
+import RecordMatchFlow, {
+  SCORE_STEP_DEPTH_ID,
+  type RecordMatchFlowInitial,
+} from "./RecordMatchFlow";
 import {
   EMPTY_SCORE,
   EMPTY_SLOTS,
@@ -49,7 +52,7 @@ const buildScoreInitial = (match: MatchInfo): RecordMatchFlowInitial => ({
 });
 
 /**
- * 전역 경기 기록 시트. "new"는 선수 고르기(presetTeams가 있으면 자리를 채워)부터,
+ * 전역 경기 기록 시트. "new"는 플레이어 선택(presetTeams가 있으면 자리를 채워)부터,
  * "score"는 경기를 받아 점수 입력부터 시작한다.
  */
 export default function RecordMatchSheet({
@@ -120,7 +123,11 @@ export default function RecordMatchSheet({
   }, [scoreMatchId, sheetKey]);
 
   const close = useCallback(() => {
-    if (!closeDepth(tabKey, DEPTH_ID)) onClose();
+    const closeSheet = () => {
+      if (!closeDepth(tabKey, DEPTH_ID)) onClose();
+    };
+    // 점수 단계 깊이가 위에 있으면 그것부터 닫아야 시트 깊이의 브라우저 기록이 남지 않는다
+    if (!closeDepth(tabKey, SCORE_STEP_DEPTH_ID, closeSheet)) closeSheet();
   }, [closeDepth, onClose, tabKey]);
 
   const handleOpenChange = useCallback(
@@ -169,6 +176,7 @@ export default function RecordMatchSheet({
         key={`${sheetKey}:${scoreMatchId ?? "new"}`}
         initial={initial}
         isOpen={isOpen}
+        tabKey={tabKey}
         onClose={close}
       />
     );

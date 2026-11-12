@@ -1,4 +1,10 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   isMatchRecordEditable,
   type RecordMatchRequest,
@@ -9,6 +15,11 @@ import type { AvatarPlayer } from "@/components/ui/PlayerAvatar";
 import { useAppNavigation } from "@/context/AppNavigationContext";
 import { useLiveSession } from "@/context/LiveSessionContext";
 import { useSystemNotice } from "@/context/SystemNoticeContext";
+import {
+  type TabKey,
+  useTabNavigation,
+} from "@/context/TabNavigationContext";
+import { useLayerDepth } from "@/hooks/useLayerDepth";
 import { usePlayers } from "@/hooks/usePlayers";
 import { apiFetch } from "@/lib/api";
 import { startSessionMatch } from "@/lib/matchSessions";
@@ -30,6 +41,8 @@ const SAVE_ERROR_FALLBACK = "기록을 저장하지 못했어요.";
 const START_ERROR_FALLBACK = "경기를 시작하지 못했어요.";
 const NOT_EDITABLE_MESSAGE = "고칠 수 없는 경기예요";
 const TEAM_NAMES = ["Team A", "Team B"] as const;
+/** 점수 단계에서 기기 뒤로가기로 플레이어 선택에 돌아가도록 쌓는 깊이 */
+export const SCORE_STEP_DEPTH_ID = "global-record-match-score-step";
 
 export interface RecordMatchFlowInitial {
   step: "pick" | "score";
@@ -44,6 +57,8 @@ export interface RecordMatchFlowProps {
   initial: RecordMatchFlowInitial;
   /** 시트가 열려 있는지. 닫힌 뒤 끝난 재시도는 화면 이동을 하지 않는다 */
   isOpen: boolean;
+  /** 시트가 깊이를 쌓은 탭. 점수 단계 깊이도 같은 탭에 쌓는다 */
+  tabKey: TabKey;
   onClose: () => void;
 }
 
@@ -82,17 +97,19 @@ const saveMatch = async (
 };
 
 /**
- * 선수 고르기 → 점수 입력 → 기록 완료. 시트를 열 때마다 셸이 key로 새로 만든다.
+ * 플레이어 선택 → 점수 입력 → 기록 완료. 시트를 열 때마다 셸이 key로 새로 만든다.
  * 입력과 수정은 같은 화면이며, 수정은 저장된 값이 채워져 있고 PUT으로 저장한다는 점만 다르다.
  */
 export default function RecordMatchFlow({
   initial,
   isOpen,
+  tabKey,
   onClose,
 }: RecordMatchFlowProps): React.ReactElement {
   const { notifyDataChanged, selectTab } = useAppNavigation();
   const { liveSession, inProgressMatches } = useLiveSession();
   const { showSaveFailure } = useSystemNotice();
+  const { closeDepth } = useTabNavigation();
   const { players, status: playersStatus } = usePlayers();
 
   const [step, setStep] = useState<Step>(initial.step);
@@ -151,7 +168,7 @@ export default function RecordMatchFlow({
     () =>
       new Set(
         inProgressMatches
-          // 지금 고치는 진행 중 경기의 선수는 경기 중으로 보지 않는다
+          // 지금 고치는 진행 중 경기의 플레이어는 경기 중으로 보지 않는다
           .filter((match) => match.id !== editingMatchId)
           .flatMap((match) => match.teams.flatMap((team) => team.players))
           .map((player) => player.id),
@@ -256,6 +273,24 @@ export default function RecordMatchFlow({
     setStep(nextStep);
   };
 
+  // 깊이가 닫힐 때 아직 점수 단계면 플레이어 선택으로 간다. 저장 완료로 단계가 바뀌어 닫힐 때는 그대로 둔다
+  const stepRef = useRef(step);
+  useEffect(() => {
+    stepRef.current = step;
+  }, [step]);
+  const backToPick = useCallback(() => {
+    if (stepRef.current !== "score") return;
+    setError(null);
+    setStep("pick");
+  }, []);
+  useLayerDepth({
+    isOpen: isOpen && step === "score",
+    tabKey,
+    depthId: SCORE_STEP_DEPTH_ID,
+    kind: "bottom-sheet",
+    onClose: backToPick,
+  });
+
   if (step === "done" && recordedMatch) {
     const recordedTeams: [string[], string[]] = [
       recordedMatch.teams[0].players.map((player) => player.id),
@@ -302,8 +337,9 @@ export default function RecordMatchFlow({
         error={isEditable ? error : NOT_EDITABLE_MESSAGE}
         canSave={canSave}
         isSaving={isBusy}
-        onChangePlayers={() => goToStep("pick")}
-        onCancel={onClose}
+        onBack={() => {
+          if (!closeDepth(tabKey, SCORE_STEP_DEPTH_ID)) backToPick();
+        }}
         onSave={handleSave}
       />
     );

@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 
-/** 경기 저장처럼 되돌리기 어려운 저장을 확정하는 길게 누르기 시간 */
-export const SAVE_HOLD_DURATION_MS = 2000;
+/** 길게 눌러 확인 공통 시간(저장·삭제) */
+export const HOLD_TO_CONFIRM_DURATION_MS = 1000;
 
 interface HoldToConfirmButtonProps {
   onComplete: () => void;
