@@ -70,6 +70,19 @@ const createRepository = (options: {
   return { repository, transaction, transactionDb, poolDb, client, execute };
 };
 
+type Statement = { sql: string; args: unknown[] };
+
+// INSERT 문의 컬럼 목록에서 위치를 찾아 해당 컬럼에 바인딩된 값을 꺼낸다.
+const argForColumn = (statement: Statement, column: string) => {
+  const columnList = statement.sql.match(/\(([^)]*)\)\s*VALUES/)?.[1];
+  const columns = columnList?.split(",").map((name) => name.trim()) ?? [];
+  const index = columns.indexOf(column);
+  if (index < 0) {
+    throw new Error(`${column} 컬럼을 INSERT 문에서 찾지 못했습니다.`);
+  }
+  return statement.args[index];
+};
+
 const input = {
   logId: "log-1",
   deletedByPlayerId: "player-1",
@@ -98,10 +111,12 @@ describe("MatchRepository.deleteRecordedMatch 커넥션 사용", () => {
     const result = await repository.deleteRecordedMatch("Mdelete1", input);
 
     const logInsert = execute.mock.calls
-      .map(([statement]) => statement as { sql: string; args: unknown[] })
+      .map(([statement]) => statement as Statement)
       .find(({ sql }) => sql.includes("match_deletion_logs"));
     expect(logInsert).toBeDefined();
-    expect(JSON.parse(String(logInsert!.args[4]))).toEqual(
+    expect(
+      JSON.parse(String(argForColumn(logInsert!, "match_snapshot"))),
+    ).toEqual(
       JSON.parse(JSON.stringify(result.match)),
     );
   });
