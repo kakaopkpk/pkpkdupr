@@ -1,4 +1,5 @@
 import React from "react";
+import { cx } from "@/components/ui/cx";
 
 export const CheckIcon: React.FC<{ size?: number; className?: string }> = ({
   size = 16,
@@ -14,7 +15,7 @@ export const CheckIcon: React.FC<{ size?: number; className?: string }> = ({
     strokeWidth="3"
     strokeLinecap="round"
     strokeLinejoin="round"
-    className={["shrink-0", className].filter(Boolean).join(" ")}
+    className={cx("shrink-0", className)}
   >
     <path d="M5 12.5l4.5 4.5L19 7.5" />
   </svg>

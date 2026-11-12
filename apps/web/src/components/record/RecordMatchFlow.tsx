@@ -29,6 +29,7 @@ import ScoreStep from "./ScoreStep";
 const SAVE_ERROR_FALLBACK = "기록을 저장하지 못했어요.";
 const START_ERROR_FALLBACK = "경기를 시작하지 못했어요.";
 const NOT_EDITABLE_MESSAGE = "고칠 수 없는 경기예요";
+const TEAM_NAMES = ["Team A", "Team B"] as const;
 
 export interface RecordMatchFlowInitial {
   step: "pick" | "score";
@@ -51,8 +52,8 @@ type Step = "pick" | "score" | "done";
 const toTeamRequests = (
   teams: [string[], string[]],
 ): StartSessionMatchRequest["teams"] => [
-  { name: "Team A", playerIds: teams[0] },
-  { name: "Team B", playerIds: teams[1] },
+  { name: TEAM_NAMES[0], playerIds: teams[0] },
+  { name: TEAM_NAMES[1], playerIds: teams[1] },
 ];
 
 const saveMatch = async (

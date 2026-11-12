@@ -113,6 +113,9 @@ const getLastPlayedAtMs = (lastPlayedAt: string | null) => {
   return Number.isNaN(value) ? Number.NEGATIVE_INFINITY : value;
 };
 
+/** 오름차순 비교. 양쪽이 같은 무한대여도 NaN 대신 0을 돌려준다 */
+const compareNumbers = (a: number, b: number) => (a < b ? -1 : a > b ? 1 : 0);
+
 /**
  * 선수 고르기 목록. 활성 회원을 아이디 부분 일치로 거른 뒤
  * 세션 참여자(경기 중 아님) → 경기 중인 사람 → 나머지(최근 경기 순) 한 목록으로 세운다.
@@ -148,10 +151,15 @@ export const buildPickList = <T extends PickListPlayer>(
     )
     .sort(
       (a, b) =>
-        getGroup(a) - getGroup(b) ||
-        (participantOrder.get(a.id) ?? Number.POSITIVE_INFINITY) -
-          (participantOrder.get(b.id) ?? Number.POSITIVE_INFINITY) ||
-        getLastPlayedAtMs(b.lastPlayedAt) - getLastPlayedAtMs(a.lastPlayedAt) ||
+        compareNumbers(getGroup(a), getGroup(b)) ||
+        compareNumbers(
+          participantOrder.get(a.id) ?? Number.POSITIVE_INFINITY,
+          participantOrder.get(b.id) ?? Number.POSITIVE_INFINITY,
+        ) ||
+        compareNumbers(
+          getLastPlayedAtMs(b.lastPlayedAt),
+          getLastPlayedAtMs(a.lastPlayedAt),
+        ) ||
         a.username.localeCompare(b.username),
     );
 };
