@@ -70,7 +70,7 @@ pnpm lint
 - 인증/프로필: `GET /api/me`, `POST /api/me/password-changed`(첫 로그인 비밀번호 변경 완료), `PATCH /api/me/profile`, avatar API. 로그인과 비밀번호 변경은 클라이언트가 Supabase Auth로 직접 합니다.
 - 플레이어: `GET /api/players`, 프로필 요약 `GET /api/players/:playerId/profile-summary`(승패·평점 변화·최근 7일 경기 수·파트너 궁합·요청자 기준 상대 전적)
 - 경기: `GET /api/matches`(`playerId`와 함께 `category=singles|doubles`로 분류 필터), 경기 기록 `POST /api/matches`·수정 `PUT /api/matches/:matchId`, `GET /api/match-feed`, 세션 조회 API
-- 세션: 오늘 세션 `GET /api/match-sessions/today`, 오늘 정기 세션 열기 `POST /api/match-sessions/regular/today`(정기 요일 22시 전만), 회원 세션 생성 `POST /api/match-sessions`, 상세 `GET /api/match-sessions/:sessionId`, 세션 경기 `GET /api/match-sessions/:sessionId/matches`, 점수 없이 진행 중 경기 시작 `POST /api/match-sessions/:sessionId/matches`(오늘 세션만, 이미 진행 중인 선수 포함 시 409, 선수 자동 참여), 복식 추천 매칭 `GET /api/match-sessions/:sessionId/recommendations?courts=N&seed=S`(오늘 세션만, courts 기본 3·1~4로 자름, seed 생략 시 서버가 정해 응답에 포함·같은 seed면 같은 결과, 진행 중 경기 선수 제외), 참여자 한 명씩 추가 `POST /api/match-sessions/:sessionId/participants`·삭제 `DELETE /api/match-sessions/:sessionId/participants/:playerId`(활성 회원 누구나·대리 가능, 오늘 세션만, 멱등)
+- 세션: 오늘 세션 `GET /api/match-sessions/today`, 다가오는 세션 `GET /api/match-sessions/upcoming`(만료 전 오늘·미래 세션, 날짜 키 오름차순·같은 날은 정기 세션 먼저, 조회 때 다음 정기 회차를 find-or-create), 오늘 정기 세션 열기 `POST /api/match-sessions/regular/today`(정기 요일 22시 전만), 회원 세션 생성 `POST /api/match-sessions`(`dateKey` 생략 시 오늘·과거 날짜 400, 세션 시각은 그날 00:00 KST라 같은 날 같은 이름은 409), 상세 `GET /api/match-sessions/:sessionId`, 세션 경기 `GET /api/match-sessions/:sessionId/matches`, 점수 없이 진행 중 경기 시작 `POST /api/match-sessions/:sessionId/matches`(오늘 세션만, 이미 진행 중인 선수 포함 시 409, 선수 자동 참여), 복식 추천 매칭 `GET /api/match-sessions/:sessionId/recommendations?courts=N&seed=S`(오늘 세션만, courts 기본 3·1~4로 자름, seed 생략 시 서버가 정해 응답에 포함·같은 seed면 같은 결과, 진행 중 경기 선수 제외), 참여자 한 명씩 추가 `POST /api/match-sessions/:sessionId/participants`·삭제 `DELETE /api/match-sessions/:sessionId/participants/:playerId`(활성 회원 누구나·대리 가능, 오늘·미래 세션만·지난 세션 403, 멱등)
 - 관리자: 선수/감사 로그, 회원 추가(`POST /api/admin/register`)·비밀번호 초기화·아이디 변경, 경기 일괄 등록·메타데이터, 평점 재계산, 공식 DUPR 조정 API
 
 도메인 규칙:
@@ -80,6 +80,7 @@ pnpm lint
 - 경기 타입·스코어·세션 계약은 `packages/shared/src/match.ts`가 기준입니다.
 - 경기는 기록 즉시 completed가 되어 평점에 반영됩니다. 활성 회원이면 참가자·생성자 여부와 상관없이 누구나 경기 시작 후 24시간 이내(`isWithinMatchEditWindow`)에만 수정할 수 있고(`isMatchRecordEditable`, 취소·과거 다중 점수 경기는 제외, 웹 버튼 노출 기준), 이후 정정은 관리자가 합니다. 마지막으로 입력·수정한 회원은 `resultSubmittedByPlayerId`에 기록됩니다.
 - 예외로 세션에서 시작한 경기는 점수 없는 진행 중 경기(`status: "created"`)입니다. 회원 누구나 `PUT /api/matches/:matchId`로 첫 점수를 넣는 순간 completed(`completedAt`=입력 시각)가 되고 평점에 증분 반영됩니다. 진행 중 경기는 평점·평점 이력·통계·`lastPlayedAt`에서 빠지고, 시작 2시간(`isInProgressMatchExpired`)이 지나도록 점수가 없으면 조회 시점 정리(`cleanupExpired`)에서 빈 세션 정리보다 먼저 삭제됩니다. 이 정리는 관리자 예정 경기를 포함한 점수 없는 created 경기 전부에 적용됩니다.
+- 정기 세션은 월·목 18:00 KST 세션이며 이름은 요일별 `getRegularSessionName`("월요 정기운동"/"목요 정기운동")이다. 다음 정기 회차(`getNextRegularSessionDateKey`, 오늘이 정기 요일이고 22시 전이면 오늘)는 `GET /upcoming` 조회 때만 미리 만들어지고, 그 밖의 세션 조회는 정기 세션을 만들지 않는다. 경기가 없는 세션은 그날 만료 시각(정기 22:00, 회원 다음 날 0시)이 지나면 참여자와 함께 정리되므로, 미래 세션은 그날이 지나기 전에는 지워지지 않는다.
 - `packages/shared` 변경 시 web, admin-web, api, db 전체 소비처를 같은 변경 단위에서 점검합니다.
 
 ## 운영과 배포

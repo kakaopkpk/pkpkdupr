@@ -127,4 +127,39 @@ describe("MatchRepository.deleteExpiredInProgressMatchesAndEmptySessions", () =>
       ).toBe(true);
     },
   );
+
+  it.each([
+    ["regular", "2026-11-12T18:00:00+09:00"],
+    ["custom", "2026-11-10T00:00:00+09:00"],
+    ["custom", "2026-11-20T00:00:00+09:00"],
+  ] as const)(
+    "미래 %s 세션(%s)은 지금 지우지 않고, 그날 만료 시각이 지나면 지운다",
+    async (kind, sessionDateIso) => {
+      const sessionDate = new Date(sessionDateIso);
+
+      const current = createRepository([]);
+      await current.repository.deleteExpiredInProgressMatchesAndEmptySessions(
+        now,
+      );
+      expect(
+        isExpiredBySqlArgs(
+          kind,
+          sessionDate,
+          executedStatement(current.execute).args,
+        ),
+      ).toBe(false);
+
+      const afterExpiry = createRepository([]);
+      await afterExpiry.repository.deleteExpiredInProgressMatchesAndEmptySessions(
+        getEmptySessionExpiresAt(kind, sessionDate),
+      );
+      expect(
+        isExpiredBySqlArgs(
+          kind,
+          sessionDate,
+          executedStatement(afterExpiry.execute).args,
+        ),
+      ).toBe(true);
+    },
+  );
 });
