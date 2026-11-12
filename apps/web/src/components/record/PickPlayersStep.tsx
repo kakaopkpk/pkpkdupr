@@ -27,10 +27,10 @@ export interface PickPlayersStepProps {
   participantIds: readonly string[];
   busyIds: ReadonlySet<string>;
   /**
-   * session: 진행 중 세션의 새 경기. "경기 시작"·"점수 입력"
-   * plain: 세션 없는 새 경기나 기존 경기의 플레이어 바꾸기. "취소"·"다음"
+   * new: 새 경기(세션과 상관없음). "경기 시작"·"점수 입력"
+   * edit: 기존 경기의 플레이어 바꾸기. "취소"·"다음"
    */
-  footerMode: "session" | "plain";
+  footerMode: "new" | "edit";
   isBusy: boolean;
   error: string | null;
   onCancel: () => void;
@@ -314,7 +314,7 @@ export default function PickPlayersStep({
       </BottomSheet.Body>
       <BottomSheet.Footer className="-mx-4 border-t border-pk-divider px-4">
         <FooterError message={error} />
-        {footerMode === "session" ? (
+        {footerMode === "new" ? (
           <div className="grid grid-cols-2 gap-2">
             <PkButton
               variant="soft"

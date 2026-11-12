@@ -30,8 +30,6 @@ export interface ScoreStepProps {
   onScoreChange: (score: ScoreDraft) => void;
   location: string;
   onLocationChange: (location: string) => void;
-  /** 이 값이 바뀌면 점수 칩을 선택값 근처로 다시 스크롤한다 */
-  scrollKey: number;
   /** 서버 오류나 "고칠 수 없는 경기예요" */
   error: string | null;
   canSave: boolean;
@@ -47,7 +45,6 @@ export default function ScoreStep({
   onScoreChange,
   location,
   onLocationChange,
-  scrollKey,
   error,
   canSave,
   isSaving,
@@ -116,7 +113,7 @@ export default function ScoreStep({
         ) : null}
         {([0, 1] as const).map((teamIndex) => (
           <TeamScore
-            key={`${teamIndex}:${scrollKey}`}
+            key={teamIndex}
             players={teams[teamIndex]}
             value={values[teamIndex]}
             isWinner={winnerIndex === teamIndex}
