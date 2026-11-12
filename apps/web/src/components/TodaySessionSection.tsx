@@ -276,9 +276,9 @@ const TodaySessionSection: React.FC<TodaySessionSectionProps> = ({
           </p>
           {createButton}
         </div>
-        {showRegularPlaceholder ? (
+        {showRegularPlaceholder && today ? (
           <TodaySessionCard
-            name={getRegularSessionName(today?.dateKey ?? "")}
+            name={getRegularSessionName(today.dateKey)}
             location={REGULAR_SESSION_LOCATION}
             isRegular
             participants={[]}
