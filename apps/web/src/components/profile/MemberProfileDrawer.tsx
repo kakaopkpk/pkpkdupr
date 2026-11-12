@@ -1,32 +1,27 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type {
-  MatchInfo,
-  MatchListResponse,
-  PlayerProfileSummaryResponse,
-} from "@/components/Match";
-import MemberProfile from "@/components/MemberProfile";
-import ProfileMatchHistoryDrawer from "@/components/ProfileMatchHistoryDrawer";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
+import type { MatchTopLevelType } from "@pkpkdupr/shared/match";
 import RightDrawer from "@/components/RightDrawer";
+import SkeletonBlock from "@/components/SkeletonBlock";
+import PlayerMatchesDrawer from "@/components/profile/PlayerMatchesDrawer";
+import ProfileStatTile from "@/components/profile/ProfileStatTile";
 import {
-  GLOBAL_LAYER,
-  useAppNavigation,
-} from "@/context/AppNavigationContext";
-import { useAuth } from "@/context/AuthContext";
+  ProfileBodySkeleton,
+  ProfileLoadError,
+  ProfileRatingSection,
+  RecentMatchesSection,
+  WinRateTile,
+} from "@/components/profile/ProfileSections";
+import { useProfileOverview } from "@/components/profile/useProfileOverview";
+import { DetailHeader } from "@/components/ui/Headers";
+import { PlayerAvatar } from "@/components/ui/PlayerAvatar";
+import { StatusMessageChip } from "@/components/ui/StatusMessageChip";
+import { GLOBAL_LAYER } from "@/context/AppNavigationContext";
 import {
   type TabKey,
   useTabNavigation,
 } from "@/context/TabNavigationContext";
 import { useLayerDepth } from "@/hooks/useLayerDepth";
 import { usePlayers } from "@/hooks/usePlayers";
-import { apiFetch } from "@/lib/api";
-import {
-  buildProfileMatchList,
-  buildRecentProfileMatches,
-  buildRatingHistory,
-  createEmptyMatchStats,
-  createEmptyRatingDelta,
-  createEmptyRatingHistory,
-} from "@/utils/matchStats";
 
 export interface MemberProfileDrawerProps {
   playerId: string | null;
@@ -36,31 +31,25 @@ export interface MemberProfileDrawerProps {
 
 const PROFILE_DEPTH_ID = "global-member-profile";
 const MATCH_HISTORY_DEPTH_ID = "global-member-match-history";
-const MATCH_HISTORY_PAGE_SIZE = 20;
 
-/** 전역 회원 프로필. 지금은 기존 MemberProfile과 경기 기록 드로어를 감싼다 */
+/** 전역 회원 프로필. 평점 카드·경기 승률·나와의 상대 전적·최근 경기 */
 export default function MemberProfileDrawer({
   playerId,
   tabKey,
   onClose,
 }: MemberProfileDrawerProps): React.ReactElement {
-  const { isAuthenticated } = useAuth();
-  const { openMatchDetail } = useAppNavigation();
-  const { registerScrollContainer, restoreScrollTop, selectedTab } =
-    useTabNavigation();
+  const {
+    registerScrollContainer,
+    requestCloseTopDepth,
+    restoreScrollTop,
+    selectedTab,
+  } = useTabNavigation();
   const { players, reload: reloadPlayers } = usePlayers();
   // 닫히는 애니메이션 동안 마지막 회원을 계속 보여 준다
   const [displayedPlayerId, setDisplayedPlayerId] = useState(playerId);
-  const [matchStats, setMatchStats] = useState(createEmptyMatchStats);
-  const [ratingDelta, setRatingDelta] = useState(createEmptyRatingDelta);
-  const [ratingHistory, setRatingHistory] = useState(createEmptyRatingHistory);
-  const [matches, setMatches] = useState<MatchInfo[]>([]);
-  const [isStatsLoading, setIsStatsLoading] = useState(false);
+  const [category, setCategory] = useState<MatchTopLevelType>("doubles");
   const [isMatchHistoryRequested, setIsMatchHistoryRequested] = useState(false);
-  const [isMatchHistoryLoading, setIsMatchHistoryLoading] = useState(false);
-  const [matchHistoryPage, setMatchHistoryPage] = useState(0);
-  const [matchHistoryTotal, setMatchHistoryTotal] = useState(0);
-  const requestIdRef = useRef(0);
+  const { overview, hasError, reload } = useProfileOverview(displayedPlayerId);
 
   const isOpen = useLayerDepth({
     isOpen: !!playerId,
@@ -74,115 +63,23 @@ export default function MemberProfileDrawer({
     () => setIsMatchHistoryRequested(false),
     [],
   );
-  const isMatchHistoryOpen = useLayerDepth({
-    isOpen: isMatchHistoryRequested && !!playerId,
-    tabKey,
-    depthId: MATCH_HISTORY_DEPTH_ID,
-    kind: "match-history",
-    onClose: closeMatchHistory,
-    saveScroll: true,
-  });
-
-  const loadSummary = useCallback(
-    async (memberId: string, preserveVisibleData = false, throwOnError = false) => {
-      const requestId = requestIdRef.current + 1;
-      requestIdRef.current = requestId;
-      if (!isAuthenticated) return;
-
-      if (!preserveVisibleData) {
-        setMatchStats(createEmptyMatchStats());
-        setRatingDelta(createEmptyRatingDelta());
-        setRatingHistory(createEmptyRatingHistory());
-        setMatches([]);
-        setIsStatsLoading(true);
-      }
-
-      try {
-        const res = await apiFetch(
-          `/api/players/${encodeURIComponent(memberId)}/profile-summary`,
-        );
-        if (!res.ok) throw new Error("매치 목록을 불러오지 못했습니다.");
-
-        const data = (await res.json()) as PlayerProfileSummaryResponse;
-        if (requestIdRef.current !== requestId) return;
-        setMatchStats(data.matchStats);
-        setRatingDelta(data.ratingDelta);
-        setMatches(data.recentMatches);
-        setRatingHistory(buildRatingHistory(data.ratingHistory));
-        setMatchHistoryPage(0);
-        setMatchHistoryTotal(0);
-      } catch (err) {
-        if (throwOnError) throw err;
-      } finally {
-        if (requestIdRef.current === requestId && !preserveVisibleData) {
-          setIsStatsLoading(false);
-        }
-      }
-    },
-    [isAuthenticated],
-  );
-
-  const loadMatchHistory = useCallback(
-    async (memberId: string, page: number, append = false) => {
-      if (!isAuthenticated) return;
-
-      setIsMatchHistoryLoading(true);
-      try {
-        const searchParams = new URLSearchParams({
-          playerId: memberId,
-          page: String(page),
-          limit: String(MATCH_HISTORY_PAGE_SIZE),
-        });
-        const res = await apiFetch(`/api/matches?${searchParams.toString()}`);
-        if (!res.ok) throw new Error("매치 목록을 불러오지 못했습니다.");
-
-        const data = (await res.json()) as MatchListResponse;
-        setMatches((current) => {
-          if (!append) return data.matches;
-          const ids = new Set(current.map((match) => match.id));
-          return [
-            ...current,
-            ...data.matches.filter((match) => !ids.has(match.id)),
-          ];
-        });
-        setMatchHistoryPage(page + 1);
-        setMatchHistoryTotal(data.total);
-      } finally {
-        setIsMatchHistoryLoading(false);
-      }
-    },
-    [isAuthenticated],
-  );
 
   useEffect(() => {
-    if (!playerId) return;
+    if (playerId) setDisplayedPlayerId(playerId);
+  }, [playerId]);
 
-    setDisplayedPlayerId(playerId);
-    void loadSummary(playerId);
-  }, [loadSummary, playerId]);
+  // 다른 회원을 열면 분류를 처음(복식)으로 돌린다
+  useEffect(() => {
+    setCategory("doubles");
+  }, [displayedPlayerId]);
 
   const refreshProfile = useCallback(async () => {
-    if (!displayedPlayerId) return;
-    await Promise.all([
-      reloadPlayers(),
-      loadSummary(displayedPlayerId, true, true),
-    ]);
-  }, [displayedPlayerId, loadSummary, reloadPlayers]);
-
-  const openMatchHistory = () => {
-    if (!displayedPlayerId) return;
-    setIsMatchHistoryRequested(true);
-    void loadMatchHistory(displayedPlayerId, 0);
-  };
+    await Promise.all([reloadPlayers(), reload({ throwOnError: true })]);
+  }, [reload, reloadPlayers]);
 
   const handleProfileExited = useCallback(() => {
     setDisplayedPlayerId(null);
-    setIsStatsLoading(false);
     setIsMatchHistoryRequested(false);
-    restoreScrollTop(tabKey);
-  }, [restoreScrollTop, tabKey]);
-
-  const handleMatchHistoryExited = useCallback(() => {
     restoreScrollTop(tabKey);
   }, [restoreScrollTop, tabKey]);
 
@@ -192,72 +89,115 @@ export default function MemberProfileDrawer({
     },
     [registerScrollContainer, tabKey],
   );
-  const registerMatchHistoryScrollContainer = useCallback(
-    (element: HTMLDivElement | null) => {
-      registerScrollContainer(tabKey, MATCH_HISTORY_DEPTH_ID, element);
-    },
-    [registerScrollContainer, tabKey],
-  );
 
   const member = useMemo(
     () => players.find((candidate) => candidate.id === displayedPlayerId) ?? null,
     [displayedPlayerId, players],
   );
-  const profileMatchList = useMemo(
-    () =>
-      displayedPlayerId ? buildProfileMatchList(matches, displayedPlayerId) : [],
-    [displayedPlayerId, matches],
-  );
-  const recentMatches = useMemo(
-    () =>
-      displayedPlayerId
-        ? buildRecentProfileMatches(matches, displayedPlayerId)
-        : [],
-    [displayedPlayerId, matches],
-  );
-  const isActive = tabKey === selectedTab;
+  const username =
+    member?.username ??
+    overview?.rankings[category]?.entries.find(
+      (entry) => entry.player.id === displayedPlayerId,
+    )?.player.username ??
+    "";
 
   if (!displayedPlayerId) return <></>;
+
+  const totalStats = overview
+    ? Object.values(overview.summary.matchStats).reduce(
+        (sum, stats) => ({
+          wins: sum.wins + stats.matchWins,
+          losses: sum.losses + stats.matchLosses,
+        }),
+        { wins: 0, losses: 0 },
+      )
+    : null;
+  const headToHead = overview?.summary.headToHead ?? null;
 
   return (
     <>
       <RightDrawer
         isOpen={isOpen}
-        isActive={isActive}
-        ariaLabel="멤버 프로필"
+        isActive={tabKey === selectedTab}
+        ariaLabel="회원 프로필"
         onExited={handleProfileExited}
         onScrollContainerChange={registerProfileScrollContainer}
         onPullToRefresh={refreshProfile}
         layer={GLOBAL_LAYER.memberProfile}
       >
-        <MemberProfile
-          player={member}
-          isMe={false}
-          matchStats={matchStats}
-          ratingDelta={ratingDelta}
-          ratingHistory={ratingHistory}
-          isStatsLoading={isStatsLoading}
-          recentMatches={recentMatches}
-          onPressRecentMatch={(match) => openMatchDetail(match.id)}
-          onViewAllMatches={openMatchHistory}
+        <DetailHeader
+          title={username}
+          onBack={() => requestCloseTopDepth(tabKey)}
         />
+        <div className="flex flex-col gap-2.5 px-4 pb-8">
+          <div className="flex items-center gap-3 px-1 pb-1.5">
+            <PlayerAvatar
+              player={{
+                id: displayedPlayerId,
+                username,
+                avatarUrl: member?.avatarUrl,
+              }}
+              size={56}
+            />
+            <div className="flex min-w-0 flex-col items-start gap-1.5">
+              {member?.statusMessage ? (
+                <StatusMessageChip
+                  message={member.statusMessage}
+                  color={member.statusMessageBackgroundColor}
+                />
+              ) : null}
+              {totalStats ? (
+                <span className="text-pk-13 text-pk-sub tabular-nums">
+                  {totalStats.wins + totalStats.losses}경기 · {totalStats.wins}승{" "}
+                  {totalStats.losses}패
+                </span>
+              ) : (
+                <SkeletonBlock className="h-4 w-32" />
+              )}
+            </div>
+          </div>
+          {overview ? (
+            <>
+              <ProfileRatingSection
+                overview={overview}
+                category={category}
+                onCategoryChange={setCategory}
+                fallbackRating={member?.duprRating?.[category] ?? null}
+              />
+              <div className="grid grid-cols-2 gap-2.5">
+                <WinRateTile overview={overview} category={category} />
+                <ProfileStatTile
+                  label="나와의 상대 전적"
+                  value={
+                    headToHead && headToHead.matchCount > 0
+                      ? `${headToHead.wins}승 ${headToHead.losses}패`
+                      : "–"
+                  }
+                  foot={`내 기준 · ${headToHead?.matchCount ?? 0}경기`}
+                />
+              </div>
+              <RecentMatchesSection
+                title="최근 경기"
+                matches={overview.summary.recentMatches}
+                onViewAll={() => setIsMatchHistoryRequested(true)}
+              />
+            </>
+          ) : hasError ? (
+            <ProfileLoadError onRetry={() => void reload()} />
+          ) : (
+            <ProfileBodySkeleton />
+          )}
+        </div>
       </RightDrawer>
-      <ProfileMatchHistoryDrawer
-        isOpen={isMatchHistoryOpen}
-        isActive={isActive}
+      <PlayerMatchesDrawer
+        isOpen={isMatchHistoryRequested && !!playerId}
         tabKey={tabKey}
-        matches={profileMatchList}
-        isLoading={isMatchHistoryLoading}
-        hasMore={matches.length < matchHistoryTotal}
-        isLoadingMore={isMatchHistoryLoading && matches.length > 0}
-        onLoadMore={() =>
-          void loadMatchHistory(displayedPlayerId, matchHistoryPage, true)
-        }
-        onPullToRefresh={() => loadMatchHistory(displayedPlayerId, 0)}
-        onPressMatch={(match) => openMatchDetail(match.id)}
-        onExited={handleMatchHistoryExited}
-        onScrollContainerChange={registerMatchHistoryScrollContainer}
+        playerId={displayedPlayerId}
+        title={`${username} 경기`}
+        initialCategory={category}
+        depthId={MATCH_HISTORY_DEPTH_ID}
         layer={GLOBAL_LAYER.memberMatchHistory}
+        onClose={closeMatchHistory}
       />
     </>
   );
