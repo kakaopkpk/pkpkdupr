@@ -4,9 +4,12 @@ import {
   canOpenRegularSession,
   getEmptySessionExpiresAt,
   getEmptySessionExpiryCutoff,
+  getNextRegularSessionDateKey,
+  getRegularSessionName,
   IN_PROGRESS_MATCH_TIMEOUT_MS,
   isInProgressMatchExpired,
   isRegularSessionTime,
+  isValidKstDateKey,
   kstDateKeyToDate,
   toKstDateKey,
 } from "../session";
@@ -238,5 +241,45 @@ describe("isMatchInProgress", () => {
     expect(isMatchInProgress({ status: "created" })).toBe(true);
     expect(isMatchInProgress({ status: "completed" })).toBe(false);
     expect(isMatchInProgress({ status: "cancelled" })).toBe(false);
+  });
+});
+
+describe("getRegularSessionName", () => {
+  it("날짜 키의 KST 요일로 이름을 정한다", () => {
+    expect(getRegularSessionName("2026-11-09")).toBe("월요 정기운동");
+    expect(getRegularSessionName("2026-11-12")).toBe("목요 정기운동");
+  });
+});
+
+describe("getNextRegularSessionDateKey", () => {
+  it.each([
+    ["월 21:59 → 오늘", "2026-11-09T21:59:59+09:00", "2026-11-09"],
+    ["월 22:00 → 목", "2026-11-09T22:00:00+09:00", "2026-11-12"],
+    ["화 → 목", "2026-11-10T09:00:00+09:00", "2026-11-12"],
+    ["수 → 목", "2026-11-11T23:59:00+09:00", "2026-11-12"],
+    ["목 21:59 → 오늘", "2026-11-12T21:59:00+09:00", "2026-11-12"],
+    ["목 22:00 → 다음 월", "2026-11-12T22:00:00+09:00", "2026-11-16"],
+    ["금 → 다음 월", "2026-11-13T12:00:00+09:00", "2026-11-16"],
+    ["토 → 다음 월", "2026-11-14T12:00:00+09:00", "2026-11-16"],
+    ["일 → 다음 월", "2026-11-15T23:00:00+09:00", "2026-11-16"],
+  ])("%s", (_label, nowIso, expected) => {
+    expect(getNextRegularSessionDateKey(new Date(nowIso))).toBe(expected);
+  });
+
+  it("월말·연말을 넘긴다", () => {
+    expect(
+      getNextRegularSessionDateKey(new Date("2026-12-31T23:00:00+09:00")),
+    ).toBe("2027-01-04");
+  });
+});
+
+describe("isValidKstDateKey", () => {
+  it("형식과 실제 날짜를 확인한다", () => {
+    expect(isValidKstDateKey("2026-11-12")).toBe(true);
+    expect(isValidKstDateKey("2028-02-29")).toBe(true);
+    expect(isValidKstDateKey("2026-02-30")).toBe(false);
+    expect(isValidKstDateKey("2026-13-01")).toBe(false);
+    expect(isValidKstDateKey("2026-1-01")).toBe(false);
+    expect(isValidKstDateKey("2026/11/12")).toBe(false);
   });
 });
