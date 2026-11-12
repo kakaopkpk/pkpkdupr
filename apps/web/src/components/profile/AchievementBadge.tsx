@@ -3,6 +3,7 @@ import type { AchievementDefinition } from "@pkpkdupr/shared/achievements";
 import { cx } from "@/components/ui/cx";
 
 const EARNED_COLOR = "var(--color-pk-primary)";
+const EARNED_ICON = "var(--color-white)";
 const UNEARNED_FILL = "var(--color-pk-neutral)";
 const UNEARNED_ICON = "var(--color-pk-quiet)";
 // 못 받은 배지 숫자 꼬리표 테두리. 시트 그랩바와 같은 색이며 pk 토큰에는 없다
@@ -124,7 +125,7 @@ export const AchievementBadge: React.FC<AchievementBadgeProps> = ({
         height={iconSize}
         viewBox="0 0 24 24"
         fill="none"
-        stroke={earned ? "#fff" : UNEARNED_ICON}
+        stroke={earned ? EARNED_ICON : UNEARNED_ICON}
         strokeWidth={2}
         strokeLinecap="round"
         strokeLinejoin="round"

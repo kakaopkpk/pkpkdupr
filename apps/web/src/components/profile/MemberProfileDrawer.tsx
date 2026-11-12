@@ -158,7 +158,7 @@ export default function MemberProfileDrawer({
               </div>
               <AchievementsSection
                 playerId={playerId}
-                progress={overview.summary.achievements ?? []}
+                progress={overview.summary.achievements}
                 variant="member"
                 badgeSize={44}
               />

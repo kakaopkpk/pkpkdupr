@@ -57,7 +57,7 @@ const loadDetail = async (
     ),
   ]);
   const progress =
-    summary.achievements?.find((item) => item.id === request.achievementId) ??
+    summary.achievements.find((item) => item.id === request.achievementId) ??
     null;
   const match =
     progress?.earned && progress.earnedMatchId
@@ -163,6 +163,7 @@ export default function AchievementDetailSheet({
     detail && detail.request === displayedRequest ? detail : null;
   const ready = currentDetail?.status === "ready" ? currentDetail : null;
   const isLoading = !currentDetail || currentDetail.status === "loading";
+  const isError = currentDetail?.status === "error";
   const progress = ready?.progress ?? null;
   const earned = !!progress?.earned;
   const earnedMatch = ready?.match ?? null;
@@ -175,10 +176,10 @@ export default function AchievementDetailSheet({
     content = (
       <>
         <BottomSheet.Header className="flex flex-col items-center gap-1 px-1 pt-1 text-center">
-          {ready ? (
-            <AchievementBadge achievement={definition} earned={earned} size={72} />
-          ) : (
+          {isLoading ? (
             <SkeletonBlock className="size-[72px] !rounded-full" />
+          ) : (
+            <AchievementBadge achievement={definition} earned={earned} size={72} />
           )}
           <h2 className="mt-3 text-pk-22 font-extrabold tracking-[-0.02em] text-pk-ink">
             {definition.name}
@@ -186,7 +187,7 @@ export default function AchievementDetailSheet({
           <p className="text-pk-15 text-pk-sub">{definition.condition}</p>
         </BottomSheet.Header>
         <BottomSheet.Body className="!gap-0 px-1">
-          {currentDetail?.status === "error" ? (
+          {isError ? (
             <p role="alert" className="pb-2 text-pk-13 font-bold text-pk-down">
               업적 정보를 불러오지 못했어요.
             </p>
@@ -194,6 +195,8 @@ export default function AchievementDetailSheet({
           <DetailRow label="받은 날">
             {isLoading ? (
               <ValueSkeleton />
+            ) : isError ? (
+              "–"
             ) : earned && progress?.earnedAt ? (
               formatKstLongDate(progress.earnedAt)
             ) : (
