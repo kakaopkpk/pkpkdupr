@@ -135,7 +135,14 @@ export default function PickPlayersStep({
             aria-label="이름 검색"
             placeholder="이름 검색"
             value={query}
+            enterKeyHint="done"
             onChange={(event) => setQuery(event.target.value)}
+            onKeyDown={(event) => {
+              // 완료/Enter로 키보드를 내려 하단 버튼을 다시 보인다
+              if (event.key !== "Enter" || event.nativeEvent.isComposing) return;
+              event.preventDefault();
+              event.currentTarget.blur();
+            }}
             // 16px 미만이면 iOS가 포커스 때 화면을 확대한다
             className="app-mobile-input min-w-0 flex-1 bg-transparent text-[16px] text-pk-ink outline-none placeholder:text-pk-muted"
           />

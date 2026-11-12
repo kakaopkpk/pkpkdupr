@@ -104,6 +104,14 @@ const CreateSessionForm: React.FC<CreateSessionFormProps> = ({
 
   const clearError = () => setError(null);
 
+  // 날짜·이름·장소 세 칸이라 폼의 암묵적 제출이 일어나지 않으므로 한 줄 입력의
+  // 완료/Enter를 직접 저장으로 잇는다. 한글 조합 중 Enter는 조합 확정이다
+  const handleEnterToSave = (event: React.KeyboardEvent<HTMLInputElement>) => {
+    if (event.key !== "Enter" || event.nativeEvent.isComposing) return;
+    event.preventDefault();
+    void handleSave();
+  };
+
   return (
     <>
       <BottomSheet.Header>
@@ -138,6 +146,8 @@ const CreateSessionForm: React.FC<CreateSessionFormProps> = ({
             maxLength={MATCH_SESSION_NAME_MAX_LENGTH}
             placeholder="예: 번개, 클럽 대회"
             required
+            enterKeyHint="done"
+            onKeyDown={handleEnterToSave}
             onChange={(event) => {
               setName(event.target.value);
               clearError();
@@ -149,6 +159,8 @@ const CreateSessionForm: React.FC<CreateSessionFormProps> = ({
             maxLength={MATCH_SESSION_LOCATION_MAX_LENGTH}
             placeholder="장소 입력"
             required
+            enterKeyHint="done"
+            onKeyDown={handleEnterToSave}
             onChange={(event) => {
               setLocation(event.target.value);
               clearError();
