@@ -7,7 +7,13 @@ import React, {
   useRef,
   useState,
 } from "react";
-import { getEmptySessionExpiresAt } from "@pkpkdupr/shared/session";
+import {
+  getEmptySessionExpiresAt,
+  getNextRegularSessionDateKey,
+  kstDateKeyToDate,
+  REGULAR_SESSION_START_HOUR,
+  toKstDateKey,
+} from "@pkpkdupr/shared/session";
 import type { MatchInfo } from "@/types/match";
 import { apiFetch } from "@/lib/api";
 import {
@@ -54,6 +60,34 @@ export const pickLiveSession = (
   );
 };
 
+/**
+ * 진행 중 세션이 바뀔 수 있는 다음 시각. 오늘 세션들의 시작·만료 시각과 오늘 정기 회차 시작(18:00) 중
+ * now보다 늦은 가장 이른 시각이다. 없으면 null
+ */
+export const getNextLiveSessionBoundary = (
+  sessions: MatchSessionDetailInfo[],
+  now: Date = new Date(),
+): Date | null => {
+  const candidates = sessions.flatMap((session) => {
+    const startsAt = new Date(session.date);
+    return [startsAt, getEmptySessionExpiresAt(session.kind, startsAt)];
+  });
+
+  // 정기 회차는 다가오는 세션 조회 때 서버가 만들어서, 오늘 세션 응답에 아직 없을 수 있다
+  const todayKey = toKstDateKey(now);
+  if (getNextRegularSessionDateKey(now) === todayKey) {
+    candidates.push(kstDateKeyToDate(todayKey, REGULAR_SESSION_START_HOUR));
+  }
+
+  const upcomingTimes = candidates
+    .map((date) => date.getTime())
+    .filter((time) => time > now.getTime());
+  return upcomingTimes.length > 0 ? new Date(Math.min(...upcomingTimes)) : null;
+};
+
+// 경계 시각을 확실히 넘긴 뒤 다시 고르도록 조금 늦게 다시 읽는다
+const BOUNDARY_RELOAD_DELAY_MS = 1_000;
+
 const fetchSessionMatches = async (sessionId: string) => {
   const res = await apiFetch(
     `/api/match-sessions/${encodeURIComponent(sessionId)}/matches`,
@@ -63,7 +97,7 @@ const fetchSessionMatches = async (sessionId: string) => {
 };
 
 /**
- * 셸이 진행 중 세션 상태를 만든다. 첫 로드와 앱이 다시 보일 때 스스로 다시 읽고,
+ * 셸이 진행 중 세션 상태를 만든다. 첫 로드, 앱이 다시 보일 때, 다음 세션 시작·만료 시각에 스스로 다시 읽고,
  * 그 밖의 갱신(데이터 변경·당겨서 새로고침)은 셸이 reload를 부른다. 주기 폴링은 하지 않는다.
  */
 export const useLiveSessionState = (
@@ -73,6 +107,10 @@ export const useLiveSessionState = (
   const [liveSession, setLiveSession] =
     useState<MatchSessionDetailInfo | null>(null);
   const [matches, setMatches] = useState<MatchInfo[]>([]);
+  /** 마지막으로 받은 오늘 세션. 다음 경계 시각 계산용 */
+  const [todaySessions, setTodaySessions] = useState<MatchSessionDetailInfo[]>(
+    [],
+  );
   const requestIdRef = useRef(0);
 
   const reload = useCallback(async () => {
@@ -82,6 +120,7 @@ export const useLiveSessionState = (
     if (!playerId) {
       setLiveSession(null);
       setMatches([]);
+      setTodaySessions([]);
       setStatus("ready");
       return;
     }
@@ -96,6 +135,7 @@ export const useLiveSessionState = (
 
       setLiveSession(nextLiveSession);
       setMatches(nextMatches);
+      setTodaySessions(today.sessions);
       setStatus("ready");
     } catch {
       if (requestIdRef.current !== requestId) return;
@@ -118,6 +158,19 @@ export const useLiveSessionState = (
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
   }, [reload]);
+
+  // 다음 경계 시각 하나만 예약한다. 다시 읽으면 todaySessions가 바뀌어 그다음 경계를 다시 예약한다
+  useEffect(() => {
+    if (!playerId) return;
+    const boundary = getNextLiveSessionBoundary(todaySessions);
+    if (!boundary) return;
+
+    const timeoutId = window.setTimeout(
+      () => void reload(),
+      boundary.getTime() - Date.now() + BOUNDARY_RELOAD_DELAY_MS,
+    );
+    return () => window.clearTimeout(timeoutId);
+  }, [playerId, reload, todaySessions]);
 
   return useMemo(() => {
     const inProgressMatches = matches.filter(
