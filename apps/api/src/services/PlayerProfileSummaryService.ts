@@ -1,5 +1,10 @@
 import {
+  computeAchievements,
+  type AchievementProgress,
+} from "@pkpkdupr/shared/achievements";
+import {
   getMatchTopLevelType,
+  getWinningTeamIndex,
   type Match,
   type MatchTopLevelType,
 } from "@pkpkdupr/shared/match";
@@ -51,6 +56,8 @@ export interface PlayerProfileSummary {
   /** 자주 진 상대(상성) */
   rivals: OpponentStat[];
   headToHead: HeadToHeadStat | null;
+  /** 업적 18개 전부의 진행 상태(정의 순서) */
+  achievements: AchievementProgress[];
 }
 
 const createEmptyMatchStats = (): PlayerProfileMatchStats => ({
@@ -72,28 +79,6 @@ const createEmptyRatingDelta = (): PlayerProfileRatingDelta => ({
     last7DaysMatchCount: 0,
   },
 });
-
-export const getWinningTeamIndex = (
-  match: Pick<Match, "scores">,
-): 0 | 1 | null => {
-  if (!match.scores?.length) return null;
-
-  const setWins = match.scores.reduce<[number, number]>(
-    ([teamA, teamB], score) => [
-      teamA + Number(score.scoreA > score.scoreB),
-      teamB + Number(score.scoreB > score.scoreA),
-    ],
-    [0, 0],
-  );
-  if (setWins[0] !== setWins[1]) return setWins[0] > setWins[1] ? 0 : 1;
-
-  const points = match.scores.reduce<[number, number]>(
-    ([teamA, teamB], score) => [teamA + score.scoreA, teamB + score.scoreB],
-    [0, 0],
-  );
-  if (points[0] === points[1]) return null;
-  return points[0] > points[1] ? 0 : 1;
-};
 
 const getPlayerTeamIndex = (match: Match, playerId: string): 0 | 1 | null => {
   const index = match.teams.findIndex((team) =>
@@ -282,5 +267,6 @@ export const buildPlayerProfileSummary = (
     partners,
     rivals,
     headToHead,
+    achievements: computeAchievements(playerId, matches),
   };
 };

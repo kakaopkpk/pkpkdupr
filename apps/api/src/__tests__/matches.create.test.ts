@@ -1,3 +1,4 @@
+import type { CompletedMatchOutcome } from "@pkpkdupr/db";
 import type { ManagedMatchSession, Match } from "@pkpkdupr/shared/match";
 import type { Player, PlayerRatingChangeLog } from "@pkpkdupr/shared/player";
 import request from "supertest";
@@ -141,9 +142,15 @@ describe("POST /api/matches", () => {
     MatchRepository["addSessionParticipants"]
   >;
   let findSessionById: MockInstance<MatchRepository["findSessionById"]>;
+  let findCompletedMatchOutcomes: MockInstance<
+    MatchRepository["findCompletedMatchOutcomes"]
+  >;
 
   beforeEach(() => {
     capturedCreatePayload = null;
+    findCompletedMatchOutcomes = vi
+      .spyOn(MatchRepository.prototype, "findCompletedMatchOutcomes")
+      .mockResolvedValue([]);
     findOrCreateRegularSession = vi
       .spyOn(MatchRepository.prototype, "findOrCreateRegularSession")
       .mockResolvedValue(buildManagedSession());
@@ -409,6 +416,67 @@ describe("POST /api/matches", () => {
     expect(applyMatchResult).not.toHaveBeenCalled();
     },
   );
+
+  describe("newAchievements", () => {
+    const priorWin = (id: string, completedAt: Date): CompletedMatchOutcome => ({
+      id,
+      type: "mixed-doubles",
+      sessionId: null,
+      completedAt,
+      teamPlayerIds: [
+        [creator.id, "player-f-1"],
+        ["player-m-1", "player-f-2"],
+      ],
+      scores: [{ scoreA: 11, scoreB: 5 }],
+    });
+
+    it("저장 전후 계산 차이로 참가자 전원이 새로 받은 업적을 응답한다", async () => {
+      // 저장한 경기는 서버 now에 완료되므로 앞선 두 승리보다 늦다.
+      findCompletedMatchOutcomes.mockImplementation(async () => {
+        const saved = capturedCreatePayload;
+        return [
+          priorWin("match-prior-1", new Date("2026-01-01T00:00:00.000Z")),
+          priorWin("match-prior-2", new Date("2026-01-02T00:00:00.000Z")),
+          priorWin("match-test-001", saved?.completedAt ?? new Date()),
+        ];
+      });
+
+      const response = await request(app)
+        .post("/api/matches")
+        .set("Authorization", "Bearer test-token")
+        .send({
+          teams: validDoublesTeams,
+          location: "PKELO Court A",
+          scores: [{ scoreA: 11, scoreB: 5 }],
+        });
+
+      expect(response.status).toBe(201);
+      expect(response.body.newAchievements).toEqual([
+        expect.objectContaining({
+          playerId: creator.id,
+          achievementId: "streak-3",
+          earnedMatchId: "match-test-001",
+        }),
+        expect.objectContaining({
+          playerId: "player-f-1",
+          achievementId: "streak-3",
+          earnedMatchId: "match-test-001",
+        }),
+      ]);
+    });
+
+    it("새로 받은 업적이 없으면 빈 배열이고, 업적 계산이 실패해도 저장 응답은 201이다", async () => {
+      const empty = await postMatch([[creator.id], ["player-m-1"]]);
+      expect(empty.status).toBe(201);
+      expect(empty.body.newAchievements).toEqual([]);
+
+      vi.spyOn(console, "error").mockImplementation(() => undefined);
+      findCompletedMatchOutcomes.mockRejectedValue(new Error("db down"));
+      const failed = await postMatch([[creator.id], ["player-m-1"]]);
+      expect(failed.status).toBe(201);
+      expect(failed.body.newAchievements).toEqual([]);
+    });
+  });
 
   it("이긴 팀 점수가 11점이 아니어도 저장한다", async () => {
     const response = await request(app)
