@@ -1,3 +1,4 @@
+import type { EarnedAchievement } from "./achievements.js";
 import type { Player, PlayerRatingChangeLog } from "./player.js";
 import type { MatchSessionKind } from "./session.js";
 
@@ -190,6 +191,32 @@ export const isMatchRecordDeletable = (
   match.matchStartsAt.getTime() <= now.getTime() &&
   (match.source !== "admin_created" || match.status === "completed");
 
+/**
+ * 이긴 팀 index. 이긴 게임 수로 정하고, 같으면 총점으로 정한다.
+ * 점수가 없거나 총점까지 같으면 null이다.
+ */
+export const getWinningTeamIndex = (match: {
+  scores?: readonly MatchScore[] | null;
+}): 0 | 1 | null => {
+  if (!match.scores?.length) return null;
+
+  const setWins = match.scores.reduce<[number, number]>(
+    ([teamA, teamB], score) => [
+      teamA + Number(score.scoreA > score.scoreB),
+      teamB + Number(score.scoreB > score.scoreA),
+    ],
+    [0, 0],
+  );
+  if (setWins[0] !== setWins[1]) return setWins[0] > setWins[1] ? 0 : 1;
+
+  const points = match.scores.reduce<[number, number]>(
+    ([teamA, teamB], score) => [teamA + score.scoreA, teamB + score.scoreB],
+    [0, 0],
+  );
+  if (points[0] === points[1]) return null;
+  return points[0] > points[1] ? 0 : 1;
+};
+
 export interface Match {
   id: string;
   type: MatchType;
@@ -253,6 +280,8 @@ export interface InProgressMatchesResponse {
 /** 기록·수정 응답. GET /api/matches/:matchId 응답과 같은 형태다 */
 export type RecordedMatchResponse = Match & {
   ratingChanges: PlayerRatingChangeLog[];
+  /** 이 저장으로 참가자 전원이 새로 받은 업적. 없으면 빈 배열 */
+  newAchievements: EarnedAchievement[];
 };
 
 export type MatchFeedItem =

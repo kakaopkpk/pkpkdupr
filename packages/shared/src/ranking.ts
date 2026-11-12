@@ -1,3 +1,4 @@
+import type { EarnedAchievement } from "./achievements.js";
 import type { MatchTopLevelType } from "./match.js";
 import type { Player } from "./player.js";
 import type { MatchSessionKind } from "./session.js";
@@ -72,4 +73,6 @@ export interface MatchSessionReport {
   session: MatchSessionHistoryItem;
   players: SessionPlayerReport[];
   topRiser: SessionPlayerReport | null;
+  /** 이 세션 경기로 받은 업적(참가자 전원). 받은 시각 오름차순 */
+  achievements: EarnedAchievement[];
 }
