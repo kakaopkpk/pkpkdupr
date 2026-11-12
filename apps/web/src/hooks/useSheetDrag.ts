@@ -1,6 +1,6 @@
 import React from "react";
 
-/** 시트 위쪽에서 이 높이 안을 잡으면 본문 스크롤과 상관없이 끌린다(그랩바·헤더) */
+/** 본문 밖(그랩바·헤더)에서 시트 위쪽 이 높이 안을 잡으면 끌린다 */
 const HANDLE_ZONE_PX = 56;
 /** 이만큼 움직인 뒤에 가로/세로 방향을 정한다 */
 const AXIS_LOCK_PX = 4;
@@ -130,14 +130,17 @@ export function useSheetDrag({
 
       const touch = event.touches[0];
       const target = event.target instanceof Element ? event.target : null;
-      const isInHandleZone =
-        touch.clientY - surface.getBoundingClientRect().top <= HANDLE_ZONE_PX;
       const body = target?.closest(".app-bottom-sheet-body");
-      // 손을 댄 순간 본문이 맨 위일 때만 본문 끌기를 허용한다. 스크롤하다 맨 위에
-      // 닿은 같은 터치는 관성 속도가 닫기 판정으로 넘어가지 않게 스크롤만 한다
-      const isBodyAtTop = !!body && body.scrollTop <= 0;
+      // 본문 안의 터치는 위쪽 영역이어도 본문 규칙만 따른다(스크롤된 본문을 되돌리는
+      // 스크롤을 가로채지 않도록). 손을 댄 순간 본문이 맨 위일 때만 본문 끌기를
+      // 허용하고, 스크롤하다 맨 위에 닿은 같은 터치는 관성 속도가 닫기 판정으로
+      // 넘어가지 않게 스크롤만 한다
+      const isFromBody = !!body;
+      const canDrag = body
+        ? body.scrollTop <= 0
+        : touch.clientY - surface.getBoundingClientRect().top <= HANDLE_ZONE_PX;
 
-      if (!isInHandleZone && !isBodyAtTop) {
+      if (!canDrag) {
         state = null;
         return;
       }
@@ -145,7 +148,7 @@ export function useSheetDrag({
       clearSettleTimeout();
       state = {
         mode: "pending",
-        isFromBody: !isInHandleZone,
+        isFromBody,
         startX: touch.clientX,
         startY: touch.clientY,
         offset: 0,
