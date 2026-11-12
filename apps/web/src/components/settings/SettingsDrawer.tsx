@@ -210,7 +210,9 @@ export default function SettingsDrawer({
         await checkForUpdate();
       }
     } catch (error) {
-      setUpdateError(getSaveErrorMessage(error, "업데이트 처리에 실패했습니다."));
+      setUpdateError(
+        getSaveErrorMessage(error, "업데이트 처리에 실패했습니다."),
+      );
     }
   };
 

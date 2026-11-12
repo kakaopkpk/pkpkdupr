@@ -1,12 +1,12 @@
 import React, { useState } from "react";
 import { PLAYER_STATUS_MESSAGE_MAX_LENGTH } from "@pkpkdupr/shared/player";
 import BottomSheet from "@/components/BottomSheet";
-import type { PlayerInfo } from "@/context/AuthContext";
 import { PkButton } from "@/components/ui/Button";
 import { TextField } from "@/components/ui/Form";
 import { PlayerAvatar } from "@/components/ui/PlayerAvatar";
 import { SheetTitle } from "@/components/ui/SheetTitle";
 import { StatusMessageChip } from "@/components/ui/StatusMessageChip";
+import type { PlayerInfo } from "@/context/AuthContext";
 import {
   STATUS_MESSAGE_PALETTE,
   type StatusMessageColorKey,

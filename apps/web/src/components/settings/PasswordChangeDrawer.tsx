@@ -46,6 +46,8 @@ export default function PasswordChangeDrawer({
       showSaveFailure({
         onRetry: async () => {
           await changePassword(newPassword);
+          // 폼에는 실패 문구가 남아 있으므로 재시도 성공도 폼 성공처럼 화면을 닫는다
+          close();
         },
       });
       // 입력을 지우지 않도록 폼에도 실패로 알린다
