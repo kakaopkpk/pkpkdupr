@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import PasswordChangeForm from "@/components/PasswordChangeForm";
+import { PkButton } from "@/components/ui/Button";
 import { useAuth } from "@/context/AuthContext";
 
 /** 첫 로그인·관리자 초기화 직후. 변경이 끝나면 AuthContext가 authenticated로 바뀌어 메인으로 간다. */
@@ -13,31 +14,33 @@ const ForceChangePassword: React.FC = () => {
   };
 
   return (
-    <div className="flex h-full w-full flex-col items-center justify-center overflow-y-auto bg-gradient-to-br from-pkpk-secondary-bg to-pkpk-primary-bg px-4 pt-[calc(env(safe-area-inset-top)+1.5rem)] pb-[calc(var(--safe-bottom)+var(--app-keyboard-offset)+1.5rem)]">
-      <div className="w-full max-w-sm self-center py-4">
-        <header className="mb-8 text-center text-white">
-          <h1 className="text-[1.2rem] font-extrabold tracking-tight">
-            비밀번호 변경
+    <div className="flex h-full w-full flex-col overflow-y-auto bg-pk-bg px-4 pt-[calc(env(safe-area-inset-top)+3rem)] pb-[calc(var(--safe-bottom)+var(--app-keyboard-offset)+1.5rem)] text-pk-ink">
+      <div className="mx-auto flex w-full max-w-sm flex-1 flex-col gap-7">
+        <header className="flex flex-col gap-1.5">
+          <h1 className="text-[26px] font-extrabold leading-[1.3] tracking-[-0.02em]">
+            새 비밀번호를
+            <br />
+            정해 주세요
           </h1>
-          <p className="mt-2 text-sm font-medium leading-6 text-white/85">
-            처음 받은 비밀번호예요. 앱을 쓰려면 새 비밀번호로 바꿔 주세요.
+          <p className="text-pk-15 text-pk-sub">
+            처음 로그인했거나 비밀번호가 초기화됐어요
           </p>
         </header>
 
-        <PasswordChangeForm
-          submitLabel="변경하고 시작하기"
-          onSubmit={completeForcedPasswordChange}
-          tone="dark"
-        />
+        {/* 페이지 바탕(#f3f5f9) 위에서는 입력칸을 흰색으로 둔다. */}
+        <div className="flex flex-1 flex-col [&_input]:bg-white!">
+          <PasswordChangeForm onSubmit={completeForcedPasswordChange} />
+        </div>
 
-        <button
-          type="button"
+        <PkButton
+          variant="ghost"
+          size="sm"
+          className="self-center"
           onClick={() => void handleLogout()}
           disabled={isLoggingOut}
-          className="mt-4 w-full py-2 text-sm text-white/80 underline-offset-2 hover:underline disabled:opacity-60"
         >
           {isLoggingOut ? "로그아웃 중..." : "로그아웃"}
-        </button>
+        </PkButton>
       </div>
     </div>
   );

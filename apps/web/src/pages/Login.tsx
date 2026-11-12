@@ -1,9 +1,10 @@
 import React, { useState } from "react";
 import { useAuth } from "../context/AuthContext";
+import { PkButton } from "@/components/ui/Button";
+import { TextField } from "@/components/ui/Form";
+import { INVALID_CREDENTIALS_MESSAGE } from "@/lib/authMessages";
+import { useOnlineStatus } from "@/hooks/useOnlineStatus";
 import { signInWithUsername } from "@/lib/supabase";
-
-const isOnline = () =>
-  typeof navigator === "undefined" ? true : navigator.onLine;
 
 const OFFLINE_LOGIN_MESSAGE =
   "오프라인에서는 로그인할 수 없습니다. 온라인 연결이 필요합니다.";
@@ -14,12 +15,13 @@ const Login: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { notice, clearNotice } = useAuth();
+  const isOnline = useOnlineStatus();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     clearNotice();
     setError(null);
-    if (!isOnline()) {
+    if (!isOnline) {
       setError(OFFLINE_LOGIN_MESSAGE);
       return;
     }
@@ -34,34 +36,35 @@ const Login: React.FC = () => {
     }
   };
 
+  const isInvalidCredentials = error === INVALID_CREDENTIALS_MESSAGE;
+  const message = error ?? (!isOnline ? OFFLINE_LOGIN_MESSAGE : notice);
+  const isMessageError = !!error || !isOnline;
+
   return (
-    <div className="flex h-full w-full flex-col items-center justify-center overflow-y-auto bg-gradient-to-br from-pkpk-secondary-bg to-pkpk-primary-bg px-4 pt-[calc(env(safe-area-inset-top)+1.5rem)] pb-[calc(var(--safe-bottom)+var(--app-keyboard-offset)+1.5rem)]">
-      <div className="w-full max-w-sm self-center py-4">
-        <header className="mb-8 text-center text-white">
-          <h1 className="text-[1.2rem] font-extrabold tracking-tight">
-            pkpkdupr
-          </h1>
-          <p className="mt-2 text-sm font-medium leading-6 text-white/85">
-            기록하고, 교류하고, 성장하는 피클볼 라이프
-          </p>
+    <div className="flex h-full w-full flex-col overflow-y-auto bg-pk-bg px-4 pt-[calc(env(safe-area-inset-top)+4rem)] pb-[calc(var(--safe-bottom)+var(--app-keyboard-offset)+1.5rem)] text-pk-ink">
+      <div className="mx-auto flex w-full max-w-sm flex-1 flex-col gap-10">
+        <header className="flex flex-col items-start gap-4">
+          <span
+            aria-hidden="true"
+            className="flex h-14 w-14 items-center justify-center rounded-[20px] bg-pk-primary"
+          >
+            <span className="h-[22px] w-[22px] rounded-full bg-pk-hl" />
+          </span>
+          <div className="flex flex-col gap-1">
+            <h1 className="text-[28px] font-extrabold tracking-[-0.02em]">
+              pkpkdupr
+            </h1>
+            <p className="text-pk-15 text-pk-sub">피클볼 경기 기록과 평점</p>
+          </div>
         </header>
 
-        {notice && !error && (
-          <div className="mb-4 w-full rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-            {notice}
-          </div>
-        )}
-
-        {error && (
-          <div className="mb-4 w-full rounded-xl border border-error/20 bg-error/10 px-4 py-3 text-sm text-error">
-            {error}
-          </div>
-        )}
-
-        <form onSubmit={handleSubmit} className="w-full space-y-4">
-          <input
+        <form
+          onSubmit={handleSubmit}
+          className="flex flex-col gap-3.5 [&_input]:bg-white!"
+        >
+          <TextField
+            label="아이디"
             type="text"
-            placeholder="아이디"
             value={username}
             onChange={(e) => setUsername(e.target.value)}
             autoCapitalize="none"
@@ -69,27 +72,44 @@ const Login: React.FC = () => {
             autoCorrect="off"
             spellCheck={false}
             required
-            className="app-mobile-input w-full rounded-xl border bg-white px-4 py-3"
           />
-
-          <input
+          <TextField
+            label="비밀번호"
             type="password"
-            placeholder="비밀번호"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             autoComplete="current-password"
             required
-            className="app-mobile-input w-full rounded-xl border bg-white px-4 py-3"
+            error={isInvalidCredentials}
           />
 
-          <button
+          {message ? (
+            <p
+              role={isMessageError ? "alert" : "status"}
+              className={
+                isMessageError
+                  ? "-mt-1 text-pk-13 font-bold text-pk-down"
+                  : "-mt-1 text-pk-13 font-bold text-pk-sub"
+              }
+            >
+              {message}
+            </p>
+          ) : null}
+
+          <PkButton
             type="submit"
-            disabled={isSubmitting || !username.trim() || !password}
-            className="app-action-button w-full rounded-xl bg-pkpk-accent-bg py-3 font-semibold text-pkpk-dark shadow-sm transition-colors hover:bg-[#d7dc17] disabled:opacity-60"
+            size="lg"
+            fullWidth
+            className="mt-2"
+            disabled={isSubmitting || !isOnline || !username.trim() || !password}
           >
             {isSubmitting ? "로그인 중..." : "로그인"}
-          </button>
+          </PkButton>
         </form>
+
+        <p className="mt-auto text-center text-pk-13 text-pk-muted">
+          계정은 운영진이 만들어 드려요
+        </p>
       </div>
     </div>
   );
