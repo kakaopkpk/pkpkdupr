@@ -1,13 +1,9 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { isMatchRecordEditable } from "@pkpkdupr/shared/match";
 import type { MatchInfo } from "@/types/match";
-import RightDrawer from "@/components/RightDrawer";
+import PushScreen from "@/components/PushScreen";
 import { PkButton } from "@/components/ui/Button";
-import { DetailHeader } from "@/components/ui/Headers";
-import {
-  GLOBAL_LAYER,
-  useAppNavigation,
-} from "@/context/AppNavigationContext";
+import { useAppNavigation } from "@/context/AppNavigationContext";
 import { useAuth } from "@/context/AuthContext";
 import {
   type TabKey,
@@ -18,18 +14,23 @@ import { useOnlineStatus } from "@/hooks/useOnlineStatus";
 import { usePlayers } from "@/hooks/usePlayers";
 import { apiFetch } from "@/lib/api";
 import {
+  CompletedMatchActions,
   CompletedMatchDetail,
+  LiveMatchActions,
   LiveMatchDetail,
   MatchDetailSkeleton,
 } from "./MatchDetailViews";
 
 export interface MatchDetailDrawerProps {
-  matchId: string | null;
+  matchId: string;
+  /** 열어 달라는 요청. false가 되면 닫히는 움직임 뒤 onExited를 부른다 */
+  isOpen: boolean;
   tabKey: TabKey;
+  /** 화면 스택에서 이 화면을 구분하는 깊이 id */
+  depthId: string;
   onClose: () => void;
+  onExited: () => void;
 }
-
-const DEPTH_ID = "global-match-detail";
 
 type LoadState =
   | { kind: "loading" }
@@ -51,32 +52,28 @@ const fetchMatch = async (matchId: string): Promise<MatchInfo> => {
   return (await res.json()) as MatchInfo;
 };
 
-/** 전역 경기 상세. 진행 중이면 점수 입력, 완료면 결과·평점 변화를 보인다 */
+/** 전역 경기 상세 화면. 진행 중이면 점수 입력, 완료면 결과·평점 변화를 보인다 */
 export default function MatchDetailDrawer({
   matchId,
+  isOpen: isRequested,
   tabKey,
+  depthId,
   onClose,
+  onExited,
 }: MatchDetailDrawerProps): React.ReactElement {
   const { isAuthenticated } = useAuth();
-  const { openRecordMatch, openSessionReport, dataVersion } =
+  const { openMemberProfile, openRecordMatch, openSessionReport, dataVersion } =
     useAppNavigation();
-  const {
-    registerScrollContainer,
-    requestCloseTopDepth,
-    restoreScrollTop,
-    selectedTab,
-  } = useTabNavigation();
+  const { closeDepth, restoreScrollTop, selectedTab } = useTabNavigation();
   const { players } = usePlayers();
   const isOnline = useOnlineStatus();
-  // 닫히는 애니메이션 동안 마지막 경기를 계속 보여 준다
-  const [displayedMatchId, setDisplayedMatchId] = useState(matchId);
   const [loadState, setLoadState] = useState<LoadState>({ kind: "loading" });
   const requestIdRef = useRef(0);
   const isOpen = useLayerDepth({
-    isOpen: !!matchId,
+    isOpen: isRequested,
     tabKey,
-    depthId: DEPTH_ID,
-    kind: "match-detail",
+    depthId,
+    kind: "push-screen",
     onClose,
     saveScroll: true,
   });
@@ -118,10 +115,7 @@ export default function MatchDetailDrawer({
     [isAuthenticated],
   );
 
-  // 새 경기를 열면 처음부터 받는다
   useEffect(() => {
-    if (!matchId) return;
-    setDisplayedMatchId(matchId);
     void loadMatch(matchId, false);
   }, [loadMatch, matchId]);
 
@@ -130,30 +124,23 @@ export default function MatchDetailDrawer({
   useEffect(() => {
     if (lastDataVersionRef.current === dataVersion) return;
     lastDataVersionRef.current = dataVersion;
-    if (matchId) void loadMatch(matchId, true);
+    void loadMatch(matchId, true);
   }, [dataVersion, loadMatch, matchId]);
-
-  const handleScrollContainerChange = useCallback(
-    (element: HTMLDivElement | null) => {
-      registerScrollContainer(tabKey, DEPTH_ID, element);
-    },
-    [registerScrollContainer, tabKey],
-  );
 
   const handleExited = useCallback(() => {
     requestIdRef.current += 1;
-    setDisplayedMatchId(null);
-    setLoadState({ kind: "loading" });
     restoreScrollTop(tabKey);
-  }, [restoreScrollTop, tabKey]);
+    onExited();
+  }, [onExited, restoreScrollTop, tabKey]);
 
   const handlePullToRefresh = useCallback(
-    () =>
-      displayedMatchId
-        ? loadMatch(displayedMatchId, true)
-        : Promise.resolve(),
-    [displayedMatchId, loadMatch],
+    () => loadMatch(matchId, true),
+    [loadMatch, matchId],
   );
+
+  const close = useCallback(() => {
+    if (!closeDepth(tabKey, depthId)) onClose();
+  }, [closeDepth, depthId, onClose, tabKey]);
 
   const usernameById = useMemo(
     () => new Map(players.map((member) => [member.id, member.username])),
@@ -168,6 +155,8 @@ export default function MatchDetailDrawer({
   };
 
   let content: React.ReactNode;
+  // 탭바 자리의 하단 고정 바. 버튼이 없으면 바를 그리지 않는다
+  let actions: React.ReactNode = null;
   if (loadState.kind === "loading") {
     content = <MatchDetailSkeleton />;
   } else if (loadState.kind === "not-found") {
@@ -182,11 +171,11 @@ export default function MatchDetailDrawer({
         <p role="alert" className="text-center text-pk-15 text-pk-sub">
           {isOnline ? loadState.message : "온라인 연결이 필요해요."}
         </p>
-        {isOnline && displayedMatchId ? (
+        {isOnline ? (
           <PkButton
             variant="soft"
             size="sm"
-            onClick={() => void loadMatch(displayedMatchId, false)}
+            onClick={() => void loadMatch(matchId, false)}
           >
             다시 시도
           </PkButton>
@@ -201,6 +190,11 @@ export default function MatchDetailDrawer({
           match={match}
           creatorUsername={getUsername(match, match.creatorPlayerId)}
           onOpenSession={openSessionReport}
+          onOpenPlayer={openMemberProfile}
+        />
+      );
+      actions = (
+        <LiveMatchActions
           onEnterScore={() =>
             openRecordMatch({ kind: "score", matchId: match.id })
           }
@@ -221,42 +215,42 @@ export default function MatchDetailDrawer({
             match,
             match.resultSubmittedByPlayerId ?? match.creatorPlayerId,
           )}
-          canEdit={canEdit}
           onOpenSession={openSessionReport}
-          onEdit={() => openRecordMatch({ kind: "score", matchId: match.id })}
-          onPlayAgain={() =>
-            openRecordMatch({
-              kind: "new",
-              presetTeams: [
-                match.teams[0].players.map((player) => player.id),
-                match.teams[1].players.map((player) => player.id),
-              ],
-            })
-          }
+          onOpenPlayer={openMemberProfile}
         />
       );
+      // 수정할 수 없으면 버튼만 빠진다(안내 문구 없음)
+      if (canEdit) {
+        actions = (
+          <CompletedMatchActions
+            onEdit={() => openRecordMatch({ kind: "score", matchId: match.id })}
+            onPlayAgain={() =>
+              openRecordMatch({
+                kind: "new",
+                presetTeams: [
+                  match.teams[0].players.map((player) => player.id),
+                  match.teams[1].players.map((player) => player.id),
+                ],
+              })
+            }
+          />
+        );
+      }
     }
   }
 
-  if (!displayedMatchId) return <></>;
-
   return (
-    <RightDrawer
+    <PushScreen
       isOpen={isOpen}
       isActive={tabKey === selectedTab}
       ariaLabel="경기 상세"
+      title="경기"
+      onBack={close}
+      actions={actions}
       onExited={handleExited}
-      onScrollContainerChange={handleScrollContainerChange}
       onPullToRefresh={handlePullToRefresh}
-      layer={GLOBAL_LAYER.matchDetail}
     >
-      <div className="flex min-h-full flex-col">
-        <DetailHeader
-          title="경기"
-          onBack={() => requestCloseTopDepth(tabKey)}
-        />
-        {content}
-      </div>
-    </RightDrawer>
+      {content}
+    </PushScreen>
   );
 }

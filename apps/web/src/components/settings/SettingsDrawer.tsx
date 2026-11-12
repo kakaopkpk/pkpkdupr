@@ -1,10 +1,9 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import BottomSheet from "@/components/BottomSheet";
-import RightDrawer from "@/components/RightDrawer";
+import PushScreen from "@/components/PushScreen";
 import { PkButton } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { ListRow } from "@/components/ui/Form";
-import { DetailHeader } from "@/components/ui/Headers";
 import { PlayerAvatar } from "@/components/ui/PlayerAvatar";
 import { SectionLabel } from "@/components/ui/Section";
 import { GLOBAL_LAYER } from "@/context/AppNavigationContext";
@@ -31,8 +30,6 @@ export interface SettingsDrawerProps {
 const DEPTH_ID = "global-settings";
 const AVATAR_DEPTH_ID = "global-settings-avatar";
 const STATUS_DEPTH_ID = "global-settings-status";
-// 설정(90)과 비밀번호 하위 화면(91)보다 위
-const SHEET_LAYER = GLOBAL_LAYER.settings + 2;
 
 const SettingsGroup: React.FC<{
   label: string;
@@ -60,8 +57,7 @@ export default function SettingsDrawer({
     checkForUpdate,
     applyUpdate,
   } = useAppUpdate();
-  const { closeDepth, registerScrollContainer, restoreScrollTop, selectedTab } =
-    useTabNavigation();
+  const { closeDepth, restoreScrollTop, selectedTab } = useTabNavigation();
   const isActive = tabKey === selectedTab;
 
   const [isPasswordRequested, setIsPasswordRequested] = useState(false);
@@ -82,7 +78,7 @@ export default function SettingsDrawer({
     isOpen,
     tabKey,
     depthId: DEPTH_ID,
-    kind: "settings",
+    kind: "push-screen",
     onClose,
     saveScroll: true,
   });
@@ -111,13 +107,6 @@ export default function SettingsDrawer({
     setIsAvatarRequested(false);
     setIsStatusRequested(false);
   }, [isOpen]);
-
-  const handleScrollContainerChange = useCallback(
-    (element: HTMLDivElement | null) => {
-      registerScrollContainer(tabKey, DEPTH_ID, element);
-    },
-    [registerScrollContainer, tabKey],
-  );
 
   const closeLayer = (depthId: string, fallback: () => void) => {
     if (!closeDepth(tabKey, depthId)) fallback();
@@ -230,19 +219,15 @@ export default function SettingsDrawer({
 
   return (
     <>
-      <RightDrawer
+      <PushScreen
         isOpen={isLayerOpen}
         isActive={isActive}
         ariaLabel="설정"
+        title="설정"
+        onBack={() => closeLayer(DEPTH_ID, onClose)}
         onExited={() => restoreScrollTop(tabKey)}
-        onScrollContainerChange={handleScrollContainerChange}
-        layer={GLOBAL_LAYER.settings}
       >
-        <DetailHeader
-          title="설정"
-          onBack={() => closeLayer(DEPTH_ID, onClose)}
-        />
-        <div className="flex flex-col gap-4 px-4 pt-1 pb-[calc(2rem+var(--safe-bottom))]">
+        <div className="flex flex-col gap-4 px-4 pt-1 pb-4">
           <SettingsGroup label="프로필">
             <ListRow
               label="프로필 사진"
@@ -334,7 +319,7 @@ export default function SettingsDrawer({
           onChange={(event) => void handleAvatarFileChange(event)}
           className="hidden"
         />
-      </RightDrawer>
+      </PushScreen>
 
       <PasswordChangeDrawer
         isOpen={isPasswordRequested && isOpen}
@@ -351,7 +336,7 @@ export default function SettingsDrawer({
           }
         }}
         ariaLabel="프로필 사진"
-        layer={SHEET_LAYER}
+        layer={GLOBAL_LAYER.sheet}
         isFixedHeight={false}
       >
         <AvatarConfirmSheetBody
@@ -372,7 +357,7 @@ export default function SettingsDrawer({
           }
         }}
         ariaLabel="상태메시지"
-        layer={SHEET_LAYER}
+        layer={GLOBAL_LAYER.sheet}
         isFixedHeight={false}
       >
         {player ? (

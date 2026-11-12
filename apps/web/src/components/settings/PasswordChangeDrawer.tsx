@@ -1,8 +1,6 @@
 import React, { useCallback } from "react";
 import PasswordChangeForm from "@/components/PasswordChangeForm";
-import RightDrawer from "@/components/RightDrawer";
-import { DetailHeader } from "@/components/ui/Headers";
-import { GLOBAL_LAYER } from "@/context/AppNavigationContext";
+import PushScreen from "@/components/PushScreen";
 import { useAuth } from "@/context/AuthContext";
 import { useSystemNotice } from "@/context/SystemNoticeContext";
 import { type TabKey, useTabNavigation } from "@/context/TabNavigationContext";
@@ -17,7 +15,7 @@ interface PasswordChangeDrawerProps {
   onClose: () => void;
 }
 
-/** 설정 안의 비밀번호 변경 하위 화면. 설정 드로어 위에 한 깊이 더 쌓는다 */
+/** 설정 안의 비밀번호 변경 하위 화면. 설정 화면 위에 한 깊이 더 쌓는다 */
 export default function PasswordChangeDrawer({
   isOpen,
   tabKey,
@@ -30,7 +28,7 @@ export default function PasswordChangeDrawer({
     isOpen,
     tabKey,
     depthId: DEPTH_ID,
-    kind: "settings",
+    kind: "push-screen",
     onClose,
   });
 
@@ -56,16 +54,16 @@ export default function PasswordChangeDrawer({
   };
 
   return (
-    <RightDrawer
+    <PushScreen
       isOpen={isLayerOpen}
       isActive={tabKey === selectedTab}
       ariaLabel="비밀번호 변경"
-      layer={GLOBAL_LAYER.settings + 1}
+      title="비밀번호 변경"
+      onBack={close}
     >
-      <DetailHeader title="비밀번호 변경" onBack={close} />
-      <div className="flex flex-1 flex-col px-4 pt-1 pb-[calc(2rem+var(--safe-bottom))]">
+      <div className="flex flex-1 flex-col px-4 pt-1 pb-4">
         <PasswordChangeForm onSubmit={submit} onSuccess={close} />
       </div>
-    </RightDrawer>
+    </PushScreen>
   );
 }

@@ -174,7 +174,7 @@
 
   html[data-ios-viewport-locked="true"] .app-tab-panel-scroll-area,
   html[data-ios-viewport-locked="true"] .app-bottom-sheet-body,
-  html[data-ios-viewport-locked="true"] .app-right-drawer-scroll-area {
+  html[data-ios-viewport-locked="true"] .app-push-screen-scroll-area {
     overscroll-behavior: none;
     touch-action: pan-y;
   }
@@ -215,7 +215,7 @@
     -webkit-overflow-scrolling: touch;
   }
 
-  .app-right-drawer-scroll-area {
+  .app-push-screen-scroll-area {
     min-width: 0;
     overflow-y: auto;
     overflow-x: hidden;
@@ -226,13 +226,13 @@
   @media (max-width: 480px) {
     .app-tab-panel-scroll-area,
     .app-bottom-sheet-body,
-    .app-right-drawer-scroll-area {
+    .app-push-screen-scroll-area {
       scrollbar-width: none;
     }
 
     .app-tab-panel-scroll-area::-webkit-scrollbar,
     .app-bottom-sheet-body::-webkit-scrollbar,
-    .app-right-drawer-scroll-area::-webkit-scrollbar {
+    .app-push-screen-scroll-area::-webkit-scrollbar {
       display: none;
     }
   }
