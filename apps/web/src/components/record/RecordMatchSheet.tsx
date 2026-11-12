@@ -1,20 +1,26 @@
 import React, { useCallback, useEffect, useState } from "react";
+import { DEFAULT_MATCH_LOCATION } from "@pkpkdupr/shared/session";
 import BottomSheet from "@/components/BottomSheet";
 import type { MatchInfo } from "@/components/Match";
-import RecordMatchDrawerBody from "@/components/RecordMatchDrawerBody";
 import SkeletonBlock from "@/components/SkeletonBlock";
+import { SheetTitle } from "@/components/ui/SheetTitle";
 import {
   GLOBAL_LAYER,
   type RecordMatchSheetRequest,
-  useAppNavigation,
 } from "@/context/AppNavigationContext";
+import { useLiveSession } from "@/context/LiveSessionContext";
 import {
   type TabKey,
   useTabNavigation,
 } from "@/context/TabNavigationContext";
 import { useLayerDepth } from "@/hooks/useLayerDepth";
-import { useOnlineStatus } from "@/hooks/useOnlineStatus";
 import { apiFetch } from "@/lib/api";
+import RecordMatchFlow, { type RecordMatchFlowInitial } from "./RecordMatchFlow";
+import {
+  EMPTY_SCORE,
+  EMPTY_SLOTS,
+  slotsFromTeams,
+} from "./recordMatch.utils";
 
 export interface RecordMatchSheetProps {
   request: RecordMatchSheetRequest | null;
@@ -31,17 +37,27 @@ type ScoreMatchState = { sheetKey: number } & (
   | { status: "error"; message: string }
 );
 
+const buildScoreInitial = (match: MatchInfo): RecordMatchFlowInitial => ({
+  step: "score",
+  slots: slotsFromTeams([
+    match.teams[0].players.map((player) => player.id),
+    match.teams[1].players.map((player) => player.id),
+  ]),
+  score: match.scores?.[0] ?? EMPTY_SCORE,
+  location: match.location,
+  editMatch: match,
+});
+
 /**
- * 전역 경기 기록 시트. 지금은 기존 RecordMatchDrawerBody를 감싼다.
- * "score" 요청은 경기를 받아 수정 모드로 연다. "new"의 presetTeams는 아직 반영하지 않는다.
+ * 전역 경기 기록 시트. "new"는 선수 고르기(presetTeams가 있으면 자리를 채워)부터,
+ * "score"는 경기를 받아 점수 입력부터 시작한다.
  */
 export default function RecordMatchSheet({
   request,
   tabKey,
   onClose,
 }: RecordMatchSheetProps): React.ReactElement {
-  const isOnline = useOnlineStatus();
-  const { notifyDataChanged } = useAppNavigation();
+  const { liveSession } = useLiveSession();
   const { closeDepth, selectedTab } = useTabNavigation();
   // 열 때마다 올려서 입력을 초기 상태로 리마운트한다
   const [sheetKey, setSheetKey] = useState(0);
@@ -119,36 +135,41 @@ export default function RecordMatchSheet({
     content = (
       <>
         <BottomSheet.Header>
-          <h2 className="bs-text-head text-left text-pkpk-main-font">
-            점수 입력
-          </h2>
+          <SheetTitle title="경기 기록" />
         </BottomSheet.Header>
         <BottomSheet.Body>
           {currentScoreMatch?.status === "error" ? (
-            <p className="text-sm font-medium text-error" role="alert">
+            <p className="px-1 text-pk-13 font-bold text-pk-down" role="alert">
               {currentScoreMatch.message}
             </p>
           ) : (
             <div role="status" aria-label="경기 불러오는 중">
-              <SkeletonBlock className="h-40 w-full rounded-2xl" />
+              <SkeletonBlock className="h-40 w-full rounded-pk-lg" />
             </div>
           )}
         </BottomSheet.Body>
       </>
     );
   } else {
+    const initial: RecordMatchFlowInitial =
+      currentScoreMatch?.status === "ready"
+        ? buildScoreInitial(currentScoreMatch.match)
+        : {
+            step: "pick",
+            slots:
+              displayedRequest?.kind === "new" && displayedRequest.presetTeams
+                ? slotsFromTeams(displayedRequest.presetTeams)
+                : EMPTY_SLOTS,
+            score: EMPTY_SCORE,
+            location: liveSession?.location || DEFAULT_MATCH_LOCATION,
+            editMatch: null,
+          };
     content = (
-      <RecordMatchDrawerBody
+      <RecordMatchFlow
         key={`${sheetKey}:${scoreMatchId ?? "new"}`}
-        editMatch={
-          currentScoreMatch?.status === "ready"
-            ? currentScoreMatch.match
-            : undefined
-        }
-        isOnline={isOnline}
-        onCancel={close}
-        onRecorded={notifyDataChanged}
-        onDone={close}
+        initial={initial}
+        isOpen={isOpen}
+        onClose={close}
       />
     );
   }
