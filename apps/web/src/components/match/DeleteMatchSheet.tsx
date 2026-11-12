@@ -56,11 +56,19 @@ const TeamLine: React.FC<{
   </div>
 );
 
+/** 진 팀 인덱스. 점수가 없거나 비기면 null */
+const getLoserIndex = (
+  hasScores: boolean,
+  scores: readonly [number, number],
+): 0 | 1 | null => {
+  if (!hasScores || scores[0] === scores[1]) return null;
+  return scores[0] > scores[1] ? 1 : 0;
+};
+
 const MatchSummary: React.FC<{ match: MatchInfo }> = ({ match }) => {
   const hasScores = (match.scores?.length ?? 0) > 0;
   const scores = getTeamResultScores(match);
-  const loserIndex =
-    !hasScores || scores[0] === scores[1] ? null : scores[0] > scores[1] ? 1 : 0;
+  const loserIndex = getLoserIndex(hasScores, scores);
 
   return (
     <div className="flex flex-col gap-2.5 rounded-pk-lg bg-pk-bg px-4 py-3.5">

@@ -11,16 +11,6 @@ export type InProgressMatchesInfo = Omit<InProgressMatchesResponse, "matches"> &
   matches: MatchInfo[];
 };
 
-/** 서버가 4xx·5xx로 거절한 요청. status로 404·409를 구분한다 */
-export class MatchRequestError extends Error {
-  constructor(
-    message: string,
-    readonly status: number,
-  ) {
-    super(message);
-  }
-}
-
 const readErrorMessage = async (res: Response, fallbackMessage: string) => {
   const errorData = (await res.json().catch(() => ({}))) as { error?: string };
   return errorData.error || fallbackMessage;
@@ -55,9 +45,8 @@ export const startMatch = async (body: StartMatchRequest): Promise<MatchInfo> =>
     body: JSON.stringify(body),
   });
   if (!res.ok) {
-    throw new MatchRequestError(
+    throw new Error(
       await readErrorMessage(res, "경기를 시작하지 못했어요."),
-      res.status,
     );
   }
   return (await res.json()) as MatchInfo;
@@ -67,9 +56,8 @@ export const startMatch = async (body: StartMatchRequest): Promise<MatchInfo> =>
 export const fetchInProgressMatches = async (): Promise<MatchInfo[]> => {
   const res = await apiFetch("/api/matches/in-progress");
   if (!res.ok) {
-    throw new MatchRequestError(
+    throw new Error(
       await readErrorMessage(res, "진행 중 경기를 불러오지 못했어요."),
-      res.status,
     );
   }
   return ((await res.json()) as InProgressMatchesInfo).matches;
@@ -91,8 +79,7 @@ export const deleteMatch = async (
     { method: "DELETE" },
   );
   if (res.ok || res.status === 404) return;
-  throw new MatchRequestError(
+  throw new Error(
     await readErrorMessage(res, "경기를 지우지 못했어요."),
-    res.status,
   );
 };

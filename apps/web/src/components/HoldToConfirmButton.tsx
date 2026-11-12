@@ -3,6 +3,9 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 /** 길게 눌러 확인하는 기본 시간 */
 export const HOLD_TO_CONFIRM_DURATION_MS = 1000;
 
+/** danger 변형의 채움 앞 끝 선 두께 */
+const PROGRESS_EDGE_WIDTH_PX = 3;
+
 interface HoldToConfirmButtonProps {
   onComplete: () => void;
   holdDurationMs?: number;
@@ -37,7 +40,7 @@ const variantClassName: Record<
     button:
       "h-[52px] justify-center rounded-pk-sm bg-pk-down px-4 text-pk-15 font-extrabold text-white disabled:cursor-not-allowed disabled:bg-pk-neutral disabled:text-pk-muted",
     progress: "bg-[rgba(15,23,38,0.4)]",
-    edge: "w-[3px] bg-pk-hl",
+    edge: "bg-pk-hl",
   },
 };
 
@@ -171,7 +174,10 @@ const HoldToConfirmButton: React.FC<HoldToConfirmButtonProps> = ({
             "pointer-events-none absolute inset-y-0",
             variantClasses.edge,
           ].join(" ")}
-          style={{ left: `max(0px, calc(${progress * 100}% - 3px))` }}
+          style={{
+            width: PROGRESS_EDGE_WIDTH_PX,
+            left: `max(0px, calc(${progress * 100}% - ${PROGRESS_EDGE_WIDTH_PX}px))`,
+          }}
         />
       ) : null}
       <span className="relative z-10 flex min-w-0 items-center gap-2">
