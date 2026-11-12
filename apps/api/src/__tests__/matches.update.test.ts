@@ -73,6 +73,15 @@ const validBody = {
   scores: [{ scoreA: 9, scoreB: 11 }],
 };
 
+// 요청자(outsider)가 팀에 없는 경기 기록 본문
+const bodyWithoutRequester = {
+  ...validBody,
+  teams: [
+    { name: "Team A", playerIds: [partner.id, substitute.id] },
+    { name: "Team B", playerIds: [opponentM.id, opponentF.id] },
+  ],
+};
+
 const editLog = (matchId: string): PlayerRatingChangeLog => ({
   id: `log-${matchId}`,
   playerId: requester.id,
@@ -378,7 +387,7 @@ describe("PUT /api/matches/:matchId", () => {
     expect(updateRecordedMatch).not.toHaveBeenCalled();
   });
 
-  it("참가자도 생성자도 아니면 403을 반환한다", async () => {
+  it("참가자도 생성자도 아닌 회원이 완료 경기를 고치면 200을 반환한다", async () => {
     vi.spyOn(
       AuthService.prototype,
       "authenticateAccessToken",
@@ -387,19 +396,40 @@ describe("PUT /api/matches/:matchId", () => {
       outsider,
     );
 
-    const response = await putMatch({
-      ...validBody,
-      teams: [
-        { playerIds: [outsider.id, partner.id] },
-        { playerIds: [opponentM.id, opponentF.id] },
-      ],
-    });
+    const response = await putMatch(bodyWithoutRequester);
 
-    expect(response.status).toBe(403);
-    expect(response.body).toEqual({
-      error: "경기 참가자 또는 생성자만 기록을 수정할 수 있습니다.",
+    expect(response.status).toBe(200);
+    expect(updateRecordedMatch).toHaveBeenCalledTimes(1);
+    const [, input] = updateRecordedMatch.mock.calls[0]!;
+    expect(input.resultSubmittedByPlayerId).toBe(outsider.id);
+    expect(recalculate).toHaveBeenCalledTimes(1);
+  });
+
+  it("참가자 아닌 회원이 진행 중 경기에 첫 점수를 넣으면 completed가 된다", async () => {
+    existing = buildExistingMatch({
+      status: "created",
+      scores: [],
+      completedAt: null,
+      resultSubmittedByPlayerId: null,
+      resultSubmittedAt: null,
+      matchStartsAt: new Date(Date.now() - 30 * 60 * 1000),
     });
-    expect(updateRecordedMatch).not.toHaveBeenCalled();
+    vi.spyOn(
+      AuthService.prototype,
+      "authenticateAccessToken",
+    ).mockResolvedValue(buildSession(outsider));
+    vi.spyOn(AuthService.prototype, "getPlayerById").mockResolvedValue(
+      outsider,
+    );
+
+    const response = await putMatch(bodyWithoutRequester);
+
+    expect(response.status).toBe(200);
+    expect(response.body.status).toBe("completed");
+    const [, input] = updateRecordedMatch.mock.calls[0]!;
+    expect(input.resultSubmittedByPlayerId).toBe(outsider.id);
+    expect(applyMatchResult).toHaveBeenCalledTimes(1);
+    expect(recalculate).not.toHaveBeenCalled();
   });
 
   it("참가자가 아니어도 경기 생성자면 수정할 수 있다", async () => {
@@ -433,21 +463,6 @@ describe("PUT /api/matches/:matchId", () => {
       AuthService.prototype,
       "authenticateAccessToken",
     ).mockResolvedValue(buildSession(outsider));
-
-    const response = await putMatch();
-
-    expect(response.status).toBe(403);
-    expect(updateRecordedMatch).not.toHaveBeenCalled();
-  });
-
-  it("관리자여도 참가자도 생성자도 아니면 403을 반환한다", async () => {
-    vi.spyOn(
-      AuthService.prototype,
-      "authenticateAccessToken",
-    ).mockResolvedValue({
-      ...buildSession(outsider),
-      payload: { playerId: outsider.id, isAdmin: true },
-    });
 
     const response = await putMatch();
 

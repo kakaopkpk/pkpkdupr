@@ -78,8 +78,8 @@ pnpm lint
 - `Player.duprRating`은 단일 숫자가 아니라 singles/doubles 분류와 metric을 포함하는 상태입니다. `null`인 NR 값도 허용합니다.
 - api 저장소 어댑터(`apps/api/src/repositories/MatchRepository.ts`, `AuthService`)는 `@pkpkdupr/db` 결과를 공개 계약 형태로 hydrate 합니다.
 - 경기 타입·스코어·세션 계약은 `packages/shared/src/match.ts`가 기준입니다.
-- 경기는 기록 즉시 completed가 되어 평점에 반영됩니다. 참가자 또는 경기 생성자(`creatorPlayerId`, 관리자 일괄 등록·예정 경기는 등록한 관리자)는 경기 시작 후 24시간 이내(`isWithinMatchEditWindow`)에만 수정할 수 있고(`canEditMatchRecord`, API·웹 공통), 이후 정정은 관리자가 합니다.
-- 예외로 세션에서 시작한 경기는 점수 없는 진행 중 경기(`status: "created"`)입니다. 참가자가 `PUT /api/matches/:matchId`로 첫 점수를 넣는 순간 completed(`completedAt`=입력 시각)가 되고 평점에 증분 반영됩니다. 진행 중 경기는 평점·평점 이력·통계·`lastPlayedAt`에서 빠지고, 시작 2시간(`isInProgressMatchExpired`)이 지나도록 점수가 없으면 조회 시점 정리(`cleanupExpired`)에서 빈 세션 정리보다 먼저 삭제됩니다. 이 정리는 관리자 예정 경기를 포함한 점수 없는 created 경기 전부에 적용됩니다.
+- 경기는 기록 즉시 completed가 되어 평점에 반영됩니다. 활성 회원이면 참가자·생성자 여부와 상관없이 누구나 경기 시작 후 24시간 이내(`isWithinMatchEditWindow`)에만 수정할 수 있고(`isMatchRecordEditable`, 취소·과거 다중 점수 경기는 제외, 웹 버튼 노출 기준), 이후 정정은 관리자가 합니다. 마지막으로 입력·수정한 회원은 `resultSubmittedByPlayerId`에 기록됩니다.
+- 예외로 세션에서 시작한 경기는 점수 없는 진행 중 경기(`status: "created"`)입니다. 회원 누구나 `PUT /api/matches/:matchId`로 첫 점수를 넣는 순간 completed(`completedAt`=입력 시각)가 되고 평점에 증분 반영됩니다. 진행 중 경기는 평점·평점 이력·통계·`lastPlayedAt`에서 빠지고, 시작 2시간(`isInProgressMatchExpired`)이 지나도록 점수가 없으면 조회 시점 정리(`cleanupExpired`)에서 빈 세션 정리보다 먼저 삭제됩니다. 이 정리는 관리자 예정 경기를 포함한 점수 없는 created 경기 전부에 적용됩니다.
 - `packages/shared` 변경 시 web, admin-web, api, db 전체 소비처를 같은 변경 단위에서 점검합니다.
 
 ## 운영과 배포

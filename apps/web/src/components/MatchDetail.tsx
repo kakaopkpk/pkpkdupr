@@ -2,9 +2,8 @@ import React, { useEffect, useMemo, useState } from "react";
 import { Button, Card, Separator } from "@heroui/react";
 import {
   getMatchTopLevelType,
-  canEditMatchRecord,
+  isMatchRecordEditable,
   isMultiGameMatchRecord,
-  isWithinMatchEditWindow,
 } from "@pkpkdupr/shared/match";
 import type { PlayerRatingChangeLog } from "@pkpkdupr/shared/player";
 import BottomSheet from "@/components/BottomSheet";
@@ -162,17 +161,10 @@ const MatchDetail: React.FC<MatchDetailProps> = ({
   // 시트를 열 때마다 RecordMatchDrawerBody를 리마운트해 최신 경기 값으로 채운다
   const [resultSheetKey, setResultSheetKey] = useState(0);
   const { closeDepth, pushDepth, selectedTab } = useTabNavigation();
-  const isEditor =
-    !!currentPlayerId && canEditMatchRecord(match, currentPlayerId);
   const hasResultScores = !!match.scores?.length;
   // 기한이 지나는 순간을 따로 감시하지 않는다. 열어 둔 채 지나면 서버가 거절한다
   const canEditRecord =
-    isEditor &&
-    match.status !== "cancelled" &&
-    !isMultiGameMatchRecord(match) &&
-    isWithinMatchEditWindow(new Date(match.matchStartsAt)) &&
-    isOnline &&
-    !!onMatchRecorded;
+    isMatchRecordEditable(match) && isOnline && !!onMatchRecorded;
   const resultSheetDepthId = `match-result-sheet:${match.id}`;
   // 단판은 점수 열 하나만, 점수가 여러 개인 과거 2선승 기록은 게임마다 열과 Total을 둔다
   const isMultiGame = isMultiGameMatchRecord(match);

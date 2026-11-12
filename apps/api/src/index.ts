@@ -4,7 +4,6 @@ import { randomUUID } from "crypto";
 import {
   isMatchInProgress,
   isSinglesMatchType,
-  canEditMatchRecord,
   isMultiGameMatchRecord,
   isWithinMatchEditWindow,
   matchTypeLabels,
@@ -1826,12 +1825,7 @@ app.put("/api/matches/:matchId", async (req, res) => {
     if (!existing || isExpiredInProgressMatch(existing, now)) {
       return res.status(404).json({ error: "매치를 찾을 수 없습니다." });
     }
-    // 관리자 여부와 무관하게 수정 전 참가자 또는 경기 생성자만 고칠 수 있다(세션 경기 포함).
-    if (!canEditMatchRecord(existing, decoded.playerId)) {
-      return res.status(403).json({
-        error: "경기 참가자 또는 생성자만 기록을 수정할 수 있습니다.",
-      });
-    }
+    // 참가자·생성자·관리자 여부와 무관하게 활성 회원이면 누구나 고칠 수 있다(세션 경기 포함).
     if (!isWithinMatchEditWindow(existing.matchStartsAt, now)) {
       return res.status(403).json({
         error:
