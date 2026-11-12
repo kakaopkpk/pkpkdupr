@@ -249,6 +249,72 @@ describe("GET /api/matches", () => {
     expect(response.status).toBe(200);
     expect(response.body.matches[0].ratingChanges).toBeUndefined();
   });
+
+  describe("category 필터", () => {
+    const doublesMatch: Match = {
+      ...match,
+      id: "match-002",
+      type: "mixed-doubles",
+    };
+    const singlesMatches: Match[] = [
+      { ...match, id: "match-003" },
+      { ...match, id: "match-004", type: "unrestricted-singles" },
+    ];
+
+    beforeEach(() => {
+      vi.spyOn(MatchRepository.prototype, "findByPlayerId").mockResolvedValue({
+        matches: [singlesMatches[0], doublesMatch, singlesMatches[1]],
+        total: 3,
+      });
+      vi.spyOn(
+        MatchRepository.prototype,
+        "getPlayerRatingChangeLogs",
+      ).mockResolvedValue([]);
+    });
+
+    it("분류로 거르고 total도 필터 기준으로 센다", async () => {
+      const response = await request(app)
+        .get(`/api/matches?playerId=${player.id}&category=singles&limit=1`)
+        .set("Authorization", "Bearer test-token");
+
+      expect(response.status).toBe(200);
+      expect(response.body.total).toBe(2);
+      expect(response.body.matches.map((item: Match) => item.id)).toEqual([
+        "match-003",
+      ]);
+
+      const nextPage = await request(app)
+        .get(
+          `/api/matches?playerId=${player.id}&category=singles&limit=1&page=1`,
+        )
+        .set("Authorization", "Bearer test-token");
+      expect(nextPage.body.matches.map((item: Match) => item.id)).toEqual([
+        "match-004",
+      ]);
+
+      const doubles = await request(app)
+        .get(`/api/matches?playerId=${player.id}&category=doubles`)
+        .set("Authorization", "Bearer test-token");
+      expect(doubles.body.total).toBe(1);
+      expect(doubles.body.matches[0].id).toBe("match-002");
+    });
+
+    it("category 값이 틀리면 400이다", async () => {
+      const response = await request(app)
+        .get(`/api/matches?playerId=${player.id}&category=mixed`)
+        .set("Authorization", "Bearer test-token");
+
+      expect(response.status).toBe(400);
+    });
+
+    it("playerId 없이 category만 주면 400이다", async () => {
+      const response = await request(app)
+        .get("/api/matches?category=singles")
+        .set("Authorization", "Bearer test-token");
+
+      expect(response.status).toBe(400);
+    });
+  });
 });
 
 describe("GET /api/players/:playerId/profile-summary", () => {
@@ -314,8 +380,16 @@ describe("GET /api/players/:playerId/profile-summary", () => {
         singles: { matchWins: 1, matchLosses: 0, setWins: 1, setLosses: 0 },
       },
       ratingDelta: {
-        singles: { last7Days: 0.1, last30Days: 0.1 },
+        singles: {
+          last7Days: 0.1,
+          last30Days: 0.1,
+          last90Days: 0.1,
+          last7DaysMatchCount: 1,
+        },
       },
+      partners: [],
+      // 요청자가 대상 본인이라 상대 전적이 없다.
+      headToHead: null,
       ratingHistory: {
         singles: [expect.objectContaining({ rating: 3.1, source: "current" })],
       },
