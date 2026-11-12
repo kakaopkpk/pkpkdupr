@@ -7,7 +7,7 @@ interface SkeletonBlockProps {
 const SkeletonBlock: React.FC<SkeletonBlockProps> = ({ className = "" }) => (
   <div
     aria-hidden="true"
-    className={`animate-pulse rounded bg-pkpk-sub-font/10 ${className}`}
+    className={`animate-pulse rounded bg-pk-neutral ${className}`}
   />
 );
 

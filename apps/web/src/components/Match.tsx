@@ -127,7 +127,7 @@ const formatMatchDateTime = (value: string | Date) => {
 /**
  * 카드에 크게 보여 줄 두 팀의 결과. 단판은 점수, 점수가 여러 개인 과거 2선승 기록은 이긴 게임 수다.
  */
-const getTeamResultScores = (
+export const getTeamResultScores = (
   match: Pick<MatchInfo, "scores">,
 ): [number, number] => {
   const scores = match.scores ?? [];

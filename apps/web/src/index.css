@@ -1,33 +1,63 @@
 @import url("https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/variable/pretendardvariable-dynamic-subset.css");
+@import url("https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&display=swap");
 @import "tailwindcss";
 @import "@heroui/styles";
 
 @theme {
-  --color-error: #f8626c;
-  --color-border: #e6e6e6;
-  --color-divider: #e6e6e6;
-  --color-pkpk-primary-bg: #3b52cc;
-  --color-pkpk-session-bg: #f5f6fc;
-  --color-pkpk-secondary-bg: #8b1e77;
-  --color-pkpk-accent-bg: #eaff19;
-  --color-pkpk-bg: #f8f9fa;
-  --color-pkpk-sub-bg: #9da4b2;
-  --color-pkpk-dark: #0d0b1a;
-  --color-pkpk-muted: #5c6880;
-  --color-pkpk-main-font: #0d0b1a;
-  --color-pkpk-sub-font: #5c6880;
+  --color-error: #c2253d;
+  --color-border: #eef1f6;
+  --color-divider: #eef1f6;
+  /* 이전 pkpk-* 토큰. 이름은 유지하고 값만 새 팔레트로 맞춘다 */
+  --color-pkpk-primary-bg: #2346a8;
+  --color-pkpk-session-bg: #e6ebf8;
+  --color-pkpk-secondary-bg: #2346a8;
+  --color-pkpk-accent-bg: #d4f04a;
+  --color-pkpk-bg: #f3f5f9;
+  --color-pkpk-sub-bg: #b4bccb;
+  --color-pkpk-dark: #0f1726;
+  --color-pkpk-muted: #4f5a70;
+  --color-pkpk-main-font: #0f1726;
+  --color-pkpk-sub-font: #4f5a70;
   --color-pkpk-sub-title: var(--color-pkpk-sub-font);
-  --color-pkpk-detail-font: #9da4b2;
+  --color-pkpk-detail-font: #8a93a6;
   --color-pkpk-primary-font: #ffffff; /* primary-bg 내 폰트색으로 사용 */
   --color-pkpk-secondary-font: #ffffff; /* secondary-bg 내 폰트색으로 사용 */
-  --color-pkpk-accent-font: #eaff19;
-  --color-pkpk-dupr-font: #3b52cc;
+  --color-pkpk-accent-font: #0f1726;
+  --color-pkpk-dupr-font: #2346a8;
+
+  --color-pk-bg: #f3f5f9;
+  --color-pk-ink: #0f1726;
+  --color-pk-sub: #4f5a70;
+  --color-pk-muted: #8a93a6;
+  --color-pk-divider: #eef1f6;
+  --color-pk-quiet: #b4bccb;
+  --color-pk-neutral: #e3e7f0; /* 세그먼트 바탕·비활성 버튼·스켈레톤 */
+  --color-pk-up: #0a7a52;
+  --color-pk-down: #c2253d;
+  --color-pk-primary: #2346a8;
+  --color-pk-primary-soft: #e6ebf8;
+  --color-pk-primary-line: #bccaf0;
+  --color-pk-hl: #d4f04a;
+  --color-pk-gold: #f2c14e;
+  --color-pk-silver: #cfd5df;
+  --color-pk-bronze: #e0a878;
+  --font-num: "Barlow Condensed", sans-serif;
+  --radius-pk-sm: 12px;
+  --radius-pk-lg: 20px;
+  --text-pk-12: 12px;
+  --text-pk-13: 13px;
+  --text-pk-15: 15px;
+  --text-pk-17: 17px;
+  --text-pk-22: 22px;
+  --text-pk-26: 26px;
 }
 
 :root {
   --app-shell-height: 100vh;
   --app-keyboard-offset: 0px;
   --safe-bottom: max(12px, env(safe-area-inset-bottom));
+  /* 화면 아래 끝에서 하단 바(미니바·알림 바 포함) 윗변까지 거리. 아직 갱신하는 곳이 없어 하단 바(66px)만 있을 때의 기본값을 쓴다 */
+  --app-bottom-dock-height: calc(66px + 8px + var(--safe-bottom));
 }
 
 @supports (height: 100svh) {
@@ -81,6 +111,7 @@
       "Droid Sans",
       "Helvetica Neue",
       sans-serif;
+    color: var(--color-pk-ink);
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
   }
@@ -173,9 +204,18 @@
     overflow: hidden;
   }
 
-  /* 내용이 바뀌어도 시트 크기가 흔들리지 않게 최대 높이로 고정한다 */
+  /*
+   * 고정 높이 시트: 화면의 약 3/4(상한 620px). 키보드가 올라오면 시트 아래 여백이
+   * 키보드 높이만큼 늘어나므로 그만큼 키우고, 화면 위쪽 여백은 남긴다.
+   */
   .app-bottom-sheet-surface--fixed {
-    height: var(--app-bottom-sheet-max-height);
+    --app-bottom-sheet-fixed-height: min(
+      calc(var(--app-shell-height) * 0.75 + var(--app-keyboard-offset)),
+      calc(620px + var(--app-keyboard-offset)),
+      calc(var(--app-shell-height) - 3rem - env(safe-area-inset-top))
+    );
+    height: var(--app-bottom-sheet-fixed-height);
+    max-height: var(--app-bottom-sheet-fixed-height);
   }
 
   .app-bottom-sheet-body {
@@ -223,8 +263,8 @@
   .app-mobile-input:focus,
   .app-mobile-input:focus-visible {
     outline: none;
-    border-color: #409eff;
-    box-shadow: inset 0 0 0 1px rgba(64, 158, 255, 0.88);
+    border-color: var(--color-pk-primary);
+    box-shadow: inset 0 0 0 1px var(--color-pk-primary);
   }
 
   .app-action-button {
