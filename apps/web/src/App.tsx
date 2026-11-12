@@ -7,6 +7,7 @@ import PwaInstallPrompt from "./components/PwaInstallPrompt";
 import PwaUpdatePrompt from "./components/PwaUpdatePrompt";
 import { AppUpdateProvider } from "./context/AppUpdateContext";
 import { AuthProvider, useAuth } from "./context/AuthContext";
+import { SystemNoticeProvider } from "./context/SystemNoticeContext";
 import ForceChangePassword from "./pages/ForceChangePassword";
 import Login from "./pages/Login";
 
@@ -227,10 +228,12 @@ function App() {
       >
         <AppUpdateProvider>
           <AuthProvider>
-            <OfflineBanner />
-            <PwaInstallPrompt />
-            <PwaUpdatePrompt />
-            <AppRoutes />
+            <SystemNoticeProvider>
+              <OfflineBanner />
+              <PwaInstallPrompt />
+              <PwaUpdatePrompt />
+              <AppRoutes />
+            </SystemNoticeProvider>
           </AuthProvider>
         </AppUpdateProvider>
       </main>
