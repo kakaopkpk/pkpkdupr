@@ -5,7 +5,6 @@ import { PkButton } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { ListRow } from "@/components/ui/Form";
 import { DetailHeader } from "@/components/ui/Headers";
-import { ChevronRightIcon } from "@/components/ui/Icons";
 import { PlayerAvatar } from "@/components/ui/PlayerAvatar";
 import { SectionLabel } from "@/components/ui/Section";
 import { GLOBAL_LAYER } from "@/context/AppNavigationContext";
