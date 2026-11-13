@@ -33,7 +33,9 @@ import {
   IN_PROGRESS_MATCH_TIMEOUT_MS,
   REGULAR_SESSION_LOCATION,
   getRegularSessionName,
+  REGULAR_SESSION_END_TIME,
   REGULAR_SESSION_START_HOUR,
+  REGULAR_SESSION_START_TIME,
   getEmptySessionExpiryCutoff,
   kstDateKeyToDate,
   type MatchSessionKind,
@@ -326,6 +328,7 @@ export class MatchRepository {
         .from(matches)
         .where(eq(matches.sessionId, stored.id)),
     ]);
+    const kind = toSessionKind(stored);
 
     return {
       id: stored.id,
@@ -337,9 +340,11 @@ export class MatchRepository {
           participant.playerId,
       ),
       matchCount: sessionMatches.length,
-      kind: toSessionKind(stored),
-      startTime: stored.startTime ?? null,
-      endTime: stored.endTime ?? null,
+      kind,
+      // 정기 세션 시각은 저장하지 않고 정해진 18:00~22:00으로 채운다
+      startTime:
+        kind === "regular" ? REGULAR_SESSION_START_TIME : stored.startTime,
+      endTime: kind === "regular" ? REGULAR_SESSION_END_TIME : stored.endTime,
       createdAt: toDate(stored.createdAt),
       updatedAt: toDate(stored.updatedAt),
     };

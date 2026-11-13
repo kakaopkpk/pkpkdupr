@@ -173,7 +173,7 @@ export const matchSessions = pgTable(
     updatedAt: unixTimestamp("updated_at").notNull(),
     /** 정기 세션의 KST 날짜 키(YYYY-MM-DD). 날짜당 하나만 있다. 회원·관리자가 만든 세션은 null이다. */
     regularDateKey: varchar("regular_date_key", { length: 10 }),
-    /** 회원 세션의 시작·종료 시각("HH:MM", KST). 시각 없이 만든 세션과 정기 세션은 null이다. */
+    /** 회원 세션의 시작·종료 시각("HH:MM", KST). 시각 없이 만든 세션과 정기 세션은 null이다(정기 세션 시각은 저장소가 채운다). */
     startTime: varchar("start_time", { length: 5 }),
     endTime: varchar("end_time", { length: 5 }),
   },

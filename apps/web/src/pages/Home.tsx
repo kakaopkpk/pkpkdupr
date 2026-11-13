@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { RecommendedCourt } from "@pkpkdupr/shared/matchmaking";
+import { formatSessionTimeRange } from "@pkpkdupr/shared/session";
 import type { MatchInfo } from "@/types/match";
 import HomeSkeleton from "@/components/home/HomeSkeleton";
 import LastSessionFeed from "@/components/home/LastSessionFeed";
@@ -15,7 +16,6 @@ import {
   usePreSessionData,
 } from "@/components/home/usePreSessionData";
 import { useSessionRecommendations } from "@/components/home/useSessionRecommendations";
-import { formatSessionTimeRange } from "@/components/home/sessionTimeLabel";
 import { useSessionTopRiser } from "@/components/home/useSessionTopRiser";
 import { TopRiserCard } from "@/components/records/SessionReportParts";
 import ParticipantsSheet from "@/components/session/ParticipantsSheet";

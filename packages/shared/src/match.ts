@@ -134,7 +134,7 @@ export interface ManagedMatchSession {
   matchCount: number;
   /** 정기 세션 날짜 키(regular_date_key)가 있으면 "regular" */
   kind: MatchSessionKind;
-  /** 저장된 시작·종료 시각("HH:MM", KST). 정기 세션은 저장하지 않아 null이다 */
+  /** 시작·종료 시각("HH:MM", KST). 정기 세션은 18:00~22:00, 시각 없이 만든 세션은 null */
   startTime: string | null;
   endTime: string | null;
   createdAt: Date;

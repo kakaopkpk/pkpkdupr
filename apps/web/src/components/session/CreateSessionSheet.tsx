@@ -1,11 +1,14 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   DEFAULT_MATCH_LOCATION,
+  formatSessionTimeRange,
   kstDateKeyToDate,
   MATCH_SESSION_LOCATION_MAX_LENGTH,
   MATCH_SESSION_NAME_MAX_LENGTH,
   minutesToSessionTime,
+  REGULAR_SESSION_START_HOUR,
   toKstDateKey,
+  toKstMinutesOfDay,
 } from "@pkpkdupr/shared/session";
 import BottomSheet from "@/components/BottomSheet";
 import { PkButton } from "@/components/ui/Button";
@@ -41,7 +44,7 @@ export interface CreateSessionSheetProps {
 
 const DEPTH_ID = "global-create-session-sheet";
 const DAY_MS = 24 * 60 * 60 * 1000;
-const DEFAULT_START_MINUTES = 18 * 60;
+const DEFAULT_START_MINUTES = REGULAR_SESSION_START_HOUR * 60;
 const DEFAULT_DURATION_MINUTES = 2 * 60;
 
 /**
@@ -49,10 +52,8 @@ const DEFAULT_DURATION_MINUTES = 2 * 60;
  * 고를 수 있는 마지막 시각을 넘지 않는다
  */
 const getDefaultTimeRange = (now: Date) => {
-  const kstNow = new Date(now.getTime() + 9 * 60 * 60 * 1000);
-  const nowMinutes = kstNow.getUTCHours() * 60 + kstNow.getUTCMinutes();
   const nextSlot =
-    Math.ceil(nowMinutes / SESSION_TIME_STEP_MINUTES) *
+    Math.ceil(toKstMinutesOfDay(now) / SESSION_TIME_STEP_MINUTES) *
     SESSION_TIME_STEP_MINUTES;
   const start = Math.min(
     Math.max(DEFAULT_START_MINUTES, nextSlot),
@@ -155,7 +156,7 @@ const CreateSessionForm: React.FC<CreateSessionFormProps> = ({
           title="세션 만들기"
           sub={
             isDateValid
-              ? `${formatDateSubtitle(dateKey, todayKey)} · ${timeRange.startTime}~${timeRange.endTime}`
+              ? `${formatDateSubtitle(dateKey, todayKey)} · ${formatSessionTimeRange(timeRange)}`
               : undefined
           }
         />

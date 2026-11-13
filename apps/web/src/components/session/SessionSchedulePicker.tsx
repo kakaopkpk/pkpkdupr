@@ -1,25 +1,27 @@
 import React, { useLayoutEffect, useRef } from "react";
 import {
+  formatSessionTimeRange,
   kstDateKeyToDate,
   minutesToSessionTime,
   REGULAR_SESSION_WEEKDAYS,
   sessionTimeToMinutes,
   toKstDateKey,
+  WEEKDAY_LABELS,
 } from "@pkpkdupr/shared/session";
 import { cx } from "@/components/ui/cx";
+import { formatKstLongDate } from "@/lib/format";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
-const WEEKDAY_LABELS = ["일", "월", "화", "수", "목", "금", "토"];
 /** 오늘부터 고를 수 있는 날 수(3주) */
 const DATE_OPTION_COUNT = 21;
 export const SESSION_TIME_STEP_MINUTES = 30;
 /** 시작 시각 06:00~23:00, 종료 시각은 시작 30분 뒤~23:30 */
-export const SESSION_FIRST_START_MINUTES = 6 * 60;
+const SESSION_FIRST_START_MINUTES = 6 * 60;
 export const SESSION_LAST_START_MINUTES = 23 * 60;
 export const SESSION_LAST_END_MINUTES = 23 * 60 + 30;
 /** 선택한 칩 앞에 보일 여백. 앞 칩이 조금 보여 가로로 넘길 수 있음을 알린다 */
 const SCROLL_LEAD_PX = 24;
-/** 칩 줄 오른쪽 끝을 흐리는 폭. 이 안에 걸친 칩은 가려진 것으로 본다 */
+/** 칩 줄 오른쪽 끝을 흐리는 폭(STRIP_CLASS_NAME의 mask 40px과 같다). 이 안에 걸친 칩은 가려진 것으로 본다 */
 const STRIP_FADE_PX = 40;
 
 // 시트 좌우 여백(시트 16px + 폼 4px)까지 스크롤하고, 오른쪽 끝을 흐려 더 있다는 것을 보인다
@@ -37,10 +39,12 @@ const getDateParts = (dateKey: string) => {
 };
 
 /** "11월 17일 월요일" */
-export const formatSessionDateLong = (dateKey: string) => {
-  const { month, day, weekday } = getDateParts(dateKey);
-  return `${month}월 ${day}일 ${WEEKDAY_LABELS[weekday]}요일`;
-};
+const formatSessionDateLong = (dateKey: string) =>
+  formatKstLongDate(kstDateKeyToDate(dateKey));
+
+const REGULAR_WEEKDAYS_LABEL = REGULAR_SESSION_WEEKDAYS.map(
+  (weekday) => WEEKDAY_LABELS[weekday],
+).join("·");
 
 const buildDateKeys = (todayKey: string) => {
   const todayStart = kstDateKeyToDate(todayKey).getTime();
@@ -135,6 +139,12 @@ export const SessionDatePicker: React.FC<{
           const isRegular = REGULAR_SESSION_WEEKDAYS.includes(weekday);
           const topLabel =
             index === 0 ? "오늘" : index === 1 ? "내일" : WEEKDAY_LABELS[weekday];
+          const ariaLabel = [
+            formatSessionDateLong(dateKey) + (index < 2 ? `(${topLabel})` : ""),
+            isRegular && "정기 운동일",
+          ]
+            .filter(Boolean)
+            .join(", ");
           return (
             <React.Fragment key={dateKey}>
               {index === 0 || day === 1 ? (
@@ -149,7 +159,7 @@ export const SessionDatePicker: React.FC<{
                 type="button"
                 role="radio"
                 aria-checked={isSelected}
-                aria-label={`${formatSessionDateLong(dateKey)}${index < 2 ? `(${topLabel})` : ""}${isRegular ? ", 정기 운동일" : ""}`}
+                aria-label={ariaLabel}
                 onClick={() => onChange(dateKey)}
                 className={cx(
                   "flex h-[72px] w-[54px] shrink-0 flex-col items-center justify-center gap-0.5 rounded-pk-sm transition-colors",
@@ -189,7 +199,7 @@ export const SessionDatePicker: React.FC<{
       </div>
       <p className="flex items-center gap-1.5 text-pk-12 text-pk-muted">
         <span aria-hidden="true" className="size-1 rounded-full bg-pk-primary" />
-        정기 운동일(월·목)
+        정기 운동일({REGULAR_WEEKDAYS_LABEL})
       </p>
     </div>
   );
@@ -283,7 +293,7 @@ export const SessionTimePicker: React.FC<{
       <FieldLabel
         id="session-time-label"
         label="시간"
-        detail={`${startTime}~${endTime} · ${formatDuration(endMinutes - startMinutes)}`}
+        detail={`${formatSessionTimeRange({ startTime, endTime })} · ${formatDuration(endMinutes - startMinutes)}`}
       />
       <div
         role="group"

@@ -1,4 +1,7 @@
-import { kstDateKeyTimeToDate } from "@pkpkdupr/shared/session";
+import {
+  formatSessionTimeRange,
+  kstDateKeyTimeToDate,
+} from "@pkpkdupr/shared/session";
 import { formatKstShortDate } from "@/lib/format";
 import type { MatchSessionDetailInfo } from "@/lib/matchSessions";
 
@@ -10,13 +13,6 @@ type SessionTimeSource = Pick<
   "kind" | "date" | "dateKey" | "isToday" | "startTime" | "endTime"
 >;
 
-/** "18:00~22:00". 시각 없는 세션이면 null */
-export const formatSessionTimeRange = (
-  session: Pick<MatchSessionDetailInfo, "startTime" | "endTime">,
-) =>
-  session.startTime && session.endTime
-    ? `${session.startTime}~${session.endTime}`
-    : null;
 
 /** "2026-11-17" → UTC 자정 시각(날짜 차 계산용) */
 const dateKeyToUtc = (dateKey: string) => {
@@ -59,6 +55,7 @@ export const getSessionTimeLabel = (
   const timeRange = formatSessionTimeRange(session);
 
   if (timeRange && session.startTime) {
+    // timeRange가 있으면 시작 시각도 있다(TS 좁히기용 조건)
     if (days <= 0) {
       const startsAt = kstDateKeyTimeToDate(session.dateKey, session.startTime);
       const until = formatTimeUntil(startsAt, now);
