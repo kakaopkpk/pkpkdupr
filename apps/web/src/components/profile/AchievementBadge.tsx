@@ -8,6 +8,8 @@ const UNEARNED_FILL = "var(--color-pk-neutral)";
 const UNEARNED_ICON = "var(--color-pk-quiet)";
 // 못 받은 배지 숫자 꼬리표 테두리
 const UNEARNED_TAG_BORDER = "var(--color-pk-line)";
+// 이 크기 이상(업적 축하 연출)이면 숫자 꼬리표도 키운다
+const LARGE_BADGE_MIN_SIZE = 96;
 
 type BadgeIconKind =
   | "ball"
@@ -184,6 +186,8 @@ export const AchievementBadge: React.FC<AchievementBadgeProps> = ({
   const iconKind =
     BADGE_ICON_BY_ID[achievement.id] ??
     BADGE_ICON_BY_CATEGORY[achievement.category];
+  const isLarge = size >= LARGE_BADGE_MIN_SIZE;
+  const tagBorder = earned ? EARNED_COLOR : UNEARNED_TAG_BORDER;
 
   return (
     <span
@@ -217,11 +221,14 @@ export const AchievementBadge: React.FC<AchievementBadgeProps> = ({
       {achievement.badgeNumber != null ? (
         <span
           className={cx(
-            "absolute -bottom-[5px] left-1/2 flex h-[17px] min-w-5 -translate-x-1/2 items-center justify-center rounded-full bg-white px-[5px] text-pk-12 leading-none font-extrabold tabular-nums",
+            "absolute left-1/2 flex -translate-x-1/2 items-center justify-center rounded-full bg-white leading-none font-extrabold tabular-nums",
+            isLarge
+              ? "-bottom-[9px] h-7 min-w-9 px-[9px] text-pk-17"
+              : "-bottom-[5px] h-[17px] min-w-5 px-[5px] text-pk-12",
             earned ? "text-pk-primary" : "text-pk-muted",
           )}
           style={{
-            boxShadow: `inset 0 0 0 1.5px ${earned ? EARNED_COLOR : UNEARNED_TAG_BORDER}`,
+            boxShadow: `inset 0 0 0 ${isLarge ? 2.5 : 1.5}px ${tagBorder}`,
           }}
         >
           {achievement.badgeNumber}

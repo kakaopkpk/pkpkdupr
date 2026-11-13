@@ -24,7 +24,7 @@
   - 그 밖의 전역 라우트: `Login.tsx`, `ForceChangePassword.tsx`
 - `src/components/`
   - `BottomNav.tsx`: 4탭 keep-alive 셸, 하단 바(`BottomDock.tsx`)와 + 메뉴, 전역 화면 래퍼 렌더, 진행 중 경기 미니바·참여 알림 바
-  - 전역 화면 래퍼: `match/`(경기 상세), `profile/`(회원 프로필·경기 목록), `record/`(경기 기록 시트), `session/`(세션 만들기(날짜 칩·시작·종료 시각 칩 `SessionSchedulePicker`)·참여자 편집), `settings/`(설정·비밀번호 변경·프로필 사진 확인·상태메시지 편집)
+  - 전역 화면 래퍼: `match/`(경기 상세), `profile/`(회원 프로필·경기 목록), `record/`(경기 기록 시트, 완료 단계에서 내 새 업적을 화면 전체 축하 연출 `AchievementCelebration`으로 띄움), `session/`(세션 만들기(날짜 칩·시작·종료 시각 칩 `SessionSchedulePicker`)·참여자 편집), `settings/`(설정·비밀번호 변경·프로필 사진 확인·상태메시지 편집)
   - 탭 전용 조각: `home/`, `records/`, `ranking/`
   - `ui/`: 새 디자인 공통 컴포넌트. 새 화면은 여기 것을 먼저 씁니다.
     - `Button.tsx`(`PkButton`, variant `primary`·`soft`·`outline`·`ghost`), `Card.tsx`, `SegmentedControl.tsx`, `Headers.tsx`(`TabHeader`·`DetailHeader`), `Form.tsx`(`TextField`), `Section.tsx`(`ListRow`·`SectionLabel`·`TextLink`), `SheetTitle.tsx`
@@ -95,7 +95,7 @@
 - 기본 클래스에 className prop을 합칠 때는 `components/ui/cx.ts`의 `cx`를 씁니다. tailwind-merge 기반이라 충돌하는 클래스는 뒤에 온 것만 남으므로 넘겨받은 className을 뒤에 둡니다. `!` 접두(important)로 우회하지 않습니다.
 - `@theme`에 `pk-*` 토큰(색·둥글기·글자 크기)을 추가하거나 바꾸면 `cx.ts`의 tailwind-merge 토큰 등록도 함께 고칩니다. 빠지면 `text-pk-15`와 `text-pk-ink`처럼 접두가 같은 클래스를 같은 종류로 오인하거나 충돌을 못 정리합니다.
 - 모션 곡선은 `@theme`의 `ease-pk-move`(이동·전환)와 `ease-pk-pop`(튀어나오는 등장) 두 개를 씁니다. arbitrary `ease-[cubic-bezier(...)]`를 새로 쓰지 않습니다.
-- 공용 애니메이션은 `index.css`의 `animate-pk-*`(`fade-in`·`fade-up`·`pop`·`draw`·`sheen`·`ping`·`spin-slow`·`rise-in`·`sink-out`·`wobble`)를 재사용합니다. 모두 fill-mode both이고 지연·길이는 inline style `animationDelay`·`animationDuration`으로 덮어씁니다. `animate-pk-draw`는 요소에 `pathLength="1"`이 필요합니다. transform·opacity만 움직이고 height·top·width·left는 애니메이션하지 않습니다. 새 keyframes는 `@theme`에 `pk-` 접두로 추가하고 `cx.ts` 등록도 함께 고칩니다.
+- 공용 애니메이션은 `index.css`의 `animate-pk-*`(`fade-in`·`fade-up`·`fade-out`·`pop`·`draw`·`sheen`·`ping`·`spin-slow`·`rise-in`·`sink-out`·`wobble`, 업적 축하 전용 `celebrate-pop`·`rays-pulse`·`slide-away`)를 재사용합니다. 모두 fill-mode both이고 지연·길이는 inline style `animationDelay`·`animationDuration`으로 덮어씁니다. `animate-pk-draw`는 요소에 `pathLength="1"`이 필요합니다. transform·opacity만 움직이고 height·top·width·left는 애니메이션하지 않습니다. 새 keyframes는 `@theme`에 `pk-` 접두로 추가하고 `cx.ts` 등록도 함께 고칩니다.
 - 움직임 줄이기는 소비처에서 `motion-reduce:`(`motion-reduce:animate-none`, `motion-reduce:transition-none`, 장식 요소는 `motion-reduce:hidden`)로 끄고 최종 상태를 바로 보입니다.
 - 화면 등장 연출(CSS 애니메이션·숫자 카운트업)은 화면이 보이게 될 때마다(처음 마운트 포함) 처음부터 한 번 재생합니다. 보임은 `context/ScreenVisibilityContext.tsx` 기준이고, 같은 보임 안의 `dataVersion` 재조회·리렌더·바텀시트 열고 닫기로는 다시 재생하지 않으며, 숨김 중이나 콘텐츠 준비 전(`isReady` false)에는 진행하지 않습니다. CSS 애니메이션은 `hooks/usePlayOnShow.ts`의 `isPlaying`일 때만 클래스를 붙이고 가장 늦게 끝나는 요소(자식에 다른 애니메이션이 없는 요소)의 `onAnimationEnd`에 `finish`를 겁니다. 무한 반복(`ping`·`spin-slow`)은 끝나지 않으므로 `usePlayOnShow`에 쓰지 않습니다. 숫자 카운트업은 `hooks/useCountUp.ts`의 `useCountUp`(움직임 줄이기면 바로 최종 값)을 쓰고, 세는 동안 자릿수가 바뀌어 주변이 흔들리면 `ui/CountUpText.tsx`로 폭을 최종 값에 고정합니다.
 - Barlow Condensed는 600·700 굵기만 로드하므로 `font-num`에는 `font-bold` 이하만 씁니다.

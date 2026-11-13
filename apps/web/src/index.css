@@ -24,6 +24,9 @@
   --color-pk-gold: #f2c14e;
   --color-pk-silver: #cfd5df;
   --color-pk-bronze: #e0a878;
+  /* 업적 축하 색종이 */
+  --color-pk-sky: #5ac8fa;
+  --color-pk-primary-mid: #5a7bd6;
   /* 세션 지배자 불꽃 후광 */
   --color-pk-flame-core: #ffd54a;
   --color-pk-flame: #ff8a1f;
@@ -48,7 +51,7 @@
   /*
    * 공용 모션. 모두 fill-mode both라 inline style animationDelay 동안 시작 상태로 머문다.
    * 지연·길이는 inline style(animationDelay·animationDuration)로 덮어쓴다.
-   * keyframes는 "시작 상태 → 정적 상태" 방향이라 motion-reduce:animate-none이면 정적 상태가 곧 최종 상태다(pk-sink-out만 퇴장 방향).
+   * keyframes는 "시작 상태 → 정적 상태" 방향이라 motion-reduce:animate-none이면 정적 상태가 곧 최종 상태다(pk-sink-out·pk-fade-out·pk-slide-away만 퇴장 방향).
    */
   --animate-pk-fade-in: pk-fade-in 200ms var(--ease-pk-move) both;
   --animate-pk-fade-up: pk-fade-up 260ms var(--ease-pk-move) both;
@@ -62,6 +65,12 @@
   --animate-pk-sink-out: pk-sink-out 260ms var(--ease-pk-move) both;
   /* 제자리에서 한 번 까딱인다. 기준점(transform-origin)은 소비처가 정한다 */
   --animate-pk-wobble: pk-wobble 600ms var(--ease-pk-move) both;
+  /* 퇴장 방향(최종 상태가 투명) */
+  --animate-pk-fade-out: pk-fade-out 220ms var(--ease-pk-move) both;
+  /* 업적 축하: 배지가 크게 튀어나왔다 살짝 줄어든 뒤 자리 잡는다 / 빛줄기가 한 번 크게 퍼졌다 돌아온다 / 배지가 왼쪽으로 빠진다(퇴장 방향) */
+  --animate-pk-celebrate-pop: pk-celebrate-pop 560ms linear both;
+  --animate-pk-rays-pulse: pk-rays-pulse 800ms var(--ease-pk-move) both;
+  --animate-pk-slide-away: pk-slide-away 220ms var(--ease-pk-move) both;
 
   @keyframes nav-icon-pop {
     30% {
@@ -147,6 +156,39 @@
     to {
       opacity: 0;
       transform: translateY(100%);
+    }
+  }
+
+  @keyframes pk-fade-out {
+    to {
+      opacity: 0;
+    }
+  }
+
+  @keyframes pk-celebrate-pop {
+    0% {
+      opacity: 0;
+      transform: scale(0.2);
+    }
+    55% {
+      opacity: 1;
+      transform: scale(1.18);
+    }
+    80% {
+      transform: scale(0.96);
+    }
+  }
+
+  @keyframes pk-rays-pulse {
+    30% {
+      transform: scale(1.28);
+    }
+  }
+
+  @keyframes pk-slide-away {
+    to {
+      opacity: 0;
+      transform: translateX(-90px) scale(0.7);
     }
   }
 
@@ -462,6 +504,44 @@
     .pk-flame-aura::before {
       animation: none;
     }
+  }
+
+  /*
+   * 업적 달성 축하 연출(AchievementCelebration).
+   * 색종이 색은 캔버스가 --pk-confetti-1~6을 읽어 쓴다.
+   */
+  .pk-celebration {
+    --pk-confetti-1: var(--color-pk-primary);
+    --pk-confetti-2: var(--color-pk-hl);
+    --pk-confetti-3: var(--color-pk-gold);
+    --pk-confetti-4: var(--color-pk-sky);
+    --pk-confetti-5: var(--color-white);
+    --pk-confetti-6: var(--color-pk-primary-mid);
+  }
+
+  .pk-celebration-dim {
+    background: color-mix(in srgb, var(--color-pk-ink) 62%, transparent);
+    -webkit-backdrop-filter: blur(7px) saturate(1.1);
+    backdrop-filter: blur(7px) saturate(1.1);
+  }
+
+  /* 배지 뒤에서 도는 빛줄기. 가운데서 바깥으로 갈수록 흐려진다 */
+  .pk-celebration-rays {
+    background: repeating-conic-gradient(
+      from 0deg,
+      color-mix(in srgb, var(--color-pk-hl) 22%, transparent) 0 7deg,
+      transparent 7deg 20deg
+    );
+    -webkit-mask: radial-gradient(circle, #000 12%, transparent 62%);
+    mask: radial-gradient(circle, #000 12%, transparent 62%);
+  }
+
+  .pk-celebration-glow {
+    background: radial-gradient(
+      circle,
+      color-mix(in srgb, var(--color-pk-hl) 42%, transparent),
+      transparent 62%
+    );
   }
 
   .app-mobile-input {
