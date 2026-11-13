@@ -75,6 +75,11 @@ const memberKindFilterLabels: Record<MemberKindFilter, string> = {
   guest: "게스트",
 };
 
+const matchesMemberKind = (
+  player: Pick<PlayerInfo, "isGuest">,
+  kind: MemberKindFilter,
+) => kind === "all" || player.isGuest === (kind === "guest");
+
 /** 게스트를 추가한 세션 날짜. 예: "11/13" (KST) */
 const formatGuestSessionDate = (value: string) =>
   new Intl.DateTimeFormat("ko-KR", {
@@ -331,12 +336,9 @@ const AdminDashboard: React.FC = () => {
     useState<MemberKindFilter>("all");
   const [promoteTarget, setPromoteTarget] = useState<PlayerInfo | null>(null);
   const [isPromotingGuest, setIsPromotingGuest] = useState(false);
-  const filteredPlayers =
-    memberKindFilter === "all"
-      ? players
-      : players.filter(
-          (player) => player.isGuest === (memberKindFilter === "guest"),
-        );
+  const filteredPlayers = players.filter((player) =>
+    matchesMemberKind(player, memberKindFilter),
+  );
   const [savingMatchMetadataIds, setSavingMatchMetadataIds] = useState<
     string[]
   >([]);
@@ -2117,12 +2119,9 @@ const AdminDashboard: React.FC = () => {
           >
             {(Object.keys(memberKindFilterLabels) as MemberKindFilter[]).map(
               (kind) => {
-                const count =
-                  kind === "all"
-                    ? players.length
-                    : players.filter(
-                        (player) => player.isGuest === (kind === "guest"),
-                      ).length;
+                const count = players.filter((player) =>
+                  matchesMemberKind(player, kind),
+                ).length;
                 const isSelected = memberKindFilter === kind;
                 return (
                   <button

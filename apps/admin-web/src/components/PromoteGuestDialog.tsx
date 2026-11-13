@@ -1,6 +1,7 @@
 import React, { useState } from "react";
+import type { AdminPromoteGuestRequest } from "@pkpkdupr/shared/player";
 
-type PromoteGender = "M" | "F";
+type PromoteGender = AdminPromoteGuestRequest["gender"];
 
 interface PromoteGuestDialogProps {
   username: string;
