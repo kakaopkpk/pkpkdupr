@@ -12,7 +12,11 @@ import {
  */
 
 export type AchievementCategory =
-  "matches" | "wins" | "streak" | "special" | "session";
+  | "matches"
+  | "wins"
+  | "streak"
+  | "special"
+  | "session";
 
 export interface AchievementDefinition {
   id: string;
@@ -410,6 +414,12 @@ const ACHIEVEMENT_METRIC_BY_ID = new Map<string, AchievementMetric>(
   ACHIEVEMENT_TABLE.map((row) => [row.definition.id, row.metric]),
 );
 
+/** 진행도가 누적 수가 아니라 최고 연승 기록인 업적(연승·환상의 콤비) */
+export const isBestStreakAchievement = (achievementId: string) => {
+  const metric = ACHIEVEMENT_METRIC_BY_ID.get(achievementId);
+  return metric === "bestStreak" || metric === "bestPartnerStreak";
+};
+
 export const ACHIEVEMENT_CATEGORY_LABEL: Record<AchievementCategory, string> = {
   matches: "경기 수",
   wins: "승리",
@@ -466,7 +476,12 @@ export interface AchievementTeam {
 
 type CountedMatch = AchievementMatch & { completedAt: Date };
 
-/** 업적에 세는 경기: 완료 + 완료 시각 있음. 완료 시각 오름차순(같으면 id 순) */
+/** 완료 시각 오름차순(같으면 id 순) */
+const compareCountedMatches = (left: CountedMatch, right: CountedMatch) =>
+  left.completedAt.getTime() - right.completedAt.getTime() ||
+  (left.id < right.id ? -1 : left.id > right.id ? 1 : 0);
+
+/** 업적에 세는 경기: 완료 + 완료 시각 있음. compareCountedMatches 순 */
 const getCountedMatches = (
   matches: readonly AchievementMatch[],
 ): CountedMatch[] =>
@@ -477,11 +492,7 @@ const getCountedMatches = (
         match.completedAt != null &&
         !Number.isNaN(match.completedAt.getTime()),
     )
-    .sort(
-      (left, right) =>
-        left.completedAt.getTime() - right.completedAt.getTime() ||
-        (left.id < right.id ? -1 : left.id > right.id ? 1 : 0),
-    );
+    .sort(compareCountedMatches);
 
 const findTeamIndex = (
   match: AchievementMatch,
@@ -524,8 +535,12 @@ const getLineupKey = (match: AchievementMatch, teamIndex: 0 | 1) => {
   return `${teamKey(teamIndex)}|${teamKey(teamIndex === 0 ? 1 : 0)}`;
 };
 
-/** 경기 결과. 승패가 갈리지 않은 경기는 "none" */
-type MatchOutcome = "won" | "lost" | "none";
+/** map[key]를 1 올리고 올린 값을 돌려준다 */
+const increment = (map: Map<string, number>, key: string) => {
+  const count = (map.get(key) ?? 0) + 1;
+  map.set(key, count);
+  return count;
+};
 
 interface SessionRecord {
   matches: number;
@@ -533,11 +548,6 @@ interface SessionRecord {
   /** 전승 상태로 UNBEATEN_SESSION_MIN_MATCHES번째 경기를 마친 경기 */
   qualifiedMatch: CountedMatch | null;
 }
-
-/** 경기를 다 훑은 뒤에 판정하는 지표. 나중 경기로 조건이 깨질 수 있다 */
-const FINAL_METRICS: ReadonlySet<AchievementMetric> = new Set([
-  "unbeatenSessions",
-]);
 
 /**
  * 한 회원의 업적 32개 진행 상태(ACHIEVEMENTS 순서).
@@ -582,7 +592,8 @@ export function computeAchievements(
   const partnerStreaks = new Map<string, number>();
   const opponentMatches = new Map<string, number>();
   const beatenOpponents = new Set<string>();
-  const lastOutcomeByLineup = new Map<string, MatchOutcome>();
+  /** 같은 조합의 직전 경기에서 진 조합 */
+  const lostLineups = new Set<string>();
   const sessions = new Map<string, SessionRecord>();
 
   for (const match of getCountedMatches(matches)) {
@@ -592,11 +603,6 @@ export function computeAchievements(
     const scores = match.scores ?? [];
     const winningTeamIndex = getWinningTeamIndex(match);
     const won = winningTeamIndex === teamIndex;
-    const outcome: MatchOutcome = won
-      ? "won"
-      : winningTeamIndex === null
-        ? "none"
-        : "lost";
 
     metrics.matches += 1;
     if (won) {
@@ -611,20 +617,18 @@ export function computeAchievements(
     }
 
     const lineupKey = getLineupKey(match, teamIndex);
-    if (won && lastOutcomeByLineup.get(lineupKey) === "lost") {
-      metrics.revenges += 1;
-    }
-    lastOutcomeByLineup.set(lineupKey, outcome);
+    if (won && lostLineups.has(lineupKey)) metrics.revenges += 1;
+    // 승패가 갈리지 않은 경기도 직전 경기가 되므로 진 상태를 지운다.
+    if (!won && winningTeamIndex !== null) lostLineups.add(lineupKey);
+    else lostLineups.delete(lineupKey);
 
     const opponentIds = new Set(
       match.teams[teamIndex === 0 ? 1 : 0].players.map((player) => player.id),
     );
     for (const opponentId of opponentIds) {
-      const count = (opponentMatches.get(opponentId) ?? 0) + 1;
-      opponentMatches.set(opponentId, count);
       metrics.bestOpponentMatches = Math.max(
         metrics.bestOpponentMatches,
-        count,
+        increment(opponentMatches, opponentId),
       );
       if (won) beatenOpponents.add(opponentId);
     }
@@ -637,11 +641,9 @@ export function computeAchievements(
           .filter((id) => id !== playerId),
       );
       for (const partnerId of partnerIds) {
-        const count = (partnerMatches.get(partnerId) ?? 0) + 1;
-        partnerMatches.set(partnerId, count);
         metrics.bestPartnerMatches = Math.max(
           metrics.bestPartnerMatches,
-          count,
+          increment(partnerMatches, partnerId),
         );
 
         const partnerStreak = won
@@ -679,7 +681,8 @@ export function computeAchievements(
     for (const item of progress) {
       if (item.earned) continue;
       const metric = ACHIEVEMENT_METRIC_BY_ID.get(item.id)!;
-      if (FINAL_METRICS.has(metric)) continue;
+      // 무패 세션은 나중 경기로 조건이 깨질 수 있어 다 훑은 뒤에 판정한다.
+      if (metric === "unbeatenSessions") continue;
       if (metrics[metric] >= item.target) {
         item.earned = true;
         item.earnedAt = match.completedAt;
@@ -693,15 +696,13 @@ export function computeAchievements(
     .flatMap((session) =>
       session.allWon && session.qualifiedMatch ? [session.qualifiedMatch] : [],
     )
-    .sort(
-      (left, right) => left.completedAt.getTime() - right.completedAt.getTime(),
-    );
+    .sort(compareCountedMatches);
   metrics.unbeatenSessions = unbeatenMatches.length;
 
   for (const item of progress) {
     const metric = ACHIEVEMENT_METRIC_BY_ID.get(item.id)!;
     item.current = metrics[metric];
-    if (FINAL_METRICS.has(metric) && item.current >= item.target) {
+    if (metric === "unbeatenSessions" && item.current >= item.target) {
       const earnedMatch = unbeatenMatches[item.target - 1];
       item.earned = true;
       item.earnedAt = earnedMatch.completedAt;

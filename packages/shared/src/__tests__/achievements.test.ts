@@ -4,6 +4,7 @@ import {
   ACHIEVEMENTS,
   computeAchievements,
   findNewAchievements,
+  isBestStreakAchievement,
   type AchievementMatch,
   type AchievementProgress,
 } from "../achievements";
@@ -131,6 +132,16 @@ describe("ACHIEVEMENTS", () => {
       special: "특별",
       session: "세션",
     });
+  });
+});
+
+describe("isBestStreakAchievement", () => {
+  it("연승과 환상의 콤비만 최고 연승 기록 업적이다", () => {
+    expect(
+      ACHIEVEMENTS.filter((definition) =>
+        isBestStreakAchievement(definition.id),
+      ).map((definition) => definition.id),
+    ).toEqual(["streak-3", "streak-5", "streak-10", "streak-20", "combo-5"]);
   });
 });
 
@@ -315,13 +326,13 @@ describe("computeAchievements", () => {
     });
 
     const tenth = hardWin();
-    expect(progressOf(compute([...below, tenth]), "hard-won-10")).toMatchObject(
-      {
-        earned: true,
-        earnedMatchId: tenth.id,
-        current: 10,
-      },
-    );
+    expect(
+      progressOf(compute([...below, tenth]), "hard-won-10"),
+    ).toMatchObject({
+      earned: true,
+      earnedMatchId: tenth.id,
+      current: 10,
+    });
   });
 
   it("단짝은 같은 파트너와 복식 20경기에서 받고 진행도는 한 파트너 최대 경기 수다", () => {
