@@ -224,11 +224,35 @@ const hydrateMatchFeedItem = (record: any): MatchFeedItem =>
     ? { kind: "session", session: hydrateSessionSummary(record.session) }
     : { kind: "match", match: hydrateMatch(record.match) };
 
+export interface MatchRepositoryOptions {
+  /**
+   * 세션이 새로 생겼거나 참여자가 바뀌었거나 지워졌을 때 그 세션 id로 부른다(구글 캘린더 반영용).
+   * 저장 뒤에 부르며, 여기서 난 예외는 저장소 호출 결과에 영향을 주지 않는다.
+   */
+  onSessionsChanged?: (sessionIds: string[]) => void;
+}
+
 /**
  * MatchRepository - API 서버에서 `@pkpkdupr/db`의 match 저장소를 호출하고,
  * 저장소 예외를 공개 API 상태 코드(MatchRepositoryError.status)로 변환합니다.
  */
 export class MatchRepository {
+  constructor(private readonly options: MatchRepositoryOptions = {}) {}
+
+  private notifySessionsChanged(sessionIds: Array<string | undefined>) {
+    const ids = [
+      ...new Set(sessionIds.filter((id): id is string => Boolean(id))),
+    ];
+    if (ids.length === 0 || !this.options.onSessionsChanged) {
+      return;
+    }
+    try {
+      this.options.onSessionsChanged(ids);
+    } catch (error) {
+      console.error("[MATCH] 세션 변경 알림 실패", ids, error);
+    }
+  }
+
   /**
    * 저장소 호출을 실행하고 실패를 status가 담긴 MatchRepositoryError로 바꾼다.
    * resolveStatus가 없으면 fallbackStatus를 쓴다.
@@ -297,12 +321,16 @@ export class MatchRepository {
   async create(match: NewMatchInput): Promise<Match> {
     for (let attempt = 0; attempt < 8; attempt += 1) {
       try {
-        const created = await this.run(
-          () => db.matches.create(toCreateMatchInput(match)),
-          500,
-          (error) => (isUniqueViolation(error) ? 409 : undefined),
+        const created = hydrateMatch(
+          await this.run(
+            () => db.matches.create(toCreateMatchInput(match)),
+            500,
+            (error) => (isUniqueViolation(error) ? 409 : undefined),
+          ),
         );
-        return hydrateMatch(created);
+        // 세션 정보로 저장하면 그 세션이 새로 만들어질 수 있다(관리자 일괄 등록 등)
+        this.notifySessionsChanged([created.session?.id]);
+        return created;
       } catch (error) {
         if (
           match.id ||
@@ -329,7 +357,9 @@ export class MatchRepository {
       400,
       (error) => (isUniqueViolation(error) ? 409 : undefined),
     );
-    return created.map(hydrateMatch);
+    const hydrated = created.map(hydrateMatch);
+    this.notifySessionsChanged(hydrated.map((match) => match.session?.id));
+    return hydrated;
   }
 
   /**
@@ -357,7 +387,9 @@ export class MatchRepository {
       }
       throw error;
     }
-    return hydrateStandaloneSession(created);
+    const stored = hydrateStandaloneSession(created);
+    this.notifySessionsChanged([stored.id]);
+    return stored;
   }
 
   async findSessions(): Promise<ManagedMatchSession[]> {
@@ -375,15 +407,22 @@ export class MatchRepository {
     return record ? hydrateManagedSession(record) : undefined;
   }
 
-  /** 그 KST 날짜의 정기 세션을 찾거나 만든다. 같은 날짜에 하나만 존재한다 */
+  /**
+   * 그 KST 날짜의 정기 세션을 찾거나 만든다. 같은 날짜에 하나만 존재한다.
+   * 이 호출이 새로 만들었을 때만 세션 변경을 알린다(이미 있던 세션 조회는 알리지 않음).
+   */
   async findOrCreateRegularSession(
     dateKey: string,
   ): Promise<ManagedMatchSession> {
-    const record = await this.run(
+    const { session, created } = await this.run(
       () => db.matches.findOrCreateRegularSession(dateKey),
       500,
     );
-    return hydrateManagedSession(record);
+    const hydrated = hydrateManagedSession(session);
+    if (created) {
+      this.notifySessionsChanged([hydrated.id]);
+    }
+    return hydrated;
   }
 
   /** 참여자를 추가한다. 이미 있으면 무시한다(동시 호출에도 덮어쓰지 않음) */
@@ -391,10 +430,13 @@ export class MatchRepository {
     sessionId: string,
     playerIds: string[],
   ): Promise<void> {
-    await this.run(
+    const added = await this.run(
       () => db.matches.addSessionParticipants(sessionId, playerIds),
       500,
     );
+    if (added) {
+      this.notifySessionsChanged([sessionId]);
+    }
   }
 
   /** 참여자 한 명을 뺀다. 참여 중이 아니어도 성공한다(멱등) */
@@ -402,10 +444,13 @@ export class MatchRepository {
     sessionId: string,
     playerId: string,
   ): Promise<void> {
-    await this.run(
+    const removed = await this.run(
       () => db.matches.removeSessionParticipant(sessionId, playerId),
       500,
     );
+    if (removed) {
+      this.notifySessionsChanged([sessionId]);
+    }
   }
 
   /** 그 KST 날짜의 세션을 시각 오름차순으로 돌려준다 */
@@ -440,7 +485,9 @@ export class MatchRepository {
    */
   async cleanupExpired(now: Date = new Date()): Promise<void> {
     try {
-      await db.matches.deleteExpiredInProgressMatchesAndEmptySessions(now);
+      const { deletedSessionIds } =
+        await db.matches.deleteExpiredInProgressMatchesAndEmptySessions(now);
+      this.notifySessionsChanged(deletedSessionIds);
     } catch (error) {
       console.error("[MATCH] 만료된 진행 중 경기·빈 세션 정리 실패", error);
     }
@@ -470,9 +517,14 @@ export class MatchRepository {
           500,
           (error) => (isUniqueViolation(error) ? 409 : undefined),
         );
-        return result.conflictPlayerId !== undefined
-          ? { conflictPlayerId: result.conflictPlayerId }
-          : { match: hydrateMatch(result.match) };
+        if (result.conflictPlayerId !== undefined) {
+          return { conflictPlayerId: result.conflictPlayerId };
+        }
+        const created = hydrateMatch(result.match);
+        if (result.sessionParticipantsAdded) {
+          this.notifySessionsChanged([created.session?.id]);
+        }
+        return { match: created };
       } catch (error) {
         // 생성한 경기 id가 겹친 경우만 새 id로 다시 시도한다.
         if (
@@ -510,6 +562,7 @@ export class MatchRepository {
     if (!deleted) {
       throw new MatchRepositoryError("세션을 찾을 수 없습니다.", 404);
     }
+    this.notifySessionsChanged([sessionId]);
   }
 
   async replaceSessionParticipants(
@@ -529,6 +582,7 @@ export class MatchRepository {
     if (!updated) {
       throw new MatchRepositoryError("세션을 찾을 수 없습니다.", 404);
     }
+    this.notifySessionsChanged([sessionId]);
     return hydrateManagedSession(updated);
   }
 

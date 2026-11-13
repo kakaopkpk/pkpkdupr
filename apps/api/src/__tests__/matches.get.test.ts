@@ -159,7 +159,11 @@ describe("GET /api/matches/:matchId", () => {
     cleanupExpired.mockRestore();
     const deleteExpired = vi
       .spyOn(db.matches, "deleteExpiredInProgressMatchesAndEmptySessions")
-      .mockResolvedValue({ deletedMatchCount: 1, deletedSessionCount: 1 });
+      .mockResolvedValue({
+        deletedMatchCount: 1,
+        deletedSessionCount: 1,
+        deletedSessionIds: [],
+      });
     const findByIdWithRatingChanges = vi
       .spyOn(MatchRepository.prototype, "findByIdWithRatingChanges")
       .mockResolvedValue({ match, ratingChanges: [] });
