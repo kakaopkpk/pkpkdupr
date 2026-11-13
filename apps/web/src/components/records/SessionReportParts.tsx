@@ -3,9 +3,12 @@ import type { SessionPlayerReport } from "@pkpkdupr/shared/ranking";
 import SkeletonBlock from "@/components/SkeletonBlock";
 import { SessionDominatorBadge } from "@/components/ui/Badges";
 import { Card } from "@/components/ui/Card";
+import { CountUpText } from "@/components/ui/CountUpText";
 import { RatingDelta } from "@/components/ui/Delta";
 import { PlayerAvatar } from "@/components/ui/PlayerAvatar";
 import { cx } from "@/components/ui/cx";
+import { useCountUp } from "@/hooks/useCountUp";
+import { usePlayOnShow } from "@/hooks/usePlayOnShow";
 import type { MatchSessionHistoryInfo } from "@/lib/rankings";
 
 const WEEKDAYS = ["일", "월", "화", "수", "목", "금", "토"] as const;
@@ -75,31 +78,64 @@ export const SessionSummary: React.FC<{ session: MatchSessionHistoryInfo }> = ({
   </div>
 );
 
-/** 그 세션에서 평점이 가장 많이 오른 사람(세션 지배자). 아바타에 불꽃 후광을 두른다 */
+/** 평점 상승 카운트업 시작·길이(ms). 카드가 보이는 순간부터 잰다 */
+const RISE_COUNT_DELAY_MS = 250;
+const RISE_COUNT_DURATION_MS = 600;
+
+/**
+ * 그 세션에서 평점이 가장 많이 오른 사람(세션 지배자). 아바타에 불꽃 후광을 두른다.
+ * 카드가 보일 때마다 왕관 까딱임·칩 흰 빛·평점 상승 카운트업을 한 번 재생한다
+ */
 export const TopRiserCard: React.FC<{ report: SessionPlayerReport }> = ({
   report,
-}) => (
-  <Card className="flex items-center gap-3 px-4 py-3.5">
-    <span className="pk-flame-aura shrink-0">
-      <PlayerAvatar player={report.player} size={44} />
-    </span>
-    <div className="flex min-w-0 flex-1 flex-col items-start gap-0.5">
-      <SessionDominatorBadge />
-      <span className="max-w-full truncate text-pk-17 font-extrabold text-pk-ink">
-        {report.player.username}
+}) => {
+  const { isPlaying, finish } = usePlayOnShow();
+  const riseCount = useCountUp(report.ratingDelta, {
+    durationMs: RISE_COUNT_DURATION_MS,
+    delayMs: RISE_COUNT_DELAY_MS,
+  });
+  const deltaClassName = "text-pk-22 font-extrabold leading-none";
+
+  return (
+    <Card className="flex items-center gap-3 px-4 py-3.5">
+      <span className="pk-flame-aura shrink-0">
+        <PlayerAvatar player={report.player} size={44} />
       </span>
-      <span className="text-pk-13 text-pk-sub tabular-nums">
-        {formatRating(report.ratingBefore)} → {formatRating(report.ratingAfter)}{" "}
-        · {report.matchCount}경기 {report.wins}승
-      </span>
-    </div>
-    {/* 이 화면의 주인공 숫자라 본문 글꼴로 크게 보인다 */}
-    <RatingDelta
-      value={report.ratingDelta}
-      className="shrink-0 text-pk-22 font-extrabold leading-none"
-    />
-  </Card>
-);
+      <div className="flex min-w-0 flex-1 flex-col items-start gap-0.5">
+        <span
+          className="flex"
+          onAnimationEnd={(event) => {
+            // 칩 흰 빛이 가장 늦게 끝나는 CSS 연출이다
+            if (event.animationName === "pk-sheen") finish();
+          }}
+        >
+          <SessionDominatorBadge isPlaying={isPlaying} />
+        </span>
+        <span className="max-w-full truncate text-pk-17 font-extrabold text-pk-ink">
+          {report.player.username}
+        </span>
+        <span className="text-pk-13 text-pk-sub tabular-nums">
+          {formatRating(report.ratingBefore)} → {formatRating(report.ratingAfter)}{" "}
+          · {report.matchCount}경기 {report.wins}승
+        </span>
+      </div>
+      {/* 이 화면의 주인공 숫자라 본문 글꼴로 크게 보인다. 세는 동안 폭은 최종 값으로 고정한다 */}
+      <CountUpText
+        align="end"
+        className="shrink-0"
+        finalContent={
+          <RatingDelta value={report.ratingDelta} className={deltaClassName} />
+        }
+      >
+        <RatingDelta
+          value={riseCount.value}
+          signValue={report.ratingDelta}
+          className={deltaClassName}
+        />
+      </CountUpText>
+    </Card>
+  );
+};
 
 export const SessionReportSkeleton: React.FC = () => (
   <div aria-hidden="true" className="flex flex-col gap-2.5">

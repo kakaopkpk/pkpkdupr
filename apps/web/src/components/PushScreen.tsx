@@ -13,6 +13,7 @@ import PullToRefreshIndicator from "@/components/PullToRefreshIndicator";
 import { DetailHeader } from "@/components/ui/Headers";
 import { cx } from "@/components/ui/cx";
 import { GLOBAL_LAYER } from "@/context/AppNavigationContext";
+import { ScreenVisibilityProvider } from "@/context/ScreenVisibilityContext";
 import {
   PULL_TO_REFRESH_THRESHOLD,
   usePullToRefresh,
@@ -286,6 +287,7 @@ export const PushScreen: React.FC<PushScreenProps> = ({
   const isCovered =
     stackIndex !== -1 && entries.slice(stackIndex + 1).some(isShown);
   const zIndex = layer + Math.min(Math.max(stackIndex, 0), MAX_STACK_OFFSET);
+  // 조작할 수 있을 때만 본문을 '보임'으로 본다(다른 탭에 연 화면·덮인 화면·닫히는 화면은 보이지 않음으로 본다)
   const isInteractive = isOpen && isActive && !isCovered;
 
   const registerPullToRefreshHandler = useCallback(
@@ -351,7 +353,9 @@ export const PushScreen: React.FC<PushScreenProps> = ({
               value={registerPullToRefreshHandler}
             >
               <PushScreenScrollContext.Provider value={scrollContainer}>
-                {children}
+                <ScreenVisibilityProvider isVisible={isInteractive}>
+                  {children}
+                </ScreenVisibilityProvider>
               </PushScreenScrollContext.Provider>
             </PushScreenPullToRefreshContext.Provider>
           </div>
