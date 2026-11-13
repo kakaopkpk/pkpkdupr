@@ -41,7 +41,7 @@
   --ease-pk-spring: cubic-bezier(0.3, 1.35, 0.45, 1);
   --animate-nav-icon-pop: nav-icon-pop 380ms ease-out;
   --animate-plus-menu-pop: plus-menu-pop 340ms var(--ease-pk-spring);
-  /* 이동·전환 곡선(PushScreen과 같은 값) */
+  /* 이동·전환 곡선 */
   --ease-pk-move: cubic-bezier(0.32, 0.72, 0, 1);
   /* 튀어나오는 등장 곡선 */
   --ease-pk-pop: cubic-bezier(0.34, 1.56, 0.64, 1);
@@ -137,7 +137,6 @@
 
   @keyframes pk-rise-in {
     from {
-      opacity: 0;
       transform: translateY(100%);
     }
   }

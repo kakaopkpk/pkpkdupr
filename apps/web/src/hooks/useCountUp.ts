@@ -25,7 +25,7 @@ export function getCountUpValue(from: number, to: number, elapsedMs: number, dur
   if (elapsedMs >= durationMs) {
     return to;
   }
-  // ease-out cubic: ease-pk-move 이동 곡선과 비슷한 감속
+  // ease-out cubic 감속 곡선
   const progress = 1 - (1 - elapsedMs / durationMs) ** 3;
   return from + (to - from) * progress;
 }
@@ -36,7 +36,8 @@ export function useCountUp(to: number, options: CountUpOptions): CountUpState {
   const [isDone, setIsDone] = useState(skipAnimation);
   const [value, setValue] = useState(() => (skipAnimation ? to : (options.from ?? 0)));
 
-  // 세는 도중 바뀐 to·옵션도 따라가도록 최신 값을 ref로 읽는다. 세기는 마운트 때 한 번만 시작한다
+  // 세는 도중 바뀐 to·from·durationMs도 따라가도록 최신 값을 ref로 읽는다.
+  // 세기는 마운트 때 한 번만 시작하므로 delayMs와 첫 렌더 값(from)은 마운트 때 값만 쓴다
   const latestRef = useRef({ to, options });
   latestRef.current = { to, options };
 

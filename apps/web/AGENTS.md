@@ -96,7 +96,7 @@
 - 모션 곡선은 `@theme`의 `ease-pk-move`(이동·전환)와 `ease-pk-pop`(튀어나오는 등장) 두 개를 씁니다. arbitrary `ease-[cubic-bezier(...)]`를 새로 쓰지 않습니다.
 - 공용 애니메이션은 `index.css`의 `animate-pk-*`(`fade-in`·`fade-up`·`pop`·`draw`·`sheen`·`ping`·`spin-slow`·`rise-in`·`sink-out`)를 재사용합니다. 모두 fill-mode both이고 지연·길이는 inline style `animationDelay`·`animationDuration`으로 덮어씁니다. `animate-pk-draw`는 요소에 `pathLength="1"`이 필요합니다. transform·opacity만 움직이고 height·top·width·left는 애니메이션하지 않습니다. 새 keyframes는 `@theme`에 `pk-` 접두로 추가하고 `cx.ts` 등록도 함께 고칩니다.
 - 움직임 줄이기는 소비처에서 `motion-reduce:`(`motion-reduce:animate-none`, `motion-reduce:transition-none`, 장식 요소는 `motion-reduce:hidden`)로 끄고 최종 상태를 바로 보입니다.
-- keep-alive 탭 안의 CSS 애니메이션은 탭을 다시 보이면 다시 재생되므로 `hooks/usePlayOnce.ts`의 `isPlaying`일 때만 클래스를 붙이고 가장 늦게 끝나는 요소의 `onAnimationEnd`에 `finish`를 겁니다. 숫자 카운트업은 `hooks/useCountUp.ts`의 `useCountUp`(마운트 때 한 번, 움직임 줄이기면 바로 최종 값)을 씁니다.
+- keep-alive 탭 안의 CSS 애니메이션은 탭을 다시 보이면 다시 재생되므로 `hooks/usePlayOnce.ts`의 `isPlaying`일 때만 클래스를 붙이고 가장 늦게 끝나는 요소(자식에 다른 애니메이션이 없는 요소)의 `onAnimationEnd`에 `finish`를 겁니다. 무한 반복(`ping`·`spin-slow`)은 끝나지 않으므로 `usePlayOnce`에 쓰지 않습니다. 숫자 카운트업은 `hooks/useCountUp.ts`의 `useCountUp`(마운트 때 한 번, 움직임 줄이기면 바로 최종 값)을 씁니다.
 - Barlow Condensed는 600·700 굵기만 로드하므로 `font-num`에는 `font-bold` 이하만 씁니다.
 
 ## 디자인 규칙
