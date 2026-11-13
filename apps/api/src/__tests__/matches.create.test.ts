@@ -101,7 +101,6 @@ const buildSession = (player: Player = creator): AuthenticatedSession => ({
 const buildCreatedMatch = (
   input: Omit<Match, "id" | "createdAt" | "updatedAt"> & { id?: string },
 ): Match => ({
-  ratingExcluded: false,
   id: input.id ?? "match-test-001",
   ...input,
   createdAt: now,
