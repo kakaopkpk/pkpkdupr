@@ -95,7 +95,7 @@ export const NavPill: React.FC<{
     <div
       role="tablist"
       aria-label="주 메뉴"
-      className={`relative grid h-[66px] min-w-0 flex-1 grid-cols-4 rounded-full p-[5px] ${GLASS_CLASS_NAME}`}
+      className={`relative grid h-[66px] min-w-0 flex-1 grid-cols-4 overflow-hidden rounded-full p-[5px] ${GLASS_CLASS_NAME}`}
     >
       <span
         aria-hidden="true"
@@ -201,7 +201,7 @@ export const PlusMenu: React.FC<{
         aria-haspopup="menu"
         aria-expanded={isOpen}
         onClick={onToggle}
-        className="flex size-[66px] shrink-0 items-center justify-center rounded-full bg-pk-primary text-white shadow-[0_8px_18px] shadow-pk-ink/18 transition-transform duration-200 touch-manipulation active:scale-[0.92] motion-reduce:transition-none"
+        className="flex size-[66px] shrink-0 items-center justify-center rounded-full bg-pk-primary text-white shadow-[0_8px_18px] shadow-pk-ink/18 transition-transform duration-200 touch-manipulation active:scale-[0.92] motion-reduce:transition-none motion-reduce:active:scale-100"
       >
         {/* 열리면 +를 돌려 ×로 만든다 */}
         <span
