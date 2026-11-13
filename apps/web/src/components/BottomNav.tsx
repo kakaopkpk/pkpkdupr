@@ -42,6 +42,7 @@ import {
   type SessionReportRequest,
 } from "@/context/AppNavigationContext";
 import { useAuth } from "@/context/AuthContext";
+import { ScreenVisibilityProvider } from "@/context/ScreenVisibilityContext";
 import {
   LiveSessionProvider,
   useLiveSessionState,
@@ -1194,7 +1195,11 @@ const BottomNav: React.FC = () => {
                       hidden={selectedTab !== key}
                       className="min-h-full bg-pk-bg pb-[calc(var(--app-bottom-dock-height)+var(--app-bottom-toast-height)+1rem)]"
                     >
-                      <TabPage />
+                      <ScreenVisibilityProvider
+                        isVisible={selectedTab === key && !isShellCovered}
+                      >
+                        <TabPage />
+                      </ScreenVisibilityProvider>
                     </div>
                   );
                 })}
