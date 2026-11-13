@@ -14,11 +14,10 @@ import type { AuthService } from "./AuthService";
 import { toKstDateKey } from "@pkpkdupr/shared/session";
 import { buildPlayerRatingHistory } from "./PlayerRatingHistoryService";
 
-export const RANKING_RATING_TREND_WINDOW_DAYS = 90;
 export const PROFILE_RATING_TREND_WINDOW_DAYS = 30;
-export const RANKING_RATING_TREND_MAX_INTERIOR_POINTS = 6;
-export const RANKING_RATING_TREND_MAX_POINTS =
-  RANKING_RATING_TREND_MAX_INTERIOR_POINTS + 2;
+const RANKING_RATING_TREND_WINDOW_DAYS = 90;
+// 양끝점 + 내부 변곡점 최대 여섯 개
+export const RANKING_RATING_TREND_MAX_POINTS = 8;
 
 type MatchWithRatingChanges = Match & {
   ratingChanges?: PlayerRatingChangeLog[];
@@ -118,20 +117,15 @@ export const selectRatingTrendWindow = (
           point.createdAt.getTime() >= cutoffMs &&
           point.createdAt.getTime() <= now.getTime(),
       );
-      return [
-        category,
-        [
-          ...(beforeCutoff
-            ? [
-                clonePoint(beforeCutoff, {
-                  createdAt: new Date(cutoffMs),
-                  source: "anchor",
-                }),
-              ]
-            : []),
-          ...inWindow,
-        ],
-      ];
+      const anchor = beforeCutoff
+        ? [
+            clonePoint(beforeCutoff, {
+              createdAt: new Date(cutoffMs),
+              source: "anchor",
+            }),
+          ]
+        : [];
+      return [category, [...anchor, ...inWindow]];
     }),
   ) as PlayerRatingHistory;
 };
@@ -145,25 +139,15 @@ export const buildRankingRatingTrend = (
   history: PlayerRatingHistory,
   now: Date = new Date(),
 ): PlayerRatingHistory => {
-  const cutoff = new Date(
-    now.getTime() - RANKING_RATING_TREND_WINDOW_DAYS * DAY_MS,
+  const windowed = selectRatingTrendWindow(
+    history,
+    RANKING_RATING_TREND_WINDOW_DAYS,
+    now,
   );
 
   return Object.fromEntries(
     categories.map((category) => {
-      const sorted = sortValidPoints(history[category]);
-      const beforeCutoff = sorted.filter(
-        (point) => point.createdAt.getTime() < cutoff.getTime(),
-      ).at(-1);
-      const inWindow = sorted.filter(
-        (point) => point.createdAt.getTime() >= cutoff.getTime(),
-      );
-      const timeline: PlayerRatingHistoryPoint[] = [
-        ...(beforeCutoff
-          ? [clonePoint(beforeCutoff, { createdAt: cutoff, source: "anchor" })]
-          : []),
-        ...inWindow,
-      ];
+      const timeline = windowed[category];
 
       const latest = timeline.at(-1);
       // 같은 날 완료된 매치가 있어도, 해당 시점보다 현재가 늦으면 오늘의

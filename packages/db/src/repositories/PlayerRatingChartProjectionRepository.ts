@@ -1,4 +1,5 @@
 import { randomUUID } from "crypto";
+import { placeholders } from "../db/client";
 import type {
   PlayerDuprCategory,
   PlayerRatingHistory,
@@ -120,14 +121,10 @@ export class PlayerRatingChartProjectionRepository {
       if (rows.length > 0) {
         const columnCount = rows[0].length;
         const values = rows
-          .map((_, rowIndex) => {
-            const offset = rowIndex * columnCount;
-            const placeholders = Array.from(
-              { length: columnCount },
-              (_, columnIndex) => `$${offset + columnIndex + 1}`,
-            );
-            return `(${placeholders.join(", ")})`;
-          })
+          .map(
+            (_, rowIndex) =>
+              `(${placeholders(columnCount, rowIndex * columnCount + 1)})`,
+          )
           .join(", ");
         await transaction.execute({
           sql: `INSERT INTO player_rating_chart_points

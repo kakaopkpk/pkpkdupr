@@ -84,26 +84,23 @@ const RatingTrendChart: React.FC<{
 
   const maxLabel = maxRating.toFixed(2);
   const minLabel = minRating.toFixed(2);
-  const showMinLabel =
-    minLabel !== maxLabel && toY(minRating) - toY(maxRating) >= Y_LABEL_MIN_GAP;
+  // 세로 범위가 0.3 이상이라 간격이 넉넉하면 두 라벨 값도 서로 다르다
+  const showMinLabel = toY(minRating) - toY(maxRating) >= Y_LABEL_MIN_GAP;
 
-  const firstSample = samples[0];
-  const lastSample = samples[samples.length - 1];
-  const formatEndLabel = (time: Date) =>
-    toKstDateKey(time) === toKstDateKey(now)
-      ? "오늘"
-      : kstMonthDayFormatter.format(time);
+  const todayKey = toKstDateKey(now);
+  const isToday = (time: Date) => toKstDateKey(time) === todayKey;
+  const firstTime = samples[0]?.time;
+  const lastTime = samples.at(-1)?.time;
   // 점이 하나면 그 평점이 오늘까지 이어지는 선이라 오른쪽은 "오늘"이고,
   // 그 점이 오늘이면 왼쪽 날짜 라벨은 겹치므로 숨긴다
-  const isSingleToday =
-    samples.length === 1 &&
-    toKstDateKey(samples[0].time) === toKstDateKey(now);
   const startLabel =
-    firstSample && !isSingleToday
-      ? kstMonthDayFormatter.format(firstSample.time)
+    firstTime && !(samples.length === 1 && isToday(firstTime))
+      ? kstMonthDayFormatter.format(firstTime)
       : null;
   const endLabel =
-    lastSample && samples.length > 1 ? formatEndLabel(lastSample.time) : "오늘";
+    lastTime && samples.length > 1 && !isToday(lastTime)
+      ? kstMonthDayFormatter.format(lastTime)
+      : "오늘";
 
   const xLabelProps = {
     y: X_LABEL_Y,
