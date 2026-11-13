@@ -129,12 +129,17 @@ export default function SessionReportDrawer({
           fetchMatchSession(targetSessionId).catch(() => null),
         ]);
         if (requestIdRef.current === requestId) {
-          setLoadState({
+          // 다시 받을 때 세션 상세만 실패하면 보이던 종료 시각을 그대로 둔다
+          setLoadState((current) => ({
             kind: "ready",
             report,
             matches,
-            endTime: sessionDetail?.endTime ?? null,
-          });
+            endTime: sessionDetail
+              ? (sessionDetail.endTime ?? null)
+              : keepVisible && current.kind === "ready"
+                ? current.endTime
+                : null,
+          }));
         }
       } catch (err) {
         if (requestIdRef.current !== requestId) return;
