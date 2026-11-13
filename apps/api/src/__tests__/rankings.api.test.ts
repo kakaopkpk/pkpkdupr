@@ -1,6 +1,7 @@
-import type {
-  CompletedMatchOutcome,
-  SessionWithParticipantIds,
+import {
+  PlayerSeenAchievementRepository,
+  type CompletedMatchOutcome,
+  type SessionWithParticipantIds,
 } from "@pkpkdupr/db";
 import type { Match } from "@pkpkdupr/shared/match";
 import type { Player, PlayerRatingChangeLog } from "@pkpkdupr/shared/player";
@@ -125,6 +126,7 @@ describe("랭킹·세션 리포트 API", () => {
     "/api/session-reports",
     `/api/session-reports/${session.id}`,
     "/api/achievements/holders",
+    "/api/me/achievements/unseen",
     "/api/records",
   ])("%s는 토큰이 없으면 401이다", async (path) => {
     const response = await request(app).get(path);
@@ -292,6 +294,76 @@ describe("랭킹·세션 리포트 API", () => {
 
     expect(response.status).toBe(200);
     expect(response.body.counts["matches-1"]).toBe(1);
+  });
+
+  it("GET /api/me/achievements/unseen은 받은 업적 중 확인하지 않았거나 다른 경기로 다시 받은 것만 돌려준다", async () => {
+    vi.spyOn(
+      PlayerSeenAchievementRepository.prototype,
+      "findByPlayerId",
+    ).mockResolvedValue([
+      { achievementId: "matches-1", earnedMatchId: match.id },
+      // 예전 경기로 받았다가 잃은 뒤 이번 경기로 다시 받았다
+      { achievementId: "wins-1", earnedMatchId: "Mold0001" },
+    ]);
+
+    const response = await authorized("/api/me/achievements/unseen");
+
+    expect(response.status).toBe(200);
+    expect(response.body.achievements).toEqual([
+      {
+        playerId: alice.id,
+        achievementId: "wins-1",
+        earnedMatchId: match.id,
+        earnedAt: completedAt.toISOString(),
+      },
+      {
+        playerId: alice.id,
+        achievementId: "dominator-1",
+        earnedMatchId: match.id,
+        earnedAt: completedAt.toISOString(),
+      },
+    ]);
+  });
+
+  it("POST /api/me/achievements/seen은 요청자의 확인 기록을 남기고 204다", async () => {
+    const markSeen = vi
+      .spyOn(PlayerSeenAchievementRepository.prototype, "markSeen")
+      .mockResolvedValue();
+    const achievements = [
+      { achievementId: "wins-1", earnedMatchId: match.id },
+    ];
+
+    const response = await request(app)
+      .post("/api/me/achievements/seen")
+      .set("Authorization", "Bearer test-token")
+      .send({ achievements });
+
+    expect(response.status).toBe(204);
+    expect(markSeen).toHaveBeenCalledWith(
+      alice.id,
+      achievements,
+      expect.any(Date),
+    );
+  });
+
+  it.each([
+    { achievements: [{ achievementId: "unknown", earnedMatchId: match.id }] },
+    { achievements: [{ achievementId: "wins-1", earnedMatchId: "" }] },
+    { achievements: "wins-1" },
+    {},
+  ])("POST /api/me/achievements/seen은 형식이 틀리면 400이다 (%j)", async (body) => {
+    const markSeen = vi.spyOn(
+      PlayerSeenAchievementRepository.prototype,
+      "markSeen",
+    );
+
+    const response = await request(app)
+      .post("/api/me/achievements/seen")
+      .set("Authorization", "Bearer test-token")
+      .send(body);
+
+    expect(response.status).toBe(400);
+    expect(markSeen).not.toHaveBeenCalled();
   });
 
   it("GET /api/session-reports/:sessionId는 id 형식이 틀리면 400이다", async () => {

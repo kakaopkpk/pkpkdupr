@@ -47,9 +47,13 @@ import {
 } from "@pkpkdupr/shared/session";
 import { generateEntityId, isEntityId } from "@pkpkdupr/shared/entityId";
 import {
+  ACHIEVEMENTS,
   findNewAchievements,
+  findUnseenAchievements,
   type AchievementHoldersResponse,
   type EarnedAchievement,
+  type SeenAchievementRef,
+  type UnseenAchievementsResponse,
 } from "@pkpkdupr/shared/achievements";
 import {
   MATCHMAKING_DEFAULT_COURTS,
@@ -89,7 +93,7 @@ import {
   isDevMockDataEnabled,
   MATCH_STALE_UPDATE_ERROR_MESSAGE,
 } from "@pkpkdupr/db";
-import { initDatabase } from "./db";
+import { db, initDatabase } from "./db";
 import {
   MatchRepository,
   MatchRepositoryError,
@@ -117,6 +121,7 @@ import {
   buildSessionReport,
   countAchievementHolders,
   createRankingContext,
+  findPlayerEarnedAchievements,
   findSessionDominations,
   parseRecordsCursor,
   toAchievementMatch,
@@ -2793,6 +2798,82 @@ app.get("/api/achievements/holders", async (req, res) => {
     res.json(response);
   } catch (err) {
     sendRankingFailure(res, err);
+  }
+});
+
+// player_seen_achievements.earned_match_id 길이
+const MAX_ID_LENGTH = 255;
+const ACHIEVEMENT_IDS = new Set(ACHIEVEMENTS.map((definition) => definition.id));
+
+/** POST /api/me/achievements/seen 본문. 형식이 틀리거나 모르는 업적이면 null */
+const parseSeenAchievements = (body: unknown): SeenAchievementRef[] | null => {
+  const items = (body as { achievements?: unknown } | null)?.achievements;
+  if (!Array.isArray(items) || items.length > ACHIEVEMENTS.length) return null;
+  const parsed: SeenAchievementRef[] = [];
+  for (const item of items) {
+    const { achievementId, earnedMatchId } = (item ?? {}) as Record<
+      string,
+      unknown
+    >;
+    if (
+      typeof achievementId !== "string" ||
+      !ACHIEVEMENT_IDS.has(achievementId) ||
+      typeof earnedMatchId !== "string" ||
+      earnedMatchId.length === 0 ||
+      earnedMatchId.length > MAX_ID_LENGTH
+    ) {
+      return null;
+    }
+    parsed.push({ achievementId, earnedMatchId });
+  }
+  return parsed;
+};
+
+app.get("/api/me/achievements/unseen", async (req, res) => {
+  try {
+    const decoded = await getAuthPayload(req, res);
+    if (!decoded) {
+      return;
+    }
+
+    const [{ context, sessions }, seen] = await Promise.all([
+      loadRankingSource(),
+      db.playerSeenAchievements.findByPlayerId(decoded.playerId),
+    ]);
+    const earned = findPlayerEarnedAchievements(
+      context,
+      findSessionDominations(context, sessions, new Date()),
+      decoded.playerId,
+    );
+    const response: UnseenAchievementsResponse = {
+      achievements: findUnseenAchievements(earned, seen),
+    };
+    res.json(response);
+  } catch (err) {
+    sendRankingFailure(res, err);
+  }
+});
+
+app.post("/api/me/achievements/seen", async (req, res) => {
+  try {
+    const decoded = await getAuthPayload(req, res);
+    if (!decoded) {
+      return;
+    }
+
+    const items = parseSeenAchievements(req.body);
+    if (!items) {
+      res.status(400).json({ error: "확인할 업적 형식이 올바르지 않습니다." });
+      return;
+    }
+    await db.playerSeenAchievements.markSeen(
+      decoded.playerId,
+      items,
+      new Date(),
+    );
+    res.status(204).end();
+  } catch (err) {
+    res.status(500).json({ error: (err as Error).message });
   }
 });
 

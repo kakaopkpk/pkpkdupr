@@ -743,6 +743,21 @@ export const countAchievementHolders = (
   return counts;
 };
 
+/** 한 회원이 지금 받은 업적(ACHIEVEMENTS 순서). 세션 지배자는 끝난 세션 기준이다 */
+export const findPlayerEarnedAchievements = (
+  context: RankingContext,
+  dominations: SessionDominations,
+  playerId: string,
+): EarnedAchievement[] =>
+  toEarnedAchievements(
+    playerId,
+    computeAchievements(
+      playerId,
+      context.matches.map(toAchievementMatch),
+      dominations.get(playerId),
+    ),
+  );
+
 /** 기록 탭 줄의 정렬 키. 세션은 date, 경기는 matchStartsAt */
 export interface RecordsCursor {
   atMs: number;

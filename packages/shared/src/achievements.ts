@@ -489,6 +489,22 @@ export interface EarnedAchievement {
   earnedAt: Date;
 }
 
+/** 회원이 확인한 업적 한 건. earnedMatchId는 확인할 때의 획득 경기다 */
+export interface SeenAchievementRef {
+  achievementId: string;
+  earnedMatchId: string;
+}
+
+/** GET /api/me/achievements/unseen 응답. 받은 업적 중 확인하지 않은 것(받은 시각 → 업적 정의 순서) */
+export interface UnseenAchievementsResponse {
+  achievements: EarnedAchievement[];
+}
+
+/** POST /api/me/achievements/seen 요청. 업적마다 지금 보고 있는 획득 경기를 넘긴다 */
+export interface MarkAchievementsSeenRequest {
+  achievements: SeenAchievementRef[];
+}
+
 /** GET /api/achievements/holders 응답. 업적 id별 받은 활성 회원 수(모든 업적 포함) */
 export interface AchievementHoldersResponse {
   counts: Record<string, number>;
@@ -838,3 +854,31 @@ export const findNewAchievements = ({
       computeAchievements(playerId, after),
     ).filter((item) => !earnedBefore.has(item.achievementId));
   });
+
+/**
+ * 받은 업적 중 확인하지 않은 것. 확인 기록이 없거나 기록의 획득 경기가 지금과 다르면
+ * (잃었다가 다른 경기로 다시 받았으면) 미확인이다. 받은 시각 → 업적 정의 순서로 정렬한다.
+ */
+export const findUnseenAchievements = (
+  earned: readonly EarnedAchievement[],
+  seen: readonly SeenAchievementRef[],
+): EarnedAchievement[] => {
+  const seenMatchIdByAchievementId = new Map(
+    seen.map((item) => [item.achievementId, item.earnedMatchId]),
+  );
+  const order = new Map(
+    ACHIEVEMENTS.map((definition, index) => [definition.id, index]),
+  );
+  return earned
+    .filter(
+      (item) =>
+        seenMatchIdByAchievementId.get(item.achievementId) !==
+        item.earnedMatchId,
+    )
+    .sort(
+      (left, right) =>
+        left.earnedAt.getTime() - right.earnedAt.getTime() ||
+        (order.get(left.achievementId) ?? 0) -
+          (order.get(right.achievementId) ?? 0),
+    );
+};
