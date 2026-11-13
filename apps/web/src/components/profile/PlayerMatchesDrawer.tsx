@@ -9,7 +9,10 @@ import { PROFILE_CATEGORY_OPTIONS } from "@/components/profile/ProfileRatingCard
 import { Card } from "@/components/ui/Card";
 import { MatchRow } from "@/components/ui/MatchRow";
 import { SectionLabel, TextLink } from "@/components/ui/Section";
-import { SegmentedControl } from "@/components/ui/SegmentedControl";
+import {
+  SegmentedControl,
+  SegmentSwitchFade,
+} from "@/components/ui/SegmentedControl";
 import { useAppNavigation } from "@/context/AppNavigationContext";
 import {
   type TabKey,
@@ -126,6 +129,7 @@ export default function PlayerMatchesDrawer({
   const [nextPage, setNextPage] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
   const [hasError, setHasError] = useState(false);
+  const [isListFading, setIsListFading] = useState(false);
   const requestIdRef = useRef(0);
   const isLoadingRef = useRef(false);
 
@@ -207,6 +211,7 @@ export default function PlayerMatchesDrawer({
   useEffect(() => {
     if (!isOpen || !playerId) return;
     setCategory(initialCategoryRef.current);
+    setIsListFading(false);
     resetAndLoad(initialCategoryRef.current);
   }, [isOpen, playerId, resetAndLoad]);
 
@@ -220,6 +225,7 @@ export default function PlayerMatchesDrawer({
 
   const changeCategory = (nextCategory: MatchTopLevelType) => {
     setCategory(nextCategory);
+    setIsListFading(true);
     resetAndLoad(nextCategory);
   };
 
@@ -272,25 +278,33 @@ export default function PlayerMatchesDrawer({
         </div>
         {isInitialLoading ? (
           <MatchListSkeleton />
-        ) : groups.length > 0 ? (
-          groups.map((group) => (
-            <section key={group.key} className="flex flex-col gap-2.5">
-              <SectionLabel>{group.label}</SectionLabel>
-              <Card>
-                {group.matches.map((match) => (
-                  <MatchRow
-                    key={match.id}
-                    match={match}
-                    onPress={() => openMatchDetail(match.id)}
-                  />
-                ))}
-              </Card>
-            </section>
-          ))
-        ) : hasError ? null : (
-          <p className="py-10 text-center text-pk-13 text-pk-muted">
-            완료한 경기가 없어요.
-          </p>
+        ) : (
+          <SegmentSwitchFade
+            isPlaying={isListFading}
+            onFinish={() => setIsListFading(false)}
+            className="flex flex-col gap-2.5"
+          >
+            {groups.length > 0 ? (
+              groups.map((group) => (
+                <section key={group.key} className="flex flex-col gap-2.5">
+                  <SectionLabel>{group.label}</SectionLabel>
+                  <Card>
+                    {group.matches.map((match) => (
+                      <MatchRow
+                        key={match.id}
+                        match={match}
+                        onPress={() => openMatchDetail(match.id)}
+                      />
+                    ))}
+                  </Card>
+                </section>
+              ))
+            ) : hasError ? null : (
+              <p className="py-10 text-center text-pk-13 text-pk-muted">
+                완료한 경기가 없어요.
+              </p>
+            )}
+          </SegmentSwitchFade>
         )}
         {hasError ? (
           <div className="flex flex-col items-center py-4">

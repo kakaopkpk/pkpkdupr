@@ -12,7 +12,10 @@ import { Card } from "@/components/ui/Card";
 import { TabHeader } from "@/components/ui/Headers";
 import { MatchRow } from "@/components/ui/MatchRow";
 import { SectionLabel } from "@/components/ui/Section";
-import { SegmentedControl } from "@/components/ui/SegmentedControl";
+import {
+  SegmentedControl,
+  SegmentSwitchFade,
+} from "@/components/ui/SegmentedControl";
 import { useAppNavigation } from "@/context/AppNavigationContext";
 import { useAuth } from "@/context/AuthContext";
 import { useTabNavigation } from "@/context/TabNavigationContext";
@@ -65,6 +68,7 @@ const Records: React.FC = () => {
   const { registerPullToRefresh } = useTabNavigation();
 
   const [mode, setMode] = useState<RecordsMode>("all");
+  const [isListFading, setIsListFading] = useState(false);
   const [sessions, setSessions] = useState<MatchSessionHistoryInfo[]>([]);
   const [sessionsStatus, setSessionsStatus] = useState<LoadStatus>("loading");
   const [sessionsError, setSessionsError] = useState<string | null>(null);
@@ -184,6 +188,7 @@ const Records: React.FC = () => {
   const handleModeChange = (nextMode: RecordsMode) => {
     requestedSessionIdRef.current = null;
     setMode(nextMode);
+    setIsListFading(true);
   };
 
   const handleSelectSession = (sessionId: string) => {
@@ -278,14 +283,18 @@ const Records: React.FC = () => {
     }
 
     return (
-      <>
+      <SegmentSwitchFade
+        isPlaying={isListFading}
+        onFinish={() => setIsListFading(false)}
+        className="flex flex-col gap-2.5"
+      >
         <SessionChips
           sessions={chipSessions}
           selectedId={selectedId}
           onSelect={handleSelectSession}
         />
         {renderDetail()}
-      </>
+      </SegmentSwitchFade>
     );
   };
 
