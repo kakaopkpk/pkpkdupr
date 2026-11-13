@@ -28,7 +28,7 @@ const isSource = (
   value === "match" || value === "current" || value === "anchor";
 
 /**
- * 저장된 90일 차트 projection은 원본 평점 로그의 대체물이 아니다. 같은
+ * 저장된 경기일별 평점 projection은 원본 평점 로그의 대체물이 아니다. 같은
  * playerId의 포인트와 생성 시각을 하나의 트랜잭션으로 바꿔 독자가 섞인
  * snapshot을 보지 않도록 한다.
  */
@@ -93,6 +93,7 @@ export class PlayerRatingChartProjectionRepository {
         args: [playerId],
       });
 
+      const rows: unknown[][] = [];
       for (const category of categories) {
         for (const point of history[category]) {
           const pointAt = new Date(point.createdAt);
@@ -103,22 +104,37 @@ export class PlayerRatingChartProjectionRepository {
           ) {
             continue;
           }
-
-          await transaction.execute({
-            sql: `INSERT INTO player_rating_chart_points
-                    (id, player_id, category, rating, source, point_at, generated_at)
-                  VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-            args: [
-              randomUUID(),
-              playerId,
-              category,
-              point.rating,
-              point.source,
-              toUnixSeconds(pointAt),
-              generatedAtSeconds,
-            ],
-          });
+          rows.push([
+            randomUUID(),
+            playerId,
+            category,
+            point.rating,
+            point.source,
+            toUnixSeconds(pointAt),
+            generatedAtSeconds,
+          ]);
         }
+      }
+
+      // 경기일 수만큼 점이 쌓이므로 한 문장으로 넣는다
+      if (rows.length > 0) {
+        const columnCount = rows[0].length;
+        const values = rows
+          .map((_, rowIndex) => {
+            const offset = rowIndex * columnCount;
+            const placeholders = Array.from(
+              { length: columnCount },
+              (_, columnIndex) => `$${offset + columnIndex + 1}`,
+            );
+            return `(${placeholders.join(", ")})`;
+          })
+          .join(", ");
+        await transaction.execute({
+          sql: `INSERT INTO player_rating_chart_points
+                  (id, player_id, category, rating, source, point_at, generated_at)
+                VALUES ${values}`,
+          args: rows.flat(),
+        });
       }
 
       await transaction.execute({

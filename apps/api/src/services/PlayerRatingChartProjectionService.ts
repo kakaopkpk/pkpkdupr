@@ -11,12 +11,14 @@ import type {
   PlayerRatingChartProjection,
 } from "../repositories/MatchRepository";
 import type { AuthService } from "./AuthService";
+import { toKstDateKey } from "@pkpkdupr/shared/session";
 import { buildPlayerRatingHistory } from "./PlayerRatingHistoryService";
 
-export const PLAYER_RATING_CHART_WINDOW_DAYS = 90;
-export const PLAYER_RATING_CHART_MAX_INTERIOR_POINTS = 6;
-export const PLAYER_RATING_CHART_MAX_POINTS =
-  PLAYER_RATING_CHART_MAX_INTERIOR_POINTS + 2;
+export const RANKING_RATING_TREND_WINDOW_DAYS = 90;
+export const PROFILE_RATING_TREND_WINDOW_DAYS = 30;
+export const RANKING_RATING_TREND_MAX_INTERIOR_POINTS = 6;
+export const RANKING_RATING_TREND_MAX_POINTS =
+  RANKING_RATING_TREND_MAX_INTERIOR_POINTS + 2;
 
 type MatchWithRatingChanges = Match & {
   ratingChanges?: PlayerRatingChangeLog[];
@@ -68,25 +70,88 @@ const getLargestDeviationIndex = (
   return candidate;
 };
 
+const sortValidPoints = (points: PlayerRatingHistoryPoint[]) =>
+  points
+    .filter(isValidPoint)
+    .map((point) => clonePoint(point))
+    .sort((left, right) => left.createdAt.getTime() - right.createdAt.getTime());
+
 /**
- * 전체 decay 보정이 끝난 선을 최근 90일의 작은 차트 projection으로 압축한다.
+ * 저장용 projection. 전체 decay 보정이 끝난 선에서 경기한 날(KST)마다
+ * 그날 마지막 평점 하나만 남긴다. 기간 자르기는 읽을 때 한다.
+ */
+export const collapseRatingHistoryByKstDay = (
+  history: PlayerRatingHistory,
+): PlayerRatingHistory =>
+  Object.fromEntries(
+    categories.map((category) => {
+      const daily: PlayerRatingHistoryPoint[] = [];
+      let lastDateKey: string | null = null;
+      for (const point of sortValidPoints(history[category])) {
+        const dateKey = toKstDateKey(point.createdAt);
+        if (dateKey === lastDateKey) daily[daily.length - 1] = point;
+        else daily.push(point);
+        lastDateKey = dateKey;
+      }
+      return [category, daily];
+    }),
+  ) as PlayerRatingHistory;
+
+/**
+ * 프로필 추세 차트용으로 최근 windowDays일만 고른다. 기간 이전 평점이 있으면
+ * 마지막 값을 기간 시작 시각의 anchor로 앞에 둔다.
+ */
+export const selectRatingTrendWindow = (
+  history: PlayerRatingHistory,
+  windowDays: number,
+  now: Date = new Date(),
+): PlayerRatingHistory => {
+  const cutoffMs = now.getTime() - windowDays * DAY_MS;
+  return Object.fromEntries(
+    categories.map((category) => {
+      const sorted = sortValidPoints(history[category]);
+      const beforeCutoff = sorted
+        .filter((point) => point.createdAt.getTime() < cutoffMs)
+        .at(-1);
+      const inWindow = sorted.filter(
+        (point) =>
+          point.createdAt.getTime() >= cutoffMs &&
+          point.createdAt.getTime() <= now.getTime(),
+      );
+      return [
+        category,
+        [
+          ...(beforeCutoff
+            ? [
+                clonePoint(beforeCutoff, {
+                  createdAt: new Date(cutoffMs),
+                  source: "anchor",
+                }),
+              ]
+            : []),
+          ...inWindow,
+        ],
+      ];
+    }),
+  ) as PlayerRatingHistory;
+};
+
+/**
+ * 랭킹 추이용으로 최근 90일 선을 작은 sparkline 점 목록으로 압축한다.
  * 양끝점은 고정하고, 실제 최고/최저와 선형 추세에서 가장 많이 벗어나는 지점만
  * 최대 여섯 개 보존한다.
  */
-export const buildPlayerRatingChartProjection = (
+export const buildRankingRatingTrend = (
   history: PlayerRatingHistory,
   now: Date = new Date(),
 ): PlayerRatingHistory => {
   const cutoff = new Date(
-    now.getTime() - PLAYER_RATING_CHART_WINDOW_DAYS * DAY_MS,
+    now.getTime() - RANKING_RATING_TREND_WINDOW_DAYS * DAY_MS,
   );
 
   return Object.fromEntries(
     categories.map((category) => {
-      const sorted = history[category]
-        .filter(isValidPoint)
-        .map((point) => clonePoint(point))
-        .sort((left, right) => left.createdAt.getTime() - right.createdAt.getTime());
+      const sorted = sortValidPoints(history[category]);
       const beforeCutoff = sorted.filter(
         (point) => point.createdAt.getTime() < cutoff.getTime(),
       ).at(-1);
@@ -118,7 +183,7 @@ export const buildPlayerRatingChartProjection = (
           index === 0 ||
           point.createdAt.getTime() !== points[index - 1]?.createdAt.getTime(),
       );
-      if (uniqueTimeline.length <= PLAYER_RATING_CHART_MAX_POINTS) {
+      if (uniqueTimeline.length <= RANKING_RATING_TREND_MAX_POINTS) {
         return [category, uniqueTimeline];
       }
 
@@ -130,7 +195,7 @@ export const buildPlayerRatingChartProjection = (
       if (maxIndex > 0 && maxIndex < uniqueTimeline.length - 1) selected.add(maxIndex);
       if (minIndex > 0 && minIndex < uniqueTimeline.length - 1) selected.add(minIndex);
 
-      while (selected.size < PLAYER_RATING_CHART_MAX_POINTS) {
+      while (selected.size < RANKING_RATING_TREND_MAX_POINTS) {
         const selectedIndexes = [...selected].sort((left, right) => left - right);
         let nextIndex: number | null = null;
         let largestDeviation = 0;
@@ -236,10 +301,9 @@ export class PlayerRatingChartProjectionService {
       player?.duprRating,
       ratingChangeLogs,
     );
-    const generatedAt = new Date();
     const projection = {
-      history: buildPlayerRatingChartProjection(history, generatedAt),
-      generatedAt,
+      history: collapseRatingHistoryByKstDay(history),
+      generatedAt: new Date(),
     };
     return this.matchRepository.replacePlayerRatingChartProjection(
       playerId,
