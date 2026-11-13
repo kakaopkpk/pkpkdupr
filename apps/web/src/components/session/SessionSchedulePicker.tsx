@@ -249,7 +249,7 @@ const formatDuration = (minutes: number) => {
 };
 
 /**
- * 시작·종료 시각 칩(30분 단위). 시작을 바꾸면 진행 시간을 유지한 채 종료를 옮기고,
+ * 시작·종료 시각 칩(30분 단위). 시작을 바꾸면 마지막으로 고른 진행 시간을 유지한 채 종료를 옮기고,
  * 하루를 넘기면 고를 수 있는 마지막 종료 시각에 맞춘다
  */
 export const SessionTimePicker: React.FC<{
@@ -259,6 +259,8 @@ export const SessionTimePicker: React.FC<{
 }> = ({ startTime, endTime, onChange }) => {
   const startMinutes = sessionTimeToMinutes(startTime);
   const endMinutes = sessionTimeToMinutes(endTime);
+  // 늦은 시작 때문에 종료가 잘려도 원래 진행 시간을 기억해, 시작을 되돌리면 복원한다
+  const preferredDurationRef = useRef(endMinutes - startMinutes);
   const endTimes = buildTimes(
     startMinutes + SESSION_TIME_STEP_MINUTES,
     SESSION_LAST_END_MINUTES,
@@ -267,7 +269,7 @@ export const SessionTimePicker: React.FC<{
   const changeStart = (nextStart: string) => {
     const nextStartMinutes = sessionTimeToMinutes(nextStart);
     const nextEndMinutes = Math.min(
-      nextStartMinutes + (endMinutes - startMinutes),
+      nextStartMinutes + preferredDurationRef.current,
       SESSION_LAST_END_MINUTES,
     );
     onChange({
@@ -300,7 +302,11 @@ export const SessionTimePicker: React.FC<{
           label="종료"
           times={endTimes}
           value={endTime}
-          onChange={(nextEnd) => onChange({ startTime, endTime: nextEnd })}
+          onChange={(nextEnd) => {
+            preferredDurationRef.current =
+              sessionTimeToMinutes(nextEnd) - startMinutes;
+            onChange({ startTime, endTime: nextEnd });
+          }}
         />
       </div>
     </div>

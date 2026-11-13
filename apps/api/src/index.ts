@@ -1333,7 +1333,8 @@ app.post("/api/match-sessions", async (req, res) => {
       );
     }
 
-    // 시각을 보내지 않는 이전 클라이언트도 받도록 둘 다 생략하면 시각 없는 세션으로 만든다
+    // 시각을 보내지 않는 이전 클라이언트도 받도록 둘 다 생략하면 시각 없는 세션으로 만든다.
+    // 이미 시작한 모임을 뒤늦게 세션으로 만드는 경우가 있어 오늘의 지난 시각도 허용한다
     const hasTime = body?.startTime != null || body?.endTime != null;
     if (
       hasTime &&
