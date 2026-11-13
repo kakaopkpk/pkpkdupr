@@ -1,13 +1,16 @@
 import { useEffect, useRef, useState } from "react";
 import { prefersReducedMotion } from "./useSheetDrag";
+import { useShowPlayKey } from "./usePlayOnShow";
 
 export interface CountUpOptions {
   /** 시작 값. 기본 0 */
   from?: number;
   /** 세는 시간(ms) */
   durationMs: number;
-  /** 마운트 뒤 세기 시작까지 기다리는 시간(ms). 기본 0 */
+  /** 세기 시작 기준(화면이 보이고 준비된 시점) 뒤 기다리는 시간(ms). 기본 0 */
   delayMs?: number;
+  /** false인 동안은 세지 않고 from을 보인다. 기본 true */
+  isReady?: boolean;
 }
 
 export interface CountUpState {
@@ -30,19 +33,24 @@ export function getCountUpValue(from: number, to: number, elapsedMs: number, dur
   return from + (to - from) * progress;
 }
 
-/** 마운트 때 한 번 from → to로 센다. 움직임 줄이기면 처음부터 to. 다 센 뒤 to가 바뀌면 애니메이션 없이 따라간다 */
+/**
+ * 화면이 보이게 될 때마다(처음 마운트 포함) from → to로 한 번 센다. 움직임 줄이기면 언제나 to.
+ * 숨김 중이나 isReady가 false인 동안은 세지 않는다. 같은 보임 안에서 다 센 뒤 to가 바뀌면 애니메이션 없이 따라간다
+ */
 export function useCountUp(to: number, options: CountUpOptions): CountUpState {
+  const { from = 0, isReady = true } = options;
   const [skipAnimation] = useState(prefersReducedMotion);
-  const [isDone, setIsDone] = useState(skipAnimation);
-  const [value, setValue] = useState(() => (skipAnimation ? to : (options.from ?? 0)));
+  const playKey = useShowPlayKey(isReady);
+  const [progress, setProgress] = useState<{ key: number; value: number } | null>(null);
+  const [doneKey, setDoneKey] = useState<number | null>(null);
 
   // 세는 도중 바뀐 to·from·durationMs도 따라가도록 최신 값을 ref로 읽는다.
-  // 세기는 마운트 때 한 번만 시작하므로 delayMs와 첫 렌더 값(from)은 마운트 때 값만 쓴다
+  // delayMs는 회차를 시작할 때 값만 쓴다
   const latestRef = useRef({ to, options });
   latestRef.current = { to, options };
 
   useEffect(() => {
-    if (skipAnimation) {
+    if (skipAnimation || playKey === null) {
       return;
     }
 
@@ -55,11 +63,13 @@ export function useCountUp(to: number, options: CountUpOptions): CountUpState {
         const { to: target, options: latestOptions } = latestRef.current;
         const elapsedMs = timestamp - startedAt;
         if (elapsedMs >= latestOptions.durationMs) {
-          setValue(target);
-          setIsDone(true);
+          setDoneKey(playKey);
           return;
         }
-        setValue(getCountUpValue(latestOptions.from ?? 0, target, elapsedMs, latestOptions.durationMs));
+        setProgress({
+          key: playKey,
+          value: getCountUpValue(latestOptions.from ?? 0, target, elapsedMs, latestOptions.durationMs),
+        });
         frameId = window.requestAnimationFrame(tick);
       };
       frameId = window.requestAnimationFrame(tick);
@@ -69,7 +79,18 @@ export function useCountUp(to: number, options: CountUpOptions): CountUpState {
       window.clearTimeout(timerId);
       window.cancelAnimationFrame(frameId);
     };
-  }, [skipAnimation]);
+  }, [skipAnimation, playKey]);
 
-  return { value: isDone ? to : value, isDone };
+  if (skipAnimation) {
+    return { value: to, isDone: true };
+  }
+  if (playKey === null) {
+    // 준비 전에는 시작 값, 숨김 중에는 최종 값을 유지한다(가려지는 동안 처음 상태로 돌아가지 않는다)
+    return isReady ? { value: to, isDone: true } : { value: from, isDone: false };
+  }
+  if (doneKey === playKey) {
+    return { value: to, isDone: true };
+  }
+  // 이번 회차의 첫 프레임 전에는 시작 값이다
+  return { value: progress?.key === playKey ? progress.value : from, isDone: false };
 }

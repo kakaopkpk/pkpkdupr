@@ -8,19 +8,20 @@ import BottomSheet from "@/components/BottomSheet";
 import { AchievementBadge } from "@/components/profile/AchievementBadge";
 import type { MatchInfo } from "@/types/match";
 import { PkButton } from "@/components/ui/Button";
+import { CountUpText } from "@/components/ui/CountUpText";
 import { RatingDelta } from "@/components/ui/Delta";
 import { PlayerAvatar, TeamAvatars } from "@/components/ui/PlayerAvatar";
 import { cx } from "@/components/ui/cx";
 import { useAppNavigation } from "@/context/AppNavigationContext";
 import { useAuth } from "@/context/AuthContext";
 import { useCountUp } from "@/hooks/useCountUp";
-import { usePlayOnce } from "@/hooks/usePlayOnce";
+import { usePlayOnShow } from "@/hooks/usePlayOnShow";
 import { getAchievementDefinition } from "@/lib/achievements";
 import { formatRating } from "@/utils/dupr";
 import { CheckIcon, FooterError } from "./RecordMatchParts";
 
 /*
- * 완료 화면 연출 시각(ms, 완료 단계 마운트 기준).
+ * 완료 화면 연출 시각(ms, 완료 단계가 보이게 된 시점 기준).
  * 체크 그리기 0 → 점수 세기 100(450) → 이긴 쪽 색 전환 → 평점 세기 650(500)과 업적 띠 650 동시
  */
 const SCORE_COUNT_DELAY_MS = 100;
@@ -51,8 +52,8 @@ export default function RecordDoneStep({
 }: RecordDoneStepProps): React.ReactElement {
   const { player: viewer } = useAuth();
   const { openAchievementDetail } = useAppNavigation();
-  // 업적 상세 시트를 열었다 닫는 등으로 다시 보여도 CSS 연출이 재생되지 않게 한 번만 붙인다
-  const { isPlaying, finish } = usePlayOnce();
+  // 바텀시트 안이라 보임 제공자 밖이다. 업적 상세 시트를 열었다 닫아도 다시 재생되지 않는다
+  const { isPlaying, finish } = usePlayOnShow();
   const score = match.scores?.[0];
   const scoreACount = useCountUp(score?.scoreA ?? 0, {
     durationMs: SCORE_COUNT_DURATION_MS,
@@ -116,13 +117,18 @@ export default function RecordDoneStep({
               isWinner={score.scoreA > score.scoreB}
             />
             <div className="font-num text-[64px] leading-none font-bold tabular-nums">
+              {/* 숫자를 콜론 쪽에 붙여 세는 동안 콜론이 제자리에 있게 한다 */}
               <CountedScore
                 count={scoreACount}
+                finalValue={score.scoreA}
+                align="end"
                 isWinner={score.scoreA > score.scoreB}
               />
               <span className="px-2 text-[#c5ccda]">:</span>
               <CountedScore
                 count={scoreBCount}
+                finalValue={score.scoreB}
+                align="start"
                 isWinner={score.scoreB > score.scoreA}
               />
             </div>
@@ -230,19 +236,26 @@ export default function RecordDoneStep({
   );
 }
 
-/** 0부터 센 큰 점수. 세는 동안은 회색이고 다 세면 이긴 쪽만 파랑으로 바뀐다 */
+/**
+ * 0부터 센 큰 점수. 세는 동안은 회색이고 다 세면 이긴 쪽만 파랑으로 바뀐다.
+ * 자리 폭은 최종 점수로 고정해 자릿수가 바뀌어도 양옆이 흔들리지 않는다
+ */
 const CountedScore: React.FC<{
   count: { value: number; isDone: boolean };
+  finalValue: number;
+  align: "start" | "end";
   isWinner: boolean;
-}> = ({ count, isWinner }) => (
-  <span
+}> = ({ count, finalValue, align, isWinner }) => (
+  <CountUpText
+    finalContent={finalValue}
+    align={align}
     className={cx(
       "transition-colors duration-200 ease-pk-move motion-reduce:transition-none",
       isWinner && count.isDone ? "text-pk-primary" : "text-pk-muted",
     )}
   >
     {Math.round(count.value)}
-  </span>
+  </CountUpText>
 );
 
 /**
