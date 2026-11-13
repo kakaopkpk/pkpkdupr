@@ -5,6 +5,7 @@ import AchievementsScreen from "@/components/profile/AchievementsScreen";
 import AchievementsSection from "@/components/profile/AchievementsSection";
 import PartnerChemistryCard from "@/components/profile/PartnerChemistryCard";
 import PlayerMatchesDrawer from "@/components/profile/PlayerMatchesDrawer";
+import ProfileHeader from "@/components/profile/ProfileHeader";
 import RivalCard from "@/components/profile/RivalCard";
 import {
   Last7DaysTile,
@@ -15,9 +16,7 @@ import {
   WinRateTile,
 } from "@/components/profile/ProfileSections";
 import { useProfileOverview } from "@/components/profile/useProfileOverview";
-import { PlayerAvatar } from "@/components/ui/PlayerAvatar";
 import { SectionLabel } from "@/components/ui/Section";
-import { StatusMessageChip } from "@/components/ui/StatusMessageChip";
 import { useAppNavigation } from "@/context/AppNavigationContext";
 import { useAuth } from "@/context/AuthContext";
 import { useTabNavigation } from "@/context/TabNavigationContext";
@@ -31,7 +30,7 @@ const Me: React.FC = () => {
   const { openSettings } = useAppNavigation();
   const { registerPullToRefresh, selectedTab } = useTabNavigation();
   const playerId = isAuthenticated ? (player?.id ?? null) : null;
-  const { overview, hasError, lastLoadedAt, reload } =
+  const { overview, hasError, loadErrorMessage, lastLoadedAt, reload } =
     useProfileOverview(playerId);
   const [category, setCategory] = useState<MatchTopLevelType>("doubles");
   const [isMatchHistoryRequested, setIsMatchHistoryRequested] = useState(false);
@@ -74,35 +73,26 @@ const Me: React.FC = () => {
 
   return (
     <>
-      <header className="flex items-center gap-3 pt-4 pr-4 pb-4 pl-5">
-        {player ? (
-          <PlayerAvatar
-            player={{ id: player.id, username, avatarUrl: player.avatarUrl }}
-            size={52}
-          />
-        ) : (
-          <span className="size-[52px] shrink-0 animate-pulse rounded-full bg-pk-neutral" />
-        )}
-        <div className="flex min-w-0 flex-1 flex-col items-start gap-1">
-          <h1 className="max-w-full truncate text-pk-22 font-extrabold tracking-[-0.02em] text-pk-ink">
-            {username}
-          </h1>
-          {player?.statusMessage ? (
-            <StatusMessageChip
-              message={player.statusMessage}
-              color={player.statusMessageBackgroundColor}
-            />
-          ) : null}
-        </div>
-        <button
-          type="button"
-          aria-label="설정"
-          onClick={openSettings}
-          className="flex size-11 shrink-0 items-center justify-center rounded-full bg-white text-pk-sub active:bg-pk-neutral"
-        >
-          <IoSettingsOutline className="size-[22px]" />
-        </button>
-      </header>
+      <ProfileHeader
+        className="pt-4 pr-4 pb-4 pl-5"
+        player={
+          player ? { id: player.id, username, avatarUrl: player.avatarUrl } : null
+        }
+        statusMessage={player?.statusMessage}
+        statusMessageBackgroundColor={player?.statusMessageBackgroundColor}
+        matchStats={overview?.summary.matchStats}
+        statsError={hasError}
+        right={
+          <button
+            type="button"
+            aria-label="설정"
+            onClick={openSettings}
+            className="flex size-11 shrink-0 items-center justify-center rounded-full bg-white text-pk-sub active:bg-pk-neutral"
+          >
+            <IoSettingsOutline className="size-[22px]" />
+          </button>
+        }
+      />
 
       <div className="flex flex-col gap-2.5 px-4">
         {overview ? (
@@ -145,7 +135,10 @@ const Me: React.FC = () => {
             />
           </>
         ) : hasError ? (
-          <ProfileLoadError onRetry={() => void reload()} />
+          <ProfileLoadError
+            message={loadErrorMessage}
+            onRetry={() => void reload()}
+          />
         ) : (
           <ProfileBodySkeleton />
         )}

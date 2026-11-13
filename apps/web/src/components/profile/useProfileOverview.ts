@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { MatchTopLevelType } from "@pkpkdupr/shared/match";
 import type { RankingResponse } from "@pkpkdupr/shared/ranking";
 import { useAppNavigation } from "@/context/AppNavigationContext";
+import { getUserErrorMessage } from "@/lib/errors";
 import {
   fetchPlayerProfileSummary,
   type PlayerProfileSummaryInfo,
@@ -22,7 +23,8 @@ export interface ProfileOverview {
 export const useProfileOverview = (playerId: string | null) => {
   const { dataVersion } = useAppNavigation();
   const [overview, setOverview] = useState<ProfileOverview | null>(null);
-  const [hasError, setHasError] = useState(false);
+  /** 보일 프로필 없이 불러오기에 실패했을 때 화면에 보일 문구. 실패가 아니면 null */
+  const [loadErrorMessage, setLoadErrorMessage] = useState<string | null>(null);
   const [lastLoadedAt, setLastLoadedAt] = useState<number | null>(null);
   const requestIdRef = useRef(0);
   const loadedPlayerIdRef = useRef<string | null>(null);
@@ -35,7 +37,7 @@ export const useProfileOverview = (playerId: string | null) => {
 
       if (loadedPlayerIdRef.current !== playerId) {
         setOverview(null);
-        setHasError(false);
+        setLoadErrorMessage(null);
       }
 
       try {
@@ -52,11 +54,15 @@ export const useProfileOverview = (playerId: string | null) => {
         if (singles) rankings.singles = singles;
         loadedPlayerIdRef.current = playerId;
         setOverview({ playerId, summary, rankings });
-        setHasError(false);
+        setLoadErrorMessage(null);
         setLastLoadedAt(Date.now());
       } catch (err) {
         if (requestIdRef.current !== requestId) return;
-        if (loadedPlayerIdRef.current !== playerId) setHasError(true);
+        if (loadedPlayerIdRef.current !== playerId) {
+          setLoadErrorMessage(
+            getUserErrorMessage(err, "프로필을 불러오지 못했어요"),
+          );
+        }
         if (throwOnError) throw err;
       }
     },
@@ -68,7 +74,7 @@ export const useProfileOverview = (playerId: string | null) => {
       requestIdRef.current += 1;
       loadedPlayerIdRef.current = null;
       setOverview(null);
-      setHasError(false);
+      setLoadErrorMessage(null);
       setLastLoadedAt(null);
       return;
     }
@@ -78,7 +84,8 @@ export const useProfileOverview = (playerId: string | null) => {
   return {
     /** 지금 playerId의 데이터만 돌려준다(이전 회원 데이터가 잠깐 보이지 않게) */
     overview: overview?.playerId === playerId ? overview : null,
-    hasError,
+    hasError: loadErrorMessage !== null,
+    loadErrorMessage: loadErrorMessage ?? "",
     lastLoadedAt,
     reload: load,
   };

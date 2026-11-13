@@ -9,6 +9,7 @@ import { PROFILE_CATEGORY_OPTIONS } from "@/components/profile/ProfileRatingCard
 import { Card } from "@/components/ui/Card";
 import { MatchRow } from "@/components/ui/MatchRow";
 import { SectionLabel, TextLink } from "@/components/ui/Section";
+import { StateMessage } from "@/components/ui/StateMessage";
 import {
   SegmentedControl,
   SegmentSwitchFade,
@@ -302,9 +303,9 @@ export default function PlayerMatchesDrawer({
                 </section>
               ))
             ) : (
-              <p className="py-10 text-center text-pk-13 text-pk-muted">
-                완료한 경기가 없어요.
-              </p>
+              <Card>
+                <StateMessage kind="empty" message="완료한 경기가 없어요" />
+              </Card>
             )}
           </SegmentSwitchFade>
         )}

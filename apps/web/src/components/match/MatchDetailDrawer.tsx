@@ -5,11 +5,8 @@ import {
 } from "@pkpkdupr/shared/match";
 import type { MatchInfo } from "@/types/match";
 import PushScreen from "@/components/PushScreen";
-import {
-  getErrorMessage,
-  isNetworkError,
-} from "@/components/record/recordMatch.utils";
-import { PkButton } from "@/components/ui/Button";
+import { getErrorMessage } from "@/components/record/recordMatch.utils";
+import { StateMessage } from "@/components/ui/StateMessage";
 import { useAppNavigation } from "@/context/AppNavigationContext";
 import { useAuth } from "@/context/AuthContext";
 import { useSystemNotice } from "@/context/SystemNoticeContext";
@@ -22,6 +19,7 @@ import { useOnlineStatus } from "@/hooks/useOnlineStatus";
 import { usePlayers } from "@/hooks/usePlayers";
 import { useStartedMatchToast } from "@/hooks/useStartedMatchToast";
 import { apiFetch } from "@/lib/api";
+import { getUserErrorMessage, isNetworkError } from "@/lib/errors";
 import {
   deleteMatch,
   getMatchTeamPlayerIds,
@@ -149,10 +147,10 @@ export default function MatchDetailDrawer({
             ? current
             : {
                 kind: "error",
-                message:
-                  err instanceof Error && err.message
-                    ? err.message
-                    : "경기를 불러오지 못했어요.",
+                message: getUserErrorMessage(
+                  err,
+                  "경기를 불러오지 못했어요",
+                ),
               },
         );
       }
@@ -336,20 +334,13 @@ export default function MatchDetailDrawer({
     );
   } else if (loadState.kind === "error") {
     content = (
-      <div className="flex flex-col items-center gap-4 px-4 pt-16">
-        <p role="alert" className="text-center text-pk-15 text-pk-sub">
-          {isOnline ? loadState.message : "온라인 연결이 필요해요."}
-        </p>
-        {isOnline ? (
-          <PkButton
-            variant="soft"
-            size="sm"
-            onClick={() => void loadMatch(matchId, false)}
-          >
-            다시 시도
-          </PkButton>
-        ) : null}
-      </div>
+      <StateMessage
+        kind="error"
+        size="panel"
+        className="px-4"
+        message={isOnline ? loadState.message : "인터넷에 연결되지 않았어요"}
+        onRetry={() => void loadMatch(matchId, false)}
+      />
     );
   } else {
     const { match } = loadState;

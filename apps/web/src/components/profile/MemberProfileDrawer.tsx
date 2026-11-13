@@ -5,8 +5,8 @@ import type { HeadToHeadStat } from "@pkpkdupr/shared/profileStats";
 import PushScreen from "@/components/PushScreen";
 import AchievementsScreen from "@/components/profile/AchievementsScreen";
 import AchievementsSection from "@/components/profile/AchievementsSection";
-import SkeletonBlock from "@/components/SkeletonBlock";
 import PlayerMatchesDrawer from "@/components/profile/PlayerMatchesDrawer";
+import ProfileHeader from "@/components/profile/ProfileHeader";
 import ProfileStatTile, {
   WinLossCount,
 } from "@/components/profile/ProfileStatTile";
@@ -24,8 +24,6 @@ import {
   CountUpNumber,
   CountUpRatingDelta,
 } from "@/components/ui/CountUpNumber";
-import { PlayerAvatar } from "@/components/ui/PlayerAvatar";
-import { StatusMessageChip } from "@/components/ui/StatusMessageChip";
 import { useAuth } from "@/context/AuthContext";
 import {
   type TabKey,
@@ -111,7 +109,8 @@ export default function MemberProfileDrawer({
   const [category, setCategory] = useState<MatchTopLevelType>("doubles");
   const [isMatchHistoryRequested, setIsMatchHistoryRequested] = useState(false);
   const [isAchievementsRequested, setIsAchievementsRequested] = useState(false);
-  const { overview, hasError, reload } = useProfileOverview(playerId);
+  const { overview, hasError, loadErrorMessage, reload } =
+    useProfileOverview(playerId);
 
   const isOpen = useLayerDepth({
     isOpen: isRequested,
@@ -154,15 +153,6 @@ export default function MemberProfileDrawer({
     )?.player.username ??
     "";
 
-  const totalStats = overview
-    ? Object.values(overview.summary.matchStats).reduce(
-        (sum, stats) => ({
-          wins: sum.wins + stats.matchWins,
-          losses: sum.losses + stats.matchLosses,
-        }),
-        { wins: 0, losses: 0 },
-      )
-    : null;
   const headToHead = overview?.summary.headToHead?.[category] ?? null;
 
   return (
@@ -171,42 +161,21 @@ export default function MemberProfileDrawer({
         isOpen={isOpen}
         isActive={tabKey === selectedTab}
         ariaLabel="회원 프로필"
-        title={username}
+        title=""
         onBack={close}
         onExited={handleProfileExited}
         onPullToRefresh={refreshProfile}
       >
         <div className="flex flex-col gap-2.5 px-4 pb-8">
-          <div className="flex items-center gap-3 px-1 pb-1.5">
-            <PlayerAvatar
-              player={{
-                id: playerId,
-                username,
-                avatarUrl: member?.avatarUrl,
-              }}
-              size={56}
-            />
-            <div className="flex min-w-0 flex-col items-start gap-1.5">
-              {member?.statusMessage ? (
-                <StatusMessageChip
-                  message={member.statusMessage}
-                  color={member.statusMessageBackgroundColor}
-                />
-              ) : null}
-              {totalStats ? (
-                <span className="text-pk-13 text-pk-sub tabular-nums">
-                  <CountUpNumber
-                    value={totalStats.wins + totalStats.losses}
-                    {...COUNT_UP}
-                  />
-                  경기 ·{" "}
-                  <WinLossCount wins={totalStats.wins} losses={totalStats.losses} />
-                </span>
-              ) : (
-                <SkeletonBlock className="h-4 w-32" />
-              )}
-            </div>
-          </div>
+          <ProfileHeader
+            className="px-1 pb-1.5"
+            headingAs="h2"
+            player={{ id: playerId, username, avatarUrl: member?.avatarUrl }}
+            statusMessage={member?.statusMessage}
+            statusMessageBackgroundColor={member?.statusMessageBackgroundColor}
+            matchStats={overview?.summary.matchStats}
+            statsError={hasError}
+          />
           {overview ? (
             <>
               <ProfileRatingSection
@@ -237,7 +206,10 @@ export default function MemberProfileDrawer({
               />
             </>
           ) : hasError ? (
-            <ProfileLoadError onRetry={() => void reload()} />
+            <ProfileLoadError
+              message={loadErrorMessage}
+              onRetry={() => void reload()}
+            />
           ) : (
             <ProfileBodySkeleton tileCount={4} />
           )}

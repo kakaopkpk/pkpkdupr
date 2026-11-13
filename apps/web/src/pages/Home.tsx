@@ -19,9 +19,11 @@ import { useSessionRecommendations } from "@/components/home/useSessionRecommend
 import { useSessionTopRiser } from "@/components/home/useSessionTopRiser";
 import { TopRiserCard } from "@/components/records/SessionReportParts";
 import ParticipantsSheet from "@/components/session/ParticipantsSheet";
-import { getErrorMessage, isNetworkError } from "@/components/session/saveError";
+import { getErrorMessage } from "@/components/session/saveError";
+import { isNetworkError } from "@/lib/errors";
 import { LivePill } from "@/components/ui/Badges";
 import { Card } from "@/components/ui/Card";
+import { StateMessage } from "@/components/ui/StateMessage";
 import { LiveMatchRow, MatchRow } from "@/components/ui/MatchRow";
 import { LinkChevron, SectionLabel } from "@/components/ui/Section";
 import { cx } from "@/components/ui/cx";
@@ -30,6 +32,7 @@ import { useAuth } from "@/context/AuthContext";
 import { useLiveSession } from "@/context/LiveSessionContext";
 import { useSystemNotice } from "@/context/SystemNoticeContext";
 import { useTabNavigation } from "@/context/TabNavigationContext";
+import { useMinuteClock } from "@/hooks/useMinuteClock";
 import {
   addMatchSessionParticipant,
   isSessionParticipant,
@@ -38,27 +41,14 @@ import {
   startSessionMatch,
 } from "@/lib/matchSessions";
 
-const MINUTE_MS = 60_000;
 const EMPTY_IDS: readonly string[] = [];
-
-/** 경과 분·남은 시간 표시를 위해 1분마다 다시 그린다 */
-const useMinuteClock = () => {
-  const [now, setNow] = useState(() => new Date());
-
-  useEffect(() => {
-    const intervalId = window.setInterval(() => setNow(new Date()), MINUTE_MS);
-    return () => window.clearInterval(intervalId);
-  }, []);
-
-  return now;
-};
 
 const getMatchPlayerIds = (match: MatchInfo) =>
   match.teams.flatMap((team) => team.players.map((player) => player.id));
 
-const EmptyText: React.FC<{ children: React.ReactNode }> = ({ children }) => (
-  <Card className="py-4">
-    <p className="text-pk-13 text-pk-sub">{children}</p>
+const EmptyCard: React.FC<{ message: string }> = ({ message }) => (
+  <Card>
+    <StateMessage kind="empty" message={message} />
   </Card>
 );
 
@@ -374,7 +364,7 @@ const Home: React.FC = () => {
             ))}
           </Card>
         ) : count === 0 ? (
-          <EmptyText>진행 중인 경기가 없어요</EmptyText>
+          <EmptyCard message="진행 중인 경기가 없어요" />
         ) : null}
       </>
     );
@@ -414,7 +404,7 @@ const Home: React.FC = () => {
           onOpenMatch={openMatchDetail}
         />
       ) : (
-        <EmptyText>아직 기록된 경기가 없어요</EmptyText>
+        <EmptyCard message="아직 기록된 경기가 없어요" />
       )}
       {/* 미참여자의 참여하기는 셸의 알림 바가 맡는다. 그 바에 가리지 않게 여백을 둔다 */}
       {!isLiveParticipant ? <div className="h-16" /> : null}
@@ -439,12 +429,12 @@ const Home: React.FC = () => {
       if (status === "error") {
         return (
           <>
-            <p
-              role="alert"
-              className="px-1 py-6 text-center text-pk-13 font-medium text-pk-down"
-            >
-              {error ?? "다가오는 세션을 불러오지 못했어요."}
-            </p>
+            <StateMessage
+              kind="error"
+              className="px-1"
+              message={error ?? "다가오는 세션을 불러오지 못했어요"}
+              onRetry={() => void preSession.reload()}
+            />
             {inProgressSection}
           </>
         );
@@ -459,7 +449,7 @@ const Home: React.FC = () => {
         {/* 다시 받기에 실패하면 이전 데이터를 둔 채 실패를 알린다 */}
         {status === "error" ? (
           <p role="alert" className="px-1 text-pk-13 font-medium text-pk-down">
-            {error ?? "다가오는 세션을 불러오지 못했어요."}
+            {error ?? "다가오는 세션을 불러오지 못했어요"}
           </p>
         ) : null}
         {nextSession ? (
@@ -475,7 +465,7 @@ const Home: React.FC = () => {
             onOpenParticipants={() => openParticipants(nextSession, EMPTY_IDS)}
           />
         ) : (
-          <EmptyText>다가오는 세션이 없어요</EmptyText>
+          <EmptyCard message="다가오는 세션이 없어요" />
         )}
         {inProgressSection}
         {lastSessionReport ? (

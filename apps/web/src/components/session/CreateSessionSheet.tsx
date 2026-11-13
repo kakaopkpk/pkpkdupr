@@ -28,7 +28,8 @@ import {
   createMatchSession,
   type MatchSessionDetailInfo,
 } from "@/lib/matchSessions";
-import { getErrorMessage, isNetworkError } from "./saveError";
+import { isNetworkError } from "@/lib/errors";
+import { getErrorMessage } from "./saveError";
 import {
   AnimatedHeight,
   formatDurationHours,
@@ -295,7 +296,7 @@ const CreateSessionForm: React.FC<CreateSessionFormProps> = ({
       </BottomSheet.Body>
       <BottomSheet.Footer className="flex flex-col gap-2">
         {error ? (
-          <p role="alert" className="px-1 text-pk-13 text-pk-down">
+          <p role="alert" className="px-1 text-pk-13 font-bold text-pk-down">
             {error}
           </p>
         ) : null}
