@@ -48,12 +48,6 @@ export const PlusIcon = () => (
   </svg>
 );
 
-export const CloseIcon = () => (
-  <svg width="26" height="26" strokeWidth={2.4} {...svgProps}>
-    <path d="M6 6l12 12M18 6L6 18" />
-  </svg>
-);
-
 const ScoreIcon = () => (
   <svg width="20" height="20" strokeWidth={2} {...svgProps}>
     <rect x="4" y="4" width="16" height="16" rx="3" />
@@ -171,7 +165,7 @@ export const PlusMenu: React.FC<{
         <div
           role="menu"
           aria-label="새로 만들기"
-          className="absolute right-0 bottom-[calc(66px+14px)] w-[220px] rounded-pk-lg bg-white py-1.5 shadow-[0_12px_32px] shadow-pk-ink/20"
+          className="app-plus-menu-pop absolute right-0 bottom-[calc(66px+14px)] w-[220px] rounded-pk-lg bg-white py-1.5 shadow-[0_12px_32px] shadow-pk-ink/20"
         >
           <button
             ref={firstItemRef}
@@ -207,9 +201,14 @@ export const PlusMenu: React.FC<{
         aria-haspopup="menu"
         aria-expanded={isOpen}
         onClick={onToggle}
-        className="flex size-[66px] shrink-0 items-center justify-center rounded-full bg-pk-primary text-white shadow-[0_8px_18px] shadow-pk-ink/18 touch-manipulation"
+        className="flex size-[66px] shrink-0 items-center justify-center rounded-full bg-pk-primary text-white shadow-[0_8px_18px] shadow-pk-ink/18 transition-transform duration-200 touch-manipulation active:scale-[0.92] motion-reduce:transition-none"
       >
-        {isOpen ? <CloseIcon /> : <PlusIcon />}
+        {/* 열리면 +를 돌려 ×로 만든다 */}
+        <span
+          className={`app-plus-icon flex ${isOpen ? "rotate-[135deg]" : ""}`}
+        >
+          <PlusIcon />
+        </span>
       </button>
     </div>
   );
