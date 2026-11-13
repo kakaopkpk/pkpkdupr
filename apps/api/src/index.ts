@@ -30,7 +30,7 @@ import {
   canOpenRegularSession,
   DEFAULT_MATCH_LOCATION,
   getEmptySessionExpiresAt,
-  getNextRegularSessionDateKey,
+  getRegularSessionDateKeys,
   isInProgressMatchExpired,
   isPastSessionStart,
   isRegularSessionTime,
@@ -40,6 +40,7 @@ import {
   kstDateKeyToDate,
   MATCH_SESSION_LOCATION_MAX_LENGTH,
   MATCH_SESSION_NAME_MAX_LENGTH,
+  REGULAR_SESSION_LOOKAHEAD_DAYS,
   toKstDateKey,
   type AddMatchSessionGuestRequest,
   type AddMatchSessionParticipantRequest,
@@ -150,6 +151,11 @@ import {
   getEnvGoogleCalendarClient,
   type CalendarSessionSnapshot,
 } from "./services/SessionCalendarSync";
+import {
+  isCronSecretMatch,
+  RegularSessionCronError,
+  runRegularSessionCron,
+} from "./services/RegularSessionCron";
 
 const app: express.Express = express();
 const PORT = process.env.PORT || 4000;
@@ -1294,10 +1300,16 @@ app.get("/api/match-sessions/upcoming", async (req, res) => {
 
     const now = new Date();
     await matchRepository.cleanupExpired(now);
-    // 크론 없이 조회 때 다음 정기 회차 1개를 보장한다(날짜당 하나는 regular_date_key 유니크가 보장).
-    await matchRepository.findOrCreateRegularSession(
-      getNextRegularSessionDateKey(now),
-    );
+    // 예약 작업이 실패해도 다음 정기 회차 1개는 조회 때 보장한다(날짜당 하나는 regular_date_key 유니크가 보장).
+    // 공휴일·취소 날짜는 만들어지지 않으므로 그다음 정기 회차로 넘어간다.
+    for (const regularDateKey of getRegularSessionDateKeys(
+      now,
+      REGULAR_SESSION_LOOKAHEAD_DAYS,
+    )) {
+      if (await matchRepository.findOrCreateRegularSession(regularDateKey)) {
+        break;
+      }
+    }
     const dateKey = toKstDateKey(now);
     const [sessions, activePlayersById] = await Promise.all([
       // 전날 시작해 자정을 넘긴 회원 세션도 끝나기 전까지 보이도록 전날부터 읽고 만료로 거른다
@@ -1345,6 +1357,12 @@ app.post("/api/match-sessions/regular/today", async (req, res) => {
     const session = await matchRepository.findOrCreateRegularSession(
       toKstDateKey(now),
     );
+    if (!session) {
+      throw new MatchSessionRequestError(
+        "오늘은 공휴일이거나 취소되어 정기 세션이 없습니다.",
+        409,
+      );
+    }
     res.json(await requireMatchSessionDetail(session.id, now));
   } catch (err) {
     sendMatchSessionFailure(res, err);
@@ -1855,7 +1873,8 @@ app.delete(
       if (!isEntityId(req.params.sessionId, "session")) {
         return res.status(400).json({ error: "유효한 세션 ID가 필요합니다." });
       }
-      await matchRepository.deleteSession(req.params.sessionId);
+      // 오늘·미래 정기 세션을 지우면 그 날짜는 취소로 남아 다시 만들어지지 않는다
+      await matchRepository.deleteSession(req.params.sessionId, new Date());
       res.status(204).send();
     } catch (err) {
       if (err instanceof MatchRepositoryError && err.status === 404) {
@@ -1868,6 +1887,38 @@ app.delete(
     }
   },
 );
+
+/**
+ * 매일 예약 작업(GitHub Actions)이 부른다. 오늘부터 4주 안의 정기 회차를 공휴일·취소 날짜를 빼고 미리 만든다.
+ * 헤더 x-cron-secret을 함수 secret CRON_SECRET과 비교한다.
+ */
+app.post("/api/cron/regular-sessions", async (req, res) => {
+  const expectedSecret = process.env.CRON_SECRET?.trim();
+  if (!expectedSecret) {
+    console.error("[CRON] CRON_SECRET이 설정되지 않았습니다.");
+    return res.status(503).json({ error: "예약 작업이 설정되지 않았습니다." });
+  }
+  const providedSecret = req.get("x-cron-secret");
+  if (!providedSecret || !isCronSecretMatch(providedSecret, expectedSecret)) {
+    return res.status(401).json({ error: "인증이 필요합니다." });
+  }
+
+  try {
+    const result = await runRegularSessionCron({
+      now: new Date(),
+      calendarClient: getEnvGoogleCalendarClient(),
+      repository: matchRepository,
+    });
+    console.log("[CRON] 정기 세션 예약 작업 완료", JSON.stringify(result));
+    res.json(result);
+  } catch (err) {
+    console.error("[CRON] 정기 세션 예약 작업 실패", err);
+    if (err instanceof RegularSessionCronError) {
+      return res.status(err.status).json({ error: err.message });
+    }
+    res.status(500).json({ error: "정기 세션을 만들지 못했습니다." });
+  }
+});
 
 app.put(
   "/api/admin/match-sessions/:sessionId/participants",

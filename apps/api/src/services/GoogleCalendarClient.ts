@@ -11,10 +11,14 @@ const TOKEN_LIFETIME_SECONDS = 3600;
 /** 토큰 만료 직전 요청이 실패하지 않도록 이만큼 일찍 새로 받는다 */
 const TOKEN_REFRESH_MARGIN_MS = 60_000;
 const REQUEST_TIMEOUT_MS = 10_000;
+/** 일정 목록 한 번에 받는 최대 개수. 공휴일 4주치는 이 안에 들어온다 */
+const LIST_MAX_RESULTS = 250;
 /** 로그가 길어지지 않도록 오류 응답 본문은 이만큼만 남긴다 */
 const MAX_ERROR_BODY_LENGTH = 500;
 /** 200으로 왔지만 토큰이 없는 응답은 구글 쪽 이상으로 보고 서버 오류 코드로 다룬다 */
 const EMPTY_TOKEN_RESPONSE_STATUS = 500;
+/** 일정 목록이 한 번에 다 오지 않으면(다음 페이지가 있으면) 예상 밖 응답으로 보고 서버 오류 코드로 다룬다 */
+const LIST_TRUNCATED_STATUS = 500;
 
 export interface GoogleServiceAccount {
   client_email: string;
@@ -40,11 +44,27 @@ export interface GoogleCalendarEvent {
   end: GoogleCalendarEventTime;
 }
 
+/** 일정 목록 조회 결과에서 쓰는 필드. 종일 일정은 date, 시각 일정은 dateTime이 있다 */
+export interface GoogleCalendarListedEvent {
+  summary?: string;
+  description?: string;
+  start?: { date?: string; dateTime?: string };
+  end?: { date?: string; dateTime?: string };
+}
+
 export interface GoogleCalendarClient {
   /** 같은 id 일정이 없으면 만들고, 있거나 지워진 상태면 내용을 통째로 덮어쓰고 되살린다 */
   upsertEvent(eventId: string, event: GoogleCalendarEvent): Promise<void>;
   /** 일정을 지운다. 이미 없거나 지워졌으면 아무것도 하지 않는다 */
   deleteEvent(eventId: string): Promise<void>;
+  /**
+   * 다른 캘린더(공휴일 캘린더 등)의 [timeMin, timeMax) 일정을 반복 일정을 펼쳐 읽는다.
+   * 서비스 계정이 읽을 수 있는 공개 캘린더여야 한다
+   */
+  listEvents(
+    calendarId: string,
+    range: { timeMin: Date; timeMax: Date },
+  ): Promise<GoogleCalendarListedEvent[]>;
 }
 
 class GoogleCalendarApiError extends Error {
@@ -303,6 +323,34 @@ export const createGoogleCalendarClient = (
         throw await fail("지우기", deleted);
       }
       await discardBody(deleted);
+    },
+    async listEvents(listCalendarId, { timeMin, timeMax }) {
+      const params = new URLSearchParams({
+        singleEvents: "true",
+        orderBy: "startTime",
+        timeMin: timeMin.toISOString(),
+        timeMax: timeMax.toISOString(),
+        maxResults: String(LIST_MAX_RESULTS),
+        fields: "items(description,start,end),nextPageToken",
+      });
+      const response = await callCalendar(
+        "GET",
+        `${CALENDAR_API_BASE}/calendars/${encodeURIComponent(listCalendarId)}/events?${params}`,
+      );
+      if (!response.ok) {
+        throw await fail("목록 조회", response);
+      }
+      const body = (await response.json()) as {
+        items?: GoogleCalendarListedEvent[];
+        nextPageToken?: string;
+      };
+      if (body.nextPageToken) {
+        throw new GoogleCalendarApiError(
+          "구글 캘린더 일정 목록이 한 번에 다 오지 않았습니다.",
+          LIST_TRUNCATED_STATUS,
+        );
+      }
+      return body.items ?? [];
     },
   };
 };

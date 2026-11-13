@@ -44,6 +44,7 @@ export {
   type TimestampUnitAudit,
   type CompletedMatchOutcome,
   type SessionWithParticipantIds,
+  type RegularSessionSkip,
 } from "./repositories/MatchRepository";
 export {
   MatchDeletionLogRepository,

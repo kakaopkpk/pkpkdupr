@@ -290,3 +290,13 @@ export const playerSeenAchievements = pgTable(
     }),
   }),
 );
+
+/**
+ * 정기 회차를 만들지 않는 KST 날짜. holiday=공휴일(예약 작업이 구글 공휴일 캘린더로 채움),
+ * canceled=관리자가 지운 오늘·미래 정기 세션. 여기 있는 날짜의 정기 세션은 어떤 경로로도 새로 만들지 않는다.
+ */
+export const regularSessionSkips = pgTable("regular_session_skips", {
+  dateKey: varchar("date_key", { length: 10 }).primaryKey(),
+  reason: varchar("reason", { length: 16 }).notNull(),
+  createdAt: unixTimestamp("created_at").notNull(),
+});

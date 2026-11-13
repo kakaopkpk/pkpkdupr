@@ -9,6 +9,7 @@ import {
   isOvernightSessionTimeRange,
   isPastSessionStart,
   isSessionOnToday,
+  getRegularSessionDateKeys,
   getRegularSessionName,
   IN_PROGRESS_MATCH_TIMEOUT_MS,
   isInProgressMatchExpired,
@@ -305,6 +306,41 @@ describe("getNextRegularSessionDateKey", () => {
     expect(
       getNextRegularSessionDateKey(new Date("2026-12-31T23:00:00+09:00")),
     ).toBe("2027-01-04");
+  });
+});
+
+describe("getRegularSessionDateKeys", () => {
+  it("오늘부터 28일 안의 월·목을 오름차순으로 준다", () => {
+    expect(
+      getRegularSessionDateKeys(new Date("2026-11-10T09:00:00+09:00"), 28),
+    ).toEqual([
+      "2026-11-12",
+      "2026-11-16",
+      "2026-11-19",
+      "2026-11-23",
+      "2026-11-26",
+      "2026-11-30",
+      "2026-12-03",
+      "2026-12-07",
+    ]);
+  });
+
+  it("오늘이 정기 요일이면 22시 전에만 오늘을 넣는다", () => {
+    expect(
+      getRegularSessionDateKeys(new Date("2026-11-12T21:59:00+09:00"), 7),
+    ).toEqual(["2026-11-12", "2026-11-16"]);
+    expect(
+      getRegularSessionDateKeys(new Date("2026-11-12T22:00:00+09:00"), 7),
+    ).toEqual(["2026-11-16"]);
+  });
+
+  it("마지막 날(오늘+days)은 넣지 않는다", () => {
+    expect(
+      getRegularSessionDateKeys(new Date("2026-11-13T09:00:00+09:00"), 3),
+    ).toEqual([]);
+    expect(
+      getRegularSessionDateKeys(new Date("2026-11-13T09:00:00+09:00"), 4),
+    ).toEqual(["2026-11-16"]);
   });
 });
 
