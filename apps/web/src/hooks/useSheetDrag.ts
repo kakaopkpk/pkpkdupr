@@ -13,6 +13,8 @@ const VELOCITY_WINDOW_MS = 100;
 const SETTLE_DURATION_MS = 180;
 /** 닫기를 요청했는데 부모가 닫지 않으면 이 시간 뒤 제자리로 돌린다 */
 const DISMISS_FALLBACK_MS = 1000;
+/** 끄는 만큼 딤을 옅게 하는 배율(1→0). index.css `.app-bottom-sheet-backdrop`이 읽는다 */
+const DRAG_FADE_PROPERTY = "--sheet-drag-fade";
 
 interface UseSheetDragOptions {
   /** 끌려 움직이는 시트 표면 */
@@ -82,7 +84,15 @@ export function useSheetDrag({
         const height = surface?.offsetHeight ?? 0;
         const progress = height > 0 ? Math.max(0, offset) / height : 0;
         dim.style.transition = transition;
-        dim.style.opacity = progress === 0 ? "" : `${Math.max(0, 1 - progress)}`;
+        // 딤 opacity는 CSS에서 열림 상태와 이 값을 곱해 정한다(.app-bottom-sheet-backdrop)
+        if (progress === 0) {
+          dim.style.removeProperty(DRAG_FADE_PROPERTY);
+        } else {
+          dim.style.setProperty(
+            DRAG_FADE_PROPERTY,
+            `${Math.max(0, 1 - progress)}`,
+          );
+        }
       }
     },
     [dimRef, surfaceRef],
@@ -103,14 +113,20 @@ export function useSheetDrag({
     }, duration);
   }, [applyOffset, clearSettleTimeout]);
 
-  // 닫는 도중 다시 열리면 끌린 위치를 지운다
   React.useEffect(() => {
     isOpenRef.current = isOpen;
+    clearSettleTimeout();
     if (isOpen) {
-      clearSettleTimeout();
+      // 닫는 도중 다시 열리면 끌린 위치를 지운다
       applyOffset(0, "");
+      return;
     }
-  }, [applyOffset, clearSettleTimeout, isOpen]);
+    // 끌다 닫히면 끄는 동안 막아 둔 딤 전환만 풀어, 옅어진 정도에서 BottomSheet의
+    // 닫힘 전환으로 이어지게 한다. 시트 표면은 끌린 위치에서 그대로 내려간다.
+    if (dimRef.current) {
+      dimRef.current.style.transition = "";
+    }
+  }, [applyOffset, clearSettleTimeout, dimRef, isOpen]);
 
   React.useEffect(() => clearSettleTimeout, [clearSettleTimeout]);
 
