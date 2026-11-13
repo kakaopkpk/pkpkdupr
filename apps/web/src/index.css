@@ -353,6 +353,18 @@
   }
 
   /*
+   * 바텀시트 뒤 배경. 딤 위에 뒤 화면을 흐리게 비치는 유리 효과를 준다.
+   * 전환 시간은 BottomSheet가 --sheet-transition-duration으로 넘기고, 끄는 동안에는
+   * useSheetDrag가 인라인 transition·opacity로 덮어쓴다.
+   */
+  .app-bottom-sheet-backdrop {
+    background-color: color-mix(in srgb, var(--color-pk-ink) 45%, transparent);
+    -webkit-backdrop-filter: blur(8px) saturate(140%);
+    backdrop-filter: blur(8px) saturate(140%);
+    transition: opacity var(--sheet-transition-duration, 0ms) ease-out;
+  }
+
+  /*
    * 하단 바·미니바 공통 유리. 뒤가 비치도록 옅게 칠하고 안쪽 윗변 하이라이트와
    * 가장자리 림, 위쪽 반사광(::before)으로 유리 두께를 낸다. 반사광은 z-index -1로
    * 내용 아래에 깔리도록 isolation으로 쌓임 맥락을 만든다.

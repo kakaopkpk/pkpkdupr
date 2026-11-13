@@ -109,8 +109,16 @@ export function useSheetDrag({
     if (isOpen) {
       clearSettleTimeout();
       applyOffset(0, "");
+      return;
     }
-  }, [applyOffset, clearSettleTimeout, isOpen]);
+    // 끌다 닫히면 딤의 인라인 opacity를 풀어 지금 옅어진 정도에서 닫힘 전환으로 이어지게 한다.
+    // 시트 표면은 끌린 위치에서 그대로 내려가야 하므로 두고 간다.
+    const dim = dimRef.current;
+    if (dim) {
+      dim.style.transition = "";
+      dim.style.opacity = "";
+    }
+  }, [applyOffset, clearSettleTimeout, dimRef, isOpen]);
 
   React.useEffect(() => clearSettleTimeout, [clearSettleTimeout]);
 
