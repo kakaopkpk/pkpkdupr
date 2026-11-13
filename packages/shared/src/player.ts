@@ -479,6 +479,11 @@ export interface GuestAddedInfo {
   sessionDate: Date | null;
 }
 
+/** POST /api/admin/players/:playerId/promote 요청. 응답은 AdminPromoteGuestResponse(관리자 회원 추가 응답과 같은 형태)다 */
+export interface AdminPromoteGuestRequest {
+  gender: "M" | "F";
+}
+
 export interface MemberListPlayer extends Player {
   lastPlayedAt: Date | null;
 }

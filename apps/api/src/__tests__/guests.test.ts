@@ -22,6 +22,7 @@ import {
   AuthService,
   type AuthenticatedSession,
 } from "../services/AuthService";
+import { SupabaseAuthAdmin } from "../services/supabaseAuthAdmin";
 import type { RatingServiceContract } from "../services/RatingContract";
 import {
   buildRankingResponse,
@@ -682,5 +683,248 @@ describe("랭킹에서 게스트 제외", () => {
       response.entries.find((entry) => entry.player.id === requester.id)
         ?.matchCount,
     ).toBe(1);
+  });
+});
+
+describe("POST /api/admin/players/:playerId/promote", () => {
+  const admin = makePlayer("Padmin01", { username: "club_admin" });
+  const adminSession: AuthenticatedSession = {
+    payload: { playerId: admin.id, isAdmin: true },
+    player: admin,
+    isFirstLogin: false,
+  };
+  const otherGuest = makePlayer("Pguest02", {
+    username: "guest_lee",
+    gender: null,
+    isGuest: true,
+    duprRating: null,
+  });
+
+  type StoredRow = Player & {
+    duprRating: null;
+    authUserId: string | null;
+    isFirstLogin: boolean;
+    guestAddedByPlayerId: string | null;
+    guestAddedSessionId: string | null;
+  };
+  const toStoredRow = (player: Player): StoredRow => ({
+    ...player,
+    duprRating: null,
+    authUserId: null,
+    isFirstLogin: false,
+    guestAddedByPlayerId: player.isGuest ? requester.id : null,
+    guestAddedSessionId: player.isGuest ? "Scustom1" : null,
+  });
+
+  let rows: Map<string, StoredRow>;
+  let createAuthUser: MockInstance<SupabaseAuthAdmin["createUser"]>;
+  let deleteAuthUser: MockInstance<SupabaseAuthAdmin["deleteUser"]>;
+  let session: AuthenticatedSession;
+
+  beforeEach(() => {
+    useNow(wednesdayMorning);
+    session = adminSession;
+    rows = new Map(
+      [admin, requester, partner, opponentM, opponentF, guest, otherGuest].map(
+        (player) => [player.id, toStoredRow(player)],
+      ),
+    );
+    vi.spyOn(
+      AuthService.prototype,
+      "authenticateAccessToken",
+    ).mockImplementation(async () => session);
+    vi.spyOn(db.players, "findById").mockImplementation(
+      async (id) => rows.get(id) as any,
+    );
+    vi.spyOn(db.players, "promoteGuest").mockImplementation(
+      async (id, gender, authUserId) => {
+        const row = rows.get(id);
+        if (
+          !row ||
+          !row.isGuest ||
+          row.status !== "active" ||
+          (authUserId && row.authUserId)
+        ) {
+          return undefined;
+        }
+        Object.assign(row, {
+          isGuest: false,
+          gender,
+          isFirstLogin: true,
+          ...(authUserId ? { authUserId } : {}),
+        });
+        return row as any;
+      },
+    );
+    createAuthUser = vi
+      .spyOn(SupabaseAuthAdmin.prototype, "createUser")
+      .mockResolvedValue("auth-promoted");
+    deleteAuthUser = vi
+      .spyOn(SupabaseAuthAdmin.prototype, "deleteUser")
+      .mockResolvedValue();
+    vi.spyOn(SupabaseAuthAdmin.prototype, "updateUser").mockResolvedValue();
+  });
+
+  const promote = (playerId: string, body: unknown = { gender: "F" }) =>
+    request(app)
+      .post(`/api/admin/players/${playerId}/promote`)
+      .set("Authorization", "Bearer token")
+      .send(body as object);
+
+  it("게스트를 정회원으로 바꾸고 성별 저장·계정 발급 후 초기 비밀번호를 한 번 준다", async () => {
+    const response = await promote(guest.id);
+
+    expect(response.status).toBe(200);
+    expect(response.headers["cache-control"]).toBe("no-store");
+    expect(response.body.player).toMatchObject({
+      id: guest.id,
+      username: "guest_kim",
+      isGuest: false,
+      gender: "F",
+    });
+    expect(response.body.player).not.toHaveProperty("authUserId");
+    expect(response.body.initialPassword).toMatch(/^[A-Za-z0-9]{10}$/);
+    expect(createAuthUser).toHaveBeenCalledWith({
+      email: expect.stringMatching(/^guest_kim@/),
+      password: response.body.initialPassword,
+    });
+    expect(rows.get(guest.id)).toMatchObject({
+      isGuest: false,
+      gender: "F",
+      authUserId: "auth-promoted",
+      isFirstLogin: true,
+    });
+  });
+
+  it("게스트가 아니면 409, 없는 회원이면 404이고 계정을 만들지 않는다", async () => {
+    const [member, missing] = await Promise.all([
+      promote(requester.id),
+      promote("Pnone001"),
+    ]);
+
+    expect(member.status).toBe(409);
+    expect(missing.status).toBe(404);
+    expect(createAuthUser).not.toHaveBeenCalled();
+  });
+
+  it.each([[{}], [{ gender: "X" }], [{ gender: null }]])(
+    "성별이 없거나 틀린 %j는 400이다",
+    async (body) => {
+      const response = await promote(guest.id, body);
+
+      expect(response.status).toBe(400);
+      expect(rows.get(guest.id)?.isGuest).toBe(true);
+      expect(createAuthUser).not.toHaveBeenCalled();
+    },
+  );
+
+  it("관리자가 아니면 403이다", async () => {
+    session = requesterSession;
+
+    const response = await promote(guest.id);
+
+    expect(response.status).toBe(403);
+    expect(rows.get(guest.id)?.isGuest).toBe(true);
+  });
+
+  it("조회 뒤 다른 요청이 먼저 승급했으면 409이고 만든 Auth 사용자를 지운다", async () => {
+    vi.mocked(db.players.promoteGuest).mockResolvedValueOnce(undefined);
+
+    const response = await promote(guest.id);
+
+    expect(response.status).toBe(409);
+    expect(deleteAuthUser).toHaveBeenCalledWith("auth-promoted");
+  });
+
+  describe("승급 뒤 경기 평점 반영", () => {
+    let create: MockInstance<MatchRepository["create"]>;
+    let applyMatchResult: MockInstance<
+      AuthService["applyMatchResultToRatings"]
+    >;
+
+    beforeEach(() => {
+      vi.spyOn(AuthService.prototype, "getPlayerById").mockResolvedValue(
+        requester,
+      );
+      // 경기 기록은 승급 결과가 반영된 저장 상태의 회원으로 판정한다.
+      vi.spyOn(AuthService.prototype, "getPublicPlayers").mockImplementation(
+        async () =>
+          [...rows.values()].map(
+            ({
+              authUserId: _a,
+              isFirstLogin: _f,
+              guestAddedByPlayerId: _g,
+              guestAddedSessionId: _s,
+              ...player
+            }) => ({ ...player, duprRating: null }),
+          ),
+      );
+      vi.spyOn(MatchRepository.prototype, "cleanupExpired").mockResolvedValue();
+      vi.spyOn(
+        MatchRepository.prototype,
+        "findCompletedMatchOutcomes",
+      ).mockResolvedValue([]);
+      vi.spyOn(
+        MatchRepository.prototype,
+        "addSessionParticipants",
+      ).mockResolvedValue(undefined);
+      create = vi
+        .spyOn(MatchRepository.prototype, "create")
+        .mockImplementation(async (input) => ({
+          ...input,
+          id: "Mmatch02",
+          createdAt: wednesdayMorning,
+          updatedAt: wednesdayMorning,
+        }));
+      applyMatchResult = vi
+        .spyOn(AuthService.prototype, "applyMatchResultToRatings")
+        .mockResolvedValue({ ratingChangeLogs: [], changedPlayerCount: 0 });
+    });
+
+    const record = (teamB: string[]) => {
+      session = requesterSession;
+      return request(app)
+        .post("/api/matches")
+        .set("Authorization", "Bearer token")
+        .send({
+          teams: [
+            { playerIds: [requester.id, partner.id] },
+            { playerIds: teamB },
+          ],
+          location: "야탑초등학교",
+          scores: [{ scoreA: 11, scoreB: 7 }],
+        });
+    };
+
+    it("승급한 회원이 낀 새 경기는 다른 게스트가 없으면 평점에 반영한다", async () => {
+      expect((await promote(guest.id, { gender: "M" })).status).toBe(200);
+
+      const response = await record([opponentM.id, guest.id]);
+
+      expect(response.status).toBe(201);
+      expect(create.mock.calls[0]![0]).toMatchObject({ ratingExcluded: false });
+      expect(applyMatchResult).toHaveBeenCalledTimes(1);
+    });
+
+    it("승급한 회원과 다른 게스트가 함께 뛴 새 경기는 계속 미반영이다", async () => {
+      expect((await promote(guest.id, { gender: "M" })).status).toBe(200);
+
+      const response = await record([guest.id, otherGuest.id]);
+
+      expect(response.status).toBe(201);
+      expect(create.mock.calls[0]![0]).toMatchObject({ ratingExcluded: true });
+    });
+
+    it("승급은 이전 경기의 평점을 다시 계산하지 않는다", async () => {
+      const recalculate = vi.spyOn(
+        AuthService.prototype,
+        "recalculateDuprRatings",
+      );
+
+      await promote(guest.id);
+
+      expect(recalculate).not.toHaveBeenCalled();
+      expect(applyMatchResult).not.toHaveBeenCalled();
+    });
   });
 });

@@ -33,6 +33,7 @@ import {
   isValidUsername,
   toInternalEmail,
   type AdminPasswordResetResponse,
+  type AdminPromoteGuestResponse,
   type AdminRegisterPlayerRequest,
   type AdminRegisterPlayerResponse,
   type AdminUpdateUsernameResponse,
@@ -786,6 +787,80 @@ export class AuthService {
       );
     }
     return { temporaryPassword };
+  }
+
+  /**
+   * 관리자가 게스트를 정회원으로 승급한다. 성별을 저장하고 로그인 계정을 함께 발급하며(첫 로그인 비밀번호 변경 강제),
+   * 초기 비밀번호는 응답으로만 돌려준다. 이미 게스트로 뛴 ratingExcluded 경기는 그대로 미반영이다.
+   * 게스트가 아니면 409, 없으면 404, inactive거나 아이디가 로그인 형식이 아니면 400이다.
+   */
+  async promoteGuest(
+    playerId: string,
+    gender: "M" | "F",
+  ): Promise<AdminPromoteGuestResponse> {
+    const stored = await this.getStoredPlayerById(playerId);
+    if (!stored) {
+      throw new AccountRequestError(404, "사용자를 찾을 수 없습니다.");
+    }
+    if (!stored.isGuest) {
+      throw new AccountRequestError(409, "게스트가 아닌 회원입니다.");
+    }
+    if (stored.status !== "active") {
+      throw new AccountRequestError(
+        400,
+        "비활성 회원에게는 비밀번호를 발급할 수 없습니다. 먼저 활성화해주세요.",
+      );
+    }
+    if (!isValidUsername(stored.username)) {
+      throw new AccountRequestError(
+        400,
+        `현재 아이디로는 로그인 계정을 만들 수 없습니다. 먼저 아이디를 바꿔주세요. ${USERNAME_FORMAT_MESSAGE}`,
+      );
+    }
+
+    const initialPassword = generateInitialPassword();
+    const stateChangedError = () =>
+      new AccountRequestError(
+        409,
+        "회원 상태가 바뀌어 승급하지 못했습니다. 다시 시도해주세요.",
+      );
+
+    if (stored.authUserId) {
+      // 게스트에게 이미 Auth 사용자가 연결돼 있으면 새로 만들지 않고 비밀번호만 바꾼다.
+      await this.updateAuthUser(stored.authUserId, {
+        email: toInternalEmail(stored.username),
+        password: initialPassword,
+      });
+      const promoted = await db.players.promoteGuest(stored.id, gender, null);
+      if (!promoted) {
+        throw stateChangedError();
+      }
+      return {
+        player: toPublicPlayer(hydratePlayer(promoted)),
+        initialPassword,
+      };
+    }
+
+    const authUserId = await this.createAuthUser(
+      stored.username,
+      initialPassword,
+    );
+    let promoted: Awaited<ReturnType<typeof db.players.promoteGuest>>;
+    try {
+      promoted = await db.players.promoteGuest(stored.id, gender, authUserId);
+    } catch (error) {
+      await this.deleteOrphanAuthUser(authUserId);
+      throw error;
+    }
+    if (!promoted) {
+      // 조회 뒤 다른 요청이 먼저 승급했거나 회원이 inactive로 바뀌었다.
+      await this.deleteOrphanAuthUser(authUserId);
+      throw stateChangedError();
+    }
+    return {
+      player: toPublicPlayer(hydratePlayer(promoted)),
+      initialPassword,
+    };
   }
 
   /**
