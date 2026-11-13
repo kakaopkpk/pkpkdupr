@@ -28,12 +28,12 @@ import {
   startMatch,
   toTeamRequests,
 } from "@/lib/matches";
+import { isNetworkError } from "@/lib/errors";
 import PickPlayersStep, { type SlotPlayer } from "./PickPlayersStep";
 import RecordDoneStep from "./RecordDoneStep";
 import {
   getErrorMessage,
   getSlotTeams,
-  isNetworkError,
   toDecidedScore,
   type RecordSlots,
   type ScoreDraft,

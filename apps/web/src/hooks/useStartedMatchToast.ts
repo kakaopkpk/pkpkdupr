@@ -1,11 +1,9 @@
 import { useCallback } from "react";
 import type { MatchInfo } from "@/types/match";
-import {
-  getErrorMessage,
-  isNetworkError,
-} from "@/components/record/recordMatch.utils";
+import { getErrorMessage } from "@/components/record/recordMatch.utils";
 import { useAppNavigation } from "@/context/AppNavigationContext";
 import { useSystemNotice } from "@/context/SystemNoticeContext";
+import { isNetworkError } from "@/lib/errors";
 import { deleteMatch } from "@/lib/matches";
 
 /**
