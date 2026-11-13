@@ -51,6 +51,25 @@ describe("markAchievementsSeen", () => {
     await expect(request).resolves.toBeUndefined();
   });
 
+  it("확인 처리가 실패하면 다시 조회 결과에 남긴다", async () => {
+    vi.mocked(apiFetch).mockResolvedValue(new Response(null, { status: 500 }));
+
+    await expect(
+      markAchievementsSeen([earned("wins-10", "Mmatch01")]),
+    ).rejects.toThrow();
+    expect(
+      excludeLocallySeenAchievements([earned("wins-10", "Mmatch01")]),
+    ).toEqual([earned("wins-10", "Mmatch01")]);
+  });
+
+  it("다른 회원이 같은 경기로 받은 같은 업적은 빼지 않는다", async () => {
+    vi.mocked(apiFetch).mockResolvedValue(new Response(null, { status: 204 }));
+    await markAchievementsSeen([earned("wins-50", "Mmatch01")]);
+
+    const other = { ...earned("wins-50", "Mmatch01"), playerId: "Pother01" };
+    expect(excludeLocallySeenAchievements([other])).toEqual([other]);
+  });
+
   it("보낼 업적이 없으면 요청하지 않는다", async () => {
     await markAchievementsSeen([]);
     expect(apiFetch).not.toHaveBeenCalled();

@@ -2873,7 +2873,9 @@ app.post("/api/me/achievements/seen", async (req, res) => {
     );
     res.status(204).end();
   } catch (err) {
-    res.status(500).json({ error: (err as Error).message });
+    // DB 오류 문구에는 제약·컬럼 이름이 들어가므로 서버에만 남긴다
+    console.error("[ACHIEVEMENT] 업적 확인 저장 실패", err);
+    res.status(500).json({ error: "업적 확인을 저장하지 못했습니다." });
   }
 });
 
