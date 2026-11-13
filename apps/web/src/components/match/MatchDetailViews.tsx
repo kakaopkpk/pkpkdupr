@@ -1,6 +1,10 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { getMatchTopLevelType } from "@pkpkdupr/shared/match";
-import { getTeamResultScores, type MatchInfo } from "@/types/match";
+import {
+  getTeamResultScores,
+  type MatchInfo,
+  RATING_EXCLUDED_NOTICE,
+} from "@/types/match";
 import SkeletonBlock from "@/components/SkeletonBlock";
 import { FooterError } from "@/components/record/RecordMatchParts";
 import { PkButton, rowPressClassName } from "@/components/ui/Button";
@@ -221,11 +225,27 @@ const RatingChangeCard: React.FC<{
       });
   }, [match.ratingChanges, match.teams]);
 
+  const title = (
+    <h2 className="mt-3 mb-0.5 text-pk-13 font-bold text-pk-sub">평점 변화</h2>
+  );
+
+  // 게스트가 낀 경기는 평점 변화가 없으므로 미반영 안내 한 줄만 보인다
+  if (match.ratingExcluded) {
+    return (
+      <Card>
+        {title}
+        <p className="py-[11px] text-pk-15 text-pk-sub">
+          {RATING_EXCLUDED_NOTICE}
+        </p>
+      </Card>
+    );
+  }
+
   if (entries.length === 0) return null;
 
   return (
     <Card>
-      <h2 className="mt-3 mb-0.5 text-pk-13 font-bold text-pk-sub">평점 변화</h2>
+      {title}
       {entries.map(({ player, change }) => (
         <button
           key={player.id}

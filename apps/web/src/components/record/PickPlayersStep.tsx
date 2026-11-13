@@ -1,6 +1,8 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import BottomSheet from "@/components/BottomSheet";
 import { PkButton } from "@/components/ui/Button";
+import { GuestLabel } from "@/components/ui/GuestLabel";
+import { InfoIcon } from "@/components/ui/Icons";
 import { PlayerAvatar, type AvatarPlayer } from "@/components/ui/PlayerAvatar";
 import { SearchField } from "@/components/ui/SearchField";
 import { SheetTitle } from "@/components/ui/SheetTitle";
@@ -18,6 +20,9 @@ import {
 } from "./recordMatch.utils";
 import { CheckIcon, FooterError } from "./RecordMatchParts";
 
+/** 자리에 그릴 플레이어. 게스트면 이름 아래에 "게스트"를 붙인다 */
+export type SlotPlayer = AvatarPlayer & { isGuest?: boolean };
+
 /** 목록에서 새로 들어온 선수 아바타의 pop 시간 */
 const NEW_PLAYER_POP_MS = 300;
 
@@ -27,7 +32,7 @@ export interface PickPlayersStepProps {
   players: MemberListPlayerInfo[];
   playersStatus: "loading" | "ready" | "error";
   /** 자리에 그릴 플레이어. 회원 목록에 없는 플레이어(불러오는 중 등)도 찾을 수 있게 셸이 모아 준다 */
-  playerById: ReadonlyMap<string, AvatarPlayer>;
+  playerById: ReadonlyMap<string, SlotPlayer>;
   participantIds: readonly string[];
   busyIds: ReadonlySet<string>;
   /**
@@ -103,6 +108,10 @@ export default function PickPlayersStep({
   const isFull = pickedIds.size >= slots.length;
   const slotTeams = getSlotTeams(slots);
   const isTeamReady = !!slotTeams;
+  // 게스트가 낀 경기는 평점에 반영되지 않으므로 버튼 위에 알린다
+  const hasGuest = [...pickedIds].some(
+    (id) => playerById.get(id)?.isGuest === true,
+  );
   const list = useMemo(
     () => buildPickList(players, { query, participantIds, busyIds }),
     [busyIds, participantIds, players, query],
@@ -171,7 +180,7 @@ export default function PickPlayersStep({
 
   const renderSlot = (index: number) => {
     const playerId = slots[index];
-    const player = playerId
+    const player: SlotPlayer | null = playerId
       ? (playerById.get(playerId) ?? { id: playerId, username: "…" })
       : null;
     const isSelected = selectedIndex === index;
@@ -195,7 +204,7 @@ export default function PickPlayersStep({
         aria-label={ariaLabel}
         aria-pressed={player ? isSelected : undefined}
         onClick={() => handleSlotPress(index)}
-        className="flex h-20 min-w-0 flex-col items-center gap-1 text-pk-ink"
+        className="flex min-h-20 min-w-0 flex-col items-center gap-1 text-pk-ink"
       >
         {player ? (
           <>
@@ -235,6 +244,11 @@ export default function PickPlayersStep({
             >
               {player.username}
             </span>
+            {player.isGuest ? (
+              <span className="-mt-1 leading-none">
+                <GuestLabel />
+              </span>
+            ) : null}
           </>
         ) : (
           <span
@@ -321,8 +335,11 @@ export default function PickPlayersStep({
                 >
                   <PlayerAvatar player={player} size={32} />
                   <span className="flex min-w-0 flex-1 flex-col">
-                    <span className="truncate text-pk-15 font-bold">
-                      {player.username}
+                    <span className="flex min-w-0 items-baseline gap-1">
+                      <span className="truncate text-pk-15 font-bold">
+                        {player.username}
+                      </span>
+                      {player.isGuest ? <GuestLabel /> : null}
                     </span>
                     {isPlaying ? (
                       <span className="text-pk-12">경기 중</span>
@@ -336,6 +353,12 @@ export default function PickPlayersStep({
         )}
       </BottomSheet.Body>
       <BottomSheet.Footer className="-mx-4 border-t border-pk-divider px-4">
+        {hasGuest ? (
+          <p className="flex items-center gap-1.5 px-1 pb-2 text-pk-13 text-pk-sub">
+            <InfoIcon />
+            게스트가 있어 평점에 반영되지 않아요
+          </p>
+        ) : null}
         <FooterError message={error} />
         {footerMode === "new" ? (
           <div className="grid grid-cols-2 gap-2">

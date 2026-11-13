@@ -31,6 +31,9 @@ export type MatchInfo = Omit<
   newAchievements?: EarnedAchievementInfo[];
 };
 
+/** 게스트가 낀 경기(ratingExcluded)의 평점 변화 자리에 보이는 한 줄 */
+export const RATING_EXCLUDED_NOTICE = "평점 미반영 · 게스트 참여 경기";
+
 export interface MatchListResponse {
   matches: MatchInfo[];
   total: number;
