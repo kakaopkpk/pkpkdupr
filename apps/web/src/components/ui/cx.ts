@@ -29,6 +29,8 @@ const twMerge = extendTailwindMerge({
         "pk-bronze",
       ],
       font: ["num"],
+      ease: ["pk-spring"],
+      animate: ["nav-icon-pop", "plus-menu-pop"],
       radius: ["pk-sm", "pk-lg"],
       text: ["pk-12", "pk-13", "pk-15", "pk-17", "pk-22", "pk-26"],
     },

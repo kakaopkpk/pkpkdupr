@@ -33,6 +33,26 @@
   --text-pk-17: 17px;
   --text-pk-22: 22px;
   --text-pk-26: 26px;
+  /* 끝에서 살짝 지나쳤다 돌아오는 튕김 곡선(하단 바 선택 배경·+ 버튼) */
+  --ease-pk-spring: cubic-bezier(0.3, 1.35, 0.45, 1);
+  --animate-nav-icon-pop: nav-icon-pop 380ms ease-out;
+  --animate-plus-menu-pop: plus-menu-pop 340ms var(--ease-pk-spring);
+
+  @keyframes nav-icon-pop {
+    30% {
+      transform: scale(0.82);
+    }
+    65% {
+      transform: scale(1.12);
+    }
+  }
+
+  @keyframes plus-menu-pop {
+    from {
+      opacity: 0;
+      transform: scale(0.35);
+    }
+  }
 }
 
 :root {
@@ -275,37 +295,6 @@
       );
   }
 
-  /* 하단 바 선택 배경. 끝에서 살짝 튕기며 탭 사이를 이동한다 */
-  .app-nav-indicator {
-    transition: transform 460ms cubic-bezier(0.3, 1.35, 0.45, 1);
-  }
-
-  .app-nav-icon-pop {
-    animation: app-nav-icon-pop 380ms ease-out;
-  }
-
-  .app-plus-icon {
-    transition: rotate 380ms cubic-bezier(0.3, 1.35, 0.45, 1);
-  }
-
-  /* + 메뉴는 + 버튼 가운데(오른쪽 33px, 메뉴 아래 14px+33px)에서 커지며 나온다 */
-  .app-plus-menu-pop {
-    transform-origin: calc(100% - 33px) calc(100% + 47px);
-    animation: app-plus-menu-pop 340ms cubic-bezier(0.3, 1.35, 0.45, 1);
-  }
-
-  @media (prefers-reduced-motion: reduce) {
-    .app-nav-indicator,
-    .app-plus-icon {
-      transition: none;
-    }
-
-    .app-nav-icon-pop,
-    .app-plus-menu-pop {
-      animation: none;
-    }
-  }
-
   .app-mobile-input {
     min-height: 2.75rem;
     font-size: 16px;
@@ -326,28 +315,3 @@
   }
 }
 
-@keyframes app-nav-icon-pop {
-  0% {
-    transform: scale(1);
-  }
-  30% {
-    transform: scale(0.82);
-  }
-  65% {
-    transform: scale(1.12);
-  }
-  100% {
-    transform: scale(1);
-  }
-}
-
-@keyframes app-plus-menu-pop {
-  from {
-    opacity: 0;
-    transform: scale(0.35);
-  }
-  to {
-    opacity: 1;
-    transform: scale(1);
-  }
-}

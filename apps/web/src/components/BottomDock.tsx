@@ -2,9 +2,6 @@ import React, { useEffect, useRef, useState } from "react";
 import type { MatchInfo } from "@/types/match";
 import type { TabKey } from "@/context/TabNavigationContext";
 
-/** 하단 바·미니바 공통 유리 알약(index.css `.app-glass`) */
-export const GLASS_CLASS_NAME = "app-glass";
-
 const svgProps = {
   viewBox: "0 0 24 24",
   fill: "none",
@@ -86,21 +83,20 @@ export const NavPill: React.FC<{
     tabKey: TabKey;
     count: number;
   } | null>(null);
-  const selectedIndex = Math.max(
-    0,
-    TAB_ITEMS.findIndex((item) => item.key === selectedTab),
+  const selectedIndex = TAB_ITEMS.findIndex(
+    (item) => item.key === selectedTab,
   );
 
   return (
     <div
       role="tablist"
       aria-label="주 메뉴"
-      className={`relative grid h-[66px] min-w-0 flex-1 grid-cols-4 overflow-hidden rounded-full p-[5px] ${GLASS_CLASS_NAME}`}
+      className="app-glass grid h-[66px] min-w-0 flex-1 grid-cols-4 overflow-hidden rounded-full p-[5px]"
     >
       <span
         aria-hidden="true"
         style={{ transform: `translateX(${selectedIndex * 100}%)` }}
-        className="app-nav-indicator absolute inset-y-[5px] left-[5px] w-[calc((100%-10px)/4)] rounded-full bg-pk-primary-soft"
+        className="absolute inset-y-[5px] left-[5px] w-[calc((100%-10px)/4)] rounded-full bg-pk-primary-soft transition-transform duration-[460ms] ease-pk-spring motion-reduce:transition-none"
       />
       {TAB_ITEMS.map(({ key, label, Icon }) => {
         const isSelected = key === selectedTab;
@@ -128,7 +124,7 @@ export const NavPill: React.FC<{
           >
             <span
               key={isIconPopping ? pressedIcon.count : 0}
-              className={`flex ${isIconPopping ? "app-nav-icon-pop" : ""}`}
+              className={`flex ${isIconPopping ? "animate-nav-icon-pop motion-reduce:animate-none" : ""}`}
             >
               <Icon />
             </span>
@@ -161,11 +157,12 @@ export const PlusMenu: React.FC<{
 
   return (
     <div className="relative">
+      {/* 메뉴는 + 버튼(66px) 위 14px에 뜨고, 버튼 가운데(오른쪽 33px, 아래 14+33px)에서 커지며 나온다 */}
       {isOpen ? (
         <div
           role="menu"
           aria-label="새로 만들기"
-          className="app-plus-menu-pop absolute right-0 bottom-[calc(66px+14px)] w-[220px] rounded-pk-lg bg-white py-1.5 shadow-[0_12px_32px] shadow-pk-ink/20"
+          className="absolute right-0 bottom-[calc(66px+14px)] w-[220px] origin-[calc(100%-33px)_calc(100%+47px)] animate-plus-menu-pop motion-reduce:animate-none rounded-pk-lg bg-white py-1.5 shadow-[0_12px_32px] shadow-pk-ink/20"
         >
           <button
             ref={firstItemRef}
@@ -205,7 +202,7 @@ export const PlusMenu: React.FC<{
       >
         {/* 열리면 +를 돌려 ×로 만든다 */}
         <span
-          className={`app-plus-icon flex ${isOpen ? "rotate-[135deg]" : ""}`}
+          className={`flex transition-transform duration-[380ms] ease-pk-spring motion-reduce:transition-none ${isOpen ? "rotate-[135deg]" : ""}`}
         >
           <PlusIcon />
         </span>
@@ -225,7 +222,7 @@ const DockBar: React.FC<{
 }> = ({ title, description, actionLabel, isActionDisabled, onAction, role }) => (
   <div
     role={role}
-    className={`flex h-[60px] items-center gap-2.5 rounded-full pr-[7px] pl-4 ${GLASS_CLASS_NAME}`}
+    className="app-glass flex h-[60px] items-center gap-2.5 rounded-full pr-[7px] pl-4"
   >
     <span
       aria-hidden="true"
