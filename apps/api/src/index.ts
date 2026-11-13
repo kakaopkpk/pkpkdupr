@@ -74,6 +74,8 @@ import type {
 import type {
   MatchSessionHistoryResponse,
   RankingResponse,
+  RecordItem,
+  RecordsResponse,
 } from "@pkpkdupr/shared/ranking";
 import type {
   AdminRegisterPlayerRequest,
@@ -110,11 +112,13 @@ import {
   SESSION_HISTORY_DEFAULT_LIMIT,
   SESSION_HISTORY_MAX_LIMIT,
   buildRankingResponse,
+  buildRecordsPage,
   buildSessionHistory,
   buildSessionReport,
   countAchievementHolders,
   createRankingContext,
   findSessionDominations,
+  parseRecordsCursor,
   toAchievementMatch,
 } from "./services/RankingService";
 import {
@@ -2686,6 +2690,62 @@ app.get("/api/session-reports", async (req, res) => {
         limit,
         playerId: playerId?.trim() || undefined,
       }),
+    };
+    res.json(response);
+  } catch (err) {
+    sendRankingFailure(res, err);
+  }
+});
+
+app.get("/api/records", async (req, res) => {
+  try {
+    const auth = await getAuthPayload(req, res);
+    if (!auth) {
+      return;
+    }
+
+    const limit = parseSessionHistoryLimit(req.query.limit);
+    const playerId = req.query.playerId;
+    if (playerId !== undefined && typeof playerId !== "string") {
+      throw new RankingRequestError("playerId는 문자열이어야 합니다.", 400);
+    }
+    const rawCursor = req.query.cursor;
+    const cursor =
+      rawCursor === undefined
+        ? null
+        : typeof rawCursor === "string"
+          ? parseRecordsCursor(rawCursor)
+          : null;
+    if (rawCursor !== undefined && !cursor) {
+      throw new RankingRequestError("cursor 형식이 올바르지 않습니다.", 400);
+    }
+
+    const { context, sessions } = await loadRankingSource();
+    const page = buildRecordsPage({
+      context,
+      sessions,
+      limit,
+      cursor,
+      playerId: playerId?.trim() || undefined,
+      requesterId: auth.playerId,
+    });
+    // 공개 Match hydrate는 페이지에 든 경기만 한다
+    const matchesById = new Map(
+      (
+        await matchRepository.findByIds(
+          page.entries.flatMap((entry) =>
+            entry.kind === "match" ? [entry.matchId] : [],
+          ),
+        )
+      ).map((match) => [match.id, match]),
+    );
+    const response: RecordsResponse = {
+      items: page.entries.flatMap((entry): RecordItem[] => {
+        if (entry.kind === "session") return [entry];
+        const match = matchesById.get(entry.matchId);
+        return match ? [{ kind: "match", match }] : [];
+      }),
+      nextCursor: page.nextCursor,
     };
     res.json(response);
   } catch (err) {
