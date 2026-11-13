@@ -1,14 +1,16 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
+  addKstDays,
   DEFAULT_MATCH_LOCATION,
+  formatSessionEndTime,
   formatSessionTimeRange,
+  isPastSessionStart,
   kstDateKeyToDate,
   MATCH_SESSION_LOCATION_MAX_LENGTH,
   MATCH_SESSION_NAME_MAX_LENGTH,
   minutesToSessionTime,
-  REGULAR_SESSION_START_HOUR,
+  sessionTimeToMinutes,
   toKstDateKey,
-  toKstMinutesOfDay,
 } from "@pkpkdupr/shared/session";
 import BottomSheet from "@/components/BottomSheet";
 import { PkButton } from "@/components/ui/Button";
@@ -28,11 +30,12 @@ import {
 } from "@/lib/matchSessions";
 import { getErrorMessage, isNetworkError } from "./saveError";
 import {
-  SESSION_LAST_END_MINUTES,
-  SESSION_LAST_START_MINUTES,
-  SESSION_TIME_STEP_MINUTES,
-  SessionDatePicker,
-  SessionTimePicker,
+  AnimatedHeight,
+  formatDurationHours,
+  SessionCalendar,
+  SessionDurationPicker,
+  SessionStartTimePicker,
+  StepSummaryRow,
 } from "./SessionSchedulePicker";
 
 export interface CreateSessionSheetProps {
@@ -43,39 +46,24 @@ export interface CreateSessionSheetProps {
 }
 
 const DEPTH_ID = "global-create-session-sheet";
-const DAY_MS = 24 * 60 * 60 * 1000;
-const DEFAULT_START_MINUTES = REGULAR_SESSION_START_HOUR * 60;
-const DEFAULT_DURATION_MINUTES = 2 * 60;
 
-/**
- * 기본 시각 18:00~20:00. 이미 18시를 넘긴 오늘이면 지금 이후 첫 30분 단위 시각부터 2시간이며,
- * 고를 수 있는 마지막 시각을 넘지 않는다
- */
-const getDefaultTimeRange = (now: Date) => {
-  const nextSlot =
-    Math.ceil(toKstMinutesOfDay(now) / SESSION_TIME_STEP_MINUTES) *
-    SESSION_TIME_STEP_MINUTES;
-  const start = Math.min(
-    Math.max(DEFAULT_START_MINUTES, nextSlot),
-    SESSION_LAST_START_MINUTES,
-  );
-  const end = Math.min(start + DEFAULT_DURATION_MINUTES, SESSION_LAST_END_MINUTES);
-  return {
-    startTime: minutesToSessionTime(start),
-    endTime: minutesToSessionTime(end),
-  };
-};
+/** 날짜 → 시작 → 길이 순서로 하나씩 열고, 셋 다 고르면 이름·장소 칸이 나타난다 */
+const PICKER_STEPS = ["date", "start", "duration"] as const;
+type PickerStep = (typeof PICKER_STEPS)[number];
 
-/** 시트 부제의 날짜 부분. "오늘 · 11월 14일 금" | "내일 · 11월 15일 토" | "11월 17일 월" */
-const formatDateSubtitle = (dateKey: string, todayKey: string) => {
+/** 접힌 날짜 줄. "오늘 · 11월 14일 금" | "내일 · 11월 15일 토" | "11월 17일 월" */
+const formatDateSummary = (dateKey: string, todayKey: string) => {
   const label = formatKstShortDate(kstDateKeyToDate(dateKey));
   if (dateKey === todayKey) return `오늘 · ${label}`;
-  const tomorrowKey = toKstDateKey(
-    new Date(kstDateKeyToDate(todayKey).getTime() + DAY_MS),
-  );
-  if (dateKey === tomorrowKey) return `내일 · ${label}`;
+  if (dateKey === addKstDays(todayKey, 1)) return `내일 · ${label}`;
   return label;
 };
+
+/** 시작 시각과 길이로 종료 시각("HH:MM")을 구한다. 자정을 넘기면 다음 날 시각이다 */
+const getEndTime = (startTime: string, durationMinutes: number) =>
+  minutesToSessionTime(
+    (sessionTimeToMinutes(startTime) + durationMinutes) % (24 * 60),
+  );
 
 interface CreateSessionFormProps {
   onCancel: () => void;
@@ -89,22 +77,53 @@ const CreateSessionForm: React.FC<CreateSessionFormProps> = ({
   const { showSaveFailure } = useSystemNotice();
   // 시트를 여는 순간의 오늘(KST). 열 때마다 폼이 새로 마운트된다
   const [todayKey] = useState(() => toKstDateKey(new Date()));
-  const [dateKey, setDateKey] = useState(todayKey);
-  const [timeRange, setTimeRange] = useState(() =>
-    getDefaultTimeRange(new Date()),
-  );
+  // 기본값 없이 시작한다. 고른 값만 칸에 칠해진다
+  const [dateKey, setDateKey] = useState<string | null>(null);
+  const [startTime, setStartTime] = useState<string | null>(null);
+  const [durationMinutes, setDurationMinutes] = useState<number | null>(null);
+  // 접힌 줄을 눌러 다시 펼친 단계. 값을 고르면 비운다
+  const [reopenedStep, setReopenedStep] = useState<PickerStep | null>(null);
   const [name, setName] = useState("");
   const [location, setLocation] = useState(DEFAULT_MATCH_LOCATION);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const nameInputRef = useRef<HTMLInputElement | null>(null);
   const trimmedName = name.trim();
   const trimmedLocation = location.trim();
-  // YYYY-MM-DD 문자열은 사전순이 날짜순이다
-  const isDateValid = !!dateKey && dateKey >= todayKey;
+
+  const values = [dateKey, startTime, durationMinutes];
+  const firstMissingIndex = values.findIndex((value) => value == null);
+  // 다시 펼친 단계가 없으면 아직 안 고른 첫 단계를 연다. 다 골랐으면 모두 접는다
+  const openStep =
+    reopenedStep ??
+    (firstMissingIndex < 0 ? null : PICKER_STEPS[firstMissingIndex]);
+  // 고른 단계 다음 단계까지 보인다. 시작은 날짜를 바꾸면 비워질 수 있지만 길이는 지워지지 않으므로
+  // 한 번 나타난 단계는 남는다
+  const shownStepCount =
+    durationMinutes != null || startTime != null ? 3 : dateKey != null ? 2 : 1;
+  const isFieldsShown = durationMinutes != null;
+  const endTime =
+    startTime && durationMinutes ? getEndTime(startTime, durationMinutes) : null;
+  const timeRange = startTime && endTime ? { startTime, endTime } : null;
   const canSave =
-    !!trimmedName && !!trimmedLocation && isDateValid && !isSaving;
+    !!dateKey &&
+    !!timeRange &&
+    !!trimmedName &&
+    !!trimmedLocation &&
+    !isSaving;
+
+  const afterPick = () => {
+    setReopenedStep(null);
+    setError(null);
+  };
+
+  // 이름·장소 칸이 처음 나타나면 이름 칸으로 바로 이어 쓴다
+  useEffect(() => {
+    if (isFieldsShown) nameInputRef.current?.focus({ preventScroll: true });
+  }, [isFieldsShown]);
 
   const save = useCallback(async () => {
+    if (!dateKey || !timeRange) return;
     setIsSaving(true);
     setError(null);
     try {
@@ -112,8 +131,7 @@ const CreateSessionForm: React.FC<CreateSessionFormProps> = ({
         name: trimmedName,
         location: trimmedLocation,
         dateKey,
-        startTime: timeRange.startTime,
-        endTime: timeRange.endTime,
+        ...timeRange,
       });
       // 시트가 닫힐 때까지 다시 누르지 못하게 성공 후에도 저장 중 상태를 유지한다
       onCreated(session);
@@ -139,8 +157,6 @@ const CreateSessionForm: React.FC<CreateSessionFormProps> = ({
     }
   };
 
-  const clearError = () => setError(null);
-
   // 이름·장소 두 칸이라 폼의 암묵적 제출이 일어나지 않으므로 한 줄 입력의
   // 완료/Enter를 직접 저장으로 잇는다. 한글 조합 중 Enter는 조합 확정이다
   const handleEnterToSave = (event: React.KeyboardEvent<HTMLInputElement>) => {
@@ -149,69 +165,133 @@ const CreateSessionForm: React.FC<CreateSessionFormProps> = ({
     void handleSave();
   };
 
+  const pickers: Record<PickerStep, React.ReactNode> = {
+    date: (
+      <SessionCalendar
+        todayKey={todayKey}
+        value={dateKey}
+        onChange={(nextDateKey) => {
+          setDateKey(nextDateKey);
+          // 오늘로 바꿔 이미 고른 시작 시각이 지났으면 시작을 다시 고르게 한다
+          if (
+            startTime &&
+            isPastSessionStart(nextDateKey, startTime, new Date())
+          ) {
+            setStartTime(null);
+          }
+          afterPick();
+        }}
+      />
+    ),
+    start: (
+      <SessionStartTimePicker
+        value={startTime}
+        isDisabled={(time) =>
+          !!dateKey && isPastSessionStart(dateKey, time, new Date())
+        }
+        onChange={(nextStartTime) => {
+          setStartTime(nextStartTime);
+          afterPick();
+        }}
+      />
+    ),
+    duration: (
+      <SessionDurationPicker
+        value={durationMinutes}
+        endLabel={timeRange ? formatSessionEndTime(timeRange) : null}
+        onChange={(nextDuration) => {
+          setDurationMinutes(nextDuration);
+          afterPick();
+        }}
+      />
+    ),
+  };
+
+  const summaries: Record<PickerStep, { label: string; value: string }> = {
+    date: {
+      label: "날짜",
+      value: dateKey ? formatDateSummary(dateKey, todayKey) : "고르기",
+    },
+    start: { label: "시작", value: startTime ?? "고르기" },
+    duration: {
+      label: "길이",
+      value: durationMinutes
+        ? [
+            formatDurationHours(durationMinutes),
+            timeRange && formatSessionTimeRange(timeRange),
+          ]
+            .filter(Boolean)
+            .join(" · ")
+        : "고르기",
+    },
+  };
+
   return (
     <>
       <BottomSheet.Header>
-        <SheetTitle
-          title="세션 만들기"
-          sub={
-            isDateValid
-              ? `${formatDateSubtitle(dateKey, todayKey)} · ${formatSessionTimeRange(timeRange)}`
-              : undefined
-          }
-        />
+        <SheetTitle title="세션 만들기" />
       </BottomSheet.Header>
       <BottomSheet.Body className="min-w-0">
-        <form
-          className="flex flex-col gap-5 px-1"
-          onSubmit={(event) => {
-            event.preventDefault();
-            void handleSave();
-          }}
-        >
-          <SessionDatePicker
-            todayKey={todayKey}
-            value={dateKey}
-            onChange={(nextDateKey) => {
-              setDateKey(nextDateKey);
-              clearError();
+        <AnimatedHeight>
+          <form
+            className="flex flex-col gap-3 px-1 pb-1"
+            onSubmit={(event) => {
+              event.preventDefault();
+              void handleSave();
             }}
-          />
-          <SessionTimePicker
-            startTime={timeRange.startTime}
-            endTime={timeRange.endTime}
-            onChange={(nextRange) => {
-              setTimeRange(nextRange);
-              clearError();
-            }}
-          />
-          <TextField
-            label="이름"
-            value={name}
-            maxLength={MATCH_SESSION_NAME_MAX_LENGTH}
-            placeholder="예: 번개, 클럽 대회"
-            required
-            enterKeyHint="done"
-            onKeyDown={handleEnterToSave}
-            onChange={(event) => {
-              setName(event.target.value);
-              clearError();
-            }}
-          />
-          <TextField
-            label="장소"
-            value={location}
-            maxLength={MATCH_SESSION_LOCATION_MAX_LENGTH}
-            placeholder="장소 입력"
-            required
-            enterKeyHint="done"
-            onKeyDown={handleEnterToSave}
-            onChange={(event) => {
-              setLocation(event.target.value);
-              clearError();
-            }}
-          />
-        </form>
+          >
+            {PICKER_STEPS.slice(0, shownStepCount).map((step) =>
+              // 펼침과 접힌 줄은 key가 달라 바뀔 때마다 새로 마운트되며 등장 모션이 재생된다
+              openStep === step ? (
+                <div
+                  key={`${step}-open`}
+                  className="animate-pk-fade-up motion-reduce:animate-none"
+                >
+                  {pickers[step]}
+                </div>
+              ) : (
+                <StepSummaryRow
+                  key={`${step}-row`}
+                  label={summaries[step].label}
+                  value={summaries[step].value}
+                  onPress={() => setReopenedStep(step)}
+                  className="animate-pk-fade-up motion-reduce:animate-none"
+                />
+              ),
+            )}
+            {isFieldsShown ? (
+              <div className="mt-2 flex animate-pk-fade-up flex-col gap-5 motion-reduce:animate-none">
+                <TextField
+                  ref={nameInputRef}
+                  label="이름"
+                  value={name}
+                  maxLength={MATCH_SESSION_NAME_MAX_LENGTH}
+                  placeholder="예: 번개, 클럽 대회"
+                  required
+                  enterKeyHint="done"
+                  onKeyDown={handleEnterToSave}
+                  onChange={(event) => {
+                    setName(event.target.value);
+                    setError(null);
+                  }}
+                />
+                <TextField
+                  label="장소"
+                  value={location}
+                  maxLength={MATCH_SESSION_LOCATION_MAX_LENGTH}
+                  placeholder="장소 입력"
+                  required
+                  enterKeyHint="done"
+                  onKeyDown={handleEnterToSave}
+                  onChange={(event) => {
+                    setLocation(event.target.value);
+                    setError(null);
+                  }}
+                />
+              </div>
+            ) : null}
+          </form>
+        </AnimatedHeight>
       </BottomSheet.Body>
       <BottomSheet.Footer className="flex flex-col gap-2">
         {error ? (
@@ -242,7 +322,7 @@ const CreateSessionForm: React.FC<CreateSessionFormProps> = ({
   );
 };
 
-/** 전역 세션 만들기 시트. 날짜(기본 오늘)·시작·종료 시각·이름·장소로 세션을 만든다 */
+/** 전역 세션 만들기 시트. 날짜·시작 시각·길이·이름·장소를 한 단계씩 골라 세션을 만든다 */
 export default function CreateSessionSheet({
   isOpen,
   tabKey,

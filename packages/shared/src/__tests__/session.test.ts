@@ -5,6 +5,10 @@ import {
   getEmptySessionExpiresAt,
   getEmptySessionExpiryCutoff,
   getNextRegularSessionDateKey,
+  addKstDays,
+  isOvernightSessionTimeRange,
+  isPastSessionStart,
+  isSessionOnToday,
   getRegularSessionName,
   IN_PROGRESS_MATCH_TIMEOUT_MS,
   isInProgressMatchExpired,
@@ -20,7 +24,6 @@ import {
   REGULAR_SESSION_START_TIME,
   sessionTimeToMinutes,
   toKstDateKey,
-  toKstMinutesOfDay,
 } from "../session";
 
 // 2026-11-09는 월요일, 2026-11-12는 목요일, 2026-11-10은 화요일(KST)
@@ -128,6 +131,29 @@ describe("getEmptySessionExpiresAt", () => {
         new Date("2026-11-09T23:30:00+09:00"),
       ).toISOString(),
     ).toBe("2026-11-09T15:00:00.000Z");
+  });
+
+  it("자정을 넘기는 회원 세션은 다음 날 종료 시각, 같은 날 끝나면 다음 날 00:00 KST", () => {
+    const sessionDate = new Date("2026-11-09T00:00:00+09:00");
+    expect(
+      getEmptySessionExpiresAt("custom", sessionDate, {
+        startTime: "23:30",
+        endTime: "01:30",
+      }),
+    ).toEqual(new Date("2026-11-10T01:30:00+09:00"));
+    expect(
+      getEmptySessionExpiresAt("custom", sessionDate, {
+        startTime: "18:00",
+        endTime: "20:00",
+      }),
+    ).toEqual(new Date("2026-11-10T00:00:00+09:00"));
+    // 정기 세션은 시각과 상관없이 그날 22:00 KST
+    expect(
+      getEmptySessionExpiresAt("regular", new Date("2026-11-09T18:00:00+09:00"), {
+        startTime: "23:00",
+        endTime: "01:00",
+      }),
+    ).toEqual(new Date("2026-11-09T22:00:00+09:00"));
   });
 
   it("UTC 날짜가 아닌 KST 날짜를 기준으로 한다", () => {
@@ -318,7 +344,8 @@ describe("세션 시각", () => {
   it("범위는 둘 다 유효하고 종료가 시작보다 늦어야 한다", () => {
     expect(isValidSessionTimeRange("18:00", "20:00")).toBe(true);
     expect(isValidSessionTimeRange("20:00", "20:00")).toBe(false);
-    expect(isValidSessionTimeRange("20:00", "18:00")).toBe(false);
+    // 종료가 시작보다 이르면 다음 날 종료다
+    expect(isValidSessionTimeRange("23:30", "01:30")).toBe(true);
     expect(isValidSessionTimeRange("18:00", null)).toBe(false);
   });
 
@@ -334,9 +361,59 @@ describe("세션 시각", () => {
     );
   });
 
-  it("KST 0시부터 지난 분을 센다", () => {
-    expect(toKstMinutesOfDay(new Date("2026-11-12T19:45:00+09:00"))).toBe(
-      1185,
-    );
+  it("자정을 넘기면 끝나는 시각에 '다음 날'을 붙인다", () => {
+    expect(
+      formatSessionTimeRange({ startTime: "23:30", endTime: "01:30" }),
+    ).toBe("23:30~다음 날 01:30");
+    expect(isOvernightSessionTimeRange({ startTime: "23:30", endTime: "01:30" })).toBe(true);
+    expect(isOvernightSessionTimeRange({ startTime: "18:00", endTime: "20:00" })).toBe(false);
+    expect(isOvernightSessionTimeRange({ startTime: null, endTime: null })).toBe(false);
+  });
+
+});
+
+describe("isSessionOnToday", () => {
+  const overnight = {
+    kind: "custom" as const,
+    date: new Date("2026-11-12T00:00:00+09:00"),
+    startTime: "23:30",
+    endTime: "01:30",
+  };
+
+  it("그날 세션은 오늘 세션이다", () => {
+    expect(isSessionOnToday(overnight, new Date("2026-11-12T10:00:00+09:00"))).toBe(true);
+  });
+
+  it("자정을 넘긴 회원 세션은 다음 날 종료 시각 전까지만 오늘 세션이다", () => {
+    expect(isSessionOnToday(overnight, new Date("2026-11-13T01:29:59+09:00"))).toBe(true);
+    expect(isSessionOnToday(overnight, new Date("2026-11-13T01:30:00+09:00"))).toBe(false);
+  });
+
+  it("같은 날 끝나는 세션과 정기 세션은 다음 날 오늘 세션이 아니다", () => {
+    const now = new Date("2026-11-13T00:10:00+09:00");
+    expect(
+      isSessionOnToday({ ...overnight, startTime: "19:00", endTime: "21:00" }, now),
+    ).toBe(false);
+    expect(
+      isSessionOnToday({ ...overnight, kind: "regular", startTime: null, endTime: null }, now),
+    ).toBe(false);
+  });
+
+  it("날짜 키를 앞뒤로 옮긴다", () => {
+    expect(addKstDays("2027-01-01", -1)).toBe("2026-12-31");
+    expect(addKstDays("2026-11-30", 1)).toBe("2026-12-01");
+  });
+});
+
+describe("isPastSessionStart", () => {
+  const now = new Date("2026-11-13T15:50:00+09:00");
+
+  it("오늘이면 지금보다 이른 시작 시각만 지난 시각이다", () => {
+    expect(isPastSessionStart("2026-11-13", "15:30", now)).toBe(true);
+    expect(isPastSessionStart("2026-11-13", "16:00", now)).toBe(false);
+  });
+
+  it("미래 날짜는 이른 시각도 지난 시각이 아니다", () => {
+    expect(isPastSessionStart("2026-11-14", "06:00", now)).toBe(false);
   });
 });

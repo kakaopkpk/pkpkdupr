@@ -52,6 +52,7 @@ const session: SessionWithParticipantIds = {
   location: "야탑초등학교",
   kind: "regular",
   startTime: "18:00",
+  endTime: "22:00",
   participantIds: [alice.id, bob.id],
 };
 const emptySession: SessionWithParticipantIds = {

@@ -1,6 +1,9 @@
 import React, { useCallback, useMemo, useState } from "react";
 import type { MatchTopLevelType } from "@pkpkdupr/shared/match";
+import { roundDuprRating } from "@pkpkdupr/shared/player";
+import type { HeadToHeadStat } from "@pkpkdupr/shared/profileStats";
 import PushScreen from "@/components/PushScreen";
+import AchievementsScreen from "@/components/profile/AchievementsScreen";
 import AchievementsSection from "@/components/profile/AchievementsSection";
 import SkeletonBlock from "@/components/SkeletonBlock";
 import PlayerMatchesDrawer from "@/components/profile/PlayerMatchesDrawer";
@@ -9,6 +12,7 @@ import ProfileStatTile, {
   WinLossCount,
 } from "@/components/profile/ProfileStatTile";
 import {
+  Last7DaysTile,
   ProfileBodySkeleton,
   ProfileLoadError,
   ProfileRatingSection,
@@ -16,7 +20,10 @@ import {
   WinRateTile,
 } from "@/components/profile/ProfileSections";
 import { useProfileOverview } from "@/components/profile/useProfileOverview";
-import { CountUpNumber } from "@/components/ui/CountUpNumber";
+import {
+  CountUpNumber,
+  CountUpRatingDelta,
+} from "@/components/ui/CountUpNumber";
 import { PlayerAvatar } from "@/components/ui/PlayerAvatar";
 import { StatusMessageChip } from "@/components/ui/StatusMessageChip";
 import { useAuth } from "@/context/AuthContext";
@@ -38,7 +45,58 @@ export interface MemberProfileDrawerProps {
   onExited: () => void;
 }
 
-/** 전역 회원 프로필 화면. 평점 카드·경기 승률·나와의 상대 전적·받은 업적·최근 경기 */
+/** 보는 사람 기준 맞대결 승패 타일 */
+const HeadToHeadTile: React.FC<{ stat: HeadToHeadStat | null }> = ({ stat }) => (
+  <ProfileStatTile
+    label="나와의 전적"
+    value={
+      stat && stat.matchCount > 0 ? (
+        <WinLossCount wins={stat.wins} losses={stat.losses} />
+      ) : (
+        "–"
+      )
+    }
+    foot={
+      <>
+        <CountUpNumber value={stat?.matchCount ?? 0} {...PROFILE_STAT_COUNT} />
+        경기
+      </>
+    }
+  />
+);
+
+/** 이 회원과 맞대결한 경기에서 보는 사람 평점이 바뀐 양의 합. 내려갔으면 "앗아간", 아니면 "퍼준" */
+const HeadToHeadRatingTile: React.FC<{ stat: HeadToHeadStat | null }> = ({
+  stat,
+}) => {
+  const matchCount = stat?.matchCount ?? 0;
+  // 표시 자리(소수 셋째 자리)에서 0이면 "퍼준"으로 본다
+  const isTaken = !!stat && roundDuprRating(stat.ratingDelta) < 0;
+  return (
+    <ProfileStatTile
+      label={isTaken ? "상대가 앗아간 내 평점" : "상대가 내게 퍼준 평점"}
+      value={
+        stat && matchCount > 0 ? (
+          <CountUpRatingDelta
+            value={stat.ratingDelta}
+            className="text-pk-22 leading-[1.4]"
+            {...PROFILE_STAT_COUNT}
+          />
+        ) : (
+          "–"
+        )
+      }
+      foot={
+        <>
+          <CountUpNumber value={matchCount} {...PROFILE_STAT_COUNT} />
+          경기 합계
+        </>
+      }
+    />
+  );
+};
+
+/** 전역 회원 프로필 화면. 평점 카드·통계 4칸(승률·최근 7일·나와의 전적·상대가 바꾼 내 평점)·받은 업적·최근 경기 */
 export default function MemberProfileDrawer({
   playerId,
   isOpen: isRequested,
@@ -52,6 +110,7 @@ export default function MemberProfileDrawer({
   const { player: viewer } = useAuth();
   const [category, setCategory] = useState<MatchTopLevelType>("doubles");
   const [isMatchHistoryRequested, setIsMatchHistoryRequested] = useState(false);
+  const [isAchievementsRequested, setIsAchievementsRequested] = useState(false);
   const { overview, hasError, reload } = useProfileOverview(playerId);
 
   const isOpen = useLayerDepth({
@@ -64,6 +123,10 @@ export default function MemberProfileDrawer({
   });
   const closeMatchHistory = useCallback(
     () => setIsMatchHistoryRequested(false),
+    [],
+  );
+  const closeAchievements = useCallback(
+    () => setIsAchievementsRequested(false),
     [],
   );
 
@@ -100,7 +163,7 @@ export default function MemberProfileDrawer({
         { wins: 0, losses: 0 },
       )
     : null;
-  const headToHead = overview?.summary.headToHead ?? null;
+  const headToHead = overview?.summary.headToHead?.[category] ?? null;
 
   return (
     <>
@@ -132,17 +195,12 @@ export default function MemberProfileDrawer({
               ) : null}
               {totalStats ? (
                 <span className="text-pk-13 text-pk-sub tabular-nums">
-                  {/* 머리 줄은 평점 카드와 함께 바로 센다 */}
                   <CountUpNumber
                     value={totalStats.wins + totalStats.losses}
-                    durationMs={PROFILE_STAT_COUNT.durationMs}
+                    {...PROFILE_STAT_COUNT}
                   />
                   경기 ·{" "}
-                  <WinLossCount
-                    wins={totalStats.wins}
-                    losses={totalStats.losses}
-                    delayMs={0}
-                  />
+                  <WinLossCount wins={totalStats.wins} losses={totalStats.losses} />
                 </span>
               ) : (
                 <SkeletonBlock className="h-4 w-32" />
@@ -157,33 +215,19 @@ export default function MemberProfileDrawer({
                 onCategoryChange={setCategory}
                 fallbackRating={member?.duprRating?.[category] ?? null}
               />
-              <div className="grid grid-cols-2 gap-2.5">
-                {/* 분류를 바꾸면 key로 다시 마운트해 카운트업을 처음부터 재생한다. 상대 전적은 분류와 무관해 그대로 둔다 */}
-                <WinRateTile
-                  key={category}
-                  overview={overview}
-                  category={category}
-                />
-                <ProfileStatTile
-                  label="나와의 상대 전적"
-                  value={
-                    headToHead && headToHead.matchCount > 0 ? (
-                      <WinLossCount
-                        wins={headToHead.wins}
-                        losses={headToHead.losses}
-                      />
-                    ) : (
-                      "–"
-                    )
-                  }
-                  foot={`내 기준 · ${headToHead?.matchCount ?? 0}경기`}
-                />
+              {/* 분류를 바꾸면 key로 다시 마운트해 카운트업을 처음부터 재생한다 */}
+              <div key={category} className="grid grid-cols-2 gap-2.5">
+                <WinRateTile overview={overview} category={category} />
+                <Last7DaysTile overview={overview} category={category} />
+                <HeadToHeadTile stat={headToHead} />
+                <HeadToHeadRatingTile stat={headToHead} />
               </div>
               <AchievementsSection
                 playerId={playerId}
                 progress={overview.summary.achievements}
                 variant="member"
                 badgeSize={44}
+                onViewAll={() => setIsAchievementsRequested(true)}
               />
               <RecentMatchesSection
                 title="최근 경기"
@@ -195,7 +239,7 @@ export default function MemberProfileDrawer({
           ) : hasError ? (
             <ProfileLoadError onRetry={() => void reload()} />
           ) : (
-            <ProfileBodySkeleton />
+            <ProfileBodySkeleton tileCount={4} />
           )}
         </div>
       </PushScreen>
@@ -207,6 +251,15 @@ export default function MemberProfileDrawer({
         initialCategory={category}
         depthId={`${depthId}:matches`}
         onClose={closeMatchHistory}
+      />
+      <AchievementsScreen
+        isOpen={isAchievementsRequested && isRequested}
+        tabKey={tabKey}
+        depthId={`${depthId}:achievements`}
+        playerId={playerId}
+        progress={overview?.summary.achievements ?? []}
+        title={`${username} 업적`}
+        onClose={closeAchievements}
       />
     </>
   );
