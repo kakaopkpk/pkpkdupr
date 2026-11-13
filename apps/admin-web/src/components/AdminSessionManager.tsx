@@ -114,6 +114,7 @@ const AdminSessionManager: React.FC<AdminSessionManagerProps> = ({
   const [selectedSessionId, setSelectedSessionId] = useState("");
   const [participantIds, setParticipantIds] = useState<string[]>([]);
   const [participantQuery, setParticipantQuery] = useState("");
+  const participantSearchRef = useRef<HTMLInputElement>(null);
   const [sessionName, setSessionName] = useState("");
   const [sessionDate, setSessionDate] = useState("");
   const [sessionLocation, setSessionLocation] = useState("");
@@ -889,13 +890,40 @@ const AdminSessionManager: React.FC<AdminSessionManagerProps> = ({
                       : `참여자 ${participantIds.length}명 저장`}
                   </button>
                 </div>
-                <input
-                  type="search"
-                  value={participantQuery}
-                  onChange={(event) => setParticipantQuery(event.target.value)}
-                  placeholder="회원명 검색"
-                  className="w-full max-w-sm rounded-lg border px-4 py-2 text-sm"
-                />
+                <div className="relative w-full max-w-sm">
+                  <input
+                    ref={participantSearchRef}
+                    type="search"
+                    value={participantQuery}
+                    onChange={(event) => setParticipantQuery(event.target.value)}
+                    placeholder="회원명 검색"
+                    // 지우기는 오른쪽 X 버튼이 맡으므로 브라우저 기본 취소 버튼은 숨긴다
+                    className="w-full appearance-none rounded-lg border py-2 pl-4 pr-10 text-sm outline-none [&::-webkit-search-cancel-button]:appearance-none"
+                  />
+                  {participantQuery ? (
+                    <button
+                      type="button"
+                      aria-label="검색어 지우기"
+                      onPointerDown={(event) => event.preventDefault()}
+                      onClick={() => {
+                        setParticipantQuery("");
+                        participantSearchRef.current?.focus();
+                      }}
+                      className="absolute inset-y-0 right-0 flex w-10 items-center justify-center text-slate-400 hover:text-slate-600"
+                    >
+                      <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
+                        <circle cx="12" cy="12" r="10" fill="currentColor" />
+                        <path
+                          d="M8.5 8.5l7 7M15.5 8.5l-7 7"
+                          fill="none"
+                          stroke="white"
+                          strokeWidth="2.2"
+                          strokeLinecap="round"
+                        />
+                      </svg>
+                    </button>
+                  ) : null}
+                </div>
                 <div className="grid max-h-72 gap-2 overflow-y-auto rounded-lg bg-slate-50 p-3 sm:grid-cols-2 lg:grid-cols-3">
                   {filteredPlayers.map((player) => (
                     <label

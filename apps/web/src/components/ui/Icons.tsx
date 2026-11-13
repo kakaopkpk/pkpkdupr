@@ -54,3 +54,35 @@ export const CrownIcon: React.FC<{ className?: string }> = ({ className }) => (
     />
   </svg>
 );
+
+/** 검색 돋보기 */
+export const SearchIcon: React.FC = () => (
+  <svg
+    width="18"
+    height="18"
+    viewBox="0 0 24 24"
+    aria-hidden="true"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2.2"
+    strokeLinecap="round"
+    className="shrink-0"
+  >
+    <circle cx="11" cy="11" r="6.5" />
+    <path d="M16 16l4 4" />
+  </svg>
+);
+
+/** 회색 원 안의 흰 X (검색어 지우기) */
+export const ClearIcon: React.FC = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
+    <circle cx="12" cy="12" r="10" fill="currentColor" />
+    <path
+      d="M8.5 8.5l7 7M15.5 8.5l-7 7"
+      fill="none"
+      stroke="white"
+      strokeWidth="2.2"
+      strokeLinecap="round"
+    />
+  </svg>
+);

@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import BottomSheet from "@/components/BottomSheet";
 import { PkButton } from "@/components/ui/Button";
 import { PlayerAvatar, type AvatarPlayer } from "@/components/ui/PlayerAvatar";
+import { SearchField } from "@/components/ui/SearchField";
 import { SheetTitle } from "@/components/ui/SheetTitle";
 import { cx } from "@/components/ui/cx";
 import type { MemberListPlayerInfo } from "@/hooks/usePlayers";
@@ -277,38 +278,20 @@ export default function PickPlayersStep({
           </span>
           {[2, 3].map(renderSlot)}
         </div>
-        <label className="mt-3 flex h-11 items-center gap-2 rounded-pk-sm bg-pk-bg px-3.5 text-pk-muted">
-          <svg
-            width="18"
-            height="18"
-            viewBox="0 0 24 24"
-            aria-hidden="true"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2.2"
-            strokeLinecap="round"
-            className="shrink-0"
-          >
-            <circle cx="11" cy="11" r="6.5" />
-            <path d="M16 16l4 4" />
-          </svg>
-          <input
-            type="search"
-            aria-label="이름 검색"
-            placeholder="이름 검색"
-            value={query}
-            enterKeyHint="done"
-            onChange={(event) => setQuery(event.target.value)}
-            onKeyDown={(event) => {
-              // 완료/Enter로 키보드를 내려 하단 버튼을 다시 보인다
-              if (event.key !== "Enter" || event.nativeEvent.isComposing) return;
-              event.preventDefault();
-              event.currentTarget.blur();
-            }}
-            // 16px 미만이면 iOS가 포커스 때 화면을 확대한다
-            className="app-mobile-input min-w-0 flex-1 bg-transparent text-[16px] text-pk-ink outline-none placeholder:text-pk-muted"
-          />
-        </label>
+        <SearchField
+          className="mt-3"
+          aria-label="이름 검색"
+          placeholder="이름 검색"
+          value={query}
+          enterKeyHint="done"
+          onValueChange={setQuery}
+          onKeyDown={(event) => {
+            // 완료/Enter로 키보드를 내려 하단 버튼을 다시 보인다
+            if (event.key !== "Enter" || event.nativeEvent.isComposing) return;
+            event.preventDefault();
+            event.currentTarget.blur();
+          }}
+        />
       </BottomSheet.Header>
       <BottomSheet.Body className="pb-2">
         {playersStatus === "error" && players.length === 0 ? (
