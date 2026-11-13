@@ -734,6 +734,7 @@ export class AuthService {
   /**
    * 관리자가 회원 비밀번호를 임시 비밀번호로 초기화한다. 연결된 Auth 사용자가 없으면 새로 만들어 연결한다(계정 발급).
    * 연결된 사용자의 이메일도 현재 아이디의 내부 이메일로 맞춰, 예전 방식으로 만든 계정도 아이디로 로그인하게 한다.
+   * 게스트는 정회원 승급(`promoteGuest`)으로만 계정을 받으므로 409로 거절한다.
    */
   async resetPlayerPassword(
     playerId: string,
@@ -741,6 +742,12 @@ export class AuthService {
     const stored = await this.getStoredPlayerById(playerId);
     if (!stored) {
       throw new AccountRequestError(404, "사용자를 찾을 수 없습니다.");
+    }
+    if (stored.isGuest) {
+      throw new AccountRequestError(
+        409,
+        "게스트에게는 비밀번호를 발급할 수 없습니다. 정회원으로 승급해 계정을 발급해주세요.",
+      );
     }
     if (stored.status !== "active") {
       throw new AccountRequestError(
