@@ -83,40 +83,69 @@ export const TAB_ITEMS: {
 export const getTabId = (tabKey: TabKey) => `app-tab-${tabKey}`;
 export const getTabPanelId = (tabKey: TabKey) => `app-tab-panel-${tabKey}`;
 
-/** 유리 알약 4탭. 높이 66px */
+/** 유리 알약 4탭. 높이 66px. 선택 배경 하나가 탭 사이를 미끄러져 이동한다 */
 export const NavPill: React.FC<{
   selectedTab: TabKey;
   onPressTab: (tabKey: TabKey) => void;
-}> = ({ selectedTab, onPressTab }) => (
-  <div
-    role="tablist"
-    aria-label="주 메뉴"
-    className={`grid h-[66px] min-w-0 flex-1 grid-cols-4 rounded-full p-[5px] ${GLASS_CLASS_NAME}`}
-  >
-    {TAB_ITEMS.map(({ key, label, Icon }) => {
-      const isSelected = key === selectedTab;
-      return (
-        <button
-          key={key}
-          type="button"
-          role="tab"
-          id={getTabId(key)}
-          aria-selected={isSelected}
-          aria-controls={getTabPanelId(key)}
-          onClick={() => onPressTab(key)}
-          className={`flex min-w-0 flex-col items-center justify-center gap-0.5 rounded-full text-pk-12 touch-manipulation ${
-            isSelected
-              ? "bg-pk-primary-soft font-extrabold text-pk-primary"
-              : "font-bold text-pk-sub"
-          }`}
-        >
-          <Icon />
-          {label}
-        </button>
-      );
-    })}
-  </div>
-);
+}> = ({ selectedTab, onPressTab }) => {
+  // 누른 탭 아이콘만 튕긴다. count를 key로 써서 같은 탭을 다시 눌러도 애니메이션을 처음부터 돌린다
+  const [pressedIcon, setPressedIcon] = useState<{
+    tabKey: TabKey;
+    count: number;
+  } | null>(null);
+  const selectedIndex = Math.max(
+    0,
+    TAB_ITEMS.findIndex((item) => item.key === selectedTab),
+  );
+
+  return (
+    <div
+      role="tablist"
+      aria-label="주 메뉴"
+      className={`relative grid h-[66px] min-w-0 flex-1 grid-cols-4 rounded-full p-[5px] ${GLASS_CLASS_NAME}`}
+    >
+      <span
+        aria-hidden="true"
+        style={{ transform: `translateX(${selectedIndex * 100}%)` }}
+        className="app-nav-indicator absolute inset-y-[5px] left-[5px] w-[calc((100%-10px)/4)] rounded-full bg-pk-primary-soft"
+      />
+      {TAB_ITEMS.map(({ key, label, Icon }) => {
+        const isSelected = key === selectedTab;
+        const isIconPopping = pressedIcon?.tabKey === key;
+        return (
+          <button
+            key={key}
+            type="button"
+            role="tab"
+            id={getTabId(key)}
+            aria-selected={isSelected}
+            aria-controls={getTabPanelId(key)}
+            onClick={() => {
+              setPressedIcon((prev) => ({
+                tabKey: key,
+                count: (prev?.count ?? 0) + 1,
+              }));
+              onPressTab(key);
+            }}
+            className={`relative flex min-w-0 flex-col items-center justify-center gap-0.5 rounded-full text-pk-12 transition-colors duration-200 touch-manipulation motion-reduce:transition-none ${
+              isSelected
+                ? "font-extrabold text-pk-primary"
+                : "font-bold text-pk-sub"
+            }`}
+          >
+            <span
+              key={isIconPopping ? pressedIcon.count : 0}
+              className={`flex ${isIconPopping ? "app-nav-icon-pop" : ""}`}
+            >
+              <Icon />
+            </span>
+            {label}
+          </button>
+        );
+      })}
+    </div>
+  );
+};
 
 /** + 버튼과 그 위에 뜨는 "새로 만들기" 메뉴 */
 export const PlusMenu: React.FC<{
