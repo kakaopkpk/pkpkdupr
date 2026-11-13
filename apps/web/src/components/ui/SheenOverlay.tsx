@@ -17,5 +17,3 @@ export const SheenOverlay: React.FC<{ delayMs?: number; durationMs?: number }> =
     className="pointer-events-none absolute inset-0 animate-pk-sheen bg-linear-to-r from-transparent via-white/70 to-transparent motion-reduce:hidden"
   />
 );
-
-export default SheenOverlay;

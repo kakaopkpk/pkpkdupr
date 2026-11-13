@@ -105,7 +105,7 @@ export const TopRiserCard: React.FC<{ report: SessionPlayerReport }> = ({
         <span
           className="flex"
           onAnimationEnd={(event) => {
-            // 칩 흰 빛(300+800ms)이 가장 늦게 끝나는 CSS 연출이다
+            // 칩 흰 빛이 가장 늦게 끝나는 CSS 연출이다
             if (event.animationName === "pk-sheen") finish();
           }}
         >
