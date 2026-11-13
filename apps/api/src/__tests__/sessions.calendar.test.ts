@@ -279,13 +279,10 @@ describe("세션 변경의 구글 캘린더 반영", () => {
 
   it("게스트를 추가하면 게스트 줄이 있는 일정을 쓴다", async () => {
     useCalendar();
-    vi.spyOn(AuthService.prototype, "createGuestPlayer").mockResolvedValue(
-      guest,
-    );
-    vi.spyOn(db.matches, "addSessionParticipants").mockImplementation(
+    vi.spyOn(AuthService.prototype, "createGuestPlayer").mockImplementation(
       async () => {
         currentSession = makeSession({ participantIds: [member.id, guest.id] });
-        return true;
+        return guest;
       },
     );
 

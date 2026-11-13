@@ -114,14 +114,18 @@ afterEach(() => {
 
 describe("POST /api/match-sessions/:sessionId/guests", () => {
   let sessionDate: Date;
-  let createPlayer: MockInstance<typeof db.players.create>;
-  let addSessionParticipants: MockInstance<
-    MatchRepository["addSessionParticipants"]
+  let storedUsernames: Set<string>;
+  let createGuestParticipant: MockInstance<
+    typeof db.matches.createGuestParticipant
+  >;
+  let notifySessionsChanged: MockInstance<
+    MatchRepository["notifySessionsChanged"]
   >;
 
   beforeEach(() => {
     useNow(thursdayMorning);
     sessionDate = new Date("2026-11-12T00:00:00+09:00");
+    storedUsernames = new Set();
     vi.spyOn(
       AuthService.prototype,
       "authenticateAccessToken",
@@ -130,27 +134,41 @@ describe("POST /api/match-sessions/:sessionId/guests", () => {
     vi.spyOn(MatchRepository.prototype, "findSessionById").mockImplementation(
       async () => makeSession({ date: sessionDate }),
     );
-    addSessionParticipants = vi
-      .spyOn(MatchRepository.prototype, "addSessionParticipants")
-      .mockResolvedValue(undefined);
-    vi.spyOn(db.players, "findByUsernameIgnoringCase").mockResolvedValue(
-      undefined,
+    notifySessionsChanged = vi.spyOn(
+      MatchRepository.prototype,
+      "notifySessionsChanged",
     );
-    createPlayer = vi
-      .spyOn(db.players, "create")
-      .mockImplementation(
-        async (input) =>
-          ({
-            ...input,
-            gender: input.gender ?? null,
-            isGuest: input.isGuest ?? false,
-            guestAddedByPlayerId: input.guestAddedByPlayerId ?? null,
-            guestAddedSessionId: input.guestAddedSessionId ?? null,
-            duprRating: null,
-            authUserId: null,
-            isFirstLogin: false,
-          }) as any,
-      );
+    vi.spyOn(db.players, "findByUsernameIgnoringCase").mockImplementation(
+      async (username) =>
+        storedUsernames.has(username.toLowerCase())
+          ? ({
+              ...requester,
+              username,
+              authUserId: null,
+              isFirstLogin: false,
+              guestAddedByPlayerId: null,
+              guestAddedSessionId: null,
+            } as Awaited<
+              ReturnType<typeof db.players.findByUsernameIgnoringCase>
+            >)
+          : undefined,
+    );
+    // 게스트 생성과 참여자 추가를 한 트랜잭션으로 하는 저장소. 성공해야만 아이디가 남는다.
+    createGuestParticipant = vi
+      .spyOn(db.matches, "createGuestParticipant")
+      .mockImplementation(async (_sessionId, input) => {
+        storedUsernames.add(input.username.toLowerCase());
+        return {
+          ...input,
+          gender: input.gender ?? null,
+          isGuest: input.isGuest ?? false,
+          guestAddedByPlayerId: input.guestAddedByPlayerId ?? null,
+          guestAddedSessionId: input.guestAddedSessionId ?? null,
+          duprRating: null,
+          authUserId: null,
+          isFirstLogin: false,
+        } as any;
+      });
   });
 
   const addGuest = (username: unknown, sessionId = "Scustom1") =>
@@ -175,9 +193,11 @@ describe("POST /api/match-sessions/:sessionId/guests", () => {
     expect(response.body).not.toHaveProperty("guestAddedSessionId");
     expect(response.body).not.toHaveProperty("authUserId");
 
-    expect(createPlayer).toHaveBeenCalledTimes(1);
-    const [input] = createPlayer.mock.calls[0]!;
+    expect(createGuestParticipant).toHaveBeenCalledTimes(1);
+    const [sessionId, input] = createGuestParticipant.mock.calls[0]!;
+    expect(sessionId).toBe("Scustom1");
     expect(input).toMatchObject({
+      id: response.body.id,
       username: "guest_kim",
       gender: null,
       status: "active",
@@ -186,9 +206,7 @@ describe("POST /api/match-sessions/:sessionId/guests", () => {
       guestAddedSessionId: "Scustom1",
     });
     expect(input.authUserId ?? null).toBeNull();
-    expect(addSessionParticipants).toHaveBeenCalledWith("Scustom1", [
-      response.body.id,
-    ]);
+    expect(notifySessionsChanged).toHaveBeenCalledWith(["Scustom1"]);
   });
 
   it("미래 세션에도 추가할 수 있다", async () => {
@@ -204,40 +222,47 @@ describe("POST /api/match-sessions/:sessionId/guests", () => {
       const response = await addGuest(username);
       expect(response.status).toBe(400);
     }
-    expect(createPlayer).not.toHaveBeenCalled();
-    expect(addSessionParticipants).not.toHaveBeenCalled();
+    expect(createGuestParticipant).not.toHaveBeenCalled();
+    expect(notifySessionsChanged).not.toHaveBeenCalled();
   });
 
   it("대소문자 무시로 이미 있는 아이디면 409", async () => {
-    vi.spyOn(db.players, "findByUsernameIgnoringCase").mockImplementation(
-      async (username) =>
-        username.toLowerCase() === "pmember1"
-          ? ({
-              ...requester,
-              authUserId: null,
-              isFirstLogin: false,
-              guestAddedByPlayerId: null,
-              guestAddedSessionId: null,
-            } as Awaited<ReturnType<typeof db.players.findByUsernameIgnoringCase>>)
-          : undefined,
-    );
+    storedUsernames.add("pmember1");
 
     const response = await addGuest("PMEMBER1");
 
     expect(response.status).toBe(409);
-    expect(createPlayer).not.toHaveBeenCalled();
-    expect(addSessionParticipants).not.toHaveBeenCalled();
+    expect(createGuestParticipant).not.toHaveBeenCalled();
+    expect(notifySessionsChanged).not.toHaveBeenCalled();
   });
 
   it("동시 요청으로 유니크 위반이 나도 409", async () => {
-    createPlayer.mockRejectedValue(
+    createGuestParticipant.mockRejectedValue(
       Object.assign(new Error("duplicate key"), { code: "23505" }),
     );
 
     const response = await addGuest("guest_kim");
 
     expect(response.status).toBe(409);
-    expect(addSessionParticipants).not.toHaveBeenCalled();
+    expect(notifySessionsChanged).not.toHaveBeenCalled();
+  });
+
+  it("참여자 추가가 실패하면 500이고, 같은 아이디로 다시 요청하면 만들어진다", async () => {
+    createGuestParticipant.mockRejectedValueOnce(
+      new Error("insert or update on table violates foreign key constraint"),
+    );
+
+    const failed = await addGuest("guest_kim");
+
+    expect(failed.status).toBe(500);
+    expect(notifySessionsChanged).not.toHaveBeenCalled();
+
+    const retried = await addGuest("guest_kim");
+
+    expect(retried.status).toBe(201);
+    expect(retried.body).toMatchObject({ username: "guest_kim" });
+    expect(createGuestParticipant).toHaveBeenCalledTimes(2);
+    expect(notifySessionsChanged).toHaveBeenCalledTimes(1);
   });
 
   it("지난 세션이면 403", async () => {
@@ -246,7 +271,7 @@ describe("POST /api/match-sessions/:sessionId/guests", () => {
     const response = await addGuest("guest_kim");
 
     expect(response.status).toBe(403);
-    expect(createPlayer).not.toHaveBeenCalled();
+    expect(createGuestParticipant).not.toHaveBeenCalled();
   });
 
   it("세션이 없으면 404, 세션 ID 형식이 틀리면 400", async () => {
@@ -256,7 +281,7 @@ describe("POST /api/match-sessions/:sessionId/guests", () => {
 
     expect((await addGuest("guest_kim")).status).toBe(404);
     expect((await addGuest("guest_kim", "not-a-session")).status).toBe(400);
-    expect(createPlayer).not.toHaveBeenCalled();
+    expect(createGuestParticipant).not.toHaveBeenCalled();
   });
 });
 
