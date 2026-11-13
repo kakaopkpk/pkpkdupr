@@ -11,7 +11,7 @@ import type { MatchSessionHistoryInfo } from "@/lib/rankings";
 
 const WEEKDAYS = ["일", "월", "화", "수", "목", "금", "토"] as const;
 
-/** dateKey("2026-11-12")를 칩 라벨 "11/12 목"으로 바꾼다 */
+/** dateKey("2026-11-12")를 짧은 날짜 "11/12 목"으로 바꾼다 */
 export const formatSessionChipLabel = (dateKey: string) => {
   const [year, month, day] = dateKey.split("-").map(Number);
   const weekday = WEEKDAYS[new Date(Date.UTC(year, month - 1, day)).getUTCDay()];
@@ -28,42 +28,6 @@ export const getSessionRankChange = (
   report.rankBefore !== null && report.rankAfter !== null
     ? report.rankBefore - report.rankAfter
     : null;
-
-/** 세션 날짜 칩 가로 스크롤. 칩 하나가 세션 하나다 */
-export const SessionChips: React.FC<{
-  sessions: readonly MatchSessionHistoryInfo[];
-  selectedId: string | null;
-  onSelect: (sessionId: string) => void;
-}> = ({ sessions, selectedId, onSelect }) => (
-  <nav
-    aria-label="세션"
-    className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-  >
-    {sessions.map((session) => {
-      const isSelected = session.id === selectedId;
-      const label = formatSessionChipLabel(session.dateKey);
-      return (
-        <button
-          key={session.id}
-          type="button"
-          aria-pressed={isSelected}
-          aria-label={`${label} ${session.name}`}
-          onClick={() => {
-            if (!isSelected) onSelect(session.id);
-          }}
-          className={cx(
-            "inline-flex h-9 shrink-0 items-center rounded-full px-3.5 text-pk-13 tabular-nums transition-colors",
-            isSelected
-              ? "bg-pk-primary font-extrabold text-white"
-              : "bg-white font-bold text-pk-sub",
-          )}
-        >
-          {label}
-        </button>
-      );
-    })}
-  </nav>
-);
 
 export const SessionSummary: React.FC<{ session: MatchSessionHistoryInfo }> = ({
   session,
@@ -187,13 +151,5 @@ export const SessionReportSkeleton: React.FC = () => (
     <SkeletonBlock className="h-[76px] w-full rounded-pk-lg" />
     <SkeletonBlock className="mt-3 h-4 w-14" />
     <SkeletonBlock className="h-56 w-full rounded-pk-lg" />
-  </div>
-);
-
-export const SessionChipsSkeleton: React.FC = () => (
-  <div aria-hidden="true" className="flex gap-2 overflow-hidden pb-1">
-    {[0, 1, 2, 3].map((index) => (
-      <SkeletonBlock key={index} className="h-9 w-[72px] shrink-0 rounded-full" />
-    ))}
   </div>
 );

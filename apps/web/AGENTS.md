@@ -20,7 +20,7 @@
 ## 구조 가이드
 
 - `src/pages/`
-  - 탭 페이지: `Home.tsx`(홈)·`Records.tsx`(기록, 세션 리포트)·`Ranking.tsx`(랭킹)·`Me.tsx`(나). props 없이 컨텍스트로 데이터를 받습니다.
+  - 탭 페이지: `Home.tsx`(홈)·`Records.tsx`(기록: `GET /api/records` 세션 카드·세션 없는 경기 카드를 KST 날짜 제목으로 묶은 최신순 목록, 전체/내 경기 세그먼트, 끝에서 카드 3개 남으면 `nextCursor`로 다음 묶음을 미리 받는 무한 스크롤, 세션 카드는 `openSessionReport`·경기 카드는 경기 상세)·`Ranking.tsx`(랭킹)·`Me.tsx`(나). props 없이 컨텍스트로 데이터를 받습니다.
   - 그 밖의 전역 라우트: `Login.tsx`, `ForceChangePassword.tsx`
 - `src/components/`
   - `BottomNav.tsx`: 4탭 keep-alive 셸, 하단 바(`BottomDock.tsx`)와 + 메뉴, 전역 화면 래퍼 렌더, 진행 중 경기 미니바·참여 알림 바
