@@ -1180,7 +1180,7 @@ const BottomNav: React.FC = () => {
               {/* 바 뒤 콘텐츠가 흐려지며 끝나게 한다 */}
               <div
                 aria-hidden="true"
-                className="pointer-events-none absolute inset-x-0 bottom-0 z-10 h-[calc(var(--app-bottom-dock-height)+var(--app-keyboard-offset)+5.5rem)] bg-[linear-gradient(to_bottom,rgba(243,245,249,0),#f3f5f9_62%)]"
+                className="pointer-events-none absolute inset-x-0 bottom-0 z-10 h-[calc(var(--app-bottom-dock-height)+var(--app-keyboard-offset)+5.5rem)] bg-[linear-gradient(to_bottom,transparent,var(--color-pk-bg)_62%)]"
               />
 
               <div
@@ -1275,7 +1275,7 @@ const BottomNav: React.FC = () => {
                       aria-hidden={!isGlobalMenuVisible}
                       tabIndex={-1}
                       onClick={() => closeGlobalMenu()}
-                      className={`fixed inset-0 z-50 cursor-default bg-[rgba(15,23,42,0.3)] transition-opacity duration-[84ms] ease-out ${
+                      className={`fixed inset-0 z-50 cursor-default bg-pk-ink/30 transition-opacity duration-[84ms] ease-out ${
                         isGlobalMenuVisible
                           ? "opacity-100"
                           : "pointer-events-none opacity-0"

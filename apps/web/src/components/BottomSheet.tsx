@@ -249,7 +249,7 @@ const BottomSheet: BottomSheetComponent = ({
         {/* 끄는 동안의 옅어짐은 안쪽에 따로 둬서 열림·닫힘 전환과 겹쳐 적용된다 */}
         <div
           ref={dimRef}
-          className="absolute inset-0 bg-[rgba(15,23,42,0.45)]"
+          className="absolute inset-0 bg-pk-ink/45"
         />
       </div>
       <div
@@ -271,7 +271,7 @@ const BottomSheet: BottomSheetComponent = ({
           role="dialog"
           aria-label={ariaLabel}
           className={[
-            "app-bottom-sheet-surface relative flex min-h-0 w-full flex-col overflow-hidden rounded-t-pk-lg bg-white px-4 pt-2.5 pb-[calc(1rem+var(--safe-bottom)+var(--app-keyboard-offset))] text-pk-ink shadow-[0_-10px_40px_rgba(15,23,42,0.2)]",
+            "app-bottom-sheet-surface relative flex min-h-0 w-full flex-col overflow-hidden rounded-t-pk-lg bg-white px-4 pt-2.5 pb-[calc(1rem+var(--safe-bottom)+var(--app-keyboard-offset))] text-pk-ink shadow-[0_-10px_40px] shadow-pk-ink/20",
             isFixedHeight ? "app-bottom-sheet-surface--fixed" : null,
             className,
           ]
@@ -281,7 +281,7 @@ const BottomSheet: BottomSheetComponent = ({
         >
           <div
             aria-hidden="true"
-            className="mb-3 h-[5px] w-10 shrink-0 self-center rounded-full bg-[#d3d9e6]"
+            className="mb-3 h-[5px] w-10 shrink-0 self-center rounded-full bg-pk-line"
           />
           {children}
         </section>

@@ -136,7 +136,7 @@ export const PushScreenCoverDim: React.FC<{
   <div
     aria-hidden="true"
     className={cx(
-      "pointer-events-none absolute inset-0 bg-[rgba(15,23,42,0.15)] transition-opacity",
+      "pointer-events-none absolute inset-0 bg-pk-ink/15 transition-opacity",
       PUSH_SCREEN_MOTION_CLASS,
       isCovered ? "opacity-100" : "opacity-0",
       className,
@@ -327,7 +327,7 @@ export const PushScreen: React.FC<PushScreenProps> = ({
           aria-label={ariaLabel}
           style={{ transform }}
           className={cx(
-            "relative flex h-[calc(var(--app-shell-height)-var(--app-keyboard-offset))] w-full flex-col bg-pk-bg outline-none shadow-[-8px_0_24px_rgba(15,23,42,0.08)] will-change-transform",
+            "relative flex h-[calc(var(--app-shell-height)-var(--app-keyboard-offset))] w-full flex-col bg-pk-bg outline-none shadow-[-8px_0_24px] shadow-pk-ink/8 will-change-transform",
             PUSH_SCREEN_TRANSITION_CLASS,
             isOpen && isActive && "pointer-events-auto",
           )}

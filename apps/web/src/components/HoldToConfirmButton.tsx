@@ -39,7 +39,7 @@ const variantClassName: Record<
   danger: {
     button:
       "h-[52px] justify-center rounded-pk-sm bg-pk-down px-4 text-pk-15 font-extrabold text-white disabled:cursor-not-allowed disabled:bg-pk-neutral disabled:text-pk-muted",
-    progress: "bg-[rgba(15,23,38,0.4)]",
+    progress: "bg-pk-ink/40",
     edge: "bg-pk-hl",
   },
 };
