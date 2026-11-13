@@ -4,6 +4,8 @@ import {
   type AchievementHoldersResponse,
   type AchievementProgress,
   type EarnedAchievement,
+  type MarkAchievementsSeenRequest,
+  type SeenAchievementRef,
   isBestStreakAchievement,
 } from "@pkpkdupr/shared/achievements";
 import { apiFetch } from "@/lib/api";
@@ -75,3 +77,50 @@ export const fetchAchievementHolders =
     }
     return (await res.json()) as AchievementHoldersResponse;
   };
+
+/** 내가 받은 업적 중 아직 축하 연출로 보지 않은 것(받은 시각 → 업적 정의 순서) */
+export const fetchUnseenAchievements = async (): Promise<
+  EarnedAchievementInfo[]
+> => {
+  const res = await apiFetch("/api/me/achievements/unseen");
+  if (!res.ok) {
+    throw new Error("새 업적을 불러오지 못했어요.");
+  }
+  const body = (await res.json()) as { achievements: EarnedAchievementInfo[] };
+  return body.achievements;
+};
+
+const toSeenKey = ({ achievementId, earnedMatchId }: SeenAchievementRef) =>
+  `${achievementId}:${earnedMatchId}`;
+
+/**
+ * 이 앱에서 확인 처리를 보낸 업적. 확인 요청이 끝나기 전에 미확인 조회가 먼저 끝나도
+ * 방금 본 업적을 다시 띄우지 않도록 조회 결과에서 뺀다.
+ */
+const locallySeenKeys = new Set<string>();
+
+export const excludeLocallySeenAchievements = <T extends SeenAchievementRef>(
+  items: readonly T[],
+): T[] => items.filter((item) => !locallySeenKeys.has(toSeenKey(item)));
+
+/** 축하 연출로 본 업적을 확인 처리한다. 업적마다 그때의 획득 경기를 넘긴다 */
+export const markAchievementsSeen = async (
+  items: readonly SeenAchievementRef[],
+): Promise<void> => {
+  if (items.length === 0) return;
+  items.forEach((item) => locallySeenKeys.add(toSeenKey(item)));
+  const body: MarkAchievementsSeenRequest = {
+    achievements: items.map(({ achievementId, earnedMatchId }) => ({
+      achievementId,
+      earnedMatchId,
+    })),
+  };
+  const res = await apiFetch("/api/me/achievements/seen", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    throw new Error("업적 확인을 저장하지 못했어요.");
+  }
+};
