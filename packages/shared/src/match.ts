@@ -242,7 +242,18 @@ export interface Match {
   createdAt: Date;
   completedAt: Date | null;
   updatedAt: Date;
+  /**
+   * 완료 시점에 게스트가 낀 경기면 true. 평점·평점 이력·업적·랭킹 경기 수·프로필 통계·lastPlayedAt에서 빠지고,
+   * 경기 목록·피드·기록 탭·세션 경기 목록에는 그대로 나온다. 게스트가 나중에 정회원이 돼도 바뀌지 않는다.
+   */
+  ratingExcluded: boolean;
 }
+
+/** 팀에 게스트가 한 명이라도 있으면 true. 경기가 completed가 될 때 ratingExcluded 판정에 쓴다 */
+export const hasGuestPlayer = (
+  teams: readonly { players: readonly Pick<Player, "isGuest">[] }[],
+): boolean =>
+  teams.some((team) => team.players.some((player) => player.isGuest));
 
 /** 경기 기록(POST /api/matches)·수정(PUT /api/matches/:matchId) 요청의 한 팀 */
 export interface RecordMatchTeamRequest {

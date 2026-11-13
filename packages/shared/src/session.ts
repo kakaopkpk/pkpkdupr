@@ -177,8 +177,10 @@ export const isInProgressMatchExpired = (
 
 /** 세션 참여자. 추천 화면이 평점·성별을 쓰므로 함께 내려준다 */
 export interface MatchSessionMember extends MatchSessionParticipant {
-  gender: "M" | "F";
+  /** 게스트만 null */
+  gender: "M" | "F" | null;
   duprRating: PublicPlayerDupr | null;
+  isGuest: boolean;
 }
 
 /** 세션 단건 응답(GET /api/match-sessions/:sessionId 등) */
@@ -233,6 +235,11 @@ export interface UpcomingMatchSessionsResponse {
 /** POST /api/match-sessions/:sessionId/participants 요청 */
 export interface AddMatchSessionParticipantRequest {
   playerId: string;
+}
+
+/** POST /api/match-sessions/:sessionId/guests 요청. 그 아이디로 게스트를 만들고 세션 참여자로 넣는다 */
+export interface AddMatchSessionGuestRequest {
+  username: string;
 }
 
 /** POST /api/match-sessions/:sessionId/matches 요청. 점수 없는 진행 중 경기를 시작한다 */

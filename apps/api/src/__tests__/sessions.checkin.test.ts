@@ -23,6 +23,7 @@ const makePlayer = (
   id: string,
   overrides: Partial<Player> = {},
 ): Player => ({
+  isGuest: false,
   id,
   username: id,
   gender: "M",
@@ -148,11 +149,18 @@ describe("public match sessions", () => {
           username: requester.username,
           gender: "M",
           duprRating: { singles: 3.5, doubles: 3.6 },
+          isGuest: false,
         },
       ],
     });
     expect(response.body.sessions[1].participants).toEqual([
-      { id: other.id, username: other.username, gender: "F", duprRating: null },
+      {
+        id: other.id,
+        username: other.username,
+        gender: "F",
+        duprRating: null,
+        isGuest: false,
+      },
     ]);
   });
 

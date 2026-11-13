@@ -26,6 +26,7 @@ const createPlayer = (id: string, rating: number): Player & {
   username: id,
   gender: "M",
   status: "active",
+  isGuest: false,
   duprRating: { singles: rating, doubles: rating },
   authUserId: null,
   createdAt: completedAt,
@@ -66,6 +67,7 @@ describe("incremental match rating", () => {
       replayMatch,
     };
     const match: Match = {
+      ratingExcluded: false,
       id: "match-incremental",
       type: "singles",
       source: "player_created",

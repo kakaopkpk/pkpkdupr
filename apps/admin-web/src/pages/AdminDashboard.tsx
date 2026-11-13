@@ -56,7 +56,8 @@ type PlayerInfo = Pick<
   updatedAt: string;
 };
 
-type PlayerGender = Player["gender"];
+/** 정회원 성별. 게스트는 성별이 없다(null) */
+type PlayerGender = NonNullable<Player["gender"]>;
 type PlayerStatusLogsByPlayerId = Record<string, PlayerStatusChangeLog[]>;
 type PlayerCreationLogsByPlayerId = Record<string, PlayerCreationLog[]>;
 type MatchPlayerInfo = Pick<
@@ -330,7 +331,10 @@ const AdminDashboard: React.FC = () => {
     setGenderDrafts((prev) => {
       const next: Record<string, PlayerGender> = {};
       loadedPlayers.forEach((loadedPlayer) => {
-        next[loadedPlayer.id] = prev[loadedPlayer.id] ?? loadedPlayer.gender;
+        const gender = prev[loadedPlayer.id] ?? loadedPlayer.gender;
+        if (gender) {
+          next[loadedPlayer.id] = gender;
+        }
       });
       return next;
     });
@@ -619,10 +623,11 @@ const AdminDashboard: React.FC = () => {
       setPlayers((prev) =>
         prev.map((item) => (item.id === data.player.id ? data.player : item)),
       );
-      setGenderDrafts((prev) => ({ ...prev, [playerId]: data.player.gender }));
+      const savedGender = data.player.gender ?? nextGender;
+      setGenderDrafts((prev) => ({ ...prev, [playerId]: savedGender }));
       setSuccess(
         data.changed
-          ? `${data.player.username} 회원 성별이 ${genderLabelMap[data.player.gender]}으로 변경되었습니다.`
+          ? `${data.player.username} 회원 성별이 ${genderLabelMap[savedGender]}으로 변경되었습니다.`
           : "변경된 성별이 없습니다.",
       );
     } catch (err: unknown) {
@@ -2133,7 +2138,7 @@ const AdminDashboard: React.FC = () => {
                         <td className="px-4 py-4 min-w-[220px]">
                           <div className="flex items-center gap-2">
                             <select
-                              value={draftGender}
+                              value={draftGender ?? ""}
                               onChange={(e) =>
                                 setGenderDrafts((prev) => ({
                                   ...prev,
@@ -2142,6 +2147,11 @@ const AdminDashboard: React.FC = () => {
                               }
                               className="border rounded-lg px-3 py-2 bg-white disabled:bg-slate-100 disabled:text-slate-400"
                             >
+                              {draftGender == null && (
+                                <option value="" disabled>
+                                  없음
+                                </option>
+                              )}
                               <option value="M">남</option>
                               <option value="F">여</option>
                             </select>
@@ -2155,7 +2165,7 @@ const AdminDashboard: React.FC = () => {
                             </button>
                           </div>
                           <p className="mt-1 text-xs text-slate-500">
-                            현재: {genderLabelMap[p.gender]}
+                            현재: {p.gender ? genderLabelMap[p.gender] : "없음"}
                           </p>
                         </td>
                         <td className="px-4 py-4 whitespace-nowrap">

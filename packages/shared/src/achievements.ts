@@ -506,6 +506,8 @@ export interface AchievementMatch {
   teams: readonly [AchievementTeam, AchievementTeam];
   scores?: readonly MatchScore[] | null;
   session?: { id: string } | null;
+  /** 게스트가 낀 경기(Match.ratingExcluded)는 업적에 세지 않는다 */
+  ratingExcluded?: boolean;
 }
 
 export interface AchievementTeam {
@@ -519,7 +521,7 @@ const compareCountedMatches = (left: CountedMatch, right: CountedMatch) =>
   left.completedAt.getTime() - right.completedAt.getTime() ||
   (left.id < right.id ? -1 : left.id > right.id ? 1 : 0);
 
-/** 업적에 세는 경기: 완료 + 완료 시각 있음. compareCountedMatches 순 */
+/** 업적에 세는 경기: 완료 + 완료 시각 있음 + 평점 반영 경기. compareCountedMatches 순 */
 const getCountedMatches = (
   matches: readonly AchievementMatch[],
 ): CountedMatch[] =>
@@ -527,6 +529,7 @@ const getCountedMatches = (
     .filter(
       (match): match is CountedMatch =>
         match.status === "completed" &&
+        !match.ratingExcluded &&
         match.completedAt != null &&
         !Number.isNaN(match.completedAt.getTime()),
     )

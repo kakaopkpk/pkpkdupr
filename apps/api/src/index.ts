@@ -3,6 +3,7 @@ import express from "express";
 import { randomUUID } from "crypto";
 import {
   getMatchTopLevelType,
+  hasGuestPlayer,
   isMatchInProgress,
   isSinglesMatchType,
   isMatchRecordDeletable,
@@ -37,6 +38,7 @@ import {
   MATCH_SESSION_LOCATION_MAX_LENGTH,
   MATCH_SESSION_NAME_MAX_LENGTH,
   toKstDateKey,
+  type AddMatchSessionGuestRequest,
   type AddMatchSessionParticipantRequest,
   type CreateMatchSessionRequest,
   type StartSessionMatchRequest,
@@ -184,7 +186,9 @@ authService.setPlayerRatingChartProjectionRefresher(
   playerRatingChartProjectionService,
 );
 const playerStatuses: PlayerStatus[] = ["active", "inactive"];
-const playerGenders: Array<Player["gender"]> = ["M", "F"];
+/** 정회원 성별. 게스트만 성별이 없고(null), 정회원 만들기·수정은 성별이 필수다 */
+type MemberGender = NonNullable<Player["gender"]>;
+const playerGenders: MemberGender[] = ["M", "F"];
 
 type MatchTeamRequest = { name?: string; playerIds?: string[] };
 
@@ -354,9 +358,8 @@ const parseAdminMatchMetadataUpdate = (
 const isMatchType = (value: unknown): value is MatchType =>
   typeof value === "string" && matchTypeValues.includes(value as MatchType);
 
-const isPlayerGender = (value: unknown): value is Player["gender"] =>
-  typeof value === "string" &&
-  playerGenders.includes(value as Player["gender"]);
+const isPlayerGender = (value: unknown): value is MemberGender =>
+  typeof value === "string" && playerGenders.includes(value as MemberGender);
 
 const isMixedDoublesTeamValid = (players: Player[]) =>
   players.length === 2 &&
@@ -400,7 +403,10 @@ const inferMatchTypeFromTeams = (teams: [Player[], Player[]]): MatchType => {
       throw new Error("유효한 팀 구성이 필요합니다.");
     }
 
-    return firstPlayer.gender === secondPlayer.gender
+    // 성별 없는 게스트가 끼면 혼성 여부를 알 수 없어 성별 무관 단식으로 본다.
+    return firstPlayer.gender == null ||
+      secondPlayer.gender == null ||
+      firstPlayer.gender === secondPlayer.gender
       ? "unrestricted-singles"
       : "singles";
   }
@@ -687,6 +693,8 @@ const startInProgressMatch = async ({
       courtName,
       matchStartsAt: now,
       completedAt: null,
+      // 평점 미반영 여부는 첫 점수로 completed가 될 때(PUT) 정한다.
+      ratingExcluded: false,
     },
     now,
   );
@@ -771,6 +779,7 @@ const toMatchSessionDetail = (
               avatarUrl: player.avatarUrl,
               gender: player.gender,
               duprRating: player.duprRating,
+              isGuest: player.isGuest,
             },
           ]
         : [];
@@ -1403,13 +1412,17 @@ const parseRecommendationSeed = (value: unknown): number => {
   return seed;
 };
 
+/** 추천 매칭의 복식 평점. 게스트는 평점이 없는(NR) 선수로 다룬다 */
+const getRecommendationDoublesRating = (member: MatchSessionMember) =>
+  member.isGuest ? null : (member.duprRating?.doubles ?? null);
+
 const toRecommendationPlayer = (
   member: MatchSessionMember,
 ): RecommendationPlayer => ({
   id: member.id,
   username: member.username,
   avatarUrl: member.avatarUrl,
-  doublesRating: member.duprRating?.doubles ?? null,
+  doublesRating: getRecommendationDoublesRating(member),
 });
 
 app.get("/api/match-sessions/:sessionId/recommendations", async (req, res) => {
@@ -1442,7 +1455,7 @@ app.get("/api/match-sessions/:sessionId/recommendations", async (req, res) => {
     const plan = recommendDoublesMatches({
       participants: session.participants.map((member) => ({
         id: member.id,
-        doublesRating: member.duprRating?.doubles ?? null,
+        doublesRating: getRecommendationDoublesRating(member),
       })),
       busyPlayerIds,
       completedMatches: sessionMatches
@@ -1523,6 +1536,35 @@ app.post("/api/match-sessions/:sessionId/participants", async (req, res) => {
     await matchRepository.addSessionParticipants(sessionId, [playerId]);
     res.json(await requireMatchSessionDetail(sessionId, now));
   } catch (err) {
+    sendMatchSessionFailure(res, err);
+  }
+});
+
+app.post("/api/match-sessions/:sessionId/guests", async (req, res) => {
+  try {
+    const decoded = await getAuthPayload(req, res);
+    if (!decoded) {
+      return;
+    }
+
+    const body = req.body as Partial<AddMatchSessionGuestRequest> | undefined;
+    const username = typeof body?.username === "string" ? body.username : "";
+
+    const sessionId = req.params.sessionId;
+    const now = new Date();
+    await matchRepository.cleanupExpired(now);
+    await requireOpenSessionForParticipants(sessionId, now);
+    const guest = await authService.createGuestPlayer({
+      username,
+      addedByPlayerId: decoded.playerId,
+      sessionId,
+    });
+    await matchRepository.addSessionParticipants(sessionId, [guest.id]);
+    res.status(201).json(guest);
+  } catch (err) {
+    if (err instanceof AccountRequestError) {
+      return sendAccountRequestFailure(res, err);
+    }
     sendMatchSessionFailure(res, err);
   }
 });
@@ -1694,6 +1736,7 @@ app.post("/api/matches", async (req, res) => {
       resultSubmittedAt: now,
       matchStartsAt: now,
       completedAt: now,
+      ratingExcluded: hasGuestPlayer(prepared.teams),
     });
   } catch (err) {
     return sendMatchRecordFailure(res, err);
@@ -1890,6 +1933,8 @@ app.post(
         courtName: normalizeNullableCourtName(courtName) ?? undefined,
         matchStartsAt: matchStartsAtDate,
         completedAt: null,
+        // 결과 입력(recordAdminResult)으로 completed가 될 때 정한다.
+        ratingExcluded: false,
       });
       res.status(201).json(match);
     } catch (err) {
@@ -1994,6 +2039,7 @@ app.post("/api/admin/matches/batch", requireAdmin, async (req, res) => {
         courtName: normalizeNullableCourtName(courtName) ?? undefined,
         matchStartsAt: matchStartsAtDate,
         completedAt: matchStartsAtDate,
+        ratingExcluded: hasGuestPlayer(matchTeams),
       };
     });
 
@@ -2198,6 +2244,26 @@ const parseExpectedUpdatedAt = (value: unknown): Date | undefined => {
 const isSameUpdatedAt = (expected: Date, actual: Date) =>
   Math.floor(expected.getTime() / 1000) === Math.floor(actual.getTime() / 1000);
 
+/**
+ * 기록 저장 후 경기의 평점 미반영 여부. 처음 completed가 되거나 참가자가 바뀌면 지금 게스트 여부로 다시 정하고,
+ * 같은 참가자로 점수만 고치면 기존 값을 둔다(그사이 게스트가 정회원이 돼도 과거 경기는 계속 빠진다).
+ * 값이 바뀐 completed 경기는 PUT이 전체 재계산하므로 평점도 따라 바뀐다.
+ */
+const resolveRatingExcludedOnUpdate = (
+  existing: Match,
+  nextTeams: Team[],
+): boolean => {
+  if (existing.status !== "completed") {
+    return hasGuestPlayer(nextTeams);
+  }
+  const previousIds = new Set(getTeamPlayerIds(existing.teams));
+  const nextIds = getTeamPlayerIds(nextTeams);
+  const sameParticipants =
+    previousIds.size === new Set(nextIds).size &&
+    nextIds.every((playerId) => previousIds.has(playerId));
+  return sameParticipants ? existing.ratingExcluded : hasGuestPlayer(nextTeams);
+};
+
 /** 평점 재계산이 읽는 경기 수 상한 */
 const MAX_RECALCULATION_MATCHES = 10000;
 
@@ -2370,6 +2436,7 @@ app.put("/api/matches/:matchId", async (req, res) => {
       ...prepared,
       resultSubmittedByPlayerId: decoded.playerId,
       resultSubmittedAt: now,
+      ratingExcluded: resolveRatingExcludedOnUpdate(existing, prepared.teams),
       expectedUpdatedAt: expectedUpdatedAt ?? existing.updatedAt,
     });
   } catch (err) {
@@ -2833,8 +2900,8 @@ app.patch(
         return;
       }
 
-      const { gender } = req.body as { gender?: Player["gender"] };
-      if (!gender || !playerGenders.includes(gender)) {
+      const { gender } = req.body as { gender?: unknown };
+      if (!isPlayerGender(gender)) {
         return res
           .status(400)
           .json({ error: "gender는 M 또는 F 여야 합니다." });

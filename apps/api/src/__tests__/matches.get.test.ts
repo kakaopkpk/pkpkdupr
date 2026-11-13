@@ -21,6 +21,7 @@ import { PlayerRatingChartProjectionService } from "../services/PlayerRatingChar
 
 const now = new Date("2026-07-14T10:00:00.000Z");
 const player: Player = {
+  isGuest: false,
   id: "player-001",
   username: "player",
   gender: "M",
@@ -35,6 +36,7 @@ const session: AuthenticatedSession = {
   isFirstLogin: false,
 };
 const match: Match = {
+  ratingExcluded: false,
   id: "match-001",
   type: "singles",
   source: "player_created",

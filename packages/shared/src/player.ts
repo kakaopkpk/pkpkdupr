@@ -457,14 +457,26 @@ export interface Player {
   id: string;
   username: string;
   duprRating: PublicPlayerDupr | null;
-  gender: "M" | "F";
+  /** 게스트만 null이다. 정회원은 항상 성별이 있다 */
+  gender: "M" | "F" | null;
   status: PlayerStatus;
+  /** 회원이 세션에서 추가한 게스트. 게스트가 낀 경기는 평점에 반영하지 않는다(Match.ratingExcluded) */
+  isGuest: boolean;
   avatarUrl?: string;
   affiliations?: PlayerAffiliation[];
   statusMessage?: string;
   statusMessageBackgroundColor?: string;
   createdAt: Date;
   updatedAt: Date;
+}
+
+/** 관리자 회원 목록(GET /api/admin/players) 항목에만 붙는 게스트 추가 정보 */
+export interface GuestAddedInfo {
+  addedByPlayerId: string | null;
+  addedByUsername: string | null;
+  sessionId: string | null;
+  sessionName: string | null;
+  sessionDate: Date | null;
 }
 
 export interface MemberListPlayer extends Player {

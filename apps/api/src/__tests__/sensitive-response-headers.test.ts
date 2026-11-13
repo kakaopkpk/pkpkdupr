@@ -10,6 +10,7 @@ import { AuthService } from "../services/AuthService";
 import type { AuthenticatedSession } from "../services/AuthService";
 
 const player: Player = {
+  isGuest: false,
   id: "Pplayer1",
   username: "player",
   gender: "M",

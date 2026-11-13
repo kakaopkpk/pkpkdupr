@@ -198,6 +198,7 @@ export const hydrateMatch = (record: any): Match => ({
   completedAt: toDateOrNull(record.completedAt),
   createdAt: new Date(record.createdAt),
   updatedAt: new Date(record.updatedAt),
+  ratingExcluded: record.ratingExcluded === true,
 });
 
 const hydrateSessionSummary = (record: any): MatchSessionSummary => ({

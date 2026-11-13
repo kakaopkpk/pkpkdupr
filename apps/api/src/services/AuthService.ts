@@ -1,4 +1,5 @@
 import {
+  GuestAddedInfo,
   OfficialDuprAdjustmentLog,
   OfficialDuprAdjustmentImpact,
   OfficialDuprAdjustmentPreview,
@@ -78,6 +79,8 @@ interface StoredPlayerRecord extends Player {
   isFirstLogin: boolean;
   duprMetrics: PlayerDuprMetrics;
   duprState: StoredPlayerDupr;
+  guestAddedByPlayerId: string | null;
+  guestAddedSessionId: string | null;
 }
 
 export interface AuthenticatedSession {
@@ -125,13 +128,17 @@ export class AccountRequestError extends Error {
 
 export interface AdminPlayer extends Player {
   duprMetrics: PlayerDuprMetrics;
+  /** 게스트를 추가한 회원·세션. 정회원은 null */
+  guestAddedInfo: GuestAddedInfo | null;
+  /** 참가한 평점 미반영(게스트가 낀) 완료 경기 수 */
+  ratingExcludedMatchCount: number;
 }
 
 const buildId = (prefix: string) =>
   `${prefix}-${randomUUID()}`;
 
 const createPlayer = (
-  input: Pick<Player, "username" | "gender">,
+  input: Pick<Player, "username" | "gender"> & { isGuest?: boolean },
 ): Player & { duprRating: null } => {
   const now = new Date();
 
@@ -141,6 +148,7 @@ const createPlayer = (
     duprRating: null,
     gender: input.gender,
     status: "active",
+    isGuest: input.isGuest ?? false,
     createdAt: now,
     updatedAt: now,
   };
@@ -157,6 +165,10 @@ const hydratePlayer = (record: any): StoredPlayerRecord => {
     duprMetrics: duprState.metrics,
     duprState,
     isFirstLogin: record.isFirstLogin === true,
+    gender: record.gender ?? null,
+    isGuest: record.isGuest === true,
+    guestAddedByPlayerId: record.guestAddedByPlayerId ?? null,
+    guestAddedSessionId: record.guestAddedSessionId ?? null,
     status: record.status === "deleted" ? "inactive" : record.status,
     createdAt: toDate(record.createdAt),
     updatedAt: toDate(record.updatedAt),
@@ -343,15 +355,12 @@ const toPublicPlayer = (stored: StoredPlayerRecord): Player => {
     isFirstLogin: _isFirstLogin,
     duprMetrics: _duprMetrics,
     duprState: _duprState,
+    guestAddedByPlayerId: _guestAddedByPlayerId,
+    guestAddedSessionId: _guestAddedSessionId,
     ...player
   } = stored;
   return player;
 };
-
-const toAdminPlayer = (stored: StoredPlayerRecord): AdminPlayer => ({
-  ...toPublicPlayer(stored),
-  duprMetrics: stored.duprMetrics,
-});
 
 /** Postgres unique_violation(23505). 표현식 유니크 인덱스(lower(username)) 위반도 같은 코드다. */
 const isUniqueViolation = (error: unknown) => {
@@ -1037,8 +1046,80 @@ export class AuthService {
   }
 
   async getAdminPlayers(): Promise<AdminPlayer[]> {
-    const players = await db.players.findAll();
-    return players.map((record) => toAdminPlayer(hydratePlayer(record)));
+    const [players, excludedMatchCountByPlayerId] = await Promise.all([
+      db.players.findAll().then((records) => records.map(hydratePlayer)),
+      db.matches.countRatingExcludedMatchesByPlayerId(),
+    ]);
+    const usernameById = new Map(
+      players.map((player) => [player.id, player.username]),
+    );
+    const guestSessionIds = [
+      ...new Set(
+        players.flatMap((player) =>
+          player.isGuest && player.guestAddedSessionId
+            ? [player.guestAddedSessionId]
+            : [],
+        ),
+      ),
+    ];
+    const sessionById = new Map(
+      (
+        await Promise.all(
+          guestSessionIds.map((sessionId) =>
+            db.matches.findSessionById(sessionId),
+          ),
+        )
+      ).flatMap((session) => (session ? [[session.id, session] as const] : [])),
+    );
+
+    return players.map((player): AdminPlayer => {
+      const session = player.guestAddedSessionId
+        ? sessionById.get(player.guestAddedSessionId)
+        : undefined;
+      return {
+        ...toPublicPlayer(player),
+        duprMetrics: player.duprMetrics,
+        // 추가한 회원·세션이 지워졌으면 id만 남기고 이름·날짜는 null이다.
+        guestAddedInfo: player.isGuest
+          ? {
+              addedByPlayerId: player.guestAddedByPlayerId,
+              addedByUsername: player.guestAddedByPlayerId
+                ? (usernameById.get(player.guestAddedByPlayerId) ?? null)
+                : null,
+              sessionId: player.guestAddedSessionId,
+              sessionName: session?.name ?? null,
+              sessionDate: session?.date ?? null,
+            }
+          : null,
+        ratingExcludedMatchCount: excludedMatchCountByPlayerId[player.id] ?? 0,
+      };
+    });
+  }
+
+  /**
+   * 세션에서 게스트를 만든다. Auth 계정 없이 active·성별 없음·NR로 만들고, 추가한 회원과 세션을 남긴다.
+   * 아이디 형식이 틀리면 400, 대소문자 무시로 이미 있으면 409다. 세션 참여자 추가는 호출부가 한다.
+   */
+  async createGuestPlayer(input: {
+    username: string;
+    addedByPlayerId: string;
+    sessionId: string;
+  }): Promise<Player> {
+    const username = input.username.trim();
+    if (!isValidUsername(username)) {
+      throw new AccountRequestError(400, USERNAME_FORMAT_MESSAGE);
+    }
+    // 동시 요청은 createStoredPlayer가 lower(username) 유니크 위반을 409로 바꿔 걸러낸다.
+    if (await db.players.findByUsernameIgnoringCase(username)) {
+      throw new AccountRequestError(409, DUPLICATE_USERNAME_MESSAGE);
+    }
+
+    const created = await this.createStoredPlayer({
+      ...createPlayer({ username, gender: null, isGuest: true }),
+      guestAddedByPlayerId: input.addedByPlayerId,
+      guestAddedSessionId: input.sessionId,
+    });
+    return toPublicPlayer(hydratePlayer(created));
   }
 
   async getPublicPlayers(): Promise<Player[]> {
@@ -1302,8 +1383,14 @@ export class AuthService {
     const matchParticipantDuprSnapshots: MatchParticipantDuprSnapshot[] = [];
     const perMatchChanges: DuprRecalculationResult["perMatchChanges"] = [];
     const fixedOfficialAnchorKeys = new Set<string>();
+    // 게스트가 낀 경기(ratingExcluded)는 정회원 승급 뒤 재계산에서도 평점에 넣지 않는다.
     const replayMatches = completedMatches
-      .filter((match) => match.status === "completed" && match.completedAt)
+      .filter(
+        (match) =>
+          match.status === "completed" &&
+          match.completedAt &&
+          !match.ratingExcluded,
+      )
       .sort(
         (a, b) =>
           new Date(a.completedAt!).getTime() -
@@ -1823,7 +1910,7 @@ export class AuthService {
     options: { refreshProjection?: boolean } = {},
   ): Promise<MatchRatingApplyResult> {
     const match = await db.matches.findById(requested.id);
-    if (!match || match.status !== "completed") {
+    if (!match || match.status !== "completed" || match.ratingExcluded) {
       return { ratingChangeLogs: [], changedPlayerCount: 0 };
     }
     const winnerTeamIndex = buildWinnerTeamIndex(match);

@@ -46,6 +46,9 @@ const setupAuthFixture = () => {
     authUserId: string | null = null,
   ): StoredPlayerRecord => {
     const player: StoredPlayerRecord = {
+      isGuest: false,
+      guestAddedByPlayerId: null,
+      guestAddedSessionId: null,
       id,
       username,
       gender: "F",

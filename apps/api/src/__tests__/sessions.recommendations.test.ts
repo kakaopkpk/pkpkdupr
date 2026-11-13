@@ -21,6 +21,7 @@ import {
 const thursdayEvening = new Date("2026-11-12T19:00:00+09:00");
 
 const makePlayer = (id: string, doubles: number | null): Player => ({
+  isGuest: false,
   id,
   username: `user-${id}`,
   gender: "M",

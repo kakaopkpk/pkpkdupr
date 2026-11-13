@@ -20,6 +20,7 @@ import {
 const now = new Date("2026-11-12T15:00:00+09:00");
 
 const requester: Player = {
+  isGuest: false,
   id: "Prequest",
   username: "prequest",
   gender: "M",

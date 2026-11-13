@@ -30,6 +30,7 @@ const players = ["anchor", "partner", "opponent-a", "opponent-b", "admin"].map(
     username: id,
     gender: "M",
     status: "active",
+    isGuest: false,
     duprRating: null,
     authUserId: null,
     createdAt: NOW,
@@ -44,6 +45,7 @@ let persistedDuprStateByPlayerId: Map<string, StoredPlayerDupr>;
 let replacedMatchCompletedLogs: PlayerRatingChangeLog[];
 
 const buildMatch = (completedAt: Date): Match => ({
+  ratingExcluded: false,
   id: `match-${completedAt.getTime()}`,
   type: "men-doubles",
   source: "player_created",

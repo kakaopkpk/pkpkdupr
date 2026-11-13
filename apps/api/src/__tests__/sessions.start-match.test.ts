@@ -22,6 +22,7 @@ const thursdayEvening = new Date("2026-11-12T19:00:00+09:00");
 const thursdayLateNight = new Date("2026-11-12T22:30:00+09:00");
 
 const makePlayer = (id: string, gender: Player["gender"]): Player => ({
+  isGuest: false,
   id,
   username: id,
   gender,
