@@ -4,7 +4,7 @@ import type { TabKey } from "@/context/TabNavigationContext";
 
 /** 하단 바·미니바 공통 유리 알약 */
 export const GLASS_CLASS_NAME =
-  "border border-[rgba(15,23,42,0.06)] bg-[rgba(255,255,255,0.6)] shadow-[0_6px_20px_rgba(15,23,42,0.10)] backdrop-blur-[20px] backdrop-saturate-[180%]";
+  "border border-pk-ink/6 bg-white/60 shadow-[0_6px_20px] shadow-pk-ink/10 backdrop-blur-[20px] backdrop-saturate-[180%]";
 
 const svgProps = {
   viewBox: "0 0 24 24",
@@ -143,7 +143,7 @@ export const PlusMenu: React.FC<{
         <div
           role="menu"
           aria-label="새로 만들기"
-          className="absolute right-0 bottom-[calc(66px+14px)] w-[220px] rounded-pk-lg bg-white py-1.5 shadow-[0_12px_32px_rgba(15,23,42,0.2)]"
+          className="absolute right-0 bottom-[calc(66px+14px)] w-[220px] rounded-pk-lg bg-white py-1.5 shadow-[0_12px_32px] shadow-pk-ink/20"
         >
           <button
             ref={firstItemRef}
@@ -179,7 +179,7 @@ export const PlusMenu: React.FC<{
         aria-haspopup="menu"
         aria-expanded={isOpen}
         onClick={onToggle}
-        className="flex size-[66px] shrink-0 items-center justify-center rounded-full bg-pk-primary text-white shadow-[0_8px_18px_rgba(15,23,42,0.18)] touch-manipulation"
+        className="flex size-[66px] shrink-0 items-center justify-center rounded-full bg-pk-primary text-white shadow-[0_8px_18px] shadow-pk-ink/18 touch-manipulation"
       >
         {isOpen ? <CloseIcon /> : <PlusIcon />}
       </button>

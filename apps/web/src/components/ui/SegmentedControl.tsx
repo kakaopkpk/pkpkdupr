@@ -41,7 +41,7 @@ export function SegmentedControl<T extends string>({
               "whitespace-nowrap rounded-full text-pk-13 transition-colors",
               size === "sm" ? "h-[30px] px-3" : "h-[34px] px-3.5",
               isSelected
-                ? "bg-white font-extrabold text-pk-ink shadow-[0_1px_2px_rgba(15,23,42,0.08)]"
+                ? "bg-white font-extrabold text-pk-ink shadow-[0_1px_2px] shadow-pk-ink/8"
                 : "bg-transparent font-bold text-pk-sub",
             )}
           >

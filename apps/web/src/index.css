@@ -13,6 +13,7 @@
   --color-pk-muted: #8a93a6;
   --color-pk-divider: #eef1f6;
   --color-pk-quiet: #b4bccb;
+  --color-pk-line: #d3d9e6; /* 시트 그랩바·미획득 배지 꼬리표 테두리 */
   --color-pk-neutral: #e3e7f0; /* 세그먼트 바탕·비활성 버튼·스켈레톤 */
   --color-pk-up: #0a7a52;
   --color-pk-down: #c2253d;

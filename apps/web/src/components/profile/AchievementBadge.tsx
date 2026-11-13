@@ -6,8 +6,8 @@ const EARNED_COLOR = "var(--color-pk-primary)";
 const EARNED_ICON = "var(--color-white)";
 const UNEARNED_FILL = "var(--color-pk-neutral)";
 const UNEARNED_ICON = "var(--color-pk-quiet)";
-// 못 받은 배지 숫자 꼬리표 테두리. 시트 그랩바와 같은 색이며 pk 토큰에는 없다
-const UNEARNED_TAG_BORDER = "#d3d9e6";
+// 못 받은 배지 숫자 꼬리표 테두리
+const UNEARNED_TAG_BORDER = "var(--color-pk-line)";
 
 type BadgeIconKind =
   | "paddle"

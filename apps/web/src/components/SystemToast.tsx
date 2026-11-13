@@ -54,7 +54,7 @@ const SystemToast: React.FC<{
         ref={cardRef}
         role="status"
         className={cx(
-          "pointer-events-auto flex min-h-14 items-center gap-2 py-1.5 pl-4 shadow-[0_8px_24px_rgba(15,23,42,0.14)]",
+          "pointer-events-auto flex min-h-14 items-center gap-2 py-1.5 pl-4 shadow-[0_8px_24px] shadow-pk-ink/14",
           variant === "pill"
             ? "rounded-full bg-white/92 backdrop-blur-[20px] backdrop-saturate-[180%]"
             : "rounded-pk-lg bg-white",
