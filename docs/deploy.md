@@ -84,6 +84,9 @@ gh variable set SUPABASE_PROJECT_REF --body <project-ref>
 | `DATABASE_URL` | 예 | 커넥션 풀러 transaction mode 주소(위 1-3). 없으면 Supabase가 주입하는 `SUPABASE_DB_URL`(직접 연결)로 대신하며 경고를 남깁니다. |
 | `CORS_ALLOWED_ORIGINS` | 예 | 허용 origin(쉼표 구분). 운영값 `https://kakaopkpk.github.io` |
 | `STORAGE_PUBLIC_URL` | 아니오 | 아바타 공개 URL의 base. 없으면 `SUPABASE_URL`을 씁니다. 운영에서는 비워 두고, 로컬 `functions serve`에서만 `http://127.0.0.1:54321`로 넣습니다(함수 안의 `SUPABASE_URL`은 브라우저가 접근할 수 없는 `http://kong:8000`이기 때문). |
+| `GOOGLE_CALENDAR_SERVICE_ACCOUNT_JSON` | 아니오 | 동호회 구글 캘린더에 세션 일정을 쓰는 서비스 계정의 JSON 키 파일 내용 전체(아래 3-1). `GOOGLE_CALENDAR_ID`와 둘 다 있어야 연동이 켜지고, 하나라도 없으면 캘린더를 호출하지 않습니다. |
+| `GOOGLE_CALENDAR_ID` | 아니오 | 일정을 쓸 동호회 캘린더 ID(아래 3-1). 예 `abcd…@group.calendar.google.com` |
+| `WEB_APP_URL` | 아니오 | 일정 설명에 넣는 웹 앱 주소. 운영값 `https://kakaopkpk.github.io/pkpkdupr/`. 없으면 설명에서 앱 링크 두 줄을 뺍니다. |
 
 `SUPABASE_URL`·`SUPABASE_ANON_KEY`·`SUPABASE_SERVICE_ROLE_KEY`·`SUPABASE_JWKS`는 Supabase가 함수에 자동으로 넣으므로 직접 설정하지 않습니다(예약 이름이라 설정할 수도 없습니다). 토큰 확인에는 `SUPABASE_JWKS`(프로젝트 JWT 서명 공개키, 토큰 서명 검증용)와 `SUPABASE_URL`·`SUPABASE_ANON_KEY`를, 계정 발급·비밀번호 초기화·아이디 변경(Auth admin API)에는 service role key를 씁니다.
 
@@ -95,6 +98,27 @@ pnpm exec supabase secrets list --project-ref <project-ref>
 ```
 
 secret을 바꾼 뒤에는 함수를 다시 배포하지 않아도 새 요청부터 반영됩니다.
+
+### 3-1. 구글 캘린더 연동 (선택, 최초 1회)
+
+세션 일정과 참석 현황을 동호회 전용 구글 캘린더에 보여 줍니다. 참석 데이터의 원본은 앱(세션 참여자)이고, 서버가 서비스 계정으로 캘린더에 쓰기만 합니다(캘린더에서 고친 내용은 앱으로 오지 않고, 다음 변경 때 덮어써집니다). 세션을 만들거나 참여자가 바뀌거나 세션이 지워질 때 응답 뒤에 반영하며, 실패하면 함수 로그(`[CALENDAR]`)만 남기고 다음 변경 때 최신 상태로 다시 씁니다. 연동 전부터 있던 세션은 다음 변경 때 일정이 생깁니다.
+
+1. [Google Cloud 콘솔](https://console.cloud.google.com/)에서 프로젝트를 만들거나 고르고, API 및 서비스 → 라이브러리에서 **Google Calendar API**를 사용 설정합니다.
+2. IAM 및 관리자 → 서비스 계정에서 서비스 계정을 만듭니다(역할 부여 없음). 서비스 계정 → 키 → 키 추가 → 새 키 만들기 → **JSON**으로 키 파일을 받습니다. 이 파일 내용 전체가 `GOOGLE_CALENDAR_SERVICE_ACCOUNT_JSON`입니다.
+3. [구글 캘린더](https://calendar.google.com/)에서 동호회 전용 캘린더를 만들고(설정 → 캘린더 추가 → 새 캘린더), 그 캘린더 설정 → 특정 사용자 또는 그룹과 공유 → 서비스 계정 이메일(`…@<프로젝트>.iam.gserviceaccount.com`)을 **일정 변경** 권한으로 추가합니다.
+4. 같은 설정 화면의 캘린더 통합 → **캘린더 ID**를 확인합니다. 이 값이 `GOOGLE_CALENDAR_ID`입니다.
+5. secret을 넣습니다.
+
+   ```bash
+   pnpm exec supabase secrets set --project-ref <project-ref> \
+     GOOGLE_CALENDAR_SERVICE_ACCOUNT_JSON="$(cat <서비스 계정 키>.json)" \
+     GOOGLE_CALENDAR_ID='<캘린더 ID>' \
+     WEB_APP_URL='https://kakaopkpk.github.io/pkpkdupr/'
+   ```
+
+6. 회원에게는 캘린더 공유(보기 권한)나 공개 주소로 그 캘린더를 구독하도록 안내합니다. 서비스 계정은 초대를 보내지 않으므로 일정에 참석자는 넣지 않습니다.
+
+로컬 dev에서는 이 값들을 넣지 않으면 연동이 꺼진 채로 동작합니다.
 
 ## 4. 로그인 설정 (최초 1회)
 
