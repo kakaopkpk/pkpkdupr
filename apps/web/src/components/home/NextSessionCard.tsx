@@ -1,4 +1,5 @@
 import React from "react";
+import { buttonPressClassName } from "@/components/ui/Button";
 import { PlayerAvatar } from "@/components/ui/PlayerAvatar";
 import { cx } from "@/components/ui/cx";
 import type { MatchSessionDetailInfo } from "@/lib/matchSessions";
@@ -123,7 +124,10 @@ const NextSessionCard: React.FC<{
               type="button"
               onClick={onLeave}
               disabled={isPending}
-              className="inline-flex h-11 items-center rounded-pk-sm border-[1.5px] border-white/50 px-4 text-pk-15 font-bold text-white active:opacity-80 disabled:opacity-60"
+              className={cx(
+                "inline-flex h-11 items-center rounded-pk-sm border-[1.5px] border-white/50 px-4 text-pk-15 font-bold text-white disabled:opacity-60",
+                buttonPressClassName,
+              )}
             >
               {pendingAction === "leave" ? "취소하는 중…" : "참여 취소"}
             </button>
@@ -133,7 +137,10 @@ const NextSessionCard: React.FC<{
             type="button"
             onClick={onJoin}
             disabled={isPending}
-            className="flex h-[52px] items-center justify-center rounded-pk-sm bg-white text-pk-15 font-extrabold text-pk-primary active:opacity-80 disabled:opacity-60"
+            className={cx(
+              "flex h-[52px] items-center justify-center rounded-pk-sm bg-white text-pk-15 font-extrabold text-pk-primary disabled:opacity-60",
+              buttonPressClassName,
+            )}
           >
             {pendingAction === "join" ? "참여하는 중…" : "참여하기"}
           </button>

@@ -3,7 +3,7 @@ import { getMatchTopLevelType } from "@pkpkdupr/shared/match";
 import { getTeamResultScores, type MatchInfo } from "@/types/match";
 import SkeletonBlock from "@/components/SkeletonBlock";
 import { FooterError } from "@/components/record/RecordMatchParts";
-import { PkButton } from "@/components/ui/Button";
+import { PkButton, rowPressClassName } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { RatingDelta } from "@/components/ui/Delta";
 import { PlayerAvatar, TeamAvatars } from "@/components/ui/PlayerAvatar";
@@ -231,7 +231,10 @@ const RatingChangeCard: React.FC<{
           key={player.id}
           type="button"
           onClick={() => onOpenPlayer(player.id)}
-          className="grid w-full grid-cols-[24px_minmax(0,1fr)_auto_60px] items-center gap-2.5 py-[11px] text-left not-last:shadow-[inset_0_-1px_0_#e6e9f0] active:opacity-70"
+          className={cx(
+            "grid w-full grid-cols-[24px_minmax(0,1fr)_auto_60px] items-center gap-2.5 py-[11px] text-left not-last:shadow-[inset_0_-1px_0_#e6e9f0] active:opacity-70",
+            rowPressClassName,
+          )}
         >
           <PlayerAvatar player={player} size={24} />
           <span className="min-w-0 truncate text-pk-15 font-bold">
