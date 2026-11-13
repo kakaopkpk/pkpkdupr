@@ -11,11 +11,15 @@ interface CountUpTiming {
 
 const formatInteger = (value: number) => String(Math.round(value));
 
-/** 0부터 value까지 세는 숫자. 기본은 정수이고, 세는 동안 폭은 최종 값으로 고정한다 */
+/** from(기본 0)부터 value까지 세는 숫자. 기본은 정수이고, 세는 동안 폭은 최종 값으로 고정한다 */
 export const CountUpNumber: React.FC<
-  CountUpTiming & { value: number; format?: (value: number) => string }
-> = ({ value, format = formatInteger, delayMs, durationMs }) => {
-  const count = useCountUp(value, { delayMs, durationMs });
+  CountUpTiming & {
+    value: number;
+    from?: number;
+    format?: (value: number) => string;
+  }
+> = ({ value, from, format = formatInteger, delayMs, durationMs }) => {
+  const count = useCountUp(value, { from, delayMs, durationMs });
   return (
     <CountUpText finalContent={format(value)}>{format(count.value)}</CountUpText>
   );

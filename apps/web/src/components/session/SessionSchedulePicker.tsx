@@ -1,34 +1,45 @@
-import React, { useLayoutEffect, useRef } from "react";
+import React, { useLayoutEffect, useRef, useState } from "react";
 import {
-  formatSessionTimeRange,
+  addKstDays,
   kstDateKeyToDate,
   minutesToSessionTime,
   REGULAR_SESSION_WEEKDAYS,
   sessionTimeToMinutes,
-  toKstDateKey,
   WEEKDAY_LABELS,
 } from "@pkpkdupr/shared/session";
+import { ChevronRightIcon } from "@/components/ui/Icons";
+import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { cx } from "@/components/ui/cx";
 import { formatKstLongDate } from "@/lib/format";
 
-const DAY_MS = 24 * 60 * 60 * 1000;
 /** 오늘부터 고를 수 있는 날 수(3주) */
 const DATE_OPTION_COUNT = 21;
-export const SESSION_TIME_STEP_MINUTES = 30;
-/** 시작 시각 06:00~23:00, 종료 시각은 시작 30분 뒤~23:30 */
-const SESSION_FIRST_START_MINUTES = 6 * 60;
-export const SESSION_LAST_START_MINUTES = 23 * 60;
-export const SESSION_LAST_END_MINUTES = 23 * 60 + 30;
-/** 선택한 칩 앞에 보일 여백. 앞 칩이 조금 보여 가로로 넘길 수 있음을 알린다 */
-const SCROLL_LEAD_PX = 24;
-/** 칩 줄 오른쪽 끝을 흐리는 폭(STRIP_CLASS_NAME의 mask 40px과 같다). 이 안에 걸친 칩은 가려진 것으로 본다 */
-const STRIP_FADE_PX = 40;
+const SESSION_TIME_STEP_MINUTES = 30;
+/** 길이 1~6시간 */
+const SESSION_DURATION_OPTIONS_MINUTES = [60, 120, 180, 240, 300, 360];
 
-// 시트 좌우 여백(시트 16px + 폼 4px)까지 스크롤하고, 오른쪽 끝을 흐려 더 있다는 것을 보인다
-const STRIP_CLASS_NAME =
-  "-mx-5 flex gap-1.5 overflow-x-auto px-5 [scrollbar-width:none] [mask-image:linear-gradient(to_right,#000_calc(100%-40px),transparent_100%)] [&::-webkit-scrollbar]:hidden";
+/** "2시간" */
+export const formatDurationHours = (minutes: number) => `${minutes / 60}시간`;
 
-/** 날짜 키의 월·일·요일(0=일). 날짜 키는 이미 KST 날짜라 UTC로 읽는다 */
+type StartTimeSegment = "dawn" | "morning" | "afternoon" | "evening";
+
+/** 시간대마다 6시간(30분 칸 12개). 순서대로 0·6·12·18시에 시작한다 */
+const SEGMENT_HOURS = 6;
+const START_TIME_SEGMENTS: readonly { value: StartTimeSegment; label: string }[] =
+  [
+    { value: "dawn", label: "새벽" },
+    { value: "morning", label: "오전" },
+    { value: "afternoon", label: "오후" },
+    { value: "evening", label: "저녁" },
+  ];
+const SEGMENT_SLOT_COUNT = (SEGMENT_HOURS * 60) / SESSION_TIME_STEP_MINUTES;
+
+export const getStartTimeSegment = (startTime: string): StartTimeSegment =>
+  START_TIME_SEGMENTS[
+    Math.floor(sessionTimeToMinutes(startTime) / (SEGMENT_HOURS * 60))
+  ].value;
+
+/** 날짜 키의 일·요일(0=일). 날짜 키는 이미 KST 날짜라 UTC로 읽는다 */
 const getDateParts = (dateKey: string) => {
   const [year, month, day] = dateKey.split("-").map(Number);
   return {
@@ -38,210 +49,133 @@ const getDateParts = (dateKey: string) => {
   };
 };
 
-/** "11월 17일 월요일" */
-const formatSessionDateLong = (dateKey: string) =>
-  formatKstLongDate(kstDateKeyToDate(dateKey));
-
-const REGULAR_WEEKDAYS_LABEL = REGULAR_SESSION_WEEKDAYS.map(
-  (weekday) => WEEKDAY_LABELS[weekday],
-).join("·");
-
-const buildDateKeys = (todayKey: string) => {
-  const todayStart = kstDateKeyToDate(todayKey).getTime();
-  return Array.from({ length: DATE_OPTION_COUNT }, (_, index) =>
-    toKstDateKey(new Date(todayStart + index * DAY_MS)),
-  );
-};
-
-const buildTimes = (fromMinutes: number, toMinutes: number) => {
-  const times: string[] = [];
-  for (
-    let minutes = fromMinutes;
-    minutes <= toMinutes;
-    minutes += SESSION_TIME_STEP_MINUTES
-  ) {
-    times.push(minutesToSessionTime(minutes));
-  }
-  return times;
-};
-
-const START_TIMES = buildTimes(
-  SESSION_FIRST_START_MINUTES,
-  SESSION_LAST_START_MINUTES,
-);
-
-/** value가 바뀔 때마다 선택한 칩이 보이도록 가로 스크롤을 맞춘다 */
-const useScrollSelectedIntoView = (value: string) => {
-  const stripRef = useRef<HTMLDivElement | null>(null);
-
-  useLayoutEffect(() => {
-    const strip = stripRef.current;
-    const chip = strip?.querySelector<HTMLElement>('[aria-checked="true"]');
-    if (!strip || !chip) return;
-    const stripRect = strip.getBoundingClientRect();
-    const chipRect = chip.getBoundingClientRect();
-    // 이미 다 보이는 칩이면 사용자가 둔 스크롤을 건드리지 않는다
-    if (
-      chipRect.left >= stripRect.left &&
-      chipRect.right <= stripRect.right - STRIP_FADE_PX
-    ) {
-      return;
-    }
-    strip.scrollLeft +=
-      chipRect.left - stripRect.left - SCROLL_LEAD_PX;
-  }, [value]);
-
-  return stripRef;
-};
-
 const FieldLabel: React.FC<{
   id: string;
   label: string;
   detail?: React.ReactNode;
 }> = ({ id, label, detail }) => (
-  <div className="flex items-baseline justify-between gap-2">
+  <div className="flex items-center justify-between gap-2">
     <span id={id} className="text-pk-13 font-bold text-pk-sub">
       {label}
     </span>
     {detail ? (
-      <span className="truncate text-pk-13 font-bold text-pk-ink tabular-nums">
+      <span className="truncate text-pk-13 font-bold text-pk-muted tabular-nums">
         {detail}
       </span>
     ) : null}
   </div>
 );
 
-/** 오늘부터 3주 날짜 칩. 월이 바뀌는 자리에 월 표시를 둔다. 정기 운동 요일은 점으로 표시한다 */
-export const SessionDatePicker: React.FC<{
+const RegularDot: React.FC<{ className?: string }> = ({ className }) => (
+  <span
+    aria-hidden="true"
+    className={cx("size-1 shrink-0 rounded-full bg-pk-primary", className)}
+  />
+);
+
+/**
+ * 오늘부터 3주를 고르는 달력. 오늘이 든 주 일요일부터 마지막 날이 든 주 토요일까지 7열로 그리고,
+ * 범위 밖 날은 누를 수 없다. 숫자 아래 줄에 정기 운동일 점과 '오늘'·달이 바뀌는 날의 'N월'을 쓴다
+ */
+export const SessionCalendar: React.FC<{
   todayKey: string;
-  value: string;
+  value: string | null;
   onChange: (dateKey: string) => void;
 }> = ({ todayKey, value, onChange }) => {
-  const stripRef = useScrollSelectedIntoView(value);
-  const dateKeys = buildDateKeys(todayKey);
+  const lastKey = addKstDays(todayKey, DATE_OPTION_COUNT - 1);
+  const firstCellKey = addKstDays(todayKey, -getDateParts(todayKey).weekday);
+  const lastCellKey = addKstDays(lastKey, 6 - getDateParts(lastKey).weekday);
+  const cellKeys: string[] = [];
+  // YYYY-MM-DD 문자열은 사전순이 날짜순이다
+  for (let key = firstCellKey; key <= lastCellKey; key = addKstDays(key, 1)) {
+    cellKeys.push(key);
+  }
 
   return (
     <div className="flex flex-col gap-2">
       <FieldLabel
         id="session-date-label"
         label="날짜"
-        detail={formatSessionDateLong(value)}
+        detail={
+          <span className="flex items-center gap-1.5">
+            <RegularDot />
+            정기 운동일
+          </span>
+        }
       />
       <div
-        ref={stripRef}
         role="radiogroup"
         aria-labelledby="session-date-label"
-        className={STRIP_CLASS_NAME}
+        className="grid grid-cols-7 gap-x-1 gap-y-0.5"
       >
-        {dateKeys.map((dateKey, index) => {
+        {WEEKDAY_LABELS.map((label, weekday) => (
+          <span
+            key={label}
+            aria-hidden="true"
+            className={cx(
+              "pb-0.5 text-center text-pk-12 font-bold",
+              weekday === 0 ? "text-pk-down" : "text-pk-muted",
+            )}
+          >
+            {label}
+          </span>
+        ))}
+        {cellKeys.map((dateKey) => {
           const { month, day, weekday } = getDateParts(dateKey);
+          const isDisabled = dateKey < todayKey || dateKey > lastKey;
           const isSelected = dateKey === value;
           const isRegular = REGULAR_SESSION_WEEKDAYS.includes(weekday);
-          const topLabel =
-            index === 0 ? "오늘" : index === 1 ? "내일" : WEEKDAY_LABELS[weekday];
-          const ariaLabel = [
-            formatSessionDateLong(dateKey) + (index < 2 ? `(${topLabel})` : ""),
-            isRegular && "정기 운동일",
-          ]
-            .filter(Boolean)
-            .join(", ");
-          return (
-            <React.Fragment key={dateKey}>
-              {index === 0 || day === 1 ? (
-                <span
-                  aria-hidden="true"
-                  className="flex w-5 shrink-0 items-center justify-center text-pk-12 font-bold text-pk-muted [writing-mode:vertical-rl]"
-                >
-                  {month}월
-                </span>
-              ) : null}
-              <button
-                type="button"
-                role="radio"
-                aria-checked={isSelected}
-                aria-label={ariaLabel}
-                onClick={() => onChange(dateKey)}
-                className={cx(
-                  "flex h-[72px] w-[54px] shrink-0 flex-col items-center justify-center gap-0.5 rounded-pk-sm transition-colors",
-                  isSelected ? "bg-pk-primary text-white" : "bg-pk-bg text-pk-ink",
-                )}
-              >
-                <span
-                  className={cx(
-                    "text-pk-12 font-bold",
-                    isSelected
-                      ? "text-white/85"
-                      : weekday === 0
-                        ? "text-pk-down"
-                        : "text-pk-sub",
-                  )}
-                >
-                  {topLabel}
-                </span>
-                <span className="text-pk-17 font-extrabold tabular-nums">
-                  {day}
-                </span>
-                <span
-                  aria-hidden="true"
-                  className={cx(
-                    "size-1 rounded-full",
-                    !isRegular
-                      ? "bg-transparent"
-                      : isSelected
-                        ? "bg-white"
-                        : "bg-pk-primary",
-                  )}
-                />
-              </button>
-            </React.Fragment>
-          );
-        })}
-      </div>
-      <p className="flex items-center gap-1.5 text-pk-12 text-pk-muted">
-        <span aria-hidden="true" className="size-1 rounded-full bg-pk-primary" />
-        정기 운동일({REGULAR_WEEKDAYS_LABEL})
-      </p>
-    </div>
-  );
-};
-
-const TimeStrip: React.FC<{
-  labelId: string;
-  label: string;
-  times: string[];
-  value: string;
-  onChange: (time: string) => void;
-}> = ({ labelId, label, times, value, onChange }) => {
-  const stripRef = useScrollSelectedIntoView(value);
-
-  return (
-    <div className="flex flex-col gap-1.5">
-      <span id={labelId} className="text-pk-12 font-bold text-pk-muted">
-        {label}
-      </span>
-      <div
-        ref={stripRef}
-        role="radiogroup"
-        aria-labelledby={labelId}
-        className={STRIP_CLASS_NAME}
-      >
-        {times.map((time) => {
-          const isSelected = time === value;
+          const note =
+            dateKey === todayKey ? "오늘" : day === 1 ? `${month}월` : null;
           return (
             <button
-              key={time}
+              key={dateKey}
               type="button"
               role="radio"
               aria-checked={isSelected}
-              onClick={() => onChange(time)}
+              aria-label={[
+                formatKstLongDate(kstDateKeyToDate(dateKey)),
+                dateKey === todayKey && "오늘",
+                isRegular && "정기 운동일",
+              ]
+                .filter(Boolean)
+                .join(", ")}
+              disabled={isDisabled}
+              onClick={() => onChange(dateKey)}
               className={cx(
-                "h-11 w-[66px] shrink-0 rounded-pk-sm text-pk-15 tabular-nums transition-colors",
-                isSelected
-                  ? "bg-pk-primary font-extrabold text-white"
-                  : "bg-pk-bg font-bold text-pk-sub",
+                "flex h-[46px] flex-col items-center justify-center gap-0.5 rounded-pk-sm transition-colors duration-150 motion-reduce:transition-none",
+                isSelected ? "bg-pk-primary text-white" : "text-pk-ink",
               )}
             >
-              {time}
+              <span
+                className={cx(
+                  "text-pk-15 leading-tight font-bold tabular-nums",
+                  isDisabled
+                    ? "text-pk-quiet"
+                    : !isSelected && weekday === 0 && "text-pk-down",
+                )}
+              >
+                {day}
+              </span>
+              <span
+                className={cx(
+                  "flex h-3 items-center gap-[3px] text-pk-12 leading-none font-bold",
+                  isSelected
+                    ? "text-white"
+                    : isDisabled
+                      ? "text-pk-quiet"
+                      : "text-pk-primary",
+                )}
+              >
+                {isRegular ? (
+                  <RegularDot
+                    className={
+                      isSelected ? "bg-white" : isDisabled ? "bg-pk-line" : ""
+                    }
+                  />
+                ) : null}
+                {note}
+              </span>
             </button>
           );
         })}
@@ -250,74 +184,172 @@ const TimeStrip: React.FC<{
   );
 };
 
-/** "2시간" | "1시간 30분" | "30분" */
-const formatDuration = (minutes: number) => {
-  const hours = Math.floor(minutes / 60);
-  const rest = minutes % 60;
-  if (hours === 0) return `${rest}분`;
-  return rest === 0 ? `${hours}시간` : `${hours}시간 ${rest}분`;
-};
+/** 6칸 그리드 라디오. 시작 시각과 길이가 같은 모양을 쓴다 */
+function ChoiceGrid<T extends string | number>({
+  labelId,
+  options,
+  value,
+  format,
+  isDisabled,
+  onChange,
+}: {
+  labelId: string;
+  options: readonly T[];
+  value: T | null;
+  format: (option: T) => string;
+  isDisabled?: (option: T) => boolean;
+  onChange: (option: T) => void;
+}): React.ReactElement {
+  return (
+    <div
+      role="radiogroup"
+      aria-labelledby={labelId}
+      className="grid grid-cols-6 gap-1.5"
+    >
+      {options.map((option) => {
+        const isSelected = option === value;
+        return (
+          <button
+            key={option}
+            type="button"
+            role="radio"
+            aria-checked={isSelected}
+            disabled={isDisabled?.(option)}
+            onClick={() => onChange(option)}
+            className={cx(
+              "h-10 rounded-pk-sm text-pk-13 tabular-nums transition-colors duration-150 motion-reduce:transition-none",
+              isSelected
+                ? "bg-pk-primary font-extrabold text-white"
+                : "bg-pk-bg font-bold text-pk-sub disabled:text-pk-quiet",
+            )}
+          >
+            {format(option)}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+const formatTime = (time: string) => time;
 
 /**
- * 시작·종료 시각 칩(30분 단위). 시작을 바꾸면 마지막으로 고른 진행 시간을 유지한 채 종료를 옮기고,
- * 하루를 넘기면 고를 수 있는 마지막 종료 시각에 맞춘다
+ * 시작 시각. 새벽·오전·오후·저녁 시간대를 고르면 그 시간대의 30분 칸 12개(6칸×2줄)를 보인다.
+ * isDisabled가 true인 시각(오늘의 지난 시각)은 누를 수 없다
  */
-export const SessionTimePicker: React.FC<{
-  startTime: string;
-  endTime: string;
-  onChange: (range: { startTime: string; endTime: string }) => void;
-}> = ({ startTime, endTime, onChange }) => {
-  const startMinutes = sessionTimeToMinutes(startTime);
-  const endMinutes = sessionTimeToMinutes(endTime);
-  // 늦은 시작 때문에 종료가 잘려도 원래 진행 시간을 기억해, 시작을 되돌리면 복원한다
-  const preferredDurationRef = useRef(endMinutes - startMinutes);
-  const endTimes = buildTimes(
-    startMinutes + SESSION_TIME_STEP_MINUTES,
-    SESSION_LAST_END_MINUTES,
+export const SessionStartTimePicker: React.FC<{
+  value: string | null;
+  isDisabled: (startTime: string) => boolean;
+  onChange: (startTime: string) => void;
+}> = ({ value, isDisabled, onChange }) => {
+  const [segment, setSegment] = useState<StartTimeSegment>(() =>
+    value ? getStartTimeSegment(value) : "evening",
   );
-
-  const changeStart = (nextStart: string) => {
-    const nextStartMinutes = sessionTimeToMinutes(nextStart);
-    const nextEndMinutes = Math.min(
-      nextStartMinutes + preferredDurationRef.current,
-      SESSION_LAST_END_MINUTES,
-    );
-    onChange({
-      startTime: nextStart,
-      endTime: minutesToSessionTime(nextEndMinutes),
-    });
-  };
+  const fromMinutes =
+    START_TIME_SEGMENTS.findIndex((option) => option.value === segment) *
+    SEGMENT_HOURS *
+    60;
+  const times = Array.from({ length: SEGMENT_SLOT_COUNT }, (_, index) =>
+    minutesToSessionTime(fromMinutes + index * SESSION_TIME_STEP_MINUTES),
+  );
 
   return (
     <div className="flex flex-col gap-2">
-      <FieldLabel
-        id="session-time-label"
-        label="시간"
-        detail={`${formatSessionTimeRange({ startTime, endTime })} · ${formatDuration(endMinutes - startMinutes)}`}
+      <FieldLabel id="session-start-label" label="시작" />
+      <SegmentedControl
+        options={START_TIME_SEGMENTS}
+        value={segment}
+        onChange={setSegment}
+        ariaLabel="시간대"
       />
-      <div
-        role="group"
-        aria-labelledby="session-time-label"
-        className="flex flex-col gap-3"
-      >
-        <TimeStrip
-          labelId="session-start-time-label"
-          label="시작"
-          times={START_TIMES}
-          value={startTime}
-          onChange={changeStart}
-        />
-        <TimeStrip
-          labelId="session-end-time-label"
-          label="종료"
-          times={endTimes}
-          value={endTime}
-          onChange={(nextEnd) => {
-            preferredDurationRef.current =
-              sessionTimeToMinutes(nextEnd) - startMinutes;
-            onChange({ startTime, endTime: nextEnd });
-          }}
-        />
+      <ChoiceGrid
+        labelId="session-start-label"
+        options={times}
+        value={value}
+        format={formatTime}
+        isDisabled={isDisabled}
+        onChange={onChange}
+      />
+    </div>
+  );
+};
+
+/** 길이 1~6시간 한 줄. 고르면 끝나는 시각을 오른쪽에 보인다 */
+export const SessionDurationPicker: React.FC<{
+  value: number | null;
+  endLabel: string | null;
+  onChange: (minutes: number) => void;
+}> = ({ value, endLabel, onChange }) => (
+  <div className="flex flex-col gap-2">
+    <FieldLabel
+      id="session-duration-label"
+      label="길이"
+      detail={endLabel ? `${endLabel} 종료` : undefined}
+    />
+    <ChoiceGrid
+      labelId="session-duration-label"
+      options={SESSION_DURATION_OPTIONS_MINUTES}
+      value={value}
+      format={formatDurationHours}
+      onChange={onChange}
+    />
+  </div>
+);
+
+/** 고른 단계를 접은 한 줄. 누르면 그 단계를 다시 펼친다 */
+export const StepSummaryRow: React.FC<{
+  label: string;
+  value: string;
+  onPress: () => void;
+  className?: string;
+}> = ({ label, value, onPress, className }) => (
+  <button
+    type="button"
+    aria-label={`${label} ${value}, 바꾸기`}
+    onClick={onPress}
+    className={cx(
+      "flex h-12 w-full items-center gap-2.5 rounded-pk-sm bg-pk-bg pr-3 pl-3.5 text-left",
+      className,
+    )}
+  >
+    <span className="w-8 shrink-0 text-pk-13 font-bold text-pk-sub">
+      {label}
+    </span>
+    <span className="min-w-0 flex-1 truncate text-pk-15 font-extrabold text-pk-ink tabular-nums">
+      {value}
+    </span>
+    <ChevronRightIcon className="shrink-0 text-pk-muted" />
+  </button>
+);
+
+/**
+ * 안쪽 내용 높이를 재서 바깥 높이를 부드럽게 맞춘다. 단계가 펼쳐지고 접힐 때 시트 높이가 튀지 않게 한다.
+ * 첫 측정 전에는 높이를 정하지 않아 처음 열 때는 애니메이션 없이 제 높이로 그린다
+ */
+export const AnimatedHeight: React.FC<{
+  className?: string;
+  children: React.ReactNode;
+}> = ({ className, children }) => {
+  const innerRef = useRef<HTMLDivElement | null>(null);
+  const [height, setHeight] = useState<number | undefined>(undefined);
+
+  useLayoutEffect(() => {
+    const inner = innerRef.current;
+    if (!inner) return;
+    const update = () => setHeight(inner.offsetHeight);
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(inner);
+    return () => observer.disconnect();
+  }, []);
+
+  return (
+    <div
+      style={{ height }}
+      className="overflow-hidden transition-[height] duration-[260ms] ease-pk-move motion-reduce:transition-none"
+    >
+      <div ref={innerRef} className={className}>
+        {children}
       </div>
     </div>
   );

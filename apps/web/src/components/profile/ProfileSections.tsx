@@ -9,7 +9,10 @@ import ProfileStatTile, {
 } from "@/components/profile/ProfileStatTile";
 import type { ProfileOverview } from "@/components/profile/useProfileOverview";
 import { Card } from "@/components/ui/Card";
-import { CountUpNumber } from "@/components/ui/CountUpNumber";
+import {
+  CountUpNumber,
+  CountUpRatingDelta,
+} from "@/components/ui/CountUpNumber";
 import { MatchRow } from "@/components/ui/MatchRow";
 import { SectionLabel, TextLink } from "@/components/ui/Section";
 import { useAppNavigation } from "@/context/AppNavigationContext";
@@ -78,6 +81,33 @@ export const WinRateTile: React.FC<{
   );
 };
 
+/** 선택 분류의 최근 7일 평점 변화와 경기 수 타일 */
+export const Last7DaysTile: React.FC<{
+  overview: ProfileOverview;
+  category: MatchTopLevelType;
+}> = ({ overview, category }) => {
+  const { last7Days, last7DaysMatchCount } =
+    overview.summary.ratingDelta[category];
+  return (
+    <ProfileStatTile
+      label="최근 7일"
+      value={
+        <CountUpRatingDelta
+          value={last7Days}
+          className="text-pk-22 leading-[1.4]"
+          {...PROFILE_STAT_COUNT}
+        />
+      }
+      foot={
+        <>
+          <CountUpNumber value={last7DaysMatchCount} {...PROFILE_STAT_COUNT} />
+          경기
+        </>
+      }
+    />
+  );
+};
+
 /** 최근 완료 경기 3개와 "전체 보기" */
 export const RecentMatchesSection: React.FC<{
   title: string;
@@ -125,12 +155,16 @@ export const RecentMatchesSection: React.FC<{
 };
 
 /** 평점 카드·타일·경기 목록 자리 스켈레톤 */
-export const ProfileBodySkeleton: React.FC = () => (
+export const ProfileBodySkeleton: React.FC<{
+  /** 통계 타일 수(2칸 한 줄씩). 기본 2 */
+  tileCount?: number;
+}> = ({ tileCount = 2 }) => (
   <div aria-busy="true" aria-label="불러오는 중" className="flex flex-col gap-2.5">
     <SkeletonBlock className="h-[268px] rounded-pk-lg" />
     <div className="grid grid-cols-2 gap-2.5">
-      <SkeletonBlock className="h-[92px] rounded-pk-lg" />
-      <SkeletonBlock className="h-[92px] rounded-pk-lg" />
+      {Array.from({ length: tileCount }, (_, index) => (
+        <SkeletonBlock key={index} className="h-[92px] rounded-pk-lg" />
+      ))}
     </div>
     <SkeletonBlock className="mt-3 h-[180px] rounded-pk-lg" />
   </div>

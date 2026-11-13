@@ -1,5 +1,6 @@
 import {
   ACHIEVEMENTS,
+  compareEarnedAchievements,
   computeAchievements,
   toEarnedAchievements,
   type AchievementMatch,
@@ -62,8 +63,12 @@ export interface RankingSession {
   name: string;
   kind: MatchSessionKind;
   date: Date;
-  /** 시작 시각("HH:MM", KST). 정기 세션은 18:00, 시각 없는 회원 세션은 null */
+  /**
+   * 시작·종료 시각("HH:MM", KST). 정기 세션은 18:00~22:00, 시각 없는 회원 세션은 null.
+   * 종료 ≤ 시작이면 자정을 넘겨 만료가 다음 날 종료 시각으로 늦춰진다
+   */
   startTime: string | null;
+  endTime: string | null;
   location: string;
   participantIds: string[];
 }
@@ -642,7 +647,9 @@ export const findSessionDominations = (
   );
   const dominations = new Map<string, Set<string>>();
   for (const session of sessions) {
-    if (getEmptySessionExpiresAt(session.kind, session.date) > now) continue;
+    if (getEmptySessionExpiresAt(session.kind, session.date, session) > now) {
+      continue;
+    }
     const sessionMatches = matchesBySession.get(session.id);
     if (!sessionMatches) continue;
     const stats = buildSessionPlayerStats(context, session, sessionMatches);
@@ -707,9 +714,16 @@ export const toAchievementMatch = (match: RankingMatch): AchievementMatch => ({
   ratingExcluded: match.ratingExcluded ?? false,
 });
 
-const ACHIEVEMENT_ORDER = new Map(
-  ACHIEVEMENTS.map((definition, index) => [definition.id, index]),
-);
+/** 한 회원이 지금 받은 업적(ACHIEVEMENTS 순서). 세션 지배자는 끝난 세션 기준이다 */
+export const findPlayerEarnedAchievements = (
+  matches: readonly AchievementMatch[],
+  dominations: SessionDominations,
+  playerId: string,
+): EarnedAchievement[] =>
+  toEarnedAchievements(
+    playerId,
+    computeAchievements(playerId, matches, dominations.get(playerId)),
+  );
 
 /**
  * 세션 경기로 받은 업적. 각 참가자의 전체 완료 경기로 계산해, 받게 된 경기가
@@ -725,17 +739,12 @@ const buildSessionAchievements = (
   const matches = context.matches.map(toAchievementMatch);
   return playerIds
     .flatMap((playerId) =>
-      toEarnedAchievements(
-        playerId,
-        computeAchievements(playerId, matches, dominations.get(playerId)),
-      ),
+      findPlayerEarnedAchievements(matches, dominations, playerId),
     )
     .filter((item) => sessionMatchIds.has(item.earnedMatchId))
     .sort(
       (left, right) =>
-        left.earnedAt.getTime() - right.earnedAt.getTime() ||
-        (ACHIEVEMENT_ORDER.get(left.achievementId) ?? 0) -
-          (ACHIEVEMENT_ORDER.get(right.achievementId) ?? 0) ||
+        compareEarnedAchievements(left, right) ||
         compareText(left.playerId, right.playerId),
     );
 };

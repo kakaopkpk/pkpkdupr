@@ -229,10 +229,10 @@ export const buildRankingRatingTrend = (
   ) as PlayerRatingHistory;
 };
 
-export const attachMatchRatingChanges = (
-  matches: Match[],
+/** 경기 완료로 생긴 평점 변경 로그를 경기 id별로 묶는다 */
+export const groupRatingChangeLogsByMatchId = (
   ratingChangeLogs: PlayerRatingChangeLog[],
-): MatchWithRatingChanges[] => {
+): Map<string, PlayerRatingChangeLog[]> => {
   const logsByMatch = new Map<string, PlayerRatingChangeLog[]>();
   for (const log of ratingChangeLogs) {
     if (log.source !== "match_completed") continue;
@@ -243,6 +243,14 @@ export const attachMatchRatingChanges = (
     logs.push(log);
     logsByMatch.set(matchId, logs);
   }
+  return logsByMatch;
+};
+
+export const attachMatchRatingChanges = (
+  matches: Match[],
+  ratingChangeLogs: PlayerRatingChangeLog[],
+): MatchWithRatingChanges[] => {
+  const logsByMatch = groupRatingChangeLogsByMatchId(ratingChangeLogs);
 
   return matches.map((match) => ({
     ...match,

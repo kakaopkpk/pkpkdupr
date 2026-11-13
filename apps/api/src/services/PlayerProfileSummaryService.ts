@@ -55,7 +55,8 @@ export interface PlayerProfileSummary {
   partners: PartnerStat[];
   /** 자주 진 상대(상성) */
   rivals: OpponentStat[];
-  headToHead: HeadToHeadStat | null;
+  /** 요청자 기준 분류별 맞대결. 본인 프로필이면 null */
+  headToHead: Record<MatchTopLevelType, HeadToHeadStat> | null;
   /** 업적 18개 전부의 진행 상태(정의 순서) */
   achievements: AchievementProgress[];
 }
@@ -134,6 +135,8 @@ export const buildPlayerProfileSummary = (
   now: Date = new Date(),
   /** 이 회원이 세션 지배자로 확정된 세션 id(세션 지배자 업적용) */
   dominatedSessionIds?: ReadonlySet<string>,
+  /** 요청자 평점 변경 로그(경기 id별). 상대 전적의 요청자 평점 변화 합에 쓴다 */
+  viewerRatingChangesByMatchId?: ReadonlyMap<string, PlayerRatingChangeLog[]>,
 ): PlayerProfileSummary => {
   const matchStats = createEmptyMatchStats();
   const ratingDelta = createEmptyRatingDelta();
@@ -142,8 +145,16 @@ export const buildPlayerProfileSummary = (
   const ninetyDaysMs = 90 * 24 * 60 * 60 * 1000;
   const partnerStatsById = new Map<string, PartnerStat>();
   const opponentStatsById = new Map<string, OpponentStat>();
-  const headToHead: HeadToHeadStat | null =
-    viewerPlayerId === playerId ? null : { matchCount: 0, wins: 0, losses: 0 };
+  const createEmptyHeadToHead = (): HeadToHeadStat => ({
+    matchCount: 0,
+    wins: 0,
+    losses: 0,
+    ratingDelta: 0,
+  });
+  const headToHead: Record<MatchTopLevelType, HeadToHeadStat> | null =
+    viewerPlayerId === playerId
+      ? null
+      : { singles: createEmptyHeadToHead(), doubles: createEmptyHeadToHead() };
 
   for (const match of matches) {
     // 게스트가 낀 경기는 승패·파트너 궁합·상대 전적·최근 경기 수에 세지 않는다(최근 경기 목록에는 나온다).
@@ -203,10 +214,13 @@ export const buildPlayerProfileSummary = (
         viewerTeamIndex !== null &&
         viewerTeamIndex !== playerTeamIndex
       ) {
-        headToHead.matchCount += 1;
+        const stat = headToHead[category];
+        stat.matchCount += 1;
         // 요청자 기준 승패라 대상 선수의 승패와 반대다.
-        if (won) headToHead.losses += 1;
-        else headToHead.wins += 1;
+        if (won) stat.losses += 1;
+        else stat.wins += 1;
+        const viewerChange = viewerRatingChangesByMatchId?.get(match.id)?.[0];
+        stat.ratingDelta += viewerChange?.delta[category] ?? 0;
       }
 
       if (won) {

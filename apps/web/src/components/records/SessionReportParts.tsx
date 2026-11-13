@@ -4,11 +4,10 @@ import SkeletonBlock from "@/components/SkeletonBlock";
 import { SessionDominatorBadge } from "@/components/ui/Badges";
 import { rowPressClassName } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
-import { CountUpText } from "@/components/ui/CountUpText";
+import { CountUpNumber, CountUpRatingDelta } from "@/components/ui/CountUpNumber";
 import { RankChange, RatingDelta } from "@/components/ui/Delta";
 import { PlayerAvatar } from "@/components/ui/PlayerAvatar";
 import { cx } from "@/components/ui/cx";
-import { useCountUp } from "@/hooks/useCountUp";
 import { usePlayOnShow } from "@/hooks/usePlayOnShow";
 import type { MatchSessionHistoryInfo } from "@/lib/rankings";
 
@@ -32,6 +31,11 @@ export const getSessionRankChange = (
     ? report.rankBefore - report.rankAfter
     : null;
 
+/** 세션 전에 NR이었는지. 세션 전 NR이던 회원도 ratingBefore에 기본값이 들어 있으므로 rankBefore로 판정한다 */
+export const wasUnratedBeforeSession = (
+  report: Pick<SessionPlayerReport, "rankBefore" | "ratingBefore">,
+): boolean => report.rankBefore === null || report.ratingBefore === null;
+
 export const SessionSummary: React.FC<{ session: MatchSessionHistoryInfo }> = ({
   session,
 }) => (
@@ -54,9 +58,40 @@ export const SessionSummary: React.FC<{ session: MatchSessionHistoryInfo }> = ({
   </div>
 );
 
-/** 평점 상승 카운트업 시작·길이(ms). 카드가 보이는 순간부터 잰다 */
-const RISE_COUNT_DELAY_MS = 250;
-const RISE_COUNT_DURATION_MS = 600;
+/**
+ * 세션 화면 숫자 카운트업 시작·길이(ms). 화면이 보이는 순간부터 잰다.
+ * 세션 지배자·내 변동·평점 변화 줄의 숫자가 모두 이 타이밍으로 함께 센다
+ */
+export const SESSION_COUNT = { delayMs: 250, durationMs: 600 } as const;
+
+/** 세션 전 평점에서 후 평점으로 세는 평점. 후 평점이 없으면 "NR", 세션 전이 NR이면 세지 않는다 */
+export const SessionRatingCount: React.FC<{
+  report: Pick<SessionPlayerReport, "ratingBefore" | "ratingAfter" | "rankBefore">;
+}> = ({ report }) => {
+  if (report.ratingAfter === null) return <>NR</>;
+  return (
+    <CountUpNumber
+      value={report.ratingAfter}
+      from={
+        wasUnratedBeforeSession(report)
+          ? report.ratingAfter
+          : (report.ratingBefore ?? report.ratingAfter)
+      }
+      format={formatRating}
+      {...SESSION_COUNT}
+    />
+  );
+};
+
+/** 세션 평점 변화량. 0부터 세며, 전후 평점 중 하나라도 없으면 "–" */
+export const SessionRatingDeltaCount: React.FC<{
+  report: Pick<SessionPlayerReport, "ratingBefore" | "ratingAfter" | "ratingDelta">;
+}> = ({ report }) =>
+  report.ratingBefore !== null && report.ratingAfter !== null ? (
+    <CountUpRatingDelta value={report.ratingDelta} {...SESSION_COUNT} />
+  ) : (
+    <RatingDelta value={null} />
+  );
 
 /**
  * 그 세션에서 평점이 가장 많이 오른 사람(세션 지배자). 아바타에 불꽃 후광을 두른다.
@@ -66,11 +101,6 @@ export const TopRiserCard: React.FC<{ report: SessionPlayerReport }> = ({
   report,
 }) => {
   const { isPlaying, finish } = usePlayOnShow();
-  const riseCount = useCountUp(report.ratingDelta, {
-    durationMs: RISE_COUNT_DURATION_MS,
-    delayMs: RISE_COUNT_DELAY_MS,
-  });
-  const deltaClassName = "text-pk-22 font-extrabold leading-none";
 
   return (
     <Card className="flex items-center gap-3 px-4 py-3.5">
@@ -95,20 +125,12 @@ export const TopRiserCard: React.FC<{ report: SessionPlayerReport }> = ({
           · {report.matchCount}경기 {report.wins}승
         </span>
       </div>
-      {/* 이 화면의 주인공 숫자라 본문 글꼴로 크게 보인다. 세는 동안 폭은 최종 값으로 고정한다 */}
-      <CountUpText
-        align="end"
-        className="shrink-0"
-        finalContent={
-          <RatingDelta value={report.ratingDelta} className={deltaClassName} />
-        }
-      >
-        <RatingDelta
-          value={riseCount.value}
-          signValue={report.ratingDelta}
-          className={deltaClassName}
-        />
-      </CountUpText>
+      {/* 이 화면의 주인공 숫자라 본문 글꼴로 크게 보인다 */}
+      <CountUpRatingDelta
+        value={report.ratingDelta}
+        className="text-pk-22 font-extrabold leading-none"
+        {...SESSION_COUNT}
+      />
     </Card>
   );
 };
@@ -124,16 +146,10 @@ export const SessionPlayerRatingRow: React.FC<{
   order?: number;
   onPress: () => void;
 }> = ({ report, ratingLabel, order, onPress }) => {
-  // 세션 전 NR이던 회원도 ratingBefore에 기본값이 들어 있으므로 rankBefore로 판정한다
-  const wasUnratedBefore =
-    report.rankBefore === null && report.rankAfter !== null;
-  const beforeText = wasUnratedBefore
+  const beforeText = wasUnratedBeforeSession(report)
     ? "NR"
     : formatRating(report.ratingBefore);
-  const ratingText =
-    ratingLabel === "after" || report.ratingAfter === null
-      ? formatRating(report.ratingAfter)
-      : `${beforeText} → ${formatRating(report.ratingAfter)}`;
+  const showsBefore = ratingLabel === "before-after" && report.ratingAfter !== null;
   const rankChange = getSessionRankChange(report);
 
   return (
@@ -156,17 +172,13 @@ export const SessionPlayerRatingRow: React.FC<{
           {report.player.username}
         </span>
         <span className="truncate text-pk-12 text-pk-muted tabular-nums">
-          {report.wins}승 {report.losses}패 · {ratingText}
+          {report.wins}승 {report.losses}패 ·{" "}
+          {showsBefore ? `${beforeText} → ` : null}
+          <SessionRatingCount report={report} />
         </span>
       </span>
       <span className="flex shrink-0 flex-col items-end gap-0.5">
-        <RatingDelta
-          value={
-            report.ratingBefore !== null && report.ratingAfter !== null
-              ? report.ratingDelta
-              : null
-          }
-        />
+        <SessionRatingDeltaCount report={report} />
         <span className="flex items-baseline gap-1 text-pk-12 font-bold text-pk-sub tabular-nums">
           {report.rankAfter === null ? "–" : `${report.rankAfter}위`}
           {rankChange !== null && rankChange !== 0 ? (

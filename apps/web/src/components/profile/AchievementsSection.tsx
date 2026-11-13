@@ -17,14 +17,14 @@ export interface AchievementsSectionProps {
   /** 업적 주인 */
   playerId: string;
   progress: readonly AchievementProgressInfo[];
-  /** "me": "업적 · N/전체 수" + 전체 보기, "member": "받은 업적 · N" */
+  /** 제목 형식. "me": "업적 · N/전체 수", "member": "받은 업적 · N" */
   variant: "me" | "member";
   /** 기본 48 */
   badgeSize?: number;
   onViewAll?: () => void;
 }
 
-/** 받은 업적만 최근 받은 순으로 한 줄(최대 4개). 못 받은 업적·진행도는 보이지 않는다 */
+/** 받은 업적만 최근 받은 순으로 한 줄(최대 4개). 못 받은 업적·진행도는 보이지 않고, 하나도 없으면 빈 카드에 안내 문구 */
 export const AchievementsSection: React.FC<AchievementsSectionProps> = ({
   playerId,
   progress,
@@ -82,9 +82,11 @@ export const AchievementsSection: React.FC<AchievementsSectionProps> = ({
           ))}
         </Card>
       ) : (
-        <p className="px-1 py-2 text-pk-13 text-pk-muted">
-          아직 받은 업적이 없어요
-        </p>
+        <Card>
+          <p className="py-6 text-center text-pk-13 text-pk-muted">
+            아직 받은 업적이 없어요
+          </p>
+        </Card>
       )}
     </section>
   );

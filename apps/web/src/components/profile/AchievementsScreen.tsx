@@ -88,6 +88,8 @@ export interface AchievementsScreenProps {
   depthId: string;
   playerId: string | null;
   progress: readonly AchievementProgressInfo[];
+  /** 머리 제목. 기본 "업적" */
+  title?: string;
   onClose: () => void;
 }
 
@@ -98,6 +100,7 @@ export default function AchievementsScreen({
   depthId,
   playerId,
   progress,
+  title = "업적",
   onClose,
 }: AchievementsScreenProps): React.ReactElement {
   const { openAchievementDetail } = useAppNavigation();
@@ -131,8 +134,8 @@ export default function AchievementsScreen({
     <PushScreen
       isOpen={isLayerOpen}
       isActive={tabKey === selectedTab}
-      ariaLabel="업적"
-      title="업적"
+      ariaLabel={title}
+      title={title}
       onBack={close}
       onExited={handleExited}
     >

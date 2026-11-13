@@ -417,6 +417,77 @@ describe("GET /api/players/:playerId/profile-summary", () => {
     expect(response.body.recentMatches).toHaveLength(1);
     expect(response.body).not.toHaveProperty("matches");
   });
+  it("다른 회원 프로필이면 요청자 평점 로그로 상대 전적의 평점 변화를 더한다", async () => {
+    const opponent: Player = { ...player, id: "player-002", username: "rival" };
+    // 상대(opponent)가 요청자(player)를 단식에서 이긴 경기
+    const completedMatch: Match = {
+      ...match,
+      status: "completed",
+      teams: [
+        { id: "team-a", name: "Team A", players: [opponent] },
+        { id: "team-b", name: "Team B", players: [player] },
+      ],
+      scores: [{ scoreA: 11, scoreB: 8 }],
+      completedAt: now,
+    };
+    const logFor = (playerId: string, singles: number): PlayerRatingChangeLog => ({
+      id: `log-${playerId}`,
+      playerId,
+      source: "match_completed",
+      sourceLogId: `match-completed-${completedMatch.id}-${now.getTime()}`,
+      previousRating: { singles: 3, doubles: 3 },
+      nextRating: { singles: 3 + singles, doubles: 3 },
+      delta: { singles, doubles: 0 },
+      createdAt: now,
+    });
+    vi.spyOn(MatchRepository.prototype, "findByPlayerId").mockResolvedValue({
+      matches: [completedMatch],
+      total: 1,
+    });
+    vi.spyOn(
+      MatchRepository.prototype,
+      "getPlayerRatingChangeLogs",
+    ).mockImplementation(async (playerId: string) => [
+      logFor(playerId, playerId === opponent.id ? 0.04 : -0.04),
+    ]);
+    vi.spyOn(AuthService.prototype, "getAllPlayers").mockResolvedValue([]);
+    vi.spyOn(
+      MatchRepository.prototype,
+      "getAllRatingChangeLogs",
+    ).mockResolvedValue([]);
+    vi.spyOn(
+      MatchRepository.prototype,
+      "findCompletedMatchOutcomes",
+    ).mockResolvedValue([]);
+    vi.spyOn(
+      MatchRepository.prototype,
+      "findSessionsWithParticipantIds",
+    ).mockResolvedValue([]);
+    vi.spyOn(
+      PlayerRatingChartProjectionService.prototype,
+      "getOrRebuild",
+    ).mockResolvedValue({
+      history: { singles: [], doubles: [] },
+      generatedAt: now,
+    });
+
+    const response = await request(app)
+      .get(`/api/players/${opponent.id}/profile-summary`)
+      .set("Authorization", "Bearer test-token");
+
+    expect(response.status).toBe(200);
+    expect(response.body.headToHead).toEqual({
+      singles: { matchCount: 1, wins: 0, losses: 1, ratingDelta: -0.04 },
+      doubles: { matchCount: 0, wins: 0, losses: 0, ratingDelta: 0 },
+    });
+    // 대상 회원 자신의 평점 변화·경기 평점 변화에는 요청자 로그가 섞이지 않는다
+    expect(response.body.ratingDelta.singles.last7Days).toBeCloseTo(0.04);
+    expect(
+      response.body.recentMatches[0].ratingChanges.map(
+        (log: PlayerRatingChangeLog) => log.playerId,
+      ),
+    ).toEqual([opponent.id]);
+  });
 });
 
 describe("GET /api/match-feed", () => {

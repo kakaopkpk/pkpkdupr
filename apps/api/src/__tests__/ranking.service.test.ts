@@ -74,6 +74,7 @@ const makeSession = (
   kind: "regular",
   date,
   startTime: "18:00",
+  endTime: "22:00",
   location: "야탑초등학교",
   participantIds: [],
   ...overrides,
@@ -584,6 +585,25 @@ describe("buildSessionReport", () => {
         item.achievementId.startsWith("dominator-"),
       ),
     ).toBe(false);
+  });
+
+  it("자정을 넘기는 회원 세션은 다음 날 종료 시각이 지나야 지배자를 정한다", () => {
+    // 11월 9일 23:30~다음 날 01:30 세션은 11월 10일 01:30 KST(16:30Z)에 끝난다
+    const overnight = {
+      ...session,
+      kind: "custom" as const,
+      date: at("2026-11-08T15:00:00Z"),
+      startTime: "23:30",
+      endTime: "01:30",
+    };
+    const context = createRankingContext(players, logs, matches);
+    const dominationsAt = (now: Date) =>
+      findSessionDominations(context, [overnight], now);
+
+    expect(dominationsAt(at("2026-11-09T15:00:00Z")).size).toBe(0);
+    expect([...dominationsAt(at("2026-11-09T16:30:00Z")).entries()]).toEqual([
+      ["Palice01", new Set([overnight.id])],
+    ]);
   });
 
   it("findSessionDominations는 끝난 세션마다 지배자를 모으고 오른 사람이 없는 세션은 뺀다", () => {

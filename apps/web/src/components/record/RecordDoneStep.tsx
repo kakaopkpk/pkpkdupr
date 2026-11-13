@@ -17,7 +17,10 @@ import { useAuth } from "@/context/AuthContext";
 import { useCountUp } from "@/hooks/useCountUp";
 import { usePlayOnShow } from "@/hooks/usePlayOnShow";
 import { prefersReducedMotion } from "@/hooks/useSheetDrag";
-import { getAchievementDefinition } from "@/lib/achievements";
+import {
+  markAchievementsSeen,
+  pickPlayerEarnedAchievements,
+} from "@/lib/achievements";
 import { formatRating } from "@/utils/dupr";
 import AchievementCelebration from "./AchievementCelebration";
 import { CheckIcon, FooterError } from "./RecordMatchParts";
@@ -84,18 +87,16 @@ export default function RecordDoneStep({
       });
   }, [match]);
   // 참가자 전원이 받은 업적 중 내 것만 띠로 보인다. 게스트가 낀 경기는 업적이 없으므로 띠·축하 연출도 없다
-  const myNewAchievements = useMemo(
+  const myNewAchievementItems = useMemo(
     () =>
       viewer && !match.ratingExcluded
-        ? (match.newAchievements ?? []).flatMap((item) => {
-            const definition =
-              item.playerId === viewer.id
-                ? getAchievementDefinition(item.achievementId)
-                : null;
-            return definition ? [definition] : [];
-          })
+        ? pickPlayerEarnedAchievements(match.newAchievements ?? [], viewer.id)
         : [],
     [match.newAchievements, match.ratingExcluded, viewer],
+  );
+  const myNewAchievements = useMemo(
+    () => myNewAchievementItems.map(({ definition }) => definition),
+    [myNewAchievementItems],
   );
 
   return (
@@ -242,7 +243,13 @@ export default function RecordDoneStep({
           achievements={myNewAchievements}
           // 움직임 줄이기면 평점 세기가 없으므로 바로 띄운다
           delayMs={prefersReducedMotion() ? 0 : CELEBRATION_DELAY_MS}
-          onClose={() => setIsCelebrationOpen(false)}
+          onClose={() => {
+            setIsCelebrationOpen(false);
+            // 여기서 본 업적은 홈에서 다시 띄우지 않는다. 실패하면 다음 미확인 조회 때 다시 뜬다
+            void markAchievementsSeen(
+              myNewAchievementItems.map(({ item }) => item),
+            ).catch(() => {});
+          }}
         />
       ) : null}
     </>

@@ -4,9 +4,11 @@ import {
   ACHIEVEMENTS,
   computeAchievements,
   findNewAchievements,
+  findUnseenAchievements,
   isBestStreakAchievement,
   type AchievementMatch,
   type AchievementProgress,
+  type EarnedAchievement,
 } from "../achievements";
 import type { MatchStatus, MatchType } from "../match";
 
@@ -755,5 +757,45 @@ describe("findNewAchievements", () => {
         after: [...before, makeMatch({ won: false })],
       }),
     ).toEqual([]);
+  });
+});
+
+describe("findUnseenAchievements", () => {
+  const earned = (
+    achievementId: string,
+    earnedMatchId: string,
+    earnedAtMs: number,
+  ): EarnedAchievement => ({
+    playerId: ME,
+    achievementId,
+    earnedMatchId,
+    earnedAt: new Date(BASE_MS + earnedAtMs),
+  });
+
+  it("확인 기록이 없는 업적을 받은 시각 → 업적 정의 순서로 돌려준다", () => {
+    const wins = earned("wins-1", "m1", 0);
+    const matches = earned("matches-1", "m1", 0);
+    const streak = earned("streak-3", "m3", -1);
+
+    expect(findUnseenAchievements([wins, matches, streak], [])).toEqual([
+      streak,
+      matches,
+      wins,
+    ]);
+  });
+
+  it("같은 획득 경기로 확인한 업적은 빼고, 다른 경기로 다시 받은 업적은 다시 돌려준다", () => {
+    const first = earned("matches-1", "m1", 0);
+    const regained = earned("unbeaten-session", "m9", 1);
+
+    expect(
+      findUnseenAchievements(
+        [first, regained],
+        [
+          { achievementId: "matches-1", earnedMatchId: "m1" },
+          { achievementId: "unbeaten-session", earnedMatchId: "m4" },
+        ],
+      ),
+    ).toEqual([regained]);
   });
 });

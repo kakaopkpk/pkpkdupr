@@ -32,9 +32,15 @@ const CATEGORY_OPTIONS: readonly SegmentedOption<MatchTopLevelType>[] = [
 
 const SKELETON_ROW_COUNT = 6;
 
-// 순위 24 · 아바타 32 · 이름 · 평점 · 변동 28. 줄 좌우 여백 없이 카드 안쪽 12px에 맞춘다
+// 순위 24 · 아바타 32 · 이름 · 평점+변동. 줄 좌우 여백 없이 카드 안쪽 12px에 맞춘다
 const rowGridClassName =
-  "grid min-h-[52px] w-full grid-cols-[24px_32px_minmax(0,1fr)_auto_28px] items-center gap-1.5 rounded-pk-sm py-2 text-left text-pk-ink";
+  "grid min-h-[52px] w-full grid-cols-[24px_32px_minmax(0,1fr)_auto] items-center gap-1.5 rounded-pk-sm py-2 text-left text-pk-ink";
+
+// 평점(15px)과 변동(12px)의 글자 세로 중심을 맞춘다. 줄 높이를 1로 두어 브라우저마다 다른 기본 줄 높이에 흔들리지 않게 한다
+const ratingCellClassName = "flex items-center gap-1.5";
+
+/** 변동 32px 폭. 왼쪽 정렬이라 ▲·▼·– 시작 위치와 평점과의 간격이 모든 줄에서 같다. flex라 부모 글꼴 줄 높이(strut)가 끼지 않는다 */
+const changeSlotClassName = "flex w-8 shrink-0 items-center whitespace-nowrap";
 
 /** 랭킹 카드: Card 기본 좌우 여백 16을 12로 줄인다 */
 const rankingCardClassName = "px-3 py-1.5";
@@ -71,11 +77,13 @@ const RankingRow: React.FC<{
     </span>
     <PlayerAvatar player={entry.player} size={32} />
     <PlayerNameCell player={entry.player} />
-    <span className="text-right text-pk-15 font-extrabold tabular-nums">
-      {formatRating(entry.rating)}
-    </span>
-    <span className="text-right">
-      <RankChange value={entry.rankChange} />
+    <span className={ratingCellClassName}>
+      <span className="text-pk-15 leading-none font-extrabold tabular-nums">
+        {formatRating(entry.rating)}
+      </span>
+      <span className={changeSlotClassName}>
+        <RankChange value={entry.rankChange} className="leading-none" />
+      </span>
     </span>
   </button>
 );
@@ -95,12 +103,12 @@ const UnratedRow: React.FC<{
     </span>
     <PlayerAvatar player={entry.player} size={32} />
     <PlayerNameCell player={entry.player} />
-    <span className="flex justify-end">
+    <span className="flex items-center justify-end gap-1.5">
       <span className="rounded-full bg-pk-neutral px-2 py-0.5 text-pk-12 font-extrabold text-pk-muted">
         NR
       </span>
+      <span className={changeSlotClassName} />
     </span>
-    <span />
   </button>
 );
 
@@ -122,8 +130,10 @@ const RankingSkeleton: React.FC = () => (
           <SkeletonBlock className="h-4 w-24" />
           <SkeletonBlock className="h-3 w-16" />
         </div>
-        <SkeletonBlock className="h-4 w-11" />
-        <span />
+        <span className="flex items-center gap-1.5">
+          <SkeletonBlock className="h-4 w-11" />
+          <span className={changeSlotClassName} />
+        </span>
       </div>
     ))}
   </Card>
