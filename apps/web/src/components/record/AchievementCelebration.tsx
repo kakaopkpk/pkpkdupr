@@ -15,6 +15,8 @@ const FIRST_CARD_DELAY_MS = 150;
 const BURST_AFTER_BADGE_MS = 80;
 const POPPERS_AFTER_BADGE_MS = 230;
 const RAYS_SPIN_MS = 22000;
+// 확인 버튼이 나타나는 시각. 그 전의 탭(시트 버튼을 누르려던 손가락 등)으로 넘어가지 않게 이때부터 입력을 받는다
+const ACTIONS_DELAY_MS = 820;
 // 폭죽을 쏘는 아래 모서리 위치(캔버스 가장자리에서 떨어진 거리)
 const POPPER_INSET_X = 6;
 const POPPER_INSET_BOTTOM = 40;
@@ -45,6 +47,7 @@ export default function AchievementCelebration({
   const [index, setIndex] = useState(0);
   const [phase, setPhase] = useState<Phase>("enter");
   const [isReducedMotion] = useState(prefersReducedMotion);
+  const [isAcceptingInput, setIsAcceptingInput] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const backCanvasRef = useRef<HTMLCanvasElement>(null);
   const frontCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -65,6 +68,12 @@ export default function AchievementCelebration({
     const id = window.setTimeout(() => setIsOpen(true), delayMs);
     return () => window.clearTimeout(id);
   }, [delayMs]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const id = window.setTimeout(() => setIsAcceptingInput(true), isReducedMotion ? 0 : ACTIONS_DELAY_MS);
+    return () => window.clearTimeout(id);
+  }, [isOpen, isReducedMotion]);
 
   // 장마다 배지 중심에서 색종이를, 아래 양쪽 모서리에서 폭죽을 터뜨린다
   useEffect(() => {
@@ -126,11 +135,11 @@ export default function AchievementCelebration({
   }, []);
 
   const advance = useCallback(() => {
-    if (phase !== "enter") return;
+    if (phase !== "enter" || !isAcceptingInput) return;
     if (isLast) close();
     else if (isReducedMotion) goNext();
     else setPhase("leaving");
-  }, [close, goNext, isLast, isReducedMotion, phase]);
+  }, [close, goNext, isAcceptingInput, isLast, isReducedMotion, phase]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -256,7 +265,7 @@ export default function AchievementCelebration({
         <div
           ref={actionsRef}
           className="pointer-events-auto absolute inset-x-4 bottom-[calc(30px+env(safe-area-inset-bottom))] animate-pk-fade-in motion-reduce:animate-none"
-          style={{ animationDelay: ms(820), animationDuration: ms(260) }}
+          style={{ animationDelay: ms(ACTIONS_DELAY_MS), animationDuration: ms(260) }}
         >
           <PkButton size="lg" fullWidth onClick={advance}>
             {isLast ? "확인" : "다음"}
