@@ -53,16 +53,16 @@ describe("RatingTrendChart", () => {
     ]);
 
     expect(markup).toMatch(
-      /<path d="[^"]+" pathLength="1"[^>]*class="animate-pk-draw motion-reduce:animate-none" style="animation-duration:700ms"/,
+      /<path d="[^"]+" pathLength="1"[^>]*class="animate-pk-draw motion-reduce:animate-none" style="animation-delay:250ms;animation-duration:600ms"/,
     );
     // 면이 선 그리기 중간부터 페이드한다
     expect(
       markup.match(
-        /class="animate-pk-fade-in motion-reduce:animate-none" style="animation-delay:400ms;animation-duration:400ms"/g,
+        /class="animate-pk-fade-in motion-reduce:animate-none" style="animation-delay:550ms;animation-duration:400ms"/g,
       ),
     ).toHaveLength(1);
     expect(markup).toMatch(
-      /<circle[^>]*class="animate-pk-pop motion-reduce:animate-none[^"]*" style="animation-delay:650ms;animation-duration:360ms"/,
+      /<circle[^>]*class="animate-pk-pop motion-reduce:animate-none[^"]*" style="animation-delay:800ms;animation-duration:360ms"/,
     );
   });
 

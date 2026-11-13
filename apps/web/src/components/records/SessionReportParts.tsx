@@ -4,7 +4,14 @@ import SkeletonBlock from "@/components/SkeletonBlock";
 import { SessionDominatorBadge } from "@/components/ui/Badges";
 import { rowPressClassName } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
-import { CountUpNumber, CountUpRatingDelta } from "@/components/ui/CountUpNumber";
+import { WinLossCount } from "@/components/profile/ProfileStatTile";
+import {
+  COUNT_UP,
+  CountUpNumber,
+  CountUpPop,
+  CountUpRatingDelta,
+  getCountUpEndMs,
+} from "@/components/ui/CountUpNumber";
 import { RankChange, RatingDelta } from "@/components/ui/Delta";
 import { PlayerAvatar } from "@/components/ui/PlayerAvatar";
 import { cx } from "@/components/ui/cx";
@@ -58,37 +65,44 @@ export const SessionSummary: React.FC<{ session: MatchSessionHistoryInfo }> = ({
   </div>
 );
 
-/**
- * 세션 화면 숫자 카운트업 시작·길이(ms). 화면이 보이는 순간부터 잰다.
- * 세션 지배자·내 변동·평점 변화 줄의 숫자가 모두 이 타이밍으로 함께 센다
- */
-export const SESSION_COUNT = { delayMs: 250, durationMs: 600 } as const;
-
-/** 세션 전 평점에서 후 평점으로 세는 평점. 후 평점이 없으면 "NR", 세션 전이 NR이면 세지 않는다 */
+/** 세션 후 평점. 0.000부터 세며, 후 평점이 없으면 "NR" */
 export const SessionRatingCount: React.FC<{
-  report: Pick<SessionPlayerReport, "ratingBefore" | "ratingAfter" | "rankBefore">;
+  report: Pick<SessionPlayerReport, "ratingAfter">;
 }> = ({ report }) => {
   if (report.ratingAfter === null) return <>NR</>;
   return (
-    <CountUpNumber
-      value={report.ratingAfter}
-      from={
-        wasUnratedBeforeSession(report)
-          ? report.ratingAfter
-          : (report.ratingBefore ?? report.ratingAfter)
-      }
-      format={formatRating}
-      {...SESSION_COUNT}
-    />
+    <CountUpNumber value={report.ratingAfter} format={formatRating} {...COUNT_UP} />
   );
 };
+
+/** 세션 전 순위에서 후 순위로 세는 순위. 세션 전 순위가 없으면 세지 않는다 */
+export const SessionRankCount: React.FC<{
+  report: Pick<SessionPlayerReport, "rankBefore"> & { rankAfter: number };
+}> = ({ report }) => (
+  <CountUpNumber
+    value={report.rankAfter}
+    from={report.rankBefore ?? report.rankAfter}
+    {...COUNT_UP}
+  />
+);
+
+/** 순위 변동 ▲▼. 숫자를 다 센 뒤 튀어나온다. 변동이 없거나 모르면 그리지 않는다 */
+export const SessionRankChangePop: React.FC<{
+  value: number | null;
+  className?: string;
+}> = ({ value, className }) =>
+  value !== null && value !== 0 ? (
+    <CountUpPop delayMs={getCountUpEndMs(COUNT_UP)}>
+      <RankChange value={value} className={className} />
+    </CountUpPop>
+  ) : null;
 
 /** 세션 평점 변화량. 0부터 세며, 전후 평점 중 하나라도 없으면 "–" */
 export const SessionRatingDeltaCount: React.FC<{
   report: Pick<SessionPlayerReport, "ratingBefore" | "ratingAfter" | "ratingDelta">;
 }> = ({ report }) =>
   report.ratingBefore !== null && report.ratingAfter !== null ? (
-    <CountUpRatingDelta value={report.ratingDelta} {...SESSION_COUNT} />
+    <CountUpRatingDelta value={report.ratingDelta} {...COUNT_UP} />
   ) : (
     <RatingDelta value={null} />
   );
@@ -129,7 +143,7 @@ export const TopRiserCard: React.FC<{ report: SessionPlayerReport }> = ({
       <CountUpRatingDelta
         value={report.ratingDelta}
         className="text-pk-22 font-extrabold leading-none"
-        {...SESSION_COUNT}
+        {...COUNT_UP}
       />
     </Card>
   );
@@ -172,7 +186,7 @@ export const SessionPlayerRatingRow: React.FC<{
           {report.player.username}
         </span>
         <span className="truncate text-pk-12 text-pk-muted tabular-nums">
-          {report.wins}승 {report.losses}패 ·{" "}
+          <WinLossCount wins={report.wins} losses={report.losses} /> ·{" "}
           {showsBefore ? `${beforeText} → ` : null}
           <SessionRatingCount report={report} />
         </span>
@@ -180,10 +194,15 @@ export const SessionPlayerRatingRow: React.FC<{
       <span className="flex shrink-0 flex-col items-end gap-0.5">
         <SessionRatingDeltaCount report={report} />
         <span className="flex items-baseline gap-1 text-pk-12 font-bold text-pk-sub tabular-nums">
-          {report.rankAfter === null ? "–" : `${report.rankAfter}위`}
-          {rankChange !== null && rankChange !== 0 ? (
-            <RankChange value={rankChange} />
-          ) : null}
+          {report.rankAfter === null ? (
+            "–"
+          ) : (
+            <span>
+              <SessionRankCount report={{ ...report, rankAfter: report.rankAfter }} />
+              위
+            </span>
+          )}
+          <SessionRankChangePop value={rankChange} />
         </span>
       </span>
     </button>

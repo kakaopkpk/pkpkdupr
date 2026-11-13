@@ -8,8 +8,13 @@ import BottomSheet from "@/components/BottomSheet";
 import { AchievementBadge } from "@/components/profile/AchievementBadge";
 import { type MatchInfo, RATING_EXCLUDED_NOTICE } from "@/types/match";
 import { PkButton } from "@/components/ui/Button";
+import { MatchRatingChangeCount } from "@/components/match/MatchRatingChangeCount";
+import {
+  COUNT_UP,
+  COUNT_UP_SECOND,
+  getCountUpEndMs,
+} from "@/components/ui/CountUpNumber";
 import { CountUpText } from "@/components/ui/CountUpText";
-import { RatingDelta } from "@/components/ui/Delta";
 import { PlayerAvatar, TeamAvatars } from "@/components/ui/PlayerAvatar";
 import { cx } from "@/components/ui/cx";
 import { useAppNavigation } from "@/context/AppNavigationContext";
@@ -21,24 +26,21 @@ import {
   markAchievementsSeen,
   pickPlayerEarnedAchievements,
 } from "@/lib/achievements";
-import { formatRating } from "@/utils/dupr";
 import AchievementCelebration from "./AchievementCelebration";
 import { CheckIcon, FooterError } from "./RecordMatchParts";
 
 /*
  * 완료 화면 연출 시각(ms, 완료 단계가 보이게 된 시점 기준).
- * 체크 그리기 0 → 점수 세기 100(450) → 이긴 쪽 색 전환 → 평점 세기 650(500)과 업적 띠 650 동시
- * → 업적 축하 연출 1150
+ * 체크 그리기 0 → 점수 세기(첫 박자) → 이긴 쪽 색 전환 → 평점 세기(둘째 박자)와 업적 띠 동시
+ * → 업적 축하 연출
  */
-const SCORE_COUNT_DELAY_MS = 100;
-const SCORE_COUNT_DURATION_MS = 450;
-const RATING_COUNT_DELAY_MS = 650;
-const RATING_COUNT_DURATION_MS = 500;
+const SCORE_COUNT = COUNT_UP;
+const RATING_COUNT = COUNT_UP_SECOND;
 // 업적 띠는 평점이 오르기 시작할 때 함께 등장한다
-const ACHIEVEMENT_DELAY_MS = RATING_COUNT_DELAY_MS;
+const ACHIEVEMENT_DELAY_MS = RATING_COUNT.delayMs;
 const ACHIEVEMENT_BADGE_POP_MS = 420;
 // 평점을 다 센 뒤 화면 전체 축하 연출을 띄운다
-const CELEBRATION_DELAY_MS = RATING_COUNT_DELAY_MS + RATING_COUNT_DURATION_MS;
+const CELEBRATION_DELAY_MS = getCountUpEndMs(RATING_COUNT);
 
 export interface RecordDoneStepProps {
   match: MatchInfo;
@@ -65,14 +67,8 @@ export default function RecordDoneStep({
   // 완료 단계가 마운트된 동안 한 번만 띄운다(업적 상세를 열었다 닫아도 다시 띄우지 않는다)
   const [isCelebrationOpen, setIsCelebrationOpen] = useState(true);
   const score = match.scores?.[0];
-  const scoreACount = useCountUp(score?.scoreA ?? 0, {
-    durationMs: SCORE_COUNT_DURATION_MS,
-    delayMs: SCORE_COUNT_DELAY_MS,
-  });
-  const scoreBCount = useCountUp(score?.scoreB ?? 0, {
-    durationMs: SCORE_COUNT_DURATION_MS,
-    delayMs: SCORE_COUNT_DELAY_MS,
-  });
+  const scoreACount = useCountUp(score?.scoreA ?? 0, SCORE_COUNT);
+  const scoreBCount = useCountUp(score?.scoreB ?? 0, SCORE_COUNT);
   const ratingCategory = getMatchTopLevelType(match.type);
   const ratingRows = useMemo(() => {
     const changeByPlayerId = new Map<string, PlayerRatingChangeLog>(
@@ -278,50 +274,23 @@ const CountedScore: React.FC<{
   </CountUpText>
 );
 
-/**
- * 평점 변화 한 줄. '다음' 평점은 이전→새, 변화는 0→최종으로 센다.
- * 변화의 부호·색은 처음부터 최종값을 따른다. 이전 평점이 NR이면 세지 않고 최종값을 보인다
- */
+/** 평점 변화 한 줄. 점수를 다 센 뒤 평점(이전 → 새)과 변화(0부터)를 센다 */
 const RatingRow: React.FC<{
   player: Player;
   change: PlayerRatingChangeLog;
   ratingCategory: MatchTopLevelType;
-}> = ({ player, change, ratingCategory }) => {
-  const previousRating = change.previousRating[ratingCategory];
-  const nextRating = change.nextRating[ratingCategory];
-  const delta = change.delta[ratingCategory];
-  const nextCount = useCountUp(nextRating ?? 0, {
-    from: previousRating ?? 0,
-    durationMs: RATING_COUNT_DURATION_MS,
-    delayMs: RATING_COUNT_DELAY_MS,
-  });
-  const deltaCount = useCountUp(delta ?? 0, {
-    durationMs: RATING_COUNT_DURATION_MS,
-    delayMs: RATING_COUNT_DELAY_MS,
-  });
-  const isCounting =
-    previousRating !== null && nextRating !== null && delta !== null;
-
-  return (
-    <div className="grid grid-cols-[24px_minmax(0,1fr)_auto_60px] items-center gap-2.5 py-[11px] not-last:border-b not-last:border-[#e6e9f0]">
-      <PlayerAvatar player={player} size={24} />
-      <span className="truncate text-pk-15 font-bold">{player.username}</span>
-      <span className="text-pk-13 tabular-nums text-pk-sub">
-        {formatRating(previousRating)} →{" "}
-        {formatRating(isCounting ? nextCount.value : nextRating)}
-      </span>
-      {isCounting ? (
-        <RatingDelta
-          value={deltaCount.value}
-          signValue={delta}
-          className="text-right"
-        />
-      ) : (
-        <RatingDelta value={delta} className="text-right" />
-      )}
-    </div>
-  );
-};
+}> = ({ player, change, ratingCategory }) => (
+  <div className="grid grid-cols-[24px_minmax(0,1fr)_auto_60px] items-center gap-2.5 py-[11px] not-last:border-b not-last:border-[#e6e9f0]">
+    <PlayerAvatar player={player} size={24} />
+    <span className="truncate text-pk-15 font-bold">{player.username}</span>
+    <MatchRatingChangeCount
+      previousRating={change.previousRating[ratingCategory]}
+      nextRating={change.nextRating[ratingCategory]}
+      delta={change.delta[ratingCategory]}
+      timing={RATING_COUNT}
+    />
+  </div>
+);
 
 const ScoreSide: React.FC<{
   players: MatchInfo["teams"][number]["players"];

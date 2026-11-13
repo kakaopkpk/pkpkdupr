@@ -9,6 +9,12 @@ import type {
 import SkeletonBlock from "@/components/SkeletonBlock";
 import { rowPressClassName } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
+import {
+  CountUpNumber,
+  CountUpPop,
+  getCountUpEndMs,
+  getRowCountUp,
+} from "@/components/ui/CountUpNumber";
 import { RankChange } from "@/components/ui/Delta";
 import { TabHeader } from "@/components/ui/Headers";
 import { PlayerAvatar } from "@/components/ui/PlayerAvatar";
@@ -63,30 +69,40 @@ const PlayerNameCell: React.FC<{ player: RankingEntryPlayer }> = ({
   </span>
 );
 
+/**
+ * 순위 줄. 평점은 0.000부터 줄 순서만큼 늦게 세고, 다 세면 순위 변동이 튀어나온다
+ */
 const RankingRow: React.FC<{
   entry: RankingEntry;
+  /** 목록 안 순서(0부터). 세기 시작을 늦추는 데 쓴다 */
+  index: number;
   onPress: () => void;
-}> = ({ entry, onPress }) => (
-  <button
-    type="button"
-    onClick={onPress}
-    className={cx(rowGridClassName, rowPressClassName, "active:bg-pk-bg")}
-  >
-    <span className="flex justify-center">
-      <RankBadge rank={entry.rank} />
-    </span>
-    <PlayerAvatar player={entry.player} size={32} />
-    <PlayerNameCell player={entry.player} />
-    <span className={ratingCellClassName}>
-      <span className="text-pk-15 leading-none font-extrabold tabular-nums">
-        {formatRating(entry.rating)}
+}> = ({ entry, index, onPress }) => {
+  const countUp = getRowCountUp(index);
+  return (
+    <button
+      type="button"
+      onClick={onPress}
+      className={cx(rowGridClassName, rowPressClassName, "active:bg-pk-bg")}
+    >
+      <span className="flex justify-center">
+        <RankBadge rank={entry.rank} />
       </span>
-      <span className={changeSlotClassName}>
-        <RankChange value={entry.rankChange} className="leading-none" />
+      <PlayerAvatar player={entry.player} size={32} />
+      <PlayerNameCell player={entry.player} />
+      <span className={ratingCellClassName}>
+        <span className="text-pk-15 leading-none font-extrabold tabular-nums">
+          <CountUpNumber value={entry.rating} format={formatRating} {...countUp} />
+        </span>
+        <span className={changeSlotClassName}>
+          <CountUpPop delayMs={getCountUpEndMs(countUp)}>
+            <RankChange value={entry.rankChange} className="leading-none" />
+          </CountUpPop>
+        </span>
       </span>
-    </span>
-  </button>
-);
+    </button>
+  );
+};
 
 /** 평점 없는(NR) 회원 줄. 순위 카드 맨 아래에 순위 "–"·NR 칩으로 이어 붙고 변동은 비운다 */
 const UnratedRow: React.FC<{
@@ -209,10 +225,11 @@ const Ranking: React.FC = () => {
                 onFinish={() => setIsListFading(false)}
               >
                 <Card className={rankingCardClassName}>
-                  {currentRanking.entries.map((entry) => (
+                  {currentRanking.entries.map((entry, index) => (
                     <RankingRow
                       key={entry.player.id}
                       entry={entry}
+                      index={index}
                       onPress={() => openMemberProfile(entry.player.id)}
                     />
                   ))}

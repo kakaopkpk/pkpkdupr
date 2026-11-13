@@ -2,14 +2,14 @@ import React from "react";
 import type { SessionPlayerReport } from "@pkpkdupr/shared/ranking";
 import {
   getSessionRankChange,
-  SESSION_COUNT,
+  SessionRankChangePop,
+  SessionRankCount,
   SessionRatingCount,
   SessionRatingDeltaCount,
 } from "@/components/records/SessionReportParts";
 import { WinLossCount } from "@/components/profile/ProfileStatTile";
 import { Card } from "@/components/ui/Card";
-import { CountUpNumber } from "@/components/ui/CountUpNumber";
-import { RankChange } from "@/components/ui/Delta";
+import { COUNT_UP, CountUpNumber } from "@/components/ui/CountUpNumber";
 import { cx } from "@/components/ui/cx";
 
 const Stat: React.FC<{
@@ -32,7 +32,7 @@ const Stat: React.FC<{
 
 /**
  * 지난 세션 피드·세션 상세의 내 변동 카드: 복식 평점·세션 후 순위와 변화, 경기 수·승패·승률.
- * 평점·순위는 세션 전 값에서, 나머지 숫자는 0부터 세션 지배자 카드와 함께 센다
+ * 순위는 세션 전 값에서, 평점과 나머지 숫자는 0부터 세션 지배자 카드와 함께 센다. 순위 변동은 다 센 뒤 튀어나온다
  */
 const LastSessionMeCard: React.FC<{ report: SessionPlayerReport }> = ({
   report,
@@ -63,37 +63,29 @@ const LastSessionMeCard: React.FC<{ report: SessionPlayerReport }> = ({
                 "–"
               ) : (
                 <>
-                  <CountUpNumber
-                    value={report.rankAfter}
-                    from={report.rankBefore ?? report.rankAfter}
-                    {...SESSION_COUNT}
+                  <SessionRankCount
+                    report={{ ...report, rankAfter: report.rankAfter }}
                   />
                   위
                 </>
               )}
             </span>
-            {rankChange !== null && rankChange !== 0 && (
-              <RankChange
-                value={rankChange}
-                className="text-pk-15 font-extrabold"
-              />
-            )}
+            <SessionRankChangePop
+              value={rankChange}
+              className="text-pk-15 font-extrabold"
+            />
           </span>
         </div>
       </div>
       <div className="grid grid-cols-3 border-t border-pk-divider pt-3.5">
         <Stat
           label="경기"
-          value={<CountUpNumber value={report.matchCount} {...SESSION_COUNT} />}
+          value={<CountUpNumber value={report.matchCount} {...COUNT_UP} />}
         />
         <Stat
           label="결과"
           value={
-            <WinLossCount
-              wins={report.wins}
-              losses={report.losses}
-              timing={SESSION_COUNT}
-            />
+<WinLossCount wins={report.wins} losses={report.losses} />
           }
           withDivider
         />
@@ -101,7 +93,7 @@ const LastSessionMeCard: React.FC<{ report: SessionPlayerReport }> = ({
           label="승률"
           value={
             <>
-              <CountUpNumber value={winRate} {...SESSION_COUNT} />%
+              <CountUpNumber value={winRate} {...COUNT_UP} />%
             </>
           }
           withDivider
