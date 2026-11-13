@@ -23,7 +23,11 @@ const makePlayer = (id: string, username: string, doubles: number): Player => ({
   updatedAt: now,
 });
 
-const alice = makePlayer("Palice01", "alice", 3.6);
+const alice: Player = {
+  ...makePlayer("Palice01", "alice", 3.6),
+  statusMessage: "오늘도 화이팅",
+  statusMessageBackgroundColor: "blue",
+};
 const bob = makePlayer("Pbob0001", "bob", 3.4);
 const authSession: AuthenticatedSession = {
   payload: { playerId: alice.id, isAdmin: false },
@@ -97,23 +101,6 @@ describe("랭킹·세션 리포트 API", () => {
       MatchRepository.prototype,
       "findSessionsWithParticipantIds",
     ).mockResolvedValue([emptySession, session]);
-    vi.spyOn(
-      MatchRepository.prototype,
-      "getPlayerRatingChartProjection",
-    ).mockResolvedValue({
-      history: {
-        singles: [],
-        doubles: [
-          {
-            rating: 3.4,
-            createdAt: new Date("2026-10-01T00:00:00Z"),
-            source: "anchor",
-          },
-          { rating: 3.6, createdAt: completedAt, source: "match" },
-        ],
-      },
-      generatedAt: now,
-    });
   });
 
   afterEach(() => {
@@ -130,7 +117,22 @@ describe("랭킹·세션 리포트 API", () => {
     expect(response.status).toBe(401);
   });
 
-  it("GET /api/rankings는 기본 복식 순위와 지난 세션 대비 변동을 돌려준다", async () => {
+  it("GET /api/rankings는 기본 복식 순위와 지난 세션 대비 변동, 회원 상태메시지를 돌려준다", async () => {
+    const carol: Player = {
+      ...makePlayer("Pcarol01", "carol", 3),
+      duprRating: { singles: null, doubles: null },
+      statusMessage: "NR 탈출 중",
+    };
+    vi.spyOn(AuthService.prototype, "getAllPlayers").mockResolvedValue([
+      alice,
+      bob,
+      carol,
+    ]);
+    const projectionSpy = vi.spyOn(
+      MatchRepository.prototype,
+      "getPlayerRatingChartProjection",
+    );
+
     const response = await authorized("/api/rankings");
 
     expect(response.status).toBe(200);
@@ -140,11 +142,15 @@ describe("랭킹·세션 리포트 API", () => {
       entries: [
         {
           rank: 1,
-          player: { id: alice.id, username: "alice" },
+          player: {
+            id: alice.id,
+            username: "alice",
+            statusMessage: "오늘도 화이팅",
+            statusMessageBackgroundColor: "blue",
+          },
           rating: 3.6,
           matchCount: 1,
           rankChange: 1,
-          trend: [3.4, 3.6],
         },
         {
           rank: 2,
@@ -152,11 +158,17 @@ describe("랭킹·세션 리포트 API", () => {
           rating: 3.4,
           matchCount: 1,
           rankChange: -1,
-          trend: [3.4, 3.6],
         },
       ],
-      unrated: [],
+      unrated: [
+        {
+          player: { id: carol.id, username: "carol", statusMessage: "NR 탈출 중" },
+          matchCount: 0,
+        },
+      ],
     });
+    // 90일 평점 추이를 읽지 않는다
+    expect(projectionSpy).not.toHaveBeenCalled();
   });
 
   it("GET /api/rankings는 category가 doubles·singles가 아니면 400이다", async () => {
