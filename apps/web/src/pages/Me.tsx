@@ -5,11 +5,9 @@ import AchievementsScreen from "@/components/profile/AchievementsScreen";
 import AchievementsSection from "@/components/profile/AchievementsSection";
 import PartnerChemistryCard from "@/components/profile/PartnerChemistryCard";
 import PlayerMatchesDrawer from "@/components/profile/PlayerMatchesDrawer";
-import ProfileStatTile, {
-  PROFILE_STAT_COUNT,
-} from "@/components/profile/ProfileStatTile";
 import RivalCard from "@/components/profile/RivalCard";
 import {
+  Last7DaysTile,
   ProfileBodySkeleton,
   ProfileLoadError,
   ProfileRatingSection,
@@ -17,10 +15,6 @@ import {
   WinRateTile,
 } from "@/components/profile/ProfileSections";
 import { useProfileOverview } from "@/components/profile/useProfileOverview";
-import {
-  CountUpNumber,
-  CountUpRatingDelta,
-} from "@/components/ui/CountUpNumber";
 import { PlayerAvatar } from "@/components/ui/PlayerAvatar";
 import { SectionLabel } from "@/components/ui/Section";
 import { StatusMessageChip } from "@/components/ui/StatusMessageChip";
@@ -123,25 +117,7 @@ const Me: React.FC = () => {
             {/* 분류를 바꾸면 key로 다시 마운트해 카운트업을 처음부터 재생한다 */}
             <div key={category} className="grid grid-cols-2 gap-2.5">
               <WinRateTile overview={overview} category={category} />
-              <ProfileStatTile
-                label="최근 7일"
-                value={
-                  <CountUpRatingDelta
-                    value={ratingDelta.last7Days}
-                    className="text-pk-22 leading-[1.4]"
-                    {...PROFILE_STAT_COUNT}
-                  />
-                }
-                foot={
-                  <>
-                    <CountUpNumber
-                      value={ratingDelta.last7DaysMatchCount}
-                      {...PROFILE_STAT_COUNT}
-                    />
-                    경기
-                  </>
-                }
-              />
+              <Last7DaysTile overview={overview} category={category} />
             </div>
             {partners.length > 0 ? (
               <section className="flex flex-col gap-2.5 pt-1">

@@ -29,8 +29,8 @@ export interface PlayerProfileSummaryInfo {
   partners: PartnerStat[];
   /** 자주 진 상대(천적) */
   rivals: OpponentStat[];
-  /** 보는 사람 기준 맞대결 승패. 본인 프로필이면 null */
-  headToHead: HeadToHeadStat | null;
+  /** 보는 사람 기준 분류별 맞대결 승패와 보는 사람 평점 변화 합. 본인 프로필이면 null */
+  headToHead: Record<MatchTopLevelType, HeadToHeadStat> | null;
   /** 업적 18개 진행 상태(ACHIEVEMENTS 순서) */
   achievements: AchievementProgressInfo[];
 }
