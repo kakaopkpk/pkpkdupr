@@ -26,10 +26,15 @@ export const COUNT_UP_SECOND = {
 /** 목록 줄마다 세기 시작을 늦추는 시간(ms) */
 export const COUNT_UP_ROW_STAGGER_MS = 40;
 
+// 이 줄 수 뒤로는 더 늦추지 않는다. 긴 목록 아래쪽이 오래 0으로 남지 않게 한다
+const COUNT_UP_ROW_STAGGER_MAX_ROWS = 10;
+
 /** 목록 index번째 줄의 카운트업 박자 */
 export const getRowCountUp = (index: number) =>
   ({
-    delayMs: COUNT_UP.delayMs + index * COUNT_UP_ROW_STAGGER_MS,
+    delayMs:
+      COUNT_UP.delayMs +
+      Math.min(index, COUNT_UP_ROW_STAGGER_MAX_ROWS) * COUNT_UP_ROW_STAGGER_MS,
     durationMs: COUNT_UP.durationMs,
   }) as const;
 

@@ -84,9 +84,7 @@ const LastSessionMeCard: React.FC<{ report: SessionPlayerReport }> = ({
         />
         <Stat
           label="결과"
-          value={
-<WinLossCount wins={report.wins} losses={report.losses} />
-          }
+          value={<WinLossCount wins={report.wins} losses={report.losses} />}
           withDivider
         />
         <Stat

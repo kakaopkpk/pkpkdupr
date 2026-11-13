@@ -65,13 +65,22 @@ export const SessionSummary: React.FC<{ session: MatchSessionHistoryInfo }> = ({
   </div>
 );
 
-/** 세션 후 평점. 0.000부터 세며, 후 평점이 없으면 "NR" */
+/**
+ * 세션 후 평점. 후 평점이 없으면 "NR".
+ * 기본은 0.000부터 세고, from을 주면(세션 전 평점을 옆에 보이는 "전 → 후" 줄) 그 값부터 센다
+ */
 export const SessionRatingCount: React.FC<{
   report: Pick<SessionPlayerReport, "ratingAfter">;
-}> = ({ report }) => {
+  from?: number;
+}> = ({ report, from }) => {
   if (report.ratingAfter === null) return <>NR</>;
   return (
-    <CountUpNumber value={report.ratingAfter} format={formatRating} {...COUNT_UP} />
+    <CountUpNumber
+      value={report.ratingAfter}
+      from={from}
+      format={formatRating}
+      {...COUNT_UP}
+    />
   );
 };
 
@@ -188,7 +197,14 @@ export const SessionPlayerRatingRow: React.FC<{
         <span className="truncate text-pk-12 text-pk-muted tabular-nums">
           <WinLossCount wins={report.wins} losses={report.losses} /> ·{" "}
           {showsBefore ? `${beforeText} → ` : null}
-          <SessionRatingCount report={report} />
+          <SessionRatingCount
+            report={report}
+            from={
+              showsBefore && !wasUnratedBeforeSession(report)
+                ? (report.ratingBefore ?? undefined)
+                : undefined
+            }
+          />
         </span>
       </span>
       <span className="flex shrink-0 flex-col items-end gap-0.5">
