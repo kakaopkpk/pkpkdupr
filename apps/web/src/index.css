@@ -562,13 +562,6 @@
     border-color: var(--color-pk-primary);
     box-shadow: inset 0 0 0 1px var(--color-pk-primary);
   }
-
-  /* 지우기는 SearchField의 X 버튼이 맡으므로 브라우저 기본 취소 버튼을 숨긴다 */
-  .pk-search-input::-webkit-search-cancel-button,
-  .pk-search-input::-webkit-search-decoration {
-    -webkit-appearance: none;
-    appearance: none;
-  }
 }
 
 @keyframes pk-flame-spin {

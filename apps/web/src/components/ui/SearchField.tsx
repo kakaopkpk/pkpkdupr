@@ -1,5 +1,6 @@
 import React, { useRef } from "react";
 import { cx } from "./cx";
+import { ClearIcon, SearchIcon } from "./Icons";
 
 type NativeInputProps = Omit<
   React.InputHTMLAttributes<HTMLInputElement>,
@@ -11,37 +12,6 @@ export interface SearchFieldProps extends NativeInputProps {
   onValueChange: (value: string) => void;
   className?: string;
 }
-
-const SearchIcon: React.FC = () => (
-  <svg
-    width="18"
-    height="18"
-    viewBox="0 0 24 24"
-    aria-hidden="true"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2.2"
-    strokeLinecap="round"
-    className="shrink-0"
-  >
-    <circle cx="11" cy="11" r="6.5" />
-    <path d="M16 16l4 4" />
-  </svg>
-);
-
-/** 회색 원 안의 흰 X */
-const ClearIcon: React.FC = () => (
-  <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
-    <circle cx="12" cy="12" r="10" fill="currentColor" />
-    <path
-      d="M8.5 8.5l7 7M15.5 8.5l-7 7"
-      fill="none"
-      stroke="white"
-      strokeWidth="2.2"
-      strokeLinecap="round"
-    />
-  </svg>
-);
 
 /** 44px 검색칸. 검색어가 있으면 오른쪽 X로 비우고, 포커스 때 테두리를 그리지 않는다 */
 export const SearchField: React.FC<SearchFieldProps> = ({
@@ -57,6 +27,7 @@ export const SearchField: React.FC<SearchFieldProps> = ({
     <label
       className={cx(
         "flex h-11 items-center gap-2 rounded-pk-sm bg-pk-bg pl-3.5 text-pk-muted",
+        !value && "pr-1.5",
         className,
       )}
     >
@@ -67,7 +38,8 @@ export const SearchField: React.FC<SearchFieldProps> = ({
         value={value}
         onChange={(event) => onValueChange(event.target.value)}
         // 16px 미만이면 iOS가 포커스 때 화면을 확대한다
-        className="pk-search-input min-w-0 flex-1 appearance-none bg-transparent text-[16px] text-pk-ink outline-none placeholder:text-pk-muted"
+        // 지우기는 오른쪽 X 버튼이 맡으므로 브라우저 기본 취소 버튼은 숨긴다
+        className="min-w-0 flex-1 appearance-none bg-transparent text-[16px] text-pk-ink outline-none placeholder:text-pk-muted [&::-webkit-search-cancel-button]:appearance-none"
         {...rest}
       />
       {value ? (
@@ -84,9 +56,7 @@ export const SearchField: React.FC<SearchFieldProps> = ({
         >
           <ClearIcon />
         </button>
-      ) : (
-        <span aria-hidden="true" className="w-1.5 shrink-0" />
-      )}
+      ) : null}
     </label>
   );
 };
