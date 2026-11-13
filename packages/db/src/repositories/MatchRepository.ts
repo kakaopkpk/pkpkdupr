@@ -96,6 +96,7 @@ export interface CompletedMatchOutcome {
   id: string;
   type: MatchType;
   sessionId: string | null;
+  matchStartsAt: Date;
   completedAt: Date;
   /** 팀별 선수 id. [0]=팀 A, [1]=팀 B */
   teamPlayerIds: [string[], string[]];
@@ -108,7 +109,7 @@ export interface SessionWithParticipantIds {
   date: Date;
   location: string;
   kind: ManagedMatchSession["kind"];
-  /** 회원 세션 시각("HH:MM", KST). 자정 넘김 세션의 만료 판정에 쓴다 */
+  /** 시작·종료 시각("HH:MM", KST). 정기 세션은 18:00~22:00, 시각 없는 회원 세션은 null. 종료 ≤ 시작이면 다음 날 종료 */
   startTime: string | null;
   endTime: string | null;
   participantIds: string[];
@@ -855,6 +856,7 @@ export class MatchRepository {
           id: matches.id,
           type: matches.type,
           sessionId: matches.sessionId,
+          matchStartsAt: matches.matchStartsAt,
           completedAt: matches.completedAt,
         })
         .from(matches)
@@ -911,12 +913,14 @@ export class MatchRepository {
         id: string;
         type: string;
         sessionId: string | null;
+        matchStartsAt: Date | string | number;
         completedAt: Date | string | number;
       }>
     ).map((row): CompletedMatchOutcome => ({
       id: row.id,
       type: row.type as MatchType,
       sessionId: row.sessionId ?? null,
+      matchStartsAt: toDate(row.matchStartsAt),
       completedAt: toDate(row.completedAt),
       teamPlayerIds: teamsByMatchId.get(row.id) ?? [[], []],
       scores: scoresByMatchId.get(row.id) ?? [],
@@ -947,16 +951,24 @@ export class MatchRepository {
     }
 
     return (sessionRows as StoredMatchSession[]).map(
-      (session): SessionWithParticipantIds => ({
-        id: session.id,
-        name: session.name,
-        date: toDate(session.date),
-        location: session.location,
-        kind: toSessionKind(session),
-        startTime: session.startTime ?? null,
-        endTime: session.endTime ?? null,
-        participantIds: participantIdsBySessionId.get(session.id) ?? [],
-      }),
+      (session): SessionWithParticipantIds => {
+        const kind = toSessionKind(session);
+        const isRegular = kind === "regular";
+        return {
+          id: session.id,
+          name: session.name,
+          date: toDate(session.date),
+          location: session.location,
+          kind,
+          startTime: isRegular
+            ? REGULAR_SESSION_START_TIME
+            : (session.startTime ?? null),
+          endTime: isRegular
+            ? REGULAR_SESSION_END_TIME
+            : (session.endTime ?? null),
+          participantIds: participantIdsBySessionId.get(session.id) ?? [],
+        };
+      },
     );
   }
 

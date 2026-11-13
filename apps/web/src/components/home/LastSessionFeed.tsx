@@ -11,8 +11,23 @@ import { getAchievementDefinition } from "@/lib/achievements";
 import { formatKstShortDate } from "@/lib/format";
 import type { MatchSessionReportInfo } from "@/lib/rankings";
 
+/** 세션 리포트 업적 중 그 회원이 받은 업적 정의 */
+export const getPlayerSessionAchievements = (
+  report: Pick<MatchSessionReportInfo, "achievements">,
+  playerId: string | undefined,
+): AchievementDefinition[] =>
+  playerId
+    ? report.achievements.flatMap((item) => {
+        const definition =
+          item.playerId === playerId
+            ? getAchievementDefinition(item.achievementId)
+            : null;
+        return definition ? [definition] : [];
+      })
+    : [];
+
 /** 그 세션에서 받은 내 새 업적. 누르면 업적 상세 시트를 연다 */
-const MyNewAchievementsCard: React.FC<{
+export const MyNewAchievementsCard: React.FC<{
   playerId: string;
   achievements: readonly AchievementDefinition[];
 }> = ({ playerId, achievements }) => {
@@ -65,17 +80,8 @@ const LastSessionFeed: React.FC<{
       )
     : undefined;
   const myAchievements = useMemo(
-    () =>
-      playerId
-        ? report.achievements.flatMap((item) => {
-            const definition =
-              item.playerId === playerId
-                ? getAchievementDefinition(item.achievementId)
-                : null;
-            return definition ? [definition] : [];
-          })
-        : [],
-    [playerId, report.achievements],
+    () => getPlayerSessionAchievements(report, playerId),
+    [playerId, report],
   );
 
   return (

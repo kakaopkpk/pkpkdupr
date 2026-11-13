@@ -13,11 +13,6 @@ export interface AchievementDetailRequest {
   achievementId: string;
 }
 
-export interface SessionReportRequest {
-  sessionId: string;
-  requestedAt: number;
-}
-
 export interface AppNavigationContextValue {
   selectTab: (tab: TabKey) => void;
   openMatchDetail: (matchId: string) => void;
@@ -28,10 +23,8 @@ export interface AppNavigationContextValue {
   openSettings: () => void;
   /** 업적 상세 바텀시트. 열린 화면·경기 기록 시트 위에 뜬다 */
   openAchievementDetail: (params: AchievementDetailRequest) => void;
-  /** 기록 탭으로 바꾸고 그 세션을 고르게 한다 */
+  /** 지금 탭 위에 세션 상세 화면을 쌓는다 */
   openSessionReport: (sessionId: string) => void;
-  /** 마지막 openSessionReport 요청. 기록 탭이 읽어 세션을 고른다 */
-  sessionReportRequest: SessionReportRequest | null;
   /** 경기 기록·수정·시작, 세션 생성, 참여 변경 뒤 호출 */
   notifyDataChanged: () => void;
   /** notifyDataChanged마다 1 증가. 탭 페이지는 이 값을 데이터 재조회 의존성으로 쓴다 */

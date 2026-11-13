@@ -1,16 +1,12 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { MatchInfo } from "@/types/match";
 import TabPanelStatus from "@/components/TabPanelStatus";
 import {
-  SessionChips,
-  SessionChipsSkeleton,
-  SessionReportSkeleton,
-  SessionSummary,
-  TopRiserCard,
-} from "@/components/records/SessionReportParts";
-import { Card } from "@/components/ui/Card";
+  RecordListFooter,
+  RecordListSkeleton,
+  RecordMatchCard,
+  RecordSessionCard,
+} from "@/components/records/RecordCards";
 import { TabHeader } from "@/components/ui/Headers";
-import { MatchRow } from "@/components/ui/MatchRow";
 import { SectionLabel } from "@/components/ui/Section";
 import {
   SegmentedControl,
@@ -19,13 +15,13 @@ import {
 import { useAppNavigation } from "@/context/AppNavigationContext";
 import { useAuth } from "@/context/AuthContext";
 import { useTabNavigation } from "@/context/TabNavigationContext";
-import { apiFetch } from "@/lib/api";
+import { formatKstLongDate } from "@/lib/format";
 import {
-  fetchSessionHistory,
-  fetchSessionReport,
-  type MatchSessionHistoryInfo,
-  type MatchSessionReportInfo,
-} from "@/lib/rankings";
+  fetchRecords,
+  getRecordItemDate,
+  getRecordItemKey,
+  type RecordItemInfo,
+} from "@/lib/records";
 
 type RecordsMode = "all" | "mine";
 
@@ -34,258 +30,201 @@ const MODE_OPTIONS = [
   { value: "mine", label: "내 경기" },
 ] as const;
 
-const SESSION_HISTORY_LIMIT = 30;
+const PAGE_SIZE = 20;
+// 목록 끝에서 이만큼 카드가 남았을 때 다음 묶음을 미리 받는다
+const PREFETCH_REMAINING_CARDS = 3;
 
-type LoadStatus = "loading" | "ready" | "error";
+type FirstPageStatus = "loading" | "ready" | "error";
+type MoreStatus = "idle" | "loading" | "error";
 
-const fetchSessionMatches = async (sessionId: string) => {
-  const res = await apiFetch(
-    `/api/match-sessions/${encodeURIComponent(sessionId)}/matches`,
-  );
-  if (!res.ok) {
-    const errorData = (await res.json().catch(() => ({}))) as {
-      error?: string;
-    };
-    throw new Error(errorData.error || "세션 경기를 불러오지 못했어요.");
-  }
-  return (await res.json()) as MatchInfo[];
-};
+interface RecordDateGroup {
+  label: string;
+  items: { item: RecordItemInfo; index: number }[];
+}
 
 const getErrorMessage = (error: unknown, fallback: string) =>
   error instanceof Error && error.message ? error.message : fallback;
 
-const isPlayerInMatch = (match: MatchInfo, playerId: string) =>
-  match.teams.some((team) =>
-    team.players.some((player) => player.id === playerId),
-  );
+/** 이어지는 같은 KST 날짜 항목을 날짜 제목 하나로 묶는다. index는 전체 목록 순번이다 */
+const groupByDate = (items: readonly RecordItemInfo[]): RecordDateGroup[] => {
+  const groups: RecordDateGroup[] = [];
+  items.forEach((item, index) => {
+    const label = formatKstLongDate(getRecordItemDate(item));
+    const lastGroup = groups[groups.length - 1];
+    if (lastGroup && lastGroup.label === label) {
+      lastGroup.items.push({ item, index });
+    } else {
+      groups.push({ label, items: [{ item, index }] });
+    }
+  });
+  return groups;
+};
 
-/** 기록 탭: 세션 날짜 칩으로 세션을 골라 요약·세션 지배자·완료 경기를 본다 */
+const mergeItems = (
+  current: readonly RecordItemInfo[],
+  next: readonly RecordItemInfo[],
+) => {
+  const keys = new Set(current.map(getRecordItemKey));
+  return [...current, ...next.filter((item) => !keys.has(getRecordItemKey(item)))];
+};
+
+/**
+ * 감싼 카드가 화면(탭 스크롤 영역이 잘라낸 보이는 범위)에 들어오면 onReach를 부른다.
+ * 숨은 탭에서는 교차하지 않으므로 부르지 않는다.
+ */
+const PrefetchTrigger: React.FC<{
+  onReach: () => void;
+  children: React.ReactNode;
+}> = ({ onReach, children }) => {
+  const targetRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    const target = targetRef.current;
+    if (!target || typeof IntersectionObserver === "undefined") return undefined;
+    const observer = new IntersectionObserver((entries) => {
+      if (entries.some((entry) => entry.isIntersecting)) onReach();
+    });
+    observer.observe(target);
+    return () => observer.disconnect();
+  }, [onReach]);
+
+  return <div ref={targetRef}>{children}</div>;
+};
+
+/** 기록 탭: 세션 카드와 세션 없는 경기 카드를 날짜 제목으로 묶은 최신순 목록, 무한 스크롤 */
 const Records: React.FC = () => {
   const { player } = useAuth();
   const playerId = player?.id;
-  const { openMatchDetail, sessionReportRequest, dataVersion } =
+  const { openMatchDetail, openSessionReport, dataVersion } =
     useAppNavigation();
   const { registerPullToRefresh } = useTabNavigation();
 
   const [mode, setMode] = useState<RecordsMode>("all");
   const [isListFading, setIsListFading] = useState(false);
-  const [sessions, setSessions] = useState<MatchSessionHistoryInfo[]>([]);
-  const [sessionsStatus, setSessionsStatus] = useState<LoadStatus>("loading");
-  const [sessionsError, setSessionsError] = useState<string | null>(null);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [report, setReport] = useState<MatchSessionReportInfo | null>(null);
-  const [matches, setMatches] = useState<MatchInfo[]>([]);
-  const [detailStatus, setDetailStatus] = useState<LoadStatus>("loading");
-  const [detailError, setDetailError] = useState<string | null>(null);
+  const [items, setItems] = useState<RecordItemInfo[]>([]);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [firstStatus, setFirstStatus] = useState<FirstPageStatus>("loading");
+  const [firstError, setFirstError] = useState<string | null>(null);
+  const [moreStatus, setMoreStatus] = useState<MoreStatus>("idle");
 
-  // 다른 화면이 열어 달라고 한 세션. 칩 목록에 없어도 선택을 유지한다
-  const requestedSessionIdRef = useRef<string | null>(null);
-  const selectedIdRef = useRef<string | null>(null);
-  const sessionsRequestRef = useRef(0);
-  selectedIdRef.current = selectedId;
+  // 첫 묶음을 다시 받으면 올리고, 응답 때 다르면 버린다(이어 받던 요청도 함께 무효)
+  const requestIdRef = useRef(0);
+  const isLoadingMoreRef = useRef(false);
 
-  const loadSessions = useCallback(
+  const requestPlayerId = mode === "mine" ? playerId : undefined;
+
+  const loadFirstPage = useCallback(
     async (showSkeleton: boolean) => {
-      const requestId = ++sessionsRequestRef.current;
-      if (showSkeleton) setSessionsStatus("loading");
-      try {
-        const nextSessions = await fetchSessionHistory({
-          limit: SESSION_HISTORY_LIMIT,
-          ...(mode === "mine" && playerId ? { playerId } : {}),
-        });
-        if (requestId !== sessionsRequestRef.current) return;
-        setSessions(nextSessions);
-        setSessionsStatus("ready");
-        // 목록 없이 끝나면 페이드 래퍼가 그려지지 않으므로 대기 중인 페이드를 버린다. 남겨 두면 나중 재조회에서 재생된다
-        if (nextSessions.length === 0 && !requestedSessionIdRef.current) {
-          setIsListFading(false);
-        }
-        setSessionsError(null);
-        setSelectedId((previous) => {
-          if (
-            previous &&
-            (previous === requestedSessionIdRef.current ||
-              nextSessions.some((session) => session.id === previous))
-          ) {
-            return previous;
-          }
-          return nextSessions[0]?.id ?? null;
-        });
-      } catch (error) {
-        if (requestId !== sessionsRequestRef.current) return;
-        setIsListFading(false);
-        setSessionsError(
-          getErrorMessage(error, "세션 기록을 불러오지 못했어요."),
-        );
-        setSessionsStatus("error");
-      }
-    },
-    [mode, playerId],
-  );
-
-  const loadDetail = useCallback(
-    async (sessionId: string, showSkeleton: boolean) => {
+      const requestId = ++requestIdRef.current;
+      isLoadingMoreRef.current = false;
+      setMoreStatus("idle");
       if (showSkeleton) {
-        setDetailStatus("loading");
-        setReport(null);
-        setMatches([]);
+        setFirstStatus("loading");
+        setItems([]);
+        setNextCursor(null);
       }
       try {
-        const [nextReport, nextMatches] = await Promise.all([
-          fetchSessionReport(sessionId),
-          fetchSessionMatches(sessionId),
-        ]);
-        if (selectedIdRef.current !== sessionId) return;
-        setReport(nextReport);
-        setMatches(nextMatches);
-        setDetailStatus("ready");
-        setDetailError(null);
+        const data = await fetchRecords({
+          limit: PAGE_SIZE,
+          ...(requestPlayerId ? { playerId: requestPlayerId } : {}),
+        });
+        if (requestId !== requestIdRef.current) return;
+        setItems(data.items);
+        setNextCursor(data.nextCursor);
+        setFirstStatus("ready");
+        setFirstError(null);
+        // 목록 없이 끝나면 페이드 래퍼가 그려지지 않으므로 대기 중인 페이드를 버린다. 남겨 두면 나중 재조회에서 재생된다
+        if (data.items.length === 0) setIsListFading(false);
       } catch (error) {
-        if (selectedIdRef.current !== sessionId) return;
-        setDetailError(
-          getErrorMessage(error, "세션 리포트를 불러오지 못했어요."),
-        );
-        setDetailStatus("error");
+        if (requestId !== requestIdRef.current) return;
+        // 새로고침 실패는 보이던 목록을 그대로 둔다
+        if (!showSkeleton) return;
+        setIsListFading(false);
+        setFirstError(getErrorMessage(error, "기록을 불러오지 못했어요."));
+        setFirstStatus("error");
       }
     },
-    [],
+    [requestPlayerId],
   );
 
-  useEffect(() => {
-    if (!sessionReportRequest) return;
-    requestedSessionIdRef.current = sessionReportRequest.sessionId;
-    setSelectedId(sessionReportRequest.sessionId);
-  }, [sessionReportRequest]);
-
-  // 보기 전환·데이터 변경 시 칩 목록을 다시 받는다
-  const lastSessionsKeyRef = useRef<string | null>(null);
-  useEffect(() => {
-    const key = `${mode}:${playerId ?? ""}`;
-    const isNewList = lastSessionsKeyRef.current !== key;
-    lastSessionsKeyRef.current = key;
-    void loadSessions(isNewList);
-  }, [loadSessions, mode, playerId, dataVersion]);
-
-  // 세션이 바뀌면 스켈레톤부터, 같은 세션의 데이터 변경이면 보이는 내용을 둔 채 다시 받는다
-  const lastDetailIdRef = useRef<string | null>(null);
-  useEffect(() => {
-    if (!selectedId) {
-      lastDetailIdRef.current = null;
-      return;
+  const loadMore = useCallback(async () => {
+    if (!nextCursor || isLoadingMoreRef.current) return;
+    const requestId = requestIdRef.current;
+    isLoadingMoreRef.current = true;
+    setMoreStatus("loading");
+    try {
+      const data = await fetchRecords({
+        limit: PAGE_SIZE,
+        cursor: nextCursor,
+        ...(requestPlayerId ? { playerId: requestPlayerId } : {}),
+      });
+      if (requestId !== requestIdRef.current) return;
+      setItems((current) => mergeItems(current, data.items));
+      setNextCursor(data.nextCursor);
+      setMoreStatus("idle");
+    } catch {
+      if (requestId !== requestIdRef.current) return;
+      setMoreStatus("error");
+    } finally {
+      if (requestId === requestIdRef.current) isLoadingMoreRef.current = false;
     }
-    const isNewSession = lastDetailIdRef.current !== selectedId;
-    lastDetailIdRef.current = selectedId;
-    void loadDetail(selectedId, isNewSession);
-  }, [dataVersion, loadDetail, selectedId]);
+  }, [nextCursor, requestPlayerId]);
+
+  // 실패한 뒤에는 다시 시도를 누르기 전까지 자동으로 받지 않는다
+  const handlePrefetch = useCallback(() => {
+    if (moreStatus === "idle") void loadMore();
+  }, [loadMore, moreStatus]);
+
+  // 보기 전환은 스켈레톤부터, 데이터 변경은 보이는 목록을 둔 채 첫 묶음부터 다시 받는다
+  const lastListKeyRef = useRef<string | null>(null);
+  useEffect(() => {
+    const key = requestPlayerId ?? "";
+    const isNewList = lastListKeyRef.current !== key;
+    lastListKeyRef.current = key;
+    void loadFirstPage(isNewList);
+  }, [loadFirstPage, requestPlayerId, dataVersion]);
 
   useEffect(
-    () =>
-      registerPullToRefresh("records", async () => {
-        const currentId = selectedIdRef.current;
-        await Promise.all([
-          loadSessions(false),
-          currentId ? loadDetail(currentId, false) : Promise.resolve(),
-        ]);
-      }),
-    [loadDetail, loadSessions, registerPullToRefresh],
+    () => registerPullToRefresh("records", () => loadFirstPage(false)),
+    [loadFirstPage, registerPullToRefresh],
   );
 
   const handleModeChange = (nextMode: RecordsMode) => {
-    requestedSessionIdRef.current = null;
     setMode(nextMode);
     setIsListFading(true);
   };
 
-  const handleSelectSession = (sessionId: string) => {
-    requestedSessionIdRef.current = null;
-    setSelectedId(sessionId);
-  };
+  const groups = useMemo(() => groupByDate(items), [items]);
+  const prefetchIndex = nextCursor
+    ? Math.max(0, items.length - PREFETCH_REMAINING_CARDS)
+    : -1;
 
-  // 요청받은 세션이 칩 목록에 없으면 앞쪽에 넣어 보인다
-  const chipSessions = useMemo(() => {
-    if (
-      report &&
-      report.session.id === selectedId &&
-      !sessions.some((session) => session.id === report.session.id)
-    ) {
-      return [report.session, ...sessions];
-    }
-    return sessions;
-  }, [report, selectedId, sessions]);
-
-  const visibleMatches = useMemo(
-    () =>
-      matches
-        .filter((match) => match.status === "completed")
-        .filter(
-          (match) =>
-            mode === "all" || (!!playerId && isPlayerInMatch(match, playerId)),
-        )
-        .sort(
-          (a, b) =>
-            new Date(b.matchStartsAt).getTime() -
-            new Date(a.matchStartsAt).getTime(),
-        ),
-    [matches, mode, playerId],
-  );
-
-  const renderDetail = () => {
-    if (detailStatus === "loading" || !report) {
-      if (detailStatus === "error") {
-        return (
-          <TabPanelStatus
-            message={detailError ?? "세션 리포트를 불러오지 못했어요."}
-            tone="error"
-          />
-        );
-      }
-      return <SessionReportSkeleton />;
-    }
-
-    return (
-      <>
-        <SessionSummary session={report.session} />
-        {report.topRiser ? <TopRiserCard report={report.topRiser} /> : null}
-        <div className="h-1" />
-        <SectionLabel>경기 {visibleMatches.length}</SectionLabel>
-        {visibleMatches.length > 0 ? (
-          <Card>
-            {visibleMatches.map((match) => (
-              <MatchRow
-                key={match.id}
-                match={match}
-                currentPlayerId={playerId}
-                onPress={() => openMatchDetail(match.id)}
-              />
-            ))}
-          </Card>
-        ) : (
-          <TabPanelStatus message="기록이 없어요" />
-        )}
-      </>
+  const renderItem = (item: RecordItemInfo) =>
+    item.kind === "session" ? (
+      <RecordSessionCard
+        session={item.session}
+        mine={item.mine}
+        onPress={() => openSessionReport(item.session.id)}
+      />
+    ) : (
+      <RecordMatchCard
+        match={item.match}
+        currentPlayerId={playerId}
+        onPress={() => openMatchDetail(item.match.id)}
+      />
     );
-  };
 
   const renderBody = () => {
-    if (sessionsStatus === "loading") {
-      return (
-        <>
-          <SessionChipsSkeleton />
-          <SessionReportSkeleton />
-        </>
-      );
-    }
-    if (sessionsStatus === "error" && chipSessions.length === 0) {
+    if (firstStatus === "loading") return <RecordListSkeleton />;
+    if (firstStatus === "error" && items.length === 0) {
       return (
         <TabPanelStatus
-          message={sessionsError ?? "세션 기록을 불러오지 못했어요."}
+          message={firstError ?? "기록을 불러오지 못했어요."}
           tone="error"
         />
       );
     }
-    if (chipSessions.length === 0 && !selectedId) {
-      return <TabPanelStatus message="기록이 없어요" />;
-    }
+    if (items.length === 0) return <TabPanelStatus message="기록이 없어요" />;
 
     return (
       <SegmentSwitchFade
@@ -293,12 +232,36 @@ const Records: React.FC = () => {
         onFinish={() => setIsListFading(false)}
         className="flex flex-col gap-2.5"
       >
-        <SessionChips
-          sessions={chipSessions}
-          selectedId={selectedId}
-          onSelect={handleSelectSession}
-        />
-        {renderDetail()}
+        {groups.map((group) => (
+          <section
+            key={`${group.label}|${group.items[0].index}`}
+            className="flex flex-col gap-2.5"
+          >
+            <div className="pt-2">
+              <SectionLabel>{group.label}</SectionLabel>
+            </div>
+            {group.items.map(({ item, index }) =>
+              index === prefetchIndex ? (
+                <PrefetchTrigger
+                  key={getRecordItemKey(item)}
+                  onReach={handlePrefetch}
+                >
+                  {renderItem(item)}
+                </PrefetchTrigger>
+              ) : (
+                <React.Fragment key={getRecordItemKey(item)}>
+                  {renderItem(item)}
+                </React.Fragment>
+              ),
+            )}
+          </section>
+        ))}
+        {nextCursor && moreStatus !== "idle" ? (
+          <RecordListFooter
+            status={moreStatus}
+            onRetry={() => void loadMore()}
+          />
+        ) : null}
       </SegmentSwitchFade>
     );
   };

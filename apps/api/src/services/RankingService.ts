@@ -5,6 +5,7 @@ import {
   type AchievementMatch,
   type EarnedAchievement,
 } from "@pkpkdupr/shared/achievements";
+import { isEntityId } from "@pkpkdupr/shared/entityId";
 import {
   getMatchTopLevelType,
   getWinningTeamIndex,
@@ -25,6 +26,7 @@ import type {
   RankingEntryPlayer,
   RankingPlayer,
   RankingResponse,
+  RecordSessionItem,
   SessionPlayerReport,
   UnratedRankingEntry,
 } from "@pkpkdupr/shared/ranking";
@@ -47,6 +49,7 @@ export interface RankingMatch {
   id: string;
   type: MatchType;
   sessionId: string | null;
+  matchStartsAt: Date;
   completedAt: Date;
   teamPlayerIds: [string[], string[]];
   scores: MatchScore[];
@@ -57,11 +60,14 @@ export interface RankingSession {
   name: string;
   kind: MatchSessionKind;
   date: Date;
-  location: string;
-  participantIds: string[];
-  /** 회원 세션 시각("HH:MM", KST). 자정을 넘기면 만료가 다음 날 종료 시각으로 늦춰진다 */
+  /**
+   * 시작·종료 시각("HH:MM", KST). 정기 세션은 18:00~22:00, 시각 없는 회원 세션은 null.
+   * 종료 ≤ 시작이면 자정을 넘겨 만료가 다음 날 종료 시각으로 늦춰진다
+   */
   startTime: string | null;
   endTime: string | null;
+  location: string;
+  participantIds: string[];
 }
 
 export type RankingSourcePlayer = Pick<
@@ -438,6 +444,7 @@ const toSessionHistoryItem = (
   kind: session.kind,
   date: session.date,
   dateKey: toKstDateKey(session.date),
+  startTime: session.startTime,
   location: session.location,
   participantCount: new Set(
     session.participantIds.filter((playerId) => activePlayerIds.has(playerId)),
@@ -582,6 +589,26 @@ const buildSessionPlayerStats = (
   return { before, after, players };
 };
 
+/** 세션 참가자 보고(복식 순위 전후 포함, ratingDelta 내림차순). 완료 경기가 없으면 null */
+const buildSessionPlayerReports = (
+  context: RankingContext,
+  session: RankingSession,
+  sessionMatches: RankingMatch[],
+): SessionPlayerReport[] | null => {
+  const stats = buildSessionPlayerStats(context, session, sessionMatches);
+  if (!stats) return null;
+
+  const ranksBefore = toRankMap(
+    rankPlayersAt(context, "doubles", stats.before),
+  );
+  const ranksAfter = toRankMap(rankPlayersAt(context, "doubles", stats.after));
+  return stats.players.map((report) => ({
+    ...report,
+    rankBefore: ranksBefore.get(report.player.id) ?? null,
+    rankAfter: ranksAfter.get(report.player.id) ?? null,
+  }));
+};
+
 /** 세션 지배자: 복식 평점이 가장 많이 오른 참가자. 오른 사람이 없으면 null */
 const pickTopRiser = <T extends SessionPlayerStats>(players: T[]): T | null =>
   players[0] && players[0].ratingDelta > 0 ? players[0] : null;
@@ -634,18 +661,8 @@ export const buildSessionReport = ({
   const sessionMatches = context.matches.filter(
     (match) => match.sessionId === session.id,
   );
-  const stats = buildSessionPlayerStats(context, session, sessionMatches);
-  if (!stats) return null;
-
-  const ranksBefore = toRankMap(
-    rankPlayersAt(context, "doubles", stats.before),
-  );
-  const ranksAfter = toRankMap(rankPlayersAt(context, "doubles", stats.after));
-  const players: SessionPlayerReport[] = stats.players.map((report) => ({
-    ...report,
-    rankBefore: ranksBefore.get(report.player.id) ?? null,
-    rankAfter: ranksAfter.get(report.player.id) ?? null,
-  }));
+  const players = buildSessionPlayerReports(context, session, sessionMatches);
+  if (!players) return null;
 
   return {
     session: toSessionHistoryItem(
@@ -730,4 +747,121 @@ export const countAchievementHolders = (
     }
   }
   return counts;
+};
+
+/** 기록 탭 줄의 정렬 키. 세션은 date, 경기는 matchStartsAt */
+export interface RecordsCursor {
+  atMs: number;
+  id: string;
+}
+
+/** `<정렬 시각 ms>_<세션·경기 id>` */
+export const formatRecordsCursor = ({ atMs, id }: RecordsCursor) =>
+  `${atMs}_${id}`;
+
+/** 형식이 틀리면 null */
+// 15자리면 Number.MAX_SAFE_INTEGER(16자리) 안이라 ms 값이 정확히 복원된다
+const MAX_RECORDS_CURSOR_MS_DIGITS = 15;
+const RECORDS_CURSOR_PATTERN = new RegExp(
+  `^(\\d{1,${MAX_RECORDS_CURSOR_MS_DIGITS}})_([A-Za-z0-9]+)$`,
+);
+
+export const parseRecordsCursor = (value: string): RecordsCursor | null => {
+  const matched = RECORDS_CURSOR_PATTERN.exec(value);
+  if (!matched) return null;
+  const id = matched[2];
+  if (!isEntityId(id, "session") && !isEntityId(id, "match")) return null;
+  return { atMs: Number(matched[1]), id };
+};
+
+/** 기록 탭 페이지 줄. 경기는 공개 Match hydrate 전이라 id만 담는다 */
+export type RecordsPageEntry =
+  | RecordSessionItem
+  | { kind: "match"; matchId: string };
+
+/**
+ * 기록 탭 목록 한 페이지. 완료 경기가 있는 세션과 세션 없는 완료 경기를
+ * 정렬 시각(세션 date·경기 matchStartsAt) 내림차순 → id 내림차순으로 섞고 cursor 뒤에서 limit개를 자른다.
+ * playerId를 주면 그 회원이 완료 경기를 뛴 세션·경기만 남긴다.
+ * 세션 줄의 mine은 세션 리포트 players의 requesterId 줄이다(업적·지배자 계산은 하지 않는다).
+ */
+export const buildRecordsPage = ({
+  context,
+  sessions,
+  limit = SESSION_HISTORY_DEFAULT_LIMIT,
+  cursor,
+  playerId,
+  requesterId,
+}: {
+  context: RankingContext;
+  sessions: RankingSession[];
+  limit?: number;
+  cursor?: RecordsCursor | null;
+  playerId?: string;
+  requesterId: string;
+}): { entries: RecordsPageEntry[]; nextCursor: string | null } => {
+  const hasPlayer = (match: RankingMatch) =>
+    !playerId || match.teamPlayerIds.some((team) => team.includes(playerId));
+  const matchesBySession = groupMatchesBySession(context.matches);
+
+  type Row = RecordsCursor &
+    (
+      | { kind: "session"; session: RankingSession; matches: RankingMatch[] }
+      | { kind: "match"; match: RankingMatch }
+    );
+  const rows: Row[] = [];
+  for (const session of sessions) {
+    const sessionMatches = matchesBySession.get(session.id);
+    if (!sessionMatches?.length || !sessionMatches.some(hasPlayer)) continue;
+    rows.push({
+      kind: "session",
+      atMs: session.date.getTime(),
+      id: session.id,
+      session,
+      matches: sessionMatches,
+    });
+  }
+  for (const match of context.matches) {
+    if (match.sessionId || !hasPlayer(match)) continue;
+    rows.push({
+      kind: "match",
+      atMs: match.matchStartsAt.getTime(),
+      id: match.id,
+      match,
+    });
+  }
+
+  const compareRows = (left: RecordsCursor, right: RecordsCursor) =>
+    right.atMs - left.atMs || compareText(right.id, left.id);
+  const remaining = rows
+    .filter((row) => !cursor || compareRows(row, cursor) > 0)
+    .sort(compareRows);
+  const page = remaining.slice(0, limit);
+  const last = page.at(-1);
+
+  const activePlayerIds = getActivePlayerIds(context);
+  const entries = page.map((row): RecordsPageEntry => {
+    if (row.kind === "match") return { kind: "match", matchId: row.id };
+    const players = buildSessionPlayerReports(
+      context,
+      row.session,
+      row.matches,
+    );
+    return {
+      kind: "session",
+      session: toSessionHistoryItem(
+        row.session,
+        row.matches.length,
+        activePlayerIds,
+      ),
+      mine:
+        players?.find((report) => report.player.id === requesterId) ?? null,
+    };
+  });
+
+  return {
+    entries,
+    nextCursor:
+      remaining.length > limit && last ? formatRecordsCursor(last) : null,
+  };
 };

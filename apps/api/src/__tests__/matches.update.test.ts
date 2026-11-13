@@ -223,6 +223,7 @@ describe("PUT /api/matches/:matchId", () => {
       id,
       type: "mixed-doubles",
       sessionId: null,
+      matchStartsAt: completedAt,
       completedAt,
       teamPlayerIds: [
         [requester.id, partner.id],
