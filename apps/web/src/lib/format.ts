@@ -1,5 +1,7 @@
 const KST_TIME_ZONE = "Asia/Seoul";
 
+export const MINUTE_MS = 60_000;
+
 const toDate = (date: Date | string) =>
   typeof date === "string" ? new Date(date) : date;
 
@@ -66,7 +68,7 @@ export const formatKstDateTime = (date: Date | string) =>
 /** 진행 중 경기 경과 시간. 0분(시작 전 포함)이면 "방금 시작", 그 뒤로 "N분째" */
 export const formatElapsed = (startsAt: Date | string, now: Date) => {
   const elapsedMinutes = Math.floor(
-    (now.getTime() - toDate(startsAt).getTime()) / 60_000,
+    (now.getTime() - toDate(startsAt).getTime()) / MINUTE_MS,
   );
   return elapsedMinutes <= 0 ? "방금 시작" : `${elapsedMinutes}분째`;
 };

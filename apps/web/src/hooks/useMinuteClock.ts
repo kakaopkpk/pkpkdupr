@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
-
-const MINUTE_MS = 60_000;
+import { MINUTE_MS } from "@/lib/format";
 
 /** 1분마다 다시 그리는 현재 시각 */
 export const useMinuteClock = (): Date => {

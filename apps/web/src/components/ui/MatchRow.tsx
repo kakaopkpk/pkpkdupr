@@ -73,6 +73,12 @@ const TeamLine: React.FC<{
   </div>
 );
 
+const timeLabelFormatters = {
+  time: formatKstTime,
+  "weekday-time": formatKstWeekdayTime,
+  "date-time": formatKstDateTime,
+} satisfies Record<string, (date: Date | string) => string>;
+
 /**
  * 경기 한 줄. 이긴 팀이 위에 오고 이긴 쪽만 굵게·블루 점수로 강조한다.
  * 줄 맨 위 메타 줄에 시간을 두고, 내 경기면 시간 뒤에 " · 내 경기" 글자만 붙는다(바탕 강조 없음).
@@ -85,7 +91,7 @@ export const MatchRow: React.FC<{
   currentPlayerId?: string;
   onPress?: () => void;
   /** 기본 "time"("20:01"), "weekday-time"은 "목 20:01", "date-time"은 "11월 13일 목 20:01". 기준은 matchStartsAt */
-  timeLabel?: "time" | "weekday-time" | "date-time";
+  timeLabel?: keyof typeof timeLabelFormatters;
   /** 팀 아바타 테 색. 흰 바탕이 아닌 곳에 놓을 때 바탕색을 넘긴다(기본 흰색) */
   avatarRingColor?: string;
 }> = ({
@@ -114,12 +120,7 @@ export const MatchRow: React.FC<{
         { team: teamB, score: scoreB },
         { team: teamA, score: scoreA },
       ];
-  const time =
-    timeLabel === "date-time"
-      ? formatKstDateTime(match.matchStartsAt)
-      : timeLabel === "weekday-time"
-        ? formatKstWeekdayTime(match.matchStartsAt)
-        : formatKstTime(match.matchStartsAt);
+  const time = timeLabelFormatters[timeLabel](match.matchStartsAt);
 
   return (
     <RowContainer

@@ -105,7 +105,8 @@ export const LiveMatchDetail: React.FC<LiveMatchDetailProps> = ({
 }) => {
   const now = useMinuteClock();
   // 관리자 예정 경기처럼 시작 시각 전의 created 경기는 진행 중이 아니라 예정으로 보인다
-  const isScheduled = new Date(match.matchStartsAt).getTime() > now.getTime();
+  const startsAt = new Date(match.matchStartsAt);
+  const isScheduled = startsAt.getTime() > now.getTime();
 
   return (
     <div className="flex flex-col gap-4 px-4 pt-1">
@@ -123,8 +124,8 @@ export const LiveMatchDetail: React.FC<LiveMatchDetailProps> = ({
           )}
         />
         {isScheduled
-          ? `예정 · ${formatKstWeekdayTime(match.matchStartsAt)}`
-          : `진행 중 · ${formatElapsed(match.matchStartsAt, now)}`}
+          ? `예정 · ${formatKstWeekdayTime(startsAt)}`
+          : `진행 중 · ${formatElapsed(startsAt, now)}`}
       </span>
       <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2">
         <TeamColumn
