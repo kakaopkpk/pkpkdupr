@@ -42,9 +42,17 @@ const makeMatch = (ratingExcluded: boolean): MatchInfo => ({
 });
 
 /** 메타 줄(첫 div)의 글자만 뽑는다 */
-const getMetaText = (match: MatchInfo, currentPlayerId?: string) => {
+const getMetaText = (
+  match: MatchInfo,
+  currentPlayerId?: string,
+  timeLabel?: "time" | "weekday-time" | "date-time",
+) => {
   const markup = renderToStaticMarkup(
-    <MatchRow match={match} currentPlayerId={currentPlayerId} />,
+    <MatchRow
+      match={match}
+      currentPlayerId={currentPlayerId}
+      timeLabel={timeLabel}
+    />,
   );
   const meta = /<div class="whitespace-nowrap[^"]*">(.*?)<\/div>/.exec(markup)?.[1] ?? "";
   return meta.replace(/<[^>]+>/g, "").replace(/<!-- -->/g, "");
@@ -60,5 +68,16 @@ describe("MatchRow 메타 줄", () => {
 
   it("정상 경기는 붙이지 않는다", () => {
     expect(getMetaText(makeMatch(false), "alice")).toBe("21:40 · 내 경기");
+  });
+});
+
+describe("MatchRow 시간 표기", () => {
+  it("date-time은 날짜·요일·시각을 보인다", () => {
+    expect(getMetaText(makeMatch(false), undefined, "date-time")).toBe(
+      "11월 13일 금 21:40",
+    );
+    expect(getMetaText(makeMatch(true), undefined, "date-time")).toBe(
+      "11월 13일 금 21:40 · 평점 미반영",
+    );
   });
 });

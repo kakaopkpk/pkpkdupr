@@ -3,12 +3,10 @@ import BottomSheet from "@/components/BottomSheet";
 import HoldToConfirmButton from "@/components/HoldToConfirmButton";
 import { FooterError } from "@/components/record/RecordMatchParts";
 import { PkButton } from "@/components/ui/Button";
-import { TeamAvatars } from "@/components/ui/PlayerAvatar";
+import { MatchRow } from "@/components/ui/MatchRow";
 import { SheetTitle } from "@/components/ui/SheetTitle";
-import { cx } from "@/components/ui/cx";
 import { GLOBAL_LAYER } from "@/context/AppNavigationContext";
-import { formatKstShortDate, formatKstTime } from "@/lib/format";
-import { getTeamResultScores, type MatchInfo } from "@/types/match";
+import type { MatchInfo } from "@/types/match";
 
 export interface DeleteMatchSheetProps {
   isOpen: boolean;
@@ -22,70 +20,16 @@ export interface DeleteMatchSheetProps {
   onConfirm: () => void;
 }
 
-/** "11월 13일 목 20:01 · 목요 정기운동" */
-const getMatchDateLine = (match: MatchInfo) => {
-  const dateTime = `${formatKstShortDate(match.matchStartsAt)} ${formatKstTime(match.matchStartsAt)}`;
-  const sessionName = match.session?.name?.trim();
-  return sessionName ? `${dateTime} · ${sessionName}` : dateTime;
-};
-
-/** 요약 상자의 팀 한 줄. 이긴 팀은 진한 글자, 진 팀은 회색이다 */
-const TeamLine: React.FC<{
-  team: MatchInfo["teams"][number];
-  score: number | null;
-  isLoser: boolean;
-}> = ({ team, score, isLoser }) => (
-  <div
-    className={cx(
-      "flex items-center gap-2.5",
-      isLoser ? "text-pk-muted" : "text-pk-ink",
-    )}
-  >
-    <TeamAvatars players={team.players} size={22} ringColor="var(--color-pk-bg)" />
-    <span
-      className={cx(
-        "min-w-0 flex-1 truncate text-pk-15",
-        isLoser ? "font-medium" : "font-bold",
-      )}
-    >
-      {team.players.map((player) => player.username).join(" · ")}
-    </span>
-    <span className="text-pk-17 font-extrabold tabular-nums">
-      {score ?? "–"}
-    </span>
+/** 경기 요약 상자. pk-bg 바탕 위에 날짜·시각 메타 줄과 팀 줄을 목록 줄 규칙대로 그린다 */
+const MatchSummary: React.FC<{ match: MatchInfo }> = ({ match }) => (
+  <div className="rounded-pk-lg bg-pk-bg px-4">
+    <MatchRow
+      match={match}
+      timeLabel="date-time"
+      avatarRingColor="var(--color-pk-bg)"
+    />
   </div>
 );
-
-/** 진 팀 인덱스. 점수가 없거나 비기면 null */
-const getLoserIndex = (
-  hasScores: boolean,
-  scores: readonly [number, number],
-): 0 | 1 | null => {
-  if (!hasScores || scores[0] === scores[1]) return null;
-  return scores[0] > scores[1] ? 1 : 0;
-};
-
-const MatchSummary: React.FC<{ match: MatchInfo }> = ({ match }) => {
-  const hasScores = (match.scores?.length ?? 0) > 0;
-  const scores = getTeamResultScores(match);
-  const loserIndex = getLoserIndex(hasScores, scores);
-
-  return (
-    <div className="flex flex-col gap-2.5 rounded-pk-lg bg-pk-bg px-4 py-3.5">
-      <p className="text-pk-12 text-pk-muted tabular-nums">
-        {getMatchDateLine(match)}
-      </p>
-      {match.teams.map((team, index) => (
-        <TeamLine
-          key={team.id}
-          team={team}
-          score={hasScores ? scores[index] : null}
-          isLoser={loserIndex === index}
-        />
-      ))}
-    </div>
-  );
-};
 
 /** 경기 삭제 확인 시트. 경기 상세 화면 위에 뜨며, 1초 길게 눌러야 지운다 */
 export default function DeleteMatchSheet({
