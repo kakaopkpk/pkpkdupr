@@ -4,7 +4,10 @@ import PushScreen from "@/components/PushScreen";
 import AchievementsSection from "@/components/profile/AchievementsSection";
 import SkeletonBlock from "@/components/SkeletonBlock";
 import PlayerMatchesDrawer from "@/components/profile/PlayerMatchesDrawer";
-import ProfileStatTile from "@/components/profile/ProfileStatTile";
+import ProfileStatTile, {
+  PROFILE_STAT_COUNT,
+  WinLossCount,
+} from "@/components/profile/ProfileStatTile";
 import {
   ProfileBodySkeleton,
   ProfileLoadError,
@@ -13,6 +16,7 @@ import {
   WinRateTile,
 } from "@/components/profile/ProfileSections";
 import { useProfileOverview } from "@/components/profile/useProfileOverview";
+import { CountUpNumber } from "@/components/ui/CountUpNumber";
 import { PlayerAvatar } from "@/components/ui/PlayerAvatar";
 import { StatusMessageChip } from "@/components/ui/StatusMessageChip";
 import { useAuth } from "@/context/AuthContext";
@@ -128,8 +132,17 @@ export default function MemberProfileDrawer({
               ) : null}
               {totalStats ? (
                 <span className="text-pk-13 text-pk-sub tabular-nums">
-                  {totalStats.wins + totalStats.losses}경기 · {totalStats.wins}승{" "}
-                  {totalStats.losses}패
+                  {/* 머리 줄은 평점 카드와 함께 바로 센다 */}
+                  <CountUpNumber
+                    value={totalStats.wins + totalStats.losses}
+                    durationMs={PROFILE_STAT_COUNT.durationMs}
+                  />
+                  경기 ·{" "}
+                  <WinLossCount
+                    wins={totalStats.wins}
+                    losses={totalStats.losses}
+                    delayMs={0}
+                  />
                 </span>
               ) : (
                 <SkeletonBlock className="h-4 w-32" />
@@ -145,13 +158,23 @@ export default function MemberProfileDrawer({
                 fallbackRating={member?.duprRating?.[category] ?? null}
               />
               <div className="grid grid-cols-2 gap-2.5">
-                <WinRateTile overview={overview} category={category} />
+                {/* 분류를 바꾸면 key로 다시 마운트해 카운트업을 처음부터 재생한다. 상대 전적은 분류와 무관해 그대로 둔다 */}
+                <WinRateTile
+                  key={category}
+                  overview={overview}
+                  category={category}
+                />
                 <ProfileStatTile
                   label="나와의 상대 전적"
                   value={
-                    headToHead && headToHead.matchCount > 0
-                      ? `${headToHead.wins}승 ${headToHead.losses}패`
-                      : "–"
+                    headToHead && headToHead.matchCount > 0 ? (
+                      <WinLossCount
+                        wins={headToHead.wins}
+                        losses={headToHead.losses}
+                      />
+                    ) : (
+                      "–"
+                    )
                   }
                   foot={`내 기준 · ${headToHead?.matchCount ?? 0}경기`}
                 />
