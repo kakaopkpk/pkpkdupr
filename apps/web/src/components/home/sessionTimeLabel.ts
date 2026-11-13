@@ -1,4 +1,5 @@
-import { formatKstShortDate, formatKstTime } from "@/lib/format";
+import { kstDateKeyTimeToDate } from "@pkpkdupr/shared/session";
+import { formatKstShortDate } from "@/lib/format";
 import type { MatchSessionDetailInfo } from "@/lib/matchSessions";
 
 const MINUTE_MS = 60_000;
@@ -6,8 +7,16 @@ const DAY_MS = 24 * 60 * MINUTE_MS;
 
 type SessionTimeSource = Pick<
   MatchSessionDetailInfo,
-  "kind" | "date" | "dateKey" | "isToday"
+  "kind" | "date" | "dateKey" | "isToday" | "startTime" | "endTime"
 >;
+
+/** "18:00~22:00". 시각 없는 세션이면 null */
+export const formatSessionTimeRange = (
+  session: Pick<MatchSessionDetailInfo, "startTime" | "endTime">,
+) =>
+  session.startTime && session.endTime
+    ? `${session.startTime}~${session.endTime}`
+    : null;
 
 /** "2026-11-17" → UTC 자정 시각(날짜 차 계산용) */
 const dateKeyToUtc = (dateKey: string) => {
@@ -36,27 +45,27 @@ export const getSessionChipLabel = (session: SessionTimeSource) => {
 
 /**
  * 다음 세션 카드의 시각 줄.
- * - 오늘 정기: "18:00 시작 · 40분 뒤"
- * - 미래 정기: "11월 17일 월 18:00 · 3일 뒤"
- * - 회원 세션(시각 없음): "11월 17일 월 · 내일", 오늘이면 "· 오늘"
+ * - 오늘: "18:00~22:00 · 40분 뒤"(시작 전) | "18:00~22:00"
+ * - 미래: "11월 17일 월 18:00~22:00 · 3일 뒤"
+ * - 시각 없는 회원 세션: "11월 17일 월 · 내일", 오늘이면 "· 오늘"
  */
 export const getSessionTimeLabel = (
   session: SessionTimeSource,
   todayKey: string,
   now: Date,
 ) => {
-  const startsAt = new Date(session.date);
   const days = getDayDiff(session.dateKey, todayKey);
+  const date = formatKstShortDate(new Date(session.date));
+  const timeRange = formatSessionTimeRange(session);
 
-  if (session.kind === "regular") {
-    const time = formatKstTime(startsAt);
+  if (timeRange && session.startTime) {
     if (days <= 0) {
+      const startsAt = kstDateKeyTimeToDate(session.dateKey, session.startTime);
       const until = formatTimeUntil(startsAt, now);
-      return until ? `${time} 시작 · ${until}` : `${time} 시작`;
+      return until ? `${timeRange} · ${until}` : timeRange;
     }
-    return `${formatKstShortDate(startsAt)} ${time} · ${formatDaysLater(days)}`;
+    return `${date} ${timeRange} · ${formatDaysLater(days)}`;
   }
 
-  const date = formatKstShortDate(startsAt);
   return days <= 0 ? `${date} · 오늘` : `${date} · ${formatDaysLater(days)}`;
 };

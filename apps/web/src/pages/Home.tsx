@@ -15,6 +15,7 @@ import {
   usePreSessionData,
 } from "@/components/home/usePreSessionData";
 import { useSessionRecommendations } from "@/components/home/useSessionRecommendations";
+import { formatSessionTimeRange } from "@/components/home/sessionTimeLabel";
 import { useSessionTopRiser } from "@/components/home/useSessionTopRiser";
 import { TopRiserCard } from "@/components/records/SessionReportParts";
 import ParticipantsSheet from "@/components/session/ParticipantsSheet";
@@ -509,6 +510,7 @@ const Home: React.FC = () => {
         <span className="min-w-0 truncate pl-1">
           {[
             liveSession.location,
+            formatSessionTimeRange(liveSession),
             `${completedMatches.length}경기`,
             `진행 ${liveInProgressCount}`,
           ]
