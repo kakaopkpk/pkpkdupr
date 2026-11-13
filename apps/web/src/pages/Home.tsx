@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { RecommendedCourt } from "@pkpkdupr/shared/matchmaking";
+import { formatSessionTimeRange } from "@pkpkdupr/shared/session";
 import type { MatchInfo } from "@/types/match";
 import HomeSkeleton from "@/components/home/HomeSkeleton";
 import LastSessionFeed from "@/components/home/LastSessionFeed";
@@ -509,6 +510,7 @@ const Home: React.FC = () => {
         <span className="min-w-0 truncate pl-1">
           {[
             liveSession.location,
+            formatSessionTimeRange(liveSession),
             `${completedMatches.length}경기`,
             `진행 ${liveInProgressCount}`,
           ]

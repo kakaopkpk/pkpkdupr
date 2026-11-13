@@ -10,8 +10,17 @@ import {
   isInProgressMatchExpired,
   isRegularSessionTime,
   isValidKstDateKey,
+  formatSessionTimeRange,
+  isValidSessionTime,
+  isValidSessionTimeRange,
+  kstDateKeyTimeToDate,
   kstDateKeyToDate,
+  minutesToSessionTime,
+  REGULAR_SESSION_END_TIME,
+  REGULAR_SESSION_START_TIME,
+  sessionTimeToMinutes,
   toKstDateKey,
+  toKstMinutesOfDay,
 } from "../session";
 
 // 2026-11-09는 월요일, 2026-11-12는 목요일, 2026-11-10은 화요일(KST)
@@ -281,5 +290,53 @@ describe("isValidKstDateKey", () => {
     expect(isValidKstDateKey("2026-13-01")).toBe(false);
     expect(isValidKstDateKey("2026-1-01")).toBe(false);
     expect(isValidKstDateKey("2026/11/12")).toBe(false);
+  });
+});
+
+describe("세션 시각", () => {
+  it("HH:MM 00:00~23:59만 유효하다", () => {
+    for (const value of ["00:00", "09:30", "23:59"]) {
+      expect(isValidSessionTime(value)).toBe(true);
+    }
+    for (const value of ["24:00", "9:30", "19:60", "1930", 1930, null]) {
+      expect(isValidSessionTime(value)).toBe(false);
+    }
+  });
+
+  it("분 단위와 서로 바꾼다", () => {
+    expect(sessionTimeToMinutes("18:30")).toBe(1110);
+    expect(minutesToSessionTime(1110)).toBe("18:30");
+    expect(minutesToSessionTime(0)).toBe("00:00");
+  });
+
+  it("KST 날짜 키와 시각으로 시점을 만든다", () => {
+    expect(kstDateKeyTimeToDate("2026-11-12", "19:30")).toEqual(
+      new Date("2026-11-12T19:30:00+09:00"),
+    );
+  });
+
+  it("범위는 둘 다 유효하고 종료가 시작보다 늦어야 한다", () => {
+    expect(isValidSessionTimeRange("18:00", "20:00")).toBe(true);
+    expect(isValidSessionTimeRange("20:00", "20:00")).toBe(false);
+    expect(isValidSessionTimeRange("20:00", "18:00")).toBe(false);
+    expect(isValidSessionTimeRange("18:00", null)).toBe(false);
+  });
+
+  it("범위 문자열을 만들고 시각이 없으면 null", () => {
+    expect(
+      formatSessionTimeRange({
+        startTime: REGULAR_SESSION_START_TIME,
+        endTime: REGULAR_SESSION_END_TIME,
+      }),
+    ).toBe("18:00~22:00");
+    expect(formatSessionTimeRange({ startTime: null, endTime: null })).toBe(
+      null,
+    );
+  });
+
+  it("KST 0시부터 지난 분을 센다", () => {
+    expect(toKstMinutesOfDay(new Date("2026-11-12T19:45:00+09:00"))).toBe(
+      1185,
+    );
   });
 });
