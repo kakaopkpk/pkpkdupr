@@ -17,6 +17,7 @@ import {
   TAB_ITEMS,
 } from "@/components/BottomDock";
 import PwaInstallPrompt from "@/components/PwaInstallPrompt";
+import UnseenAchievementCelebration from "@/components/profile/UnseenAchievementCelebration";
 import {
   PUSH_SCREEN_TRANSITION_CLASS,
   PushScreenCoverDim,
@@ -691,10 +692,11 @@ const BottomNav: React.FC = () => {
     [depthStacks, isGlobalMenuVisible, selectedTab],
   );
 
-  // 전역 화면은 연 탭과 상관없이 셸 전체를 덮으므로 모든 탭의 깊이가 비어야 홈 탭이 드러난다
-  const isHomeTabUncovered =
-    selectedTab === "home" &&
-    TAB_KEYS.every((tabKey) => depthStacks[tabKey].length === 0);
+  // 전역 화면은 연 탭과 상관없이 셸 전체를 덮으므로 모든 탭의 깊이가 비어야 탭이 드러난다
+  const isEveryTabUncovered = TAB_KEYS.every(
+    (tabKey) => depthStacks[tabKey].length === 0,
+  );
+  const isHomeTabUncovered = selectedTab === "home" && isEveryTabUncovered;
 
   // 지금 탭 위에 화면이 열려 있으면 탭 셸(하단 바·미니바·알림 바·+ 버튼 포함)이 그 아래로 밀려 가려진다
   const isShellCovered = isPushScreenShown(pushScreenStack.entries);
@@ -1255,6 +1257,11 @@ const BottomNav: React.FC = () => {
             </div>
 
             <PwaInstallPrompt isActive={isHomeTabUncovered} />
+            <UnseenAchievementCelebration
+              playerId={player?.id ?? null}
+              isActive={isEveryTabUncovered && !isGlobalMenuOpen}
+              dataVersion={dataVersion}
+            />
 
             {globalScreens.map((screen) => {
               const screenProps = {
