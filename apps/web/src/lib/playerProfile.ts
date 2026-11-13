@@ -27,7 +27,7 @@ export interface PlayerProfileSummaryInfo {
   ratingHistory: PlayerRatingHistory;
   recentMatches: MatchInfo[];
   partners: PartnerStat[];
-  /** 자주 진 상대(상성) */
+  /** 자주 진 상대(천적) */
   rivals: OpponentStat[];
   /** 보는 사람 기준 맞대결 승패. 본인 프로필이면 null */
   headToHead: HeadToHeadStat | null;
