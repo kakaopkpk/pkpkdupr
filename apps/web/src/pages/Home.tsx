@@ -32,6 +32,7 @@ import { useAuth } from "@/context/AuthContext";
 import { useLiveSession } from "@/context/LiveSessionContext";
 import { useSystemNotice } from "@/context/SystemNoticeContext";
 import { useTabNavigation } from "@/context/TabNavigationContext";
+import { useMinuteClock } from "@/hooks/useMinuteClock";
 import {
   addMatchSessionParticipant,
   isSessionParticipant,
@@ -40,20 +41,7 @@ import {
   startSessionMatch,
 } from "@/lib/matchSessions";
 
-const MINUTE_MS = 60_000;
 const EMPTY_IDS: readonly string[] = [];
-
-/** 경과 분·남은 시간 표시를 위해 1분마다 다시 그린다 */
-const useMinuteClock = () => {
-  const [now, setNow] = useState(() => new Date());
-
-  useEffect(() => {
-    const intervalId = window.setInterval(() => setNow(new Date()), MINUTE_MS);
-    return () => window.clearInterval(intervalId);
-  }, []);
-
-  return now;
-};
 
 const getMatchPlayerIds = (match: MatchInfo) =>
   match.teams.flatMap((team) => team.players.map((player) => player.id));

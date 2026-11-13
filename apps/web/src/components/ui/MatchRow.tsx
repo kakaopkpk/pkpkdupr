@@ -1,6 +1,11 @@
 import React from "react";
 import { getTeamResultScores, type MatchInfo } from "@/types/match";
-import { formatKstTime, formatKstWeekdayTime } from "@/lib/format";
+import {
+  formatElapsed,
+  formatKstDateTime,
+  formatKstTime,
+  formatKstWeekdayTime,
+} from "@/lib/format";
 import { rowPressClassName } from "./Button";
 import { ChevronRightIcon } from "./Icons";
 import { TeamAvatars } from "./PlayerAvatar";
@@ -8,7 +13,8 @@ import { cx } from "./cx";
 
 type MatchTeam = MatchInfo["teams"][number];
 
-const rowDividerClassName =
+/** 목록 줄 사이 구분선. 마지막 줄에는 긋지 않는다 */
+export const rowDividerClassName =
   "not-last:shadow-[inset_0_-1px_0_var(--color-pk-divider)]";
 
 const getTeamLabel = (team: MatchTeam) =>
@@ -40,9 +46,10 @@ const TeamLine: React.FC<{
   team: MatchTeam;
   score?: number;
   emphasis: "win" | "lose" | "none";
-}> = ({ team, score, emphasis }) => (
+  ringColor?: string;
+}> = ({ team, score, emphasis, ringColor }) => (
   <div className="flex min-w-0 items-center gap-2.5">
-    <TeamAvatars players={team.players} size={22} />
+    <TeamAvatars players={team.players} size={22} ringColor={ringColor} />
     <span
       className={cx(
         "min-w-0 flex-1 truncate text-pk-15",
@@ -66,6 +73,12 @@ const TeamLine: React.FC<{
   </div>
 );
 
+const timeLabelFormatters = {
+  time: formatKstTime,
+  "weekday-time": formatKstWeekdayTime,
+  "date-time": formatKstDateTime,
+} satisfies Record<string, (date: Date | string) => string>;
+
 /**
  * 경기 한 줄. 이긴 팀이 위에 오고 이긴 쪽만 굵게·블루 점수로 강조한다.
  * 줄 맨 위 메타 줄에 시간을 두고, 내 경기면 시간 뒤에 " · 내 경기" 글자만 붙는다(바탕 강조 없음).
@@ -77,9 +90,17 @@ export const MatchRow: React.FC<{
   /** 이 선수가 든 경기면 메타 줄 시간 뒤에 " · 내 경기"를 붙인다 */
   currentPlayerId?: string;
   onPress?: () => void;
-  /** 기본 "time"("20:01"), "weekday-time"은 "목 20:01". 기준은 matchStartsAt */
-  timeLabel?: "time" | "weekday-time";
-}> = ({ match, currentPlayerId, onPress, timeLabel = "time" }) => {
+  /** 기본 "time"("20:01"), "weekday-time"은 "목 20:01", "date-time"은 "11월 13일 목 20:01". 기준은 matchStartsAt */
+  timeLabel?: keyof typeof timeLabelFormatters;
+  /** 팀 아바타 테 색. 흰 바탕이 아닌 곳에 놓을 때 바탕색을 넘긴다(기본 흰색) */
+  avatarRingColor?: string;
+}> = ({
+  match,
+  currentPlayerId,
+  onPress,
+  timeLabel = "time",
+  avatarRingColor,
+}) => {
   const [teamA, teamB] = match.teams;
   const hasScores = (match.scores?.length ?? 0) > 0;
   const [scoreA, scoreB] = getTeamResultScores(match);
@@ -99,10 +120,7 @@ export const MatchRow: React.FC<{
         { team: teamB, score: scoreB },
         { team: teamA, score: scoreA },
       ];
-  const time =
-    timeLabel === "weekday-time"
-      ? formatKstWeekdayTime(match.matchStartsAt)
-      : formatKstTime(match.matchStartsAt);
+  const time = timeLabelFormatters[timeLabel](match.matchStartsAt);
 
   return (
     <RowContainer
@@ -125,6 +143,7 @@ export const MatchRow: React.FC<{
           team={team}
           score={hasScores ? score : undefined}
           emphasis={hasWinner ? (index === 0 ? "win" : "lose") : "none"}
+          ringColor={avatarRingColor}
         />
       ))}
     </RowContainer>
@@ -136,35 +155,26 @@ export const LiveMatchRow: React.FC<{
   match: MatchInfo;
   now: Date;
   onPress?: () => void;
-}> = ({ match, now, onPress }) => {
-  const elapsedMinutes = Math.max(
-    0,
-    Math.floor(
-      (now.getTime() - new Date(match.matchStartsAt).getTime()) / 60_000,
-    ),
-  );
-
-  return (
-    <RowContainer
-      onPress={onPress}
-      className={cx(
-        "grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-2 py-3 text-pk-ink",
-        rowDividerClassName,
-      )}
-    >
-      <div className="flex min-w-0 flex-col gap-1.5">
-        {match.teams.map((team) => (
-          <TeamLine
-            key={team.id}
-            team={team}
-            emphasis="none"
-          />
-        ))}
-      </div>
-      <span className="whitespace-nowrap text-pk-12 text-pk-muted tabular-nums">
-        {elapsedMinutes}분째
-      </span>
-      <ChevronRightIcon />
-    </RowContainer>
-  );
-};
+}> = ({ match, now, onPress }) => (
+  <RowContainer
+    onPress={onPress}
+    className={cx(
+      "grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-2 py-3 text-pk-ink",
+      rowDividerClassName,
+    )}
+  >
+    <div className="flex min-w-0 flex-col gap-1.5">
+      {match.teams.map((team) => (
+        <TeamLine
+          key={team.id}
+          team={team}
+          emphasis="none"
+        />
+      ))}
+    </div>
+    <span className="whitespace-nowrap text-pk-12 text-pk-muted tabular-nums">
+      {formatElapsed(match.matchStartsAt, now)}
+    </span>
+    <ChevronRightIcon />
+  </RowContainer>
+);

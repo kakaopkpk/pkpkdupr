@@ -39,7 +39,7 @@
   - `SystemNoticeContext.tsx`: `useSystemNotice().showSaveFailure({ onRetry })`로 저장 실패 토스트(네트워크 오류에만, 서버 4xx·5xx는 화면 인라인), `showToast({ message, actionLabel?, onAction?, durationMs? })`로 하단 바 위 알약 토스트(기본 5초, 동작 글자 하나)
   - `AppUpdateContext.tsx`: `useAppUpdate()`로 PWA 업데이트 확인·적용 상태
   - `ScreenVisibilityContext.tsx`: `useIsScreenVisible()`로 안쪽 화면이 지금 보이는지. 탭 패널(선택됨 && 탭 셸이 PushScreen에 덮이지 않음)과 PushScreen 본문(열림 && 활성 && 덮이지 않음)이 제공하고, 제공자 밖(바텀시트 등)은 언제나 보임
-- `src/hooks/`: `useSheetDrag.ts`(바텀시트 끌어 닫기·`prefersReducedMotion`), `useCountUp.ts`(화면이 보일 때마다 숫자 카운트업), `usePlayOnShow.ts`(화면이 보일 때마다 CSS 애니메이션 한 번 재생), `useLayerDepth.ts`, `usePullToRefresh.ts`, `usePlayers.ts`, `useOnlineStatus.ts`, `useStartedMatchToast.ts`
+- `src/hooks/`: `useSheetDrag.ts`(바텀시트 끌어 닫기·`prefersReducedMotion`), `useCountUp.ts`(화면이 보일 때마다 숫자 카운트업), `usePlayOnShow.ts`(화면이 보일 때마다 CSS 애니메이션 한 번 재생), `useLayerDepth.ts`, `usePullToRefresh.ts`, `usePlayers.ts`, `useOnlineStatus.ts`, `useStartedMatchToast.ts`, `useMinuteClock.ts`(1분마다 다시 그리는 현재 시각)
 - `src/types/match.ts`: API JSON 응답 기준 경기 타입(`MatchInfo`, `MatchListResponse`)과 `getTeamResultScores`
 - `src/lib/`: API 호출(`api.ts`)·Supabase 클라이언트·도메인별 요청 함수·포맷터·오류 판정과 화면 문구(`errors.ts`의 `isNetworkError`·`getUserErrorMessage`, 불러오기 실패는 `err.message` 대신 이 문구), `src/utils/`: 평점(`dupr.ts`)·아바타 유틸
 - 도메인 타입은 `@pkpkdupr/shared/*`에서 import합니다. 웹 전용 응답 형태만 `src/types/`에 둡니다.
