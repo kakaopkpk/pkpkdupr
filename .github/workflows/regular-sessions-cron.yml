@@ -28,10 +28,10 @@ jobs:
             echo "::error::GitHub 설정이 없습니다: ${missing[*]} (docs/deploy.md 참고)"
             exit 1
           fi
-          # 함수 이름 api 뒤에 앱 경로 /api/...가 붙는다
+          # 함수 이름 api가 앱 경로 /api/...의 첫 segment가 된다(/functions/v1은 진입점이 뗀다)
           curl --silent --show-error --fail-with-body \
             --max-time 120 \
             -X POST \
             -H "x-cron-secret: $CRON_SECRET" \
-            "https://${SUPABASE_PROJECT_REF}.supabase.co/functions/v1/api/api/cron/regular-sessions"
+            "https://${SUPABASE_PROJECT_REF}.supabase.co/functions/v1/api/cron/regular-sessions"
           echo

@@ -127,7 +127,7 @@ secret을 바꾼 뒤에는 함수를 다시 배포하지 않아도 새 요청부
 
 ### 3-2. 정기 세션 예약 작업 (최초 1회)
 
-`.github/workflows/regular-sessions-cron.yml`이 매일 KST 04:00(UTC 19:00)에 `POST https://<project-ref>.supabase.co/functions/v1/api/api/cron/regular-sessions`를 부릅니다. Actions 탭에서 `workflow_dispatch`로 바로 실행할 수도 있습니다.
+`.github/workflows/regular-sessions-cron.yml`이 매일 KST 04:00(UTC 19:00)에 `POST https://<project-ref>.supabase.co/functions/v1/api/cron/regular-sessions`를 부릅니다. Actions 탭에서 `workflow_dispatch`로 바로 실행할 수도 있습니다.
 
 - 오늘(KST)부터 28일 안의 정기 회차(월·목, 오늘은 22시 전만)를 공휴일·취소 날짜를 빼고 만듭니다. 이미 있는 회차는 그대로라 여러 번 실행해도 날짜당 하나입니다. 새로 만든 회차는 구글 캘린더 일정도 생깁니다.
 - 공휴일은 구글 "대한민국 공휴일" 캘린더(`ko.south_korea#holiday@group.v.calendar.google.com`)를 3-1의 서비스 계정으로 읽어 확인하고 DB(`regular_session_skips`)에 남깁니다. 공개 캘린더라 공유 설정은 필요 없지만 **3-1 연동이 켜져 있어야 합니다.** 연동 설정이 없거나 조회가 실패하면 그날은 아무것도 만들지 않고 5xx로 끝나며(워크플로 실패), 다음 날 실행이 메웁니다.
