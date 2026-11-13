@@ -35,7 +35,7 @@ import {
   useTabNavigation,
 } from "@/context/TabNavigationContext";
 import { useLayerDepth } from "@/hooks/useLayerDepth";
-import { fetchSessionMatches } from "@/lib/matchSessions";
+import { fetchMatchSession, fetchSessionMatches } from "@/lib/matchSessions";
 import {
   fetchSessionReport,
   type MatchSessionReportInfo,
@@ -53,7 +53,13 @@ const RATING_PREVIEW_COUNT = 3;
 
 type LoadState =
   | { kind: "loading" }
-  | { kind: "ready"; report: MatchSessionReportInfo; matches: MatchInfo[] }
+  | {
+      kind: "ready";
+      report: MatchSessionReportInfo;
+      matches: MatchInfo[];
+      /** 세션 상세 조회로 얻은 종료 시각. 그 조회가 실패했거나 시각 없는 세션이면 null */
+      endTime: string | null;
+    }
   | { kind: "error"; message: string };
 
 const isPlayerInMatch = (match: MatchInfo, playerId: string) =>
@@ -116,12 +122,19 @@ export default function SessionReportDrawer({
       if (!keepVisible) setLoadState({ kind: "loading" });
 
       try {
-        const [report, matches] = await Promise.all([
+        const [report, matches, sessionDetail] = await Promise.all([
           fetchSessionReport(targetSessionId),
           fetchSessionMatches(targetSessionId),
+          // 메타 줄 종료 시각만을 위한 조회라, 실패해도 화면은 시작 시각만으로 띄운다
+          fetchMatchSession(targetSessionId).catch(() => null),
         ]);
         if (requestIdRef.current === requestId) {
-          setLoadState({ kind: "ready", report, matches });
+          setLoadState({
+            kind: "ready",
+            report,
+            matches,
+            endTime: sessionDetail?.endTime ?? null,
+          });
         }
       } catch (err) {
         if (requestIdRef.current !== requestId) return;
@@ -220,7 +233,7 @@ export default function SessionReportDrawer({
 
     return (
       <>
-        <SessionSummary session={session} />
+        <SessionSummary session={session} endTime={loadState.endTime} />
         {topRiser ? <TopRiserCard report={topRiser} /> : null}
         {myReport ? <LastSessionMeCard report={myReport} /> : null}
         {playerId && myAchievements.length > 0 ? (
