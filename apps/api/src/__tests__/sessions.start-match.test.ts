@@ -48,6 +48,8 @@ const makeSession = (
   participantIds: [],
   matchCount: 0,
   kind: "custom",
+  startTime: null,
+  endTime: null,
   createdAt: thursdayEvening,
   updatedAt: thursdayEvening,
   ...overrides,
@@ -59,6 +61,8 @@ const regularSession = makeSession({
   date: new Date("2026-11-12T18:00:00+09:00"),
   location: "야탑초등학교",
   kind: "regular",
+  startTime: null,
+  endTime: null,
 });
 
 const doublesBody = {

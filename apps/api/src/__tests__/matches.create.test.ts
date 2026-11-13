@@ -123,6 +123,8 @@ const buildManagedSession = (
   participantIds: [],
   matchCount: 0,
   kind: "regular",
+  startTime: null,
+  endTime: null,
   createdAt: now,
   updatedAt: now,
   ...overrides,

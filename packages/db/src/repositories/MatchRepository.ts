@@ -307,6 +307,8 @@ export class MatchRepository {
       name: stored.name,
       date: toDate(stored.date),
       location: stored.location,
+      startTime: stored.startTime ?? null,
+      endTime: stored.endTime ?? null,
     };
   }
 
@@ -336,6 +338,8 @@ export class MatchRepository {
       ),
       matchCount: sessionMatches.length,
       kind: toSessionKind(stored),
+      startTime: stored.startTime ?? null,
+      endTime: stored.endTime ?? null,
       createdAt: toDate(stored.createdAt),
       updatedAt: toDate(stored.updatedAt),
     };
@@ -2149,6 +2153,8 @@ export class MatchRepository {
           name,
           date,
           location,
+          startTime: session.startTime ?? null,
+          endTime: session.endTime ?? null,
           createdAt: now,
           updatedAt: now,
         });

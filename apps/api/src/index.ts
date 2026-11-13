@@ -32,9 +32,12 @@ import {
   isInProgressMatchExpired,
   isRegularSessionTime,
   isValidKstDateKey,
+  isValidSessionTime,
   kstDateKeyToDate,
   MATCH_SESSION_LOCATION_MAX_LENGTH,
   MATCH_SESSION_NAME_MAX_LENGTH,
+  REGULAR_SESSION_END_TIME,
+  REGULAR_SESSION_START_TIME,
   toKstDateKey,
   type AddMatchSessionParticipantRequest,
   type CreateMatchSessionRequest,
@@ -778,6 +781,14 @@ const toMatchSessionDetail = (
     date: session.date,
     location: session.location,
     dateKey,
+    startTime:
+      session.kind === "regular"
+        ? REGULAR_SESSION_START_TIME
+        : (session.startTime ?? null),
+    endTime:
+      session.kind === "regular"
+        ? REGULAR_SESSION_END_TIME
+        : (session.endTime ?? null),
     isToday: dateKey === toKstDateKey(now),
     participants,
     matchCount: session.matchCount,
@@ -1322,10 +1333,32 @@ app.post("/api/match-sessions", async (req, res) => {
       );
     }
 
+    // 시각을 보내지 않는 이전 클라이언트도 받도록 둘 다 생략하면 시각 없는 세션으로 만든다
+    const hasTime = body?.startTime != null || body?.endTime != null;
+    if (
+      hasTime &&
+      !(isValidSessionTime(body?.startTime) && isValidSessionTime(body?.endTime))
+    ) {
+      throw new MatchSessionRequestError(
+        "세션 시작·종료 시각은 HH:MM 형식으로 함께 보내야 합니다.",
+        400,
+      );
+    }
+    const startTime = hasTime ? (body!.startTime as string) : null;
+    const endTime = hasTime ? (body!.endTime as string) : null;
+    // HH:MM은 문자열 비교가 시각 순서와 같다
+    if (startTime && endTime && endTime <= startTime) {
+      throw new MatchSessionRequestError(
+        "세션 종료 시각은 시작 시각보다 늦어야 합니다.",
+        400,
+      );
+    }
+
     await matchRepository.cleanupExpired(now);
-    // 회원 세션 시각은 고른 날 00:00 KST로 고정해 같은 날 같은 이름은 (name, date) 유니크로 막는다.
+    // 회원 세션 시각(date)은 시작 시각과 상관없이 고른 날 00:00 KST로 고정해
+    // 같은 날 같은 이름은 (name, date) 유니크로 막는다.
     const created = await matchRepository.createSession(
-      { name, date: kstDateKeyToDate(dateKey), location },
+      { name, date: kstDateKeyToDate(dateKey), location, startTime, endTime },
       { conflictOnDuplicate: true },
     );
     res.status(201).json(await requireMatchSessionDetail(created.id, now));

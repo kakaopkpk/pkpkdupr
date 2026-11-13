@@ -114,6 +114,8 @@ const hydrateStandaloneSession = (record: any): Session => ({
   name: record.name,
   date: new Date(record.date),
   location: record.location,
+  startTime: record.startTime ?? null,
+  endTime: record.endTime ?? null,
 });
 
 const hydrateManagedSession = (record: any): ManagedMatchSession => ({
@@ -124,6 +126,8 @@ const hydrateManagedSession = (record: any): ManagedMatchSession => ({
   participantIds: record.participantIds ?? [],
   matchCount: Number(record.matchCount ?? 0),
   kind: record.kind === "regular" ? "regular" : "custom",
+  startTime: record.startTime ?? null,
+  endTime: record.endTime ?? null,
   createdAt: new Date(record.createdAt),
   updatedAt: new Date(record.updatedAt),
 });
@@ -321,7 +325,7 @@ export class MatchRepository {
 
   /**
    * 세션을 만든다. `conflictOnDuplicate`면 `(name, date)` 유니크 위반을 DB 원문 대신
-   * 안내 메시지의 409로 바꾼다. 회원 세션은 `date`가 그날 00:00 KST라 같은 날 같은 이름이 대상이다.
+   * 안내 메시지의 409로 바꾼다. 회원 세션은 시작 시각과 상관없이 `date`가 그날 00:00 KST라 같은 날 같은 이름이 대상이다.
    */
   async createSession(
     session: Omit<Session, "id"> & { id?: string },

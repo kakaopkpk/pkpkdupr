@@ -53,6 +53,8 @@ const makeSession = (
   participantIds: [],
   matchCount: 0,
   kind: "custom",
+  startTime: null,
+  endTime: null,
   createdAt: thursdayMorning,
   updatedAt: thursdayMorning,
   ...overrides,
@@ -224,6 +226,8 @@ describe("public match sessions", () => {
         name: "번개",
         date: new Date("2026-11-12T00:00:00+09:00"),
         location: "탄천",
+        startTime: null,
+        endTime: null,
       },
       { conflictOnDuplicate: true },
     );
@@ -263,6 +267,8 @@ describe("public match sessions", () => {
           name: "번개",
           date: new Date(`${dateKey}T00:00:00+09:00`),
           location: "탄천",
+          startTime: null,
+          endTime: null,
         },
         { conflictOnDuplicate: true },
       );
@@ -276,6 +282,69 @@ describe("public match sessions", () => {
       dateKey: "2026-11-20",
       isToday: false,
     });
+  });
+
+  it("시작·종료 시각을 저장하고 세션 응답에 돌려준다. 날짜 시각은 그날 00:00 KST 그대로다", async () => {
+    const createSession = vi
+      .spyOn(MatchRepository.prototype, "createSession")
+      .mockImplementation(async (session) => ({ id: "Stimed01", ...session }));
+    vi.spyOn(MatchRepository.prototype, "findSessionById").mockResolvedValue(
+      makeSession({
+        id: "Stimed01",
+        date: new Date("2026-11-20T00:00:00+09:00"),
+        startTime: "19:30",
+        endTime: "21:00",
+      }),
+    );
+
+    const response = await request(app)
+      .post("/api/match-sessions")
+      .set("Authorization", "Bearer token")
+      .send({
+        name: "번개",
+        location: "탄천",
+        dateKey: "2026-11-20",
+        startTime: "19:30",
+        endTime: "21:00",
+      });
+
+    expect(response.status).toBe(201);
+    expect(createSession).toHaveBeenCalledWith(
+      {
+        name: "번개",
+        date: new Date("2026-11-20T00:00:00+09:00"),
+        location: "탄천",
+        startTime: "19:30",
+        endTime: "21:00",
+      },
+      { conflictOnDuplicate: true },
+    );
+    expect(response.body).toMatchObject({
+      id: "Stimed01",
+      startTime: "19:30",
+      endTime: "21:00",
+    });
+  });
+
+  it("시작·종료 시각 중 하나만 있거나 형식이 틀리거나 종료가 시작보다 이르지 않으면 400", async () => {
+    const createSession = vi.spyOn(MatchRepository.prototype, "createSession");
+
+    for (const time of [
+      { startTime: "19:00" },
+      { endTime: "21:00" },
+      { startTime: "7:00", endTime: "9:00" },
+      { startTime: "24:00", endTime: "24:30" },
+      { startTime: "19:00", endTime: 2100 },
+      { startTime: "21:00", endTime: "21:00" },
+      { startTime: "21:00", endTime: "19:00" },
+    ]) {
+      const response = await request(app)
+        .post("/api/match-sessions")
+        .set("Authorization", "Bearer token")
+        .send({ name: "번개", location: "탄천", ...time });
+      expect(response.status).toBe(400);
+    }
+    expect(createSession).not.toHaveBeenCalled();
   });
 
   it("dateKey 형식이 틀리거나 없는 날짜면 400, 오늘보다 이르면 400", async () => {

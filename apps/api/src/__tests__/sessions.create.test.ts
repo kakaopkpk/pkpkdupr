@@ -47,6 +47,8 @@ const managedSession: ManagedMatchSession = {
   participantIds: participants.map((player) => player.id),
   matchCount: 0,
   kind: "custom",
+  startTime: null,
+  endTime: null,
   createdAt: now,
   updatedAt: now,
 };

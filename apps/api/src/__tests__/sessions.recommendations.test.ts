@@ -45,6 +45,8 @@ const makeSession = (
   participantIds: playerIds,
   matchCount: 0,
   kind: "regular",
+  startTime: null,
+  endTime: null,
   createdAt: thursdayEvening,
   updatedAt: thursdayEvening,
   ...overrides,

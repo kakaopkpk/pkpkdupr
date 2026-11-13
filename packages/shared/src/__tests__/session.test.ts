@@ -10,7 +10,11 @@ import {
   isInProgressMatchExpired,
   isRegularSessionTime,
   isValidKstDateKey,
+  isValidSessionTime,
+  kstDateKeyTimeToDate,
   kstDateKeyToDate,
+  minutesToSessionTime,
+  sessionTimeToMinutes,
   toKstDateKey,
 } from "../session";
 
@@ -281,5 +285,28 @@ describe("isValidKstDateKey", () => {
     expect(isValidKstDateKey("2026-13-01")).toBe(false);
     expect(isValidKstDateKey("2026-1-01")).toBe(false);
     expect(isValidKstDateKey("2026/11/12")).toBe(false);
+  });
+});
+
+describe("세션 시각", () => {
+  it("HH:MM 00:00~23:59만 유효하다", () => {
+    for (const value of ["00:00", "09:30", "23:59"]) {
+      expect(isValidSessionTime(value)).toBe(true);
+    }
+    for (const value of ["24:00", "9:30", "19:60", "1930", 1930, null]) {
+      expect(isValidSessionTime(value)).toBe(false);
+    }
+  });
+
+  it("분 단위와 서로 바꾼다", () => {
+    expect(sessionTimeToMinutes("18:30")).toBe(1110);
+    expect(minutesToSessionTime(1110)).toBe("18:30");
+    expect(minutesToSessionTime(0)).toBe("00:00");
+  });
+
+  it("KST 날짜 키와 시각으로 시점을 만든다", () => {
+    expect(kstDateKeyTimeToDate("2026-11-12", "19:30")).toEqual(
+      new Date("2026-11-12T19:30:00+09:00"),
+    );
   });
 });
