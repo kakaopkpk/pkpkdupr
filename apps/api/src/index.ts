@@ -1028,11 +1028,16 @@ app.get("/api/players/:playerId/profile-summary", async (req, res) => {
     }
 
     const playerId = req.params.playerId;
+    const viewerPlayerId = decoded.playerId;
     const now = new Date();
-    const [result, ratingChangeLogs, projection, rankingSource] =
+    const [result, ratingChangeLogs, viewerRatingChangeLogs, projection, rankingSource] =
       await Promise.all([
         matchRepository.findByPlayerId(playerId, 0, 10_000),
         matchRepository.getPlayerRatingChangeLogs(playerId),
+        // 상대 전적의 "상대가 바꾼 내 평점"용. 본인 프로필이면 필요 없다
+        viewerPlayerId === playerId
+          ? Promise.resolve([])
+          : matchRepository.getPlayerRatingChangeLogs(viewerPlayerId),
         playerRatingChartProjectionService.getOrRebuild(playerId),
         // 세션 지배자 업적은 세션마다 전원의 평점 변화를 비교해야 해서 전체 원천을 읽는다.
         // 실패해도 요약은 돌려주고 세션 지배자만 빠진다.
@@ -1041,7 +1046,10 @@ app.get("/api/players/:playerId/profile-summary", async (req, res) => {
           return null;
         }),
       ]);
-    const matches = attachMatchRatingChanges(result.matches, ratingChangeLogs);
+    const matches = attachMatchRatingChanges(result.matches, [
+      ...ratingChangeLogs,
+      ...viewerRatingChangeLogs,
+    ]);
     const dominations = rankingSource
       ? findSessionDominations(
           rankingSource.context,
@@ -1057,7 +1065,7 @@ app.get("/api/players/:playerId/profile-summary", async (req, res) => {
           projection.history,
           PROFILE_RATING_TREND_WINDOW_DAYS,
         ),
-        decoded.playerId,
+        viewerPlayerId,
         now,
         dominations?.get(playerId),
       ),

@@ -55,7 +55,8 @@ export interface PlayerProfileSummary {
   partners: PartnerStat[];
   /** 자주 진 상대(상성) */
   rivals: OpponentStat[];
-  headToHead: HeadToHeadStat | null;
+  /** 요청자 기준 분류별 맞대결. 본인 프로필이면 null */
+  headToHead: Record<MatchTopLevelType, HeadToHeadStat> | null;
   /** 업적 18개 전부의 진행 상태(정의 순서) */
   achievements: AchievementProgress[];
 }
@@ -142,8 +143,16 @@ export const buildPlayerProfileSummary = (
   const ninetyDaysMs = 90 * 24 * 60 * 60 * 1000;
   const partnerStatsById = new Map<string, PartnerStat>();
   const opponentStatsById = new Map<string, OpponentStat>();
-  const headToHead: HeadToHeadStat | null =
-    viewerPlayerId === playerId ? null : { matchCount: 0, wins: 0, losses: 0 };
+  const createEmptyHeadToHead = (): HeadToHeadStat => ({
+    matchCount: 0,
+    wins: 0,
+    losses: 0,
+    ratingDelta: 0,
+  });
+  const headToHead: Record<MatchTopLevelType, HeadToHeadStat> | null =
+    viewerPlayerId === playerId
+      ? null
+      : { singles: createEmptyHeadToHead(), doubles: createEmptyHeadToHead() };
 
   for (const match of matches) {
     if (match.status !== "completed") continue;
@@ -202,10 +211,16 @@ export const buildPlayerProfileSummary = (
         viewerTeamIndex !== null &&
         viewerTeamIndex !== playerTeamIndex
       ) {
-        headToHead.matchCount += 1;
+        const stat = headToHead[category];
+        stat.matchCount += 1;
         // 요청자 기준 승패라 대상 선수의 승패와 반대다.
-        if (won) headToHead.losses += 1;
-        else headToHead.wins += 1;
+        if (won) stat.losses += 1;
+        else stat.wins += 1;
+        // ratingChanges에 요청자 로그가 함께 붙어 와야 더해진다
+        const viewerChange = match.ratingChanges?.find(
+          (candidate) => candidate.playerId === viewerPlayerId,
+        );
+        stat.ratingDelta += viewerChange?.delta[category] ?? 0;
       }
 
       if (won) {

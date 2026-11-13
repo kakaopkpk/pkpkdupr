@@ -322,36 +322,65 @@ describe("buildPlayerProfileSummary", () => {
   });
 
   describe("상대 전적", () => {
-    it("요청자 기준 승패를 단식·복식 합쳐 센다", () => {
+    it("요청자 기준 승패와 요청자 평점 변화 합을 분류별로 센다", () => {
+      const viewerChange = (
+        matchId: string,
+        delta: { singles: number; doubles: number },
+      ): PlayerRatingChangeLog => ({
+        id: `log-${matchId}`,
+        playerId: viewer.id,
+        source: "match_completed",
+        sourceLogId: matchId,
+        previousRating: { singles: 3, doubles: 3 },
+        nextRating: {
+          singles: 3 + delta.singles,
+          doubles: 3 + delta.doubles,
+        },
+        delta,
+        createdAt: now,
+      });
+      const withViewerChange = (
+        match: Match,
+        delta: { singles: number; doubles: number },
+      ) => ({ ...match, ratingChanges: [viewerChange(match.id, delta)] });
       const matches = [
-        // 대상(me)이 viewer를 단식에서 이김 → viewer 1패
-        makeMatch({
-          id: "Mh2h0001",
-          teams: [
-            { id: "team-a", name: "Team A", players: [me] },
-            { id: "team-b", name: "Team B", players: [viewer] },
-          ],
-          scores: [{ scoreA: 11, scoreB: 4 }],
-        }),
-        // 복식에서 viewer 팀이 이김 → viewer 1승
-        makeMatch({
-          id: "Mh2h0002",
-          type: "men-doubles",
-          teams: [
-            { id: "team-a", name: "Team A", players: [me, partnerA] },
-            { id: "team-b", name: "Team B", players: [viewer, partnerB] },
-          ],
-          scores: [{ scoreA: 9, scoreB: 11 }],
-        }),
-        // 같은 팀이면 맞대결이 아니다
-        makeMatch({
-          id: "Mh2h0003",
-          type: "men-doubles",
-          teams: [
-            { id: "team-a", name: "Team A", players: [me, viewer] },
-            { id: "team-b", name: "Team B", players: [partnerA, partnerB] },
-          ],
-        }),
+        // 대상(me)이 viewer를 단식에서 이김 → viewer 1패, 단식 평점 −0.02
+        withViewerChange(
+          makeMatch({
+            id: "Mh2h0001",
+            teams: [
+              { id: "team-a", name: "Team A", players: [me] },
+              { id: "team-b", name: "Team B", players: [viewer] },
+            ],
+            scores: [{ scoreA: 11, scoreB: 4 }],
+          }),
+          { singles: -0.02, doubles: 0 },
+        ),
+        // 복식에서 viewer 팀이 이김 → viewer 1승, 복식 평점 +0.03
+        withViewerChange(
+          makeMatch({
+            id: "Mh2h0002",
+            type: "men-doubles",
+            teams: [
+              { id: "team-a", name: "Team A", players: [me, partnerA] },
+              { id: "team-b", name: "Team B", players: [viewer, partnerB] },
+            ],
+            scores: [{ scoreA: 9, scoreB: 11 }],
+          }),
+          { singles: 0, doubles: 0.03 },
+        ),
+        // 같은 팀이면 맞대결이 아니라 승패·평점 변화 모두 넣지 않는다
+        withViewerChange(
+          makeMatch({
+            id: "Mh2h0003",
+            type: "men-doubles",
+            teams: [
+              { id: "team-a", name: "Team A", players: [me, viewer] },
+              { id: "team-b", name: "Team B", players: [partnerA, partnerB] },
+            ],
+          }),
+          { singles: 0, doubles: 0.05 },
+        ),
         // 진행 중 경기는 제외
         makeMatch({
           id: "Mh2h0004",
@@ -373,7 +402,10 @@ describe("buildPlayerProfileSummary", () => {
         now,
       );
 
-      expect(summary.headToHead).toEqual({ matchCount: 2, wins: 1, losses: 1 });
+      expect(summary.headToHead).toEqual({
+        singles: { matchCount: 1, wins: 0, losses: 1, ratingDelta: -0.02 },
+        doubles: { matchCount: 1, wins: 1, losses: 0, ratingDelta: 0.03 },
+      });
     });
 
     it("맞대결이 없으면 0, 본인이면 null이다", () => {
@@ -382,7 +414,10 @@ describe("buildPlayerProfileSummary", () => {
       expect(
         buildPlayerProfileSummary(matches, me.id, emptyHistory, viewer.id, now)
           .headToHead,
-      ).toEqual({ matchCount: 0, wins: 0, losses: 0 });
+      ).toEqual({
+        singles: { matchCount: 0, wins: 0, losses: 0, ratingDelta: 0 },
+        doubles: { matchCount: 0, wins: 0, losses: 0, ratingDelta: 0 },
+      });
       expect(
         buildPlayerProfileSummary(matches, me.id, emptyHistory, me.id, now)
           .headToHead,
