@@ -424,6 +424,7 @@ describe("POST /api/matches", () => {
       id,
       type: "mixed-doubles",
       sessionId: null,
+      matchStartsAt: completedAt,
       completedAt,
       teamPlayerIds: [
         [creator.id, "player-f-1"],
