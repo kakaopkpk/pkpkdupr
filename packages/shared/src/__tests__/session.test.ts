@@ -5,8 +5,10 @@ import {
   getEmptySessionExpiresAt,
   getEmptySessionExpiryCutoff,
   getNextRegularSessionDateKey,
+  getPreviousKstDateKey,
   getSessionDurationMinutes,
   isOvernightSessionTimeRange,
+  isSessionOnToday,
   getRegularSessionName,
   IN_PROGRESS_MATCH_TIMEOUT_MS,
   isInProgressMatchExpired,
@@ -376,5 +378,37 @@ describe("세션 시각", () => {
     expect(toKstMinutesOfDay(new Date("2026-11-12T19:45:00+09:00"))).toBe(
       1185,
     );
+  });
+});
+
+describe("isSessionOnToday", () => {
+  const overnight = {
+    kind: "custom" as const,
+    date: new Date("2026-11-12T00:00:00+09:00"),
+    startTime: "23:30",
+    endTime: "01:30",
+  };
+
+  it("그날 세션은 오늘 세션이다", () => {
+    expect(isSessionOnToday(overnight, new Date("2026-11-12T10:00:00+09:00"))).toBe(true);
+  });
+
+  it("자정을 넘긴 회원 세션은 다음 날 종료 시각 전까지만 오늘 세션이다", () => {
+    expect(isSessionOnToday(overnight, new Date("2026-11-13T01:29:59+09:00"))).toBe(true);
+    expect(isSessionOnToday(overnight, new Date("2026-11-13T01:30:00+09:00"))).toBe(false);
+  });
+
+  it("같은 날 끝나는 세션과 정기 세션은 다음 날 오늘 세션이 아니다", () => {
+    const now = new Date("2026-11-13T00:10:00+09:00");
+    expect(
+      isSessionOnToday({ ...overnight, startTime: "19:00", endTime: "21:00" }, now),
+    ).toBe(false);
+    expect(
+      isSessionOnToday({ ...overnight, kind: "regular", startTime: null, endTime: null }, now),
+    ).toBe(false);
+  });
+
+  it("전날 날짜 키를 구한다", () => {
+    expect(getPreviousKstDateKey("2027-01-01")).toBe("2026-12-31");
   });
 });

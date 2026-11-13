@@ -158,6 +158,10 @@ export const kstDateKeyTimeToDate = (dateKey: string, time: string): Date =>
     kstDateKeyToDate(dateKey).getTime() + sessionTimeToMinutes(time) * 60_000,
   );
 
+/** 전날 KST 날짜 키 */
+export const getPreviousKstDateKey = (dateKey: string): string =>
+  toKstDateKey(new Date(kstDateKeyToDate(dateKey).getTime() - DAY_MS));
+
 /** YYYY-MM-DD 형식이고 실제 있는 날짜면 true */
 export const isValidKstDateKey = (value: string): boolean =>
   /^\d{4}-\d{2}-\d{2}$/.test(value) &&
@@ -180,6 +184,26 @@ export const getEmptySessionExpiresAt = (
   return timeRange?.endTime && isOvernightSessionTimeRange(timeRange)
     ? new Date(nextDayStart + sessionTimeToMinutes(timeRange.endTime) * 60_000)
     : new Date(nextDayStart);
+};
+
+/**
+ * 지금 그 세션이 '오늘 세션'이면 true. 그날(KST) 세션이거나, 전날 시작해 자정을 넘긴 회원 세션이
+ * 아직 끝나지 않았을 때다. 세션 경기 기록·시작·추천과 오늘 세션 목록이 이 기준을 쓴다
+ */
+export const isSessionOnToday = (
+  session: { kind: MatchSessionKind; date: Date } & SessionTimeRange,
+  now: Date,
+): boolean => {
+  const dateKey = toKstDateKey(session.date);
+  const todayKey = toKstDateKey(now);
+  if (dateKey === todayKey) return true;
+  return (
+    session.kind !== "regular" &&
+    dateKey < todayKey &&
+    isOvernightSessionTimeRange(session) &&
+    now.getTime() <
+      getEmptySessionExpiresAt(session.kind, session.date, session).getTime()
+  );
 };
 
 /**
@@ -226,7 +250,10 @@ export interface MatchSessionDetail {
   /** 시작·종료 시각("HH:MM", KST). 정기 세션은 18:00~22:00, 시각 없이 만든 회원 세션은 null. 종료 ≤ 시작이면 다음 날 종료 */
   startTime: string | null;
   endTime: string | null;
-  /** 오늘(KST) 세션이면 true. 세션 경기 기록/시작·추천은 오늘 세션에서만 되고, 참여자 추가·삭제는 오늘·미래 세션에서 된다 */
+  /**
+   * 오늘(KST) 세션이면 true(`isSessionOnToday`, 전날 시작해 자정을 넘긴 회원 세션은 끝나기 전까지 포함).
+   * 세션 경기 기록/시작·추천은 오늘 세션에서만 되고, 참여자 추가·삭제는 오늘·미래 세션에서 된다
+   */
   isToday: boolean;
   /** active 회원만 */
   participants: MatchSessionMember[];
@@ -239,7 +266,7 @@ export interface TodayMatchSessionsResponse {
   dateKey: string;
   /** canOpenRegularSession(now). 정기 세션이 아직 생성 전이어도 카드를 보여 줄 수 있다 */
   regularSessionOpen: boolean;
-  /** 오늘 날짜의 생성된 세션. 정기 세션이 있으면 맨 앞 */
+  /** 오늘 날짜의 생성된 세션과, 전날 시작해 아직 끝나지 않은 자정 넘김 회원 세션. 정기 세션이 있으면 맨 앞 */
   sessions: MatchSessionDetail[];
 }
 

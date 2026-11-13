@@ -240,6 +240,44 @@ describe("public match sessions", () => {
     });
   });
 
+  it("전날 시작해 자정을 넘긴 회원 세션은 끝나기 전까지 오늘 세션 목록에 오늘 세션으로 나온다", async () => {
+    const overnight = makeSession({
+      id: "Snight01",
+      name: "심야 번개",
+      date: new Date("2026-11-12T00:00:00+09:00"),
+      startTime: "23:30",
+      endTime: "01:30",
+    });
+    const sameDayEnded = makeSession({
+      id: "Sended01",
+      date: new Date("2026-11-12T00:00:00+09:00"),
+      startTime: "19:00",
+      endTime: "21:00",
+    });
+    vi.spyOn(MatchRepository.prototype, "findSessionsByDateKey").mockImplementation(
+      async (dateKey) => (dateKey === "2026-11-12" ? [overnight, sameDayEnded] : []),
+    );
+
+    useNow(new Date("2026-11-13T00:30:00+09:00"));
+    const during = await request(app)
+      .get("/api/match-sessions/today")
+      .set("Authorization", "Bearer token");
+    expect(during.status).toBe(200);
+    expect(during.body.dateKey).toBe("2026-11-13");
+    expect(during.body.sessions).toHaveLength(1);
+    expect(during.body.sessions[0]).toMatchObject({
+      id: "Snight01",
+      dateKey: "2026-11-12",
+      isToday: true,
+    });
+
+    useNow(new Date("2026-11-13T01:30:00+09:00"));
+    const after = await request(app)
+      .get("/api/match-sessions/today")
+      .set("Authorization", "Bearer token");
+    expect(after.body.sessions).toEqual([]);
+  });
+
   it("dateKey로 오늘이나 미래 날짜 세션을 그날 00:00 KST로 만든다", async () => {
     const createSession = vi
       .spyOn(MatchRepository.prototype, "createSession")
@@ -601,7 +639,8 @@ describe("public match sessions", () => {
       }
       expect(findOrCreate).toHaveBeenCalledTimes(2);
       expect(findOrCreate).toHaveBeenCalledWith("2026-11-16");
-      expect(findFrom).toHaveBeenCalledWith("2026-11-12");
+      // 전날 시작해 자정을 넘긴 세션도 보이도록 전날부터 읽는다
+      expect(findFrom).toHaveBeenCalledWith("2026-11-11");
     });
 
     it("정기 요일 22시 전이면 오늘 정기 세션을 보장한다", async () => {
