@@ -46,5 +46,6 @@ describe("cx", () => {
   it("애니메이션은 pk 토큰을 포함해 뒤의 것만 남긴다", () => {
     expect(cx("animate-pk-pop", "animate-none")).toBe("animate-none");
     expect(cx("animate-pk-rise-in", "animate-pk-sink-out")).toBe("animate-pk-sink-out");
+    expect(cx("animate-pk-wobble", "animate-none")).toBe("animate-none");
   });
 });
