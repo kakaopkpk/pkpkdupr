@@ -1,4 +1,10 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import type { MatchInfo } from "@/types/match";
 import PushScreen from "@/components/PushScreen";
 import TabPanelStatus from "@/components/TabPanelStatus";

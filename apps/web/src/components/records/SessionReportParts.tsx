@@ -125,11 +125,15 @@ export const SessionPlayerRatingRow: React.FC<{
   onPress: () => void;
 }> = ({ report, ratingLabel, order, onPress }) => {
   // 세션 전 NR이던 회원도 ratingBefore에 기본값이 들어 있으므로 rankBefore로 판정한다
-  const wasUnratedBefore = report.rankBefore === null && report.rankAfter !== null;
+  const wasUnratedBefore =
+    report.rankBefore === null && report.rankAfter !== null;
+  const beforeText = wasUnratedBefore
+    ? "NR"
+    : formatRating(report.ratingBefore);
   const ratingText =
     ratingLabel === "after" || report.ratingAfter === null
       ? formatRating(report.ratingAfter)
-      : `${wasUnratedBefore ? "NR" : formatRating(report.ratingBefore)} → ${formatRating(report.ratingAfter)}`;
+      : `${beforeText} → ${formatRating(report.ratingAfter)}`;
   const rankChange = getSessionRankChange(report);
 
   return (
