@@ -28,7 +28,7 @@ import {
   startMatch,
   toTeamRequests,
 } from "@/lib/matches";
-import PickPlayersStep from "./PickPlayersStep";
+import PickPlayersStep, { type SlotPlayer } from "./PickPlayersStep";
 import RecordDoneStep from "./RecordDoneStep";
 import {
   getErrorMessage,
@@ -139,8 +139,8 @@ export default function RecordMatchFlow({
     );
 
   const playerById = useMemo(() => {
-    const map = new Map<string, AvatarPlayer>();
-    const add = (player: AvatarPlayer) => {
+    const map = new Map<string, SlotPlayer>();
+    const add = (player: SlotPlayer) => {
       if (!map.has(player.id)) map.set(player.id, player);
     };
     players.forEach(add);

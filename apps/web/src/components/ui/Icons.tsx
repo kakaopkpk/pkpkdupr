@@ -86,3 +86,42 @@ export const ClearIcon: React.FC = () => (
     />
   </svg>
 );
+
+/** 원 안의 i (안내) */
+export const InfoIcon: React.FC<{ className?: string }> = ({ className }) => (
+  <svg
+    width="16"
+    height="16"
+    viewBox="0 0 24 24"
+    aria-hidden="true"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    className={className ?? "shrink-0"}
+  >
+    <circle cx="12" cy="12" r="9" />
+    <path d="M12 11v5M12 8h.01" />
+  </svg>
+);
+
+/** 사람 + 더하기 (게스트 추가) */
+export const PersonAddIcon: React.FC<{ className?: string }> = ({
+  className,
+}) => (
+  <svg
+    width="16"
+    height="16"
+    viewBox="0 0 24 24"
+    aria-hidden="true"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2.2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    className={className ?? "shrink-0"}
+  >
+    <circle cx="10" cy="8" r="3.5" />
+    <path d="M3.5 19.5c.8-3.3 3.4-5 6.5-5s5.7 1.7 6.5 5M19 8v6M16 11h6" />
+  </svg>
+);
