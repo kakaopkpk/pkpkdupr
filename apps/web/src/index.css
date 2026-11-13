@@ -41,6 +41,25 @@
   --ease-pk-spring: cubic-bezier(0.3, 1.35, 0.45, 1);
   --animate-nav-icon-pop: nav-icon-pop 380ms ease-out;
   --animate-plus-menu-pop: plus-menu-pop 340ms var(--ease-pk-spring);
+  /* 이동·전환 곡선(PushScreen과 같은 값) */
+  --ease-pk-move: cubic-bezier(0.32, 0.72, 0, 1);
+  /* 튀어나오는 등장 곡선 */
+  --ease-pk-pop: cubic-bezier(0.34, 1.56, 0.64, 1);
+  /*
+   * 공용 모션. 모두 fill-mode both라 inline style animationDelay 동안 시작 상태로 머문다.
+   * 지연·길이는 inline style(animationDelay·animationDuration)로 덮어쓴다.
+   * keyframes는 "시작 상태 → 정적 상태" 방향이라 motion-reduce:animate-none이면 정적 상태가 곧 최종 상태다(pk-sink-out만 퇴장 방향).
+   */
+  --animate-pk-fade-in: pk-fade-in 200ms var(--ease-pk-move) both;
+  --animate-pk-fade-up: pk-fade-up 260ms var(--ease-pk-move) both;
+  --animate-pk-pop: pk-pop 260ms var(--ease-pk-pop) both;
+  /* 요소에 pathLength="1"이 필요하다 */
+  --animate-pk-draw: pk-draw 320ms var(--ease-pk-move) both;
+  --animate-pk-sheen: pk-sheen 700ms var(--ease-pk-move) both;
+  --animate-pk-ping: pk-ping 1.6s cubic-bezier(0, 0, 0.2, 1) infinite both;
+  --animate-pk-spin-slow: pk-spin-slow 6s linear infinite both;
+  --animate-pk-rise-in: pk-rise-in 320ms var(--ease-pk-pop) both;
+  --animate-pk-sink-out: pk-sink-out 260ms var(--ease-pk-move) both;
 
   @keyframes nav-icon-pop {
     30% {
@@ -55,6 +74,78 @@
     from {
       opacity: 0;
       transform: scale(0.35);
+    }
+  }
+
+  @keyframes pk-fade-in {
+    from {
+      opacity: 0;
+    }
+  }
+
+  @keyframes pk-fade-up {
+    from {
+      opacity: 0;
+      transform: translateY(8px);
+    }
+  }
+
+  /* 오버슈트는 ease-pk-pop 곡선이 만든다 */
+  @keyframes pk-pop {
+    from {
+      opacity: 0;
+      transform: scale(0.6);
+    }
+  }
+
+  @keyframes pk-draw {
+    from {
+      stroke-dasharray: 1;
+      stroke-dashoffset: 1;
+    }
+    to {
+      stroke-dasharray: 1;
+      stroke-dashoffset: 0;
+    }
+  }
+
+  @keyframes pk-sheen {
+    from {
+      transform: translateX(-100%);
+    }
+    to {
+      transform: translateX(100%);
+    }
+  }
+
+  @keyframes pk-ping {
+    from {
+      opacity: 1;
+      transform: scale(1);
+    }
+    to {
+      opacity: 0;
+      transform: scale(2.6);
+    }
+  }
+
+  @keyframes pk-spin-slow {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+
+  @keyframes pk-rise-in {
+    from {
+      opacity: 0;
+      transform: translateY(100%);
+    }
+  }
+
+  @keyframes pk-sink-out {
+    to {
+      opacity: 0;
+      transform: translateY(100%);
     }
   }
 }
