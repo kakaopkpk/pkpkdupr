@@ -575,6 +575,7 @@ export type SessionDominations = ReadonlyMap<string, ReadonlySet<string>>;
 /**
  * 끝난 세션(만료 시각 `getEmptySessionExpiresAt` ≤ now)의 지배자를 모은다.
  * 진행 중이거나 오늘 아직 끝나지 않은 세션은 지배자가 바뀔 수 있어 넣지 않는다.
+ * 다른 업적처럼 조회 때마다 계산하므로, 끝난 뒤 경기를 수정·삭제하면 지배자도 다시 정해진다.
  */
 export const findSessionDominations = (
   context: RankingContext,

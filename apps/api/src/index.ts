@@ -1027,14 +1027,20 @@ app.get("/api/players/:playerId/profile-summary", async (req, res) => {
         matchRepository.getPlayerRatingChangeLogs(playerId),
         playerRatingChartProjectionService.getOrRebuild(playerId),
         // 세션 지배자 업적은 세션마다 전원의 평점 변화를 비교해야 해서 전체 원천을 읽는다.
-        loadRankingSource(),
+        // 실패해도 요약은 돌려주고 세션 지배자만 빠진다.
+        loadRankingSource().catch((err) => {
+          console.error("[PROFILE] 세션 지배자 원천 조회 실패", playerId, err);
+          return null;
+        }),
       ]);
     const matches = attachMatchRatingChanges(result.matches, ratingChangeLogs);
-    const dominations = findSessionDominations(
-      rankingSource.context,
-      rankingSource.sessions,
-      now,
-    );
+    const dominations = rankingSource
+      ? findSessionDominations(
+          rankingSource.context,
+          rankingSource.sessions,
+          now,
+        )
+      : null;
     res.json(
       buildPlayerProfileSummary(
         matches,
@@ -1042,7 +1048,7 @@ app.get("/api/players/:playerId/profile-summary", async (req, res) => {
         projection.history,
         decoded.playerId,
         now,
-        dominations.get(playerId),
+        dominations?.get(playerId),
       ),
     );
   } catch (err) {
