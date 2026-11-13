@@ -8,7 +8,11 @@ export type RankingPlayer = Pick<Player, "id" | "username" | "avatarUrl">;
 /** 랭킹 줄 회원. 상태메시지가 없으면 필드를 생략한다(Player와 같은 규칙) */
 export type RankingEntryPlayer = Pick<
   Player,
-  "id" | "username" | "avatarUrl" | "statusMessage" | "statusMessageBackgroundColor"
+  | "id"
+  | "username"
+  | "avatarUrl"
+  | "statusMessage"
+  | "statusMessageBackgroundColor"
 >;
 
 export interface RankingEntry {
