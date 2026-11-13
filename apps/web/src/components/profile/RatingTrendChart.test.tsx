@@ -31,7 +31,7 @@ describe("RatingTrendChart", () => {
     expect(markup).toContain("3.20");
   });
 
-  it("경기일 점은 같은 간격이고 anchor에는 점을 찍지 않는다", () => {
+  it("경기일은 같은 간격이고 점은 끝점 하나만 찍는다", () => {
     const markup = render([
       { rating: 3.3, createdAt: "2026-10-14T12:00:00.000Z", source: "anchor" },
       { rating: 3.35, createdAt: "2026-10-20T11:00:00.000Z", source: "match" },
@@ -39,8 +39,9 @@ describe("RatingTrendChart", () => {
     ]);
 
     expect(getLineXs(markup)).toEqual([34, 176, 318]);
-    // 가운데 경기일 점(r 2.5) 하나와 끝점(r 4) 하나
-    expect(markup.match(/<circle/g)).toHaveLength(2);
+    // 중간 경기일에는 점을 찍지 않고 끝점(r 4)만 있다
+    expect(markup.match(/<circle/g)).toHaveLength(1);
+    expect(markup).toContain('r="4"');
     expect(markup).toContain("10월 14일");
     expect(markup).toContain("11월 12일");
   });
@@ -54,12 +55,12 @@ describe("RatingTrendChart", () => {
     expect(markup).toMatch(
       /<path d="[^"]+" pathLength="1"[^>]*class="animate-pk-draw motion-reduce:animate-none" style="animation-duration:700ms"/,
     );
-    // 면과 경기일 점 묶음이 같은 지연·길이로 페이드한다
+    // 면이 선 그리기 중간부터 페이드한다
     expect(
       markup.match(
         /class="animate-pk-fade-in motion-reduce:animate-none" style="animation-delay:400ms;animation-duration:400ms"/g,
       ),
-    ).toHaveLength(2);
+    ).toHaveLength(1);
     expect(markup).toMatch(
       /<circle[^>]*class="animate-pk-pop motion-reduce:animate-none[^"]*" style="animation-delay:650ms;animation-duration:360ms"/,
     );

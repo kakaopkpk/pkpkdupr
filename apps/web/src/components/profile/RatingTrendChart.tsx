@@ -5,7 +5,7 @@ import { usePlayOnShow } from "@/hooks/usePlayOnShow";
 export interface RatingTrendPoint {
   rating: number;
   createdAt: Date | string;
-  /** `anchor`는 기간 시작 직전 평점이라 경기한 날 점을 찍지 않는다 */
+  /** `anchor`는 기간 시작 직전 평점(선의 왼쪽 시작점) */
   source?: "match" | "current" | "anchor";
 }
 
@@ -26,7 +26,7 @@ const EMPTY_TEXT_Y = 58;
 const MIN_RATING_SPAN = 0.3;
 
 // 화면이 보일 때의 그리기 모션(ms). 끝점 pop의 onAnimationEnd가 재생 종료를 알리므로
-// END_DOT_DELAY_MS + END_DOT_POP_MS가 선 그리기(LINE_DRAW_MS)와 면·점 페이드(FILL_DELAY_MS + FILL_FADE_MS)보다
+// END_DOT_DELAY_MS + END_DOT_POP_MS가 선 그리기(LINE_DRAW_MS)와 면 페이드(FILL_DELAY_MS + FILL_FADE_MS)보다
 // 늦게 끝나야 한다. 아니면 다른 모션이 끝나기 전에 animate 클래스가 떨어진다
 /** 선 그리기 길이(ms). 평점 카드의 평점 카운트업도 같은 길이로 맞춘다 */
 export const LINE_DRAW_MS = 700;
@@ -57,7 +57,6 @@ const RatingTrendChart: React.FC<{
     .map((point) => ({
       rating: point.rating,
       time: new Date(point.createdAt),
-      isAnchor: point.source === "anchor",
     }))
     .filter(
       (point) =>
@@ -81,7 +80,6 @@ const RatingTrendChart: React.FC<{
   const coordinates = samples.map((point, index) => ({
     x: toX(index),
     y: toY(point.rating),
-    isAnchor: point.isAnchor,
   }));
   // 점이 하나뿐이면 왼쪽 끝부터 같은 평점으로 이어 그린다
   const linePath = coordinates.length === 1
@@ -179,22 +177,6 @@ const RatingTrendChart: React.FC<{
             }
             style={isPlaying ? { animationDuration: `${LINE_DRAW_MS}ms` } : undefined}
           />
-          <g
-            className={fadeInClass}
-            style={isPlaying ? fadeInStyle : undefined}
-          >
-            {coordinates.slice(0, -1).map(({ x, y, isAnchor }) =>
-              isAnchor ? null : (
-                <circle
-                  key={`${x}-${y}`}
-                  cx={x}
-                  cy={y}
-                  r={2.5}
-                  fill="var(--color-pk-primary)"
-                />
-              ),
-            )}
-          </g>
           {/* SVG 요소의 scale 기준점을 점 중심으로 맞추려면 fill-box가 필요하다 */}
           <circle
             cx={last.x}
