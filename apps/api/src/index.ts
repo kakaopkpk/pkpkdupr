@@ -2713,7 +2713,11 @@ app.get("/api/session-reports/:sessionId", async (req, res) => {
     const { context, sessions } = await loadRankingSource();
     const session = sessions.find((candidate) => candidate.id === sessionId);
     const report = session
-      ? buildSessionReport({ context, session, sessions })
+      ? buildSessionReport({
+          context,
+          session,
+          dominations: findSessionDominations(context, sessions, new Date()),
+        })
       : null;
     if (!report) {
       throw new RankingRequestError("세션 리포트를 찾을 수 없습니다.", 404);
@@ -2732,7 +2736,10 @@ app.get("/api/achievements/holders", async (req, res) => {
 
     const { context, sessions } = await loadRankingSource();
     const response: AchievementHoldersResponse = {
-      counts: countAchievementHolders(context, sessions),
+      counts: countAchievementHolders(
+        context,
+        findSessionDominations(context, sessions, new Date()),
+      ),
     };
     res.json(response);
   } catch (err) {

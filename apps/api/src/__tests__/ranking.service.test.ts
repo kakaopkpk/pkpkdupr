@@ -410,8 +410,7 @@ describe("buildSessionReport", () => {
     const report = buildSessionReport({
       context: createRankingContext(players, logs, matches),
       session,
-      sessions: [session],
-      now,
+      dominations: new Map(),
     });
 
     expect(report?.session).toMatchObject({
@@ -451,8 +450,7 @@ describe("buildSessionReport", () => {
     const report = buildSessionReport({
       context: createRankingContext(players, flatLogs, matches),
       session,
-      sessions: [session],
-      now,
+      dominations: new Map(),
     });
     expect(report?.topRiser).toBeNull();
   });
@@ -498,8 +496,7 @@ describe("buildSessionReport", () => {
     const report = buildSessionReport({
       context: createRankingContext(nrPlayers, nrLogs, nrMatches),
       session: nrSession,
-      sessions: [nrSession],
-      now,
+      dominations: new Map(),
     });
 
     expect(report?.topRiser?.player.username).toBe("erin");
@@ -526,8 +523,7 @@ describe("buildSessionReport", () => {
       buildSessionReport({
         context: createRankingContext(players, logs, []),
         session,
-        sessions: [session],
-        now,
+        dominations: new Map(),
       }),
     ).toBeNull();
   });
@@ -535,13 +531,17 @@ describe("buildSessionReport", () => {
   // 정기 세션(2026-11-09)은 그날 22:00 KST(13:00Z)에 끝난다.
   const sessionEndsAt = at("2026-11-09T13:00:00Z");
 
-  it("끝난 세션의 topRiser는 세션 지배자 업적을 그 세션 마지막 경기로 받는다", () => {
-    const report = buildSessionReport({
-      context: createRankingContext(players, logs, matches),
+  const reportAt = (reportNow: Date) => {
+    const context = createRankingContext(players, logs, matches);
+    return buildSessionReport({
+      context,
       session,
-      sessions: [session],
-      now: sessionEndsAt,
+      dominations: findSessionDominations(context, [session], reportNow),
     });
+  };
+
+  it("끝난 세션의 topRiser는 세션 지배자 업적을 그 세션 마지막 경기로 받는다", () => {
+    const report = reportAt(sessionEndsAt);
     expect(
       report?.achievements.filter((item) =>
         item.achievementId.startsWith("dominator-"),
@@ -557,12 +557,7 @@ describe("buildSessionReport", () => {
   });
 
   it("끝나지 않은 세션의 topRiser는 세션 지배자 업적을 받지 않는다", () => {
-    const report = buildSessionReport({
-      context: createRankingContext(players, logs, matches),
-      session,
-      sessions: [session],
-      now: new Date(sessionEndsAt.getTime() - 1),
-    });
+    const report = reportAt(new Date(sessionEndsAt.getTime() - 1));
     expect(report?.topRiser?.player.username).toBe("alice");
     expect(
       report?.achievements.some((item) =>

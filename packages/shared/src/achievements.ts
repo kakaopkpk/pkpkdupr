@@ -575,12 +575,17 @@ interface SessionRecord {
 }
 
 /** 세션 단위로 다 훑은 뒤에 판정하는 지표. 나중 경기나 세션 종료로 결과가 정해진다 */
-type SessionEventMetric = "unbeatenSessions" | "dominatedSessions";
+const SESSION_EVENT_METRICS = [
+  "unbeatenSessions",
+  "dominatedSessions",
+] as const satisfies readonly AchievementMetric[];
+
+type SessionEventMetric = (typeof SESSION_EVENT_METRICS)[number];
 
 const isSessionEventMetric = (
   metric: AchievementMetric,
 ): metric is SessionEventMetric =>
-  metric === "unbeatenSessions" || metric === "dominatedSessions";
+  (SESSION_EVENT_METRICS as readonly AchievementMetric[]).includes(metric);
 
 const NO_SESSIONS: ReadonlySet<string> = new Set();
 
@@ -745,12 +750,9 @@ export function computeAchievements(
       sessionEventMatches.dominatedSessions.push(session.lastMatch);
     }
   }
-  for (const [metric, eventMatches] of Object.entries(sessionEventMatches) as [
-    SessionEventMetric,
-    CountedMatch[],
-  ][]) {
-    eventMatches.sort(compareCountedMatches);
-    metrics[metric] = eventMatches.length;
+  for (const metric of SESSION_EVENT_METRICS) {
+    sessionEventMatches[metric].sort(compareCountedMatches);
+    metrics[metric] = sessionEventMatches[metric].length;
   }
 
   for (const item of progress) {
