@@ -38,6 +38,7 @@ import {
   matchSessionParticipants,
   matchSessions,
   players,
+  regularSessionSkips,
 } from "../db/schema";
 import { generateEntityId, isEntityId } from "@pkpkdupr/shared/entityId";
 import {
@@ -50,6 +51,7 @@ import {
   getEmptySessionExpiryCutoff,
   kstDateKeyToDate,
   type MatchSessionKind,
+  type RegularSessionSkipReason,
 } from "@pkpkdupr/shared/session";
 import { firstRow, placeholders, type RawQueryResult } from "../db/client";
 import { buildMatchDeletionLogInsert } from "./MatchDeletionLogRepository";
@@ -284,6 +286,17 @@ const parseParticipantDuprSnapshot = (
 
 const REGULAR_DATE_KEY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
+/** 날짜 키의 다음 날. 구간 조회의 미포함 끝으로 쓴다 */
+const addDateKeyDay = (dateKey: string) => {
+  const [year, month, day] = dateKey.split("-").map(Number);
+  return new Date(Date.UTC(year, month - 1, day + 1)).toISOString().slice(0, 10);
+};
+
+export interface RegularSessionSkip {
+  dateKey: string;
+  reason: RegularSessionSkipReason;
+}
+
 const toExpectedUpdatedAtSeconds = (expectedUpdatedAt: Date | undefined) =>
   expectedUpdatedAt ? toUnixTimestampSeconds(expectedUpdatedAt) : null;
 
@@ -487,10 +500,11 @@ export class MatchRepository {
   /**
    * 그 KST 날짜의 정기 세션을 찾거나 만든다.
    * 날짜당 하나는 regular_date_key 유니크 제약이 보장하므로, 동시 호출은 ON CONFLICT DO NOTHING 후 재조회로 같은 행을 받는다.
+   * 세션이 없고 그 날짜가 regular_session_skips(공휴일·취소)에 있으면 만들지 않고 null을 돌려준다.
    */
   async findOrCreateRegularSession(
     dateKey: string,
-  ): Promise<{ session: ManagedMatchSession; created: boolean }> {
+  ): Promise<{ session: ManagedMatchSession; created: boolean } | null> {
     if (!REGULAR_DATE_KEY_PATTERN.test(dateKey)) {
       throw new Error("유효한 정기 세션 날짜가 필요합니다.");
     }
@@ -506,6 +520,9 @@ export class MatchRepository {
     const existing = await findStored();
     if (existing) {
       return { session: await this.toManagedSession(existing), created: false };
+    }
+    if ((await this.findRegularSessionSkips(dateKey, addDateKeyDay(dateKey))).length > 0) {
+      return null;
     }
 
     const sessionDate = kstDateKeyToDate(dateKey, REGULAR_SESSION_START_HOUR);
@@ -1990,7 +2007,14 @@ export class MatchRepository {
     }
   }
 
-  async deleteSession(sessionId: string): Promise<boolean> {
+  /**
+   * 경기가 없는 세션을 참여자와 함께 지운다. 없으면 false.
+   * cancelRegularFromDateKey를 주면 그 날짜 이후(포함)의 정기 세션을 지울 때 그 날짜를 취소(canceled)로 남겨 다시 만들지 않는다.
+   */
+  async deleteSession(
+    sessionId: string,
+    options: { cancelRegularFromDateKey?: string } = {},
+  ): Promise<boolean> {
     if (!isEntityId(sessionId, "session")) {
       throw new Error("유효한 세션 ID가 필요합니다.");
     }
@@ -1999,7 +2023,7 @@ export class MatchRepository {
     let committed = false;
     try {
       const session = await transaction.execute({
-        sql: "SELECT id FROM match_sessions WHERE id = $1",
+        sql: "SELECT id, regular_date_key FROM match_sessions WHERE id = $1",
         args: [sessionId],
       });
       if (!session.rows.length) {
@@ -2024,6 +2048,22 @@ export class MatchRepository {
         sql: "DELETE FROM match_sessions WHERE id = $1",
         args: [sessionId],
       });
+      const regularDateKey = session.rows[0]?.regular_date_key;
+      // YYYY-MM-DD 날짜 키는 문자열 비교가 날짜 순서와 같다. 이미 공휴일로 있으면 그대로 둔다
+      if (
+        typeof regularDateKey === "string" &&
+        options.cancelRegularFromDateKey &&
+        regularDateKey >= options.cancelRegularFromDateKey
+      ) {
+        await transaction.execute({
+          sql: `
+            INSERT INTO regular_session_skips (date_key, reason, created_at)
+            VALUES ($1, 'canceled', $2)
+            ON CONFLICT (date_key) DO NOTHING
+          `,
+          args: [regularDateKey, toUnixTimestampSeconds(new Date())],
+        });
+      }
       await transaction.commit();
       committed = true;
       return true;
@@ -2032,6 +2072,83 @@ export class MatchRepository {
         transaction.close();
       }
     }
+  }
+
+  /** from 이상 to 미만 날짜 키의 정기 회차 제외 날짜(날짜 오름차순) */
+  async findRegularSessionSkips(
+    fromDateKey: string,
+    toDateKey: string,
+  ): Promise<RegularSessionSkip[]> {
+    const rows: Array<{ dateKey: string; reason: string }> = await this.db
+      .select({
+        dateKey: regularSessionSkips.dateKey,
+        reason: regularSessionSkips.reason,
+      })
+      .from(regularSessionSkips)
+      .where(
+        and(
+          gte(regularSessionSkips.dateKey, fromDateKey),
+          lt(regularSessionSkips.dateKey, toDateKey),
+        ),
+      )
+      .orderBy(asc(regularSessionSkips.dateKey));
+    return rows.map((row) => ({
+      dateKey: row.dateKey,
+      reason: row.reason as RegularSessionSkipReason,
+    }));
+  }
+
+  /** 공휴일 날짜를 남긴다. 이미 있는 날짜(취소 포함)는 그대로 둔다 */
+  async addRegularSessionHolidays(dateKeys: string[]): Promise<void> {
+    const uniqueDateKeys = [...new Set(dateKeys)];
+    if (uniqueDateKeys.some((dateKey) => !REGULAR_DATE_KEY_PATTERN.test(dateKey))) {
+      throw new Error("유효한 공휴일 날짜가 필요합니다.");
+    }
+    if (uniqueDateKeys.length === 0) {
+      return;
+    }
+    const createdAt = new Date();
+    await this.db
+      .insert(regularSessionSkips)
+      .values(
+        uniqueDateKeys.map((dateKey) => ({
+          dateKey,
+          reason: "holiday",
+          createdAt,
+        })),
+      )
+      .onConflictDoNothing();
+  }
+
+  /**
+   * 그 날짜들의 정기 세션 중 참여자와 경기가 모두 없는 세션을 지운다(문장 하나).
+   * 지운 세션의 id와 날짜 키를 돌려준다.
+   */
+  async deleteEmptyRegularSessions(
+    dateKeys: string[],
+  ): Promise<Array<{ id: string; dateKey: string }>> {
+    const uniqueDateKeys = [...new Set(dateKeys)];
+    if (uniqueDateKeys.length === 0) {
+      return [];
+    }
+    const result: RawQueryResult = await this.client.execute({
+      sql: `
+        DELETE FROM match_sessions s
+        WHERE s.regular_date_key IN (${placeholders(uniqueDateKeys.length)})
+          AND NOT EXISTS (SELECT 1 FROM matches m WHERE m.session_id = s.id)
+          AND NOT EXISTS (
+            SELECT 1 FROM match_session_participants p WHERE p.session_id = s.id
+          )
+        RETURNING s.id, s.regular_date_key
+      `,
+      args: uniqueDateKeys,
+    });
+    return result.rows
+      .map((row) => ({
+        id: String(row.id),
+        dateKey: String(row.regular_date_key),
+      }))
+      .sort((a, b) => a.dateKey.localeCompare(b.dateKey));
   }
 
   async updateMetadata(

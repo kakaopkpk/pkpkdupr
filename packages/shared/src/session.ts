@@ -82,6 +82,42 @@ export const getNextRegularSessionDateKey = (now: Date): string => {
   throw new Error("정기 세션 요일이 없습니다.");
 };
 
+/** 정기 세션을 미리 만드는 기간(일). 오늘(KST)을 포함해 이 일수 안의 정기 회차를 만든다 */
+export const REGULAR_SESSION_LOOKAHEAD_DAYS = 28;
+
+/** 정기 회차를 만들지 않는 날짜의 사유. holiday=공휴일, canceled=관리자가 지운 회차 */
+export type RegularSessionSkipReason = "holiday" | "canceled";
+
+/**
+ * 오늘(KST)부터 days일 안의 정기 회차 날짜 키(오름차순).
+ * 오늘은 getNextRegularSessionDateKey와 같이 정기 요일 22:00 KST 전일 때만 넣는다
+ */
+export const getRegularSessionDateKeys = (now: Date, days: number): string[] => {
+  const todayKey = toKstDateKey(now);
+  const dateKeys: string[] = [];
+  for (let offset = 0; offset < days; offset += 1) {
+    const dateKey = addKstDays(todayKey, offset);
+    const weekday = toKstShifted(kstDateKeyToDate(dateKey)).getUTCDay();
+    if (!REGULAR_SESSION_WEEKDAYS.includes(weekday)) continue;
+    if (offset === 0 && !canOpenRegularSession(now)) continue;
+    dateKeys.push(dateKey);
+  }
+  return dateKeys;
+};
+
+/** POST /api/cron/regular-sessions 응답 */
+export interface RegularSessionsCronResponse {
+  /** 대상 기간의 KST 날짜 키. from 포함, to 미포함 */
+  fromDateKey: string;
+  toDateKey: string;
+  /** 새로 만든 정기 회차 날짜 */
+  created: string[];
+  /** 공휴일·취소라 만들지 않은 정기 회차 날짜 */
+  skipped: Array<{ dateKey: string; reason: RegularSessionSkipReason }>;
+  /** 공휴일로 확인돼 지운 빈 정기 세션 날짜 */
+  deleted: string[];
+}
+
 /** "HH:MM"(00:00~23:59) 형식이면 true. 같은 형식끼리는 문자열 비교가 시각 순서와 같다 */
 export const isValidSessionTime = (value: unknown): value is string =>
   typeof value === "string" && /^([01]\d|2[0-3]):[0-5]\d$/.test(value);

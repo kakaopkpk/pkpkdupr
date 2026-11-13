@@ -287,6 +287,7 @@ describe("createSessionCalendarSync", () => {
   const makeClient = () => ({
     upsertEvent: vi.fn<GoogleCalendarClient["upsertEvent"]>(async () => undefined),
     deleteEvent: vi.fn<GoogleCalendarClient["deleteEvent"]>(async () => undefined),
+    listEvents: vi.fn<GoogleCalendarClient["listEvents"]>(async () => []),
   });
 
   afterEach(() => {

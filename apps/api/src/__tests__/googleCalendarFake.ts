@@ -34,12 +34,17 @@ export interface RecordedCalendarCall {
   body: unknown;
 }
 
+/** 캘린더 호출의 응답. 상태 코드만 주면 본문은 "{}"다 */
+export type FakeCalendarResponse = number | { status: number; body: unknown };
+
 /**
  * 구글 토큰·캘린더 API를 흉내 내는 fetch.
- * calendarResponder로 캘린더 호출별 상태 코드를 정하고, 토큰 요청은 항상 성공한다.
+ * calendarResponder로 캘린더 호출별 상태 코드(와 본문)를 정하고, 토큰 요청은 항상 성공한다.
  */
 export const createFakeGoogleFetch = (
-  calendarResponder: (call: RecordedCalendarCall) => number = () => 200,
+  calendarResponder: (
+    call: RecordedCalendarCall,
+  ) => FakeCalendarResponse = () => 200,
 ) => {
   const calendarCalls: RecordedCalendarCall[] = [];
   const tokenRequests: URLSearchParams[] = [];
@@ -59,8 +64,13 @@ export const createFakeGoogleFetch = (
         body: init?.body ? JSON.parse(String(init.body)) : undefined,
       };
       calendarCalls.push(call);
-      const status = calendarResponder(call);
-      return new Response(status === 204 ? null : "{}", { status });
+      const response = calendarResponder(call);
+      if (typeof response !== "number") {
+        return new Response(JSON.stringify(response.body), {
+          status: response.status,
+        });
+      }
+      return new Response(response === 204 ? null : "{}", { status: response });
     },
   );
   return { fetchMock, calendarCalls, tokenRequests };

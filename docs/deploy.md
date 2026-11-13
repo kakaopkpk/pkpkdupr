@@ -67,11 +67,13 @@ curl -si -X POST "https://<project-ref>.supabase.co/storage/v1/object/avatars/te
 | --- | --- | --- |
 | secret | `SUPABASE_ACCESS_TOKEN` | Supabase access token |
 | secret | `SUPABASE_DB_PASSWORD` | 프로젝트 DB 비밀번호 (`supabase db push`가 사용) |
+| secret | `CRON_SECRET` | 정기 세션 예약 작업 호출용 secret. 함수 secret `CRON_SECRET`과 같은 값(아래 3-2) |
 | variable | `SUPABASE_PROJECT_REF` | Project ref |
 
 ```bash
 gh secret set SUPABASE_ACCESS_TOKEN
 gh secret set SUPABASE_DB_PASSWORD
+gh secret set CRON_SECRET
 gh variable set SUPABASE_PROJECT_REF --body <project-ref>
 ```
 
@@ -86,6 +88,7 @@ gh variable set SUPABASE_PROJECT_REF --body <project-ref>
 | `STORAGE_PUBLIC_URL` | 아니오 | 아바타 공개 URL의 base. 없으면 `SUPABASE_URL`을 씁니다. 운영에서는 비워 두고, 로컬 `functions serve`에서만 `http://127.0.0.1:54321`로 넣습니다(함수 안의 `SUPABASE_URL`은 브라우저가 접근할 수 없는 `http://kong:8000`이기 때문). |
 | `GOOGLE_CALENDAR_SERVICE_ACCOUNT_JSON` | 아니오 | 동호회 구글 캘린더에 세션 일정을 쓰는 서비스 계정의 JSON 키 파일 내용 전체(아래 3-1). `GOOGLE_CALENDAR_ID`와 둘 다 있어야 연동이 켜지고, 하나라도 없으면 캘린더를 호출하지 않습니다. |
 | `GOOGLE_CALENDAR_ID` | 아니오 | 일정을 쓸 동호회 캘린더 ID(아래 3-1). 예 `abcd…@group.calendar.google.com` |
+| `CRON_SECRET` | 예 | 정기 세션 예약 작업(`POST /api/cron/regular-sessions`)이 헤더 `x-cron-secret`과 비교하는 값(아래 3-2). 없으면 예약 작업이 503으로 실패합니다. |
 | `WEB_APP_URL` | 아니오 | 일정 설명에 넣는 웹 앱 주소. 운영값 `https://kakaopkpk.github.io/pkpkdupr/`. 없으면 설명에서 앱 링크 두 줄을 뺍니다. |
 
 `SUPABASE_URL`·`SUPABASE_ANON_KEY`·`SUPABASE_SERVICE_ROLE_KEY`·`SUPABASE_JWKS`는 Supabase가 함수에 자동으로 넣으므로 직접 설정하지 않습니다(예약 이름이라 설정할 수도 없습니다). 토큰 확인에는 `SUPABASE_JWKS`(프로젝트 JWT 서명 공개키, 토큰 서명 검증용)와 `SUPABASE_URL`·`SUPABASE_ANON_KEY`를, 계정 발급·비밀번호 초기화·아이디 변경(Auth admin API)에는 service role key를 씁니다.
@@ -121,6 +124,24 @@ secret을 바꾼 뒤에는 함수를 다시 배포하지 않아도 새 요청부
 > 일정 설명에는 참석한 회원·게스트의 아이디 명단과 세션 장소·시각이 들어가고, 아이디는 로그인 식별자이기도 합니다. 캘린더는 비공개로 두고 **공개 사용 설정이나 공개 주소(iCal) 구독은 쓰지 않습니다.** 공유 대상은 동호회 회원 계정으로만 한정합니다.
 
 로컬 dev에서는 이 값들을 넣지 않으면 연동이 꺼진 채로 동작합니다.
+
+### 3-2. 정기 세션 예약 작업 (최초 1회)
+
+`.github/workflows/regular-sessions-cron.yml`이 매일 KST 04:00(UTC 19:00)에 `POST https://<project-ref>.supabase.co/functions/v1/api/api/cron/regular-sessions`를 부릅니다. Actions 탭에서 `workflow_dispatch`로 바로 실행할 수도 있습니다.
+
+- 오늘(KST)부터 28일 안의 정기 회차(월·목, 오늘은 22시 전만)를 공휴일·취소 날짜를 빼고 만듭니다. 이미 있는 회차는 그대로라 여러 번 실행해도 날짜당 하나입니다. 새로 만든 회차는 구글 캘린더 일정도 생깁니다.
+- 공휴일은 구글 "대한민국 공휴일" 캘린더(`ko.south_korea#holiday@group.v.calendar.google.com`)를 3-1의 서비스 계정으로 읽어 확인하고 DB(`regular_session_skips`)에 남깁니다. 공개 캘린더라 공유 설정은 필요 없지만 **3-1 연동이 켜져 있어야 합니다.** 연동 설정이 없거나 조회가 실패하면 그날은 아무것도 만들지 않고 5xx로 끝나며(워크플로 실패), 다음 날 실행이 메웁니다.
+- 이미 만든 회차가 공휴일로 확인되면 참여자·경기가 모두 없을 때만 지웁니다.
+- 관리자가 오늘·미래 정기 세션을 지우면 그 날짜는 취소로 남아 다시 만들어지지 않습니다.
+- 응답 JSON(`created`·`skipped`·`deleted`)은 워크플로 로그에 그대로 찍힙니다.
+
+같은 임의 값을 함수 secret과 GitHub secret 두 곳에 넣습니다.
+
+```bash
+CRON_SECRET="$(openssl rand -hex 32)"
+pnpm exec supabase secrets set --project-ref <project-ref> CRON_SECRET="$CRON_SECRET"
+gh secret set CRON_SECRET --body "$CRON_SECRET"
+```
 
 ## 4. 로그인 설정 (최초 1회)
 

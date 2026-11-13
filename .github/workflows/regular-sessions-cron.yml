@@ -1,0 +1,37 @@
+name: regular-sessions-cron
+
+# 매일 KST 04:00에 정기 세션을 오늘부터 4주치(공휴일·취소 날짜 제외) 미리 만든다.
+# 실패해도 다음 날 실행이 빈 회차를 메운다. 필요한 설정은 docs/deploy.md를 따른다.
+on:
+  schedule:
+    - cron: "0 19 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: regular-sessions-cron
+  cancel-in-progress: false
+
+jobs:
+  create-regular-sessions:
+    runs-on: ubuntu-latest
+    permissions: {}
+    steps:
+      - name: Call regular sessions cron
+        env:
+          SUPABASE_PROJECT_REF: ${{ vars.SUPABASE_PROJECT_REF }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          missing=()
+          [ -n "$SUPABASE_PROJECT_REF" ] || missing+=("vars.SUPABASE_PROJECT_REF")
+          [ -n "$CRON_SECRET" ] || missing+=("secrets.CRON_SECRET")
+          if [ ${#missing[@]} -gt 0 ]; then
+            echo "::error::GitHub 설정이 없습니다: ${missing[*]} (docs/deploy.md 참고)"
+            exit 1
+          fi
+          # 함수 이름 api 뒤에 앱 경로 /api/...가 붙는다
+          curl --silent --show-error --fail-with-body \
+            --max-time 120 \
+            -X POST \
+            -H "x-cron-secret: $CRON_SECRET" \
+            "https://${SUPABASE_PROJECT_REF}.supabase.co/functions/v1/api/api/cron/regular-sessions"
+          echo

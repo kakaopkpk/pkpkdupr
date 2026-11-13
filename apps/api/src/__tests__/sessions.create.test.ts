@@ -127,7 +127,7 @@ describe("admin match sessions", () => {
       .set("Authorization", "Bearer admin-token");
 
     expect(response.status).toBe(204);
-    expect(deleteSession).toHaveBeenCalledWith(managedSession.id);
+    expect(deleteSession).toHaveBeenCalledWith(managedSession.id, expect.any(Date));
   });
 
   it("저장소가 세션을 삭제하면 성공으로 처리한다", async () => {
@@ -136,8 +136,16 @@ describe("admin match sessions", () => {
       .mockResolvedValue(true);
     const repository = new MatchRepository();
 
-    await expect(repository.deleteSession(managedSession.id)).resolves.toBeUndefined();
-    expect(deleteSession).toHaveBeenCalledWith(managedSession.id);
+    await expect(
+      repository.deleteSession(
+        managedSession.id,
+        new Date("2026-11-12T10:00:00+09:00"),
+      ),
+    ).resolves.toBeUndefined();
+    // 오늘(KST) 이후 정기 세션을 지우면 취소로 남기도록 오늘 날짜 키를 넘긴다
+    expect(deleteSession).toHaveBeenCalledWith(managedSession.id, {
+      cancelRegularFromDateKey: "2026-11-12",
+    });
   });
 
   it("저장소의 세션 삭제 결과와 예외를 공개 API 상태 코드로 변환한다", async () => {

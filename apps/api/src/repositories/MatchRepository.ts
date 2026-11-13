@@ -9,7 +9,7 @@ import type {
 } from "@pkpkdupr/shared/match";
 import { randomUUID } from "crypto";
 import { generateEntityId, isEntityId } from "@pkpkdupr/shared/entityId";
-import { kstDateKeyToDate } from "@pkpkdupr/shared/session";
+import { kstDateKeyToDate, toKstDateKey } from "@pkpkdupr/shared/session";
 import type {
   PlayerRatingChangeLog,
   PlayerRatingHistory,
@@ -22,6 +22,7 @@ import {
   SessionHasMatchesError,
   type CompletedMatchOutcome,
   type CreateMatchInput,
+  type RegularSessionSkip,
   type SessionWithParticipantIds,
   type UpdateMatchMetadataInput,
   type UpdateRecordedMatchInput,
@@ -413,20 +414,57 @@ export class MatchRepository {
 
   /**
    * 그 KST 날짜의 정기 세션을 찾거나 만든다. 같은 날짜에 하나만 존재한다.
+   * 세션이 없고 그 날짜가 공휴일·취소 날짜면 만들지 않고 undefined를 돌려준다.
    * 이 호출이 새로 만들었을 때만 세션 변경을 알린다(이미 있던 세션 조회는 알리지 않음).
    */
   async findOrCreateRegularSession(
     dateKey: string,
-  ): Promise<ManagedMatchSession> {
-    const { session, created } = await this.run(
+  ): Promise<ManagedMatchSession | undefined> {
+    return (await this.ensureRegularSession(dateKey))?.session;
+  }
+
+  /** findOrCreateRegularSession과 같고, 이 호출이 새로 만들었는지(created)도 돌려준다 */
+  async ensureRegularSession(
+    dateKey: string,
+  ): Promise<{ session: ManagedMatchSession; created: boolean } | undefined> {
+    const result = await this.run(
       () => db.matches.findOrCreateRegularSession(dateKey),
       500,
     );
-    const hydrated = hydrateManagedSession(session);
-    if (created) {
-      this.notifySessionsChanged([hydrated.id]);
+    if (!result) {
+      return undefined;
     }
-    return hydrated;
+    const session = hydrateManagedSession(result.session);
+    if (result.created) {
+      this.notifySessionsChanged([session.id]);
+    }
+    return { session, created: result.created };
+  }
+
+  /** from 이상 to 미만 KST 날짜 키의 정기 회차 제외 날짜(공휴일·취소) */
+  async findRegularSessionSkips(
+    fromDateKey: string,
+    toDateKey: string,
+  ): Promise<RegularSessionSkip[]> {
+    return await this.run(
+      () => db.matches.findRegularSessionSkips(fromDateKey, toDateKey),
+      500,
+    );
+  }
+
+  /** 공휴일 날짜를 남긴다. 이미 있는 날짜는 그대로 둔다 */
+  async addRegularSessionHolidays(dateKeys: string[]): Promise<void> {
+    await this.run(() => db.matches.addRegularSessionHolidays(dateKeys), 500);
+  }
+
+  /** 그 날짜들의 빈 정기 세션(참여자·경기 없음)을 지우고 지운 날짜 키를 돌려준다 */
+  async deleteEmptyRegularSessions(dateKeys: string[]): Promise<string[]> {
+    const deleted = await this.run(
+      () => db.matches.deleteEmptyRegularSessions(dateKeys),
+      500,
+    );
+    this.notifySessionsChanged(deleted.map((session) => session.id));
+    return deleted.map((session) => session.dateKey);
   }
 
   /** 참여자를 추가한다. 이미 있으면 무시한다(동시 호출에도 덮어쓰지 않음) */
@@ -554,12 +592,19 @@ export class MatchRepository {
     return records.map(hydrateMatch);
   }
 
-  async deleteSession(sessionId: string): Promise<void> {
+  /** 경기가 없는 세션을 지운다. 오늘(now, KST)·미래 정기 세션이면 그 날짜를 취소로 남겨 다시 만들지 않는다 */
+  async deleteSession(
+    sessionId: string,
+    now: Date = new Date(),
+  ): Promise<void> {
     if (!isEntityId(sessionId, "session")) {
       throw new MatchRepositoryError("유효한 세션 ID가 필요합니다.", 400);
     }
     const deleted = await this.run(
-      () => db.matches.deleteSession(sessionId),
+      () =>
+        db.matches.deleteSession(sessionId, {
+          cancelRegularFromDateKey: toKstDateKey(now),
+        }),
       400,
       (error) => (error instanceof SessionHasMatchesError ? 409 : undefined),
     );
