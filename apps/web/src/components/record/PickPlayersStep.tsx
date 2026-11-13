@@ -17,6 +17,9 @@ import {
 } from "./recordMatch.utils";
 import { CheckIcon, FooterError } from "./RecordMatchParts";
 
+/** 목록에서 새로 들어온 선수 아바타의 pop 시간 */
+const NEW_PLAYER_POP_MS = 300;
+
 export interface PickPlayersStepProps {
   slots: RecordSlots;
   onSlotsChange: (slots: RecordSlots) => void;
@@ -41,6 +44,17 @@ export interface PickPlayersStepProps {
 /** 자리 아바타를 감싸는 원(아바타 44px + 링 안쪽 여백 3px) */
 const SLOT_CIRCLE_CLASS =
   "relative flex size-[50px] items-center justify-center rounded-full";
+
+/** 자리 바꾸기 대상 자리의 점선 링. 아바타는 돌지 않게 링만 따로 6초에 한 바퀴 돈다 */
+const TargetRing: React.FC<{ className?: string }> = ({ className }) => (
+  <span
+    aria-hidden="true"
+    className={cx(
+      "pointer-events-none absolute rounded-full border-2 border-dashed border-pk-primary animate-pk-spin-slow motion-reduce:animate-none",
+      className,
+    )}
+  />
+);
 
 const CloseMarkIcon: React.FC = () => (
   <svg
@@ -92,6 +106,18 @@ export default function PickPlayersStep({
     () => buildPickList(players, { query, participantIds, busyIds }),
     [busyIds, participantIds, players, query],
   );
+  // 직전 자리 목록에 없던 선수만 아바타 pop. 첫 마운트·자리 바꾸기는 선수 집합이 같아 제외된다
+  const [prevSlots, setPrevSlots] = useState(slots);
+  const [poppedIds, setPoppedIds] = useState<ReadonlySet<string>>(
+    () => new Set(),
+  );
+  if (prevSlots !== slots) {
+    const prevIds = new Set(getSlotPlayerIds(prevSlots));
+    setPrevSlots(slots);
+    setPoppedIds(
+      new Set(getSlotPlayerIds(slots).filter((id) => !prevIds.has(id))),
+    );
+  }
 
   // 누른 빈자리가 채워지면 선호를 소모해, 나중에 그 자리가 다시 비어도 왼쪽부터 첫 빈자리가 다음 자리가 된다
   useEffect(() => {
@@ -176,10 +202,21 @@ export default function PickPlayersStep({
               className={cx(
                 SLOT_CIRCLE_CLASS,
                 isSelected && "shadow-[inset_0_0_0_2px_var(--color-pk-primary)]",
-                isTarget && "border-2 border-dashed border-pk-primary",
               )}
             >
-              <PlayerAvatar player={player} size={44} />
+              {/* 선수가 바뀌면 key로 다시 마운트해, 새로 들어온 선수일 때만 pop을 처음부터 재생한다 */}
+              <span
+                key={player.id}
+                style={{ animationDuration: `${NEW_PLAYER_POP_MS}ms` }}
+                className={cx(
+                  "flex",
+                  poppedIds.has(player.id) &&
+                    "animate-pk-pop motion-reduce:animate-none",
+                )}
+              >
+                <PlayerAvatar player={player} size={44} />
+              </span>
+              {isTarget ? <TargetRing className="inset-0" /> : null}
               {isSelected ? (
                 <span
                   aria-hidden="true"
@@ -204,12 +241,15 @@ export default function PickPlayersStep({
               SLOT_CIRCLE_CLASS,
               "border-2",
               isTarget
-                ? "border-dashed border-pk-primary bg-pk-primary-soft"
+                ? "border-transparent bg-pk-primary-soft"
                 : !isSelecting && index === nextIndex
                   ? "border-solid border-pk-primary"
                   : "border-dashed border-pk-muted",
             )}
-          />
+          >
+            {/* 테두리(2px) 바깥까지 덮도록 링을 테두리만큼 넓힌다 */}
+            {isTarget ? <TargetRing className="-inset-0.5" /> : null}
+          </span>
         )}
       </button>
     );

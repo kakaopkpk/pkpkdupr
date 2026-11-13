@@ -167,6 +167,8 @@ const TeamScore: React.FC<TeamScoreProps> = ({
 }) => {
   const scrollRef = useRef<HTMLDivElement>(null);
   const initialValueRef = useRef(value);
+  // 사용자가 칩으로 점수를 바꾼 횟수. 0이면 마운트 때 있던 점수라 pop하지 않는다
+  const [pickCount, setPickCount] = useState(0);
   const names = players.map((player) => player.username).join(" · ");
 
   useLayoutEffect(() => {
@@ -190,7 +192,7 @@ const TeamScore: React.FC<TeamScoreProps> = ({
         </div>
         <span
           className={cx(
-            "font-num text-[52px] leading-[0.9] font-bold tabular-nums",
+            "font-num text-[52px] leading-[0.9] font-bold tabular-nums transition-colors duration-180 ease-pk-move motion-reduce:transition-none",
             value === null
               ? "text-pk-quiet"
               : isWinner
@@ -198,7 +200,16 @@ const TeamScore: React.FC<TeamScoreProps> = ({
                 : "text-pk-ink",
           )}
         >
-          {value ?? "–"}
+          {/* 고를 때마다 key로 다시 마운트해 pop을 재생한다. 색 전환은 바깥 span이 맡는다 */}
+          <span
+            key={pickCount}
+            className={cx(
+              "inline-block",
+              pickCount > 0 && "animate-pk-pop motion-reduce:animate-none",
+            )}
+          >
+            {value ?? "–"}
+          </span>
         </span>
       </div>
       <div
@@ -216,13 +227,20 @@ const TeamScore: React.FC<TeamScoreProps> = ({
               role="radio"
               aria-checked={isSelected}
               aria-label={`${n}점`}
-              onClick={() => onChange(n)}
+              onClick={() => {
+                if (n === value) return;
+                setPickCount((count) => count + 1);
+                onChange(n);
+              }}
               style={{ width: CHIP_SIZE, height: CHIP_SIZE }}
               className={cx(
                 "shrink-0 rounded-pk-sm text-pk-17 tabular-nums",
                 isSelected
                   ? "bg-pk-primary font-extrabold text-white"
                   : "bg-pk-bg font-bold text-pk-sub",
+                isSelected &&
+                  pickCount > 0 &&
+                  "animate-pk-pop motion-reduce:animate-none",
               )}
             >
               {n}
