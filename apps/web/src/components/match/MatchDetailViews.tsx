@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useMemo } from "react";
 import { getMatchTopLevelType } from "@pkpkdupr/shared/match";
 import {
   getTeamResultScores,
@@ -14,10 +14,13 @@ import {
   COUNT_UP,
   CountUpNumber,
 } from "@/components/ui/CountUpNumber";
+import { rowDividerClassName } from "@/components/ui/MatchRow";
 import { PlayerAvatar, TeamAvatars } from "@/components/ui/PlayerAvatar";
-import { LinkChevron } from "@/components/ui/Section";
+import { LinkChevron, SectionLabel } from "@/components/ui/Section";
 import { cx } from "@/components/ui/cx";
+import { useMinuteClock } from "@/hooks/useMinuteClock";
 import {
+  formatElapsed,
   formatKstShortDate,
   formatKstTime,
   formatKstWeekdayTime,
@@ -25,19 +28,7 @@ import {
 
 type MatchTeam = MatchInfo["teams"][number];
 
-const MINUTE_MS = 60_000;
 const BG_COLOR = "var(--color-pk-bg)";
-
-const useMinuteClock = () => {
-  const [now, setNow] = useState(() => Date.now());
-
-  useEffect(() => {
-    const intervalId = window.setInterval(() => setNow(Date.now()), MINUTE_MS);
-    return () => window.clearInterval(intervalId);
-  }, []);
-
-  return now;
-};
 
 const getSessionLabel = (session: NonNullable<MatchInfo["session"]>) =>
   session.name?.trim() || `${formatKstShortDate(session.date)} 세션`;
@@ -113,10 +104,8 @@ export const LiveMatchDetail: React.FC<LiveMatchDetailProps> = ({
   onOpenPlayer,
 }) => {
   const now = useMinuteClock();
-  const startsAtMs = new Date(match.matchStartsAt).getTime();
   // 관리자 예정 경기처럼 시작 시각 전의 created 경기는 진행 중이 아니라 예정으로 보인다
-  const isScheduled = startsAtMs > now;
-  const elapsedMinutes = Math.floor((now - startsAtMs) / MINUTE_MS);
+  const isScheduled = new Date(match.matchStartsAt).getTime() > now.getTime();
 
   return (
     <div className="flex flex-col gap-4 px-4 pt-1">
@@ -135,7 +124,7 @@ export const LiveMatchDetail: React.FC<LiveMatchDetailProps> = ({
         />
         {isScheduled
           ? `예정 · ${formatKstWeekdayTime(match.matchStartsAt)}`
-          : `진행 중 · ${elapsedMinutes}분째`}
+          : `진행 중 · ${formatElapsed(match.matchStartsAt, now)}`}
       </span>
       <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2">
         <TeamColumn
@@ -232,49 +221,50 @@ const RatingChangeCard: React.FC<{
       });
   }, [match.ratingChanges, match.teams]);
 
-  const title = (
-    <h2 className="mt-3 mb-0.5 text-pk-13 font-bold text-pk-sub">평점 변화</h2>
-  );
-
-  // 게스트가 낀 경기는 평점 변화가 없으므로 미반영 안내 한 줄만 보인다
+  // 게스트가 낀 경기는 평점 변화가 없으므로 개수 없는 제목 아래 미반영 안내 한 줄만 보인다
   if (match.ratingExcluded) {
     return (
-      <Card>
-        {title}
-        <p className="py-[11px] text-pk-15 text-pk-sub">
-          {RATING_EXCLUDED_NOTICE}
-        </p>
-      </Card>
+      <section className="flex flex-col gap-2.5 pt-1">
+        <SectionLabel>평점 변화</SectionLabel>
+        <Card>
+          <p className="py-[11px] text-pk-15 text-pk-sub">
+            {RATING_EXCLUDED_NOTICE}
+          </p>
+        </Card>
+      </section>
     );
   }
 
   if (entries.length === 0) return null;
 
   return (
-    <Card>
-      {title}
-      {entries.map(({ player, change }) => (
-        <button
-          key={player.id}
-          type="button"
-          onClick={() => onOpenPlayer(player.id)}
-          className={cx(
-            "grid w-full grid-cols-[24px_minmax(0,1fr)_auto_60px] items-center gap-2.5 py-[11px] text-left not-last:shadow-[inset_0_-1px_0_#e6e9f0] active:opacity-70",
-            rowPressClassName,
-          )}
-        >
-          <PlayerAvatar player={player} size={24} />
-          <span className="min-w-0 truncate text-pk-15 font-bold">
-            {player.username}
-          </span>
-          <MatchRatingChangeCount
-            previousRating={change.previousRating[ratingCategory]}
-            nextRating={change.nextRating[ratingCategory]}
-            delta={change.delta[ratingCategory]}
-          />
-        </button>
-      ))}
-    </Card>
+    <section className="flex flex-col gap-2.5 pt-1">
+      <SectionLabel>평점 변화 · {entries.length}</SectionLabel>
+      <Card>
+        {entries.map(({ player, change }) => (
+          <button
+            key={player.id}
+            type="button"
+            onClick={() => onOpenPlayer(player.id)}
+            className={cx(
+              "grid min-h-14 w-full grid-cols-[32px_minmax(0,1fr)_auto_60px] items-center gap-3 text-left active:opacity-70",
+              rowDividerClassName,
+              rowPressClassName,
+            )}
+          >
+            <PlayerAvatar player={player} size={32} />
+            <span className="min-w-0 truncate text-pk-15 font-bold">
+              {player.username}
+            </span>
+            <MatchRatingChangeCount
+              previousRating={change.previousRating[ratingCategory]}
+              nextRating={change.nextRating[ratingCategory]}
+              delta={change.delta[ratingCategory]}
+            />
+          </button>
+        ))}
+      </Card>
+    </section>
   );
 };
 
