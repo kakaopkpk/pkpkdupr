@@ -67,21 +67,6 @@ export const WEEKDAY_LABELS = ["일", "월", "화", "수", "목", "금", "토"];
 export const getRegularSessionName = (dateKey: string): string =>
   `${WEEKDAY_LABELS[toKstShifted(kstDateKeyToDate(dateKey)).getUTCDay()]}요 정기운동`;
 
-/** 다음 정기 회차의 KST 날짜 키. 오늘이 정기 요일이고 22:00 KST 전이면 오늘 */
-export const getNextRegularSessionDateKey = (now: Date): string => {
-  if (canOpenRegularSession(now)) {
-    return toKstDateKey(now);
-  }
-  const todayStart = kstDateKeyToDate(toKstDateKey(now));
-  for (let offset = 1; offset <= 7; offset += 1) {
-    const day = new Date(todayStart.getTime() + offset * DAY_MS);
-    if (REGULAR_SESSION_WEEKDAYS.includes(toKstShifted(day).getUTCDay())) {
-      return toKstDateKey(day);
-    }
-  }
-  throw new Error("정기 세션 요일이 없습니다.");
-};
-
 /** 정기 세션을 미리 만드는 기간(일). 오늘(KST)을 포함해 이 일수 안의 정기 회차를 만든다 */
 export const REGULAR_SESSION_LOOKAHEAD_DAYS = 28;
 
@@ -90,7 +75,7 @@ export type RegularSessionSkipReason = "holiday" | "canceled";
 
 /**
  * 오늘(KST)부터 days일 안의 정기 회차 날짜 키(오름차순).
- * 오늘은 getNextRegularSessionDateKey와 같이 정기 요일 22:00 KST 전일 때만 넣는다
+ * 오늘은 정기 요일 22:00 KST 전일 때만 넣는다
  */
 export const getRegularSessionDateKeys = (now: Date, days: number): string[] => {
   const todayKey = toKstDateKey(now);
@@ -103,6 +88,16 @@ export const getRegularSessionDateKeys = (now: Date, days: number): string[] => 
     dateKeys.push(dateKey);
   }
   return dateKeys;
+};
+
+/** 다음 정기 회차의 KST 날짜 키. 오늘이 정기 요일이고 22:00 KST 전이면 오늘 */
+export const getNextRegularSessionDateKey = (now: Date): string => {
+  // 오늘을 빼도 7일 뒤 같은 요일까지 보면 다음 회차가 반드시 들어온다
+  const [next] = getRegularSessionDateKeys(now, 8);
+  if (!next) {
+    throw new Error("정기 세션 요일이 없습니다.");
+  }
+  return next;
 };
 
 /** POST /api/cron/regular-sessions 응답 */

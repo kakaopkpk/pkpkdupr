@@ -1,3 +1,4 @@
+import { createHash, timingSafeEqual } from "crypto";
 import {
   addKstDays,
   getRegularSessionDateKeys,
@@ -34,16 +35,12 @@ export class RegularSessionCronError extends Error {
   }
 }
 
-/** 헤더 값과 secret을 길이와 상관없이 끝까지 비교한다(타이밍으로 secret을 추측하지 못하게) */
-export const isCronSecretMatch = (provided: string, expected: string) => {
-  const providedBytes = new TextEncoder().encode(provided);
-  const expectedBytes = new TextEncoder().encode(expected);
-  let difference = providedBytes.length ^ expectedBytes.length;
-  for (let index = 0; index < expectedBytes.length; index += 1) {
-    difference |= (providedBytes[index] ?? 0) ^ expectedBytes[index]!;
-  }
-  return difference === 0;
-};
+/** 헤더 값과 secret을 같은 길이의 해시로 바꿔 상수 시간에 비교한다(타이밍으로 secret을 추측하지 못하게) */
+export const isCronSecretMatch = (provided: string, expected: string) =>
+  timingSafeEqual(
+    createHash("sha256").update(provided).digest(),
+    createHash("sha256").update(expected).digest(),
+  );
 
 /**
  * 공휴일 캘린더 일정에서 공휴일(설명이 "공휴일"로 시작) 날짜 키를 뽑는다.

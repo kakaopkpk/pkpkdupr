@@ -302,6 +302,10 @@ describe("정기 세션 예약 작업", () => {
     const listUrl = new URL(listCall!.url);
     expect(listCall!.method).toBe("GET");
     expect(listUrl.searchParams.get("singleEvents")).toBe("true");
+    expect(listUrl.searchParams.get("maxResults")).toBe("250");
+    expect(listUrl.searchParams.get("fields")).toBe(
+      "items(description,start,end),nextPageToken",
+    );
     expect(listUrl.searchParams.get("timeMin")).toBe("2026-11-11T15:00:00.000Z");
     expect(listUrl.searchParams.get("timeMax")).toBe("2026-12-09T15:00:00.000Z");
     // 새로 만든 세션은 동호회 캘린더 일정도 생긴다
@@ -367,6 +371,23 @@ describe("정기 세션 예약 작업", () => {
     const response = await runCron();
 
     expect(response.status).toBe(502);
+    expect(store.findOrCreate).not.toHaveBeenCalled();
+    expect(store.addHolidays).not.toHaveBeenCalled();
+    expect(errorLog).toHaveBeenCalled();
+  });
+
+  it("공휴일 목록이 한 번에 다 오지 않으면 세션을 만들지 않고 5xx로 응답한다", async () => {
+    const errorLog = vi.spyOn(console, "error").mockImplementation(() => {});
+    useCalendar((call) =>
+      call.url.startsWith(holidayListUrlPrefix)
+        ? { status: 200, body: { items: [], nextPageToken: "next" } }
+        : 200,
+    );
+
+    const response = await runCron();
+
+    expect(response.status).toBe(502);
+    expect(holidayListCalls()).toHaveLength(1);
     expect(store.findOrCreate).not.toHaveBeenCalled();
     expect(store.addHolidays).not.toHaveBeenCalled();
     expect(errorLog).toHaveBeenCalled();

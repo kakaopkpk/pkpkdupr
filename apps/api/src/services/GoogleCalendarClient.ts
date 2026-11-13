@@ -11,13 +11,14 @@ const TOKEN_LIFETIME_SECONDS = 3600;
 /** 토큰 만료 직전 요청이 실패하지 않도록 이만큼 일찍 새로 받는다 */
 const TOKEN_REFRESH_MARGIN_MS = 60_000;
 const REQUEST_TIMEOUT_MS = 10_000;
-/** 일정 목록의 페이지 크기와, 응답이 이상해도 끝없이 돌지 않도록 둔 최대 페이지 수 */
-const LIST_PAGE_SIZE = 250;
-const LIST_MAX_PAGES = 10;
+/** 일정 목록 한 번에 받는 최대 개수. 공휴일 4주치는 이 안에 들어온다 */
+const LIST_MAX_RESULTS = 250;
 /** 로그가 길어지지 않도록 오류 응답 본문은 이만큼만 남긴다 */
 const MAX_ERROR_BODY_LENGTH = 500;
 /** 200으로 왔지만 토큰이 없는 응답은 구글 쪽 이상으로 보고 서버 오류 코드로 다룬다 */
 const EMPTY_TOKEN_RESPONSE_STATUS = 500;
+/** 일정 목록이 한 번에 다 오지 않으면(다음 페이지가 있으면) 예상 밖 응답으로 보고 서버 오류 코드로 다룬다 */
+const LIST_TRUNCATED_STATUS = 500;
 
 export interface GoogleServiceAccount {
   client_email: string;
@@ -324,38 +325,32 @@ export const createGoogleCalendarClient = (
       await discardBody(deleted);
     },
     async listEvents(listCalendarId, { timeMin, timeMax }) {
-      const listUrl = `${CALENDAR_API_BASE}/calendars/${encodeURIComponent(listCalendarId)}/events`;
-      const events: GoogleCalendarListedEvent[] = [];
-      let pageToken: string | undefined;
-      for (let page = 0; page < LIST_MAX_PAGES; page += 1) {
-        const params = new URLSearchParams({
-          singleEvents: "true",
-          orderBy: "startTime",
-          timeMin: timeMin.toISOString(),
-          timeMax: timeMax.toISOString(),
-          maxResults: String(LIST_PAGE_SIZE),
-        });
-        if (pageToken) {
-          params.set("pageToken", pageToken);
-        }
-        const response = await callCalendar("GET", `${listUrl}?${params}`);
-        if (!response.ok) {
-          throw await fail("목록 조회", response);
-        }
-        const body = (await response.json()) as {
-          items?: GoogleCalendarListedEvent[];
-          nextPageToken?: string;
-        };
-        events.push(...(body.items ?? []));
-        pageToken = body.nextPageToken;
-        if (!pageToken) {
-          return events;
-        }
-      }
-      throw new GoogleCalendarApiError(
-        "구글 캘린더 일정 목록이 너무 깁니다.",
-        EMPTY_TOKEN_RESPONSE_STATUS,
+      const params = new URLSearchParams({
+        singleEvents: "true",
+        orderBy: "startTime",
+        timeMin: timeMin.toISOString(),
+        timeMax: timeMax.toISOString(),
+        maxResults: String(LIST_MAX_RESULTS),
+        fields: "items(description,start,end),nextPageToken",
+      });
+      const response = await callCalendar(
+        "GET",
+        `${CALENDAR_API_BASE}/calendars/${encodeURIComponent(listCalendarId)}/events?${params}`,
       );
+      if (!response.ok) {
+        throw await fail("목록 조회", response);
+      }
+      const body = (await response.json()) as {
+        items?: GoogleCalendarListedEvent[];
+        nextPageToken?: string;
+      };
+      if (body.nextPageToken) {
+        throw new GoogleCalendarApiError(
+          "구글 캘린더 일정 목록이 한 번에 다 오지 않았습니다.",
+          LIST_TRUNCATED_STATUS,
+        );
+      }
+      return body.items ?? [];
     },
   };
 };

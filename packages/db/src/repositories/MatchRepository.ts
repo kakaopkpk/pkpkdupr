@@ -286,12 +286,6 @@ const parseParticipantDuprSnapshot = (
 
 const REGULAR_DATE_KEY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
-/** 날짜 키의 다음 날. 구간 조회의 미포함 끝으로 쓴다 */
-const addDateKeyDay = (dateKey: string) => {
-  const [year, month, day] = dateKey.split("-").map(Number);
-  return new Date(Date.UTC(year, month - 1, day + 1)).toISOString().slice(0, 10);
-};
-
 export interface RegularSessionSkip {
   dateKey: string;
   reason: RegularSessionSkipReason;
@@ -521,7 +515,7 @@ export class MatchRepository {
     if (existing) {
       return { session: await this.toManagedSession(existing), created: false };
     }
-    if ((await this.findRegularSessionSkips(dateKey, addDateKeyDay(dateKey))).length > 0) {
+    if (await this.isRegularSessionSkipped(dateKey)) {
       return null;
     }
 
@@ -2072,6 +2066,16 @@ export class MatchRepository {
         transaction.close();
       }
     }
+  }
+
+  private async isRegularSessionSkipped(dateKey: string): Promise<boolean> {
+    const row = await this.db
+      .select({ dateKey: regularSessionSkips.dateKey })
+      .from(regularSessionSkips)
+      .where(eq(regularSessionSkips.dateKey, dateKey))
+      .limit(1)
+      .then(firstRow);
+    return row !== undefined;
   }
 
   /** from 이상 to 미만 날짜 키의 정기 회차 제외 날짜(날짜 오름차순) */
