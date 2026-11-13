@@ -1206,6 +1206,12 @@ const BottomNav: React.FC = () => {
                 className="pointer-events-none absolute inset-x-0 bottom-0 z-10 h-[calc(var(--app-bottom-dock-height)+var(--app-keyboard-offset)+5.5rem)] bg-[linear-gradient(to_bottom,transparent,color-mix(in_srgb,var(--color-pk-bg)_55%,transparent)_75%)]"
               />
 
+              {/* 바를 살짝 빗나간 터치(바 아래 여백·바 위 가장자리)가 뒤 콘텐츠로 가지 않게 막는다 */}
+              <div
+                aria-hidden="true"
+                className="absolute inset-x-0 bottom-0 z-[15] h-[calc(var(--app-bottom-dock-height)+var(--app-keyboard-offset)+12px)]"
+              />
+
               <div
                 className={`fixed left-1/2 z-20 flex app-shell-width -translate-x-1/2 flex-col gap-2.5 px-4 ${dockBottom}`}
               >
