@@ -8,7 +8,7 @@ import { buttonPressClassName } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { SectionLabel, TextLink } from "@/components/ui/Section";
 import { cx } from "@/components/ui/cx";
-import { TeamBlock } from "./TeamBlock";
+import { TeamsVersus } from "./TeamBlock";
 import type { SessionRecommendationsState } from "./useSessionRecommendations";
 
 const rowDividerClassName =
@@ -26,21 +26,16 @@ const RecommendationRow: React.FC<{
   error: string | null;
   onStart: () => void;
 }> = ({ court, isStarting, isStartDisabled, error, onStart }) => (
-  // 1행: 팀별 평균, 2행: 팀 vs 팀, 4열: 두 행에 걸친 시작 버튼
-  <div
-    className={cx(
-      "grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)_auto] items-center gap-x-2 gap-y-1 py-3",
-      rowDividerClassName,
-    )}
-  >
-    <span className="text-pk-12 text-pk-muted tabular-nums">
-      평균 {court.teams[0].averageRating.toFixed(2)}
-    </span>
-    <span aria-hidden="true" />
-    <span className="text-right text-pk-12 text-pk-muted tabular-nums">
-      평균 {court.teams[1].averageRating.toFixed(2)}
-    </span>
-    <span className="col-start-4 row-span-2 row-start-1 pl-1">
+  <div className={cx("flex flex-col gap-2.5 py-3", rowDividerClassName)}>
+    {/* 왼쪽: 팀별 평균 위에 팀 vs 팀, 오른쪽: 두 줄 높이 가운데의 시작 버튼 */}
+    <div className="flex items-center gap-3">
+      <div className="flex min-w-0 flex-1 flex-col gap-1">
+        <div className="flex justify-between gap-2 text-pk-12 text-pk-muted tabular-nums">
+          <span>평균 {court.teams[0].averageRating.toFixed(2)}</span>
+          <span>평균 {court.teams[1].averageRating.toFixed(2)}</span>
+        </div>
+        <TeamsVersus teams={[court.teams[0].players, court.teams[1].players]} />
+      </div>
       {/* 연한 파랑 36px·둥글기 12px·13/800. PkButton sm(알약·700)과 모양이 달라 직접 그린다 */}
       <button
         type="button"
@@ -53,15 +48,9 @@ const RecommendationRow: React.FC<{
       >
         {isStarting ? "시작하는 중…" : "시작"}
       </button>
-    </span>
-    <TeamBlock players={court.teams[0].players} />
-    <span className="text-pk-12 font-bold text-pk-muted">vs</span>
-    <TeamBlock players={court.teams[1].players} align="end" />
+    </div>
     {error ? (
-      <p
-        role="alert"
-        className="col-span-full pt-1.5 text-pk-13 font-medium text-pk-down"
-      >
+      <p role="alert" className="text-pk-13 font-medium text-pk-down">
         {error}
       </p>
     ) : null}

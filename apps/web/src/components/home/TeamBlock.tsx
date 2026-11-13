@@ -3,7 +3,7 @@ import { type AvatarPlayer, TeamAvatars } from "@/components/ui/PlayerAvatar";
 import { cx } from "@/components/ui/cx";
 
 /** 팀 아바타 쌍 + 이름 두 줄. 오른쪽 팀(align="end")은 아바타가 바깥쪽에 온다 */
-export const TeamBlock: React.FC<{
+const TeamBlock: React.FC<{
   players: readonly AvatarPlayer[];
   align?: "start" | "end";
   size?: 24 | 28;
