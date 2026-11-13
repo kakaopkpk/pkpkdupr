@@ -2,15 +2,11 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import type { MatchTopLevelType } from "@pkpkdupr/shared/match";
 import type {
   RankingEntry,
+  RankingEntryPlayer,
   RankingResponse,
   UnratedRankingEntry,
 } from "@pkpkdupr/shared/ranking";
 import SkeletonBlock from "@/components/SkeletonBlock";
-import {
-  SPARKLINE_TREND_LABELS,
-  Sparkline,
-  getSparklineTrend,
-} from "@/components/ranking/Sparkline";
 import { Card } from "@/components/ui/Card";
 import { RankChange } from "@/components/ui/Delta";
 import { TabHeader } from "@/components/ui/Headers";
@@ -20,9 +16,9 @@ import {
   SegmentedControl,
   type SegmentedOption,
 } from "@/components/ui/SegmentedControl";
+import { StatusMessageChip } from "@/components/ui/StatusMessageChip";
 import { cx } from "@/components/ui/cx";
 import { useAppNavigation } from "@/context/AppNavigationContext";
-import { useAuth } from "@/context/AuthContext";
 import { useTabNavigation } from "@/context/TabNavigationContext";
 import { fetchRankings } from "@/lib/rankings";
 import { formatRating } from "@/utils/dupr";
@@ -34,83 +30,69 @@ const CATEGORY_OPTIONS: readonly SegmentedOption<MatchTopLevelType>[] = [
 
 const SKELETON_ROW_COUNT = 6;
 
+// 순위 24 · 아바타 32 · 이름 · 평점 · 변동 28. 줄 좌우 여백 없이 카드 안쪽 12px에 맞춘다
 const rowGridClassName =
-  "grid w-full grid-cols-[24px_32px_minmax(0,1fr)_72px_auto_28px] items-center gap-2 rounded-pk-sm px-1.5 py-2 text-left text-pk-ink";
+  "grid min-h-[52px] w-full grid-cols-[24px_32px_minmax(0,1fr)_auto_28px] items-center gap-1.5 rounded-pk-sm py-2 text-left text-pk-ink";
+
+/** 랭킹 카드: Card 기본 좌우 여백 16을 12로 줄인다 */
+const rankingCardClassName = "px-3 py-1.5";
+
+/** 이름과 그 아래 상태메시지 칩. 상태메시지가 없으면 이름만 세로 가운데에 놓인다 */
+const PlayerNameCell: React.FC<{ player: RankingEntryPlayer }> = ({
+  player,
+}) => (
+  <span className="flex min-w-0 flex-col items-start gap-0.5">
+    <span className="max-w-full truncate text-pk-15 font-bold">
+      {player.username}
+    </span>
+    {player.statusMessage ? (
+      <StatusMessageChip
+        message={player.statusMessage}
+        color={player.statusMessageBackgroundColor}
+        size="sm"
+      />
+    ) : null}
+  </span>
+);
 
 const RankingRow: React.FC<{
   entry: RankingEntry;
-  isMe: boolean;
   onPress: () => void;
-}> = ({ entry, isMe, onPress }) => {
-  const { player } = entry;
-  const trendLabel = SPARKLINE_TREND_LABELS[getSparklineTrend(entry.trend)];
-
-  return (
-    <button
-      type="button"
-      onClick={onPress}
-      className={cx(
-        rowGridClassName,
-        isMe ? "bg-pk-primary-soft" : "active:bg-pk-bg",
-      )}
-    >
-      <span className="flex justify-center">
-        <RankBadge rank={entry.rank} />
-      </span>
-      <PlayerAvatar player={player} size={32} />
-      <span className="flex min-w-0 flex-col">
-        <span className="truncate text-pk-15 font-bold">{player.username}</span>
-        <span
-          className={cx("text-pk-12", isMe ? "text-pk-primary" : "text-pk-muted")}
-        >
-          {entry.matchCount}경기{isMe ? " · 나" : ""}
-        </span>
-      </span>
-      <span className="flex h-6 w-[72px] items-center">
-        <Sparkline
-          values={entry.trend}
-          ariaLabel={`${player.username} 90일 평점 ${trendLabel}`}
-        />
-      </span>
-      <span className="text-right text-pk-15 font-extrabold tabular-nums">
-        {formatRating(entry.rating)}
-      </span>
-      <span className="text-right">
-        <RankChange value={entry.rankChange} />
-      </span>
-    </button>
-  );
-};
-
-/** 평점 없는(NR) 회원 줄. 순위 카드 맨 아래에 순위 "–"·NR 칩으로 이어 붙고 추이·변동은 비운다 */
-const UnratedRow: React.FC<{
-  entry: UnratedRankingEntry;
-  isMe: boolean;
-  onPress: () => void;
-}> = ({ entry, isMe, onPress }) => (
+}> = ({ entry, onPress }) => (
   <button
     type="button"
     onClick={onPress}
-    className={cx(
-      rowGridClassName,
-      isMe ? "bg-pk-primary-soft" : "active:bg-pk-bg",
-    )}
+    className={cx(rowGridClassName, "active:bg-pk-bg")}
+  >
+    <span className="flex justify-center">
+      <RankBadge rank={entry.rank} />
+    </span>
+    <PlayerAvatar player={entry.player} size={32} />
+    <PlayerNameCell player={entry.player} />
+    <span className="text-right text-pk-15 font-extrabold tabular-nums">
+      {formatRating(entry.rating)}
+    </span>
+    <span className="text-right">
+      <RankChange value={entry.rankChange} />
+    </span>
+  </button>
+);
+
+/** 평점 없는(NR) 회원 줄. 순위 카드 맨 아래에 순위 "–"·NR 칩으로 이어 붙고 변동은 비운다 */
+const UnratedRow: React.FC<{
+  entry: UnratedRankingEntry;
+  onPress: () => void;
+}> = ({ entry, onPress }) => (
+  <button
+    type="button"
+    onClick={onPress}
+    className={cx(rowGridClassName, "active:bg-pk-bg")}
   >
     <span className="flex justify-center text-pk-13 font-extrabold text-pk-muted">
       –
     </span>
     <PlayerAvatar player={entry.player} size={32} />
-    <span className="flex min-w-0 flex-col">
-      <span className="truncate text-pk-15 font-bold">
-        {entry.player.username}
-      </span>
-      <span
-        className={cx("text-pk-12", isMe ? "text-pk-primary" : "text-pk-muted")}
-      >
-        {entry.matchCount}경기{isMe ? " · 나" : ""}
-      </span>
-    </span>
-    <span />
+    <PlayerNameCell player={entry.player} />
     <span className="flex justify-end">
       <span className="rounded-full bg-pk-neutral px-2 py-0.5 text-pk-12 font-extrabold text-pk-muted">
         NR
@@ -129,17 +111,17 @@ const sortUnrated = (entries: readonly UnratedRankingEntry[]) =>
   );
 
 const RankingSkeleton: React.FC = () => (
-  <Card className="px-2 py-1.5">
+  <Card className={rankingCardClassName}>
     {Array.from({ length: SKELETON_ROW_COUNT }, (_, index) => (
-      <div key={index} className="flex items-center gap-2 px-1.5 py-2">
+      <div key={index} className={rowGridClassName}>
         <SkeletonBlock className="size-6 rounded-full" />
         <SkeletonBlock className="size-8 rounded-full" />
-        <div className="flex flex-1 flex-col gap-1">
+        <div className="flex min-w-0 flex-col gap-1">
           <SkeletonBlock className="h-4 w-24" />
-          <SkeletonBlock className="h-3 w-12" />
+          <SkeletonBlock className="h-3 w-16" />
         </div>
-        <SkeletonBlock className="h-6 w-[72px]" />
         <SkeletonBlock className="h-4 w-11" />
+        <span />
       </div>
     ))}
   </Card>
@@ -147,7 +129,6 @@ const RankingSkeleton: React.FC = () => (
 
 /** 랭킹 탭. 순위·변동은 서버가 계산한 값을 그대로 보인다 */
 const Ranking: React.FC = () => {
-  const { player } = useAuth();
   const { openMemberProfile, dataVersion } = useAppNavigation();
   const { registerPullToRefresh } = useTabNavigation();
   const [category, setCategory] = useState<MatchTopLevelType>("doubles");
@@ -182,7 +163,6 @@ const Ranking: React.FC = () => {
 
   // 분류를 바꾼 직후에는 이전 분류 결과 대신 스켈레톤을 보인다
   const currentRanking = ranking?.category === category ? ranking : null;
-  const myPlayerId = player?.id;
 
   return (
     <div className="pb-6">
@@ -205,12 +185,11 @@ const Ranking: React.FC = () => {
           <>
             {currentRanking.entries.length + currentRanking.unrated.length >
             0 ? (
-              <Card className="px-2 py-1.5">
+              <Card className={rankingCardClassName}>
                 {currentRanking.entries.map((entry) => (
                   <RankingRow
                     key={entry.player.id}
                     entry={entry}
-                    isMe={entry.player.id === myPlayerId}
                     onPress={() => openMemberProfile(entry.player.id)}
                   />
                 ))}
@@ -218,7 +197,6 @@ const Ranking: React.FC = () => {
                   <UnratedRow
                     key={entry.player.id}
                     entry={entry}
-                    isMe={entry.player.id === myPlayerId}
                     onPress={() => openMemberProfile(entry.player.id)}
                   />
                 ))}
