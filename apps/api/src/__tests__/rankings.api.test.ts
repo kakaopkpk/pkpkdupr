@@ -41,6 +41,8 @@ const session: SessionWithParticipantIds = {
   date: new Date("2026-11-09T09:00:00.000Z"),
   location: "야탑초등학교",
   kind: "regular",
+  startTime: null,
+  endTime: null,
   participantIds: [alice.id, bob.id],
 };
 const emptySession: SessionWithParticipantIds = {

@@ -108,6 +108,9 @@ export interface SessionWithParticipantIds {
   date: Date;
   location: string;
   kind: ManagedMatchSession["kind"];
+  /** 회원 세션 시각("HH:MM", KST). 자정 넘김 세션의 만료 판정에 쓴다 */
+  startTime: string | null;
+  endTime: string | null;
   participantIds: string[];
 }
 
@@ -950,6 +953,8 @@ export class MatchRepository {
         date: toDate(session.date),
         location: session.location,
         kind: toSessionKind(session),
+        startTime: session.startTime ?? null,
+        endTime: session.endTime ?? null,
         participantIds: participantIdsBySessionId.get(session.id) ?? [],
       }),
     );
