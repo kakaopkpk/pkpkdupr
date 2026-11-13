@@ -60,6 +60,8 @@
   --animate-pk-spin-slow: pk-spin-slow 6s linear infinite both;
   --animate-pk-rise-in: pk-rise-in 320ms var(--ease-pk-pop) both;
   --animate-pk-sink-out: pk-sink-out 260ms var(--ease-pk-move) both;
+  /* 제자리에서 한 번 까딱인다. 기준점(transform-origin)은 소비처가 정한다 */
+  --animate-pk-wobble: pk-wobble 600ms var(--ease-pk-move) both;
 
   @keyframes nav-icon-pop {
     30% {
@@ -145,6 +147,19 @@
     to {
       opacity: 0;
       transform: translateY(100%);
+    }
+  }
+
+  @keyframes pk-wobble {
+    0%,
+    100% {
+      transform: rotate(0);
+    }
+    33% {
+      transform: rotate(-14deg);
+    }
+    66% {
+      transform: rotate(8deg);
     }
   }
 }

@@ -10,6 +10,7 @@ import type { MatchInfo } from "@/types/match";
 import { PkButton } from "@/components/ui/Button";
 import { CountUpText } from "@/components/ui/CountUpText";
 import { RatingDelta } from "@/components/ui/Delta";
+import { SheenOverlay } from "@/components/ui/SheenOverlay";
 import { PlayerAvatar, TeamAvatars } from "@/components/ui/PlayerAvatar";
 import { cx } from "@/components/ui/cx";
 import { useAppNavigation } from "@/context/AppNavigationContext";
@@ -189,11 +190,7 @@ export default function RecordDoneStep({
                 </span>
                 {isPlaying ? (
                   // 띠 위로 한 번 지나가는 흰 빛. 띠의 overflow-hidden이 밖으로 넘치지 않게 자른다
-                  <span
-                    aria-hidden="true"
-                    style={{ animationDelay: `${ACHIEVEMENT_DELAY_MS}ms` }}
-                    className="pointer-events-none absolute inset-0 animate-pk-sheen bg-linear-to-r from-transparent via-white/70 to-transparent motion-reduce:hidden"
-                  />
+                  <SheenOverlay delayMs={ACHIEVEMENT_DELAY_MS} />
                 ) : null}
               </button>
             ))}
