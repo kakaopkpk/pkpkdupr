@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
+import { cx } from "@/components/ui/cx";
 
 /** 길게 눌러 확인하는 기본 시간 */
 export const HOLD_TO_CONFIRM_DURATION_MS = 1000;
@@ -147,23 +148,19 @@ const HoldToConfirmButton: React.FC<HoldToConfirmButtonProps> = ({
       onPointerLeave={stopHold}
       onPointerCancel={stopHold}
       onContextMenu={(event) => event.preventDefault()}
-      className={[
+      className={cx(
         "relative flex w-full select-none items-center overflow-hidden transition-colors touch-manipulation",
         variantClasses.button,
         className,
-      ]
-        .filter(Boolean)
-        .join(" ")}
+      )}
       style={{ WebkitTouchCallout: "none" }}
     >
       <span
         aria-hidden="true"
-        className={[
+        className={cx(
           "pointer-events-none absolute inset-y-0 left-0 w-full origin-left",
           progressClassName ?? variantClasses.progress,
-        ]
-          .filter(Boolean)
-          .join(" ")}
+        )}
         style={{ transform: `scaleX(${progress})` }}
       />
       {variantClasses.edge && progress > 0 ? (
