@@ -1,9 +1,13 @@
 import React from "react";
 import type { MatchTopLevelType } from "@pkpkdupr/shared/match";
 import { Card } from "@/components/ui/Card";
-import { RatingDelta } from "@/components/ui/Delta";
+import {
+  CountUpRating,
+  CountUpRatingDelta,
+} from "@/components/ui/CountUpNumber";
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import RatingTrendChart, {
+  LINE_DRAW_MS,
   type RatingTrendPoint,
 } from "@/components/profile/RatingTrendChart";
 
@@ -17,7 +21,10 @@ export const PROFILE_CATEGORY_OPTIONS = [
   { value: "singles", label: CATEGORY_LABELS.singles },
 ] as const satisfies readonly { value: MatchTopLevelType; label: string }[];
 
-/** 랭킹·평점·30일 변화·30일 추이 차트와 복식/단식 전환 */
+/**
+ * 랭킹·평점·30일 변화·30일 추이 차트와 복식/단식 전환.
+ * 평점과 30일 변화는 차트 선 그리기와 함께 0부터 센다. 분류를 바꾸면 key로 다시 마운트해 처음부터 재생한다
+ */
 const ProfileRatingCard: React.FC<{
   category: MatchTopLevelType;
   onCategoryChange: (category: MatchTopLevelType) => void;
@@ -42,14 +49,27 @@ const ProfileRatingCard: React.FC<{
     </div>
     <div className="flex items-baseline justify-between gap-2">
       <span className="font-num text-[56px] font-bold leading-[0.95] tabular-nums text-pk-ink">
-        {rating !== null ? rating.toFixed(3) : "–"}
+        {rating !== null ? (
+          <CountUpRating
+            key={category}
+            value={rating}
+            durationMs={LINE_DRAW_MS}
+          />
+        ) : (
+          "–"
+        )}
       </span>
       <span className="whitespace-nowrap">
         <span className="text-pk-13 font-medium text-pk-sub">30일</span>{" "}
-        <RatingDelta value={last30Days} />
+        <CountUpRatingDelta
+          key={category}
+          value={last30Days}
+          durationMs={LINE_DRAW_MS}
+        />
       </span>
     </div>
     <RatingTrendChart
+      key={category}
       points={history}
       ariaLabel={`최근 30일 ${CATEGORY_LABELS[category]} 평점 추세`}
     />

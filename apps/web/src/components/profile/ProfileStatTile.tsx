@@ -1,6 +1,9 @@
 import React from "react";
 import { Card } from "@/components/ui/Card";
 
+/** 통계 타일 숫자의 카운트업 시작·길이(ms). 평점 카드보다 조금 늦게 따라온다 */
+export const PROFILE_STAT_COUNT = { delayMs: 150, durationMs: 500 } as const;
+
 /** 라벨·큰 값·보조 문구로 된 통계 타일 */
 const ProfileStatTile: React.FC<{
   label: string;

@@ -3,9 +3,12 @@ import type { MatchTopLevelType } from "@pkpkdupr/shared/match";
 import type { MatchInfo } from "@/types/match";
 import SkeletonBlock from "@/components/SkeletonBlock";
 import ProfileRatingCard from "@/components/profile/ProfileRatingCard";
-import ProfileStatTile from "@/components/profile/ProfileStatTile";
+import ProfileStatTile, {
+  PROFILE_STAT_COUNT,
+} from "@/components/profile/ProfileStatTile";
 import type { ProfileOverview } from "@/components/profile/useProfileOverview";
 import { Card } from "@/components/ui/Card";
+import { CountUpInteger } from "@/components/ui/CountUpNumber";
 import { MatchRow } from "@/components/ui/MatchRow";
 import { SectionLabel, TextLink } from "@/components/ui/Section";
 import { useAppNavigation } from "@/context/AppNavigationContext";
@@ -46,7 +49,7 @@ export const ProfileRatingSection: React.FC<{
   );
 };
 
-/** 선택 분류의 경기 승률 타일 */
+/** 선택 분류의 경기 승률 타일. 승률·승패를 0부터 센다(분류를 바꾸면 호출부가 key로 다시 재생한다) */
 export const WinRateTile: React.FC<{
   overview: ProfileOverview;
   category: MatchTopLevelType;
@@ -56,8 +59,25 @@ export const WinRateTile: React.FC<{
   return (
     <ProfileStatTile
       label="경기 승률"
-      value={total > 0 ? `${Math.round((matchWins / total) * 100)}%` : "–"}
-      foot={`${matchWins}승 ${matchLosses}패`}
+      value={
+        total > 0 ? (
+          <>
+            <CountUpInteger
+              value={Math.round((matchWins / total) * 100)}
+              {...PROFILE_STAT_COUNT}
+            />
+            %
+          </>
+        ) : (
+          "–"
+        )
+      }
+      foot={
+        <>
+          <CountUpInteger value={matchWins} {...PROFILE_STAT_COUNT} />승{" "}
+          <CountUpInteger value={matchLosses} {...PROFILE_STAT_COUNT} />패
+        </>
+      }
     />
   );
 };

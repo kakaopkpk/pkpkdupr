@@ -5,7 +5,9 @@ import AchievementsScreen from "@/components/profile/AchievementsScreen";
 import AchievementsSection from "@/components/profile/AchievementsSection";
 import PartnerChemistryCard from "@/components/profile/PartnerChemistryCard";
 import PlayerMatchesDrawer from "@/components/profile/PlayerMatchesDrawer";
-import ProfileStatTile from "@/components/profile/ProfileStatTile";
+import ProfileStatTile, {
+  PROFILE_STAT_COUNT,
+} from "@/components/profile/ProfileStatTile";
 import RivalCard from "@/components/profile/RivalCard";
 import {
   ProfileBodySkeleton,
@@ -15,7 +17,10 @@ import {
   WinRateTile,
 } from "@/components/profile/ProfileSections";
 import { useProfileOverview } from "@/components/profile/useProfileOverview";
-import { RatingDelta } from "@/components/ui/Delta";
+import {
+  CountUpInteger,
+  CountUpRatingDelta,
+} from "@/components/ui/CountUpNumber";
 import { PlayerAvatar } from "@/components/ui/PlayerAvatar";
 import { SectionLabel } from "@/components/ui/Section";
 import { StatusMessageChip } from "@/components/ui/StatusMessageChip";
@@ -116,16 +121,31 @@ const Me: React.FC = () => {
               fallbackRating={player?.duprRating?.[category] ?? null}
             />
             <div className="grid grid-cols-2 gap-2.5">
-              <WinRateTile overview={overview} category={category} />
+              {/* 분류를 바꾸면 key로 다시 마운트해 카운트업을 처음부터 재생한다 */}
+              <WinRateTile
+                key={`win-${category}`}
+                overview={overview}
+                category={category}
+              />
               <ProfileStatTile
+                key={`last7-${category}`}
                 label="최근 7일"
                 value={
-                  <RatingDelta
+                  <CountUpRatingDelta
                     value={ratingDelta.last7Days}
                     className="text-pk-22 leading-[1.4]"
+                    {...PROFILE_STAT_COUNT}
                   />
                 }
-                foot={`${ratingDelta.last7DaysMatchCount}경기`}
+                foot={
+                  <>
+                    <CountUpInteger
+                      value={ratingDelta.last7DaysMatchCount}
+                      {...PROFILE_STAT_COUNT}
+                    />
+                    경기
+                  </>
+                }
               />
             </div>
             {partners.length > 0 ? (
