@@ -5,21 +5,29 @@ import type { MatchSessionKind } from "./session.js";
 
 export type RankingPlayer = Pick<Player, "id" | "username" | "avatarUrl">;
 
+/** 랭킹 줄 회원. 상태메시지가 없으면 필드를 생략한다(Player와 같은 규칙) */
+export type RankingEntryPlayer = Pick<
+  Player,
+  | "id"
+  | "username"
+  | "avatarUrl"
+  | "statusMessage"
+  | "statusMessageBackgroundColor"
+>;
+
 export interface RankingEntry {
   /** 1부터 연속 */
   rank: number;
-  player: RankingPlayer;
+  player: RankingEntryPlayer;
   rating: number;
   /** 이 분류의 완료 경기 수 */
   matchCount: number;
   /** 기준 순위 - 현재 순위. 양수=상승, 0=보합, null=기준 시점에 순위 없음 */
   rankChange: number | null;
-  /** 최근 90일 평점 추이(오래된 순) */
-  trend: number[];
 }
 
 export interface UnratedRankingEntry {
-  player: RankingPlayer;
+  player: RankingEntryPlayer;
   matchCount: number;
 }
 

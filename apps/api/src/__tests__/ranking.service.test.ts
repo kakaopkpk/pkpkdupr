@@ -273,11 +273,14 @@ describe("buildRankingResponse", () => {
   const completedAt = at("2026-11-09T10:00:00Z");
   const session = makeSession("Ssessio1", sessionDate);
   const players = [
-    makePlayer("Palice01", "alice", 3.6),
+    makePlayer("Palice01", "alice", 3.6, {
+      statusMessage: "오늘도 화이팅",
+      statusMessageBackgroundColor: "blue",
+    }),
     makePlayer("Pbob0001", "bob", 3.5),
     makePlayer("Pcarol01", "carol", 3.5),
     makePlayer("Pnewbie1", "newbie", 3.08),
-    makePlayer("Pnr00001", "nr", null),
+    makePlayer("Pnr00001", "nr", null, { statusMessage: "복귀했어요" }),
   ];
   const logs = [
     makeLog("Palice01", "Mmatch01", completedAt, 3.5, 3.6),
@@ -303,7 +306,6 @@ describe("buildRankingResponse", () => {
       context,
       category: "doubles",
       sessions: [session],
-      trendByPlayerId: new Map([["Palice01", [3.5, 3.6]]]),
       now,
     });
 
@@ -320,11 +322,27 @@ describe("buildRankingResponse", () => {
       ["carol", 3, -2],
       ["newbie", 4, null],
     ]);
-    expect(response.entries[0]?.trend).toEqual([3.5, 3.6]);
-    expect(response.entries[1]?.trend).toEqual([]);
+    expect(response.entries[0]).not.toHaveProperty("trend");
+    // 상태메시지는 값이 있을 때만 싣는다
+    expect(response.entries[0]?.player).toEqual({
+      id: "Palice01",
+      username: "alice",
+      avatarUrl: undefined,
+      statusMessage: "오늘도 화이팅",
+      statusMessageBackgroundColor: "blue",
+    });
+    expect(response.entries[1]?.player).not.toHaveProperty("statusMessage");
+    expect(response.entries[1]?.player).not.toHaveProperty(
+      "statusMessageBackgroundColor",
+    );
     expect(response.unrated).toEqual([
       {
-        player: { id: "Pnr00001", username: "nr", avatarUrl: undefined },
+        player: {
+          id: "Pnr00001",
+          username: "nr",
+          avatarUrl: undefined,
+          statusMessage: "복귀했어요",
+        },
         matchCount: 0,
       },
     ]);
@@ -340,7 +358,6 @@ describe("buildRankingResponse", () => {
       context,
       category: "doubles",
       sessions: [session],
-      trendByPlayerId: new Map(),
       now,
     });
 
