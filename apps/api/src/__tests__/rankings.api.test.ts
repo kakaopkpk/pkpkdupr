@@ -144,7 +144,8 @@ describe("랭킹·세션 리포트 API", () => {
           rating: 3.6,
           matchCount: 1,
           rankChange: 1,
-          trend: [3.4, 3.6],
+          // 마지막 경기 뒤 지금 시각의 현재 평점 끝점이 붙는다
+          trend: [3.4, 3.6, 3.6],
         },
         {
           rank: 2,
@@ -152,7 +153,8 @@ describe("랭킹·세션 리포트 API", () => {
           rating: 3.4,
           matchCount: 1,
           rankChange: -1,
-          trend: [3.4, 3.6],
+          // 마지막 경기 뒤 지금 시각의 현재 평점 끝점이 붙는다
+          trend: [3.4, 3.6, 3.6],
         },
       ],
       unrated: [],

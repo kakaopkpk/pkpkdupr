@@ -100,7 +100,10 @@ import {
 } from "./services/AuthService";
 import {
   attachMatchRatingChanges,
+  PROFILE_RATING_TREND_WINDOW_DAYS,
   PlayerRatingChartProjectionService,
+  buildRankingRatingTrend,
+  selectRatingTrendWindow,
 } from "./services/PlayerRatingChartProjectionService";
 import { buildPlayerProfileSummary } from "./services/PlayerProfileSummaryService";
 import {
@@ -1045,7 +1048,10 @@ app.get("/api/players/:playerId/profile-summary", async (req, res) => {
       buildPlayerProfileSummary(
         matches,
         playerId,
-        projection.history,
+        selectRatingTrendWindow(
+          projection.history,
+          PROFILE_RATING_TREND_WINDOW_DAYS,
+        ),
         decoded.playerId,
         now,
         dominations?.get(playerId),
@@ -2597,7 +2603,7 @@ const loadRankingSource = async () => {
   return { context: createRankingContext(players, logs, matches), sessions };
 };
 
-/** 프로필 차트와 같은 90일 projection의 평점 값. 없는 선수만 하나씩 다시 만든다 */
+/** 경기일별 평점 projection을 90일 추이로 압축한 평점 값. 없는 선수만 하나씩 다시 만든다 */
 const loadRatingTrends = async (
   playerIds: string[],
   category: MatchTopLevelType,
@@ -2608,13 +2614,16 @@ const loadRatingTrends = async (
     ),
   );
   const trends = new Map<string, number[]>();
+  const now = new Date();
   for (const [index, playerId] of playerIds.entries()) {
     const projection =
       projections[index] ??
       (await playerRatingChartProjectionService.rebuildPlayer(playerId));
     trends.set(
       playerId,
-      projection.history[category].map((point) => point.rating),
+      buildRankingRatingTrend(projection.history, now)[category].map(
+        (point) => point.rating,
+      ),
     );
   }
   return trends;
