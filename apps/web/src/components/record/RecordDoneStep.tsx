@@ -16,6 +16,7 @@ import { useAppNavigation } from "@/context/AppNavigationContext";
 import { useAuth } from "@/context/AuthContext";
 import { useCountUp } from "@/hooks/useCountUp";
 import { usePlayOnShow } from "@/hooks/usePlayOnShow";
+import { prefersReducedMotion } from "@/hooks/useSheetDrag";
 import { getAchievementDefinition } from "@/lib/achievements";
 import { formatRating } from "@/utils/dupr";
 import AchievementCelebration from "./AchievementCelebration";
@@ -233,7 +234,8 @@ export default function RecordDoneStep({
       {viewer && myNewAchievements.length > 0 && isCelebrationOpen ? (
         <AchievementCelebration
           achievements={myNewAchievements}
-          delayMs={CELEBRATION_DELAY_MS}
+          // 움직임 줄이기면 평점 세기가 없으므로 바로 띄운다
+          delayMs={prefersReducedMotion() ? 0 : CELEBRATION_DELAY_MS}
           onClose={() => setIsCelebrationOpen(false)}
         />
       ) : null}

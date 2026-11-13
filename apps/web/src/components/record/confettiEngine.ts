@@ -7,10 +7,8 @@ export interface ConfettiPiece {
   /** 지난 시간. 음수면 그만큼 기다렸다 나타난다 */
   t: number;
   life: number;
-  gravity: number;
   /** 60fps 한 프레임당 속도 감쇠 비율 */
   drag: number;
-  maxFallSpeed: number;
   rotation: number;
   rotationSpeed: number;
   /** 종이가 뒤집히는 위상. 세로 폭을 cos(flip)로 줄여 그린다 */
@@ -27,6 +25,16 @@ export interface ConfettiPiece {
   isFront: boolean;
 }
 
+const GRAVITY = 900;
+const MAX_FALL_SPEED = 520;
+// 배지 중심 폭발: 조각 수와 속도 범위(px/s)
+const BURST_COUNT = 80;
+const BURST_MIN_SPEED = 380;
+const BURST_MAX_SPEED = 920;
+// 모서리 폭죽: 한 발의 조각 수와 속도 범위(px/s)
+const POPPER_COUNT = 38;
+const POPPER_MIN_SPEED = 780;
+const POPPER_MAX_SPEED = 1150;
 /** 사라지기 전 서서히 투명해지는 시간(초) */
 const FADE_OUT_SECONDS = 0.5;
 /** 화면 아래로 이만큼 벗어나면 지운다 */
@@ -44,9 +52,7 @@ function createPiece(
   return {
     t: 0,
     life: random(2.2, 3.2),
-    gravity: 900,
     drag: 0.965,
-    maxFallSpeed: 520,
     rotation: random(0, Math.PI * 2),
     rotationSpeed: random(-9, 9),
     flip: random(0, Math.PI * 2),
@@ -73,7 +79,7 @@ export function stepConfettiPiece(
   if (piece.t < 0) return true;
   const decay = Math.pow(piece.drag, dt * 60);
   piece.vx *= decay;
-  piece.vy = Math.min(piece.vy * decay + piece.gravity * dt, piece.maxFallSpeed);
+  piece.vy = Math.min(piece.vy * decay + GRAVITY * dt, MAX_FALL_SPEED);
   piece.sway += dt * piece.swaySpeed;
   piece.x += (piece.vx + Math.sin(piece.sway) * piece.swayAmount) * dt;
   piece.y += piece.vy * dt;
@@ -85,7 +91,7 @@ export function stepConfettiPiece(
 function drawPiece(context: CanvasRenderingContext2D, piece: ConfettiPiece) {
   const remaining = piece.life - piece.t;
   context.save();
-  context.globalAlpha = remaining < FADE_OUT_SECONDS ? Math.max(0, remaining / FADE_OUT_SECONDS) : 1;
+  context.globalAlpha = Math.min(1, remaining / FADE_OUT_SECONDS);
   context.translate(piece.x, piece.y);
   context.rotate(piece.rotation);
   context.scale(1, Math.cos(piece.flip));
@@ -101,14 +107,12 @@ function drawPiece(context: CanvasRenderingContext2D, piece: ConfettiPiece) {
 }
 
 export interface ConfettiEngine {
-  readonly width: number;
-  readonly height: number;
   /** 캔버스 크기를 지금 화면 크기에 맞춘다 */
   resize: () => void;
   /** (x, y)에서 사방으로 터진다 */
-  burst: (x: number, y: number, count: number, minSpeed: number, maxSpeed: number) => void;
+  burst: (x: number, y: number) => void;
   /** (x, y)에서 위쪽으로 쏘아 올린다. direction 1은 오른쪽 위, -1은 왼쪽 위 */
-  popper: (x: number, y: number, direction: 1 | -1, count: number) => void;
+  popper: (x: number, y: number, direction: 1 | -1) => void;
   destroy: () => void;
 }
 
@@ -170,17 +174,11 @@ export function createConfettiEngine(
   resize();
 
   return {
-    get width() {
-      return width;
-    },
-    get height() {
-      return height;
-    },
     resize,
-    burst(x, y, count, minSpeed, maxSpeed) {
-      for (let i = 0; i < count; i += 1) {
+    burst(x, y) {
+      for (let i = 0; i < BURST_COUNT; i += 1) {
         const angle = random(0, Math.PI * 2);
-        const speed = random(minSpeed, maxSpeed);
+        const speed = random(BURST_MIN_SPEED, BURST_MAX_SPEED);
         add(
           createPiece(colors, {
             x,
@@ -193,10 +191,10 @@ export function createConfettiEngine(
         );
       }
     },
-    popper(x, y, direction, count) {
-      for (let i = 0; i < count; i += 1) {
+    popper(x, y, direction) {
+      for (let i = 0; i < POPPER_COUNT; i += 1) {
         const angle = -Math.PI / 2 + direction * random(0.22, 0.62);
-        const speed = random(780, 1150);
+        const speed = random(POPPER_MIN_SPEED, POPPER_MAX_SPEED);
         add(
           createPiece(colors, {
             x,
