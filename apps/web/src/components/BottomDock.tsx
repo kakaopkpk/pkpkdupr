@@ -2,10 +2,6 @@ import React, { useEffect, useRef, useState } from "react";
 import type { MatchInfo } from "@/types/match";
 import type { TabKey } from "@/context/TabNavigationContext";
 
-/** 하단 바·미니바 공통 유리 알약 */
-export const GLASS_CLASS_NAME =
-  "border border-pk-ink/6 bg-white/60 shadow-[0_6px_20px] shadow-pk-ink/10 backdrop-blur-[20px] backdrop-saturate-[180%]";
-
 const svgProps = {
   viewBox: "0 0 24 24",
   fill: "none",
@@ -49,12 +45,6 @@ export const PlusIcon = () => (
   </svg>
 );
 
-export const CloseIcon = () => (
-  <svg width="26" height="26" strokeWidth={2.4} {...svgProps}>
-    <path d="M6 6l12 12M18 6L6 18" />
-  </svg>
-);
-
 const ScoreIcon = () => (
   <svg width="20" height="20" strokeWidth={2} {...svgProps}>
     <rect x="4" y="4" width="16" height="16" rx="3" />
@@ -83,40 +73,68 @@ export const TAB_ITEMS: {
 export const getTabId = (tabKey: TabKey) => `app-tab-${tabKey}`;
 export const getTabPanelId = (tabKey: TabKey) => `app-tab-panel-${tabKey}`;
 
-/** 유리 알약 4탭. 높이 66px */
+/** 유리 알약 4탭. 높이 66px. 선택 배경 하나가 탭 사이를 미끄러져 이동한다 */
 export const NavPill: React.FC<{
   selectedTab: TabKey;
   onPressTab: (tabKey: TabKey) => void;
-}> = ({ selectedTab, onPressTab }) => (
-  <div
-    role="tablist"
-    aria-label="주 메뉴"
-    className={`grid h-[66px] min-w-0 flex-1 grid-cols-4 rounded-full p-[5px] ${GLASS_CLASS_NAME}`}
-  >
-    {TAB_ITEMS.map(({ key, label, Icon }) => {
-      const isSelected = key === selectedTab;
-      return (
-        <button
-          key={key}
-          type="button"
-          role="tab"
-          id={getTabId(key)}
-          aria-selected={isSelected}
-          aria-controls={getTabPanelId(key)}
-          onClick={() => onPressTab(key)}
-          className={`flex min-w-0 flex-col items-center justify-center gap-0.5 rounded-full text-pk-12 touch-manipulation ${
-            isSelected
-              ? "bg-pk-primary-soft font-extrabold text-pk-primary"
-              : "font-bold text-pk-sub"
-          }`}
-        >
-          <Icon />
-          {label}
-        </button>
-      );
-    })}
-  </div>
-);
+}> = ({ selectedTab, onPressTab }) => {
+  // 누른 탭 아이콘만 튕긴다. count를 key로 써서 같은 탭을 다시 눌러도 애니메이션을 처음부터 돌린다
+  const [pressedIcon, setPressedIcon] = useState<{
+    tabKey: TabKey;
+    count: number;
+  } | null>(null);
+  const selectedIndex = TAB_ITEMS.findIndex(
+    (item) => item.key === selectedTab,
+  );
+
+  return (
+    <div
+      role="tablist"
+      aria-label="주 메뉴"
+      className="app-glass grid h-[66px] min-w-0 flex-1 grid-cols-4 overflow-hidden rounded-full p-[5px]"
+    >
+      <span
+        aria-hidden="true"
+        style={{ transform: `translateX(${selectedIndex * 100}%)` }}
+        className="absolute inset-y-[5px] left-[5px] w-[calc((100%-10px)/4)] rounded-full bg-pk-primary-soft transition-transform duration-[460ms] ease-pk-spring motion-reduce:transition-none"
+      />
+      {TAB_ITEMS.map(({ key, label, Icon }) => {
+        const isSelected = key === selectedTab;
+        const isIconPopping = pressedIcon?.tabKey === key;
+        return (
+          <button
+            key={key}
+            type="button"
+            role="tab"
+            id={getTabId(key)}
+            aria-selected={isSelected}
+            aria-controls={getTabPanelId(key)}
+            onClick={() => {
+              setPressedIcon((prev) => ({
+                tabKey: key,
+                count: (prev?.count ?? 0) + 1,
+              }));
+              onPressTab(key);
+            }}
+            className={`relative flex min-w-0 flex-col items-center justify-center gap-0.5 rounded-full text-pk-12 transition-colors duration-200 touch-manipulation motion-reduce:transition-none ${
+              isSelected
+                ? "font-extrabold text-pk-primary"
+                : "font-bold text-pk-sub"
+            }`}
+          >
+            <span
+              key={isIconPopping ? pressedIcon.count : 0}
+              className={`flex ${isIconPopping ? "animate-nav-icon-pop motion-reduce:animate-none" : ""}`}
+            >
+              <Icon />
+            </span>
+            {label}
+          </button>
+        );
+      })}
+    </div>
+  );
+};
 
 /** + 버튼과 그 위에 뜨는 "새로 만들기" 메뉴 */
 export const PlusMenu: React.FC<{
@@ -139,11 +157,12 @@ export const PlusMenu: React.FC<{
 
   return (
     <div className="relative">
+      {/* 메뉴는 + 버튼(66px) 위 14px에 뜨고, 버튼 가운데(오른쪽 33px, 아래 14+33px)에서 커지며 나온다 */}
       {isOpen ? (
         <div
           role="menu"
           aria-label="새로 만들기"
-          className="absolute right-0 bottom-[calc(66px+14px)] w-[220px] rounded-pk-lg bg-white py-1.5 shadow-[0_12px_32px] shadow-pk-ink/20"
+          className="absolute right-0 bottom-[calc(66px+14px)] w-[220px] origin-[calc(100%-33px)_calc(100%+47px)] animate-plus-menu-pop motion-reduce:animate-none rounded-pk-lg bg-white py-1.5 shadow-[0_12px_32px] shadow-pk-ink/20"
         >
           <button
             ref={firstItemRef}
@@ -179,9 +198,14 @@ export const PlusMenu: React.FC<{
         aria-haspopup="menu"
         aria-expanded={isOpen}
         onClick={onToggle}
-        className="flex size-[66px] shrink-0 items-center justify-center rounded-full bg-pk-primary text-white shadow-[0_8px_18px] shadow-pk-ink/18 touch-manipulation"
+        className="flex size-[66px] shrink-0 items-center justify-center rounded-full bg-pk-primary text-white shadow-[0_8px_18px] shadow-pk-ink/18 transition-transform duration-200 touch-manipulation active:scale-[0.92] motion-reduce:transition-none motion-reduce:active:scale-100"
       >
-        {isOpen ? <CloseIcon /> : <PlusIcon />}
+        {/* 열리면 +를 돌려 ×로 만든다 */}
+        <span
+          className={`flex transition-transform duration-[380ms] ease-pk-spring motion-reduce:transition-none ${isOpen ? "rotate-[135deg]" : ""}`}
+        >
+          <PlusIcon />
+        </span>
       </button>
     </div>
   );
@@ -198,7 +222,7 @@ const DockBar: React.FC<{
 }> = ({ title, description, actionLabel, isActionDisabled, onAction, role }) => (
   <div
     role={role}
-    className={`flex h-[60px] items-center gap-2.5 rounded-full pr-[7px] pl-4 ${GLASS_CLASS_NAME}`}
+    className="app-glass flex h-[60px] items-center gap-2.5 rounded-full pr-[7px] pl-4"
   >
     <span
       aria-hidden="true"

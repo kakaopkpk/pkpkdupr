@@ -1177,10 +1177,10 @@ const BottomNav: React.FC = () => {
                 })}
               </div>
 
-              {/* 바 뒤 콘텐츠가 흐려지며 끝나게 한다 */}
+              {/* 바 뒤 콘텐츠가 흐려지며 끝나게 한다. 유리 바 뒤로 콘텐츠가 비치도록 끝까지 가리지는 않는다 */}
               <div
                 aria-hidden="true"
-                className="pointer-events-none absolute inset-x-0 bottom-0 z-10 h-[calc(var(--app-bottom-dock-height)+var(--app-keyboard-offset)+5.5rem)] bg-[linear-gradient(to_bottom,transparent,var(--color-pk-bg)_62%)]"
+                className="pointer-events-none absolute inset-x-0 bottom-0 z-10 h-[calc(var(--app-bottom-dock-height)+var(--app-keyboard-offset)+5.5rem)] bg-[linear-gradient(to_bottom,transparent,color-mix(in_srgb,var(--color-pk-bg)_55%,transparent)_75%)]"
               />
 
               <div
