@@ -28,7 +28,10 @@ export const RatingDelta: React.FC<{
 };
 
 /** 순위 변화. 양수 ▲n 초록, 음수 ▼n 빨강, 0·null "–" 회색 */
-export const RankChange: React.FC<{ value: number | null }> = ({ value }) => {
+export const RankChange: React.FC<{
+  value: number | null;
+  className?: string;
+}> = ({ value, className }) => {
   const label =
     value === null || value === 0
       ? "–"
@@ -41,6 +44,7 @@ export const RankChange: React.FC<{ value: number | null }> = ({ value }) => {
       className={cx(
         "text-pk-12 font-bold tabular-nums",
         getDeltaColorClassName(value),
+        className,
       )}
     >
       {label}
