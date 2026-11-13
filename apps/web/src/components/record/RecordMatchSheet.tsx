@@ -34,6 +34,7 @@ export interface RecordMatchSheetProps {
 }
 
 const DEPTH_ID = "global-record-match-sheet";
+const SCORE_MATCH_LOAD_FAILED = "경기를 불러오지 못했어요";
 
 // sheetKey는 이 상태를 받은 요청. 요청이 바뀐 직후 한 렌더 동안 남는 이전 결과를 거르는 데 쓴다
 type ScoreMatchState = { sheetKey: number } & (
@@ -102,7 +103,7 @@ export default function RecordMatchSheet({
         const res = await apiFetch(
           `/api/matches/${encodeURIComponent(scoreMatchId)}`,
         );
-        if (!res.ok) throw new Error("경기를 불러오지 못했어요");
+        if (!res.ok) throw new Error(SCORE_MATCH_LOAD_FAILED);
         const match = (await res.json()) as MatchInfo;
         if (!isCancelled) setScoreMatch({ sheetKey, status: "ready", match });
       } catch (err) {
@@ -110,7 +111,7 @@ export default function RecordMatchSheet({
           setScoreMatch({
             sheetKey,
             status: "error",
-            message: getUserErrorMessage(err, "경기를 불러오지 못했어요"),
+            message: getUserErrorMessage(err, SCORE_MATCH_LOAD_FAILED),
           });
         }
       }
