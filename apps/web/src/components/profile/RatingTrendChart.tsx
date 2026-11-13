@@ -25,7 +25,9 @@ const EMPTY_TEXT_Y = 58;
 // 작은 변동이 차트 높이 전체로 과장되지 않게 하는 최소 세로 범위
 const MIN_RATING_SPAN = 0.3;
 
-// 처음 나타날 때의 그리기 모션(ms). 가장 늦게 끝나는 끝점 pop이 재생 종료를 알린다
+// 처음 나타날 때의 그리기 모션(ms). 끝점 pop의 onAnimationEnd가 재생 종료를 알리므로
+// END_DOT_DELAY_MS + END_DOT_POP_MS가 선 그리기(LINE_DRAW_MS)와 면·점 페이드(FILL_DELAY_MS + FILL_FADE_MS)보다
+// 늦게 끝나야 한다. 아니면 다른 모션이 끝나기 전에 animate 클래스가 떨어진다
 const LINE_DRAW_MS = 700;
 const FILL_DELAY_MS = 400;
 const FILL_FADE_MS = 400;

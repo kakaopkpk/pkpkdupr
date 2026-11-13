@@ -45,6 +45,26 @@ describe("RatingTrendChart", () => {
     expect(markup).toContain("11월 12일");
   });
 
+  it("처음 렌더에서 선 그리기·면 페이드·끝점 pop 모션을 붙인다", () => {
+    const markup = render([
+      { rating: 3.3, createdAt: "2026-10-20T11:00:00.000Z", source: "match" },
+      { rating: 3.35, createdAt: "2026-11-12T11:00:00.000Z", source: "match" },
+    ]);
+
+    expect(markup).toMatch(
+      /<path d="[^"]+" pathLength="1"[^>]*class="animate-pk-draw motion-reduce:animate-none" style="animation-duration:700ms"/,
+    );
+    // 면과 경기일 점 묶음이 같은 지연·길이로 페이드한다
+    expect(
+      markup.match(
+        /class="animate-pk-fade-in motion-reduce:animate-none" style="animation-delay:400ms;animation-duration:400ms"/g,
+      ),
+    ).toHaveLength(2);
+    expect(markup).toMatch(
+      /<circle[^>]*class="animate-pk-pop motion-reduce:animate-none[^"]*" style="animation-delay:650ms;animation-duration:360ms"/,
+    );
+  });
+
   it("오늘 처음 받은 평점 하나뿐이면 날짜 라벨 없이 오늘만 보인다", () => {
     const markup = render([
       { rating: 3.5, createdAt: "2026-11-13T10:00:00.000Z", source: "match" },
