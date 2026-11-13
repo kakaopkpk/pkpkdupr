@@ -35,5 +35,4 @@ const twMerge = extendTailwindMerge({
   },
 });
 
-// 클래스를 합치고 Tailwind 충돌은 뒤에 온 클래스만 남긴다.
 export const cx = (...classNames: Array<string | false | null | undefined>) => twMerge(classNames);
