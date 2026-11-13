@@ -1,6 +1,6 @@
 import React from "react";
 import { toKstDateKey } from "@pkpkdupr/shared/session";
-import { usePlayOnce } from "@/hooks/usePlayOnce";
+import { usePlayOnShow } from "@/hooks/usePlayOnShow";
 
 export interface RatingTrendPoint {
   rating: number;
@@ -25,7 +25,7 @@ const EMPTY_TEXT_Y = 58;
 // 작은 변동이 차트 높이 전체로 과장되지 않게 하는 최소 세로 범위
 const MIN_RATING_SPAN = 0.3;
 
-// 처음 나타날 때의 그리기 모션(ms). 끝점 pop의 onAnimationEnd가 재생 종료를 알리므로
+// 화면이 보일 때의 그리기 모션(ms). 끝점 pop의 onAnimationEnd가 재생 종료를 알리므로
 // END_DOT_DELAY_MS + END_DOT_POP_MS가 선 그리기(LINE_DRAW_MS)와 면·점 페이드(FILL_DELAY_MS + FILL_FADE_MS)보다
 // 늦게 끝나야 한다. 아니면 다른 모션이 끝나기 전에 animate 클래스가 떨어진다
 const LINE_DRAW_MS = 700;
@@ -50,8 +50,8 @@ const RatingTrendChart: React.FC<{
   ariaLabel: string;
   now?: Date;
 }> = ({ points, ariaLabel, now = new Date() }) => {
-  // 재생이 끝나면 animate 클래스를 떼어, keep-alive 탭 재표시나 점 변경 때 다시 재생되지 않게 한다
-  const { isPlaying, finish } = usePlayOnce();
+  // 화면이 보일 때마다 한 번 그리고, 끝나면 animate 클래스를 떼어 같은 보임 안의 점 변경 때는 다시 그리지 않는다
+  const { isPlaying, finish } = usePlayOnShow();
   const samples = points
     .map((point) => ({
       rating: point.rating,

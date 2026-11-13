@@ -104,6 +104,14 @@ const BottomSheet: BottomSheetComponent = ({
     () => ({ transitionDuration: `${transitionDurationMs}ms` }),
     [transitionDurationMs],
   );
+  const backdropStyle = React.useMemo(
+    () =>
+      ({
+        "--sheet-visible": isVisible ? 1 : 0,
+        "--sheet-transition-duration": `${transitionDurationMs}ms`,
+      }) as React.CSSProperties,
+    [isVisible, transitionDurationMs],
+  );
 
   useSheetDrag({
     surfaceRef,
@@ -233,20 +241,16 @@ const BottomSheet: BottomSheetComponent = ({
         }
       }}
     >
+      {/*
+        * 딤과 블러를 한 요소에 둔다. 조상에 opacity가 걸리면 블러가 뒤 화면을 못 보므로
+        * 열림·닫힘 전환과 끌어 닫기의 옅어짐을 모두 이 요소의 opacity로 처리한다.
+        */}
       <div
+        ref={dimRef}
         aria-hidden="true"
-        className={[
-          "pointer-events-none absolute inset-0 transition-opacity ease-out",
-          isVisible ? "opacity-100" : "opacity-0",
-        ].join(" ")}
-        style={transitionStyle}
-      >
-        {/* 끄는 동안의 옅어짐은 안쪽에 따로 둬서 열림·닫힘 전환과 겹쳐 적용된다 */}
-        <div
-          ref={dimRef}
-          className="absolute inset-0 bg-pk-ink/45"
-        />
-      </div>
+        className="app-bottom-sheet-backdrop pointer-events-none absolute inset-0"
+        style={backdropStyle}
+      />
       <div
         className={[
           "app-shell-width relative z-10 mx-auto w-full",
