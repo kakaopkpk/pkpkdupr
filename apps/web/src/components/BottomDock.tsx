@@ -2,9 +2,8 @@ import React, { useEffect, useRef, useState } from "react";
 import type { MatchInfo } from "@/types/match";
 import type { TabKey } from "@/context/TabNavigationContext";
 
-/** 하단 바·미니바 공통 유리 알약 */
-export const GLASS_CLASS_NAME =
-  "border border-pk-ink/6 bg-white/60 shadow-[0_6px_20px] shadow-pk-ink/10 backdrop-blur-[20px] backdrop-saturate-[180%]";
+/** 하단 바·미니바 공통 유리 알약(index.css `.app-glass`) */
+export const GLASS_CLASS_NAME = "app-glass";
 
 const svgProps = {
   viewBox: "0 0 24 24",
