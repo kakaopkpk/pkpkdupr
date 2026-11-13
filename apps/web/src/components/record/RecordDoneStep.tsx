@@ -21,13 +21,14 @@ import { CheckIcon, FooterError } from "./RecordMatchParts";
 
 /*
  * 완료 화면 연출 시각(ms, 완료 단계 마운트 기준).
- * 체크 그리기 0 → 점수 세기 100(450) → 이긴 쪽 색 전환 → 평점 세기 650(500) → 업적 띠 1150
+ * 체크 그리기 0 → 점수 세기 100(450) → 이긴 쪽 색 전환 → 평점 세기 650(500)과 업적 띠 650 동시
  */
 const SCORE_COUNT_DELAY_MS = 100;
 const SCORE_COUNT_DURATION_MS = 450;
 const RATING_COUNT_DELAY_MS = 650;
 const RATING_COUNT_DURATION_MS = 500;
-const ACHIEVEMENT_DELAY_MS = 1150;
+// 업적 띠는 평점이 오르기 시작할 때 함께 등장한다
+const ACHIEVEMENT_DELAY_MS = RATING_COUNT_DELAY_MS;
 const ACHIEVEMENT_BADGE_POP_MS = 420;
 
 export interface RecordDoneStepProps {
@@ -135,7 +136,7 @@ export default function RecordDoneStep({
           <div
             className="flex shrink-0 flex-col gap-2"
             onAnimationEnd={(event) => {
-              // 흰 빛(1150+700ms)이 가장 늦게 끝난다
+              // 흰 빛(650+700ms)이 가장 늦게 끝나는 CSS 연출이다
               if (event.animationName === "pk-sheen") finish();
             }}
           >
