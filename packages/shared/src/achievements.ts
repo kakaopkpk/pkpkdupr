@@ -855,6 +855,19 @@ export const findNewAchievements = ({
     ).filter((item) => !earnedBefore.has(item.achievementId));
   });
 
+const ACHIEVEMENT_ORDER = new Map(
+  ACHIEVEMENTS.map((definition, index) => [definition.id, index]),
+);
+
+/** 받은 업적 정렬: 받은 시각 → 업적 정의 순서 */
+export const compareEarnedAchievements = (
+  left: EarnedAchievement,
+  right: EarnedAchievement,
+): number =>
+  left.earnedAt.getTime() - right.earnedAt.getTime() ||
+  (ACHIEVEMENT_ORDER.get(left.achievementId) ?? 0) -
+    (ACHIEVEMENT_ORDER.get(right.achievementId) ?? 0);
+
 /**
  * 받은 업적 중 확인하지 않은 것. 확인 기록이 없거나 기록의 획득 경기가 지금과 다르면
  * (잃었다가 다른 경기로 다시 받았으면) 미확인이다. 받은 시각 → 업적 정의 순서로 정렬한다.
@@ -866,19 +879,11 @@ export const findUnseenAchievements = (
   const seenMatchIdByAchievementId = new Map(
     seen.map((item) => [item.achievementId, item.earnedMatchId]),
   );
-  const order = new Map(
-    ACHIEVEMENTS.map((definition, index) => [definition.id, index]),
-  );
   return earned
     .filter(
       (item) =>
         seenMatchIdByAchievementId.get(item.achievementId) !==
         item.earnedMatchId,
     )
-    .sort(
-      (left, right) =>
-        left.earnedAt.getTime() - right.earnedAt.getTime() ||
-        (order.get(left.achievementId) ?? 0) -
-          (order.get(right.achievementId) ?? 0),
-    );
+    .sort(compareEarnedAchievements);
 };

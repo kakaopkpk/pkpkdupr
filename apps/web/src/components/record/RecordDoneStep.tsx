@@ -18,8 +18,8 @@ import { useCountUp } from "@/hooks/useCountUp";
 import { usePlayOnShow } from "@/hooks/usePlayOnShow";
 import { prefersReducedMotion } from "@/hooks/useSheetDrag";
 import {
-  getAchievementDefinition,
   markAchievementsSeen,
+  pickPlayerEarnedAchievements,
 } from "@/lib/achievements";
 import { formatRating } from "@/utils/dupr";
 import AchievementCelebration from "./AchievementCelebration";
@@ -90,20 +90,12 @@ export default function RecordDoneStep({
   const myNewAchievementItems = useMemo(
     () =>
       viewer
-        ? (match.newAchievements ?? []).filter(
-            (item) =>
-              item.playerId === viewer.id &&
-              !!getAchievementDefinition(item.achievementId),
-          )
+        ? pickPlayerEarnedAchievements(match.newAchievements ?? [], viewer.id)
         : [],
     [match.newAchievements, viewer],
   );
   const myNewAchievements = useMemo(
-    () =>
-      myNewAchievementItems.flatMap((item) => {
-        const definition = getAchievementDefinition(item.achievementId);
-        return definition ? [definition] : [];
-      }),
+    () => myNewAchievementItems.map(({ definition }) => definition),
     [myNewAchievementItems],
   );
 
@@ -248,7 +240,9 @@ export default function RecordDoneStep({
           onClose={() => {
             setIsCelebrationOpen(false);
             // 여기서 본 업적은 홈에서 다시 띄우지 않는다. 실패하면 다음 미확인 조회 때 다시 뜬다
-            void markAchievementsSeen(myNewAchievementItems).catch(() => {});
+            void markAchievementsSeen(
+              myNewAchievementItems.map(({ item }) => item),
+            ).catch(() => {});
           }}
         />
       ) : null}

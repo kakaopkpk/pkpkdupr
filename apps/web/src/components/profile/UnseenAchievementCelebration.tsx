@@ -1,11 +1,10 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useState } from "react";
 import AchievementCelebration from "@/components/record/AchievementCelebration";
 import {
-  excludeLocallySeenAchievements,
   fetchUnseenAchievements,
-  getAchievementDefinition,
   markAchievementsSeen,
-  type EarnedAchievementInfo,
+  pickPlayerEarnedAchievements,
+  type PlayerEarnedAchievement,
 } from "@/lib/achievements";
 
 export interface UnseenAchievementCelebrationProps {
@@ -27,23 +26,13 @@ export default function UnseenAchievementCelebration({
   isActive,
   dataVersion,
 }: UnseenAchievementCelebrationProps): React.ReactElement | null {
-  const [items, setItems] = useState<EarnedAchievementInfo[] | null>(null);
+  const [unseen, setUnseen] = useState<PlayerEarnedAchievement[] | null>(null);
   const [resumeCount, setResumeCount] = useState(0);
-  const isActiveRef = useRef(isActive);
-  const isShowingRef = useRef(false);
-  const requestIdRef = useRef(0);
-
-  useEffect(() => {
-    isActiveRef.current = isActive;
-  }, [isActive]);
-
-  useEffect(() => {
-    isShowingRef.current = items !== null;
-  }, [items]);
+  const isShowing = unseen !== null;
 
   // 다른 회원으로 바뀌면 띄우던 연출을 버린다
   useEffect(() => {
-    setItems(null);
+    setUnseen(null);
   }, [playerId]);
 
   useEffect(() => {
@@ -58,44 +47,34 @@ export default function UnseenAchievementCelebration({
   }, []);
 
   useEffect(() => {
-    if (!playerId || !isActive || isShowingRef.current) return;
-    const requestId = requestIdRef.current + 1;
-    requestIdRef.current = requestId;
+    if (!playerId || !isActive || isShowing) return;
+    // 그사이 다시 조회했거나 다른 화면이 열렸으면 결과를 버린다(닫히면 다시 조회한다)
+    let isCancelled = false;
     fetchUnseenAchievements()
-      .then((result) => {
-        // 그사이 다시 조회했거나 다른 화면이 열렸으면 버린다(닫히면 다시 조회한다)
-        if (requestIdRef.current !== requestId || !isActiveRef.current) return;
-        if (isShowingRef.current) return;
-        const unseen = excludeLocallySeenAchievements(result).filter(
-          (item) =>
-            item.playerId === playerId &&
-            !!getAchievementDefinition(item.achievementId),
-        );
-        if (unseen.length > 0) setItems(unseen);
+      .then((items) => {
+        if (isCancelled) return;
+        const picked = pickPlayerEarnedAchievements(items, playerId);
+        if (picked.length > 0) setUnseen(picked);
       })
       // 조회 실패는 알리지 않는다. 다음 조회 때 다시 시도한다
       .catch(() => {});
-  }, [dataVersion, isActive, playerId, resumeCount]);
+    return () => {
+      isCancelled = true;
+    };
+  }, [dataVersion, isActive, isShowing, playerId, resumeCount]);
 
-  const definitions = useMemo(
-    () =>
-      (items ?? []).flatMap((item) => {
-        const definition = getAchievementDefinition(item.achievementId);
-        return definition ? [definition] : [];
-      }),
-    [items],
-  );
-
-  if (!items || definitions.length === 0) return null;
+  if (!unseen) return null;
 
   return (
     <AchievementCelebration
-      achievements={definitions}
+      achievements={unseen.map(({ definition }) => definition)}
       delayMs={0}
       onClose={() => {
         // 확인 처리가 실패하면 다음 조회 때 다시 뜬다
-        void markAchievementsSeen(items).catch(() => {});
-        setItems(null);
+        void markAchievementsSeen(unseen.map(({ item }) => item)).catch(
+          () => {},
+        );
+        setUnseen(null);
       }}
     />
   );

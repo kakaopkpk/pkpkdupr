@@ -51,10 +51,7 @@ export {
   type CreateMatchDeletionLogInput,
   type MatchDeletionLog,
 } from "./repositories/MatchDeletionLogRepository";
-export {
-  PlayerSeenAchievementRepository,
-  type SeenAchievement,
-} from "./repositories/PlayerSeenAchievementRepository";
+export { PlayerSeenAchievementRepository } from "./repositories/PlayerSeenAchievementRepository";
 export {
   TestDataRepository,
   isDevMockDataEnabled,

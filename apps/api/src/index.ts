@@ -2841,7 +2841,7 @@ app.get("/api/me/achievements/unseen", async (req, res) => {
       db.playerSeenAchievements.findByPlayerId(decoded.playerId),
     ]);
     const earned = findPlayerEarnedAchievements(
-      context,
+      context.matches.map(toAchievementMatch),
       findSessionDominations(context, sessions, new Date()),
       decoded.playerId,
     );

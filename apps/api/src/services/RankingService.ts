@@ -1,5 +1,6 @@
 import {
   ACHIEVEMENTS,
+  compareEarnedAchievements,
   computeAchievements,
   toEarnedAchievements,
   type AchievementMatch,
@@ -689,9 +690,16 @@ export const toAchievementMatch = (match: RankingMatch): AchievementMatch => ({
   session: match.sessionId ? { id: match.sessionId } : null,
 });
 
-const ACHIEVEMENT_ORDER = new Map(
-  ACHIEVEMENTS.map((definition, index) => [definition.id, index]),
-);
+/** 한 회원이 지금 받은 업적(ACHIEVEMENTS 순서). 세션 지배자는 끝난 세션 기준이다 */
+export const findPlayerEarnedAchievements = (
+  matches: readonly AchievementMatch[],
+  dominations: SessionDominations,
+  playerId: string,
+): EarnedAchievement[] =>
+  toEarnedAchievements(
+    playerId,
+    computeAchievements(playerId, matches, dominations.get(playerId)),
+  );
 
 /**
  * 세션 경기로 받은 업적. 각 참가자의 전체 완료 경기로 계산해, 받게 된 경기가
@@ -707,17 +715,12 @@ const buildSessionAchievements = (
   const matches = context.matches.map(toAchievementMatch);
   return playerIds
     .flatMap((playerId) =>
-      toEarnedAchievements(
-        playerId,
-        computeAchievements(playerId, matches, dominations.get(playerId)),
-      ),
+      findPlayerEarnedAchievements(matches, dominations, playerId),
     )
     .filter((item) => sessionMatchIds.has(item.earnedMatchId))
     .sort(
       (left, right) =>
-        left.earnedAt.getTime() - right.earnedAt.getTime() ||
-        (ACHIEVEMENT_ORDER.get(left.achievementId) ?? 0) -
-          (ACHIEVEMENT_ORDER.get(right.achievementId) ?? 0) ||
+        compareEarnedAchievements(left, right) ||
         compareText(left.playerId, right.playerId),
     );
 };
@@ -742,21 +745,6 @@ export const countAchievementHolders = (
   }
   return counts;
 };
-
-/** 한 회원이 지금 받은 업적(ACHIEVEMENTS 순서). 세션 지배자는 끝난 세션 기준이다 */
-export const findPlayerEarnedAchievements = (
-  context: RankingContext,
-  dominations: SessionDominations,
-  playerId: string,
-): EarnedAchievement[] =>
-  toEarnedAchievements(
-    playerId,
-    computeAchievements(
-      playerId,
-      context.matches.map(toAchievementMatch),
-      dominations.get(playerId),
-    ),
-  );
 
 /** 기록 탭 줄의 정렬 키. 세션은 date, 경기는 matchStartsAt */
 export interface RecordsCursor {

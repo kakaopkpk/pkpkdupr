@@ -1,10 +1,7 @@
-import type { DbClient } from "../db/client";
+import type { SeenAchievementRef } from "@pkpkdupr/shared/achievements";
+import { placeholders, type DbClient } from "../db/client";
 
-/** 회원이 확인한 업적 한 건. earnedMatchId는 확인할 때의 획득 경기다 */
-export interface SeenAchievement {
-  achievementId: string;
-  earnedMatchId: string;
-}
+const COLUMNS_PER_ROW = 4;
 
 /**
  * 회원이 축하 시트로 확인한 업적 기록. 업적은 저장하지 않고 조회 시 계산하므로,
@@ -13,7 +10,7 @@ export interface SeenAchievement {
 export class PlayerSeenAchievementRepository {
   constructor(private readonly client: DbClient) {}
 
-  async findByPlayerId(playerId: string): Promise<SeenAchievement[]> {
+  async findByPlayerId(playerId: string): Promise<SeenAchievementRef[]> {
     const result = await this.client.execute({
       sql: `SELECT achievement_id AS "achievementId",
                    earned_match_id AS "earnedMatchId"
@@ -30,7 +27,7 @@ export class PlayerSeenAchievementRepository {
   /** 업적별로 확인한 획득 경기를 덮어쓴다. 같은 요청을 다시 보내도 결과가 같다 */
   async markSeen(
     playerId: string,
-    items: readonly SeenAchievement[],
+    items: readonly SeenAchievementRef[],
     seenAt: Date,
   ): Promise<void> {
     // 한 요청에 같은 업적이 두 번 오면 ON CONFLICT가 같은 행을 두 번 고치려다 실패하므로 마지막 값만 남긴다
@@ -40,12 +37,19 @@ export class PlayerSeenAchievementRepository {
     if (byAchievementId.size === 0) return;
 
     const seenAtSeconds = Math.floor(seenAt.getTime() / 1000);
-    const args: unknown[] = [];
-    const rows = [...byAchievementId.values()].map((item) => {
-      const start = args.length;
-      args.push(playerId, item.achievementId, item.earnedMatchId, seenAtSeconds);
-      return `($${start + 1}, $${start + 2}, $${start + 3}, $${start + 4})`;
-    });
+    const rows = [...byAchievementId.values()];
+    const values = rows
+      .map(
+        (_, index) =>
+          `(${placeholders(COLUMNS_PER_ROW, index * COLUMNS_PER_ROW + 1)})`,
+      )
+      .join(", ");
+    const args = rows.flatMap((item) => [
+      playerId,
+      item.achievementId,
+      item.earnedMatchId,
+      seenAtSeconds,
+    ]);
     await this.client.execute({
       sql: `INSERT INTO player_seen_achievements (
               player_id,
@@ -53,7 +57,7 @@ export class PlayerSeenAchievementRepository {
               earned_match_id,
               seen_at
             )
-            VALUES ${rows.join(", ")}
+            VALUES ${values}
             ON CONFLICT (player_id, achievement_id) DO UPDATE
               SET earned_match_id = EXCLUDED.earned_match_id,
                   seen_at = EXCLUDED.seen_at`,
