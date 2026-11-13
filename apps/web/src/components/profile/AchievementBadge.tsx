@@ -10,29 +10,35 @@ const UNEARNED_ICON = "var(--color-pk-quiet)";
 const UNEARNED_TAG_BORDER = "var(--color-pk-line)";
 
 type BadgeIconKind =
-  | "paddle"
+  | "ball"
   | "trophy"
   | "flame"
   | "shield"
-  | "bolt"
+  | "bandage"
+  | "stamp"
   | "partners"
   | "calendar"
-  | "timer"
+  | "dumbbell"
   | "heart"
   | "group"
   | "versus"
   | "target"
-  | "rotate"
+  | "fist"
   | "star"
   | "crown";
 
-/** 24 viewBox 선 아이콘 */
+/** 24 viewBox 선 아이콘. 글자는 아이콘 색(currentColor)으로 채운다 */
 const BADGE_ICON_PATHS: Record<BadgeIconKind, React.ReactNode> = {
-  paddle: (
+  // 피클볼 공(구멍 뚫린 공)
+  ball: (
     <>
-      <ellipse cx="10" cy="9.5" rx="6" ry="6.5" />
-      <path d="M14.2 14l5.3 5.5" />
-      <circle cx="19" cy="5.5" r="1.6" />
+      <circle cx="12" cy="12" r="8.5" />
+      <circle cx="12" cy="7.6" r=".5" />
+      <circle cx="8" cy="10.4" r=".5" />
+      <circle cx="16" cy="10.4" r=".5" />
+      <circle cx="12" cy="12.3" r=".5" />
+      <circle cx="9.4" cy="15.6" r=".5" />
+      <circle cx="14.6" cy="15.6" r=".5" />
     </>
   ),
   trophy: (
@@ -50,7 +56,33 @@ const BADGE_ICON_PATHS: Record<BadgeIconKind, React.ReactNode> = {
       <path d="M9 12l2 2 4-4" />
     </>
   ),
-  bolt: <path d="M13 3L6 13h5l-1 8 7-10h-5z" />,
+  bandage: (
+    <>
+      <path d="M7.98 20.98L20.98 7.98A3.5 3.5 0 0 0 16.03 3.03L3.03 16.03A3.5 3.5 0 0 0 7.98 20.98Z" />
+      <path d="M11.65 7.41L16.6 12.35M7.41 11.65L12.35 16.6" />
+      <circle cx="13.7" cy="12" r=".5" />
+      <circle cx="10.3" cy="12" r=".5" />
+      <circle cx="12" cy="10.3" r=".5" />
+      <circle cx="12" cy="13.7" r=".5" />
+    </>
+  ),
+  stamp: (
+    <>
+      <circle cx="12" cy="12" r="9" />
+      <text
+        x="12"
+        y="16"
+        textAnchor="middle"
+        fontSize="11"
+        fontWeight="900"
+        fontFamily="serif"
+        stroke="none"
+        fill="currentColor"
+      >
+        勝
+      </text>
+    </>
+  ),
   partners: (
     <>
       <circle cx="8.5" cy="9" r="3" />
@@ -64,12 +96,7 @@ const BADGE_ICON_PATHS: Record<BadgeIconKind, React.ReactNode> = {
       <path d="M4 10h16M9 3v4M15 3v4M9 15l2 2 4-4" />
     </>
   ),
-  timer: (
-    <>
-      <circle cx="12" cy="13.5" r="7" />
-      <path d="M12 13.5V9.5M10 3h4M18 6.5l1.5-1.5" />
-    </>
-  ),
+  dumbbell: <path d="M6.5 7v10M17.5 7v10M3.5 9.5v5M20.5 9.5v5M6.5 12h11" />,
   heart: (
     <path d="M12 19.5s-7-4.3-7-9.7A3.8 3.8 0 0 1 12 7.6a3.8 3.8 0 0 1 7 2.2c0 5.4-7 9.7-7 9.7z" />
   ),
@@ -91,10 +118,10 @@ const BADGE_ICON_PATHS: Record<BadgeIconKind, React.ReactNode> = {
       <circle cx="12" cy="12" r="1" />
     </>
   ),
-  rotate: (
+  fist: (
     <>
-      <path d="M4.5 12a7.5 7.5 0 1 0 2.2-5.3" />
-      <path d="M4.5 3.5v3.7h3.7" />
+      <path d="M6 10.5V8.2a1.7 1.7 0 0 1 3.4 0v1.8M9.4 9.6V7.2a1.7 1.7 0 0 1 3.4 0v2.4M12.8 9.6V7.6a1.7 1.7 0 0 1 3.4 0V10M16.2 10.2V9a1.7 1.7 0 0 1 3.4 0v4.3a6.6 6.6 0 0 1-6.6 6.6h-.4A6.6 6.6 0 0 1 6 13.3v-2.8" />
+      <path d="M6 12.4h5.6a2 2 0 0 1 0 4H9.4" />
     </>
   ),
   star: (
@@ -111,15 +138,16 @@ const BADGE_ICON_PATHS: Record<BadgeIconKind, React.ReactNode> = {
 /** 특별·세션 분류는 업적마다 아이콘이 다르다 */
 const BADGE_ICON_BY_ID: Partial<Record<string, BadgeIconKind>> = {
   "perfect-win": "shield",
-  "hard-won-10": "bolt",
+  "hard-won": "bandage",
+  "deuce-master": "stamp",
   "partner-20": "partners",
   "partner-50": "partners",
   "combo-5": "heart",
   "social-10": "group",
   "rival-20": "versus",
   "dojo-15": "target",
-  revenge: "rotate",
-  "iron-8": "timer",
+  revenge: "fist",
+  "iron-8": "dumbbell",
   "unbeaten-session": "star",
   "dominator-1": "crown",
   "dominator-10": "crown",
@@ -129,7 +157,7 @@ const BADGE_ICON_BY_CATEGORY: Record<
   AchievementDefinition["category"],
   BadgeIconKind
 > = {
-  matches: "paddle",
+  matches: "ball",
   wins: "trophy",
   streak: "flame",
   special: "shield",
@@ -178,6 +206,7 @@ export const AchievementBadge: React.FC<AchievementBadgeProps> = ({
         viewBox="0 0 24 24"
         fill="none"
         stroke={earned ? EARNED_ICON : UNEARNED_ICON}
+        color={earned ? EARNED_ICON : UNEARNED_ICON}
         strokeWidth={2}
         strokeLinecap="round"
         strokeLinejoin="round"

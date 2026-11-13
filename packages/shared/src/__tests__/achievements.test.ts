@@ -86,7 +86,7 @@ const compute = (matches: AchievementMatch[]) =>
   computeAchievements(ME, matches);
 
 describe("ACHIEVEMENTS", () => {
-  it("업적 34개를 표 순서로 정의한다", () => {
+  it("업적 35개를 표 순서로 정의한다", () => {
     expect(ACHIEVEMENTS.map((definition) => definition.id)).toEqual([
       "matches-1",
       "matches-10",
@@ -107,7 +107,8 @@ describe("ACHIEVEMENTS", () => {
       "streak-10",
       "streak-20",
       "perfect-win",
-      "hard-won-10",
+      "hard-won",
+      "deuce-master",
       "partner-20",
       "partner-50",
       "combo-5",
@@ -123,7 +124,7 @@ describe("ACHIEVEMENTS", () => {
       "dominator-1",
       "dominator-10",
     ]);
-    expect(new Set(ACHIEVEMENTS.map((item) => item.id)).size).toBe(34);
+    expect(new Set(ACHIEVEMENTS.map((item) => item.id)).size).toBe(35);
   });
 
   it("분류 이름은 경기 수·승리·연승·특별·세션이다", () => {
@@ -148,9 +149,9 @@ describe("isBestStreakAchievement", () => {
 });
 
 describe("computeAchievements", () => {
-  it("경기가 없으면 34개 모두 진행도 0으로 받지 않은 상태다", () => {
+  it("경기가 없으면 35개 모두 진행도 0으로 받지 않은 상태다", () => {
     const progress = compute([]);
-    expect(progress).toHaveLength(34);
+    expect(progress).toHaveLength(35);
     expect(progress.map((item) => item.id)).toEqual(
       ACHIEVEMENTS.map((definition) => definition.id),
     );
@@ -312,7 +313,7 @@ describe("computeAchievements", () => {
     });
   });
 
-  it("힘겹게 쟁취한 승리는 양 팀 10점 이상 경기에서 10번 이기면 받는다", () => {
+  it("듀스 승부사는 양 팀 10점 이상 경기에서 10번 이기면 받는다", () => {
     const hardWin = () => makeMatch({ won: true, scoreA: 12, scoreB: 10 });
     const noise = [
       // 상대가 9점이면 해당하지 않는다.
@@ -322,19 +323,39 @@ describe("computeAchievements", () => {
     ];
 
     const below = [...noise, ...repeat(9, hardWin)];
-    expect(progressOf(compute(below), "hard-won-10")).toMatchObject({
+    expect(progressOf(compute(below), "deuce-master")).toMatchObject({
       earned: false,
       current: 9,
     });
 
     const tenth = hardWin();
     expect(
-      progressOf(compute([...below, tenth]), "hard-won-10"),
+      progressOf(compute([...below, tenth]), "deuce-master"),
     ).toMatchObject({
       earned: true,
       earnedMatchId: tenth.id,
       current: 10,
     });
+  });
+
+  it("힘겹게 쟁취한 승리는 15점 이상 내고 2점 차로 이긴 경기에서 받는다", () => {
+    const notHardWon = [
+      // 11점제 듀스 승리지만 15점에 못 미친다.
+      makeMatch({ won: true, scoreA: 14, scoreB: 12 }),
+      // 대회룰 15점 경기처럼 2점 차가 아니면 듀스 끝 승리가 아니다.
+      makeMatch({ won: true, scoreA: 15, scoreB: 7 }),
+      // 15:13이어도 진 경기는 세지 않는다.
+      makeMatch({ won: false, scoreA: 13, scoreB: 15 }),
+    ];
+    expect(progressOf(compute(notHardWon), "hard-won")).toMatchObject({
+      earned: false,
+      current: 0,
+    });
+
+    const hardWon = makeMatch({ won: true, scoreA: 16, scoreB: 14 });
+    expect(
+      progressOf(compute([...notHardWon, hardWon]), "hard-won"),
+    ).toMatchObject({ earned: true, earnedMatchId: hardWon.id, current: 1 });
   });
 
   it("단짝은 같은 파트너와 복식 20경기에서 받고 진행도는 한 파트너 최대 경기 수다", () => {
