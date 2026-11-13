@@ -111,12 +111,17 @@ export function useSheetDrag({
       applyOffset(0, "");
       return;
     }
-    // 끌다 닫히면 딤의 인라인 opacity를 풀어 지금 옅어진 정도에서 닫힘 전환으로 이어지게 한다.
+    // 닫힐 때 딤을 지금 옅어진 정도에서 바로 0으로 내린다. 인라인 opacity를 비우면
+    // 아직 남은 opacity-100 클래스 쪽으로 잠깐 되짙어지므로 0을 직접 쓴다.
     // 시트 표면은 끌린 위치에서 그대로 내려가야 하므로 두고 간다.
+    // 전환 길이는 BottomSheet 닫힘 전환(180ms)과 같다.
+    clearSettleTimeout();
     const dim = dimRef.current;
     if (dim) {
-      dim.style.transition = "";
-      dim.style.opacity = "";
+      const duration = prefersReducedMotion() ? 0 : SETTLE_DURATION_MS;
+      dim.style.transition =
+        duration > 0 ? `opacity ${duration}ms ease-out` : "none";
+      dim.style.opacity = "0";
     }
   }, [applyOffset, clearSettleTimeout, dimRef, isOpen]);
 
