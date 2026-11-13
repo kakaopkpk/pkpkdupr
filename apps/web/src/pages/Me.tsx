@@ -68,7 +68,6 @@ const Me: React.FC = () => {
   );
 
   const username = player?.username ?? "";
-  const ratingDelta = overview?.summary.ratingDelta[category];
   const partners = overview?.summary.partners ?? [];
   const rivals = overview?.summary.rivals ?? [];
   const achievements = overview?.summary.achievements ?? [];
@@ -106,7 +105,7 @@ const Me: React.FC = () => {
       </header>
 
       <div className="flex flex-col gap-2.5 px-4">
-        {overview && ratingDelta ? (
+        {overview ? (
           <>
             <ProfileRatingSection
               overview={overview}

@@ -5,8 +5,6 @@ import { usePlayOnShow } from "@/hooks/usePlayOnShow";
 export interface RatingTrendPoint {
   rating: number;
   createdAt: Date | string;
-  /** `anchor`는 기간 시작 직전 평점(선의 왼쪽 시작점) */
-  source?: "match" | "current" | "anchor";
 }
 
 const WIDTH = 326;
@@ -113,14 +111,6 @@ const RatingTrendChart: React.FC<{
       ? kstMonthDayFormatter.format(lastTime)
       : "오늘";
 
-  const fadeInClass = isPlaying
-    ? "animate-pk-fade-in motion-reduce:animate-none"
-    : undefined;
-  const fadeInStyle = {
-    animationDelay: `${FILL_DELAY_MS}ms`,
-    animationDuration: `${FILL_FADE_MS}ms`,
-  };
-
   const xLabelProps = {
     y: X_LABEL_Y,
     fill: "var(--color-pk-muted)",
@@ -161,8 +151,19 @@ const RatingTrendChart: React.FC<{
             d={areaPath}
             fill="var(--color-pk-primary)"
             fillOpacity={0.08}
-            className={fadeInClass}
-            style={isPlaying ? fadeInStyle : undefined}
+            className={
+              isPlaying
+                ? "animate-pk-fade-in motion-reduce:animate-none"
+                : undefined
+            }
+            style={
+              isPlaying
+                ? {
+                    animationDelay: `${FILL_DELAY_MS}ms`,
+                    animationDuration: `${FILL_FADE_MS}ms`,
+                  }
+                : undefined
+            }
           />
           <path
             d={lineD}

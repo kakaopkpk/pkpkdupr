@@ -1,5 +1,6 @@
 import React, { useCallback, useMemo, useState } from "react";
 import type { MatchTopLevelType } from "@pkpkdupr/shared/match";
+import { roundDuprRating } from "@pkpkdupr/shared/player";
 import type { HeadToHeadStat } from "@pkpkdupr/shared/profileStats";
 import PushScreen from "@/components/PushScreen";
 import AchievementsScreen from "@/components/profile/AchievementsScreen";
@@ -70,7 +71,7 @@ const HeadToHeadRatingTile: React.FC<{ stat: HeadToHeadStat | null }> = ({
 }) => {
   const matchCount = stat?.matchCount ?? 0;
   // 표시 자리(소수 셋째 자리)에서 0이면 "퍼준"으로 본다
-  const isTaken = !!stat && Math.round(stat.ratingDelta * 1000) < 0;
+  const isTaken = !!stat && roundDuprRating(stat.ratingDelta) < 0;
   return (
     <ProfileStatTile
       label={isTaken ? "상대가 앗아간 내 평점" : "상대가 내게 퍼준 평점"}
