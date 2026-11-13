@@ -195,17 +195,12 @@ export default function MemberProfileDrawer({
               ) : null}
               {totalStats ? (
                 <span className="text-pk-13 text-pk-sub tabular-nums">
-                  {/* 머리 줄은 평점 카드와 함께 바로 센다 */}
                   <CountUpNumber
                     value={totalStats.wins + totalStats.losses}
-                    durationMs={PROFILE_STAT_COUNT.durationMs}
+                    {...PROFILE_STAT_COUNT}
                   />
                   경기 ·{" "}
-                  <WinLossCount
-                    wins={totalStats.wins}
-                    losses={totalStats.losses}
-                    delayMs={0}
-                  />
+                  <WinLossCount wins={totalStats.wins} losses={totalStats.losses} />
                 </span>
               ) : (
                 <SkeletonBlock className="h-4 w-32" />
