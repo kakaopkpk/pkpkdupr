@@ -1595,7 +1595,7 @@ app.post("/api/match-sessions/:sessionId/guests", async (req, res) => {
       addedByPlayerId: decoded.playerId,
       sessionId,
     });
-    await matchRepository.addSessionParticipants(sessionId, [guest.id]);
+    matchRepository.notifySessionsChanged([sessionId]);
     res.status(201).json(guest);
   } catch (err) {
     if (err instanceof AccountRequestError) {

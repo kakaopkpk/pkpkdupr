@@ -53,6 +53,11 @@ import {
 } from "@pkpkdupr/shared/session";
 import { firstRow, placeholders, type RawQueryResult } from "../db/client";
 import { buildMatchDeletionLogInsert } from "./MatchDeletionLogRepository";
+import {
+  PlayerRepository,
+  type CreateStoredPlayerInput,
+  type StoredPlayerRecord,
+} from "./PlayerRepository";
 
 type StoredMatch = typeof matches.$inferSelect;
 type StoredMatchParticipant = typeof matchParticipants.$inferSelect;
@@ -570,6 +575,50 @@ export class MatchRepository {
       args: [now, sessionId],
     });
     return true;
+  }
+
+  /**
+   * 게스트 회원을 만들고 그 세션의 참여자로 넣는다.
+   * 한 트랜잭션이라 참여자 추가가 실패하면 게스트 행도 남지 않는다.
+   * 아이디가 겹치면 Postgres unique_violation(23505)을 그대로 던진다.
+   */
+  async createGuestParticipant(
+    sessionId: string,
+    guest: CreateStoredPlayerInput,
+  ): Promise<StoredPlayerRecord> {
+    if (!isEntityId(sessionId, "session")) {
+      throw new Error("유효한 세션 ID가 필요합니다.");
+    }
+
+    const transaction = await this.client.transaction("write");
+    let committed = false;
+    const now = toUnixTimestampSeconds(new Date());
+    try {
+      const created = await new PlayerRepository(transaction.db).create(guest);
+      await transaction.execute({
+        sql: `
+          INSERT INTO match_session_participants (
+            id,
+            session_id,
+            player_id,
+            created_at
+          )
+          VALUES ($1, $2, $3, $4)
+        `,
+        args: [`${sessionId}-${created.id}`, sessionId, created.id, now],
+      });
+      await transaction.execute({
+        sql: "UPDATE match_sessions SET updated_at = $1 WHERE id = $2",
+        args: [now, sessionId],
+      });
+      await transaction.commit();
+      committed = true;
+      return created;
+    } finally {
+      if (!committed) {
+        transaction.close();
+      }
+    }
   }
 
   /** 세션 참여자 한 명을 뺀다. 참여 중이 아니면 아무것도 하지 않는다. 실제로 뺐으면 true */

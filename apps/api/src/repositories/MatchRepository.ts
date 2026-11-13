@@ -239,7 +239,11 @@ export interface MatchRepositoryOptions {
 export class MatchRepository {
   constructor(private readonly options: MatchRepositoryOptions = {}) {}
 
-  private notifySessionsChanged(sessionIds: Array<string | undefined>) {
+  /**
+   * onSessionsChanged를 부른다. 이 저장소를 거치지 않고 세션 참여자를 바꾼 쓰기
+   * (AuthService.createGuestPlayer의 게스트 생성·참여자 추가)도 저장 뒤 여기로 알린다.
+   */
+  notifySessionsChanged(sessionIds: Array<string | undefined>) {
     const ids = [
       ...new Set(sessionIds.filter((id): id is string => Boolean(id))),
     ];

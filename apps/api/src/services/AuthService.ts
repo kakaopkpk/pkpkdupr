@@ -1181,8 +1181,9 @@ export class AuthService {
   }
 
   /**
-   * 세션에서 게스트를 만든다. Auth 계정 없이 active·성별 없음·NR로 만들고, 추가한 회원과 세션을 남긴다.
-   * 아이디 형식이 틀리면 400, 대소문자 무시로 이미 있으면 409다. 세션 참여자 추가는 호출부가 한다.
+   * 세션에서 게스트를 만들고 그 세션의 참여자로 넣는다. Auth 계정 없이 active·성별 없음·NR로 만들고,
+   * 추가한 회원과 세션을 남긴다. 아이디 형식이 틀리면 400, 대소문자 무시로 이미 있으면 409다.
+   * 두 쓰기는 한 트랜잭션이라 참여자 추가가 실패하면 게스트도 남지 않아 같은 아이디로 다시 요청할 수 있다.
    */
   async createGuestPlayer(input: {
     username: string;
@@ -1193,17 +1194,24 @@ export class AuthService {
     if (!isValidUsername(username)) {
       throw new AccountRequestError(400, USERNAME_FORMAT_MESSAGE);
     }
-    // 동시 요청은 createStoredPlayer가 lower(username) 유니크 위반을 409로 바꿔 걸러낸다.
     if (await db.players.findByUsernameIgnoringCase(username)) {
       throw new AccountRequestError(409, DUPLICATE_USERNAME_MESSAGE);
     }
 
-    const created = await this.createStoredPlayer({
-      ...createPlayer({ username, gender: null, isGuest: true }),
-      guestAddedByPlayerId: input.addedByPlayerId,
-      guestAddedSessionId: input.sessionId,
-    });
-    return toPublicPlayer(hydratePlayer(created));
+    try {
+      const created = await db.matches.createGuestParticipant(input.sessionId, {
+        ...createPlayer({ username, gender: null, isGuest: true }),
+        guestAddedByPlayerId: input.addedByPlayerId,
+        guestAddedSessionId: input.sessionId,
+      });
+      return toPublicPlayer(hydratePlayer(created));
+    } catch (error) {
+      // 동시 요청은 lower(username) 유니크 위반으로 걸러진다.
+      if (isUniqueViolation(error)) {
+        throw new AccountRequestError(409, DUPLICATE_USERNAME_MESSAGE);
+      }
+      throw error;
+    }
   }
 
   async getPublicPlayers(): Promise<Player[]> {
