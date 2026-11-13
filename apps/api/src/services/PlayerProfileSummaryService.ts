@@ -132,6 +132,8 @@ export const buildPlayerProfileSummary = (
   ratingHistory: PlayerRatingHistory,
   viewerPlayerId: string,
   now: Date = new Date(),
+  /** 이 회원이 세션 지배자로 확정된 세션 id(세션 지배자 업적용) */
+  dominatedSessionIds?: ReadonlySet<string>,
 ): PlayerProfileSummary => {
   const matchStats = createEmptyMatchStats();
   const ratingDelta = createEmptyRatingDelta();
@@ -267,6 +269,6 @@ export const buildPlayerProfileSummary = (
     partners,
     rivals,
     headToHead,
-    achievements: computeAchievements(playerId, matches),
+    achievements: computeAchievements(playerId, matches, dominatedSessionIds),
   };
 };

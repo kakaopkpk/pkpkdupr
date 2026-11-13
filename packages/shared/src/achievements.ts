@@ -46,7 +46,8 @@ type AchievementMetric =
   | "distinctBeatenOpponents"
   | "bestOpponentMatches"
   | "bestPartnerStreak"
-  | "unbeatenSessions";
+  | "unbeatenSessions"
+  | "dominatedSessions";
 
 /** 업적 정의와 진행도 지표를 한 행에 함께 둔 표(표 순서) */
 const ACHIEVEMENT_TABLE: readonly {
@@ -405,6 +406,28 @@ const ACHIEVEMENT_TABLE: readonly {
       target: 1,
     },
   },
+  {
+    metric: "dominatedSessions",
+    definition: {
+      id: "dominator-1",
+      category: "session",
+      name: "세션 지배자",
+      condition: "끝난 세션에서 복식 평점이 가장 많이 오름",
+      badgeNumber: null,
+      target: 1,
+    },
+  },
+  {
+    metric: "dominatedSessions",
+    definition: {
+      id: "dominator-10",
+      category: "session",
+      name: "세션 지배자 10회",
+      condition: "세션 지배자 10번",
+      badgeNumber: 10,
+      target: 10,
+    },
+  },
 ];
 
 export const ACHIEVEMENTS: readonly AchievementDefinition[] =
@@ -547,19 +570,34 @@ interface SessionRecord {
   allWon: boolean;
   /** 전승 상태로 UNBEATEN_SESSION_MIN_MATCHES번째 경기를 마친 경기 */
   qualifiedMatch: CountedMatch | null;
+  /** 이 세션에서 한 마지막 경기 */
+  lastMatch: CountedMatch;
 }
 
+/** 세션 단위로 다 훑은 뒤에 판정하는 지표. 나중 경기나 세션 종료로 결과가 정해진다 */
+type SessionEventMetric = "unbeatenSessions" | "dominatedSessions";
+
+const isSessionEventMetric = (
+  metric: AchievementMetric,
+): metric is SessionEventMetric =>
+  metric === "unbeatenSessions" || metric === "dominatedSessions";
+
+const NO_SESSIONS: ReadonlySet<string> = new Set();
+
 /**
- * 한 회원의 업적 32개 진행 상태(ACHIEVEMENTS 순서).
+ * 한 회원의 업적 34개 진행 상태(ACHIEVEMENTS 순서).
  * 완료 경기만(진행 중·취소 제외) 완료 시각 순으로 훑어, 진행도가 목표에 처음 닿은
  * 경기를 받게 된 경기로, 그 경기 완료 시각을 받은 날로 정한다.
  * 승패가 갈리지 않은 경기는 승리에는 세지 않고 연승·콤비 연승·무패 세션은 끊는다.
  * 경기 수·단짝·라이벌·세션 진행도에는 센다.
  * 무패 세션은 그 세션의 모든 경기로 판정하므로, 4경기 전승 뒤 같은 세션에서 지면 받지 않은 상태가 된다.
+ * 세션 지배자는 경기만으로 알 수 없어 서버가 정한 dominatedSessionIds(이 회원이 지배자로 확정된
+ * 끝난 세션)로 세고, 그 세션에서 이 회원의 마지막 경기를 받은 경기로 정한다.
  */
 export function computeAchievements(
   playerId: string,
   matches: readonly AchievementMatch[],
+  dominatedSessionIds: ReadonlySet<string> = NO_SESSIONS,
 ): AchievementProgress[] {
   const metrics: Record<AchievementMetric, number> = {
     matches: 0,
@@ -577,6 +615,7 @@ export function computeAchievements(
     bestOpponentMatches: 0,
     bestPartnerStreak: 0,
     unbeatenSessions: 0,
+    dominatedSessions: 0,
   };
   const progress: AchievementProgress[] = ACHIEVEMENTS.map((definition) => ({
     id: definition.id,
@@ -664,9 +703,11 @@ export function computeAchievements(
         matches: 0,
         allWon: true,
         qualifiedMatch: null,
+        lastMatch: match,
       };
       sessions.set(sessionId, session);
       session.matches += 1;
+      session.lastMatch = match;
       if (!won) session.allWon = false;
       if (session.allWon && session.matches === UNBEATEN_SESSION_MIN_MATCHES) {
         session.qualifiedMatch = match;
@@ -681,8 +722,7 @@ export function computeAchievements(
     for (const item of progress) {
       if (item.earned) continue;
       const metric = ACHIEVEMENT_METRIC_BY_ID.get(item.id)!;
-      // 무패 세션은 나중 경기로 조건이 깨질 수 있어 다 훑은 뒤에 판정한다.
-      if (metric === "unbeatenSessions") continue;
+      if (isSessionEventMetric(metric)) continue;
       if (metrics[metric] >= item.target) {
         item.earned = true;
         item.earnedAt = match.completedAt;
@@ -691,19 +731,33 @@ export function computeAchievements(
     }
   }
 
-  // 무패 세션: 끝까지 전승인 세션만 세고, 그중 가장 먼저 조건을 채운 경기를 받은 경기로 정한다.
-  const unbeatenMatches = [...sessions.values()]
-    .flatMap((session) =>
-      session.allWon && session.qualifiedMatch ? [session.qualifiedMatch] : [],
-    )
-    .sort(compareCountedMatches);
-  metrics.unbeatenSessions = unbeatenMatches.length;
+  // 세션 단위 지표는 해당 세션마다 조건을 채운 경기를 모아, 시간순 target번째 경기를 받은 경기로 정한다.
+  // 무패 세션: 끝까지 전승인 세션의 전승 4번째 경기. 세션 지배자: 지배 세션의 내 마지막 경기.
+  const sessionEventMatches: Record<SessionEventMetric, CountedMatch[]> = {
+    unbeatenSessions: [],
+    dominatedSessions: [],
+  };
+  for (const [sessionId, session] of sessions) {
+    if (session.allWon && session.qualifiedMatch) {
+      sessionEventMatches.unbeatenSessions.push(session.qualifiedMatch);
+    }
+    if (dominatedSessionIds.has(sessionId)) {
+      sessionEventMatches.dominatedSessions.push(session.lastMatch);
+    }
+  }
+  for (const [metric, eventMatches] of Object.entries(sessionEventMatches) as [
+    SessionEventMetric,
+    CountedMatch[],
+  ][]) {
+    eventMatches.sort(compareCountedMatches);
+    metrics[metric] = eventMatches.length;
+  }
 
   for (const item of progress) {
     const metric = ACHIEVEMENT_METRIC_BY_ID.get(item.id)!;
     item.current = metrics[metric];
-    if (metric === "unbeatenSessions" && item.current >= item.target) {
-      const earnedMatch = unbeatenMatches[item.target - 1];
+    if (isSessionEventMetric(metric) && item.current >= item.target) {
+      const earnedMatch = sessionEventMatches[metric][item.target - 1];
       item.earned = true;
       item.earnedAt = earnedMatch.completedAt;
       item.earnedMatchId = earnedMatch.id;
@@ -733,6 +787,7 @@ export const toEarnedAchievements = (
 /**
  * 경기 저장 전후 계산 차이로 새로 받은 업적을 구한다.
  * 저장 후에 받았고 저장 전에는 받지 않은 업적만 돌려준다(회원 순서 → ACHIEVEMENTS 순서).
+ * 세션 지배자는 세션이 끝난 뒤 정해지므로 넣지 않는다.
  */
 export const findNewAchievements = ({
   playerIds,

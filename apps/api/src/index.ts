@@ -111,6 +111,7 @@ import {
   buildSessionReport,
   countAchievementHolders,
   createRankingContext,
+  findSessionDominations,
   rankPlayersAt,
   toAchievementMatch,
 } from "./services/RankingService";
@@ -1019,18 +1020,29 @@ app.get("/api/players/:playerId/profile-summary", async (req, res) => {
     }
 
     const playerId = req.params.playerId;
-    const [result, ratingChangeLogs, projection] = await Promise.all([
-      matchRepository.findByPlayerId(playerId, 0, 10_000),
-      matchRepository.getPlayerRatingChangeLogs(playerId),
-      playerRatingChartProjectionService.getOrRebuild(playerId),
-    ]);
+    const now = new Date();
+    const [result, ratingChangeLogs, projection, rankingSource] =
+      await Promise.all([
+        matchRepository.findByPlayerId(playerId, 0, 10_000),
+        matchRepository.getPlayerRatingChangeLogs(playerId),
+        playerRatingChartProjectionService.getOrRebuild(playerId),
+        // 세션 지배자 업적은 세션마다 전원의 평점 변화를 비교해야 해서 전체 원천을 읽는다.
+        loadRankingSource(),
+      ]);
     const matches = attachMatchRatingChanges(result.matches, ratingChangeLogs);
+    const dominations = findSessionDominations(
+      rankingSource.context,
+      rankingSource.sessions,
+      now,
+    );
     res.json(
       buildPlayerProfileSummary(
         matches,
         playerId,
         projection.history,
         decoded.playerId,
+        now,
+        dominations.get(playerId),
       ),
     );
   } catch (err) {
@@ -2694,7 +2706,9 @@ app.get("/api/session-reports/:sessionId", async (req, res) => {
     }
     const { context, sessions } = await loadRankingSource();
     const session = sessions.find((candidate) => candidate.id === sessionId);
-    const report = session ? buildSessionReport({ context, session }) : null;
+    const report = session
+      ? buildSessionReport({ context, session, sessions })
+      : null;
     if (!report) {
       throw new RankingRequestError("세션 리포트를 찾을 수 없습니다.", 404);
     }
@@ -2710,14 +2724,9 @@ app.get("/api/achievements/holders", async (req, res) => {
       return;
     }
 
-    const [players, matches] = await Promise.all([
-      authService.getAllPlayers(),
-      matchRepository.findCompletedMatchOutcomes(),
-    ]);
+    const { context, sessions } = await loadRankingSource();
     const response: AchievementHoldersResponse = {
-      counts: countAchievementHolders(
-        createRankingContext(players, [], matches),
-      ),
+      counts: countAchievementHolders(context, sessions),
     };
     res.json(response);
   } catch (err) {

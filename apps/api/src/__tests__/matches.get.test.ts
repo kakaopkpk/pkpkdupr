@@ -357,6 +357,20 @@ describe("GET /api/players/:playerId/profile-summary", () => {
       MatchRepository.prototype,
       "getPlayerRatingChangeLogs",
     ).mockResolvedValue([ratingChangeLog]);
+    // 세션 지배자 업적 계산용 전체 원천. 세션이 없으면 지배자도 없다.
+    vi.spyOn(AuthService.prototype, "getAllPlayers").mockResolvedValue([]);
+    vi.spyOn(
+      MatchRepository.prototype,
+      "getAllRatingChangeLogs",
+    ).mockResolvedValue([]);
+    vi.spyOn(
+      MatchRepository.prototype,
+      "findCompletedMatchOutcomes",
+    ).mockResolvedValue([]);
+    vi.spyOn(
+      MatchRepository.prototype,
+      "findSessionsWithParticipantIds",
+    ).mockResolvedValue([]);
     vi.spyOn(
       PlayerRatingChartProjectionService.prototype,
       "getOrRebuild",

@@ -86,7 +86,7 @@ const compute = (matches: AchievementMatch[]) =>
   computeAchievements(ME, matches);
 
 describe("ACHIEVEMENTS", () => {
-  it("업적 32개를 표 순서로 정의한다", () => {
+  it("업적 34개를 표 순서로 정의한다", () => {
     expect(ACHIEVEMENTS.map((definition) => definition.id)).toEqual([
       "matches-1",
       "matches-10",
@@ -120,8 +120,10 @@ describe("ACHIEVEMENTS", () => {
       "attendance-100",
       "iron-8",
       "unbeaten-session",
+      "dominator-1",
+      "dominator-10",
     ]);
-    expect(new Set(ACHIEVEMENTS.map((item) => item.id)).size).toBe(32);
+    expect(new Set(ACHIEVEMENTS.map((item) => item.id)).size).toBe(34);
   });
 
   it("분류 이름은 경기 수·승리·연승·특별·세션이다", () => {
@@ -146,9 +148,9 @@ describe("isBestStreakAchievement", () => {
 });
 
 describe("computeAchievements", () => {
-  it("경기가 없으면 32개 모두 진행도 0으로 받지 않은 상태다", () => {
+  it("경기가 없으면 34개 모두 진행도 0으로 받지 않은 상태다", () => {
     const progress = compute([]);
-    expect(progress).toHaveLength(32);
+    expect(progress).toHaveLength(34);
     expect(progress.map((item) => item.id)).toEqual(
       ACHIEVEMENTS.map((definition) => definition.id),
     );
@@ -618,6 +620,53 @@ describe("computeAchievements", () => {
         "unbeaten-session",
       ),
     ).toMatchObject({ earned: true, earnedMatchId: fourth.id });
+  });
+
+  it("세션 지배자는 지배 세션 수로 세고, 그 세션에서 내 마지막 경기를 받은 경기로 정한다", () => {
+    const sessionA = [
+      makeMatch({ sessionId: "session-a" }),
+      makeMatch({ won: false, sessionId: "session-a" }),
+    ];
+    const sessionB = [makeMatch({ sessionId: "session-b" })];
+    const matches = [...sessionA, ...sessionB];
+
+    // 지배 세션이 없으면(기본값) 받지 않는다.
+    expect(progressOf(compute(matches), "dominator-1")).toMatchObject({
+      earned: false,
+      current: 0,
+    });
+
+    // 경기를 하지 않은 세션 id는 세지 않는다.
+    const progress = computeAchievements(
+      ME,
+      matches,
+      new Set(["session-b", "session-a", "session-none"]),
+    );
+    expect(progressOf(progress, "dominator-1")).toMatchObject({
+      earned: true,
+      // 시간순으로 먼저인 session-a의 내 마지막 경기
+      earnedMatchId: sessionA[1].id,
+      earnedAt: sessionA[1].completedAt,
+      current: 2,
+    });
+    expect(progressOf(progress, "dominator-10")).toMatchObject({
+      earned: false,
+      current: 2,
+    });
+  });
+
+  it("세션 지배자 10회는 열 번째 지배 세션에서 받는다", () => {
+    const matches = Array.from({ length: 10 }, (_, index) =>
+      makeMatch({ sessionId: `session-${index}` }),
+    );
+    const dominated = new Set(matches.map((_, index) => `session-${index}`));
+    expect(
+      progressOf(computeAchievements(ME, matches, dominated), "dominator-10"),
+    ).toMatchObject({
+      earned: true,
+      earnedMatchId: matches[9].id,
+      current: 10,
+    });
   });
 
   it("진행 중·취소 경기와 완료 시각이 없는 경기, 참가하지 않은 경기는 세지 않는다", () => {
