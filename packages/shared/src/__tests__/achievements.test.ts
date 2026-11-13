@@ -340,21 +340,23 @@ describe("computeAchievements", () => {
     });
   });
 
-  it("힘겹게 쟁취한 승리는 15점 이상 내고 2점 차로 이긴 경기에서 받는다", () => {
+  it("힘겹게 쟁취한 승리는 듀스 끝에 15:14로 이긴 경기에서 받는다", () => {
     const notHardWon = [
-      // 11점제 듀스 승리지만 15점에 못 미친다.
+      // 듀스 승리지만 15점 상한까지 가지 않았다.
       makeMatch({ won: true, scoreA: 14, scoreB: 12 }),
-      // 대회룰 15점 경기처럼 2점 차가 아니면 듀스 끝 승리가 아니다.
+      // 15점을 냈어도 14점 상대가 아니면 듀스 상한 승리가 아니다.
       makeMatch({ won: true, scoreA: 15, scoreB: 7 }),
-      // 15:13이어도 진 경기는 세지 않는다.
-      makeMatch({ won: false, scoreA: 13, scoreB: 15 }),
+      makeMatch({ won: true, scoreA: 15, scoreB: 13 }),
+      makeMatch({ won: true, scoreA: 16, scoreB: 14 }),
+      // 15:14여도 진 경기는 세지 않는다.
+      makeMatch({ won: false, scoreA: 14, scoreB: 15 }),
     ];
     expect(progressOf(compute(notHardWon), "hard-won")).toMatchObject({
       earned: false,
       current: 0,
     });
 
-    const hardWon = makeMatch({ won: true, scoreA: 16, scoreB: 14 });
+    const hardWon = makeMatch({ won: true, scoreA: 15, scoreB: 14 });
     expect(
       progressOf(compute([...notHardWon, hardWon]), "hard-won"),
     ).toMatchObject({ earned: true, earnedMatchId: hardWon.id, current: 1 });
