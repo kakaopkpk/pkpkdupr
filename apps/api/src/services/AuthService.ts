@@ -827,14 +827,16 @@ export class AuthService {
 
     if (stored.authUserId) {
       // 게스트에게 이미 Auth 사용자가 연결돼 있으면 새로 만들지 않고 비밀번호만 바꾼다.
-      await this.updateAuthUser(stored.authUserId, {
-        email: toInternalEmail(stored.username),
-        password: initialPassword,
-      });
+      // 승급을 먼저 확정해, 다른 요청이 먼저 승급한 경우 그 회원의 비밀번호를 덮어쓰지 않는다.
+      // Auth 갱신이 실패해도 첫 로그인 플래그가 켜져 있어 관리자가 비밀번호 초기화로 복구할 수 있다.
       const promoted = await db.players.promoteGuest(stored.id, gender, null);
       if (!promoted) {
         throw stateChangedError();
       }
+      await this.updateAuthUser(stored.authUserId, {
+        email: toInternalEmail(stored.username),
+        password: initialPassword,
+      });
       return {
         player: toPublicPlayer(hydratePlayer(promoted)),
         initialPassword,
