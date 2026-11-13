@@ -9,6 +9,7 @@ import type {
 } from "@pkpkdupr/shared/session";
 import { isRegularSessionTime } from "@pkpkdupr/shared/session";
 import { apiFetch } from "@/lib/api";
+import type { MatchInfo } from "@/types/match";
 
 /** JSON 응답 형태(날짜는 문자열) */
 export type MatchSessionDetailInfo = Omit<MatchSessionDetail, "date"> & {
@@ -126,6 +127,13 @@ export const fetchSessionRecommendations = (
     "추천 매칭을 불러오지 못했어요.",
   );
 };
+
+/** 세션의 경기 전부(진행 중 경기 포함) */
+export const fetchSessionMatches = (sessionId: string) =>
+  requestJson<MatchInfo[]>(
+    `${sessionPath(sessionId)}/matches`,
+    "세션 경기를 불러오지 못했어요.",
+  );
 
 /** 점수 없는 진행 중 경기를 시작한다 */
 export const startSessionMatch = async (

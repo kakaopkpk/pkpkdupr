@@ -2,9 +2,18 @@ import type {
   CompletedMatchOutcome,
   SessionWithParticipantIds,
 } from "@pkpkdupr/db";
+import type { Match } from "@pkpkdupr/shared/match";
 import type { Player, PlayerRatingChangeLog } from "@pkpkdupr/shared/player";
 import request from "supertest";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+  type MockInstance,
+} from "vitest";
 import { app } from "../index";
 import { MatchRepository } from "../repositories/MatchRepository";
 import {
@@ -41,6 +50,7 @@ const session: SessionWithParticipantIds = {
   date: new Date("2026-11-09T09:00:00.000Z"),
   location: "야탑초등학교",
   kind: "regular",
+  startTime: "18:00",
   participantIds: [alice.id, bob.id],
 };
 const emptySession: SessionWithParticipantIds = {
@@ -54,6 +64,7 @@ const match: CompletedMatchOutcome = {
   id: "Mmatch01",
   type: "unrestricted-doubles",
   sessionId: session.id,
+  matchStartsAt: completedAt,
   completedAt,
   teamPlayerIds: [[alice.id], [bob.id]],
   scores: [{ scoreA: 11, scoreB: 7 }],
@@ -72,6 +83,8 @@ const makeLog = (
   delta: { singles: 0, doubles: next - previous },
   createdAt: completedAt,
 });
+
+const carolId = "Pcarol01";
 
 const authorized = (path: string) =>
   request(app).get(path).set("Authorization", "Bearer test-token");
@@ -112,6 +125,7 @@ describe("랭킹·세션 리포트 API", () => {
     "/api/session-reports",
     `/api/session-reports/${session.id}`,
     "/api/achievements/holders",
+    "/api/records",
   ])("%s는 토큰이 없으면 401이다", async (path) => {
     const response = await request(app).get(path);
     expect(response.status).toBe(401);
@@ -188,6 +202,7 @@ describe("랭킹·세션 리포트 API", () => {
           kind: "regular",
           date: session.date.toISOString(),
           dateKey: "2026-11-09",
+          startTime: "18:00",
           location: "야탑초등학교",
           participantCount: 2,
           matchCount: 1,
@@ -291,4 +306,132 @@ describe("랭킹·세션 리포트 API", () => {
       expect(response.status).toBe(404);
     },
   );
+
+  describe("GET /api/records", () => {
+    // 세션(11-09 09:00)보다 늦게 시작한 세션 없는 경기와 이른 경기
+    const laterMatch: CompletedMatchOutcome = {
+      ...match,
+      id: "Mlater01",
+      sessionId: null,
+      matchStartsAt: new Date("2026-11-11T09:00:00.000Z"),
+      completedAt: new Date("2026-11-11T09:30:00.000Z"),
+      teamPlayerIds: [[bob.id], [carolId]],
+    };
+    const earlierMatch: CompletedMatchOutcome = {
+      ...match,
+      id: "Mearly01",
+      sessionId: null,
+      matchStartsAt: new Date("2026-11-01T09:00:00.000Z"),
+      completedAt: new Date("2026-11-01T09:30:00.000Z"),
+    };
+    // 같은 시각이면 id 내림차순이다
+    const tiedMatch: CompletedMatchOutcome = {
+      ...earlierMatch,
+      id: "Mearly02",
+    };
+    const toPublicMatch = (outcome: CompletedMatchOutcome) =>
+      ({
+        id: outcome.id,
+        type: outcome.type,
+        status: "completed",
+        matchStartsAt: outcome.matchStartsAt,
+      }) as unknown as Match;
+
+    let findByIds: MockInstance<MatchRepository["findByIds"]>;
+
+    beforeEach(() => {
+      vi.spyOn(
+        MatchRepository.prototype,
+        "findCompletedMatchOutcomes",
+      ).mockResolvedValue([match, laterMatch, earlierMatch, tiedMatch]);
+      findByIds = vi
+        .spyOn(MatchRepository.prototype, "findByIds")
+        .mockImplementation(async (ids: string[]) =>
+          [laterMatch, earlierMatch, tiedMatch]
+            .filter((outcome) => ids.includes(outcome.id))
+            .map(toPublicMatch),
+        );
+    });
+
+    it("세션과 세션 없는 경기를 시각 내림차순 → id 내림차순으로 섞고 mine은 세션 리포트의 요청자 줄과 같다", async () => {
+      const [records, report] = await Promise.all([
+        authorized("/api/records"),
+        authorized(`/api/session-reports/${session.id}`),
+      ]);
+
+      expect(records.status).toBe(200);
+      expect(
+        records.body.items.map((item: { kind: string; session?: { id: string }; match?: { id: string } }) =>
+          item.kind === "session" ? item.session?.id : item.match?.id,
+        ),
+      ).toEqual([laterMatch.id, session.id, tiedMatch.id, earlierMatch.id]);
+      expect(records.body.nextCursor).toBeNull();
+
+      const sessionItem = records.body.items[1];
+      expect(sessionItem.session).toEqual(report.body.session);
+      expect(sessionItem.session.startTime).toBe("18:00");
+      expect(sessionItem.mine).toEqual(
+        report.body.players.find(
+          (row: { player: { id: string } }) => row.player.id === alice.id,
+        ),
+      );
+    });
+
+    it("요청자가 안 뛴 세션의 mine은 null이다", async () => {
+      vi.spyOn(
+        AuthService.prototype,
+        "authenticateAccessToken",
+      ).mockResolvedValue({
+        ...authSession,
+        payload: { playerId: carolId, isAdmin: false },
+      });
+
+      const response = await authorized("/api/records");
+
+      expect(response.status).toBe(200);
+      expect(
+        response.body.items.find(
+          (item: { kind: string }) => item.kind === "session",
+        ).mine,
+      ).toBeNull();
+    });
+
+    it("cursor로 이어 받으면 중복·누락 없이 끝까지 가고 페이지 경기만 hydrate한다", async () => {
+      const first = await authorized("/api/records?limit=2");
+      expect(first.status).toBe(200);
+      expect(first.body.items).toHaveLength(2);
+      expect(first.body.nextCursor).toEqual(expect.any(String));
+      expect(findByIds).toHaveBeenLastCalledWith([laterMatch.id]);
+
+      const second = await authorized(
+        `/api/records?limit=2&cursor=${encodeURIComponent(first.body.nextCursor)}`,
+      );
+      expect(second.status).toBe(200);
+      expect(
+        second.body.items.map((item: { match: { id: string } }) => item.match.id),
+      ).toEqual([tiedMatch.id, earlierMatch.id]);
+      expect(second.body.nextCursor).toBeNull();
+      expect(findByIds).toHaveBeenLastCalledWith([tiedMatch.id, earlierMatch.id]);
+    });
+
+    it("playerId를 주면 그 회원이 뛴 세션·경기만 남긴다", async () => {
+      const response = await authorized(`/api/records?playerId=${carolId}`);
+
+      expect(response.status).toBe(200);
+      expect(response.body.items).toEqual([
+        expect.objectContaining({
+          kind: "match",
+          match: expect.objectContaining({ id: laterMatch.id }),
+        }),
+      ]);
+    });
+
+    it.each(["limit=abc", "limit=0", "cursor=abc", "cursor=123_Xnotid1"])(
+      "%s면 400이다",
+      async (query) => {
+        const response = await authorized(`/api/records?${query}`);
+        expect(response.status).toBe(400);
+      },
+    );
+  });
 });

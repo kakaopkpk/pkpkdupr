@@ -32,6 +32,7 @@ import MatchDetailDrawer from "@/components/match/MatchDetailDrawer";
 import AchievementDetailSheet from "@/components/profile/AchievementDetailSheet";
 import MemberProfileDrawer from "@/components/profile/MemberProfileDrawer";
 import RecordMatchSheet from "@/components/record/RecordMatchSheet";
+import SessionReportDrawer from "@/components/records/SessionReportDrawer";
 import CreateSessionSheet from "@/components/session/CreateSessionSheet";
 import SettingsDrawer from "@/components/settings/SettingsDrawer";
 import {
@@ -39,7 +40,6 @@ import {
   AppNavigationProvider,
   type AppNavigationContextValue,
   type RecordMatchSheetRequest,
-  type SessionReportRequest,
 } from "@/context/AppNavigationContext";
 import { useAuth } from "@/context/AuthContext";
 import { ScreenVisibilityProvider } from "@/context/ScreenVisibilityContext";
@@ -151,10 +151,11 @@ const isTabDepthHistoryState = (
 
 type GlobalScreenRoute =
   | { kind: "match-detail"; matchId: string }
-  | { kind: "member-profile"; playerId: string };
+  | { kind: "member-profile"; playerId: string }
+  | { kind: "session-report"; sessionId: string };
 
 /**
- * 화면 위에 계속 쌓을 수 있는 전역 화면(경기 상세·회원 프로필) 하나.
+ * 화면 위에 계속 쌓을 수 있는 전역 화면(경기 상세·회원 프로필·세션 상세) 하나.
  * id는 깊이 id로도 쓰며, 닫힌 뒤(isOpen=false)에도 닫히는 움직임이 끝날 때까지 남는다.
  */
 interface GlobalScreenEntry {
@@ -164,10 +165,16 @@ interface GlobalScreenEntry {
   isOpen: boolean;
 }
 
-const isSameRoute = (a: GlobalScreenRoute, b: GlobalScreenRoute) =>
-  a.kind === "match-detail"
-    ? b.kind === "match-detail" && a.matchId === b.matchId
-    : b.kind === "member-profile" && a.playerId === b.playerId;
+const isSameRoute = (a: GlobalScreenRoute, b: GlobalScreenRoute) => {
+  switch (a.kind) {
+    case "match-detail":
+      return b.kind === "match-detail" && a.matchId === b.matchId;
+    case "member-profile":
+      return b.kind === "member-profile" && a.playerId === b.playerId;
+    case "session-report":
+      return b.kind === "session-report" && a.sessionId === b.sessionId;
+  }
+};
 
 /** 전역 화면 하나의 열림 상태. tabKey는 연 탭이며 닫힌 뒤에도 닫히는 애니메이션을 위해 유지한다 */
 interface GlobalLayerState<T> {
@@ -192,8 +199,6 @@ const BottomNav: React.FC = () => {
   const [isGlobalMenuOpen, setIsGlobalMenuOpen] = useState(false);
   const [globalMenuTabKey, setGlobalMenuTabKey] = useState<TabKey>("home");
   const [dataVersion, setDataVersion] = useState(0);
-  const [sessionReportRequest, setSessionReportRequest] =
-    useState<SessionReportRequest | null>(null);
   const [globalScreens, setGlobalScreens] = useState<GlobalScreenEntry[]>([]);
   const [recordMatchLayer, setRecordMatchLayer] =
     useState<GlobalLayerState<RecordMatchSheetRequest>>(closedLayer);
@@ -591,11 +596,9 @@ const BottomNav: React.FC = () => {
   );
 
   const openSessionReport = useCallback(
-    (sessionId: string) => {
-      setSessionReportRequest({ sessionId, requestedAt: Date.now() });
-      selectTab("records");
-    },
-    [selectTab],
+    (sessionId: string) =>
+      openGlobalScreen({ kind: "session-report", sessionId }),
+    [openGlobalScreen],
   );
 
   const reloadLiveSession = liveSessionState.reload;
@@ -1114,7 +1117,6 @@ const BottomNav: React.FC = () => {
       openSettings,
       openAchievementDetail,
       openSessionReport,
-      sessionReportRequest,
       notifyDataChanged,
       dataVersion,
     }),
@@ -1129,7 +1131,6 @@ const BottomNav: React.FC = () => {
       openSessionReport,
       openSettings,
       selectTab,
-      sessionReportRequest,
     ],
   );
 
@@ -1255,29 +1256,41 @@ const BottomNav: React.FC = () => {
 
             <PwaInstallPrompt isActive={isHomeTabUncovered} />
 
-            {globalScreens.map((screen) =>
-              screen.route.kind === "match-detail" ? (
-                <MatchDetailDrawer
-                  key={screen.id}
-                  matchId={screen.route.matchId}
-                  isOpen={screen.isOpen}
-                  tabKey={screen.tabKey}
-                  depthId={screen.id}
-                  onClose={() => closeGlobalScreen(screen.id)}
-                  onExited={() => removeGlobalScreen(screen.id)}
-                />
-              ) : (
-                <MemberProfileDrawer
-                  key={screen.id}
-                  playerId={screen.route.playerId}
-                  isOpen={screen.isOpen}
-                  tabKey={screen.tabKey}
-                  depthId={screen.id}
-                  onClose={() => closeGlobalScreen(screen.id)}
-                  onExited={() => removeGlobalScreen(screen.id)}
-                />
-              ),
-            )}
+            {globalScreens.map((screen) => {
+              const screenProps = {
+                isOpen: screen.isOpen,
+                tabKey: screen.tabKey,
+                depthId: screen.id,
+                onClose: () => closeGlobalScreen(screen.id),
+                onExited: () => removeGlobalScreen(screen.id),
+              };
+              switch (screen.route.kind) {
+                case "match-detail":
+                  return (
+                    <MatchDetailDrawer
+                      key={screen.id}
+                      matchId={screen.route.matchId}
+                      {...screenProps}
+                    />
+                  );
+                case "member-profile":
+                  return (
+                    <MemberProfileDrawer
+                      key={screen.id}
+                      playerId={screen.route.playerId}
+                      {...screenProps}
+                    />
+                  );
+                case "session-report":
+                  return (
+                    <SessionReportDrawer
+                      key={screen.id}
+                      sessionId={screen.route.sessionId}
+                      {...screenProps}
+                    />
+                  );
+              }
+            })}
             <RecordMatchSheet
               request={recordMatchLayer.value}
               tabKey={recordMatchLayer.tabKey}

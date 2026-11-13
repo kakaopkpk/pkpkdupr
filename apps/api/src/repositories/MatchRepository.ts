@@ -264,6 +264,14 @@ export class MatchRepository {
     return match ? hydrateMatch(match) : undefined;
   }
 
+  /** ID 목록의 경기를 같은 순서로 조회한다. 없는 경기는 빠진다 */
+  async findByIds(matchIds: string[]): Promise<Match[]> {
+    const found = await Promise.all(
+      matchIds.map((matchId) => this.findById(matchId)),
+    );
+    return found.filter((match): match is Match => Boolean(match));
+  }
+
   /** ID로 단일 경기 조회 + 이 경기에 의한 DUPR 변동 로그 함께 반환 */
   async findByIdWithRatingChanges(
     matchId: string,
