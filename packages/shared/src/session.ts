@@ -60,7 +60,8 @@ export const canOpenRegularSession = (now: Date): boolean => {
   );
 };
 
-const WEEKDAY_LABELS = ["일", "월", "화", "수", "목", "금", "토"];
+/** KST 요일 한 글자. 0=일요일 */
+export const WEEKDAY_LABELS = ["일", "월", "화", "수", "목", "금", "토"];
 
 /** 정기 세션 이름. 날짜 키의 KST 요일로 "월요 정기운동" | "목요 정기운동" */
 export const getRegularSessionName = (dateKey: string): string =>
@@ -80,6 +81,59 @@ export const getNextRegularSessionDateKey = (now: Date): string => {
   }
   throw new Error("정기 세션 요일이 없습니다.");
 };
+
+/** "HH:MM"(00:00~23:59) 형식이면 true. 같은 형식끼리는 문자열 비교가 시각 순서와 같다 */
+export const isValidSessionTime = (value: unknown): value is string =>
+  typeof value === "string" && /^([01]\d|2[0-3]):[0-5]\d$/.test(value);
+
+/** "18:00" → 1080(0시부터 분) */
+export const sessionTimeToMinutes = (time: string): number => {
+  const [hour, minute] = time.split(":").map(Number);
+  return hour * 60 + minute;
+};
+
+/** 1080 → "18:00" */
+export const minutesToSessionTime = (minutes: number): string =>
+  `${String(Math.floor(minutes / 60)).padStart(2, "0")}:${String(minutes % 60).padStart(2, "0")}`;
+
+/** 정기 세션 시각("HH:MM", KST). 18:00~22:00 */
+export const REGULAR_SESSION_START_TIME = minutesToSessionTime(
+  REGULAR_SESSION_START_HOUR * 60,
+);
+export const REGULAR_SESSION_END_TIME = minutesToSessionTime(
+  REGULAR_SESSION_END_HOUR * 60,
+);
+
+/** 시각의 KST 0시부터 지난 분 */
+export const toKstMinutesOfDay = (date: Date): number => {
+  const kst = toKstShifted(date);
+  return kst.getUTCHours() * 60 + kst.getUTCMinutes();
+};
+
+/** 둘 다 "HH:MM"이고 종료가 시작보다 늦으면 true */
+export const isValidSessionTimeRange = (
+  startTime: unknown,
+  endTime: unknown,
+): boolean =>
+  isValidSessionTime(startTime) &&
+  isValidSessionTime(endTime) &&
+  endTime > startTime;
+
+/** "18:00~22:00". 시각 없는 세션이면 null */
+export const formatSessionTimeRange = ({
+  startTime,
+  endTime,
+}: {
+  startTime: string | null;
+  endTime: string | null;
+}): string | null =>
+  startTime && endTime ? `${startTime}~${endTime}` : null;
+
+/** KST 날짜 키의 "HH:MM"(KST) 시각 */
+export const kstDateKeyTimeToDate = (dateKey: string, time: string): Date =>
+  new Date(
+    kstDateKeyToDate(dateKey).getTime() + sessionTimeToMinutes(time) * 60_000,
+  );
 
 /** YYYY-MM-DD 형식이고 실제 있는 날짜면 true */
 export const isValidKstDateKey = (value: string): boolean =>
@@ -137,6 +191,9 @@ export interface MatchSessionDetail {
   location: string;
   /** date의 KST 날짜 키 */
   dateKey: string;
+  /** 시작·종료 시각("HH:MM", KST). 정기 세션은 18:00~22:00, 시각 없이 만든 회원 세션은 null */
+  startTime: string | null;
+  endTime: string | null;
   /** 오늘(KST) 세션이면 true. 세션 경기 기록/시작·추천은 오늘 세션에서만 되고, 참여자 추가·삭제는 오늘·미래 세션에서 된다 */
   isToday: boolean;
   /** active 회원만 */
@@ -160,6 +217,9 @@ export interface CreateMatchSessionRequest {
   location: string;
   /** 세션 날짜(KST, YYYY-MM-DD). 생략하면 오늘. 오늘보다 이르면 400 */
   dateKey?: string;
+  /** 시작·종료 시각("HH:MM", KST). 둘 다 주거나 둘 다 생략한다. 종료가 시작보다 늦어야 한다 */
+  startTime?: string;
+  endTime?: string;
 }
 
 /** GET /api/match-sessions/upcoming 응답 */

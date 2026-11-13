@@ -48,6 +48,8 @@ const makeSession = (
   participantIds: [],
   matchCount: 0,
   kind: "custom",
+  startTime: null,
+  endTime: null,
   createdAt: thursdayAfternoon,
   updatedAt: thursdayAfternoon,
   ...overrides,

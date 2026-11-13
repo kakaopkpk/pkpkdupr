@@ -1,10 +1,14 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   DEFAULT_MATCH_LOCATION,
+  formatSessionTimeRange,
   kstDateKeyToDate,
   MATCH_SESSION_LOCATION_MAX_LENGTH,
   MATCH_SESSION_NAME_MAX_LENGTH,
+  minutesToSessionTime,
+  REGULAR_SESSION_START_HOUR,
   toKstDateKey,
+  toKstMinutesOfDay,
 } from "@pkpkdupr/shared/session";
 import BottomSheet from "@/components/BottomSheet";
 import { PkButton } from "@/components/ui/Button";
@@ -23,6 +27,13 @@ import {
   type MatchSessionDetailInfo,
 } from "@/lib/matchSessions";
 import { getErrorMessage, isNetworkError } from "./saveError";
+import {
+  SESSION_LAST_END_MINUTES,
+  SESSION_LAST_START_MINUTES,
+  SESSION_TIME_STEP_MINUTES,
+  SessionDatePicker,
+  SessionTimePicker,
+} from "./SessionSchedulePicker";
 
 export interface CreateSessionSheetProps {
   isOpen: boolean;
@@ -33,8 +44,29 @@ export interface CreateSessionSheetProps {
 
 const DEPTH_ID = "global-create-session-sheet";
 const DAY_MS = 24 * 60 * 60 * 1000;
+const DEFAULT_START_MINUTES = REGULAR_SESSION_START_HOUR * 60;
+const DEFAULT_DURATION_MINUTES = 2 * 60;
 
-/** "오늘 · 11월 14일 금" | "내일 · 11월 15일 토" | "11월 17일 월" */
+/**
+ * 기본 시각 18:00~20:00. 이미 18시를 넘긴 오늘이면 지금 이후 첫 30분 단위 시각부터 2시간이며,
+ * 고를 수 있는 마지막 시각을 넘지 않는다
+ */
+const getDefaultTimeRange = (now: Date) => {
+  const nextSlot =
+    Math.ceil(toKstMinutesOfDay(now) / SESSION_TIME_STEP_MINUTES) *
+    SESSION_TIME_STEP_MINUTES;
+  const start = Math.min(
+    Math.max(DEFAULT_START_MINUTES, nextSlot),
+    SESSION_LAST_START_MINUTES,
+  );
+  const end = Math.min(start + DEFAULT_DURATION_MINUTES, SESSION_LAST_END_MINUTES);
+  return {
+    startTime: minutesToSessionTime(start),
+    endTime: minutesToSessionTime(end),
+  };
+};
+
+/** 시트 부제의 날짜 부분. "오늘 · 11월 14일 금" | "내일 · 11월 15일 토" | "11월 17일 월" */
 const formatDateSubtitle = (dateKey: string, todayKey: string) => {
   const label = formatKstShortDate(kstDateKeyToDate(dateKey));
   if (dateKey === todayKey) return `오늘 · ${label}`;
@@ -58,6 +90,9 @@ const CreateSessionForm: React.FC<CreateSessionFormProps> = ({
   // 시트를 여는 순간의 오늘(KST). 열 때마다 폼이 새로 마운트된다
   const [todayKey] = useState(() => toKstDateKey(new Date()));
   const [dateKey, setDateKey] = useState(todayKey);
+  const [timeRange, setTimeRange] = useState(() =>
+    getDefaultTimeRange(new Date()),
+  );
   const [name, setName] = useState("");
   const [location, setLocation] = useState(DEFAULT_MATCH_LOCATION);
   const [isSaving, setIsSaving] = useState(false);
@@ -77,6 +112,8 @@ const CreateSessionForm: React.FC<CreateSessionFormProps> = ({
         name: trimmedName,
         location: trimmedLocation,
         dateKey,
+        startTime: timeRange.startTime,
+        endTime: timeRange.endTime,
       });
       // 시트가 닫힐 때까지 다시 누르지 못하게 성공 후에도 저장 중 상태를 유지한다
       onCreated(session);
@@ -85,7 +122,7 @@ const CreateSessionForm: React.FC<CreateSessionFormProps> = ({
       if (isNetworkError(err)) throw err;
       setError(getErrorMessage(err, "세션을 만들지 못했어요."));
     }
-  }, [dateKey, onCreated, trimmedLocation, trimmedName]);
+  }, [dateKey, onCreated, timeRange, trimmedLocation, trimmedName]);
 
   // 토스트의 "다시 시도"는 그 시점의 입력으로 다시 저장한다
   const saveRef = useRef(save);
@@ -104,7 +141,7 @@ const CreateSessionForm: React.FC<CreateSessionFormProps> = ({
 
   const clearError = () => setError(null);
 
-  // 날짜·이름·장소 세 칸이라 폼의 암묵적 제출이 일어나지 않으므로 한 줄 입력의
+  // 이름·장소 두 칸이라 폼의 암묵적 제출이 일어나지 않으므로 한 줄 입력의
   // 완료/Enter를 직접 저장으로 잇는다. 한글 조합 중 Enter는 조합 확정이다
   const handleEnterToSave = (event: React.KeyboardEvent<HTMLInputElement>) => {
     if (event.key !== "Enter" || event.nativeEvent.isComposing) return;
@@ -117,26 +154,34 @@ const CreateSessionForm: React.FC<CreateSessionFormProps> = ({
       <BottomSheet.Header>
         <SheetTitle
           title="세션 만들기"
-          sub={isDateValid ? formatDateSubtitle(dateKey, todayKey) : undefined}
+          sub={
+            isDateValid
+              ? `${formatDateSubtitle(dateKey, todayKey)} · ${formatSessionTimeRange(timeRange)}`
+              : undefined
+          }
         />
       </BottomSheet.Header>
       <BottomSheet.Body className="min-w-0">
         <form
-          className="flex flex-col gap-4 px-1"
+          className="flex flex-col gap-5 px-1"
           onSubmit={(event) => {
             event.preventDefault();
             void handleSave();
           }}
         >
-          <TextField
-            label="날짜"
-            type="date"
+          <SessionDatePicker
+            todayKey={todayKey}
             value={dateKey}
-            min={todayKey}
-            required
-            error={!isDateValid}
-            onChange={(event) => {
-              setDateKey(event.target.value);
+            onChange={(nextDateKey) => {
+              setDateKey(nextDateKey);
+              clearError();
+            }}
+          />
+          <SessionTimePicker
+            startTime={timeRange.startTime}
+            endTime={timeRange.endTime}
+            onChange={(nextRange) => {
+              setTimeRange(nextRange);
               clearError();
             }}
           />
@@ -197,7 +242,7 @@ const CreateSessionForm: React.FC<CreateSessionFormProps> = ({
   );
 };
 
-/** 전역 세션 만들기 시트. 날짜(기본 오늘)·이름·장소로 세션을 만든다 */
+/** 전역 세션 만들기 시트. 날짜(기본 오늘)·시작·종료 시각·이름·장소로 세션을 만든다 */
 export default function CreateSessionSheet({
   isOpen,
   tabKey,

@@ -32,6 +32,7 @@ import {
   isInProgressMatchExpired,
   isRegularSessionTime,
   isValidKstDateKey,
+  isValidSessionTimeRange,
   kstDateKeyToDate,
   MATCH_SESSION_LOCATION_MAX_LENGTH,
   MATCH_SESSION_NAME_MAX_LENGTH,
@@ -778,6 +779,8 @@ const toMatchSessionDetail = (
     date: session.date,
     location: session.location,
     dateKey,
+    startTime: session.startTime,
+    endTime: session.endTime,
     isToday: dateKey === toKstDateKey(now),
     participants,
     matchCount: session.matchCount,
@@ -1322,10 +1325,24 @@ app.post("/api/match-sessions", async (req, res) => {
       );
     }
 
+    // 시각을 보내지 않는 이전 클라이언트도 받도록 둘 다 생략하면 시각 없는 세션으로 만든다.
+    // 이미 시작한 모임을 뒤늦게 세션으로 만드는 경우가 있어 오늘의 지난 시각도 허용한다
+    const { startTime = null, endTime = null } = body ?? {};
+    if (
+      (startTime != null || endTime != null) &&
+      !isValidSessionTimeRange(startTime, endTime)
+    ) {
+      throw new MatchSessionRequestError(
+        "세션 시작·종료 시각은 HH:MM 형식으로 함께 보내고, 종료가 시작보다 늦어야 합니다.",
+        400,
+      );
+    }
+
     await matchRepository.cleanupExpired(now);
-    // 회원 세션 시각은 고른 날 00:00 KST로 고정해 같은 날 같은 이름은 (name, date) 유니크로 막는다.
+    // 회원 세션 시각(date)은 시작 시각과 상관없이 고른 날 00:00 KST로 고정해
+    // 같은 날 같은 이름은 (name, date) 유니크로 막는다.
     const created = await matchRepository.createSession(
-      { name, date: kstDateKeyToDate(dateKey), location },
+      { name, date: kstDateKeyToDate(dateKey), location, startTime, endTime },
       { conflictOnDuplicate: true },
     );
     res.status(201).json(await requireMatchSessionDetail(created.id, now));
