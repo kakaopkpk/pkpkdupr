@@ -37,6 +37,7 @@ type AchievementMetric =
   | "bestStreak"
   | "perfectWins"
   | "hardWonWins"
+  | "deuceWins"
   | "bestPartnerMatches"
   | "attendedSessions"
   | "bestSessionMatches"
@@ -266,11 +267,22 @@ const ACHIEVEMENT_TABLE: readonly {
   {
     metric: "hardWonWins",
     definition: {
-      id: "hard-won-10",
+      id: "hard-won",
       category: "special",
       name: "힘겹게 쟁취한 승리",
+      condition: "연이은 듀스 끝에 15점 이상 내고 2점 차로 승리",
+      badgeNumber: null,
+      target: 1,
+    },
+  },
+  {
+    metric: "deuceWins",
+    definition: {
+      id: "deuce-master",
+      category: "special",
+      name: "듀스 승부사",
       condition: "양 팀 10점 이상 경기에서 10번 승리",
-      badgeNumber: 10,
+      badgeNumber: null,
       target: 10,
     },
   },
@@ -303,7 +315,7 @@ const ACHIEVEMENT_TABLE: readonly {
       category: "special",
       name: "환상의 콤비",
       condition: "같은 파트너와 복식 5연승",
-      badgeNumber: 5,
+      badgeNumber: null,
       target: 5,
     },
   },
@@ -314,7 +326,7 @@ const ACHIEVEMENT_TABLE: readonly {
       category: "special",
       name: "사교왕",
       condition: "서로 다른 파트너 10명과 복식",
-      badgeNumber: 10,
+      badgeNumber: null,
       target: 10,
     },
   },
@@ -325,7 +337,7 @@ const ACHIEVEMENT_TABLE: readonly {
       category: "special",
       name: "라이벌",
       condition: "같은 상대와 맞대결 20번",
-      badgeNumber: 20,
+      badgeNumber: null,
       target: 20,
     },
   },
@@ -336,7 +348,7 @@ const ACHIEVEMENT_TABLE: readonly {
       category: "special",
       name: "도장깨기",
       condition: "서로 다른 상대 15명에게 승리",
-      badgeNumber: 15,
+      badgeNumber: null,
       target: 15,
     },
   },
@@ -391,7 +403,7 @@ const ACHIEVEMENT_TABLE: readonly {
       category: "session",
       name: "철인",
       condition: "한 세션에서 8경기",
-      badgeNumber: 8,
+      badgeNumber: null,
       target: 8,
     },
   },
@@ -451,8 +463,11 @@ export const ACHIEVEMENT_CATEGORY_LABEL: Record<AchievementCategory, string> = {
   session: "세션",
 };
 
-/** 힘겹게 쟁취한 승리에서 두 팀 모두 넘어야 하는 점수 */
-export const HARD_WON_MIN_POINTS = 10;
+/** 듀스 승부사에서 두 팀 모두 넘어야 하는 점수 */
+export const DEUCE_MIN_POINTS = 10;
+
+/** 힘겹게 쟁취한 승리에서 이긴 팀이 내야 하는 점수. 듀스 끝 승리라 2점 차여야 한다 */
+export const HARD_WON_MIN_POINTS = 15;
 
 export interface AchievementProgress {
   id: string;
@@ -538,12 +553,22 @@ const isPerfect = (scores: readonly MatchScore[], teamIndex: 0 | 1) =>
   scores.length > 0 && sumPoints(scores, teamIndex === 0 ? 1 : 0) === 0;
 
 /** 두 팀 모두 10점 이상. 과거 다중 점수 기록은 게임 하나라도 그러면 해당한다 */
-const isHardFought = (scores: readonly MatchScore[]) =>
+const isDeuceGame = (scores: readonly MatchScore[]) =>
   scores.some(
     (score) =>
-      score.scoreA >= HARD_WON_MIN_POINTS &&
-      score.scoreB >= HARD_WON_MIN_POINTS,
+      score.scoreA >= DEUCE_MIN_POINTS && score.scoreB >= DEUCE_MIN_POINTS,
   );
+
+/**
+ * 연이은 듀스 끝에 15점 이상 내고 2점 차로 이긴 게임이 있다. 몇 점제 경기인지 기록이 없어
+ * 2점 차로 듀스 끝 승리를 알아보므로, 15:7 같은 대회룰 승리는 빠지고 대회룰 15:13은 들어간다.
+ */
+const isHardWon = (scores: readonly MatchScore[], teamIndex: 0 | 1) =>
+  scores.some((score) => {
+    const mine = teamIndex === 0 ? score.scoreA : score.scoreB;
+    const theirs = teamIndex === 0 ? score.scoreB : score.scoreA;
+    return mine >= HARD_WON_MIN_POINTS && mine - theirs === 2;
+  });
 
 /** 무패 세션에 필요한 한 세션 경기 수 */
 export const UNBEATEN_SESSION_MIN_MATCHES = 4;
@@ -590,7 +615,7 @@ const isSessionEventMetric = (
 const NO_SESSIONS: ReadonlySet<string> = new Set();
 
 /**
- * 한 회원의 업적 34개 진행 상태(ACHIEVEMENTS 순서).
+ * 한 회원의 업적 35개 진행 상태(ACHIEVEMENTS 순서).
  * 완료 경기만(진행 중·취소 제외) 완료 시각 순으로 훑어, 진행도가 목표에 처음 닿은
  * 경기를 받게 된 경기로, 그 경기 완료 시각을 받은 날로 정한다.
  * 승패가 갈리지 않은 경기는 승리에는 세지 않고 연승·콤비 연승·무패 세션은 끊는다.
@@ -610,6 +635,7 @@ export function computeAchievements(
     bestStreak: 0,
     perfectWins: 0,
     hardWonWins: 0,
+    deuceWins: 0,
     bestPartnerMatches: 0,
     attendedSessions: 0,
     bestSessionMatches: 0,
@@ -654,7 +680,8 @@ export function computeAchievements(
       streak += 1;
       metrics.bestStreak = Math.max(metrics.bestStreak, streak);
       if (isPerfect(scores, teamIndex)) metrics.perfectWins += 1;
-      if (isHardFought(scores)) metrics.hardWonWins += 1;
+      if (isDeuceGame(scores)) metrics.deuceWins += 1;
+      if (isHardWon(scores, teamIndex)) metrics.hardWonWins += 1;
       if (!isDoublesMatchType(match.type)) metrics.singlesWins += 1;
     } else {
       streak = 0;
