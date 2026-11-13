@@ -9,7 +9,8 @@ export interface SegmentedOption<T extends string> {
 /**
  * #e3e7f0 알약 바탕, 선택 항목 흰 알약.
  * 흰 알약은 옵션과 분리된 인디케이터 하나이고 값이 바뀌면 translateX로만 미끄러진다.
- * 옵션 칸은 가장 긴 라벨 기준 같은 너비(auto-cols-fr)라 인디케이터 크기가 바뀌지 않는다.
+ * 옵션 칸은 auto-cols-fr(minmax(0, 1fr))로 같은 너비라 인디케이터 너비가 칸 하나와 같고 바뀌지 않는다.
+ * 내용 크기로 정해지는 자리에서는 칸 너비가 가장 긴 라벨 기준이 된다.
  */
 export function SegmentedControl<T extends string>({
   options,
@@ -76,6 +77,7 @@ export function SegmentedControl<T extends string>({
  * 세그먼트로 바꾼 뒤 새로 보이는 목록을 200ms 페이드인한다.
  * 첫 마운트·dataVersion 재조회·keep-alive 탭 재표시에서 다시 재생하지 않도록
  * 쓰는 쪽이 세그먼트 onChange에서만 isPlaying을 켜고, 끝나면(onFinish) 끈다.
+ * 전환 결과가 빈 목록·오류라 이 래퍼가 그려지지 않으면 쓰는 쪽이 직접 꺼야 한다.
  */
 export const SegmentSwitchFade: React.FC<{
   isPlaying: boolean;

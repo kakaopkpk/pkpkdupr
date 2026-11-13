@@ -147,8 +147,13 @@ const Ranking: React.FC = () => {
       if (requestId !== requestIdRef.current) return;
       setRanking(response);
       setErrorMessage(null);
+      // 빈 결과면 페이드 래퍼가 그려지지 않으므로 대기 중인 페이드를 버린다. 남겨 두면 나중 재조회에서 재생된다
+      if (response.entries.length + response.unrated.length === 0) {
+        setIsListFading(false);
+      }
     } catch (error) {
       if (requestId !== requestIdRef.current) return;
+      setIsListFading(false);
       setErrorMessage(
         error instanceof Error ? error.message : "랭킹을 불러오지 못했어요.",
       );

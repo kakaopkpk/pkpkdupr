@@ -96,6 +96,10 @@ const Records: React.FC = () => {
         if (requestId !== sessionsRequestRef.current) return;
         setSessions(nextSessions);
         setSessionsStatus("ready");
+        // 목록 없이 끝나면 페이드 래퍼가 그려지지 않으므로 대기 중인 페이드를 버린다. 남겨 두면 나중 재조회에서 재생된다
+        if (nextSessions.length === 0 && !requestedSessionIdRef.current) {
+          setIsListFading(false);
+        }
         setSessionsError(null);
         setSelectedId((previous) => {
           if (
@@ -109,6 +113,7 @@ const Records: React.FC = () => {
         });
       } catch (error) {
         if (requestId !== sessionsRequestRef.current) return;
+        setIsListFading(false);
         setSessionsError(
           getErrorMessage(error, "세션 기록을 불러오지 못했어요."),
         );

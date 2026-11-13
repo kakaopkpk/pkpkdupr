@@ -180,6 +180,8 @@ export default function PlayerMatchesDrawer({
         setNextPage(page + 1);
       } catch (err) {
         if (requestIdRef.current !== requestId) return;
+        // 실패하면 새 목록이 없으므로 대기 중인 페이드를 버린다. 남겨 두면 나중 재조회에서 재생된다
+        setIsListFading(false);
         setHasError(true);
         if (throwOnError) throw err;
       } finally {
@@ -278,7 +280,7 @@ export default function PlayerMatchesDrawer({
         </div>
         {isInitialLoading ? (
           <MatchListSkeleton />
-        ) : (
+        ) : groups.length === 0 && hasError ? null : (
           <SegmentSwitchFade
             isPlaying={isListFading}
             onFinish={() => setIsListFading(false)}
@@ -299,7 +301,7 @@ export default function PlayerMatchesDrawer({
                   </Card>
                 </section>
               ))
-            ) : hasError ? null : (
+            ) : (
               <p className="py-10 text-center text-pk-13 text-pk-muted">
                 완료한 경기가 없어요.
               </p>
