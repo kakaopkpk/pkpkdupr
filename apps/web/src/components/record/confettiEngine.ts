@@ -144,7 +144,8 @@ export function createConfettiEngine(
   };
 
   const tick = (now: number) => {
-    const dt = Math.min(0.033, (now - lastTime) / 1000);
+    // 첫 프레임의 rAF 시각이 add() 때 잰 시각보다 이를 수 있어 0 아래로는 자른다
+    const dt = Math.max(0, Math.min(0.033, (now - lastTime) / 1000));
     lastTime = now;
     backContext?.clearRect(0, 0, width, height);
     frontContext?.clearRect(0, 0, width, height);

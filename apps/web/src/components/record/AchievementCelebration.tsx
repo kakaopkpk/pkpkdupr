@@ -35,7 +35,7 @@ const RING_SPREAD: Keyframe[] = [
 export interface AchievementCelebrationProps {
   /** 띄울 업적. 한 장씩 넘긴다 */
   achievements: readonly AchievementDefinition[];
-  /** 마운트 후 이만큼 기다렸다가 띄운다 */
+  /** 마운트 후 이만큼 기다렸다가 띄운다. 움직임 줄이기면 기다리지 않는다(앞선 세기 연출이 없다) */
   delayMs: number;
   onClose: () => void;
 }
@@ -96,9 +96,9 @@ export default function AchievementCelebration({
   }, []);
 
   useEffect(() => {
-    const id = window.setTimeout(() => setIsOpen(true), delayMs);
+    const id = window.setTimeout(() => setIsOpen(true), isReducedMotion ? 0 : delayMs);
     return () => window.clearTimeout(id);
-  }, [delayMs]);
+  }, [delayMs, isReducedMotion]);
 
   useEffect(
     () => () => {
@@ -214,8 +214,14 @@ export default function AchievementCelebration({
     }
   }, [isOpen, index, isReducedMotion, animate, stopAll]);
 
+  // 열리면 버튼에 포커스를 옮기고, 닫히면(언마운트) 원래 포커스로 돌려준다
   useEffect(() => {
-    if (isOpen) actionsRef.current?.querySelector("button")?.focus({ preventScroll: true });
+    if (!isOpen) return;
+    const previousFocus = document.activeElement;
+    actionsRef.current?.querySelector("button")?.focus({ preventScroll: true });
+    return () => {
+      if (previousFocus instanceof HTMLElement) previousFocus.focus({ preventScroll: true });
+    };
   }, [isOpen]);
 
   const close = useCallback(() => {
@@ -266,6 +272,11 @@ export default function AchievementCelebration({
     if (!isOpen) return;
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") close();
+      // 버튼 하나뿐이라 Tab으로 뒤 시트에 가지 않게 버튼에 묶어 둔다
+      if (event.key === "Tab") {
+        event.preventDefault();
+        actionsRef.current?.querySelector("button")?.focus({ preventScroll: true });
+      }
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
