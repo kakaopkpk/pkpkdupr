@@ -27,10 +27,9 @@ const MIN_RATING_SPAN = 0.3;
 // 화면이 보일 때의 그리기 모션(ms). 선은 숫자 카운트업(COUNT_UP)과 같은 박자로 그린다.
 // 끝점 pop의 onAnimationEnd가 재생 종료를 알리므로 END_DOT_DELAY_MS + END_DOT_POP_MS가
 // 선 그리기와 면 페이드(FILL_DELAY_MS + FILL_FADE_MS)보다 늦게 끝나야 한다. 아니면 다른 모션이 끝나기 전에 animate 클래스가 떨어진다
-const LINE_DRAW = COUNT_UP;
-const FILL_DELAY_MS = LINE_DRAW.delayMs + 300;
+const FILL_DELAY_MS = COUNT_UP.delayMs + 300;
 const FILL_FADE_MS = 400;
-const END_DOT_DELAY_MS = LINE_DRAW.delayMs + LINE_DRAW.durationMs - 50;
+const END_DOT_DELAY_MS = COUNT_UP.delayMs + COUNT_UP.durationMs - 50;
 const END_DOT_POP_MS = 360;
 
 const kstMonthDayFormatter = new Intl.DateTimeFormat("ko-KR", {
@@ -179,8 +178,8 @@ const RatingTrendChart: React.FC<{
             style={
               isPlaying
                 ? {
-                    animationDelay: `${LINE_DRAW.delayMs}ms`,
-                    animationDuration: `${LINE_DRAW.durationMs}ms`,
+                    animationDelay: `${COUNT_UP.delayMs}ms`,
+                    animationDuration: `${COUNT_UP.durationMs}ms`,
                   }
                 : undefined
             }

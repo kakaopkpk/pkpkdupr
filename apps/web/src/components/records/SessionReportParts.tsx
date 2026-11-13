@@ -9,8 +9,8 @@ import {
   COUNT_UP,
   CountUpNumber,
   CountUpPop,
+  COUNT_UP_SECOND,
   CountUpRatingDelta,
-  getCountUpEndMs,
 } from "@/components/ui/CountUpNumber";
 import { RankChange, RatingDelta } from "@/components/ui/Delta";
 import { PlayerAvatar } from "@/components/ui/PlayerAvatar";
@@ -84,27 +84,35 @@ export const SessionRatingCount: React.FC<{
   );
 };
 
-/** 세션 전 순위에서 후 순위로 세는 순위. 세션 전 순위가 없으면 세지 않는다 */
+/** 세션 후 순위 "n위". 세션 전 순위에서 세고, 전 순위가 없으면 세지 않는다. 후 순위가 없으면 "–" */
 export const SessionRankCount: React.FC<{
-  report: Pick<SessionPlayerReport, "rankBefore"> & { rankAfter: number };
-}> = ({ report }) => (
-  <CountUpNumber
-    value={report.rankAfter}
-    from={report.rankBefore ?? report.rankAfter}
-    {...COUNT_UP}
-  />
-);
+  report: Pick<SessionPlayerReport, "rankBefore" | "rankAfter">;
+}> = ({ report }) =>
+  report.rankAfter === null ? (
+    <>–</>
+  ) : (
+    <span>
+      <CountUpNumber
+        value={report.rankAfter}
+        from={report.rankBefore ?? report.rankAfter}
+        {...COUNT_UP}
+      />
+      위
+    </span>
+  );
 
-/** 순위 변동 ▲▼. 숫자를 다 센 뒤 튀어나온다. 변동이 없거나 모르면 그리지 않는다 */
+/** 세션 전후 순위 변동 ▲▼. 순위를 다 센 뒤 튀어나온다. 변동이 없거나 모르면 그리지 않는다 */
 export const SessionRankChangePop: React.FC<{
-  value: number | null;
+  report: Pick<SessionPlayerReport, "rankBefore" | "rankAfter">;
   className?: string;
-}> = ({ value, className }) =>
-  value !== null && value !== 0 ? (
-    <CountUpPop delayMs={getCountUpEndMs(COUNT_UP)}>
-      <RankChange value={value} className={className} />
+}> = ({ report, className }) => {
+  const rankChange = getSessionRankChange(report);
+  return rankChange !== null && rankChange !== 0 ? (
+    <CountUpPop delayMs={COUNT_UP_SECOND.delayMs}>
+      <RankChange value={rankChange} className={className} />
     </CountUpPop>
   ) : null;
+};
 
 /** 세션 평점 변화량. 0부터 세며, 전후 평점 중 하나라도 없으면 "–" */
 export const SessionRatingDeltaCount: React.FC<{
@@ -173,8 +181,11 @@ export const SessionPlayerRatingRow: React.FC<{
     ? "NR"
     : formatRating(report.ratingBefore);
   const showsBefore = ratingLabel === "before-after" && report.ratingAfter !== null;
-  const rankChange = getSessionRankChange(report);
-
+  // "전 → 후"로 보일 때는 후 평점을 전 평점부터 센다(전이 NR이면 0부터)
+  const ratingFrom =
+    showsBefore && !wasUnratedBeforeSession(report)
+      ? report.ratingBefore ?? undefined
+      : undefined;
   return (
     <button
       type="button"
@@ -197,28 +208,14 @@ export const SessionPlayerRatingRow: React.FC<{
         <span className="truncate text-pk-12 text-pk-muted tabular-nums">
           <WinLossCount wins={report.wins} losses={report.losses} /> ·{" "}
           {showsBefore ? `${beforeText} → ` : null}
-          <SessionRatingCount
-            report={report}
-            from={
-              showsBefore && !wasUnratedBeforeSession(report)
-                ? (report.ratingBefore ?? undefined)
-                : undefined
-            }
-          />
+          <SessionRatingCount report={report} from={ratingFrom} />
         </span>
       </span>
       <span className="flex shrink-0 flex-col items-end gap-0.5">
         <SessionRatingDeltaCount report={report} />
         <span className="flex items-baseline gap-1 text-pk-12 font-bold text-pk-sub tabular-nums">
-          {report.rankAfter === null ? (
-            "–"
-          ) : (
-            <span>
-              <SessionRankCount report={{ ...report, rankAfter: report.rankAfter }} />
-              위
-            </span>
-          )}
-          <SessionRankChangePop value={rankChange} />
+          <SessionRankCount report={report} />
+          <SessionRankChangePop report={report} />
         </span>
       </span>
     </button>

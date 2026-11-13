@@ -287,7 +287,6 @@ const RatingRow: React.FC<{
       previousRating={change.previousRating[ratingCategory]}
       nextRating={change.nextRating[ratingCategory]}
       delta={change.delta[ratingCategory]}
-      timing={RATING_COUNT}
     />
   </div>
 );

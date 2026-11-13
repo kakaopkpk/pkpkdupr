@@ -12,7 +12,6 @@ import { MatchRatingChangeCount } from "@/components/match/MatchRatingChangeCoun
 import { Card } from "@/components/ui/Card";
 import {
   COUNT_UP,
-  COUNT_UP_SECOND,
   CountUpNumber,
 } from "@/components/ui/CountUpNumber";
 import { PlayerAvatar, TeamAvatars } from "@/components/ui/PlayerAvatar";
@@ -272,7 +271,6 @@ const RatingChangeCard: React.FC<{
             previousRating={change.previousRating[ratingCategory]}
             nextRating={change.nextRating[ratingCategory]}
             delta={change.delta[ratingCategory]}
-            timing={COUNT_UP_SECOND}
           />
         </button>
       ))}

@@ -1,7 +1,6 @@
 import React from "react";
 import type { SessionPlayerReport } from "@pkpkdupr/shared/ranking";
 import {
-  getSessionRankChange,
   SessionRankChangePop,
   SessionRankCount,
   SessionRatingCount,
@@ -37,7 +36,6 @@ const Stat: React.FC<{
 const LastSessionMeCard: React.FC<{ report: SessionPlayerReport }> = ({
   report,
 }) => {
-  const rankChange = getSessionRankChange(report);
   const winRate =
     report.matchCount > 0
       ? Math.round((report.wins / report.matchCount) * 100)
@@ -59,19 +57,10 @@ const LastSessionMeCard: React.FC<{ report: SessionPlayerReport }> = ({
           <span className="text-pk-13 text-pk-sub">랭킹</span>
           <span className="flex items-baseline gap-1.5">
             <span className="text-pk-26 font-extrabold text-pk-ink tabular-nums">
-              {report.rankAfter === null ? (
-                "–"
-              ) : (
-                <>
-                  <SessionRankCount
-                    report={{ ...report, rankAfter: report.rankAfter }}
-                  />
-                  위
-                </>
-              )}
+              <SessionRankCount report={report} />
             </span>
             <SessionRankChangePop
-              value={rankChange}
+              report={report}
               className="text-pk-15 font-extrabold"
             />
           </span>

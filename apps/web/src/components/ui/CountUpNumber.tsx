@@ -24,7 +24,7 @@ export const COUNT_UP_SECOND = {
 } as const;
 
 /** 목록 줄마다 세기 시작을 늦추는 시간(ms) */
-export const COUNT_UP_ROW_STAGGER_MS = 40;
+const COUNT_UP_ROW_STAGGER_MS = 40;
 
 // 이 줄 수 뒤로는 더 늦추지 않는다. 긴 목록 아래쪽이 오래 0으로 남지 않게 한다
 const COUNT_UP_ROW_STAGGER_MAX_ROWS = 10;
@@ -79,15 +79,13 @@ export const CountUpRatingDelta: React.FC<
 export const CountUpPop: React.FC<{
   delayMs: number;
   children: React.ReactNode;
-  className?: string;
-}> = ({ delayMs, children, className }) => {
+}> = ({ delayMs, children }) => {
   const { isPlaying, finish } = usePlayOnShow();
   return (
     <span
       className={cx(
         "inline-flex",
         isPlaying && "animate-pk-pop motion-reduce:animate-none",
-        className,
       )}
       style={isPlaying ? { animationDelay: `${delayMs}ms` } : undefined}
       onAnimationEnd={finish}
