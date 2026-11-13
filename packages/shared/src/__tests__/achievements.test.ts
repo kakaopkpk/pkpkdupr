@@ -4,6 +4,7 @@ import {
   ACHIEVEMENTS,
   computeAchievements,
   findNewAchievements,
+  isBestStreakAchievement,
   type AchievementMatch,
   type AchievementProgress,
 } from "../achievements";
@@ -20,6 +21,7 @@ const makeMatch = ({
   scoreA,
   scoreB,
   partnerId,
+  opponentIds,
   type,
   sessionId,
   status = "completed",
@@ -29,6 +31,8 @@ const makeMatch = ({
   scoreA?: number;
   scoreB?: number;
   partnerId?: string;
+  /** 기본은 복식 opp-1·opp-2, 단식 opp-1 */
+  opponentIds?: string[];
   type?: MatchType;
   sessionId?: string;
   status?: MatchStatus;
@@ -49,7 +53,9 @@ const makeMatch = ({
     teams: [
       { players: myTeam },
       {
-        players: (doubles ? ["opp-1", "opp-2"] : ["opp-1"]).map((id) => ({
+        players: (
+          opponentIds ?? (doubles ? ["opp-1", "opp-2"] : ["opp-1"])
+        ).map((id) => ({
           id,
         })),
       },
@@ -80,28 +86,42 @@ const compute = (matches: AchievementMatch[]) =>
   computeAchievements(ME, matches);
 
 describe("ACHIEVEMENTS", () => {
-  it("업적 18개를 표 순서로 정의한다", () => {
+  it("업적 32개를 표 순서로 정의한다", () => {
     expect(ACHIEVEMENTS.map((definition) => definition.id)).toEqual([
       "matches-1",
       "matches-10",
       "matches-50",
       "matches-100",
       "matches-300",
+      "matches-1000",
       "wins-1",
       "wins-10",
       "wins-50",
       "wins-100",
+      "wins-500",
+      "wins-1000",
+      "singles-wins-1",
+      "singles-wins-10",
       "streak-3",
       "streak-5",
       "streak-10",
+      "streak-20",
       "perfect-win",
       "hard-won-10",
       "partner-20",
+      "partner-50",
+      "combo-5",
+      "social-10",
+      "rival-20",
+      "dojo-15",
+      "revenge",
       "attendance-10",
       "attendance-30",
+      "attendance-100",
       "iron-8",
+      "unbeaten-session",
     ]);
-    expect(new Set(ACHIEVEMENTS.map((item) => item.id)).size).toBe(18);
+    expect(new Set(ACHIEVEMENTS.map((item) => item.id)).size).toBe(32);
   });
 
   it("분류 이름은 경기 수·승리·연승·특별·세션이다", () => {
@@ -115,10 +135,20 @@ describe("ACHIEVEMENTS", () => {
   });
 });
 
+describe("isBestStreakAchievement", () => {
+  it("연승과 환상의 콤비만 최고 연승 기록 업적이다", () => {
+    expect(
+      ACHIEVEMENTS.filter((definition) =>
+        isBestStreakAchievement(definition.id),
+      ).map((definition) => definition.id),
+    ).toEqual(["streak-3", "streak-5", "streak-10", "streak-20", "combo-5"]);
+  });
+});
+
 describe("computeAchievements", () => {
-  it("경기가 없으면 18개 모두 진행도 0으로 받지 않은 상태다", () => {
+  it("경기가 없으면 32개 모두 진행도 0으로 받지 않은 상태다", () => {
     const progress = compute([]);
-    expect(progress).toHaveLength(18);
+    expect(progress).toHaveLength(32);
     expect(progress.map((item) => item.id)).toEqual(
       ACHIEVEMENTS.map((definition) => definition.id),
     );
@@ -141,6 +171,7 @@ describe("computeAchievements", () => {
     ["matches-50", 50],
     ["matches-100", 100],
     ["matches-300", 300],
+    ["matches-1000", 1000],
   ])("%s는 경기 %i개 완료에서 받는다(단식+복식, 승패 무관)", (id, target) => {
     // 단식 진 경기와 복식 진 경기를 번갈아 넣어 분류·승패와 무관함을 확인한다.
     const build = (count: number) =>
@@ -174,6 +205,8 @@ describe("computeAchievements", () => {
     ["wins-10", 10],
     ["wins-50", 50],
     ["wins-100", 100],
+    ["wins-500", 500],
+    ["wins-1000", 1000],
   ])("%s는 이긴 경기 %i개에서 받는다", (id, target) => {
     // 진 경기를 사이사이 넣어도 승리 수만 센다.
     const build = (wins: number) =>
@@ -199,6 +232,7 @@ describe("computeAchievements", () => {
     ["streak-3", 3],
     ["streak-5", 5],
     ["streak-10", 10],
+    ["streak-20", 20],
   ])("%s는 %i연승에서 받는다", (id, target) => {
     const below = [
       ...repeat(target - 1, () => makeMatch({ won: true })),
@@ -328,6 +362,7 @@ describe("computeAchievements", () => {
   it.each([
     ["attendance-10", 10],
     ["attendance-30", 30],
+    ["attendance-100", 100],
   ])("%s는 경기를 1개 이상 한 서로 다른 세션 %i개에서 받는다", (id, target) => {
     const build = (sessionCount: number) =>
       Array.from({ length: sessionCount }, (_, index) => [
@@ -367,6 +402,222 @@ describe("computeAchievements", () => {
       earnedMatchId: eighth.id,
       current: 8,
     });
+  });
+
+  it.each([
+    ["singles-wins-1", 1],
+    ["singles-wins-10", 10],
+  ])("%s는 단식에서 이긴 경기 %i개에서 받는다", (id, target) => {
+    // 복식 승리와 단식 패배는 세지 않는다.
+    const noise = [
+      ...repeat(target, () => makeMatch({ won: true, partnerId: "p" })),
+      makeMatch({ won: false }),
+    ];
+    const below = [...noise, ...repeat(target - 1, () => makeMatch())];
+    expect(progressOf(compute(below), id)).toMatchObject({
+      earned: false,
+      current: target - 1,
+    });
+
+    const last = makeMatch();
+    expect(progressOf(compute([...below, last]), id)).toMatchObject({
+      earned: true,
+      earnedMatchId: last.id,
+      current: target,
+    });
+  });
+
+  it("단짝 50경기는 같은 파트너와 복식 50경기에서 받는다", () => {
+    const below = repeat(49, () => makeMatch({ partnerId: "partner-a" }));
+    expect(progressOf(compute(below), "partner-50")).toMatchObject({
+      earned: false,
+      current: 49,
+    });
+
+    const fiftieth = makeMatch({ won: false, partnerId: "partner-a" });
+    expect(
+      progressOf(compute([...below, fiftieth]), "partner-50"),
+    ).toMatchObject({ earned: true, earnedMatchId: fiftieth.id, current: 50 });
+  });
+
+  it("환상의 콤비는 같은 파트너와 함께한 경기끼리 5연승이면 받는다", () => {
+    const withA = (won: boolean) => makeMatch({ won, partnerId: "partner-a" });
+    const matches = [
+      ...repeat(3, () => withA(true)),
+      // 다른 파트너·단식 경기는 partner-a와의 연승을 끊지 않는다.
+      makeMatch({ won: false, partnerId: "partner-b" }),
+      makeMatch({ won: false }),
+      withA(true),
+    ];
+    expect(progressOf(compute(matches), "combo-5")).toMatchObject({
+      earned: false,
+      current: 4,
+    });
+
+    const fifth = withA(true);
+    expect(progressOf(compute([...matches, fifth]), "combo-5")).toMatchObject({
+      earned: true,
+      earnedMatchId: fifth.id,
+      current: 5,
+    });
+
+    // partner-a와 진 경기는 연승을 끊는다.
+    expect(
+      progressOf(compute([...matches, withA(false), withA(true)]), "combo-5"),
+    ).toMatchObject({ earned: false, current: 4 });
+  });
+
+  it("사교왕은 서로 다른 파트너 10명과 복식을 하면 받는다", () => {
+    const below = [
+      ...Array.from({ length: 9 }, (_, index) =>
+        makeMatch({ won: false, partnerId: `partner-${index}` }),
+      ),
+      // 같은 파트너와 다시 한 경기, 단식 경기는 늘리지 않는다.
+      makeMatch({ partnerId: "partner-0" }),
+      makeMatch({ opponentIds: ["solo"] }),
+    ];
+    expect(progressOf(compute(below), "social-10")).toMatchObject({
+      earned: false,
+      current: 9,
+    });
+
+    const tenth = makeMatch({ partnerId: "partner-9" });
+    expect(progressOf(compute([...below, tenth]), "social-10")).toMatchObject({
+      earned: true,
+      earnedMatchId: tenth.id,
+      current: 10,
+    });
+  });
+
+  it("라이벌은 같은 상대와 맞대결 20번에서 받는다(단식·복식, 승패 무관)", () => {
+    const build = (count: number) =>
+      Array.from({ length: count }, (_, index) =>
+        index % 2
+          ? makeMatch({ won: false, opponentIds: ["rival"] })
+          : makeMatch({
+              won: true,
+              partnerId: `partner-${index}`,
+              opponentIds: ["rival", `other-${index}`],
+            }),
+      );
+    expect(progressOf(compute(build(19)), "rival-20")).toMatchObject({
+      earned: false,
+      current: 19,
+    });
+
+    const reached = build(20);
+    expect(progressOf(compute(reached), "rival-20")).toMatchObject({
+      earned: true,
+      earnedMatchId: reached.at(-1)?.id,
+      current: 20,
+    });
+  });
+
+  it("도장깨기는 서로 다른 상대 15명에게 이기면 받는다(복식은 상대 팀 각 선수)", () => {
+    const below = [
+      // 복식 승리 한 번에 상대 두 명을 센다: 7경기로 14명.
+      ...Array.from({ length: 7 }, (_, index) =>
+        makeMatch({
+          partnerId: "mate",
+          opponentIds: [`opp-${index * 2}`, `opp-${index * 2 + 1}`],
+        }),
+      ),
+      // 이미 이긴 상대에게 또 이기거나, 진 상대는 세지 않는다.
+      makeMatch({ opponentIds: ["opp-0"] }),
+      makeMatch({ won: false, opponentIds: ["opp-14"] }),
+    ];
+    expect(progressOf(compute(below), "dojo-15")).toMatchObject({
+      earned: false,
+      current: 14,
+    });
+
+    const fifteenth = makeMatch({ opponentIds: ["opp-14"] });
+    expect(progressOf(compute([...below, fifteenth]), "dojo-15")).toMatchObject(
+      { earned: true, earnedMatchId: fifteenth.id, current: 15 },
+    );
+  });
+
+  it("리벤지는 파트너·상대가 같은 조합의 직전 경기에서 지고 다음 같은 조합 경기에서 이기면 받는다", () => {
+    const lineup = (won: boolean) =>
+      makeMatch({ won, partnerId: "mate", opponentIds: ["opp-1", "opp-2"] });
+    const loss = lineup(false);
+    const notRevenge = [
+      loss,
+      // 파트너가 다르거나 상대가 한 명이라도 다르면 다른 조합이다.
+      makeMatch({ partnerId: "other", opponentIds: ["opp-1", "opp-2"] }),
+      makeMatch({ partnerId: "mate", opponentIds: ["opp-1", "opp-3"] }),
+    ];
+    expect(progressOf(compute(notRevenge), "revenge")).toMatchObject({
+      earned: false,
+      current: 0,
+    });
+
+    // 상대 팀 선수 순서가 바뀌어도 같은 조합이다.
+    const revenge = makeMatch({
+      partnerId: "mate",
+      opponentIds: ["opp-2", "opp-1"],
+    });
+    expect(
+      progressOf(compute([...notRevenge, revenge]), "revenge"),
+    ).toMatchObject({ earned: true, earnedMatchId: revenge.id, current: 1 });
+
+    // 같은 조합의 직전 경기가 승리였으면 리벤지가 아니다.
+    expect(
+      progressOf(
+        compute([lineup(false), lineup(true), lineup(true)]),
+        "revenge",
+      ).current,
+    ).toBe(1);
+  });
+
+  it("리벤지는 단식에서 같은 상대에게 진 뒤 이겨도 받는다", () => {
+    const matches = [
+      makeMatch({ won: false, opponentIds: ["rival"] }),
+      makeMatch({ won: true, opponentIds: ["rival"] }),
+    ];
+    expect(progressOf(compute(matches), "revenge")).toMatchObject({
+      earned: true,
+      earnedMatchId: matches[1].id,
+    });
+  });
+
+  it("무패 세션은 한 세션에서 4경기 이상 모두 이기면 받고, 같은 세션에서 지면 받지 않은 상태다", () => {
+    const inSession = (won: boolean, sessionId = "session-a") =>
+      makeMatch({ won, sessionId });
+
+    const three = repeat(3, () => inSession(true));
+    expect(progressOf(compute(three), "unbeaten-session")).toMatchObject({
+      earned: false,
+      current: 0,
+    });
+
+    const fourth = inSession(true);
+    const unbeaten = [...three, fourth, inSession(true)];
+    expect(progressOf(compute(unbeaten), "unbeaten-session")).toMatchObject({
+      earned: true,
+      // 네 번째 경기에서 조건을 채운다.
+      earnedMatchId: fourth.id,
+      earnedAt: fourth.completedAt,
+      current: 1,
+    });
+
+    // 같은 세션에서 한 번이라도 지면 무패 세션이 아니다.
+    expect(
+      progressOf(compute([...unbeaten, inSession(false)]), "unbeaten-session"),
+    ).toMatchObject({
+      earned: false,
+      earnedAt: null,
+      earnedMatchId: null,
+      current: 0,
+    });
+
+    // 다른 세션의 패배는 영향이 없다.
+    expect(
+      progressOf(
+        compute([...unbeaten, inSession(false, "session-b")]),
+        "unbeaten-session",
+      ),
+    ).toMatchObject({ earned: true, earnedMatchId: fourth.id });
   });
 
   it("진행 중·취소 경기와 완료 시각이 없는 경기, 참가하지 않은 경기는 세지 않는다", () => {

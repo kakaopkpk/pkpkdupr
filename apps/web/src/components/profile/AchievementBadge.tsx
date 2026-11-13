@@ -17,7 +17,13 @@ type BadgeIconKind =
   | "bolt"
   | "partners"
   | "calendar"
-  | "timer";
+  | "timer"
+  | "heart"
+  | "group"
+  | "versus"
+  | "target"
+  | "rotate"
+  | "star";
 
 /** 24 viewBox 선 아이콘 */
 const BADGE_ICON_PATHS: Record<BadgeIconKind, React.ReactNode> = {
@@ -63,6 +69,36 @@ const BADGE_ICON_PATHS: Record<BadgeIconKind, React.ReactNode> = {
       <path d="M12 13.5V9.5M10 3h4M18 6.5l1.5-1.5" />
     </>
   ),
+  heart: (
+    <path d="M12 19.5s-7-4.3-7-9.7A3.8 3.8 0 0 1 12 7.6a3.8 3.8 0 0 1 7 2.2c0 5.4-7 9.7-7 9.7z" />
+  ),
+  group: (
+    <>
+      <circle cx="12" cy="8" r="2.8" />
+      <circle cx="5.5" cy="10" r="2.2" />
+      <circle cx="18.5" cy="10" r="2.2" />
+      <path d="M7.5 19c.6-2.9 2.3-4.5 4.5-4.5s3.9 1.6 4.5 4.5M2.5 18c.4-1.9 1.5-3 3-3.2M21.5 18c-.4-1.9-1.5-3-3-3.2" />
+    </>
+  ),
+  versus: (
+    <path d="M5 4l9.5 9.5M19 4L9.5 13.5M4 15.5l4.5 4.5M20 15.5L15.5 20M6.5 18L11 13.5M17.5 18L13 13.5" />
+  ),
+  target: (
+    <>
+      <circle cx="12" cy="12" r="8" />
+      <circle cx="12" cy="12" r="4.5" />
+      <circle cx="12" cy="12" r="1" />
+    </>
+  ),
+  rotate: (
+    <>
+      <path d="M4.5 12a7.5 7.5 0 1 0 2.2-5.3" />
+      <path d="M4.5 3.5v3.7h3.7" />
+    </>
+  ),
+  star: (
+    <path d="M12 3.5l2.6 5.3 5.8.8-4.2 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8-4.2-4.1 5.8-.8z" />
+  ),
 };
 
 /** 특별·세션 분류는 업적마다 아이콘이 다르다 */
@@ -70,7 +106,14 @@ const BADGE_ICON_BY_ID: Partial<Record<string, BadgeIconKind>> = {
   "perfect-win": "shield",
   "hard-won-10": "bolt",
   "partner-20": "partners",
+  "partner-50": "partners",
+  "combo-5": "heart",
+  "social-10": "group",
+  "rival-20": "versus",
+  "dojo-15": "target",
+  revenge: "rotate",
   "iron-8": "timer",
+  "unbeaten-session": "star",
 };
 
 const BADGE_ICON_BY_CATEGORY: Record<

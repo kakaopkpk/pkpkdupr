@@ -39,7 +39,14 @@ type AchievementMetric =
   | "hardWonWins"
   | "bestPartnerMatches"
   | "attendedSessions"
-  | "bestSessionMatches";
+  | "bestSessionMatches"
+  | "singlesWins"
+  | "revenges"
+  | "distinctPartners"
+  | "distinctBeatenOpponents"
+  | "bestOpponentMatches"
+  | "bestPartnerStreak"
+  | "unbeatenSessions";
 
 /** 업적 정의와 진행도 지표를 한 행에 함께 둔 표(표 순서) */
 const ACHIEVEMENT_TABLE: readonly {
@@ -102,6 +109,17 @@ const ACHIEVEMENT_TABLE: readonly {
     },
   },
   {
+    metric: "matches",
+    definition: {
+      id: "matches-1000",
+      category: "matches",
+      name: "1000경기",
+      condition: "경기 1000개 완료",
+      badgeNumber: 1000,
+      target: 1000,
+    },
+  },
+  {
     metric: "wins",
     definition: {
       id: "wins-1",
@@ -146,6 +164,50 @@ const ACHIEVEMENT_TABLE: readonly {
     },
   },
   {
+    metric: "wins",
+    definition: {
+      id: "wins-500",
+      category: "wins",
+      name: "500승",
+      condition: "이긴 경기 500개",
+      badgeNumber: 500,
+      target: 500,
+    },
+  },
+  {
+    metric: "wins",
+    definition: {
+      id: "wins-1000",
+      category: "wins",
+      name: "1000승",
+      condition: "이긴 경기 1000개",
+      badgeNumber: 1000,
+      target: 1000,
+    },
+  },
+  {
+    metric: "singlesWins",
+    definition: {
+      id: "singles-wins-1",
+      category: "wins",
+      name: "단식 첫 승",
+      condition: "단식에서 처음 이긴 경기",
+      badgeNumber: null,
+      target: 1,
+    },
+  },
+  {
+    metric: "singlesWins",
+    definition: {
+      id: "singles-wins-10",
+      category: "wins",
+      name: "단식 10승",
+      condition: "단식에서 이긴 경기 10개",
+      badgeNumber: 10,
+      target: 10,
+    },
+  },
+  {
     metric: "bestStreak",
     definition: {
       id: "streak-3",
@@ -176,6 +238,17 @@ const ACHIEVEMENT_TABLE: readonly {
       condition: "열 경기 연달아 승리",
       badgeNumber: 10,
       target: 10,
+    },
+  },
+  {
+    metric: "bestStreak",
+    definition: {
+      id: "streak-20",
+      category: "streak",
+      name: "20연승",
+      condition: "스무 경기 연달아 승리",
+      badgeNumber: 20,
+      target: 20,
     },
   },
   {
@@ -212,6 +285,72 @@ const ACHIEVEMENT_TABLE: readonly {
     },
   },
   {
+    metric: "bestPartnerMatches",
+    definition: {
+      id: "partner-50",
+      category: "special",
+      name: "단짝 50경기",
+      condition: "같은 파트너와 복식 50경기",
+      badgeNumber: 50,
+      target: 50,
+    },
+  },
+  {
+    metric: "bestPartnerStreak",
+    definition: {
+      id: "combo-5",
+      category: "special",
+      name: "환상의 콤비",
+      condition: "같은 파트너와 복식 5연승",
+      badgeNumber: 5,
+      target: 5,
+    },
+  },
+  {
+    metric: "distinctPartners",
+    definition: {
+      id: "social-10",
+      category: "special",
+      name: "사교왕",
+      condition: "서로 다른 파트너 10명과 복식",
+      badgeNumber: 10,
+      target: 10,
+    },
+  },
+  {
+    metric: "bestOpponentMatches",
+    definition: {
+      id: "rival-20",
+      category: "special",
+      name: "라이벌",
+      condition: "같은 상대와 맞대결 20번",
+      badgeNumber: 20,
+      target: 20,
+    },
+  },
+  {
+    metric: "distinctBeatenOpponents",
+    definition: {
+      id: "dojo-15",
+      category: "special",
+      name: "도장깨기",
+      condition: "서로 다른 상대 15명에게 승리",
+      badgeNumber: 15,
+      target: 15,
+    },
+  },
+  {
+    metric: "revenges",
+    definition: {
+      id: "revenge",
+      category: "special",
+      name: "리벤지",
+      condition: "졌던 파트너·상대 조합 그대로 다시 붙어 승리",
+      badgeNumber: null,
+      target: 1,
+    },
+  },
+  {
     metric: "attendedSessions",
     definition: {
       id: "attendance-10",
@@ -234,6 +373,17 @@ const ACHIEVEMENT_TABLE: readonly {
     },
   },
   {
+    metric: "attendedSessions",
+    definition: {
+      id: "attendance-100",
+      category: "session",
+      name: "개근 100회",
+      condition: "경기를 한 세션 100번",
+      badgeNumber: 100,
+      target: 100,
+    },
+  },
+  {
     metric: "bestSessionMatches",
     definition: {
       id: "iron-8",
@@ -244,6 +394,17 @@ const ACHIEVEMENT_TABLE: readonly {
       target: 8,
     },
   },
+  {
+    metric: "unbeatenSessions",
+    definition: {
+      id: "unbeaten-session",
+      category: "session",
+      name: "무패 세션",
+      condition: "한 세션에서 4경기 이상 하고 전부 승리",
+      badgeNumber: null,
+      target: 1,
+    },
+  },
 ];
 
 export const ACHIEVEMENTS: readonly AchievementDefinition[] =
@@ -252,6 +413,12 @@ export const ACHIEVEMENTS: readonly AchievementDefinition[] =
 const ACHIEVEMENT_METRIC_BY_ID = new Map<string, AchievementMetric>(
   ACHIEVEMENT_TABLE.map((row) => [row.definition.id, row.metric]),
 );
+
+/** 진행도가 누적 수가 아니라 최고 연승 기록인 업적(연승·환상의 콤비) */
+export const isBestStreakAchievement = (achievementId: string) => {
+  const metric = ACHIEVEMENT_METRIC_BY_ID.get(achievementId);
+  return metric === "bestStreak" || metric === "bestPartnerStreak";
+};
 
 export const ACHIEVEMENT_CATEGORY_LABEL: Record<AchievementCategory, string> = {
   matches: "경기 수",
@@ -269,7 +436,10 @@ export interface AchievementProgress {
   earned: boolean;
   earnedAt: Date | null;
   earnedMatchId: string | null;
-  /** 지금까지 진행도. 연승은 최고 연승, 단짝은 한 파트너와의 최대 복식 경기 수, 철인은 한 세션 최대 경기 수 */
+  /**
+   * 지금까지 진행도. 연승은 최고 연승, 단짝은 한 파트너와의 최대 복식 경기 수,
+   * 환상의 콤비는 한 파트너와의 최고 연승, 라이벌은 한 상대와의 최대 맞대결 수, 철인은 한 세션 최대 경기 수
+   */
   current: number;
   target: number;
 }
@@ -304,22 +474,25 @@ export interface AchievementTeam {
   players: readonly { id: string }[];
 }
 
-/** 업적에 세는 경기: 완료 + 완료 시각 있음. 완료 시각 오름차순(같으면 id 순) */
+type CountedMatch = AchievementMatch & { completedAt: Date };
+
+/** 완료 시각 오름차순(같으면 id 순) */
+const compareCountedMatches = (left: CountedMatch, right: CountedMatch) =>
+  left.completedAt.getTime() - right.completedAt.getTime() ||
+  (left.id < right.id ? -1 : left.id > right.id ? 1 : 0);
+
+/** 업적에 세는 경기: 완료 + 완료 시각 있음. compareCountedMatches 순 */
 const getCountedMatches = (
   matches: readonly AchievementMatch[],
-): (AchievementMatch & { completedAt: Date })[] =>
+): CountedMatch[] =>
   matches
     .filter(
-      (match): match is AchievementMatch & { completedAt: Date } =>
+      (match): match is CountedMatch =>
         match.status === "completed" &&
         match.completedAt != null &&
         !Number.isNaN(match.completedAt.getTime()),
     )
-    .sort(
-      (left, right) =>
-        left.completedAt.getTime() - right.completedAt.getTime() ||
-        (left.id < right.id ? -1 : left.id > right.id ? 1 : 0),
-    );
+    .sort(compareCountedMatches);
 
 const findTeamIndex = (
   match: AchievementMatch,
@@ -349,11 +522,40 @@ const isHardFought = (scores: readonly MatchScore[]) =>
       score.scoreB >= HARD_WON_MIN_POINTS,
   );
 
+/** 무패 세션에 필요한 한 세션 경기 수 */
+export const UNBEATEN_SESSION_MIN_MATCHES = 4;
+
+/** 같은 조합 판정 키: 내 팀 구성과 상대 팀 구성(팀 안 순서 무관) */
+const getLineupKey = (match: AchievementMatch, teamIndex: 0 | 1) => {
+  const teamKey = (index: 0 | 1) =>
+    match.teams[index].players
+      .map((player) => player.id)
+      .sort()
+      .join(",");
+  return `${teamKey(teamIndex)}|${teamKey(teamIndex === 0 ? 1 : 0)}`;
+};
+
+/** map[key]를 1 올리고 올린 값을 돌려준다 */
+const increment = (map: Map<string, number>, key: string) => {
+  const count = (map.get(key) ?? 0) + 1;
+  map.set(key, count);
+  return count;
+};
+
+interface SessionRecord {
+  matches: number;
+  allWon: boolean;
+  /** 전승 상태로 UNBEATEN_SESSION_MIN_MATCHES번째 경기를 마친 경기 */
+  qualifiedMatch: CountedMatch | null;
+}
+
 /**
- * 한 회원의 업적 18개 진행 상태(ACHIEVEMENTS 순서).
+ * 한 회원의 업적 32개 진행 상태(ACHIEVEMENTS 순서).
  * 완료 경기만(진행 중·취소 제외) 완료 시각 순으로 훑어, 진행도가 목표에 처음 닿은
  * 경기를 받게 된 경기로, 그 경기 완료 시각을 받은 날로 정한다.
- * 승패가 갈리지 않은 경기는 승리에는 세지 않고 연승은 끊는다. 경기 수·단짝·세션 진행도에는 센다.
+ * 승패가 갈리지 않은 경기는 승리에는 세지 않고 연승·콤비 연승·무패 세션은 끊는다.
+ * 경기 수·단짝·라이벌·세션 진행도에는 센다.
+ * 무패 세션은 그 세션의 모든 경기로 판정하므로, 4경기 전승 뒤 같은 세션에서 지면 받지 않은 상태가 된다.
  */
 export function computeAchievements(
   playerId: string,
@@ -368,6 +570,13 @@ export function computeAchievements(
     bestPartnerMatches: 0,
     attendedSessions: 0,
     bestSessionMatches: 0,
+    singlesWins: 0,
+    revenges: 0,
+    distinctPartners: 0,
+    distinctBeatenOpponents: 0,
+    bestOpponentMatches: 0,
+    bestPartnerStreak: 0,
+    unbeatenSessions: 0,
   };
   const progress: AchievementProgress[] = ACHIEVEMENTS.map((definition) => ({
     id: definition.id,
@@ -380,14 +589,20 @@ export function computeAchievements(
 
   let streak = 0;
   const partnerMatches = new Map<string, number>();
-  const sessionMatches = new Map<string, number>();
+  const partnerStreaks = new Map<string, number>();
+  const opponentMatches = new Map<string, number>();
+  const beatenOpponents = new Set<string>();
+  /** 같은 조합의 직전 경기에서 진 조합 */
+  const lostLineups = new Set<string>();
+  const sessions = new Map<string, SessionRecord>();
 
   for (const match of getCountedMatches(matches)) {
     const teamIndex = findTeamIndex(match, playerId);
     if (teamIndex === null) continue;
 
     const scores = match.scores ?? [];
-    const won = getWinningTeamIndex(match) === teamIndex;
+    const winningTeamIndex = getWinningTeamIndex(match);
+    const won = winningTeamIndex === teamIndex;
 
     metrics.matches += 1;
     if (won) {
@@ -396,9 +611,28 @@ export function computeAchievements(
       metrics.bestStreak = Math.max(metrics.bestStreak, streak);
       if (isPerfect(scores, teamIndex)) metrics.perfectWins += 1;
       if (isHardFought(scores)) metrics.hardWonWins += 1;
+      if (!isDoublesMatchType(match.type)) metrics.singlesWins += 1;
     } else {
       streak = 0;
     }
+
+    const lineupKey = getLineupKey(match, teamIndex);
+    if (won && lostLineups.has(lineupKey)) metrics.revenges += 1;
+    // 승패가 갈리지 않은 경기도 직전 경기가 되므로 진 상태를 지운다.
+    if (!won && winningTeamIndex !== null) lostLineups.add(lineupKey);
+    else lostLineups.delete(lineupKey);
+
+    const opponentIds = new Set(
+      match.teams[teamIndex === 0 ? 1 : 0].players.map((player) => player.id),
+    );
+    for (const opponentId of opponentIds) {
+      metrics.bestOpponentMatches = Math.max(
+        metrics.bestOpponentMatches,
+        increment(opponentMatches, opponentId),
+      );
+      if (won) beatenOpponents.add(opponentId);
+    }
+    metrics.distinctBeatenOpponents = beatenOpponents.size;
 
     if (isDoublesMatchType(match.type)) {
       const partnerIds = new Set(
@@ -407,26 +641,49 @@ export function computeAchievements(
           .filter((id) => id !== playerId),
       );
       for (const partnerId of partnerIds) {
-        const count = (partnerMatches.get(partnerId) ?? 0) + 1;
-        partnerMatches.set(partnerId, count);
         metrics.bestPartnerMatches = Math.max(
           metrics.bestPartnerMatches,
-          count,
+          increment(partnerMatches, partnerId),
+        );
+
+        const partnerStreak = won
+          ? (partnerStreaks.get(partnerId) ?? 0) + 1
+          : 0;
+        partnerStreaks.set(partnerId, partnerStreak);
+        metrics.bestPartnerStreak = Math.max(
+          metrics.bestPartnerStreak,
+          partnerStreak,
         );
       }
+      metrics.distinctPartners = partnerMatches.size;
     }
 
     const sessionId = match.session?.id;
     if (sessionId) {
-      const count = (sessionMatches.get(sessionId) ?? 0) + 1;
-      sessionMatches.set(sessionId, count);
-      if (count === 1) metrics.attendedSessions += 1;
-      metrics.bestSessionMatches = Math.max(metrics.bestSessionMatches, count);
+      const session = sessions.get(sessionId) ?? {
+        matches: 0,
+        allWon: true,
+        qualifiedMatch: null,
+      };
+      sessions.set(sessionId, session);
+      session.matches += 1;
+      if (!won) session.allWon = false;
+      if (session.allWon && session.matches === UNBEATEN_SESSION_MIN_MATCHES) {
+        session.qualifiedMatch = match;
+      }
+      if (session.matches === 1) metrics.attendedSessions += 1;
+      metrics.bestSessionMatches = Math.max(
+        metrics.bestSessionMatches,
+        session.matches,
+      );
     }
 
     for (const item of progress) {
       if (item.earned) continue;
-      if (metrics[ACHIEVEMENT_METRIC_BY_ID.get(item.id)!] >= item.target) {
+      const metric = ACHIEVEMENT_METRIC_BY_ID.get(item.id)!;
+      // 무패 세션은 나중 경기로 조건이 깨질 수 있어 다 훑은 뒤에 판정한다.
+      if (metric === "unbeatenSessions") continue;
+      if (metrics[metric] >= item.target) {
         item.earned = true;
         item.earnedAt = match.completedAt;
         item.earnedMatchId = match.id;
@@ -434,8 +691,23 @@ export function computeAchievements(
     }
   }
 
+  // 무패 세션: 끝까지 전승인 세션만 세고, 그중 가장 먼저 조건을 채운 경기를 받은 경기로 정한다.
+  const unbeatenMatches = [...sessions.values()]
+    .flatMap((session) =>
+      session.allWon && session.qualifiedMatch ? [session.qualifiedMatch] : [],
+    )
+    .sort(compareCountedMatches);
+  metrics.unbeatenSessions = unbeatenMatches.length;
+
   for (const item of progress) {
-    item.current = metrics[ACHIEVEMENT_METRIC_BY_ID.get(item.id)!];
+    const metric = ACHIEVEMENT_METRIC_BY_ID.get(item.id)!;
+    item.current = metrics[metric];
+    if (metric === "unbeatenSessions" && item.current >= item.target) {
+      const earnedMatch = unbeatenMatches[item.target - 1];
+      item.earned = true;
+      item.earnedAt = earnedMatch.completedAt;
+      item.earnedMatchId = earnedMatch.id;
+    }
   }
   return progress;
 }
