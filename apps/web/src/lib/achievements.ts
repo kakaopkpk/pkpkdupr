@@ -52,13 +52,17 @@ export const getEarnedAchievementsByRecent = (
           (ACHIEVEMENT_ORDER.get(left.definition.id) ?? 0),
     );
 
-/** 못 받은 업적의 진행 문구. 연승은 최고 기록으로 보여 준다 */
+/** 진행도가 최고 연승인 업적. 못 받았을 때 최고 기록으로 보여 준다 */
+const isBestStreakAchievement = (definition: AchievementDefinition) =>
+  definition.category === "streak" || definition.id === "combo-5";
+
+/** 못 받은 업적의 진행 문구. 연승·환상의 콤비는 최고 기록으로 보여 준다 */
 export const formatAchievementProgress = (
   definition: AchievementDefinition,
   progress: AchievementProgressInfo | null | undefined,
 ) => {
   const current = progress?.current ?? 0;
-  return definition.category === "streak"
+  return isBestStreakAchievement(definition)
     ? `최고 ${current}`
     : `${Math.min(current, definition.target)}/${definition.target}`;
 };
