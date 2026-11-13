@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useState } from "react";
 import { useIsScreenVisible } from "@/context/ScreenVisibilityContext";
 
 interface ShowCycle {
@@ -63,10 +63,7 @@ export interface PlayOnShowState {
 export function usePlayOnShow(isReady = true): PlayOnShowState {
   const playKey = useShowPlayKey(isReady);
   const [finishedKey, setFinishedKey] = useState<number | null>(null);
-  const playKeyRef = useRef(playKey);
-  playKeyRef.current = playKey;
-
-  const finish = useCallback(() => setFinishedKey(playKeyRef.current), []);
+  const finish = useCallback(() => setFinishedKey(playKey), [playKey]);
 
   return { isPlaying: playKey !== null && playKey !== finishedKey, finish };
 }

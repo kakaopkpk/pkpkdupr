@@ -46,8 +46,8 @@ export function useCountUp(to: number, options: CountUpOptions): CountUpState {
 
   // 세는 도중 바뀐 to·from·durationMs도 따라가도록 최신 값을 ref로 읽는다.
   // delayMs는 회차를 시작할 때 값만 쓴다
-  const latestRef = useRef({ to, options });
-  latestRef.current = { to, options };
+  const latestRef = useRef({ to, from, options });
+  latestRef.current = { to, from, options };
 
   useEffect(() => {
     if (skipAnimation || playKey === null) {
@@ -60,7 +60,7 @@ export function useCountUp(to: number, options: CountUpOptions): CountUpState {
       let startedAt: number | null = null;
       const tick = (timestamp: number) => {
         startedAt ??= timestamp;
-        const { to: target, options: latestOptions } = latestRef.current;
+        const { to: target, from: start, options: latestOptions } = latestRef.current;
         const elapsedMs = timestamp - startedAt;
         if (elapsedMs >= latestOptions.durationMs) {
           setDoneKey(playKey);
@@ -68,7 +68,7 @@ export function useCountUp(to: number, options: CountUpOptions): CountUpState {
         }
         setProgress({
           key: playKey,
-          value: getCountUpValue(latestOptions.from ?? 0, target, elapsedMs, latestOptions.durationMs),
+          value: getCountUpValue(start, target, elapsedMs, latestOptions.durationMs),
         });
         frameId = window.requestAnimationFrame(tick);
       };
