@@ -3,8 +3,8 @@ import { Card } from "@/components/ui/Card";
 import { CountUpNumber } from "@/components/ui/CountUpNumber";
 import { LINE_DRAW_MS } from "@/components/profile/RatingTrendChart";
 
-/** 프로필 통계 숫자의 카운트업 시작·길이(ms). 평점 카드의 평점·차트 선 그리기와 함께 움직인다 */
-export const PROFILE_STAT_COUNT = { delayMs: 0, durationMs: LINE_DRAW_MS } as const;
+/** 프로필 통계 숫자의 카운트업 길이(ms). 평점 카드의 평점·차트 선 그리기와 함께 움직인다 */
+export const PROFILE_STAT_COUNT = { durationMs: LINE_DRAW_MS } as const;
 
 /** 0부터 세는 "N승 M패" */
 export const WinLossCount: React.FC<{ wins: number; losses: number }> = ({
