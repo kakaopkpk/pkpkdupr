@@ -124,6 +124,7 @@ describe("랭킹·세션 리포트 API", () => {
     "/api/rankings",
     "/api/session-reports",
     `/api/session-reports/${session.id}`,
+    "/api/achievements/holders",
   ])("%s는 토큰이 없으면 401이다", async (path) => {
     const response = await request(app).get(path);
     expect(response.status).toBe(401);
@@ -224,6 +225,43 @@ describe("랭킹·세션 리포트 API", () => {
       player: { id: alice.id },
       ratingDelta: 0.2,
     });
+    // 받은 시각이 같으면 업적 정의 순서 → 회원 id 순이다.
+    const earned = (playerId: string, achievementId: string) => ({
+      playerId,
+      achievementId,
+      earnedMatchId: match.id,
+      earnedAt: completedAt.toISOString(),
+    });
+    expect(response.body.achievements).toEqual([
+      earned(alice.id, "matches-1"),
+      earned(bob.id, "matches-1"),
+      earned(alice.id, "wins-1"),
+    ]);
+  });
+
+  it("GET /api/achievements/holders는 업적별 받은 활성 회원 수를 모든 업적에 대해 돌려준다", async () => {
+    const response = await authorized("/api/achievements/holders");
+
+    expect(response.status).toBe(200);
+    expect(Object.keys(response.body.counts)).toHaveLength(18);
+    expect(response.body.counts).toMatchObject({
+      "matches-1": 2,
+      "wins-1": 1,
+      "matches-10": 0,
+      "streak-3": 0,
+    });
+  });
+
+  it("GET /api/achievements/holders는 비활성 회원을 세지 않는다", async () => {
+    vi.spyOn(AuthService.prototype, "getAllPlayers").mockResolvedValue([
+      alice,
+      { ...bob, status: "inactive" },
+    ]);
+
+    const response = await authorized("/api/achievements/holders");
+
+    expect(response.status).toBe(200);
+    expect(response.body.counts["matches-1"]).toBe(1);
   });
 
   it("GET /api/session-reports/:sessionId는 id 형식이 틀리면 400이다", async () => {

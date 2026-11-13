@@ -1,7 +1,7 @@
 import React, { useLayoutEffect, useRef, useState } from "react";
 import BottomSheet from "@/components/BottomSheet";
 import HoldToConfirmButton, {
-  SAVE_HOLD_DURATION_MS,
+  HOLD_TO_CONFIRM_DURATION_MS,
 } from "@/components/HoldToConfirmButton";
 import { PkButton } from "@/components/ui/Button";
 import { TextField } from "@/components/ui/Form";
@@ -9,7 +9,7 @@ import {
   TeamAvatars,
   type AvatarPlayer,
 } from "@/components/ui/PlayerAvatar";
-import { TextLink } from "@/components/ui/Section";
+import { ChevronRightIcon } from "@/components/ui/Icons";
 import { SheetTitle } from "@/components/ui/SheetTitle";
 import { cx } from "@/components/ui/cx";
 import { isScoreTie, type ScoreDraft } from "./recordMatch.utils";
@@ -30,14 +30,12 @@ export interface ScoreStepProps {
   onScoreChange: (score: ScoreDraft) => void;
   location: string;
   onLocationChange: (location: string) => void;
-  /** 이 값이 바뀌면 점수 칩을 선택값 근처로 다시 스크롤한다 */
-  scrollKey: number;
   /** 서버 오류나 "고칠 수 없는 경기예요" */
   error: string | null;
   canSave: boolean;
   isSaving: boolean;
-  onChangePlayers: () => void;
-  onCancel: () => void;
+  /** 플레이어 선택으로 돌아간다. 고른 점수·장소는 그대로 남는다 */
+  onBack: () => void;
   onSave: () => void;
 }
 
@@ -47,12 +45,10 @@ export default function ScoreStep({
   onScoreChange,
   location,
   onLocationChange,
-  scrollKey,
   error,
   canSave,
   isSaving,
-  onChangePlayers,
-  onCancel,
+  onBack,
   onSave,
 }: ScoreStepProps): React.ReactElement {
   const [isEditingLocation, setIsEditingLocation] = useState(false);
@@ -84,12 +80,12 @@ export default function ScoreStep({
             <button
               type="button"
               onClick={() => setIsEditingLocation((open) => !open)}
-              className="text-pk-13 text-pk-sub"
+              className="inline-flex items-center gap-0.5 text-pk-13 text-pk-sub"
             >
-              {trimmedLocation || "장소 없음"} ›
+              {trimmedLocation || "장소 없음"}
+              <ChevronRightIcon className="size-3.5 shrink-0" />
             </button>
           }
-          right={<TextLink onPress={onChangePlayers}>선수 바꾸기</TextLink>}
         />
       </BottomSheet.Header>
       <BottomSheet.Body className="pb-2">
@@ -117,7 +113,7 @@ export default function ScoreStep({
         ) : null}
         {([0, 1] as const).map((teamIndex) => (
           <TeamScore
-            key={`${teamIndex}:${scrollKey}`}
+            key={teamIndex}
             players={teams[teamIndex]}
             value={values[teamIndex]}
             isWinner={winnerIndex === teamIndex}
@@ -135,22 +131,17 @@ export default function ScoreStep({
             variant="ghost"
             size="lg"
             disabled={isSaving}
-            onClick={onCancel}
+            onClick={onBack}
           >
-            취소
+            이전
           </PkButton>
           <HoldToConfirmButton
             ariaLabel="길게 눌러 저장"
-            holdDurationMs={SAVE_HOLD_DURATION_MS}
+            holdDurationMs={HOLD_TO_CONFIRM_DURATION_MS}
             isDisabled={!isSaveEnabled}
             onComplete={onSave}
           >
-            <span>길게 눌러 저장</span>
-            {isSaveEnabled ? (
-              <span className="text-pk-13 font-bold tabular-nums text-white/75">
-                {SAVE_HOLD_DURATION_MS / 1000}초
-              </span>
-            ) : null}
+            길게 눌러 저장
           </HoldToConfirmButton>
         </div>
       </BottomSheet.Footer>

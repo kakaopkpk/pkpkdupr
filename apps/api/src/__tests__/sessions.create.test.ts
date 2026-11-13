@@ -337,8 +337,11 @@ describe("admin match sessions", () => {
 
   it("관리자가 세션 경기를 삭제하고 남은 완료 경기를 재계산한다", async () => {
     const deleteMatch = vi
-      .spyOn(MatchRepository.prototype, "delete")
-      .mockResolvedValue(undefined);
+      .spyOn(MatchRepository.prototype, "deleteRecorded")
+      .mockResolvedValue({
+        status: "completed",
+        match: { id: "Mmatch01", status: "completed" } as Match,
+      });
     vi.spyOn(MatchRepository.prototype, "findAll").mockResolvedValue({
       matches: [],
       total: 0,
@@ -359,12 +362,38 @@ describe("admin match sessions", () => {
       .set("Authorization", "Bearer admin-token");
 
     expect(response.status).toBe(200);
-    expect(deleteMatch).toHaveBeenCalledWith("Mmatch01");
+    expect(deleteMatch).toHaveBeenCalledWith("Mmatch01", {
+      deletedByPlayerId: admin.id,
+      deletedByAdmin: true,
+    });
     expect(recalculate).toHaveBeenCalledWith(
-      [],
+      expect.any(Function),
       expect.objectContaining({ source: "manual_recalculation" }),
     );
+    await expect(recalculate.mock.calls[0]![0]()).resolves.toEqual([]);
     expect(response.body.deletedMatchId).toBe("Mmatch01");
+  });
+
+  it("관리자가 진행 중 경기를 지우면 재계산하지 않는다", async () => {
+    vi.spyOn(MatchRepository.prototype, "deleteRecorded").mockResolvedValue({
+      status: "created",
+      match: { id: "Mmatch01", status: "created" } as Match,
+    });
+    const recalculate = vi.spyOn(
+      AuthService.prototype,
+      "recalculateDuprRatings",
+    );
+
+    const response = await request(app)
+      .delete("/api/admin/matches/Mmatch01")
+      .set("Authorization", "Bearer admin-token");
+
+    expect(response.status).toBe(200);
+    expect(recalculate).not.toHaveBeenCalled();
+    expect(response.body).toMatchObject({
+      deletedMatchId: "Mmatch01",
+      perMatchLogCount: 0,
+    });
   });
 
   it("관리자가 아니면 세션 경기를 삭제하지 않는다", async () => {
@@ -372,7 +401,7 @@ describe("admin match sessions", () => {
       ...adminSession,
       payload: { playerId: admin.id, isAdmin: false },
     });
-    const deleteMatch = vi.spyOn(MatchRepository.prototype, "delete");
+    const deleteMatch = vi.spyOn(MatchRepository.prototype, "deleteRecorded");
 
     const response = await request(app)
       .delete("/api/admin/matches/Mmatch01")

@@ -39,6 +39,7 @@ import {
   type MatchSessionKind,
 } from "@pkpkdupr/shared/session";
 import { firstRow, placeholders, type RawQueryResult } from "../db/client";
+import { buildMatchDeletionLogInsert } from "./MatchDeletionLogRepository";
 
 type StoredMatch = typeof matches.$inferSelect;
 type StoredMatchParticipant = typeof matchParticipants.$inferSelect;
@@ -60,6 +61,24 @@ export class MatchRecordUpdateConflictError extends Error {
   constructor() {
     super("기록을 수정할 수 없는 매치 상태입니다.");
     this.name = "MatchRecordUpdateConflictError";
+  }
+}
+
+/** 경기가 없거나 이미 지워졌다 */
+export class MatchNotFoundError extends Error {
+  constructor() {
+    super("매치를 찾을 수 없습니다.");
+    this.name = "MatchNotFoundError";
+  }
+}
+
+export const MATCH_STALE_UPDATE_ERROR_MESSAGE = "다른 회원이 먼저 고쳤어요";
+
+/** 요청이 기준으로 삼은 updatedAt(expectedUpdatedAt)과 저장된 updated_at이 다르다 */
+export class MatchStaleUpdateError extends Error {
+  constructor() {
+    super(MATCH_STALE_UPDATE_ERROR_MESSAGE);
+    this.name = "MatchStaleUpdateError";
   }
 }
 
@@ -117,6 +136,25 @@ export interface UpdateRecordedMatchInput {
   scores: MatchScore[];
   resultSubmittedByPlayerId: string;
   resultSubmittedAt: Date;
+  /** 주면 저장된 updated_at(초 단위)과 같을 때만 고치고, 다르면 MatchStaleUpdateError */
+  expectedUpdatedAt?: Date;
+}
+
+export interface DeleteRecordedMatchInput {
+  /** 감사 로그 id */
+  logId: string;
+  deletedByPlayerId: string;
+  deletedByAdmin: boolean;
+  deletedAt: Date;
+  /** 주면 저장된 updated_at(초 단위)과 같을 때만 지우고, 다르면 MatchStaleUpdateError */
+  expectedUpdatedAt?: Date;
+}
+
+export interface DeletedMatchResult {
+  /** 실제로 지운 행의 상태(DELETE … RETURNING). completed였으면 평점에 반영돼 있던 경기다 */
+  status: MatchStatus;
+  /** 지운 시점의 경기 전체(감사 로그 스냅샷과 같다) */
+  match: Match;
 }
 
 export interface UpdateMatchMetadataInput {
@@ -214,6 +252,30 @@ const parseParticipantDuprSnapshot = (
 };
 
 const REGULAR_DATE_KEY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+
+const toExpectedUpdatedAtSeconds = (expectedUpdatedAt: Date | undefined) =>
+  expectedUpdatedAt ? toUnixTimestampSeconds(expectedUpdatedAt) : null;
+
+const matchesExpectedUpdatedAt = (
+  row: Record<string, unknown>,
+  expectedUpdatedAt: Date | undefined,
+) =>
+  !expectedUpdatedAt ||
+  Number(row.updated_at) === toUnixTimestampSeconds(expectedUpdatedAt);
+
+/** 조건부 쓰기가 아무 행도 바꾸지 못했을 때, 현재 행으로 원인(없음·먼저 고침·상태)을 가른다 */
+const toRecordedMatchWriteError = (
+  row: Record<string, unknown> | undefined,
+  expectedUpdatedAt: Date | undefined,
+) => {
+  if (!row) {
+    return new MatchNotFoundError();
+  }
+  if (!matchesExpectedUpdatedAt(row, expectedUpdatedAt)) {
+    return new MatchStaleUpdateError();
+  }
+  return new MatchRecordUpdateConflictError();
+};
 
 /**
  * MatchRepository - `packages/db`의 경기 저장소.
@@ -621,7 +683,15 @@ export class MatchRepository {
   }
 
   async findById(id: string): Promise<Match | undefined> {
-    const match = await this.db
+    return await this.findByIdWith(this.db, id);
+  }
+
+  /** `executor`(풀 또는 트랜잭션 커넥션)로 경기를 조회·조립한다. */
+  private async findByIdWith(
+    executor: any,
+    id: string,
+  ): Promise<Match | undefined> {
+    const match = await executor
       .select()
       .from(matches)
       .where(eq(matches.id, id))
@@ -632,7 +702,7 @@ export class MatchRepository {
       return undefined;
     }
 
-    return await this.hydrateMatch(match);
+    return await this.hydrateMatch(match, executor);
   }
 
   async findAll(
@@ -1235,6 +1305,201 @@ export class MatchRepository {
     return createdMatches as Match[];
   }
 
+  /**
+   * 점수 없는 진행 중 경기를 만든다. 선수 중 누구든 이미 진행 중 경기(findInProgressPlayerIds와 같은 조건)에 있으면
+   * 아무것도 쓰지 않고 겹치는 첫 선수 id를 돌려준다.
+   * 확인과 생성(세션 참여자 추가 포함)을 advisory 트랜잭션 잠금 하나로 직렬화해, 같은 선수로 동시에 와도 하나만 생긴다.
+   * data.session은 이미 있는 세션이어야 한다.
+   */
+  async createInProgressMatch(
+    data: CreateMatchInput,
+    now: Date,
+  ): Promise<
+    { match: Match; conflictPlayerId?: undefined } | { conflictPlayerId: string }
+  > {
+    if (!isEntityId(data.id, "match")) {
+      throw new Error("유효한 매치 ID가 필요합니다.");
+    }
+    if (data.status !== "created" || (data.scores?.length ?? 0) > 0) {
+      throw new Error("점수 없는 진행 중 경기만 만들 수 있습니다.");
+    }
+    if (data.session && !isEntityId(data.session.id, "session")) {
+      throw new Error("유효한 세션 ID가 필요합니다.");
+    }
+    const playerIds = [
+      ...new Set(data.teams.flatMap((team) => team.players.map((p) => p.id))),
+    ];
+    if (playerIds.length === 0) {
+      throw new Error("경기 선수가 필요합니다.");
+    }
+
+    const transaction = await this.client.transaction("write");
+    let committed = false;
+    try {
+      await transaction.execute(
+        "SELECT pg_advisory_xact_lock(hashtext('pkpkdupr:start-in-progress-match'))",
+      );
+
+      const busy = await transaction.execute({
+        sql: `
+          SELECT DISTINCT p.player_id
+          FROM match_participants p
+          INNER JOIN matches m ON m.id = p.match_id
+          WHERE m.status = 'created'
+            AND m.match_starts_at > $1
+            AND m.match_starts_at <= $2
+            AND NOT EXISTS (SELECT 1 FROM match_scores s WHERE s.match_id = m.id)
+            AND p.player_id IN (${placeholders(playerIds.length, 3)})
+        `,
+        args: [
+          inProgressExpiryCutoff(now),
+          toUnixTimestampSeconds(now),
+          ...playerIds,
+        ],
+      });
+      const busyPlayerIds = new Set(
+        busy.rows.map((row: Record<string, unknown>) => String(row.player_id)),
+      );
+      const conflictPlayerId = playerIds.find((id) => busyPlayerIds.has(id));
+      if (conflictPlayerId) {
+        return { conflictPlayerId };
+      }
+
+      const nowSeconds = toUnixTimestampSeconds(now);
+      const session = data.session;
+      if (session) {
+        // 경기 저장 전에 참여자를 넣어, 저장된 세션 경기의 선수는 항상 참여자이게 한다.
+        const inserted = await transaction.execute({
+          sql: `
+            INSERT INTO match_session_participants (
+              id, session_id, player_id, created_at
+            )
+            VALUES ${playerIds
+              .map((_, index) => `(${placeholders(4, index * 4 + 1)})`)
+              .join(", ")}
+            ON CONFLICT DO NOTHING
+          `,
+          args: playerIds.flatMap((playerId) => [
+            `${session.id}-${playerId}`,
+            session.id,
+            playerId,
+            nowSeconds,
+          ]),
+        });
+        if (inserted.rowsAffected > 0) {
+          await transaction.execute({
+            sql: "UPDATE match_sessions SET updated_at = $1 WHERE id = $2",
+            args: [nowSeconds, session.id],
+          });
+        }
+      }
+
+      await transaction.execute({
+        sql: `
+          INSERT INTO matches (
+            id,
+            type,
+            source,
+            creator_player_id,
+            name,
+            session_id,
+            session_name,
+            session_date,
+            status,
+            location,
+            court_name,
+            match_starts_at,
+            completed_at,
+            result_submitted_by_player_id,
+            result_submitted_at,
+            created_at,
+            updated_at
+          )
+          VALUES (${placeholders(17)})
+        `,
+        args: [
+          data.id,
+          data.type,
+          data.source ?? "player_created",
+          data.creatorPlayerId,
+          data.name?.trim() || null,
+          session?.id ?? null,
+          session?.name?.trim() || null,
+          session ? toUnixTimestampSeconds(toDate(session.date)) : null,
+          data.status,
+          data.location,
+          data.courtName?.trim() || null,
+          toUnixTimestampSeconds(new Date(data.matchStartsAt)),
+          null,
+          null,
+          null,
+          nowSeconds,
+          nowSeconds,
+        ],
+      });
+
+      for (const [teamIndex, team] of data.teams.entries()) {
+        for (const player of team.players) {
+          await transaction.execute({
+            sql: `
+              INSERT INTO match_participants (
+                id,
+                match_id,
+                team_index,
+                player_id,
+                dupr_rating_json
+              )
+              VALUES ($1, $2, $3, $4, $5)
+            `,
+            args: [
+              `${data.id}-team-${teamIndex}-${player.id}`,
+              data.id,
+              teamIndex,
+              player.id,
+              JSON.stringify(player.duprRating ?? null),
+            ],
+          });
+        }
+      }
+
+      await transaction.commit();
+      committed = true;
+    } finally {
+      if (!committed) {
+        transaction.close();
+      }
+    }
+
+    const created = await this.findById(data.id);
+    if (!created) {
+      throw new Error("매치 생성에 실패했습니다.");
+    }
+    return { match: created };
+  }
+
+  /**
+   * 진행 중(점수 없는 created, 이미 시작했고 만료 전) 경기 전부를 시작 시각 최신순으로 돌려준다.
+   * 조건은 findInProgressPlayerIds와 같아 시작 시각이 아직 오지 않은 관리자 예정 경기는 빠진다.
+   */
+  async findInProgressMatches(now: Date): Promise<Match[]> {
+    const result: RawQueryResult = await this.client.execute({
+      sql: `
+        SELECT m.id
+        FROM matches m
+        WHERE m.status = 'created'
+          AND m.match_starts_at > $1
+          AND m.match_starts_at <= $2
+          AND NOT EXISTS (SELECT 1 FROM match_scores s WHERE s.match_id = m.id)
+        ORDER BY m.match_starts_at DESC, m.created_at DESC, m.id DESC
+      `,
+      args: [inProgressExpiryCutoff(now), toUnixTimestampSeconds(now)],
+    });
+    const found = await Promise.all(
+      result.rows.map((row) => this.findById(String(row.id))),
+    );
+    return found.filter((match): match is Match => match !== undefined);
+  }
+
   async fillMissingParticipantDuprSnapshots(
     snapshots: MatchParticipantDuprSnapshot[],
   ): Promise<{
@@ -1392,9 +1657,10 @@ export class MatchRepository {
             result_submitted_by_player_id = $4,
             result_submitted_at = $5,
             completed_at = COALESCE(completed_at, $5),
-            updated_at = $5
+            updated_at = GREATEST($5, updated_at + 1)
           WHERE id = $6
             AND status IN ('created', 'completed')
+            AND ($7::bigint IS NULL OR updated_at = $7)
         `,
         args: [
           data.type,
@@ -1403,10 +1669,18 @@ export class MatchRepository {
           data.resultSubmittedByPlayerId,
           submittedAtSeconds,
           matchId,
+          toExpectedUpdatedAtSeconds(data.expectedUpdatedAt),
         ],
       });
       if (!updateResult.rowsAffected) {
-        throw new MatchRecordUpdateConflictError();
+        const current = await transaction.execute({
+          sql: `SELECT status, updated_at FROM matches WHERE id = $1`,
+          args: [matchId],
+        });
+        throw toRecordedMatchWriteError(
+          current.rows[0],
+          data.expectedUpdatedAt,
+        );
       }
 
       const existingParticipants = await transaction.execute({
@@ -1468,11 +1742,38 @@ export class MatchRepository {
     return updated;
   }
 
-  async delete(matchId: string): Promise<void> {
+  /**
+   * 경기를 지우고 같은 트랜잭션에서 감사 로그(match_deletion_logs)를 남긴다.
+   * 행을 FOR UPDATE로 잠근 뒤 스냅샷을 읽으므로, 같은 경기에 점수 입력(updateRecordedMatch)이 겹치면
+   * 둘 중 하나가 먼저 끝난 상태를 기준으로 처리된다. 지운 행의 상태는 DELETE … RETURNING으로 돌려준다.
+   * 세션은 건드리지 않는다. 경기가 없어진 세션은 빈 세션 정리 규칙(만료 시각 이후 정리)을 따른다.
+   */
+  async deleteRecordedMatch(
+    matchId: string,
+    input: DeleteRecordedMatchInput,
+  ): Promise<DeletedMatchResult> {
     const transaction = await this.client.transaction("write");
     let committed = false;
 
     try {
+      const locked = await transaction.execute({
+        sql: `SELECT status, updated_at FROM matches WHERE id = $1 FOR UPDATE`,
+        args: [matchId],
+      });
+      const lockedRow = locked.rows[0];
+      if (
+        !lockedRow ||
+        !matchesExpectedUpdatedAt(lockedRow, input.expectedUpdatedAt)
+      ) {
+        throw toRecordedMatchWriteError(lockedRow, input.expectedUpdatedAt);
+      }
+
+      // 풀의 다른 커넥션을 기다리면 동시 삭제가 풀을 다 점유했을 때 교착하므로 트랜잭션 커넥션으로 읽는다.
+      const snapshot = await this.findByIdWith(transaction.db, matchId);
+      if (!snapshot) {
+        throw new MatchNotFoundError();
+      }
+
       await transaction.execute({
         sql: `DELETE FROM match_scores WHERE match_id = $1`,
         args: [matchId],
@@ -1482,18 +1783,30 @@ export class MatchRepository {
         args: [matchId],
       });
       const deleted = await transaction.execute({
-        sql: `DELETE FROM matches WHERE id = $1`,
+        sql: `DELETE FROM matches WHERE id = $1 RETURNING status`,
         args: [matchId],
       });
-      if (!deleted.rowsAffected) {
-        throw new Error("MATCH_NOT_FOUND");
+      const deletedRow = deleted.rows[0];
+      if (!deletedRow) {
+        throw new MatchNotFoundError();
       }
+      await transaction.execute(
+        buildMatchDeletionLogInsert({
+          id: input.logId,
+          matchId,
+          deletedByPlayerId: input.deletedByPlayerId,
+          deletedByAdmin: input.deletedByAdmin,
+          matchSnapshot: snapshot,
+          deletedAt: input.deletedAt,
+        }),
+      );
 
       await transaction.commit();
       committed = true;
-    } catch (error) {
-      transaction.close();
-      throw error;
+      return {
+        status: String(deletedRow.status) as MatchStatus,
+        match: snapshot,
+      };
     } finally {
       if (!committed) {
         transaction.close();
@@ -1606,20 +1919,23 @@ export class MatchRepository {
     return await this.findById(id);
   }
 
-  private async hydrateMatch(match: StoredMatch): Promise<Match> {
+  private async hydrateMatch(
+    match: StoredMatch,
+    executor: any = this.db,
+  ): Promise<Match> {
     const [participants, scores, session] = await Promise.all([
-      this.db
+      executor
         .select()
         .from(matchParticipants)
         .where(eq(matchParticipants.matchId, match.id))
         .orderBy(matchParticipants.id),
-      this.db
+      executor
         .select()
         .from(matchScores)
         .where(eq(matchScores.matchId, match.id))
         .orderBy(matchScores.id),
       match.sessionId
-        ? this.db
+        ? executor
             .select()
             .from(matchSessions)
             .where(eq(matchSessions.id, match.sessionId))
@@ -1629,7 +1945,7 @@ export class MatchRepository {
     ]);
     const playerRecords = await Promise.all(
       participants.map((participant: StoredMatchParticipant) =>
-        this.db
+        executor
           .select()
           .from(players)
           .where(eq(players.id, participant.playerId))

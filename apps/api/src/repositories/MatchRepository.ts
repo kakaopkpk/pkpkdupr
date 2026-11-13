@@ -2,10 +2,12 @@ import type {
   Match,
   MatchFeedItem,
   MatchScore,
+  MatchStatus,
   MatchSessionSummary,
   ManagedMatchSession,
   Session,
 } from "@pkpkdupr/shared/match";
+import { randomUUID } from "crypto";
 import { generateEntityId, isEntityId } from "@pkpkdupr/shared/entityId";
 import { kstDateKeyToDate } from "@pkpkdupr/shared/session";
 import type {
@@ -14,7 +16,9 @@ import type {
 } from "@pkpkdupr/shared/player";
 import {
   CompletedMatchResultEditError,
+  MatchNotFoundError,
   MatchRecordUpdateConflictError,
+  MatchStaleUpdateError,
   SessionHasMatchesError,
   type CompletedMatchOutcome,
   type CreateMatchInput,
@@ -437,6 +441,50 @@ export class MatchRepository {
     );
   }
 
+  /**
+   * 점수 없는 진행 중 경기를 만든다(세션 참여자 추가 포함).
+   * 선수 중 누구든 이미 진행 중 경기에 있으면 아무것도 만들지 않고 겹치는 첫 선수 id를 돌려준다.
+   */
+  async createInProgress(
+    match: NewMatchInput,
+    now: Date,
+  ): Promise<{ match: Match } | { conflictPlayerId: string }> {
+    for (let attempt = 0; attempt < 8; attempt += 1) {
+      try {
+        const result = await this.run(
+          () =>
+            db.matches.createInProgressMatch(toCreateMatchInput(match), now),
+          500,
+          (error) => (isUniqueViolation(error) ? 409 : undefined),
+        );
+        return result.conflictPlayerId !== undefined
+          ? { conflictPlayerId: result.conflictPlayerId }
+          : { match: hydrateMatch(result.match) };
+      } catch (error) {
+        // 생성한 경기 id가 겹친 경우만 새 id로 다시 시도한다.
+        if (
+          match.id ||
+          attempt === 7 ||
+          !(error instanceof MatchRepositoryError) ||
+          error.status !== 409
+        ) {
+          throw error;
+        }
+      }
+    }
+
+    throw new MatchRepositoryError("매치 ID 생성에 실패했습니다.", 500);
+  }
+
+  /** 세션과 상관없이 지금 진행 중인(만료 전, 시작한, 점수 없는) 경기 */
+  async findInProgress(now: Date = new Date()): Promise<Match[]> {
+    const records = await this.run(
+      () => db.matches.findInProgressMatches(now),
+      500,
+    );
+    return records.map(hydrateMatch);
+  }
+
   async deleteSession(sessionId: string): Promise<void> {
     if (!isEntityId(sessionId, "session")) {
       throw new MatchRepositoryError("유효한 세션 ID가 필요합니다.", 400);
@@ -492,7 +540,10 @@ export class MatchRepository {
     return hydrateMatch(updated);
   }
 
-  /** 참가자의 경기 기록 수정. cancelled 등 수정할 수 없는 상태로 바뀌었으면 409로 응답한다. */
+  /**
+   * 참가자의 경기 기록 수정. 그사이 지워졌으면 404, expectedUpdatedAt이 저장된 값과 다르거나
+   * cancelled 등 수정할 수 없는 상태로 바뀌었으면 409로 응답한다.
+   */
   async updateRecordedMatch(
     matchId: string,
     input: UpdateRecordedMatchInput,
@@ -501,20 +552,50 @@ export class MatchRepository {
       () => db.matches.updateRecordedMatch(matchId, input),
       400,
       (error) =>
-        error instanceof MatchRecordUpdateConflictError ? 409 : undefined,
+        error instanceof MatchNotFoundError
+          ? 404
+          : error instanceof MatchRecordUpdateConflictError ||
+              error instanceof MatchStaleUpdateError
+            ? 409
+            : undefined,
     );
 
     return hydrateMatch(updated);
   }
 
-  async delete(matchId: string): Promise<void> {
+  /**
+   * 경기를 지우고 감사 로그를 남긴다. 이미 지워졌으면 404(notFoundMessage),
+   * expectedUpdatedAt이 저장된 값과 다르면 409로 응답한다.
+   * 반환하는 status는 실제로 지운 행의 상태라 평점 재계산 여부는 이 값으로 정한다.
+   */
+  async deleteRecorded(
+    matchId: string,
+    input: {
+      deletedByPlayerId: string;
+      deletedByAdmin: boolean;
+      expectedUpdatedAt?: Date;
+      notFoundMessage?: string;
+    },
+  ): Promise<{ status: MatchStatus; match: Match }> {
+    const { notFoundMessage, ...deleteInput } = input;
     try {
-      await db.matches.delete(matchId);
+      const deleted = await db.matches.deleteRecordedMatch(matchId, {
+        ...deleteInput,
+        logId: `match-deletion-${randomUUID()}`,
+        deletedAt: new Date(),
+      });
+      return { status: deleted.status, match: hydrateMatch(deleted.match) };
     } catch (error) {
-      if ((error as Error).message === "MATCH_NOT_FOUND") {
-        throw new MatchRepositoryError("매치를 찾을 수 없습니다.", 404);
+      if (error instanceof MatchNotFoundError) {
+        throw new MatchRepositoryError(
+          notFoundMessage ?? error.message,
+          404,
+        );
       }
-      throw toRepositoryError(error, 400);
+      if (error instanceof MatchStaleUpdateError) {
+        throw new MatchRepositoryError(error.message, 409);
+      }
+      throw toRepositoryError(error, 500);
     }
   }
 

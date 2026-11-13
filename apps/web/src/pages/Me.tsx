@@ -1,9 +1,12 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import type { MatchTopLevelType } from "@pkpkdupr/shared/match";
 import { IoSettingsOutline } from "react-icons/io5";
+import AchievementsScreen from "@/components/profile/AchievementsScreen";
+import AchievementsSection from "@/components/profile/AchievementsSection";
 import PartnerChemistryCard from "@/components/profile/PartnerChemistryCard";
 import PlayerMatchesDrawer from "@/components/profile/PlayerMatchesDrawer";
 import ProfileStatTile from "@/components/profile/ProfileStatTile";
+import RivalCard from "@/components/profile/RivalCard";
 import {
   ProfileBodySkeleton,
   ProfileLoadError,
@@ -14,6 +17,7 @@ import {
 import { useProfileOverview } from "@/components/profile/useProfileOverview";
 import { RatingDelta } from "@/components/ui/Delta";
 import { PlayerAvatar } from "@/components/ui/PlayerAvatar";
+import { SectionLabel } from "@/components/ui/Section";
 import { StatusMessageChip } from "@/components/ui/StatusMessageChip";
 import { useAppNavigation } from "@/context/AppNavigationContext";
 import { useAuth } from "@/context/AuthContext";
@@ -21,8 +25,7 @@ import { useTabNavigation } from "@/context/TabNavigationContext";
 import { isTabRefreshDue } from "@/lib/tabRefresh";
 
 const MATCH_HISTORY_DEPTH_ID = "me-match-history";
-// 나 탭 깊이 화면이라 전역 회원 프로필(62)보다 아래에 둔다
-const MATCH_HISTORY_LAYER = 60;
+const ACHIEVEMENTS_DEPTH_ID = "me-achievements";
 
 const Me: React.FC = () => {
   const { player, isAuthenticated, refreshMe } = useAuth();
@@ -33,6 +36,7 @@ const Me: React.FC = () => {
     useProfileOverview(playerId);
   const [category, setCategory] = useState<MatchTopLevelType>("doubles");
   const [isMatchHistoryRequested, setIsMatchHistoryRequested] = useState(false);
+  const [isAchievementsRequested, setIsAchievementsRequested] = useState(false);
   const wasTabActiveRef = useRef(false);
 
   useEffect(
@@ -59,10 +63,16 @@ const Me: React.FC = () => {
     () => setIsMatchHistoryRequested(false),
     [],
   );
+  const closeAchievements = useCallback(
+    () => setIsAchievementsRequested(false),
+    [],
+  );
 
   const username = player?.username ?? "";
   const ratingDelta = overview?.summary.ratingDelta[category];
   const partners = overview?.summary.partners ?? [];
+  const rivals = overview?.summary.rivals ?? [];
+  const achievements = overview?.summary.achievements ?? [];
 
   return (
     <>
@@ -119,10 +129,25 @@ const Me: React.FC = () => {
               />
             </div>
             {partners.length > 0 ? (
-              <PartnerChemistryCard partners={partners} />
+              <section className="flex flex-col gap-2.5 pt-1">
+                <SectionLabel>파트너 궁합</SectionLabel>
+                <PartnerChemistryCard partners={partners} />
+              </section>
+            ) : null}
+            <section className="flex flex-col gap-2.5 pt-1">
+              <SectionLabel>상성 · 자주 진 상대</SectionLabel>
+              <RivalCard rivals={rivals} />
+            </section>
+            {playerId ? (
+              <AchievementsSection
+                playerId={playerId}
+                progress={achievements}
+                variant="me"
+                onViewAll={() => setIsAchievementsRequested(true)}
+              />
             ) : null}
             <RecentMatchesSection
-              title="내 경기"
+              title="최근 경기"
               matches={overview.summary.recentMatches}
               onViewAll={() => setIsMatchHistoryRequested(true)}
             />
@@ -141,8 +166,15 @@ const Me: React.FC = () => {
         title="내 경기"
         initialCategory={category}
         depthId={MATCH_HISTORY_DEPTH_ID}
-        layer={MATCH_HISTORY_LAYER}
         onClose={closeMatchHistory}
+      />
+      <AchievementsScreen
+        isOpen={isAchievementsRequested}
+        tabKey="me"
+        depthId={ACHIEVEMENTS_DEPTH_ID}
+        playerId={playerId}
+        progress={achievements}
+        onClose={closeAchievements}
       />
     </>
   );

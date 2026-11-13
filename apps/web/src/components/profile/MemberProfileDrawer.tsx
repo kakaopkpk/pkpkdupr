@@ -1,6 +1,7 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useMemo, useState } from "react";
 import type { MatchTopLevelType } from "@pkpkdupr/shared/match";
-import RightDrawer from "@/components/RightDrawer";
+import PushScreen from "@/components/PushScreen";
+import AchievementsSection from "@/components/profile/AchievementsSection";
 import SkeletonBlock from "@/components/SkeletonBlock";
 import PlayerMatchesDrawer from "@/components/profile/PlayerMatchesDrawer";
 import ProfileStatTile from "@/components/profile/ProfileStatTile";
@@ -12,10 +13,9 @@ import {
   WinRateTile,
 } from "@/components/profile/ProfileSections";
 import { useProfileOverview } from "@/components/profile/useProfileOverview";
-import { DetailHeader } from "@/components/ui/Headers";
 import { PlayerAvatar } from "@/components/ui/PlayerAvatar";
 import { StatusMessageChip } from "@/components/ui/StatusMessageChip";
-import { GLOBAL_LAYER } from "@/context/AppNavigationContext";
+import { useAuth } from "@/context/AuthContext";
 import {
   type TabKey,
   useTabNavigation,
@@ -24,38 +24,37 @@ import { useLayerDepth } from "@/hooks/useLayerDepth";
 import { usePlayers } from "@/hooks/usePlayers";
 
 export interface MemberProfileDrawerProps {
-  playerId: string | null;
+  playerId: string;
+  /** 열어 달라는 요청. false가 되면 닫히는 움직임 뒤 onExited를 부른다 */
+  isOpen: boolean;
   tabKey: TabKey;
+  /** 화면 스택에서 이 화면을 구분하는 깊이 id */
+  depthId: string;
   onClose: () => void;
+  onExited: () => void;
 }
 
-const PROFILE_DEPTH_ID = "global-member-profile";
-const MATCH_HISTORY_DEPTH_ID = "global-member-match-history";
-
-/** 전역 회원 프로필. 평점 카드·경기 승률·나와의 상대 전적·최근 경기 */
+/** 전역 회원 프로필 화면. 평점 카드·경기 승률·나와의 상대 전적·받은 업적·최근 경기 */
 export default function MemberProfileDrawer({
   playerId,
+  isOpen: isRequested,
   tabKey,
+  depthId,
   onClose,
+  onExited,
 }: MemberProfileDrawerProps): React.ReactElement {
-  const {
-    registerScrollContainer,
-    requestCloseTopDepth,
-    restoreScrollTop,
-    selectedTab,
-  } = useTabNavigation();
+  const { closeDepth, restoreScrollTop, selectedTab } = useTabNavigation();
   const { players, reload: reloadPlayers } = usePlayers();
-  // 닫히는 애니메이션 동안 마지막 회원을 계속 보여 준다
-  const [displayedPlayerId, setDisplayedPlayerId] = useState(playerId);
+  const { player: viewer } = useAuth();
   const [category, setCategory] = useState<MatchTopLevelType>("doubles");
   const [isMatchHistoryRequested, setIsMatchHistoryRequested] = useState(false);
-  const { overview, hasError, reload } = useProfileOverview(displayedPlayerId);
+  const { overview, hasError, reload } = useProfileOverview(playerId);
 
   const isOpen = useLayerDepth({
-    isOpen: !!playerId,
+    isOpen: isRequested,
     tabKey,
-    depthId: PROFILE_DEPTH_ID,
-    kind: "member-profile",
+    depthId,
+    kind: "push-screen",
     onClose,
     saveScroll: true,
   });
@@ -64,44 +63,29 @@ export default function MemberProfileDrawer({
     [],
   );
 
-  useEffect(() => {
-    if (playerId) setDisplayedPlayerId(playerId);
-  }, [playerId]);
-
-  // 다른 회원을 열면 분류를 처음(복식)으로 돌린다
-  useEffect(() => {
-    setCategory("doubles");
-  }, [displayedPlayerId]);
-
   const refreshProfile = useCallback(async () => {
     await Promise.all([reloadPlayers(), reload({ throwOnError: true })]);
   }, [reload, reloadPlayers]);
 
   const handleProfileExited = useCallback(() => {
-    setDisplayedPlayerId(null);
-    setIsMatchHistoryRequested(false);
     restoreScrollTop(tabKey);
-  }, [restoreScrollTop, tabKey]);
+    onExited();
+  }, [onExited, restoreScrollTop, tabKey]);
 
-  const registerProfileScrollContainer = useCallback(
-    (element: HTMLDivElement | null) => {
-      registerScrollContainer(tabKey, PROFILE_DEPTH_ID, element);
-    },
-    [registerScrollContainer, tabKey],
-  );
+  const close = useCallback(() => {
+    if (!closeDepth(tabKey, depthId)) onClose();
+  }, [closeDepth, depthId, onClose, tabKey]);
 
   const member = useMemo(
-    () => players.find((candidate) => candidate.id === displayedPlayerId) ?? null,
-    [displayedPlayerId, players],
+    () => players.find((candidate) => candidate.id === playerId) ?? null,
+    [playerId, players],
   );
   const username =
     member?.username ??
     overview?.rankings[category]?.entries.find(
-      (entry) => entry.player.id === displayedPlayerId,
+      (entry) => entry.player.id === playerId,
     )?.player.username ??
     "";
-
-  if (!displayedPlayerId) return <></>;
 
   const totalStats = overview
     ? Object.values(overview.summary.matchStats).reduce(
@@ -116,24 +100,20 @@ export default function MemberProfileDrawer({
 
   return (
     <>
-      <RightDrawer
+      <PushScreen
         isOpen={isOpen}
         isActive={tabKey === selectedTab}
         ariaLabel="회원 프로필"
+        title={username}
+        onBack={close}
         onExited={handleProfileExited}
-        onScrollContainerChange={registerProfileScrollContainer}
         onPullToRefresh={refreshProfile}
-        layer={GLOBAL_LAYER.memberProfile}
       >
-        <DetailHeader
-          title={username}
-          onBack={() => requestCloseTopDepth(tabKey)}
-        />
         <div className="flex flex-col gap-2.5 px-4 pb-8">
           <div className="flex items-center gap-3 px-1 pb-1.5">
             <PlayerAvatar
               player={{
-                id: displayedPlayerId,
+                id: playerId,
                 username,
                 avatarUrl: member?.avatarUrl,
               }}
@@ -176,9 +156,16 @@ export default function MemberProfileDrawer({
                   foot={`내 기준 · ${headToHead?.matchCount ?? 0}경기`}
                 />
               </div>
+              <AchievementsSection
+                playerId={playerId}
+                progress={overview.summary.achievements}
+                variant="member"
+                badgeSize={44}
+              />
               <RecentMatchesSection
                 title="최근 경기"
                 matches={overview.summary.recentMatches}
+                viewerPlayerId={viewer?.id}
                 onViewAll={() => setIsMatchHistoryRequested(true)}
               />
             </>
@@ -188,15 +175,14 @@ export default function MemberProfileDrawer({
             <ProfileBodySkeleton />
           )}
         </div>
-      </RightDrawer>
+      </PushScreen>
       <PlayerMatchesDrawer
-        isOpen={isMatchHistoryRequested && !!playerId}
+        isOpen={isMatchHistoryRequested && isRequested}
         tabKey={tabKey}
-        playerId={displayedPlayerId}
+        playerId={playerId}
         title={`${username} 경기`}
         initialCategory={category}
-        depthId={MATCH_HISTORY_DEPTH_ID}
-        layer={GLOBAL_LAYER.memberMatchHistory}
+        depthId={`${depthId}:matches`}
         onClose={closeMatchHistory}
       />
     </>

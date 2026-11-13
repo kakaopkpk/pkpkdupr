@@ -5,6 +5,7 @@ import {
   getMatchTopLevelType,
   isMatchInProgress,
   isSinglesMatchType,
+  isMatchRecordDeletable,
   isMultiGameMatchRecord,
   isWithinMatchEditWindow,
   matchTypeLabels,
@@ -15,6 +16,8 @@ import {
   type MatchScore,
   type RecordMatchRequest,
   type RecordedMatchResponse,
+  type StartMatchRequest,
+  type InProgressMatchesResponse,
   type Team,
   type Session,
   type ManagedMatchSession,
@@ -23,6 +26,7 @@ import {
 } from "@pkpkdupr/shared/match";
 import {
   canOpenRegularSession,
+  DEFAULT_MATCH_LOCATION,
   getEmptySessionExpiresAt,
   getNextRegularSessionDateKey,
   isInProgressMatchExpired,
@@ -41,6 +45,11 @@ import {
   type UpcomingMatchSessionsResponse,
 } from "@pkpkdupr/shared/session";
 import { generateEntityId, isEntityId } from "@pkpkdupr/shared/entityId";
+import {
+  findNewAchievements,
+  type AchievementHoldersResponse,
+  type EarnedAchievement,
+} from "@pkpkdupr/shared/achievements";
 import {
   MATCHMAKING_DEFAULT_COURTS,
   clampMatchmakingCourts,
@@ -73,6 +82,10 @@ import type {
   MeResponse,
 } from "@pkpkdupr/shared/auth";
 import { assertRequiredEnv } from "./config/env";
+import {
+  isDevMockDataEnabled,
+  MATCH_STALE_UPDATE_ERROR_MESSAGE,
+} from "@pkpkdupr/db";
 import { initDatabase } from "./db";
 import {
   MatchRepository,
@@ -83,6 +96,7 @@ import {
   AuthError,
   AuthService,
   type AuthenticatedSession,
+  type DuprRecalculationSummary,
 } from "./services/AuthService";
 import {
   attachMatchRatingChanges,
@@ -95,8 +109,10 @@ import {
   buildRankingResponse,
   buildSessionHistory,
   buildSessionReport,
+  countAchievementHolders,
   createRankingContext,
   rankPlayersAt,
+  toAchievementMatch,
 } from "./services/RankingService";
 import {
   AvatarValidationError,
@@ -600,6 +616,111 @@ const resolveSessionForNewMatch = async (
   );
 };
 
+/**
+ * 진행 중 경기 시작(POST /api/matches/start)의 세션을 정한다.
+ * 요청 세션이 오늘(KST) 회원 세션이면 그 세션, 그 밖(정기 세션·지난 세션·없는 세션·생략)은 기록과 같은 시간 규칙을 따른다.
+ */
+const resolveSessionForStartedMatch = async (
+  requestedSessionId: string | undefined,
+  now: Date,
+): Promise<ManagedMatchSession | undefined> => {
+  if (requestedSessionId && isEntityId(requestedSessionId, "session")) {
+    const requested = await matchRepository.findSessionById(requestedSessionId);
+    if (
+      requested &&
+      requested.kind !== "regular" &&
+      toKstDateKey(requested.date) === toKstDateKey(now)
+    ) {
+      return requested;
+    }
+  }
+  return await resolveSessionForNewMatch(undefined, now);
+};
+
+type PreparedMatchLineup = Awaited<ReturnType<typeof prepareMatchLineup>>;
+
+/**
+ * 점수 없는 진행 중 경기를 만든다. 세션이 있으면 선수를 참여자로 넣는다.
+ * 선수 중 누구든 이미 진행 중 경기에 있으면 아무것도 만들지 않고 409로 막는다.
+ */
+const startInProgressMatch = async ({
+  requesterPlayerId,
+  lineup,
+  session,
+  location,
+  courtName,
+  now,
+}: {
+  requesterPlayerId: string;
+  lineup: PreparedMatchLineup;
+  session: ManagedMatchSession | undefined;
+  location: string;
+  courtName?: string;
+  now: Date;
+}): Promise<Match> => {
+  const result = await matchRepository.createInProgress(
+    {
+      type: lineup.type,
+      teams: lineup.teams,
+      scores: [],
+      session: session
+        ? {
+            id: session.id,
+            name: session.name,
+            date: session.date,
+            location: session.location,
+          }
+        : undefined,
+      source: "player_created",
+      creatorPlayerId: requesterPlayerId,
+      status: "created",
+      resultSubmittedByPlayerId: null,
+      resultSubmittedAt: null,
+      location,
+      courtName,
+      matchStartsAt: now,
+      completedAt: null,
+    },
+    now,
+  );
+  if ("conflictPlayerId" in result) {
+    throw toPlayerBusyError(lineup, result.conflictPlayerId);
+  }
+  return result.match;
+};
+
+const toPlayerBusyError = (
+  lineup: PreparedMatchLineup,
+  busyPlayerId: string,
+): MatchRecordRequestError => {
+  const busyPlayer = lineup.teams
+    .flatMap((team) => team.players)
+    .find((player) => player.id === busyPlayerId);
+  return new MatchRecordRequestError(
+    `${busyPlayer?.username ?? busyPlayerId}님이 다른 경기 중이에요`,
+    409,
+  );
+};
+
+/**
+ * 세션 find-or-create 같은 쓰기 전에 진행 중 경기에 있는 선수를 미리 막는다.
+ * 동시 요청의 최종 판정은 createInProgress의 잠금 트랜잭션이 한다.
+ */
+const assertPlayersNotInProgress = async (
+  lineup: PreparedMatchLineup,
+  now: Date,
+): Promise<void> => {
+  const inProgressPlayerIds = new Set(
+    await matchRepository.findInProgressPlayerIds(now),
+  );
+  const busyPlayerId = getTeamPlayerIds(lineup.teams).find((playerId) =>
+    inProgressPlayerIds.has(playerId),
+  );
+  if (busyPlayerId) {
+    throw toPlayerBusyError(lineup, busyPlayerId);
+  }
+};
+
 /** 공개 세션 API 요청 오류. status로 400·403·404·409를 구분해 응답한다 */
 class MatchSessionRequestError extends Error {
   constructor(
@@ -706,6 +827,34 @@ const requireOpenSessionForParticipants = async (
 
 const getTeamPlayerIds = (teams: Team[]) =>
   teams.flatMap((team) => team.players.map((player) => player.id));
+
+/**
+ * 경기 저장으로 참가자 전원이 새로 받은 업적. 저장 후 완료 경기 전체와, 그중 이 경기만
+ * 저장 전 상태(previous, 완료 경기가 아니었으면 뺌)로 되돌린 목록의 계산 차이로 구한다.
+ * 저장은 이미 끝났으므로 업적 계산이 실패하면 빈 배열로 응답한다.
+ */
+const findNewAchievementsForSavedMatch = async (
+  match: Match,
+  previous: Match | null,
+): Promise<EarnedAchievement[]> => {
+  try {
+    const after = (await matchRepository.findCompletedMatchOutcomes()).map(
+      toAchievementMatch,
+    );
+    const before = [
+      ...after.filter((candidate) => candidate.id !== match.id),
+      ...(previous?.status === "completed" ? [previous] : []),
+    ];
+    return findNewAchievements({
+      playerIds: getTeamPlayerIds(match.teams),
+      before,
+      after,
+    });
+  } catch (err) {
+    console.error("[MATCH] 새 업적 계산 실패", match.id, err);
+    return [];
+  }
+};
 
 /** 검증·저장소 오류는 지정된 상태로, 그 밖의 검증 예외는 400으로 응답한다. */
 const sendMatchRecordFailure = (res: express.Response, error: unknown) => {
@@ -1392,44 +1541,73 @@ app.post("/api/match-sessions/:sessionId/matches", async (req, res) => {
     }
 
     const lineup = await prepareMatchLineup(type, teams, decoded.playerId);
-    const playerIds = getTeamPlayerIds(lineup.teams);
-    const inProgressPlayerIds = new Set(
-      await matchRepository.findInProgressPlayerIds(now),
-    );
-    if (playerIds.some((playerId) => inProgressPlayerIds.has(playerId))) {
-      throw new MatchRecordRequestError(
-        "이미 진행 중인 경기에 들어간 선수가 있습니다.",
-        409,
-      );
-    }
-
     const session = await resolveSessionForNewMatch(sessionId, now);
-    if (session) {
-      await matchRepository.addSessionParticipants(session.id, playerIds);
-    }
-    const match = await matchRepository.create({
-      type: lineup.type,
-      teams: lineup.teams,
-      scores: [],
-      session: session
-        ? {
-            id: session.id,
-            name: session.name,
-            date: session.date,
-            location: session.location,
-          }
-        : undefined,
-      source: "player_created",
-      creatorPlayerId: decoded.playerId,
-      status: "created",
-      resultSubmittedByPlayerId: null,
-      resultSubmittedAt: null,
+    const match = await startInProgressMatch({
+      requesterPlayerId: decoded.playerId,
+      lineup,
+      session,
       location: normalizeOptionalName(location) ?? requestedSession.location,
       courtName: normalizedCourtName ?? undefined,
-      matchStartsAt: now,
-      completedAt: null,
+      now,
     });
     res.status(201).json(match);
+  } catch (err) {
+    sendMatchRecordFailure(res, err);
+  }
+});
+
+app.post("/api/matches/start", async (req, res) => {
+  const decoded = await getAuthPayload(req, res);
+  if (!decoded) {
+    return;
+  }
+
+  try {
+    const body = req.body as Partial<StartMatchRequest> | undefined;
+    const { type, teams, location } = body ?? {};
+    const requestedSessionId = parseRequestedSessionId(body?.sessionId);
+    if (type != null && !isMatchType(type)) {
+      throw new MatchRecordRequestError("유효한 매치 타입이 필요합니다.", 400);
+    }
+    if (!Array.isArray(teams) || teams.length !== 2) {
+      throw new MatchRecordRequestError("두 팀 구성이 필요합니다.", 400);
+    }
+
+    // 시작 시각은 진행 중 만료(2시간)·24시간 수정 기한·정기 세션 판정의 기준이라 서버 now로 정한다.
+    const now = new Date();
+    await matchRepository.cleanupExpired(now);
+    const lineup = await prepareMatchLineup(type, teams, decoded.playerId);
+    await assertPlayersNotInProgress(lineup, now);
+    const session = await resolveSessionForStartedMatch(requestedSessionId, now);
+    const match = await startInProgressMatch({
+      requesterPlayerId: decoded.playerId,
+      lineup,
+      session,
+      location:
+        normalizeOptionalName(location) ??
+        session?.location ??
+        DEFAULT_MATCH_LOCATION,
+      now,
+    });
+    res.status(201).json(match);
+  } catch (err) {
+    sendMatchRecordFailure(res, err);
+  }
+});
+
+// "/api/matches/:matchId"보다 먼저 등록해야 "in-progress"를 경기 id로 읽지 않는다.
+app.get("/api/matches/in-progress", async (req, res) => {
+  try {
+    if (!(await getAuthPayload(req, res))) {
+      return;
+    }
+
+    const now = new Date();
+    await matchRepository.cleanupExpired(now);
+    const response: InProgressMatchesResponse = {
+      matches: await matchRepository.findInProgress(now),
+    };
+    res.json(response);
   } catch (err) {
     sendMatchRecordFailure(res, err);
   }
@@ -1484,6 +1662,7 @@ app.post("/api/matches", async (req, res) => {
     const response: RecordedMatchResponse = {
       ...match,
       ratingChanges: ratingChangeLogs,
+      newAchievements: await findNewAchievementsForSavedMatch(match, null),
     };
     res.status(201).json(response);
   } catch (err) {
@@ -1921,18 +2100,25 @@ app.delete(
   requireAdmin,
   async (req, res) => {
     try {
-      await matchRepository.delete(req.params.matchId);
-      const { matches } = await matchRepository.findAll(0, 10000);
-      const recalculation = await authService.recalculateDuprRatings(
-        matches.filter((candidate) => candidate.status === "completed"),
-        {
-          source: "manual_recalculation",
-          sourceLogId: `admin-match-delete-${req.params.matchId}-${Date.now()}-${randomUUID()}`,
-          perMatchLogs: true,
-        },
-      );
+      const decoded = await getAuthPayload(req, res);
+      if (!decoded) {
+        return;
+      }
 
-      res.json({ deletedMatchId: req.params.matchId, ...recalculation });
+      const matchId = req.params.matchId;
+      const deleted = await matchRepository.deleteRecorded(matchId, {
+        deletedByPlayerId: decoded.playerId,
+        deletedByAdmin: true,
+      });
+      const recalculation =
+        deleted.status === "completed"
+          ? await recalculateRatingsAfterMatchDelete(
+              matchId,
+              "admin-match-delete",
+            )
+          : EMPTY_DUPR_RECALCULATION_SUMMARY;
+
+      res.json({ deletedMatchId: matchId, ...recalculation });
     } catch (err) {
       if (err instanceof MatchRepositoryError && err.status === 404) {
         return res.status(404).json({ error: err.message });
@@ -1948,6 +2134,138 @@ const isExpiredInProgressMatch = (match: Match, now: Date) =>
   (match.scores?.length ?? 0) === 0 &&
   isInProgressMatchExpired(match.matchStartsAt, now);
 
+const MATCH_ALREADY_DELETED_MESSAGE = "다른 회원이 지운 경기예요";
+
+/** 요청의 expectedUpdatedAt(ISO 문자열). 없으면 undefined, 형식이 틀리면 400 */
+const parseExpectedUpdatedAt = (value: unknown): Date | undefined => {
+  if (value == null || value === "") {
+    return undefined;
+  }
+  const date = typeof value === "string" ? new Date(value) : null;
+  if (!date || Number.isNaN(date.getTime())) {
+    throw new MatchRecordRequestError(
+      "expectedUpdatedAt은 ISO 날짜 문자열이어야 합니다.",
+      400,
+    );
+  }
+  return date;
+};
+
+/** updated_at은 초 단위로 저장되므로 같은 초면 같은 값으로 본다 */
+const isSameUpdatedAt = (expected: Date, actual: Date) =>
+  Math.floor(expected.getTime() / 1000) === Math.floor(actual.getTime() / 1000);
+
+/** 평점 재계산이 읽는 경기 수 상한 */
+const MAX_RECALCULATION_MATCHES = 10000;
+
+/** 평점 재계산 입력. 평점 쓰기 잠금 안에서 불려 최신 완료 경기 목록을 읽는다 */
+const loadCompletedMatches = async () => {
+  const { matches } = await matchRepository.findAll(
+    0,
+    MAX_RECALCULATION_MATCHES,
+  );
+  return matches.filter((match) => match.status === "completed");
+};
+
+const EMPTY_DUPR_RECALCULATION_SUMMARY: DuprRecalculationSummary = {
+  ratingChangeLogs: [],
+  perMatchLogs: [],
+  changedPlayerCount: 0,
+  restoredMatchDuprSnapshotCount: 0,
+  restoredMatchDuprSnapshotMatchCount: 0,
+  perMatchLogCount: 0,
+};
+
+/** 평점에 반영돼 있던(completed) 경기를 지운 뒤 평점을 처음부터 다시 계산한다 */
+const recalculateRatingsAfterMatchDelete = (
+  matchId: string,
+  sourceLogIdPrefix: string,
+) =>
+  authService.recalculateDuprRatings(loadCompletedMatches, {
+    source: "manual_recalculation",
+    sourceLogId: `${sourceLogIdPrefix}-${matchId}-${Date.now()}-${randomUUID()}`,
+    perMatchLogs: true,
+  });
+
+/** 회원이 지울 수 없는 경기면 그 이유(403 응답 문구), 지울 수 있으면 null */
+const getMatchDeleteForbiddenReason = (
+  match: Match,
+  now: Date,
+): string | null => {
+  if (isMatchRecordDeletable(match, now)) {
+    return null;
+  }
+  if (match.status === "cancelled") {
+    return "취소된 경기는 지울 수 없습니다.";
+  }
+  if (isMultiGameMatchRecord(match)) {
+    return "여러 게임으로 기록된 경기는 지울 수 없습니다. 관리자에게 요청해 주세요.";
+  }
+  if (!isWithinMatchEditWindow(match.matchStartsAt, now)) {
+    return "경기 시작 후 24시간이 지나 지울 수 없습니다. 관리자에게 요청해 주세요.";
+  }
+  if (match.matchStartsAt.getTime() > now.getTime()) {
+    return "아직 시작하지 않은 예정 경기는 지울 수 없습니다.";
+  }
+  return "완료되지 않은 관리자 예정 경기는 회원이 지울 수 없습니다.";
+};
+
+/**
+ * 회원 경기 삭제. 활성 회원 누구나 isMatchRecordDeletable인 경기를 지울 수 있다.
+ * 평점 재계산 여부는 미리 읽은 상태가 아니라 실제로 지운 행의 상태로 정한다.
+ * 경기가 없어진 세션은 빈 세션 정리 규칙(조회 시점 cleanupExpired)을 그대로 따른다.
+ */
+app.delete("/api/matches/:matchId", async (req, res) => {
+  const decoded = await getAuthPayload(req, res);
+  if (!decoded) {
+    return;
+  }
+
+  const matchId = req.params.matchId;
+  let deletedStatus: Match["status"];
+  try {
+    const expectedUpdatedAt = parseExpectedUpdatedAt(
+      req.query.expectedUpdatedAt,
+    );
+    const now = new Date();
+    await matchRepository.cleanupExpired(now);
+    const existing = await matchRepository.findById(matchId);
+    // 정리가 실패해 남아 있어도 만료된 진행 중 경기는 이미 없는 경기로 본다.
+    if (!existing || isExpiredInProgressMatch(existing, now)) {
+      return res.status(404).json({ error: MATCH_ALREADY_DELETED_MESSAGE });
+    }
+    if (
+      expectedUpdatedAt &&
+      !isSameUpdatedAt(expectedUpdatedAt, existing.updatedAt)
+    ) {
+      return res.status(409).json({ error: MATCH_STALE_UPDATE_ERROR_MESSAGE });
+    }
+    const forbiddenReason = getMatchDeleteForbiddenReason(existing, now);
+    if (forbiddenReason) {
+      return res.status(403).json({ error: forbiddenReason });
+    }
+
+    ({ status: deletedStatus } = await matchRepository.deleteRecorded(matchId, {
+      deletedByPlayerId: decoded.playerId,
+      deletedByAdmin: false,
+      expectedUpdatedAt,
+      notFoundMessage: MATCH_ALREADY_DELETED_MESSAGE,
+    }));
+  } catch (err) {
+    return sendMatchRecordFailure(res, err);
+  }
+
+  try {
+    if (deletedStatus === "completed") {
+      await recalculateRatingsAfterMatchDelete(matchId, "match-delete");
+    }
+    res.status(204).end();
+  } catch (err) {
+    console.error("[MATCH] 경기 삭제 후 평점 재계산 실패", matchId, err);
+    res.status(500).json({ error: MATCH_RATING_APPLY_FAILURE_MESSAGE });
+  }
+});
+
 app.put("/api/matches/:matchId", async (req, res) => {
   const decoded = await getAuthPayload(req, res);
   if (!decoded) {
@@ -1956,14 +2274,23 @@ app.put("/api/matches/:matchId", async (req, res) => {
 
   const matchId = req.params.matchId;
   let wasCompleted: boolean;
+  let previous: Match;
   let match: Match;
   try {
+    const body = req.body as Partial<RecordMatchRequest> | undefined;
+    const expectedUpdatedAt = parseExpectedUpdatedAt(body?.expectedUpdatedAt);
     const now = new Date();
     await matchRepository.cleanupExpired(now);
     const existing = await matchRepository.findById(matchId);
     // 정리가 실패해 남아 있어도 만료된 진행 중 경기는 없는 경기로 본다.
     if (!existing || isExpiredInProgressMatch(existing, now)) {
       return res.status(404).json({ error: "매치를 찾을 수 없습니다." });
+    }
+    if (
+      expectedUpdatedAt &&
+      !isSameUpdatedAt(expectedUpdatedAt, existing.updatedAt)
+    ) {
+      return res.status(409).json({ error: MATCH_STALE_UPDATE_ERROR_MESSAGE });
     }
     // 참가자·생성자·관리자 여부와 무관하게 활성 회원이면 누구나 고칠 수 있다(세션 경기 포함).
     if (!isWithinMatchEditWindow(existing.matchStartsAt, now)) {
@@ -1984,10 +2311,7 @@ app.put("/api/matches/:matchId", async (req, res) => {
       });
     }
 
-    const prepared = await prepareRecordedMatch(
-      req.body as Partial<RecordMatchRequest>,
-      decoded.playerId,
-    );
+    const prepared = await prepareRecordedMatch(body, decoded.playerId);
     if (existing.session) {
       // 바뀐 팀의 새 선수도 세션 참여자로 넣는다. 빠진 선수는 참여자에서 지우지 않는다.
       await matchRepository.addSessionParticipants(
@@ -1996,10 +2320,14 @@ app.put("/api/matches/:matchId", async (req, res) => {
       );
     }
     wasCompleted = existing.status === "completed";
+    previous = existing;
+    // 요청에 없어도 미리 읽은 updatedAt을 조건으로 저장해, 그사이 다른 회원이 고쳤으면 409로 막는다.
+    // 그래서 아래 재계산 여부(wasCompleted)는 실제로 고친 행의 이전 상태와 같다.
     match = await matchRepository.updateRecordedMatch(matchId, {
       ...prepared,
       resultSubmittedByPlayerId: decoded.playerId,
       resultSubmittedAt: now,
+      expectedUpdatedAt: expectedUpdatedAt ?? existing.updatedAt,
     });
   } catch (err) {
     return sendMatchRecordFailure(res, err);
@@ -2009,9 +2337,8 @@ app.put("/api/matches/:matchId", async (req, res) => {
     let ratingChanges: PlayerRatingChangeLog[];
     if (wasCompleted) {
       // 증분 반영은 같은 경기의 로그가 이미 있으면 아무것도 하지 않으므로, 반영된 경기를 고치면 전체 재계산한다.
-      const { matches } = await matchRepository.findAll(0, 10000);
       const { perMatchLogs } = await authService.recalculateDuprRatings(
-        matches.filter((candidate) => candidate.status === "completed"),
+        loadCompletedMatches,
         {
           source: "manual_recalculation",
           sourceLogId: `match-edit-${matchId}-${Date.now()}-${randomUUID()}`,
@@ -2026,7 +2353,11 @@ app.put("/api/matches/:matchId", async (req, res) => {
       ({ ratingChangeLogs: ratingChanges } =
         await authService.applyMatchResultToRatings(match));
     }
-    const response: RecordedMatchResponse = { ...match, ratingChanges };
+    const response: RecordedMatchResponse = {
+      ...match,
+      ratingChanges,
+      newAchievements: await findNewAchievementsForSavedMatch(match, previous),
+    };
     res.json(response);
   } catch (err) {
     console.error("[MATCH] 경기 기록 수정 후 평점 반영 실패", matchId, err);
@@ -2373,6 +2704,27 @@ app.get("/api/session-reports/:sessionId", async (req, res) => {
   }
 });
 
+app.get("/api/achievements/holders", async (req, res) => {
+  try {
+    if (!(await getAuthPayload(req, res))) {
+      return;
+    }
+
+    const [players, matches] = await Promise.all([
+      authService.getAllPlayers(),
+      matchRepository.findCompletedMatchOutcomes(),
+    ]);
+    const response: AchievementHoldersResponse = {
+      counts: countAchievementHolders(
+        createRankingContext(players, [], matches),
+      ),
+    };
+    res.json(response);
+  } catch (err) {
+    sendRankingFailure(res, err);
+  }
+});
+
 app.get("/api/admin/players", requireAdmin, async (_req, res) => {
   try {
     const players = await authService.getAdminPlayers();
@@ -2462,19 +2814,23 @@ app.patch(
 
 app.post("/api/admin/ratings/recalculate", requireAdmin, async (_req, res) => {
   try {
-    const { matches } = await matchRepository.findAll(0, 10000);
-    const completedMatches = matches.filter(
-      (match) => match.status === "completed",
+    let completedMatchCount = 0;
+    const result = await authService.recalculateDuprRatings(
+      async () => {
+        const completedMatches = await loadCompletedMatches();
+        completedMatchCount = completedMatches.length;
+        return completedMatches;
+      },
+      {
+        source: "manual_recalculation",
+        sourceLogId: `manual-recalculation-${Date.now()}-${randomUUID()}`,
+        perMatchLogs: true,
+      },
     );
-    const result = await authService.recalculateDuprRatings(completedMatches, {
-      source: "manual_recalculation",
-      sourceLogId: `manual-recalculation-${Date.now()}-${randomUUID()}`,
-      perMatchLogs: true,
-    });
 
     res.json({
       ...result,
-      completedMatchCount: completedMatches.length,
+      completedMatchCount,
     });
   } catch (err) {
     res.status(400).json({ error: (err as Error).message });
@@ -2491,7 +2847,6 @@ app.post(
         return;
       }
 
-      const { matches } = await matchRepository.findAll(0, 10000);
       const result = await authService.applyOfficialDuprAdjustment(
         {
           playerId: req.params.playerId,
@@ -2500,7 +2855,7 @@ app.post(
           confidence: req.body.confidence,
           reason: req.body.reason,
         },
-        matches.filter((match) => match.status === "completed"),
+        loadCompletedMatches,
       );
 
       res.json(result);
@@ -2520,7 +2875,6 @@ app.post(
         return;
       }
 
-      const { matches } = await matchRepository.findAll(0, 10000);
       const result = await authService.previewOfficialDuprAdjustment(
         {
           playerId: req.params.playerId,
@@ -2529,7 +2883,7 @@ app.post(
           confidence: req.body.confidence,
           reason: req.body.reason,
         },
-        matches.filter((match) => match.status === "completed"),
+        await loadCompletedMatches(),
       );
 
       res.json(result);
@@ -2599,10 +2953,25 @@ app.patch(
 
 export { app };
 
+/** dev mock 경기는 평점 변경 로그 없이 들어오므로 시딩 직후 관리자 재계산과 같은 경로로 로그를 채운다 */
+const recalculateDevMockRatings = async () => {
+  await authService.recalculateDuprRatings(
+    loadCompletedMatches,
+    {
+      source: "manual_recalculation",
+      sourceLogId: `dev-mock-recalculation-${Date.now()}-${randomUUID()}`,
+      perMatchLogs: true,
+    },
+  );
+};
+
 export const startServer = async () => {
   assertRequiredEnv();
   await initDatabase();
   await authService.seedDevAuthAccounts();
+  if (isDevMockDataEnabled()) {
+    await recalculateDevMockRatings();
+  }
   return (app as any).listen(PORT, () => {
     console.log(`🚀 API Server running on http://localhost:${PORT}`);
   });

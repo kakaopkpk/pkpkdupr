@@ -1,7 +1,10 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 
-/** 경기 저장처럼 되돌리기 어려운 저장을 확정하는 길게 누르기 시간 */
-export const SAVE_HOLD_DURATION_MS = 2000;
+/** 길게 눌러 확인하는 기본 시간 */
+export const HOLD_TO_CONFIRM_DURATION_MS = 1000;
+
+/** danger 변형의 채움 앞 끝 선 두께 */
+const PROGRESS_EDGE_WIDTH_PX = 3;
 
 interface HoldToConfirmButtonProps {
   onComplete: () => void;
@@ -14,13 +17,14 @@ interface HoldToConfirmButtonProps {
   /**
    * primary(기본): 블루 채움 버튼 위로 누르는 동안 진행이 찬다.
    * plain: 바탕 없는 행 모양. 색은 className·progressClassName으로 정한다.
+   * danger: 빨강 채움 버튼(경기 삭제 전용). 누르는 동안 왼쪽부터 어둡게 차고 채움 앞 끝에 라임 선이 보인다.
    */
-  variant?: "primary" | "plain";
+  variant?: "primary" | "plain" | "danger";
 }
 
 const variantClassName: Record<
   NonNullable<HoldToConfirmButtonProps["variant"]>,
-  { button: string; progress: string }
+  { button: string; progress: string; edge?: string }
 > = {
   primary: {
     button:
@@ -32,11 +36,17 @@ const variantClassName: Record<
       "rounded-xl px-3 py-2 text-left disabled:cursor-not-allowed disabled:opacity-50",
     progress: "bg-pk-down/14",
   },
+  danger: {
+    button:
+      "h-[52px] justify-center rounded-pk-sm bg-pk-down px-4 text-pk-15 font-extrabold text-white disabled:cursor-not-allowed disabled:bg-pk-neutral disabled:text-pk-muted",
+    progress: "bg-[rgba(15,23,38,0.4)]",
+    edge: "bg-pk-hl",
+  },
 };
 
 const HoldToConfirmButton: React.FC<HoldToConfirmButtonProps> = ({
   onComplete,
-  holdDurationMs = 500,
+  holdDurationMs = HOLD_TO_CONFIRM_DURATION_MS,
   children,
   className,
   progressClassName,
@@ -156,6 +166,20 @@ const HoldToConfirmButton: React.FC<HoldToConfirmButtonProps> = ({
           .join(" ")}
         style={{ transform: `scaleX(${progress})` }}
       />
+      {variantClasses.edge && progress > 0 ? (
+        // 채움 앞 끝 선. 채움과 달리 늘어나지 않도록 위치만 옮긴다
+        <span
+          aria-hidden="true"
+          className={[
+            "pointer-events-none absolute inset-y-0",
+            variantClasses.edge,
+          ].join(" ")}
+          style={{
+            width: PROGRESS_EDGE_WIDTH_PX,
+            left: `max(0px, calc(${progress * 100}% - ${PROGRESS_EDGE_WIDTH_PX}px))`,
+          }}
+        />
+      ) : null}
       <span className="relative z-10 flex min-w-0 items-center gap-2">
         {children}
       </span>

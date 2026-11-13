@@ -1,3 +1,4 @@
+import type { EarnedAchievement } from "./achievements.js";
 import type { MatchTopLevelType } from "./match.js";
 import type { Player } from "./player.js";
 import type { MatchSessionKind } from "./session.js";
@@ -53,12 +54,16 @@ export interface SessionPlayerReport {
   matchCount: number;
   wins: number;
   losses: number;
-  /** 복식 평점: 세션 시작 직전 / 세션 마지막 완료 경기 반영 직후 */
+  /**
+   * 복식 평점: 세션 시작 직전 / 세션 마지막 완료 경기 반영 직후.
+   * 세션 전에 NR이던 회원은 첫 경기 완료 평점 로그의 시작값(기본 3.0)이 ratingBefore다.
+   * 세션 후에도 복식 NR이면 둘 다 null이다.
+   */
   ratingBefore: number | null;
   ratingAfter: number | null;
-  /** ratingAfter - ratingBefore. 둘 중 하나라도 NR(null)이면 0이라 세션 중 처음 평점을 얻은 선수는 topRiser 후보가 아니다 */
+  /** ratingAfter - ratingBefore. 세션 후에도 복식 NR이라 둘 중 하나가 null이면 0이다 */
   ratingDelta: number;
-  /** 복식 순위: 같은 두 시점 */
+  /** 복식 순위: 같은 두 시점. 세션 전 NR이던 회원의 rankBefore는 순위표에 없었으므로 null이다 */
   rankBefore: number | null;
   rankAfter: number | null;
 }
@@ -68,4 +73,6 @@ export interface MatchSessionReport {
   session: MatchSessionHistoryItem;
   players: SessionPlayerReport[];
   topRiser: SessionPlayerReport | null;
+  /** 이 세션 경기로 받은 업적(참가자 전원). 받은 시각 오름차순 */
+  achievements: EarnedAchievement[];
 }

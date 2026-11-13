@@ -18,13 +18,16 @@ export const TabHeader: React.FC<{
   </header>
 );
 
-/** 상세 화면 머리. 44px 뒤로 버튼 + 제목 17/800 */
+/**
+ * 화면 이동(PushScreen) 머리. 위에 고정되며 44px 원형 뒤로 버튼 + 제목 17/800 한 줄(넘치면 말줄임) + 오른쪽 슬롯.
+ * 위 여백은 상태 표시줄(safe-area)을 포함한다.
+ */
 export const DetailHeader: React.FC<{
-  title: string;
+  title: React.ReactNode;
   onBack: () => void;
   right?: React.ReactNode;
 }> = ({ title, onBack, right }) => (
-  <header className="flex items-center gap-0.5 px-3 pt-2 pb-2">
+  <header className="flex shrink-0 items-center gap-0.5 bg-pk-bg px-3 pt-[calc(env(safe-area-inset-top)+8px)] pb-2">
     <button
       type="button"
       aria-label="뒤로"

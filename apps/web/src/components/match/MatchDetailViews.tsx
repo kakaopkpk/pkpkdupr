@@ -2,10 +2,12 @@ import React, { useEffect, useMemo, useState } from "react";
 import { getMatchTopLevelType } from "@pkpkdupr/shared/match";
 import { getTeamResultScores, type MatchInfo } from "@/types/match";
 import SkeletonBlock from "@/components/SkeletonBlock";
+import { FooterError } from "@/components/record/RecordMatchParts";
 import { PkButton } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { RatingDelta } from "@/components/ui/Delta";
 import { PlayerAvatar, TeamAvatars } from "@/components/ui/PlayerAvatar";
+import { LinkChevron } from "@/components/ui/Section";
 import { cx } from "@/components/ui/cx";
 import {
   formatKstShortDate,
@@ -33,15 +35,6 @@ const useMinuteClock = () => {
 const getSessionLabel = (session: NonNullable<MatchInfo["session"]>) =>
   session.name?.trim() || `${formatKstShortDate(session.date)} 세션`;
 
-/** 하단 고정 버튼 자리. 스크롤해도 화면 아래에 붙어 있다 */
-const BottomActions: React.FC<{ children: React.ReactNode }> = ({
-  children,
-}) => (
-  <div className="sticky bottom-0 z-10 mt-auto bg-linear-to-b from-pk-bg/0 to-pk-bg to-40% px-4 pt-6 pb-2">
-    {children}
-  </div>
-);
-
 /** 정보 카드의 한 줄. 왼쪽 이름, 오른쪽 값 */
 const InfoRow: React.FC<{ label: string; children: React.ReactNode }> = ({
   label,
@@ -62,17 +55,19 @@ const SessionLink: React.FC<{
   <button
     type="button"
     onClick={() => onOpen(session.id)}
-    className="font-bold text-pk-primary active:opacity-70"
+    className="inline-flex items-center gap-0.5 font-bold text-pk-primary active:opacity-70"
   >
-    {getSessionLabel(session)} ›
+    {getSessionLabel(session)}
+    <LinkChevron />
   </button>
 );
 
-/** 팀 아바타 쌍과 이름 두 줄을 세로로 쌓는다 */
-const TeamColumn: React.FC<{ team: MatchTeam; tone: "strong" | "weak" }> = ({
-  team,
-  tone,
-}) => (
+/** 팀 아바타 쌍과 이름 두 줄을 세로로 쌓는다. 이름을 누르면 그 회원 프로필을 연다 */
+const TeamColumn: React.FC<{
+  team: MatchTeam;
+  tone: "strong" | "weak";
+  onOpenPlayer: (playerId: string) => void;
+}> = ({ team, tone, onOpenPlayer }) => (
   <div className="flex min-w-0 flex-col items-center gap-1.5">
     <TeamAvatars players={team.players} size={32} ringColor={BG_COLOR} />
     <span
@@ -82,9 +77,14 @@ const TeamColumn: React.FC<{ team: MatchTeam; tone: "strong" | "weak" }> = ({
       )}
     >
       {team.players.map((player) => (
-        <span key={player.id} className="max-w-full truncate">
+        <button
+          key={player.id}
+          type="button"
+          onClick={() => onOpenPlayer(player.id)}
+          className="max-w-full truncate active:opacity-70"
+        >
           {player.username}
-        </span>
+        </button>
       ))}
     </span>
   </div>
@@ -95,15 +95,15 @@ export interface LiveMatchDetailProps {
   /** 시작한 사람 아이디. 모르면 null */
   creatorUsername: string | null;
   onOpenSession: (sessionId: string) => void;
-  onEnterScore: () => void;
+  onOpenPlayer: (playerId: string) => void;
 }
 
-/** 진행 중(또는 시작 전 예정) 경기. 참가자가 아니어도 같은 화면과 점수 입력 버튼을 본다 */
+/** 진행 중(또는 시작 전 예정) 경기 본문. 참가자가 아니어도 같은 화면을 보며, 점수 입력 버튼은 LiveMatchActions로 하단 고정 바에 둔다 */
 export const LiveMatchDetail: React.FC<LiveMatchDetailProps> = ({
   match,
   creatorUsername,
   onOpenSession,
-  onEnterScore,
+  onOpenPlayer,
 }) => {
   const now = useMinuteClock();
   const startsAtMs = new Date(match.matchStartsAt).getTime();
@@ -112,51 +112,64 @@ export const LiveMatchDetail: React.FC<LiveMatchDetailProps> = ({
   const elapsedMinutes = Math.floor((now - startsAtMs) / MINUTE_MS);
 
   return (
-    <>
-      <div className="flex flex-col gap-4 px-4 pt-1">
+    <div className="flex flex-col gap-4 px-4 pt-1">
+      <span
+        className={cx(
+          "inline-flex items-center gap-1.5 self-center rounded-full px-3 py-1 text-pk-13 font-bold tabular-nums",
+          isScheduled ? "bg-pk-neutral text-pk-sub" : "bg-pk-primary-soft text-pk-primary",
+        )}
+      >
         <span
+          aria-hidden="true"
           className={cx(
-            "inline-flex items-center gap-1.5 self-center rounded-full px-3 py-1 text-pk-13 font-bold tabular-nums",
-            isScheduled ? "bg-pk-neutral text-pk-sub" : "bg-pk-primary-soft text-pk-primary",
+            "size-[7px] rounded-full",
+            isScheduled ? "bg-pk-muted" : "bg-pk-primary",
           )}
-        >
-          <span
-            aria-hidden="true"
-            className={cx(
-              "size-[7px] rounded-full",
-              isScheduled ? "bg-pk-muted" : "bg-pk-primary",
-            )}
-          />
-          {isScheduled
-            ? `예정 · ${formatKstWeekdayTime(match.matchStartsAt)}`
-            : `진행 중 · ${elapsedMinutes}분째`}
-        </span>
-        <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2">
-          <TeamColumn team={match.teams[0]} tone="strong" />
-          <span className="text-pk-15 font-bold text-pk-muted">vs</span>
-          <TeamColumn team={match.teams[1]} tone="strong" />
-        </div>
-        <Card>
-          {match.session ? (
-            <InfoRow label="세션">
-              <SessionLink session={match.session} onOpen={onOpenSession} />
-            </InfoRow>
-          ) : null}
-          <InfoRow label="시작">{formatKstTime(match.matchStartsAt)}</InfoRow>
-          <InfoRow label="시작한 사람">{creatorUsername ?? "–"}</InfoRow>
-        </Card>
+        />
+        {isScheduled
+          ? `예정 · ${formatKstWeekdayTime(match.matchStartsAt)}`
+          : `진행 중 · ${elapsedMinutes}분째`}
+      </span>
+      <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2">
+        <TeamColumn
+          team={match.teams[0]}
+          tone="strong"
+          onOpenPlayer={onOpenPlayer}
+        />
+        <span className="text-pk-15 font-bold text-pk-muted">vs</span>
+        <TeamColumn
+          team={match.teams[1]}
+          tone="strong"
+          onOpenPlayer={onOpenPlayer}
+        />
       </div>
-      <BottomActions>
-        <PkButton size="lg" fullWidth className="h-14" onClick={onEnterScore}>
-          점수 입력
-        </PkButton>
-      </BottomActions>
-    </>
+      <Card>
+        {match.session ? (
+          <InfoRow label="세션">
+            <SessionLink session={match.session} onOpen={onOpenSession} />
+          </InfoRow>
+        ) : null}
+        <InfoRow label="시작">{formatKstTime(match.matchStartsAt)}</InfoRow>
+        <InfoRow label="시작한 사람">{creatorUsername ?? "–"}</InfoRow>
+      </Card>
+    </div>
   );
 };
 
+/** 진행 중 경기 하단 고정 바 내용 */
+export const LiveMatchActions: React.FC<{ onEnterScore: () => void }> = ({
+  onEnterScore,
+}) => (
+  <PkButton size="lg" fullWidth className="h-14" onClick={onEnterScore}>
+    점수 입력
+  </PkButton>
+);
+
 /** 큰 점수 블록. 이긴 쪽 점수는 블루, 진 쪽은 회색 */
-const ScoreBlock: React.FC<{ match: MatchInfo }> = ({ match }) => {
+const ScoreBlock: React.FC<{
+  match: MatchInfo;
+  onOpenPlayer: (playerId: string) => void;
+}> = ({ match, onOpenPlayer }) => {
   const hasScores = (match.scores?.length ?? 0) > 0;
   const [scoreA, scoreB] = getTeamResultScores(match);
   const winnerIndex = !hasScores || scoreA === scoreB ? null : scoreA > scoreB ? 0 : 1;
@@ -168,6 +181,7 @@ const ScoreBlock: React.FC<{ match: MatchInfo }> = ({ match }) => {
       <TeamColumn
         team={match.teams[0]}
         tone={winnerIndex === 1 ? "weak" : "strong"}
+        onOpenPlayer={onOpenPlayer}
       />
       <div className="font-num text-[64px] leading-none font-bold tabular-nums">
         <span className="sr-only">
@@ -182,12 +196,16 @@ const ScoreBlock: React.FC<{ match: MatchInfo }> = ({ match }) => {
       <TeamColumn
         team={match.teams[1]}
         tone={winnerIndex === 0 ? "weak" : "strong"}
+        onOpenPlayer={onOpenPlayer}
       />
     </div>
   );
 };
 
-const RatingChangeCard: React.FC<{ match: MatchInfo }> = ({ match }) => {
+const RatingChangeCard: React.FC<{
+  match: MatchInfo;
+  onOpenPlayer: (playerId: string) => void;
+}> = ({ match, onOpenPlayer }) => {
   // 경기 분류(단식/복식)에 맞는 평점의 이전·이후 값을 보인다
   const ratingCategory =
     getMatchTopLevelType(match.type) === "singles" ? "singles" : "doubles";
@@ -209,9 +227,11 @@ const RatingChangeCard: React.FC<{ match: MatchInfo }> = ({ match }) => {
     <Card>
       <h2 className="mt-3 mb-0.5 text-pk-13 font-bold text-pk-sub">평점 변화</h2>
       {entries.map(({ player, change }) => (
-        <div
+        <button
           key={player.id}
-          className="grid grid-cols-[24px_minmax(0,1fr)_auto_60px] items-center gap-2.5 py-[11px] not-last:shadow-[inset_0_-1px_0_#e6e9f0]"
+          type="button"
+          onClick={() => onOpenPlayer(player.id)}
+          className="grid w-full grid-cols-[24px_minmax(0,1fr)_auto_60px] items-center gap-2.5 py-[11px] text-left not-last:shadow-[inset_0_-1px_0_#e6e9f0] active:opacity-70"
         >
           <PlayerAvatar player={player} size={24} />
           <span className="min-w-0 truncate text-pk-15 font-bold">
@@ -225,7 +245,7 @@ const RatingChangeCard: React.FC<{ match: MatchInfo }> = ({ match }) => {
             value={change.delta[ratingCategory]}
             className="text-right"
           />
-        </div>
+        </button>
       ))}
     </Card>
   );
@@ -234,54 +254,74 @@ const RatingChangeCard: React.FC<{ match: MatchInfo }> = ({ match }) => {
 export interface CompletedMatchDetailProps {
   match: MatchInfo;
   recorderUsername: string | null;
-  /** false면 수정·한 판 더 버튼을 그리지 않는다(안내 문구 없음) */
-  canEdit: boolean;
   onOpenSession: (sessionId: string) => void;
-  onEdit: () => void;
-  onPlayAgain: () => void;
+  onOpenPlayer: (playerId: string) => void;
 }
 
-/** 완료 경기. 수정할 수 없으면 같은 화면에서 버튼만 빠진다 */
+/** 완료 경기 본문. 수정·한 판 더 버튼은 CompletedMatchActions로 하단 고정 바에 둔다 */
 export const CompletedMatchDetail: React.FC<CompletedMatchDetailProps> = ({
   match,
   recorderUsername,
-  canEdit,
   onOpenSession,
-  onEdit,
-  onPlayAgain,
+  onOpenPlayer,
 }) => (
+  <div className="flex flex-col gap-4 px-4 pt-1">
+    <p className="text-center text-pk-13 text-pk-sub tabular-nums">
+      {formatKstShortDate(match.matchStartsAt)}{" "}
+      {formatKstTime(match.matchStartsAt)}
+      {match.session ? (
+        <>
+          {" · "}
+          <SessionLink session={match.session} onOpen={onOpenSession} />
+        </>
+      ) : null}
+    </p>
+    <ScoreBlock match={match} onOpenPlayer={onOpenPlayer} />
+    <RatingChangeCard match={match} onOpenPlayer={onOpenPlayer} />
+    <Card>
+      <InfoRow label="장소">{match.location || "–"}</InfoRow>
+      <InfoRow label="기록한 사람">{recorderUsername ?? "–"}</InfoRow>
+    </Card>
+  </div>
+);
+
+/** 완료 경기 하단 고정 바 내용. 2칸 같은 너비이며, 한 판 더가 거절되면 버튼 위에 서버 문구를 보인다 */
+export const CompletedMatchActions: React.FC<{
+  isBusy: boolean;
+  error: string | null;
+  onEdit: () => void;
+  onPlayAgain: () => void;
+}> = ({ isBusy, error, onEdit, onPlayAgain }) => (
   <>
-    <div className="flex flex-col gap-4 px-4 pt-1">
-      <p className="text-center text-pk-13 text-pk-sub tabular-nums">
-        {formatKstShortDate(match.matchStartsAt)}{" "}
-        {formatKstTime(match.matchStartsAt)}
-        {match.session ? (
-          <>
-            {" · "}
-            <SessionLink session={match.session} onOpen={onOpenSession} />
-          </>
-        ) : null}
-      </p>
-      <ScoreBlock match={match} />
-      <RatingChangeCard match={match} />
-      <Card>
-        <InfoRow label="장소">{match.location || "–"}</InfoRow>
-        <InfoRow label="기록한 사람">{recorderUsername ?? "–"}</InfoRow>
-      </Card>
+    <FooterError message={error} />
+    <div className="grid grid-cols-2 gap-2">
+      <PkButton
+        variant="soft"
+        size="lg"
+        fullWidth
+        disabled={isBusy}
+        onClick={onEdit}
+      >
+        수정
+      </PkButton>
+      <PkButton size="lg" fullWidth disabled={isBusy} onClick={onPlayAgain}>
+        같은 멤버로 한 판 더
+      </PkButton>
     </div>
-    {canEdit ? (
-      <BottomActions>
-        <div className="grid grid-cols-2 gap-2">
-          <PkButton variant="soft" size="lg" onClick={onEdit}>
-            수정
-          </PkButton>
-          <PkButton size="lg" onClick={onPlayAgain}>
-            한 판 더
-          </PkButton>
-        </div>
-      </BottomActions>
-    ) : null}
   </>
+);
+
+/** 경기 상세 헤더 오른쪽 "삭제" 글자 버튼 */
+export const DeleteMatchHeaderButton: React.FC<{ onPress: () => void }> = ({
+  onPress,
+}) => (
+  <button
+    type="button"
+    onClick={onPress}
+    className="inline-flex min-h-11 items-center px-2 text-pk-15 font-bold text-pk-sub active:opacity-70"
+  >
+    삭제
+  </button>
 );
 
 /** 불러오는 동안 자리만 그린다 */

@@ -1,4 +1,5 @@
 export { getDb, getDbClient } from "./db/client";
+export { RatingWriteLock, RATING_WRITE_LOCK_KEY } from "./db/ratingWriteLock";
 export * from "./db/schema";
 export {
   PlayerRepository,
@@ -30,8 +31,13 @@ export {
   MatchRepository,
   CompletedMatchResultEditError,
   MatchRecordUpdateConflictError,
+  MatchNotFoundError,
+  MatchStaleUpdateError,
+  MATCH_STALE_UPDATE_ERROR_MESSAGE,
   SessionHasMatchesError,
   type CreateMatchInput,
+  type DeleteRecordedMatchInput,
+  type DeletedMatchResult,
   type UpdateMatchMetadataInput,
   type UpdateRecordedMatchInput,
   type MatchParticipantDuprSnapshot,
@@ -39,6 +45,12 @@ export {
   type CompletedMatchOutcome,
   type SessionWithParticipantIds,
 } from "./repositories/MatchRepository";
+export {
+  MatchDeletionLogRepository,
+  buildMatchDeletionLogInsert,
+  type CreateMatchDeletionLogInput,
+  type MatchDeletionLog,
+} from "./repositories/MatchDeletionLogRepository";
 export {
   TestDataRepository,
   isDevMockDataEnabled,

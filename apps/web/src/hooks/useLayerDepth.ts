@@ -13,7 +13,7 @@ interface UseLayerDepthOptions {
   kind: TabDepthKind;
   /** 깊이가 닫혔을 때(뒤로가기·닫기 버튼·셸이 닫음) 호출한다. 여러 번 불려도 안전해야 한다 */
   onClose: () => void;
-  /** true면 열기 전에 탭 스크롤 위치를 저장한다(전체 화면 드로어) */
+  /** true면 열기 전에 탭 스크롤 위치를 저장한다(화면 이동 PushScreen) */
   saveScroll?: boolean;
 }
 

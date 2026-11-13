@@ -77,6 +77,37 @@ describe("buildPlayerProfileSummary", () => {
     ]);
   });
 
+  it("업적 18개 진행 상태를 정의 순서로 넣고 진행 중 경기는 세지 않는다", () => {
+    const completed = makeMatch({ id: "Mcomplet" });
+    const inProgress = makeMatch({
+      id: "Minprogr",
+      status: "created",
+      scores: [],
+      completedAt: null,
+    });
+
+    const { achievements } = buildPlayerProfileSummary(
+      [inProgress, completed],
+      me.id,
+      emptyHistory,
+      me.id,
+      now,
+    );
+
+    expect(achievements).toHaveLength(18);
+    expect(achievements[0]).toEqual({
+      id: "matches-1",
+      earned: true,
+      earnedAt: now,
+      earnedMatchId: "Mcomplet",
+      current: 1,
+      target: 1,
+    });
+    expect(achievements.find((item) => item.id === "matches-10")).toMatchObject(
+      { earned: false, current: 1, target: 10 },
+    );
+  });
+
   describe("파트너 궁합", () => {
     let seq = 0;
     const doubles = (partner: Player, won: boolean, extra: Partial<Match> = {}) =>
@@ -177,6 +208,116 @@ describe("buildPlayerProfileSummary", () => {
       );
 
       expect(summary.partners).toEqual([]);
+    });
+  });
+
+  describe("상성", () => {
+    let seq = 0;
+    const versus = (
+      opponents: Player[],
+      won: boolean,
+      extra: Partial<Match> = {},
+    ) =>
+      makeMatch({
+        id: `Mr${String(seq++).padStart(6, "0")}`,
+        type: opponents.length > 1 ? "men-doubles" : "unrestricted-singles",
+        teams: [
+          {
+            id: "team-a",
+            name: "Team A",
+            players: opponents.length > 1 ? [me, viewer] : [me],
+          },
+          { id: "team-b", name: "Team B", players: opponents },
+        ],
+        scores: [won ? { scoreA: 11, scoreB: 5 } : { scoreA: 5, scoreB: 11 }],
+        ...extra,
+      });
+    const rivalIds = (matches: Match[]) =>
+      buildPlayerProfileSummary(matches, me.id, emptyHistory, me.id, now)
+        .rivals.map((stat) => stat.opponent.id);
+
+    it("3경기 이상 만나 진 비율이 50% 이상인 상대만 넣는다", () => {
+      const matches = [
+        // partnerA: 2전 2패 — 경기 수 부족
+        versus([partnerA], false),
+        versus([partnerA], false),
+        // partnerB: 4전 2패(50%) — 포함
+        ...[true, false, true, false].map((won) => versus([partnerB], won)),
+        // partnerC: 3전 1패(33%) — 제외
+        ...[true, true, false].map((won) => versus([partnerC], won)),
+        // 진행 중·승패 없는 경기는 세지 않는다
+        versus([partnerA], false, {
+          status: "created",
+          scores: [],
+          completedAt: null,
+        }),
+        versus([partnerA], false, { scores: [{ scoreA: 11, scoreB: 11 }] }),
+      ];
+
+      const summary = buildPlayerProfileSummary(
+        matches,
+        me.id,
+        emptyHistory,
+        me.id,
+        now,
+      );
+
+      expect(summary.rivals).toEqual([
+        {
+          opponent: {
+            id: partnerB.id,
+            username: partnerB.username,
+            avatarUrl: undefined,
+          },
+          matchCount: 4,
+          wins: 2,
+          losses: 2,
+        },
+      ]);
+    });
+
+    it("복식은 상대 두 명 각각과 1경기로 세고 단식과 합친다", () => {
+      const matches = [
+        versus([partnerA, partnerB], false),
+        versus([partnerA, partnerB], false),
+        versus([partnerA], false),
+      ];
+
+      const summary = buildPlayerProfileSummary(
+        matches,
+        me.id,
+        emptyHistory,
+        me.id,
+        now,
+      );
+
+      expect(
+        summary.rivals.map(({ opponent, matchCount, losses }) => ({
+          id: opponent.id,
+          matchCount,
+          losses,
+        })),
+      ).toEqual([{ id: partnerA.id, matchCount: 3, losses: 3 }]);
+    });
+
+    it("진 비율 → 경기 수 → 아이디 순으로 정렬하고 최대 3명만 넣는다", () => {
+      const extra = makePlayer("Pextra01");
+      const matches = [
+        // opponent: 3전 3패(100%)
+        ...[1, 2, 3].map(() => versus([opponent], false)),
+        // partnerC: 4전 3패(75%)
+        ...[false, false, false, true].map((won) => versus([partnerC], won)),
+        // partnerB: 4전 2패(50%) — 아이디로 partnerA 뒤
+        ...[false, false, true, true].map((won) => versus([partnerB], won)),
+        // partnerA: 4전 2패(50%)
+        ...[false, true, false, true].map((won) => versus([partnerA], won)),
+        // extra: 6전 3패(50%) — 경기 수로 50% 중 가장 앞
+        ...[false, true, false, true, false, true].map((won) =>
+          versus([extra], won),
+        ),
+      ];
+
+      expect(rivalIds(matches)).toEqual([opponent.id, partnerC.id, extra.id]);
     });
   });
 

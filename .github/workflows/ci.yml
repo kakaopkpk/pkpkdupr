@@ -45,3 +45,6 @@ jobs:
 
       - name: Test shared
         run: pnpm --filter @pkpkdupr/shared test
+
+      - name: Test web
+        run: pnpm --filter @pkpkdupr/web test

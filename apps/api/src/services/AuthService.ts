@@ -403,11 +403,31 @@ interface DuprRecalculationResult {
   }>;
 }
 
+export interface DuprRecalculationSummary {
+  ratingChangeLogs: PlayerRatingChangeLog[];
+  perMatchLogs: PlayerRatingChangeLog[];
+  changedPlayerCount: number;
+  restoredMatchDuprSnapshotCount: number;
+  restoredMatchDuprSnapshotMatchCount: number;
+  perMatchLogCount: number;
+}
+
+export interface MatchRatingApplyResult {
+  ratingChangeLogs: PlayerRatingChangeLog[];
+  changedPlayerCount: number;
+}
+
 interface MatchParticipantDuprSnapshot {
   matchId: string;
   playerId: string;
   duprRating: PublicPlayerDupr | null;
 }
+
+/**
+ * 재계산 입력(완료 경기 목록)을 읽는 함수. 평점 쓰기 잠금 안에서 호출해,
+ * 잠금을 기다리는 동안 다른 경로가 반영한 경기까지 포함한 최신 목록으로 재계산한다.
+ */
+export type CompletedMatchesLoader = () => Promise<Match[]>;
 
 interface RecalculateDuprRatingsOptions {
   source?: PlayerRatingChangeSource;
@@ -546,6 +566,14 @@ export class AuthService {
     refresher: PlayerRatingChartProjectionRefresher,
   ) {
     this.playerRatingChartProjectionRefresher = refresher;
+  }
+
+  /**
+   * 평점을 쓰는 공개 메서드는 모두 이 잠금 안에서 실행한다(Postgres advisory 잠금 키 하나).
+   * 잠금 안에서는 *Locked 메서드만 부른다. 잠금을 다시 잡으면 다른 커넥션이 같은 키를 기다려 교착된다.
+   */
+  private async withRatingWriteLock<T>(fn: () => Promise<T>): Promise<T> {
+    return await db.ratingWriteLock.run(fn);
   }
 
   private async refreshPlayerRatingChartProjections(playerIds: Iterable<string>) {
@@ -1620,6 +1648,28 @@ export class AuthService {
       confidence?: OfficialDuprConfidencePatch;
       reason?: string | null;
     },
+    loadCompletedMatches: CompletedMatchesLoader,
+  ): Promise<{
+    player: Player;
+    log: OfficialDuprAdjustmentLog;
+    ratingChangeLogs: PlayerRatingChangeLog[];
+  }> {
+    return await this.withRatingWriteLock(async () =>
+      this.applyOfficialDuprAdjustmentLocked(
+        input,
+        await loadCompletedMatches(),
+      ),
+    );
+  }
+
+  private async applyOfficialDuprAdjustmentLocked(
+    input: {
+      playerId: string;
+      changedByPlayerId: string;
+      ratings?: OfficialDuprRatingPatch;
+      confidence?: OfficialDuprConfidencePatch;
+      reason?: string | null;
+    },
     completedMatches: Match[],
   ): Promise<{
     player: Player;
@@ -1690,17 +1740,20 @@ export class AuthService {
     };
   }
 
+  /** 완료 경기 전체로 평점을 처음부터 다시 계산한다. 입력은 평점 쓰기 잠금 안에서 읽는다 */
   async recalculateDuprRatings(
-    completedMatches: Match[],
+    loadCompletedMatches: CompletedMatchesLoader,
     options: RecalculateDuprRatingsOptions = {},
-  ): Promise<{
-    ratingChangeLogs: PlayerRatingChangeLog[];
-    perMatchLogs: PlayerRatingChangeLog[];
-    changedPlayerCount: number;
-    restoredMatchDuprSnapshotCount: number;
-    restoredMatchDuprSnapshotMatchCount: number;
-    perMatchLogCount: number;
-  }> {
+  ): Promise<DuprRecalculationSummary> {
+    return await this.withRatingWriteLock(async () =>
+      this.recalculateDuprRatingsLocked(await loadCompletedMatches(), options),
+    );
+  }
+
+  private async recalculateDuprRatingsLocked(
+    completedMatches: Match[],
+    options: RecalculateDuprRatingsOptions,
+  ): Promise<DuprRecalculationSummary> {
     const recalculation =
       await this.calculateDuprRecalculation(completedMatches);
     const impacts = this.buildOfficialDuprImpacts(recalculation);
@@ -1754,13 +1807,25 @@ export class AuthService {
     };
   }
 
-  async applyMatchResultToRatings(
-    match: Match,
+  /** 완료 경기 하나를 지금 평점에 증분 반영한다. 이미 반영된 경기면 기존 로그를 돌려준다 */
+  async applyMatchResultToRatings(match: Match): Promise<MatchRatingApplyResult> {
+    return await this.withRatingWriteLock(() =>
+      this.applyMatchResultToRatingsLocked(match),
+    );
+  }
+
+  /**
+   * 잠금 안에서 경기를 다시 읽어 반영한다. 잠금을 기다리는 사이 경기가 지워졌거나
+   * 완료가 아니게 됐으면 평점 효과를 남기지 않고, 고쳐졌으면 고친 내용으로 반영한다.
+   */
+  private async applyMatchResultToRatingsLocked(
+    requested: Match,
     options: { refreshProjection?: boolean } = {},
-  ): Promise<{
-    ratingChangeLogs: PlayerRatingChangeLog[];
-    changedPlayerCount: number;
-  }> {
+  ): Promise<MatchRatingApplyResult> {
+    const match = await db.matches.findById(requested.id);
+    if (!match || match.status !== "completed") {
+      return { ratingChangeLogs: [], changedPlayerCount: 0 };
+    }
     const winnerTeamIndex = buildWinnerTeamIndex(match);
     if (winnerTeamIndex == null || !match.completedAt) {
       return { ratingChangeLogs: [], changedPlayerCount: 0 };
@@ -1901,17 +1966,26 @@ export class AuthService {
    * 관리자 일괄 완료 경기에서는 경기별 chart projection을 반복 재생성하지
    * 않고, 모든 평점 저장 후 고유 참가자별로 한 번만 갱신한다.
    */
-  async applyMatchResultsToRatings(matches: Match[]): Promise<{
-    ratingChangeLogs: PlayerRatingChangeLog[];
-    changedPlayerCount: number;
-  }> {
+  async applyMatchResultsToRatings(
+    matches: Match[],
+  ): Promise<MatchRatingApplyResult> {
+    return await this.withRatingWriteLock(() =>
+      this.applyMatchResultsToRatingsLocked(matches),
+    );
+  }
+
+  private async applyMatchResultsToRatingsLocked(
+    matches: Match[],
+  ): Promise<MatchRatingApplyResult> {
     const ratingResults = [];
     for (const match of [...matches].sort(
       (left, right) =>
         left.completedAt!.getTime() - right.completedAt!.getTime(),
     )) {
       ratingResults.push(
-        await this.applyMatchResultToRatings(match, { refreshProjection: false }),
+        await this.applyMatchResultToRatingsLocked(match, {
+          refreshProjection: false,
+        }),
       );
     }
     const ratingChangeLogs = ratingResults.flatMap(

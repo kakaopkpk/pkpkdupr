@@ -1,3 +1,4 @@
+import type { CompletedMatchOutcome } from "@pkpkdupr/db";
 import { MATCH_EDIT_WINDOW_MS, type Match } from "@pkpkdupr/shared/match";
 import type { Player, PlayerRatingChangeLog } from "@pkpkdupr/shared/player";
 import request from "supertest";
@@ -107,6 +108,9 @@ describe("PUT /api/matches/:matchId", () => {
   >;
   let cleanupExpired: MockInstance<MatchRepository["cleanupExpired"]>;
   let findAll: MockInstance<MatchRepository["findAll"]>;
+  let findCompletedMatchOutcomes: MockInstance<
+    MatchRepository["findCompletedMatchOutcomes"]
+  >;
 
   const putMatch = (body: object = validBody, matchId = existing.id) =>
     request(app)
@@ -116,6 +120,9 @@ describe("PUT /api/matches/:matchId", () => {
 
   beforeEach(() => {
     existing = buildExistingMatch();
+    findCompletedMatchOutcomes = vi
+      .spyOn(MatchRepository.prototype, "findCompletedMatchOutcomes")
+      .mockResolvedValue([]);
     cleanupExpired = vi
       .spyOn(MatchRepository.prototype, "cleanupExpired")
       .mockResolvedValue(undefined);
@@ -206,6 +213,55 @@ describe("PUT /api/matches/:matchId", () => {
     expect(response.body.ratingChanges).toEqual([
       expect.objectContaining({ id: `log-${existing.id}` }),
     ]);
+  });
+
+  it("수정으로 승패가 바뀌면 저장 전후 차이로 새로 받은 업적을 응답한다", async () => {
+    const opponentWin = (
+      id: string,
+      completedAt: Date,
+    ): CompletedMatchOutcome => ({
+      id,
+      type: "mixed-doubles",
+      sessionId: null,
+      completedAt,
+      teamPlayerIds: [
+        [requester.id, partner.id],
+        [opponentM.id, opponentF.id],
+      ],
+      scores: [{ scoreA: 5, scoreB: 11 }],
+    });
+    const hoursAgo = (hours: number) =>
+      new Date(Date.now() - hours * 60 * 60 * 1000);
+    // 저장 후: 상대 팀이 앞선 두 경기와 고친 경기(validBody 9:11)를 모두 이겨 3연승이다.
+    // 저장 전: 고친 경기는 요청자 팀이 이긴 기존 기록(11:5)이라 상대 팀은 최고 2연승이었다.
+    findCompletedMatchOutcomes.mockResolvedValue([
+      opponentWin("match-prior-1", hoursAgo(3)),
+      opponentWin("match-prior-2", hoursAgo(2)),
+      opponentWin(existing.id, existing.completedAt ?? hoursAgo(1)),
+    ]);
+
+    const response = await putMatch();
+
+    expect(response.status).toBe(200);
+    expect(response.body.newAchievements).toEqual([
+      expect.objectContaining({
+        playerId: opponentM.id,
+        achievementId: "streak-3",
+        earnedMatchId: existing.id,
+      }),
+      expect.objectContaining({
+        playerId: opponentF.id,
+        achievementId: "streak-3",
+        earnedMatchId: existing.id,
+      }),
+    ]);
+  });
+
+  it("새로 받은 업적이 없으면 newAchievements는 빈 배열이다", async () => {
+    const response = await putMatch();
+
+    expect(response.status).toBe(200);
+    expect(response.body.newAchievements).toEqual([]);
   });
 
   it("created 경기 입력은 증분 반영한다", async () => {
@@ -301,7 +357,8 @@ describe("PUT /api/matches/:matchId", () => {
     const response = await putMatch();
 
     expect(response.status).toBe(200);
-    const [replayed] = recalculate.mock.calls[0]!;
+    const [loadCompletedMatches] = recalculate.mock.calls[0]!;
+    const replayed = await loadCompletedMatches();
     expect(replayed.map((match) => match.id)).toEqual([existing.id]);
   });
 

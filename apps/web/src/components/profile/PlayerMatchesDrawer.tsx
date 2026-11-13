@@ -1,13 +1,12 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import type { MatchTopLevelType } from "@pkpkdupr/shared/match";
 import type { MatchInfo } from "@/types/match";
-import RightDrawer, {
-  useRightDrawerScrollContainer,
-} from "@/components/RightDrawer";
+import PushScreen, {
+  usePushScreenScrollContainer,
+} from "@/components/PushScreen";
 import SkeletonBlock from "@/components/SkeletonBlock";
 import { PROFILE_CATEGORY_OPTIONS } from "@/components/profile/ProfileRatingCard";
 import { Card } from "@/components/ui/Card";
-import { DetailHeader } from "@/components/ui/Headers";
 import { MatchRow } from "@/components/ui/MatchRow";
 import { SectionLabel, TextLink } from "@/components/ui/Section";
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
@@ -64,7 +63,7 @@ const InfiniteScrollTrigger: React.FC<{
   loadedCount: number;
   onReach: () => void;
 }> = ({ isEnabled, loadedCount, onReach }) => {
-  const scrollContainer = useRightDrawerScrollContainer();
+  const scrollContainer = usePushScreenScrollContainer();
   const targetRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -104,11 +103,10 @@ export interface PlayerMatchesDrawerProps {
   /** 열 때 고를 분류(프로필 평점 카드에서 고른 분류) */
   initialCategory: MatchTopLevelType;
   depthId: string;
-  layer: number;
   onClose: () => void;
 }
 
-/** 한 선수의 완료 경기 목록. 복식/단식 전환, 날짜·세션 묶음, 무한 스크롤 */
+/** 한 선수의 완료 경기 목록 화면. 복식/단식 전환, 날짜·세션 묶음, 무한 스크롤 */
 export default function PlayerMatchesDrawer({
   isOpen,
   tabKey,
@@ -116,16 +114,10 @@ export default function PlayerMatchesDrawer({
   title,
   initialCategory,
   depthId,
-  layer,
   onClose,
 }: PlayerMatchesDrawerProps): React.ReactElement {
   const { openMatchDetail, dataVersion } = useAppNavigation();
-  const {
-    registerScrollContainer,
-    requestCloseTopDepth,
-    restoreScrollTop,
-    selectedTab,
-  } = useTabNavigation();
+  const { closeDepth, restoreScrollTop, selectedTab } = useTabNavigation();
   const [category, setCategory] = useState(initialCategory);
   const [matches, setMatches] = useState<MatchInfo[]>([]);
   // 진행 중 경기를 거르기 전 받은 개수. 다음 페이지 여부는 이 값과 total로 정한다
@@ -141,7 +133,7 @@ export default function PlayerMatchesDrawer({
     isOpen: isOpen && !!playerId,
     tabKey,
     depthId,
-    kind: "match-history",
+    kind: "push-screen",
     onClose,
     saveScroll: true,
   });
@@ -242,12 +234,9 @@ export default function PlayerMatchesDrawer({
     [category, loadPage],
   );
 
-  const handleScrollContainerChange = useCallback(
-    (element: HTMLDivElement | null) => {
-      registerScrollContainer(tabKey, depthId, element);
-    },
-    [depthId, registerScrollContainer, tabKey],
-  );
+  const close = useCallback(() => {
+    if (!closeDepth(tabKey, depthId)) onClose();
+  }, [closeDepth, depthId, onClose, tabKey]);
 
   const handleExited = useCallback(() => {
     requestIdRef.current += 1;
@@ -263,16 +252,15 @@ export default function PlayerMatchesDrawer({
   const isInitialLoading = isLoading && loadedCount === 0;
 
   return (
-    <RightDrawer
+    <PushScreen
       isOpen={isLayerOpen}
       isActive={tabKey === selectedTab}
       ariaLabel={title}
+      title={title}
+      onBack={close}
       onExited={handleExited}
-      onScrollContainerChange={handleScrollContainerChange}
       onPullToRefresh={refresh}
-      layer={layer}
     >
-      <DetailHeader title={title} onBack={() => requestCloseTopDepth(tabKey)} />
       <div className="flex flex-col gap-2.5 px-4 pb-8">
         <div className="mb-1 self-start">
           <SegmentedControl
@@ -329,6 +317,6 @@ export default function PlayerMatchesDrawer({
           </>
         ) : null}
       </div>
-    </RightDrawer>
+    </PushScreen>
   );
 }

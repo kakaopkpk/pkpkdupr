@@ -53,8 +53,26 @@ const execute = async (
  */
 class PostgresTransaction {
   private closed = false;
+  private drizzleDb: Db | undefined;
 
-  constructor(private readonly connection: ReservedSql) {}
+  constructor(
+    private readonly connection: ReservedSql,
+    private readonly options: Sql["options"],
+  ) {}
+
+  /**
+   * 이 트랜잭션이 잡은 커넥션으로 실행되는 drizzle 인스턴스.
+   * 행 잠금을 쥔 채 풀의 다른 커넥션을 기다리지 않고 같은 트랜잭션 안에서 조회할 때 쓴다.
+   */
+  get db(): Db {
+    if (!this.drizzleDb) {
+      // 예약 커넥션에는 options가 없는데 drizzle이 타임스탬프 파서를 설정하려고 읽으므로, 풀과 같은 options를 붙인다.
+      this.drizzleDb = drizzle(
+        Object.assign(this.connection, { options: this.options }) as Sql,
+      );
+    }
+    return this.drizzleDb;
+  }
 
   async execute(statement: RawStatement): Promise<RawQueryResult> {
     return await execute(this.connection, statement);
@@ -93,7 +111,34 @@ class PostgresClient {
       connection.release();
       throw error;
     }
-    return new PostgresTransaction(connection);
+    return new PostgresTransaction(connection, this.sql.options);
+  }
+
+  /**
+   * 트랜잭션 advisory 잠금(`pg_advisory_xact_lock`)을 잡은 채 fn을 실행하고, 끝나면 COMMIT/ROLLBACK으로 놓는다.
+   * 잠금은 상호 배제용이라 fn 안의 쿼리는 이 트랜잭션이 아닌 풀의 다른 커넥션으로 실행된다.
+   * 세션 잠금이 아니라 트랜잭션 잠금이라 풀러(transaction mode)에서도 커넥션 반납과 함께 풀린다.
+   * 같은 키로 중첩 호출하면 다른 커넥션이 같은 잠금을 기다리며 교착되므로 바깥에서 한 번만 잡는다.
+   */
+  async withAdvisoryXactLock<T>(key: number, fn: () => Promise<T>): Promise<T> {
+    const transaction = await this.transaction();
+    let result: T;
+    try {
+      await transaction.execute({
+        sql: "SELECT pg_advisory_xact_lock($1)",
+        args: [key],
+      });
+      result = await fn();
+    } catch (error) {
+      transaction.close();
+      throw error;
+    }
+    try {
+      await transaction.commit();
+    } finally {
+      transaction.close();
+    }
+    return result;
   }
 
   async close() {

@@ -2,34 +2,38 @@ import React, { useMemo } from "react";
 import { getMatchTopLevelType } from "@pkpkdupr/shared/match";
 import type { PlayerRatingChangeLog } from "@pkpkdupr/shared/player";
 import BottomSheet from "@/components/BottomSheet";
+import { AchievementBadge } from "@/components/profile/AchievementBadge";
 import type { MatchInfo } from "@/types/match";
 import { PkButton } from "@/components/ui/Button";
 import { RatingDelta } from "@/components/ui/Delta";
 import { PlayerAvatar, TeamAvatars } from "@/components/ui/PlayerAvatar";
 import { cx } from "@/components/ui/cx";
+import { useAppNavigation } from "@/context/AppNavigationContext";
+import { useAuth } from "@/context/AuthContext";
+import { getAchievementDefinition } from "@/lib/achievements";
 import { formatRating } from "@/utils/dupr";
 import { CheckIcon, FooterError } from "./RecordMatchParts";
 
 export interface RecordDoneStepProps {
   match: MatchInfo;
-  /** 진행 중 세션이 있으면 "같은 멤버로 바로 시작"·"세션으로 돌아가기" */
-  hasLiveSession: boolean;
   isBusy: boolean;
+  /** 버튼 위에 보일 서버 문구(같은 선수가 다른 경기 중이면 409 문구) */
   error: string | null;
-  /** 세션: 같은 팀으로 진행 중 경기 시작. 세션 없음: 같은 선수로 점수 입력 다시 열기 */
+  /** 같은 팀으로 진행 중 경기를 시작한다(세션과 상관없음) */
   onPlayAgain: () => void;
-  /** 세션: 홈으로 돌아가기. 세션 없음: 닫기 */
+  /** 시트를 닫는다 */
   onDone: () => void;
 }
 
 export default function RecordDoneStep({
   match,
-  hasLiveSession,
   isBusy,
   error,
   onPlayAgain,
   onDone,
 }: RecordDoneStepProps): React.ReactElement {
+  const { player: viewer } = useAuth();
+  const { openAchievementDetail } = useAppNavigation();
   const score = match.scores?.[0];
   const ratingCategory = getMatchTopLevelType(match.type);
   const ratingRows = useMemo(() => {
@@ -44,11 +48,26 @@ export default function RecordDoneStep({
         return change ? [{ player: teamPlayer, change }] : [];
       });
   }, [match]);
+  // 참가자 전원이 받은 업적 중 내 것만 띠로 보인다
+  const myNewAchievements = useMemo(
+    () =>
+      viewer
+        ? (match.newAchievements ?? []).flatMap((item) => {
+            const definition =
+              item.playerId === viewer.id
+                ? getAchievementDefinition(item.achievementId)
+                : null;
+            return definition ? [definition] : [];
+          })
+        : [],
+    [match.newAchievements, viewer],
+  );
 
   return (
     <>
-      <BottomSheet.Header>
-        <div className="flex flex-col gap-0.5 px-1 pt-0.5">
+      {/* 제목까지 본문에 넣어 그랩바 아래 전부가 함께 스크롤된다 */}
+      <BottomSheet.Body className="pb-2">
+        <div className="flex shrink-0 flex-col gap-0.5 px-1 pt-0.5">
           <h2 className="flex items-center gap-1.5 text-pk-22 font-extrabold tracking-[-0.02em] text-pk-ink">
             <CheckIcon size={22} className="text-pk-up" />
             기록했어요
@@ -57,8 +76,6 @@ export default function RecordDoneStep({
             <p className="text-pk-13 text-pk-sub">{match.session.name}</p>
           ) : null}
         </div>
-      </BottomSheet.Header>
-      <BottomSheet.Body className="pb-2">
         {score ? (
           <div className="grid shrink-0 grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2">
             <ScoreSide
@@ -86,6 +103,33 @@ export default function RecordDoneStep({
               players={match.teams[1].players}
               isWinner={score.scoreB > score.scoreA}
             />
+          </div>
+        ) : null}
+        {viewer && myNewAchievements.length > 0 ? (
+          <div className="flex shrink-0 flex-col gap-2">
+            {myNewAchievements.map((definition) => (
+              <button
+                key={definition.id}
+                type="button"
+                onClick={() =>
+                  openAchievementDetail({
+                    playerId: viewer.id,
+                    achievementId: definition.id,
+                  })
+                }
+                className="flex items-center gap-3 rounded-pk-sm bg-pk-primary-soft px-3.5 py-3 text-left active:opacity-80"
+              >
+                <AchievementBadge achievement={definition} earned size={40} />
+                <span className="flex min-w-0 flex-col gap-0.5">
+                  <span className="truncate text-pk-15 font-extrabold text-pk-ink">
+                    새 업적 · {definition.name}
+                  </span>
+                  <span className="truncate text-pk-13 text-pk-sub">
+                    {definition.condition}
+                  </span>
+                </span>
+              </button>
+            ))}
           </div>
         ) : null}
         {ratingRows.length > 0 ? (
@@ -125,10 +169,10 @@ export default function RecordDoneStep({
             disabled={isBusy}
             onClick={onPlayAgain}
           >
-            {hasLiveSession ? "같은 멤버로 바로 시작" : "같은 멤버로 한 판 더"}
+            같은 멤버로 한 판 더
           </PkButton>
           <PkButton size="lg" fullWidth disabled={isBusy} onClick={onDone}>
-            {hasLiveSession ? "세션으로 돌아가기" : "닫기"}
+            닫기
           </PkButton>
         </div>
       </BottomSheet.Footer>

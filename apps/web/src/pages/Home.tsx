@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import type { RecommendedCourt } from "@pkpkdupr/shared/matchmaking";
 import type { MatchInfo } from "@/types/match";
 import HomeSkeleton from "@/components/home/HomeSkeleton";
-import LastSessionMeCard from "@/components/home/LastSessionMeCard";
+import LastSessionFeed from "@/components/home/LastSessionFeed";
 import MyLiveMatchCard from "@/components/home/MyLiveMatchCard";
 import NextSessionCard, {
   type ParticipationAction,
@@ -15,19 +15,20 @@ import {
   usePreSessionData,
 } from "@/components/home/usePreSessionData";
 import { useSessionRecommendations } from "@/components/home/useSessionRecommendations";
+import { useSessionTopRiser } from "@/components/home/useSessionTopRiser";
+import { TopRiserCard } from "@/components/records/SessionReportParts";
 import ParticipantsSheet from "@/components/session/ParticipantsSheet";
 import { getErrorMessage, isNetworkError } from "@/components/session/saveError";
 import { LivePill } from "@/components/ui/Badges";
 import { Card } from "@/components/ui/Card";
-import { TabHeader } from "@/components/ui/Headers";
 import { LiveMatchRow, MatchRow } from "@/components/ui/MatchRow";
-import { SectionLabel, TextLink } from "@/components/ui/Section";
+import { LinkChevron, SectionLabel } from "@/components/ui/Section";
+import { cx } from "@/components/ui/cx";
 import { useAppNavigation } from "@/context/AppNavigationContext";
 import { useAuth } from "@/context/AuthContext";
 import { useLiveSession } from "@/context/LiveSessionContext";
 import { useSystemNotice } from "@/context/SystemNoticeContext";
 import { useTabNavigation } from "@/context/TabNavigationContext";
-import { formatKstLongDate, formatKstShortDate } from "@/lib/format";
 import {
   addMatchSessionParticipant,
   isSessionParticipant,
@@ -66,16 +67,14 @@ const Spacer: React.FC = () => <div className="h-1.5" />;
 const MatchListCard: React.FC<{
   matches: MatchInfo[];
   currentPlayerId: string | undefined;
-  timeLabel?: React.ComponentProps<typeof MatchRow>["timeLabel"];
   onOpenMatch: (matchId: string) => void;
-}> = ({ matches, currentPlayerId, timeLabel, onOpenMatch }) => (
+}> = ({ matches, currentPlayerId, onOpenMatch }) => (
   <Card>
     {matches.map((match) => (
       <MatchRow
         key={match.id}
         match={match}
         currentPlayerId={currentPlayerId}
-        timeLabel={timeLabel}
         onPress={() => onOpenMatch(match.id)}
       />
     ))}
@@ -104,7 +103,7 @@ const INITIAL_START_STATE: StartState = {
 
 /**
  * 홈 탭. 셸의 진행 중 세션이 있으면 진행 화면(참여자 Main / 미참여자 MainGuest),
- * 없으면 다가오는 첫 세션 카드와 지난 세션 요약을 보인다.
+ * 없으면 다가오는 첫 세션 카드, 세션 밖 진행 중 경기, 지난 세션 피드를 보인다.
  */
 const Home: React.FC = () => {
   const { player } = useAuth();
@@ -113,7 +112,6 @@ const Home: React.FC = () => {
   const {
     openRecordMatch,
     openMatchDetail,
-    openSessionReport,
     notifyDataChanged,
     dataVersion,
   } = useAppNavigation();
@@ -131,9 +129,9 @@ const Home: React.FC = () => {
 
   const preSession = usePreSessionData({
     enabled: isPreSession,
-    playerId,
     dataVersion,
   });
+  const liveTopRiser = useSessionTopRiser(liveSession?.id ?? null, dataVersion);
   const recommendations = useSessionRecommendations(
     isLiveParticipant && liveSession ? liveSession.id : null,
     dataVersion,
@@ -226,8 +224,25 @@ const Home: React.FC = () => {
   };
 
   // ── 진행 중 세션 ────────────────────────────────────
+  // 세션 밖 경기까지 포함한 진행 중 경기. 경기 중인 선수 판단(대기 인원·참여 취소 잠금)에 쓴다
   const inProgressMatches = live.inProgressMatches;
   const myInProgressMatch = live.myInProgressMatch;
+  const sessionInProgressMatches = useMemo(
+    () =>
+      liveSession
+        ? inProgressMatches.filter(
+            (match) => match.session?.id === liveSession.id,
+          )
+        : [],
+    [inProgressMatches, liveSession],
+  );
+  // 세션 머리의 진행 수. 세션 밖 내 경기도 진행 중 목록에 함께 보이므로 센다
+  const liveInProgressCount =
+    sessionInProgressMatches.length +
+    (myInProgressMatch &&
+    !sessionInProgressMatches.some((match) => match.id === myInProgressMatch.id)
+      ? 1
+      : 0);
   const busyPlayerIds = useMemo(
     () => inProgressMatches.flatMap(getMatchPlayerIds),
     [inProgressMatches],
@@ -330,17 +345,14 @@ const Home: React.FC = () => {
   );
 
   // ── 그리기 ─────────────────────────────────────────
-  const todayLabel = formatKstLongDate(now);
-
-  const renderLive = () => {
-    const otherInProgress = isLiveParticipant
-      ? inProgressMatches.filter((match) => match.id !== myInProgressMatch?.id)
-      : inProgressMatches;
+  /** 진행 중 머리·내 경기 카드·남의 진행 중 경기 줄. 내 경기는 세션 밖 경기여도 맨 위에 온다 */
+  const renderInProgress = (otherMatches: MatchInfo[]) => {
+    const count = otherMatches.length + (myInProgressMatch ? 1 : 0);
 
     return (
       <>
-        <SectionLabel>진행 중 {inProgressMatches.length}</SectionLabel>
-        {isLiveParticipant && myInProgressMatch ? (
+        <SectionLabel>진행 중 {count}</SectionLabel>
+        {myInProgressMatch ? (
           <MyLiveMatchCard
             match={myInProgressMatch}
             now={now}
@@ -349,9 +361,9 @@ const Home: React.FC = () => {
             }
           />
         ) : null}
-        {otherInProgress.length > 0 ? (
+        {otherMatches.length > 0 ? (
           <Card>
-            {otherInProgress.map((match) => (
+            {otherMatches.map((match) => (
               <LiveMatchRow
                 key={match.id}
                 match={match}
@@ -360,56 +372,86 @@ const Home: React.FC = () => {
               />
             ))}
           </Card>
-        ) : inProgressMatches.length === 0 ? (
+        ) : count === 0 ? (
           <EmptyText>진행 중인 경기가 없어요</EmptyText>
         ) : null}
-        {isLiveParticipant ? (
-          <>
-            <Spacer />
-            <RecommendationSection
-              state={visibleRecommendations}
-              waitingCount={waitingCount}
-              startingKey={startState.startingKey}
-              startError={startState.error}
-              onStart={(court) => void startRecommendedMatch(court)}
-            />
-          </>
-        ) : null}
-        <Spacer />
-        <SectionLabel>오늘 기록 {completedMatches.length}</SectionLabel>
-        {completedMatches.length > 0 ? (
-          <MatchListCard
-            matches={completedMatches}
-            currentPlayerId={playerId}
-            onOpenMatch={openMatchDetail}
-          />
-        ) : (
-          <EmptyText>아직 기록된 경기가 없어요</EmptyText>
-        )}
-        {/* 미참여자의 참여하기는 셸의 알림 바가 맡는다. 그 바에 가리지 않게 여백을 둔다 */}
-        {!isLiveParticipant ? <div className="h-16" /> : null}
       </>
     );
   };
 
+  const renderLive = () => (
+    <>
+      {liveTopRiser ? (
+        <>
+          <TopRiserCard report={liveTopRiser} />
+          <Spacer />
+        </>
+      ) : null}
+      {renderInProgress(
+        sessionInProgressMatches.filter(
+          (match) => match.id !== myInProgressMatch?.id,
+        ),
+      )}
+      {isLiveParticipant ? (
+        <>
+          <Spacer />
+          <RecommendationSection
+            state={visibleRecommendations}
+            waitingCount={waitingCount}
+            startingKey={startState.startingKey}
+            startError={startState.error}
+            onStart={(court) => void startRecommendedMatch(court)}
+          />
+        </>
+      ) : null}
+      <Spacer />
+      <SectionLabel>오늘 기록 {completedMatches.length}</SectionLabel>
+      {completedMatches.length > 0 ? (
+        <MatchListCard
+          matches={completedMatches}
+          currentPlayerId={playerId}
+          onOpenMatch={openMatchDetail}
+        />
+      ) : (
+        <EmptyText>아직 기록된 경기가 없어요</EmptyText>
+      )}
+      {/* 미참여자의 참여하기는 셸의 알림 바가 맡는다. 그 바에 가리지 않게 여백을 둔다 */}
+      {!isLiveParticipant ? <div className="h-16" /> : null}
+    </>
+  );
+
   const renderPreSession = () => {
     const { data, status, error } = preSession;
+    // 진행 중 경기는 다가오는 세션 조회와 따로 받으므로 그 조회가 실패해도 보인다
+    const inProgressSection =
+      inProgressMatches.length > 0 ? (
+        <>
+          <Spacer />
+          {renderInProgress(
+            inProgressMatches.filter(
+              (match) => match.id !== myInProgressMatch?.id,
+            ),
+          )}
+        </>
+      ) : null;
     if (!data) {
       if (status === "error") {
         return (
-          <p
-            role="alert"
-            className="px-1 py-6 text-center text-pk-13 font-medium text-pk-down"
-          >
-            {error ?? "다가오는 세션을 불러오지 못했어요."}
-          </p>
+          <>
+            <p
+              role="alert"
+              className="px-1 py-6 text-center text-pk-13 font-medium text-pk-down"
+            >
+              {error ?? "다가오는 세션을 불러오지 못했어요."}
+            </p>
+            {inProgressSection}
+          </>
         );
       }
       return <HomeSkeleton />;
     }
 
-    const { upcoming, lastSessionMe, recentMatches, lastSession } = data;
-    const isToday = !!nextSession?.isToday;
+    const { upcoming, lastSessionReport } = data;
 
     return (
       <>
@@ -434,89 +476,54 @@ const Home: React.FC = () => {
         ) : (
           <EmptyText>다가오는 세션이 없어요</EmptyText>
         )}
-        {isToday && lastSessionMe ? (
+        {inProgressSection}
+        {lastSessionReport ? (
           <>
             <Spacer />
-            <SectionLabel>
-              지난 세션의 나 · {formatKstShortDate(lastSessionMe.session.date)}
-            </SectionLabel>
-            <LastSessionMeCard report={lastSessionMe.report} />
-          </>
-        ) : null}
-        {isToday && recentMatches.length > 0 ? (
-          <>
-            <Spacer />
-            <SectionLabel>최근 기록</SectionLabel>
-            <MatchListCard
-              matches={recentMatches}
-              currentPlayerId={playerId}
-              timeLabel="weekday-time"
-              onOpenMatch={openMatchDetail}
-            />
-          </>
-        ) : null}
-        {!isToday && lastSession ? (
-          <>
-            <Spacer />
-            <SectionLabel
-              right={
-                <TextLink
-                  onPress={() => openSessionReport(lastSession.session.id)}
-                >
-                  리포트 ›
-                </TextLink>
-              }
-            >
-              지난 세션 · {formatKstShortDate(lastSession.session.date)}
-            </SectionLabel>
-            {lastSession.matches.length > 0 ? (
-              <MatchListCard
-                matches={lastSession.matches}
-                currentPlayerId={playerId}
-                timeLabel="weekday-time"
-                onOpenMatch={openMatchDetail}
-              />
-            ) : null}
+            <LastSessionFeed report={lastSessionReport} playerId={playerId} />
           </>
         ) : null}
       </>
     );
   };
 
+  // 세션 중에만 세션 머리를 둔다. 세션 없는 날·세션 전에는 탭 제목 없이 첫 카드부터 보인다
   const header = liveSession ? (
-    <TabHeader
-      title="홈"
-      right={
-        <span className="mt-1.5">
-          <LivePill />
+    <header className="flex flex-col gap-1 px-5 pt-4 pb-4">
+      <div className="flex items-center justify-between gap-3">
+        <h1 className="min-w-0 truncate text-pk-17 font-extrabold text-pk-ink">
+          {liveSession.name}
+        </h1>
+        <LivePill />
+      </div>
+      <p className="flex min-w-0 items-center text-pk-13 text-pk-sub tabular-nums">
+        <button
+          type="button"
+          onClick={() => openParticipants(liveSession, busyPlayerIds)}
+          className="inline-flex shrink-0 items-center gap-0.5 font-bold text-pk-primary"
+        >
+          {liveSession.participants.length}명 참여
+          <LinkChevron />
+        </button>
+        {/* flex 항목의 앞 공백은 사라지므로 버튼과의 간격은 pl로 둔다 */}
+        <span className="min-w-0 truncate pl-1">
+          {[
+            liveSession.location,
+            `${completedMatches.length}경기`,
+            `진행 ${liveInProgressCount}`,
+          ]
+            .filter(Boolean)
+            .map((part) => `· ${part}`)
+            .join(" ")}
         </span>
-      }
-      sub={
-        <>
-          <p className="truncate text-pk-15 font-bold text-pk-ink">
-            {liveSession.name} · {liveSession.location}
-          </p>
-          <p className="tabular-nums">
-            <button
-              type="button"
-              onClick={() => openParticipants(liveSession, busyPlayerIds)}
-              className="font-bold text-pk-primary"
-            >
-              {liveSession.participants.length}명 참여 ›
-            </button>
-            {` · ${completedMatches.length}경기 · 진행 ${inProgressMatches.length}`}
-          </p>
-        </>
-      }
-    />
-  ) : (
-    <TabHeader title="홈" sub={todayLabel} />
-  );
+      </p>
+    </header>
+  ) : null;
 
   return (
     <>
       {header}
-      <div className="flex flex-col gap-2.5 px-4 pb-6">
+      <div className={cx("flex flex-col gap-2.5 px-4 pb-6", !header && "pt-4")}>
         {liveSession ? renderLive() : null}
         {isPreSession ? renderPreSession() : null}
         {!isLiveResolved ? <HomeSkeleton /> : null}

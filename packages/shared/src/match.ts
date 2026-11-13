@@ -1,3 +1,4 @@
+import type { EarnedAchievement } from "./achievements.js";
 import type { Player, PlayerRatingChangeLog } from "./player.js";
 import type { MatchSessionKind } from "./session.js";
 
@@ -177,6 +178,45 @@ export const isMatchRecordEditable = (
   !isMultiGameMatchRecord(match) &&
   isWithinMatchEditWindow(match.matchStartsAt, now);
 
+/**
+ * 회원이 지울 수 있는 경기면 true. 회원 누구나 가능하며
+ * 수정 가능 조건(취소 아님 · 과거 다중 점수 기록 아님 · 시작 후 24시간 이내)에 더해
+ * 이미 시작했고(시작 시각 ≤ now) 완료되지 않은 관리자 예정 경기가 아닐 때
+ */
+export const isMatchRecordDeletable = (
+  match: Pick<Match, "status" | "scores" | "matchStartsAt" | "source">,
+  now: Date = new Date(),
+): boolean =>
+  isMatchRecordEditable(match, now) &&
+  match.matchStartsAt.getTime() <= now.getTime() &&
+  (match.source !== "admin_created" || match.status === "completed");
+
+/**
+ * 이긴 팀 index. 이긴 게임 수로 정하고, 같으면 총점으로 정한다.
+ * 점수가 없거나 총점까지 같으면 null이다.
+ */
+export const getWinningTeamIndex = (match: {
+  scores?: readonly MatchScore[] | null;
+}): 0 | 1 | null => {
+  if (!match.scores?.length) return null;
+
+  const setWins = match.scores.reduce<[number, number]>(
+    ([teamA, teamB], score) => [
+      teamA + Number(score.scoreA > score.scoreB),
+      teamB + Number(score.scoreB > score.scoreA),
+    ],
+    [0, 0],
+  );
+  if (setWins[0] !== setWins[1]) return setWins[0] > setWins[1] ? 0 : 1;
+
+  const points = match.scores.reduce<[number, number]>(
+    ([teamA, teamB], score) => [teamA + score.scoreA, teamB + score.scoreB],
+    [0, 0],
+  );
+  if (points[0] === points[1]) return null;
+  return points[0] > points[1] ? 0 : 1;
+};
+
 export interface Match {
   id: string;
   type: MatchType;
@@ -217,11 +257,31 @@ export interface RecordMatchRequest {
   scores: MatchScore[];
   /** POST /api/matches 전용. 회원 세션(오늘) 안에서 기록할 때 지정. 정기 세션은 시작 시각 규칙으로 자동 지정되므로 무시된다 */
   sessionId?: string;
+  /** PUT /api/matches/:matchId 전용. 마지막으로 본 updatedAt(ISO). 서버 값과 다르면 409 */
+  expectedUpdatedAt?: string;
+}
+
+/** POST /api/matches/start 요청. 세션과 상관없이 점수 없는 진행 중 경기를 시작한다 */
+export interface StartMatchRequest {
+  teams: [RecordMatchTeamRequest, RecordMatchTeamRequest];
+  /** 원래 경기의 세션(한 판 더) 또는 지금 세션. 오늘 세션일 때만 그 세션에 넣는다 */
+  sessionId?: string;
+  /** 생략하면 팀 구성으로 추론 */
+  type?: MatchType;
+  /** 생략하면 세션 장소, 세션도 없으면 기본 장소 */
+  location?: string;
+}
+
+/** GET /api/matches/in-progress 응답 */
+export interface InProgressMatchesResponse {
+  matches: Match[];
 }
 
 /** 기록·수정 응답. GET /api/matches/:matchId 응답과 같은 형태다 */
 export type RecordedMatchResponse = Match & {
   ratingChanges: PlayerRatingChangeLog[];
+  /** 이 저장으로 참가자 전원이 새로 받은 업적. 없으면 빈 배열 */
+  newAchievements: EarnedAchievement[];
 };
 
 export type MatchFeedItem =

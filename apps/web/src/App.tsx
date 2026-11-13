@@ -186,9 +186,15 @@ function App() {
           )
         : 0;
 
+      const roundedOffset = Math.round(keyboardOffset);
       document.documentElement.style.setProperty(
         "--app-keyboard-offset",
-        `${Math.round(keyboardOffset)}px`,
+        `${roundedOffset}px`,
+      );
+      // 키보드가 열려 있는 동안 바텀시트 Footer를 숨기는 CSS 기준
+      document.documentElement.toggleAttribute(
+        "data-keyboard-open",
+        roundedOffset > 0,
       );
     };
 
@@ -215,6 +221,7 @@ function App() {
       window.removeEventListener("focusout", handleFocusOut);
       window.visualViewport?.removeEventListener("resize", updateViewportMetrics);
       window.visualViewport?.removeEventListener("scroll", updateViewportMetrics);
+      document.documentElement.removeAttribute("data-keyboard-open");
     };
   }, []);
 

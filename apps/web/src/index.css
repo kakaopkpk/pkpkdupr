@@ -174,7 +174,7 @@
 
   html[data-ios-viewport-locked="true"] .app-tab-panel-scroll-area,
   html[data-ios-viewport-locked="true"] .app-bottom-sheet-body,
-  html[data-ios-viewport-locked="true"] .app-right-drawer-scroll-area {
+  html[data-ios-viewport-locked="true"] .app-push-screen-scroll-area {
     overscroll-behavior: none;
     touch-action: pan-y;
   }
@@ -202,6 +202,11 @@
     max-height: var(--app-bottom-sheet-fixed-height);
   }
 
+  /* 키보드가 열려 있는 동안 하단 버튼을 숨겨 본문이 키보드 바로 위까지 보이게 한다 */
+  html[data-keyboard-open] .app-bottom-sheet-footer {
+    display: none;
+  }
+
   .app-bottom-sheet-body {
     min-height: 0;
     overflow-y: auto;
@@ -210,7 +215,7 @@
     -webkit-overflow-scrolling: touch;
   }
 
-  .app-right-drawer-scroll-area {
+  .app-push-screen-scroll-area {
     min-width: 0;
     overflow-y: auto;
     overflow-x: hidden;
@@ -221,13 +226,13 @@
   @media (max-width: 480px) {
     .app-tab-panel-scroll-area,
     .app-bottom-sheet-body,
-    .app-right-drawer-scroll-area {
+    .app-push-screen-scroll-area {
       scrollbar-width: none;
     }
 
     .app-tab-panel-scroll-area::-webkit-scrollbar,
     .app-bottom-sheet-body::-webkit-scrollbar,
-    .app-right-drawer-scroll-area::-webkit-scrollbar {
+    .app-push-screen-scroll-area::-webkit-scrollbar {
       display: none;
     }
   }
