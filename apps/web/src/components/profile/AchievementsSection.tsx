@@ -1,8 +1,10 @@
 import React from "react";
 import { ACHIEVEMENTS } from "@pkpkdupr/shared/achievements";
 import { AchievementBadge } from "@/components/profile/AchievementBadge";
+import { rowPressClassName } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { SectionLabel, TextLink } from "@/components/ui/Section";
+import { cx } from "@/components/ui/cx";
 import { useAppNavigation } from "@/context/AppNavigationContext";
 import {
   type AchievementProgressInfo,
@@ -63,7 +65,10 @@ export const AchievementsSection: React.FC<AchievementsSectionProps> = ({
                   achievementId: definition.id,
                 })
               }
-              className="flex min-w-0 flex-col items-center gap-2.5 rounded-pk-sm py-1 active:bg-pk-bg"
+              className={cx(
+                "flex min-w-0 flex-col items-center gap-2.5 rounded-pk-sm py-1 active:bg-pk-bg",
+                rowPressClassName,
+              )}
             >
               <AchievementBadge
                 achievement={definition}

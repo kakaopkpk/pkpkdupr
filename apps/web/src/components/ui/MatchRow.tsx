@@ -1,6 +1,7 @@
 import React from "react";
 import { getTeamResultScores, type MatchInfo } from "@/types/match";
 import { formatKstTime, formatKstWeekdayTime } from "@/lib/format";
+import { rowPressClassName } from "./Button";
 import { ChevronRightIcon } from "./Icons";
 import { TeamAvatars } from "./PlayerAvatar";
 import { cx } from "./cx";
@@ -24,7 +25,8 @@ const RowContainer: React.FC<{
       type="button"
       onClick={onPress}
       className={cx(
-        "w-full text-left transition-colors active:bg-pk-primary-soft/60",
+        "w-full text-left active:bg-pk-primary-soft/60",
+        rowPressClassName,
         className,
       )}
     >
