@@ -24,6 +24,9 @@
   --color-pk-gold: #f2c14e;
   --color-pk-silver: #cfd5df;
   --color-pk-bronze: #e0a878;
+  /* 업적 축하 색종이 */
+  --color-pk-sky: #5ac8fa;
+  --color-pk-primary-mid: #5a7bd6;
   /* 세션 지배자 불꽃 후광 */
   --color-pk-flame-core: #ffd54a;
   --color-pk-flame: #ff8a1f;
@@ -462,6 +465,44 @@
     .pk-flame-aura::before {
       animation: none;
     }
+  }
+
+  /*
+   * 업적 달성 축하 연출(AchievementCelebration).
+   * 색종이 색은 캔버스가 --pk-confetti-1~6을 읽어 쓴다.
+   */
+  .pk-celebration {
+    --pk-confetti-1: var(--color-pk-primary);
+    --pk-confetti-2: var(--color-pk-hl);
+    --pk-confetti-3: var(--color-pk-gold);
+    --pk-confetti-4: var(--color-pk-sky);
+    --pk-confetti-5: var(--color-white);
+    --pk-confetti-6: var(--color-pk-primary-mid);
+  }
+
+  .pk-celebration-dim {
+    background: color-mix(in srgb, var(--color-pk-ink) 62%, transparent);
+    -webkit-backdrop-filter: blur(7px) saturate(1.1);
+    backdrop-filter: blur(7px) saturate(1.1);
+  }
+
+  /* 배지 뒤에서 도는 빛줄기. 가운데서 바깥으로 갈수록 흐려진다 */
+  .pk-celebration-rays {
+    background: repeating-conic-gradient(
+      from 0deg,
+      color-mix(in srgb, var(--color-pk-hl) 22%, transparent) 0 7deg,
+      transparent 7deg 20deg
+    );
+    -webkit-mask: radial-gradient(circle, #000 12%, transparent 62%);
+    mask: radial-gradient(circle, #000 12%, transparent 62%);
+  }
+
+  .pk-celebration-glow {
+    background: radial-gradient(
+      circle,
+      color-mix(in srgb, var(--color-pk-hl) 42%, transparent),
+      transparent 62%
+    );
   }
 
   .app-mobile-input {
