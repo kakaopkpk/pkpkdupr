@@ -7,6 +7,7 @@ export const TextField: React.FC<
   React.InputHTMLAttributes<HTMLInputElement> & {
     label?: string;
     error?: boolean;
+    ref?: React.Ref<HTMLInputElement>;
   }
 > = ({ label, error = false, className, id, ...rest }) => {
   const generatedId = useId();

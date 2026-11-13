@@ -25,12 +25,15 @@ import {
   validateMatchScores,
 } from "@pkpkdupr/shared/match";
 import {
+  addKstDays,
   canOpenRegularSession,
   DEFAULT_MATCH_LOCATION,
   getEmptySessionExpiresAt,
   getNextRegularSessionDateKey,
   isInProgressMatchExpired,
+  isPastSessionStart,
   isRegularSessionTime,
+  isSessionOnToday,
   isValidKstDateKey,
   isValidSessionTimeRange,
   kstDateKeyToDate,
@@ -605,7 +608,7 @@ const resolveSessionForNewMatch = async (
       throw new MatchRecordRequestError("세션을 찾을 수 없습니다.", 404);
     }
     if (requested.kind !== "regular") {
-      if (toKstDateKey(requested.date) !== toKstDateKey(matchStartsAt)) {
+      if (!isSessionOnToday(requested, matchStartsAt)) {
         throw new MatchRecordRequestError(
           "오늘 세션에서만 경기를 기록할 수 있습니다.",
           403,
@@ -636,7 +639,7 @@ const resolveSessionForStartedMatch = async (
     if (
       requested &&
       requested.kind !== "regular" &&
-      toKstDateKey(requested.date) === toKstDateKey(now)
+      isSessionOnToday(requested, now)
     ) {
       return requested;
     }
@@ -785,7 +788,7 @@ const toMatchSessionDetail = (
     dateKey,
     startTime: session.startTime,
     endTime: session.endTime,
-    isToday: dateKey === toKstDateKey(now),
+    isToday: isSessionOnToday(session, now),
     participants,
     matchCount: session.matchCount,
   };
@@ -825,8 +828,11 @@ const requireOpenSessionForParticipants = async (
   if (!session) {
     throw new MatchSessionRequestError("세션을 찾을 수 없습니다.", 404);
   }
-  // YYYY-MM-DD 날짜 키는 문자열 비교가 날짜 순서와 같다
-  if (toKstDateKey(session.date) < toKstDateKey(now)) {
+  // YYYY-MM-DD 날짜 키는 문자열 비교가 날짜 순서와 같다. 자정을 넘긴 진행 중 세션은 아직 오늘 세션이다
+  if (
+    toKstDateKey(session.date) < toKstDateKey(now) &&
+    !isSessionOnToday(session, now)
+  ) {
     throw new MatchSessionRequestError(
       "지난 세션은 참여자를 바꿀 수 없습니다.",
       403,
@@ -1195,10 +1201,17 @@ app.get("/api/match-sessions/today", async (req, res) => {
     const now = new Date();
     await matchRepository.cleanupExpired(now);
     const dateKey = toKstDateKey(now);
-    const [sessions, activePlayersById] = await Promise.all([
-      matchRepository.findSessionsByDateKey(dateKey),
-      loadActivePlayersById(),
-    ]);
+    const [todaySessions, yesterdaySessions, activePlayersById] =
+      await Promise.all([
+        matchRepository.findSessionsByDateKey(dateKey),
+        matchRepository.findSessionsByDateKey(addKstDays(dateKey, -1)),
+        loadActivePlayersById(),
+      ]);
+    // 전날 시작해 자정을 넘긴 회원 세션은 끝나기 전까지 오늘 세션으로 함께 준다
+    const sessions = [
+      ...yesterdaySessions.filter((session) => isSessionOnToday(session, now)),
+      ...todaySessions,
+    ];
     // 저장소가 시각 오름차순으로 주므로 정기 세션만 맨 앞으로 옮긴다(정렬은 안정적이다).
     const ordered = [...sessions].sort(
       (a, b) => Number(b.kind === "regular") - Number(a.kind === "regular"),
@@ -1230,14 +1243,16 @@ app.get("/api/match-sessions/upcoming", async (req, res) => {
     );
     const dateKey = toKstDateKey(now);
     const [sessions, activePlayersById] = await Promise.all([
-      matchRepository.findSessionsFromDateKey(dateKey),
+      // 전날 시작해 자정을 넘긴 회원 세션도 끝나기 전까지 보이도록 전날부터 읽고 만료로 거른다
+      matchRepository.findSessionsFromDateKey(addKstDays(dateKey, -1)),
       loadActivePlayersById(),
     ]);
     // 정리가 best-effort라 만료됐지만 아직 남은 빈 세션도 응답에서 뺀다.
     // 경기가 있는 세션은 만료 후에도 남지만, 다가오는 세션 목록에는 넣지 않는다.
     const details = sessions
       .filter(
-        (session) => getEmptySessionExpiresAt(session.kind, session.date) > now,
+        (session) =>
+          getEmptySessionExpiresAt(session.kind, session.date, session) > now,
       )
       .map((session) => toMatchSessionDetail(session, activePlayersById, now));
     // 저장소가 시각 오름차순으로 주므로 날짜 키·정기 여부로만 다시 정렬한다(정렬은 안정적이다).
@@ -1330,14 +1345,20 @@ app.post("/api/match-sessions", async (req, res) => {
     }
 
     // 시각을 보내지 않는 이전 클라이언트도 받도록 둘 다 생략하면 시각 없는 세션으로 만든다.
-    // 이미 시작한 모임을 뒤늦게 세션으로 만드는 경우가 있어 오늘의 지난 시각도 허용한다
+    // 종료가 시작보다 이르면 다음 날 종료이고, 세션 날짜는 시작 시각의 날짜다
     const { startTime = null, endTime = null } = body ?? {};
     if (
       (startTime != null || endTime != null) &&
       !isValidSessionTimeRange(startTime, endTime)
     ) {
       throw new MatchSessionRequestError(
-        "세션 시작·종료 시각은 HH:MM 형식으로 함께 보내고, 종료가 시작보다 늦어야 합니다.",
+        "세션 시작·종료 시각은 HH:MM 형식으로 함께 보내고, 서로 달라야 합니다.",
+        400,
+      );
+    }
+    if (startTime != null && isPastSessionStart(dateKey, startTime, now)) {
+      throw new MatchSessionRequestError(
+        "이미 지난 시각으로는 세션을 만들 수 없습니다.",
         400,
       );
     }
@@ -1576,7 +1597,7 @@ app.post("/api/match-sessions/:sessionId/matches", async (req, res) => {
     if (!requestedSession) {
       throw new MatchRecordRequestError("세션을 찾을 수 없습니다.", 404);
     }
-    if (toKstDateKey(requestedSession.date) !== toKstDateKey(now)) {
+    if (!isSessionOnToday(requestedSession, now)) {
       throw new MatchRecordRequestError(
         "오늘 세션에서만 경기를 시작할 수 있습니다.",
         403,

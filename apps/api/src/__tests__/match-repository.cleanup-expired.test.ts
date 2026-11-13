@@ -128,6 +128,26 @@ describe("MatchRepository.deleteExpiredInProgressMatchesAndEmptySessions", () =>
     },
   );
 
+  it("자정을 넘기는 회원 세션은 SQL이 date + 하루 + 종료 시각을 now(epoch 초)와 비교한다", async () => {
+    const { repository, execute } = createRepository([]);
+
+    await repository.deleteExpiredInProgressMatchesAndEmptySessions(now);
+
+    const { sql, args } = executedStatement(execute);
+    expect(sql).toMatch(/s\.end_time <= s\.start_time/);
+    expect(sql).toMatch(/s\."date" \+ 86400 \+/);
+    expect(sql).toMatch(/<= \$4/);
+    expect(args[3]).toBe(toSeconds(now));
+
+    // SQL과 같은 계산: 11월 9일 23:30~다음 날 01:30 세션은 11월 10일 01:30 KST에 만료된다
+    const sessionDate = new Date("2026-11-09T00:00:00+09:00");
+    const expiresAt = getEmptySessionExpiresAt("custom", sessionDate, {
+      startTime: "23:30",
+      endTime: "01:30",
+    });
+    expect(toSeconds(sessionDate) + 86400 + 90 * 60).toBe(toSeconds(expiresAt));
+  });
+
   it.each([
     ["regular", "2026-11-12T18:00:00+09:00"],
     ["custom", "2026-11-10T00:00:00+09:00"],

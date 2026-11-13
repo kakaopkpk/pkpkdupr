@@ -60,8 +60,12 @@ export interface RankingSession {
   name: string;
   kind: MatchSessionKind;
   date: Date;
-  /** 시작 시각("HH:MM", KST). 정기 세션은 18:00, 시각 없는 회원 세션은 null */
+  /**
+   * 시작·종료 시각("HH:MM", KST). 정기 세션은 18:00~22:00, 시각 없는 회원 세션은 null.
+   * 종료 ≤ 시작이면 자정을 넘겨 만료가 다음 날 종료 시각으로 늦춰진다
+   */
   startTime: string | null;
+  endTime: string | null;
   location: string;
   participantIds: string[];
 }
@@ -625,7 +629,9 @@ export const findSessionDominations = (
   const matchesBySession = groupMatchesBySession(context.matches);
   const dominations = new Map<string, Set<string>>();
   for (const session of sessions) {
-    if (getEmptySessionExpiresAt(session.kind, session.date) > now) continue;
+    if (getEmptySessionExpiresAt(session.kind, session.date, session) > now) {
+      continue;
+    }
     const sessionMatches = matchesBySession.get(session.id);
     if (!sessionMatches) continue;
     const stats = buildSessionPlayerStats(context, session, sessionMatches);
