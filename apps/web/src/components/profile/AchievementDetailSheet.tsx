@@ -4,18 +4,15 @@ import BottomSheet from "@/components/BottomSheet";
 import SkeletonBlock from "@/components/SkeletonBlock";
 import { AchievementBadge } from "@/components/profile/AchievementBadge";
 import { PkButton } from "@/components/ui/Button";
-import { LinkChevron } from "@/components/ui/Section";
 import {
   GLOBAL_LAYER,
   type AchievementDetailRequest,
-  useAppNavigation,
 } from "@/context/AppNavigationContext";
 import {
   type TabKey,
   useTabNavigation,
 } from "@/context/TabNavigationContext";
 import { useLayerDepth } from "@/hooks/useLayerDepth";
-import { apiFetch } from "@/lib/api";
 import {
   type AchievementProgressInfo,
   fetchAchievementHolders,
@@ -24,7 +21,6 @@ import {
 } from "@/lib/achievements";
 import { formatKstLongDate } from "@/lib/format";
 import { fetchPlayerProfileSummary } from "@/lib/playerProfile";
-import { getTeamResultScores, type MatchInfo } from "@/types/match";
 
 const DEPTH_ID = "global-achievement-detail";
 
@@ -32,19 +28,12 @@ interface DetailData {
   request: AchievementDetailRequest;
   progress: AchievementProgressInfo | null;
   holderCount: number | null;
-  /** 받게 된 경기. 못 받았거나 불러오지 못했으면 null */
-  match: MatchInfo | null;
 }
 
 type DetailState =
   | { status: "loading"; request: AchievementDetailRequest }
   | { status: "error"; request: AchievementDetailRequest }
   | ({ status: "ready" } & DetailData);
-
-const fetchMatch = async (matchId: string): Promise<MatchInfo | null> => {
-  const res = await apiFetch(`/api/matches/${encodeURIComponent(matchId)}`);
-  return res.ok ? ((await res.json()) as MatchInfo) : null;
-};
 
 const loadDetail = async (
   request: AchievementDetailRequest,
@@ -59,26 +48,12 @@ const loadDetail = async (
   const progress =
     summary.achievements.find((item) => item.id === request.achievementId) ??
     null;
-  const match =
-    progress?.earned && progress.earnedMatchId
-      ? await fetchMatch(progress.earnedMatchId).catch(() => null)
-      : null;
 
   return {
     request,
     progress,
     holderCount: holders ? (holders.counts[request.achievementId] ?? 0) : null,
-    match,
   };
-};
-
-/** 업적 주인 팀 점수를 앞에 둔다 */
-const formatOwnerScore = (match: MatchInfo, playerId: string) => {
-  const [scoreA, scoreB] = getTeamResultScores(match);
-  const isTeamB = match.teams[1].players.some(
-    (player) => player.id === playerId,
-  );
-  return isTeamB ? `${scoreB} : ${scoreA}` : `${scoreA} : ${scoreB}`;
 };
 
 const DetailRow: React.FC<{
@@ -98,22 +73,15 @@ const ValueSkeleton: React.FC = () => <SkeletonBlock className="h-4 w-16" />;
 export interface AchievementDetailSheetProps {
   request: AchievementDetailRequest | null;
   tabKey: TabKey;
-  /**
-   * false면 받게 된 경기를 눌러도 경기 상세로 가지 않는다.
-   * 경기 기록 시트 위에서 열면 경기 상세가 그 시트 아래에 열리므로 막는다.
-   */
-  canOpenMatch: boolean;
   onClose: () => void;
 }
 
-/** 업적 상세 바텀시트: 배지·이름·조건, 받은 날·받게 된 경기·받은 회원 수 */
+/** 업적 상세 바텀시트: 배지·이름·조건, 받은 날·진행·받은 회원 수 */
 export default function AchievementDetailSheet({
   request,
   tabKey,
-  canOpenMatch,
   onClose,
 }: AchievementDetailSheetProps): React.ReactElement {
-  const { openMatchDetail } = useAppNavigation();
   const { closeDepth, selectedTab } = useTabNavigation();
   // 닫히는 애니메이션 동안 마지막 요청의 내용을 유지한다
   const [displayedRequest, setDisplayedRequest] = useState(request);
@@ -166,13 +134,11 @@ export default function AchievementDetailSheet({
   const isError = currentDetail?.status === "error";
   const progress = ready?.progress ?? null;
   const earned = !!progress?.earned;
-  const earnedMatch = ready?.match ?? null;
 
   let content: React.ReactElement;
   if (!definition || !displayedRequest) {
     content = <div />;
   } else {
-    const playerId = displayedRequest.playerId;
     content = (
       <>
         <BottomSheet.Header className="flex flex-col items-center gap-1 px-1 pt-1 text-center">
@@ -203,26 +169,7 @@ export default function AchievementDetailSheet({
               <span className="font-medium text-pk-muted">아직 못 받았어요</span>
             )}
           </DetailRow>
-          {isLoading ? null : earned ? (
-            <DetailRow label="받게 된 경기">
-              {earnedMatch ? (
-                canOpenMatch ? (
-                  <button
-                    type="button"
-                    onClick={() => close(() => openMatchDetail(earnedMatch.id))}
-                    className="-mr-1 inline-flex min-h-11 items-center gap-0.5 px-1 text-pk-primary"
-                  >
-                    {formatOwnerScore(earnedMatch, playerId)}
-                    <LinkChevron />
-                  </button>
-                ) : (
-                  formatOwnerScore(earnedMatch, playerId)
-                )
-              ) : (
-                "–"
-              )}
-            </DetailRow>
-          ) : ready ? (
+          {ready && !earned ? (
             <DetailRow label="진행">
               {formatAchievementProgress(definition, progress)}
             </DetailRow>
@@ -256,7 +203,7 @@ export default function AchievementDetailSheet({
       ariaLabel="업적 상세"
       layer={GLOBAL_LAYER.achievementDetail}
       isFixedHeight={false}
-      className="h-[min(440px,calc(var(--app-shell-height)-3rem))]"
+      className="h-[min(420px,calc(var(--app-shell-height)-3rem))]"
     >
       {content}
     </BottomSheet>
