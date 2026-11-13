@@ -5,6 +5,7 @@ import { useAppUpdate } from "@/context/AppUpdateContext";
 import { useAuth } from "@/context/AuthContext";
 import { useIsSystemNoticeVisible } from "@/context/SystemNoticeContext";
 import { useOnlineStatus } from "@/hooks/useOnlineStatus";
+import { usePresence } from "@/hooks/usePresence";
 
 const isStandaloneDisplay = () =>
   window.matchMedia("(display-mode: standalone)").matches ||
@@ -79,13 +80,18 @@ const PwaUpdatePrompt: React.FC = () => {
     isStandalone,
   ]);
 
-  if (
-    !isStandalone ||
-    isLoading ||
-    !isAuthenticated ||
-    !isUpdateAvailable ||
-    isSystemNoticeVisible
-  ) {
+  const isVisible =
+    isStandalone &&
+    !isLoading &&
+    isAuthenticated &&
+    isUpdateAvailable &&
+    !isSystemNoticeVisible;
+  // 다른 알림에 자리를 내줄 때는 겹치지 않게 퇴장 없이 바로 숨는다
+  const presence = usePresence(isVisible ? true : null, {
+    skipExit: isSystemNoticeVisible,
+  });
+
+  if (!presence) {
     return null;
   }
 
@@ -100,6 +106,7 @@ const PwaUpdatePrompt: React.FC = () => {
   return (
     <SystemToast
       className="z-30"
+      isExiting={presence.isExiting}
       actions={
         <PkButton
           size="md"

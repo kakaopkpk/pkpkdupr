@@ -9,6 +9,7 @@ import React, {
 } from "react";
 import SystemToast from "@/components/SystemToast";
 import { PkButton } from "@/components/ui/Button";
+import { usePresence } from "@/hooks/usePresence";
 
 const SAVE_FAILURE_IDLE_DISMISS_MS = 10_000;
 const TOAST_DEFAULT_DURATION_MS = 5_000;
@@ -40,6 +41,16 @@ export interface SystemNoticeContextValue {
   showToast: (options: ToastOptions) => void;
 }
 
+type ShownToast = ToastOptions & { id: number };
+
+/** 하단에 보일 알림. 저장 실패가 일반 토스트보다 먼저다 */
+type NoticeItem = { kind: "save-failure" } | { kind: "toast"; toast: ShownToast };
+
+const SAVE_FAILURE_NOTICE: NoticeItem = { kind: "save-failure" };
+
+const getNoticeKey = (item: NoticeItem) =>
+  item.kind === "save-failure" ? "save-failure" : `toast-${item.toast.id}`;
+
 const SystemNoticeContext = createContext<SystemNoticeContextValue | null>(
   null,
 );
@@ -58,9 +69,7 @@ export const SystemNoticeProvider: React.FC<{ children: React.ReactNode }> = ({
   // 재시도 중 새 실패가 와서 교체됐으면 이전 재시도 결과로 닫지 않는다
   const saveFailureRef = useRef<SaveFailureNoticeOptions | null>(null);
   // id는 같은 내용을 다시 띄워도 표시 시간을 새로 세기 위해 쓴다
-  const [toast, setToast] = useState<
-    (ToastOptions & { id: number }) | null
-  >(null);
+  const [toast, setToast] = useState<ShownToast | null>(null);
   const toastIdRef = useRef(0);
 
   const showSaveFailure = useCallback((options: SaveFailureNoticeOptions) => {
@@ -125,6 +134,16 @@ export const SystemNoticeProvider: React.FC<{ children: React.ReactNode }> = ({
     }
   };
 
+  const toastNotice = useMemo<NoticeItem | null>(
+    () => (toast ? { kind: "toast", toast } : null),
+    [toast],
+  );
+  // 다른 알림으로 바뀌면(저장 실패 ↔ 일반, 일반 토스트 id 변경) 이전 것은 퇴장 없이 바로 바뀐다
+  const activeNotice = saveFailure ? SAVE_FAILURE_NOTICE : toastNotice;
+  const notice = usePresence<NoticeItem>(activeNotice, {
+    key: activeNotice ? getNoticeKey(activeNotice) : undefined,
+  });
+
   const value = useMemo<SystemNoticeContextValue>(
     () => ({ showSaveFailure, showToast }),
     [showSaveFailure, showToast],
@@ -132,14 +151,15 @@ export const SystemNoticeProvider: React.FC<{ children: React.ReactNode }> = ({
 
   return (
     <SystemNoticeContext.Provider value={value}>
-      <SystemNoticeVisibleContext.Provider
-        value={saveFailure !== null || toast !== null}
-      >
+      {/* 퇴장 중에도 true로 두어 다른 하단 토스트가 겹쳐 뜨지 않게 한다 */}
+      <SystemNoticeVisibleContext.Provider value={notice !== null}>
         {children}
-        {saveFailure ? (
+        {notice?.item.kind === "save-failure" ? (
           // 열린 바텀시트·드로어(layer 50~80)보다 위
           <SystemToast
+            key={notice.key}
             className="z-[1000]"
+            isExiting={notice.isExiting}
             actions={
               <PkButton
                 size="md"
@@ -153,24 +173,25 @@ export const SystemNoticeProvider: React.FC<{ children: React.ReactNode }> = ({
           >
             저장하지 못했어요
           </SystemToast>
-        ) : toast ? (
+        ) : notice?.item.kind === "toast" ? (
           <SystemToast
-            key={toast.id}
+            key={notice.key}
             variant="pill"
             className="z-[1000]"
+            isExiting={notice.isExiting}
             actions={
-              toast.actionLabel ? (
+              notice.item.toast.actionLabel ? (
                 <button
                   type="button"
                   onClick={handleToastAction}
                   className="h-11 shrink-0 rounded-full px-3 text-pk-15 font-extrabold text-pk-primary active:opacity-70"
                 >
-                  {toast.actionLabel}
+                  {notice.item.toast.actionLabel}
                 </button>
               ) : null
             }
           >
-            {toast.message}
+            {notice.item.toast.message}
           </SystemToast>
         ) : null}
       </SystemNoticeVisibleContext.Provider>
@@ -186,6 +207,6 @@ export const useSystemNotice = (): SystemNoticeContextValue => {
   return context;
 };
 
-/** 저장 실패 알림이나 일반 토스트가 떠 있으면 true. 다른 하단 토스트는 그동안 숨는다 */
+/** 저장 실패 알림이나 일반 토스트가 떠 있으면(퇴장 중 포함) true. 다른 하단 토스트는 그동안 퇴장 없이 바로 숨는다 */
 export const useIsSystemNoticeVisible = () =>
   useContext(SystemNoticeVisibleContext);
