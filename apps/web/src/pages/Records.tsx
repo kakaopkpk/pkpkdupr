@@ -12,7 +12,10 @@ import { Card } from "@/components/ui/Card";
 import { TabHeader } from "@/components/ui/Headers";
 import { MatchRow } from "@/components/ui/MatchRow";
 import { SectionLabel } from "@/components/ui/Section";
-import { SegmentedControl } from "@/components/ui/SegmentedControl";
+import {
+  SegmentedControl,
+  SegmentSwitchFade,
+} from "@/components/ui/SegmentedControl";
 import { useAppNavigation } from "@/context/AppNavigationContext";
 import { useAuth } from "@/context/AuthContext";
 import { useTabNavigation } from "@/context/TabNavigationContext";
@@ -65,6 +68,7 @@ const Records: React.FC = () => {
   const { registerPullToRefresh } = useTabNavigation();
 
   const [mode, setMode] = useState<RecordsMode>("all");
+  const [isListFading, setIsListFading] = useState(false);
   const [sessions, setSessions] = useState<MatchSessionHistoryInfo[]>([]);
   const [sessionsStatus, setSessionsStatus] = useState<LoadStatus>("loading");
   const [sessionsError, setSessionsError] = useState<string | null>(null);
@@ -92,6 +96,10 @@ const Records: React.FC = () => {
         if (requestId !== sessionsRequestRef.current) return;
         setSessions(nextSessions);
         setSessionsStatus("ready");
+        // 목록 없이 끝나면 페이드 래퍼가 그려지지 않으므로 대기 중인 페이드를 버린다. 남겨 두면 나중 재조회에서 재생된다
+        if (nextSessions.length === 0 && !requestedSessionIdRef.current) {
+          setIsListFading(false);
+        }
         setSessionsError(null);
         setSelectedId((previous) => {
           if (
@@ -105,6 +113,7 @@ const Records: React.FC = () => {
         });
       } catch (error) {
         if (requestId !== sessionsRequestRef.current) return;
+        setIsListFading(false);
         setSessionsError(
           getErrorMessage(error, "세션 기록을 불러오지 못했어요."),
         );
@@ -184,6 +193,7 @@ const Records: React.FC = () => {
   const handleModeChange = (nextMode: RecordsMode) => {
     requestedSessionIdRef.current = null;
     setMode(nextMode);
+    setIsListFading(true);
   };
 
   const handleSelectSession = (sessionId: string) => {
@@ -278,14 +288,18 @@ const Records: React.FC = () => {
     }
 
     return (
-      <>
+      <SegmentSwitchFade
+        isPlaying={isListFading}
+        onFinish={() => setIsListFading(false)}
+        className="flex flex-col gap-2.5"
+      >
         <SessionChips
           sessions={chipSessions}
           selectedId={selectedId}
           onSelect={handleSelectSession}
         />
         {renderDetail()}
-      </>
+      </SegmentSwitchFade>
     );
   };
 

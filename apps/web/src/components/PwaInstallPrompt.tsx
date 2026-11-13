@@ -4,6 +4,7 @@ import { toKstDateKey } from "@pkpkdupr/shared/session";
 import SystemToast from "@/components/SystemToast";
 import { PkButton } from "@/components/ui/Button";
 import { useIsSystemNoticeVisible } from "@/context/SystemNoticeContext";
+import { usePresence } from "@/hooks/usePresence";
 
 interface BeforeInstallPromptEvent extends Event {
   prompt: () => Promise<void>;
@@ -142,8 +143,13 @@ const PwaInstallPrompt: React.FC<PwaInstallPromptProps> = ({ isActive }) => {
     (!isDismissedToday || isIosGuideOpen) &&
     !!installPromptKind &&
     !isSystemNoticeVisible;
+  // 퇴장하는 동안 마지막 문구를 유지한다. 다른 알림에 자리를 내줄 때는 겹치지 않게 바로 숨는다
+  const presence = usePresence<"ios-guide" | "prompt">(
+    isVisible ? (isIosGuideOpen ? "ios-guide" : "prompt") : null,
+    { skipExit: isSystemNoticeVisible },
+  );
 
-  if (!isVisible) {
+  if (!presence) {
     return null;
   }
 
@@ -191,9 +197,13 @@ const PwaInstallPrompt: React.FC<PwaInstallPromptProps> = ({ isActive }) => {
     </button>
   );
 
-  if (isIosGuideOpen) {
+  if (presence.item === "ios-guide") {
     return (
-      <SystemToast className="z-30" actions={closeButton}>
+      <SystemToast
+        className="z-30"
+        isExiting={presence.isExiting}
+        actions={closeButton}
+      >
         <span className="text-pk-13 font-semibold text-pk-sub">
           Safari 하단의{" "}
           <span
@@ -213,6 +223,7 @@ const PwaInstallPrompt: React.FC<PwaInstallPromptProps> = ({ isActive }) => {
   return (
     <SystemToast
       className="z-30"
+      isExiting={presence.isExiting}
       actions={
         <>
           <PkButton

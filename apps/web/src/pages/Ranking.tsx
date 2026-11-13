@@ -7,6 +7,7 @@ import type {
   UnratedRankingEntry,
 } from "@pkpkdupr/shared/ranking";
 import SkeletonBlock from "@/components/SkeletonBlock";
+import { rowPressClassName } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { RankChange } from "@/components/ui/Delta";
 import { TabHeader } from "@/components/ui/Headers";
@@ -14,6 +15,7 @@ import { PlayerAvatar } from "@/components/ui/PlayerAvatar";
 import { RankBadge } from "@/components/ui/RankBadge";
 import {
   SegmentedControl,
+  SegmentSwitchFade,
   type SegmentedOption,
 } from "@/components/ui/SegmentedControl";
 import { StatusMessageChip } from "@/components/ui/StatusMessageChip";
@@ -62,7 +64,7 @@ const RankingRow: React.FC<{
   <button
     type="button"
     onClick={onPress}
-    className={cx(rowGridClassName, "active:bg-pk-bg")}
+    className={cx(rowGridClassName, rowPressClassName, "active:bg-pk-bg")}
   >
     <span className="flex justify-center">
       <RankBadge rank={entry.rank} />
@@ -86,7 +88,7 @@ const UnratedRow: React.FC<{
   <button
     type="button"
     onClick={onPress}
-    className={cx(rowGridClassName, "active:bg-pk-bg")}
+    className={cx(rowGridClassName, rowPressClassName, "active:bg-pk-bg")}
   >
     <span className="flex justify-center text-pk-13 font-extrabold text-pk-muted">
       –
@@ -132,6 +134,7 @@ const Ranking: React.FC = () => {
   const { openMemberProfile, dataVersion } = useAppNavigation();
   const { registerPullToRefresh } = useTabNavigation();
   const [category, setCategory] = useState<MatchTopLevelType>("doubles");
+  const [isListFading, setIsListFading] = useState(false);
   const [ranking, setRanking] = useState<RankingResponse | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   // 늦게 끝난 이전 요청(분류 전환 전 등)이 최신 결과를 덮지 않게 한다
@@ -144,8 +147,13 @@ const Ranking: React.FC = () => {
       if (requestId !== requestIdRef.current) return;
       setRanking(response);
       setErrorMessage(null);
+      // 빈 결과면 페이드 래퍼가 그려지지 않으므로 대기 중인 페이드를 버린다. 남겨 두면 나중 재조회에서 재생된다
+      if (response.entries.length + response.unrated.length === 0) {
+        setIsListFading(false);
+      }
     } catch (error) {
       if (requestId !== requestIdRef.current) return;
+      setIsListFading(false);
       setErrorMessage(
         error instanceof Error ? error.message : "랭킹을 불러오지 못했어요.",
       );
@@ -175,6 +183,7 @@ const Ranking: React.FC = () => {
             onChange={(nextCategory) => {
               setErrorMessage(null);
               setCategory(nextCategory);
+              setIsListFading(true);
             }}
             ariaLabel="종목"
           />
@@ -185,22 +194,27 @@ const Ranking: React.FC = () => {
           <>
             {currentRanking.entries.length + currentRanking.unrated.length >
             0 ? (
-              <Card className={rankingCardClassName}>
-                {currentRanking.entries.map((entry) => (
-                  <RankingRow
-                    key={entry.player.id}
-                    entry={entry}
-                    onPress={() => openMemberProfile(entry.player.id)}
-                  />
-                ))}
-                {sortUnrated(currentRanking.unrated).map((entry) => (
-                  <UnratedRow
-                    key={entry.player.id}
-                    entry={entry}
-                    onPress={() => openMemberProfile(entry.player.id)}
-                  />
-                ))}
-              </Card>
+              <SegmentSwitchFade
+                isPlaying={isListFading}
+                onFinish={() => setIsListFading(false)}
+              >
+                <Card className={rankingCardClassName}>
+                  {currentRanking.entries.map((entry) => (
+                    <RankingRow
+                      key={entry.player.id}
+                      entry={entry}
+                      onPress={() => openMemberProfile(entry.player.id)}
+                    />
+                  ))}
+                  {sortUnrated(currentRanking.unrated).map((entry) => (
+                    <UnratedRow
+                      key={entry.player.id}
+                      entry={entry}
+                      onPress={() => openMemberProfile(entry.player.id)}
+                    />
+                  ))}
+                </Card>
+              </SegmentSwitchFade>
             ) : null}
           </>
         ) : errorMessage ? (

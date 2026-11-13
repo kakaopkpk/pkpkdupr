@@ -26,7 +26,7 @@ const COVERED_TRANSFORM = "translateX(-30%)";
 
 /** 화면 이동·뒤 화면 밀림·어두워짐이 함께 쓰는 시간과 곡선. 끝으로 갈수록 부드럽게 멈춘다 */
 const PUSH_SCREEN_MOTION_CLASS =
-  "duration-[320ms] ease-[cubic-bezier(0.32,0.72,0,1)] motion-reduce:transition-none";
+  "duration-[320ms] ease-pk-move motion-reduce:transition-none";
 
 export const PUSH_SCREEN_TRANSITION_CLASS = `transition-transform ${PUSH_SCREEN_MOTION_CLASS}`;
 

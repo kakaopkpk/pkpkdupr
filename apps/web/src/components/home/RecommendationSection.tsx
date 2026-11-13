@@ -4,6 +4,7 @@ import {
   type RecommendedCourt,
 } from "@pkpkdupr/shared/matchmaking";
 import SkeletonBlock from "@/components/SkeletonBlock";
+import { buttonPressClassName } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { SectionLabel, TextLink } from "@/components/ui/Section";
 import { cx } from "@/components/ui/cx";
@@ -37,7 +38,10 @@ const RecommendationRow: React.FC<{
         type="button"
         disabled={isStartDisabled}
         onClick={onStart}
-        className="inline-flex h-9 shrink-0 select-none items-center justify-center whitespace-nowrap rounded-pk-sm bg-pk-primary-soft px-4 text-pk-13 font-extrabold text-pk-primary transition-opacity touch-manipulation active:opacity-80 disabled:cursor-not-allowed disabled:bg-pk-neutral disabled:text-pk-muted disabled:active:opacity-100"
+        className={cx(
+          "inline-flex h-9 shrink-0 select-none items-center justify-center whitespace-nowrap rounded-pk-sm bg-pk-primary-soft px-4 text-pk-13 font-extrabold text-pk-primary touch-manipulation disabled:cursor-not-allowed disabled:bg-pk-neutral disabled:text-pk-muted",
+          buttonPressClassName,
+        )}
       >
         {isStarting ? "시작하는 중…" : "시작"}
       </button>

@@ -1,5 +1,6 @@
 import React from "react";
 import { toKstDateKey } from "@pkpkdupr/shared/session";
+import { usePlayOnce } from "@/hooks/usePlayOnce";
 
 export interface RatingTrendPoint {
   rating: number;
@@ -24,6 +25,15 @@ const EMPTY_TEXT_Y = 58;
 // 작은 변동이 차트 높이 전체로 과장되지 않게 하는 최소 세로 범위
 const MIN_RATING_SPAN = 0.3;
 
+// 처음 나타날 때의 그리기 모션(ms). 끝점 pop의 onAnimationEnd가 재생 종료를 알리므로
+// END_DOT_DELAY_MS + END_DOT_POP_MS가 선 그리기(LINE_DRAW_MS)와 면·점 페이드(FILL_DELAY_MS + FILL_FADE_MS)보다
+// 늦게 끝나야 한다. 아니면 다른 모션이 끝나기 전에 animate 클래스가 떨어진다
+const LINE_DRAW_MS = 700;
+const FILL_DELAY_MS = 400;
+const FILL_FADE_MS = 400;
+const END_DOT_DELAY_MS = 650;
+const END_DOT_POP_MS = 360;
+
 const kstMonthDayFormatter = new Intl.DateTimeFormat("ko-KR", {
   timeZone: "Asia/Seoul",
   month: "long",
@@ -40,6 +50,8 @@ const RatingTrendChart: React.FC<{
   ariaLabel: string;
   now?: Date;
 }> = ({ points, ariaLabel, now = new Date() }) => {
+  // 재생이 끝나면 animate 클래스를 떼어, keep-alive 탭 재표시나 점 변경 때 다시 재생되지 않게 한다
+  const { isPlaying, finish } = usePlayOnce();
   const samples = points
     .map((point) => ({
       rating: point.rating,
@@ -77,9 +89,9 @@ const RatingTrendChart: React.FC<{
   const hasLine = linePath.length > 1;
   const first = linePath[0];
   const last = linePath[linePath.length - 1];
-  const linePoints = linePath.map(({ x, y }) => `${x},${y}`).join(" ");
+  const lineD = `M${linePath.map(({ x, y }) => `${x} ${y}`).join(" L")}`;
   const areaPath = hasLine
-    ? `M${linePath.map(({ x, y }) => `${x} ${y}`).join(" L")} L${last.x} ${AREA_BOTTOM} L${first.x} ${AREA_BOTTOM} Z`
+    ? `${lineD} L${last.x} ${AREA_BOTTOM} L${first.x} ${AREA_BOTTOM} Z`
     : "";
 
   const maxLabel = maxRating.toFixed(2);
@@ -101,6 +113,14 @@ const RatingTrendChart: React.FC<{
     lastTime && samples.length > 1 && !isToday(lastTime)
       ? kstMonthDayFormatter.format(lastTime)
       : "오늘";
+
+  const fadeInClass = isPlaying
+    ? "animate-pk-fade-in motion-reduce:animate-none"
+    : undefined;
+  const fadeInStyle = {
+    animationDelay: `${FILL_DELAY_MS}ms`,
+    animationDuration: `${FILL_FADE_MS}ms`,
+  };
 
   const xLabelProps = {
     y: X_LABEL_Y,
@@ -138,27 +158,63 @@ const RatingTrendChart: React.FC<{
       ))}
       {hasLine ? (
         <>
-          <path d={areaPath} fill="var(--color-pk-primary)" fillOpacity={0.08} />
-          <polyline
-            points={linePoints}
+          <path
+            d={areaPath}
+            fill="var(--color-pk-primary)"
+            fillOpacity={0.08}
+            className={fadeInClass}
+            style={isPlaying ? fadeInStyle : undefined}
+          />
+          <path
+            d={lineD}
+            pathLength={1}
             fill="none"
             stroke="var(--color-pk-primary)"
             strokeWidth={2.4}
             strokeLinejoin="round"
             strokeLinecap="round"
+            className={
+              isPlaying ? "animate-pk-draw motion-reduce:animate-none" : undefined
+            }
+            style={isPlaying ? { animationDuration: `${LINE_DRAW_MS}ms` } : undefined}
           />
-          {coordinates.slice(0, -1).map(({ x, y, isAnchor }) =>
-            isAnchor ? null : (
-              <circle
-                key={`${x}-${y}`}
-                cx={x}
-                cy={y}
-                r={2.5}
-                fill="var(--color-pk-primary)"
-              />
-            ),
-          )}
-          <circle cx={last.x} cy={last.y} r={4} fill="var(--color-pk-primary)" />
+          <g
+            className={fadeInClass}
+            style={isPlaying ? fadeInStyle : undefined}
+          >
+            {coordinates.slice(0, -1).map(({ x, y, isAnchor }) =>
+              isAnchor ? null : (
+                <circle
+                  key={`${x}-${y}`}
+                  cx={x}
+                  cy={y}
+                  r={2.5}
+                  fill="var(--color-pk-primary)"
+                />
+              ),
+            )}
+          </g>
+          {/* SVG 요소의 scale 기준점을 점 중심으로 맞추려면 fill-box가 필요하다 */}
+          <circle
+            cx={last.x}
+            cy={last.y}
+            r={4}
+            fill="var(--color-pk-primary)"
+            className={
+              isPlaying
+                ? "animate-pk-pop motion-reduce:animate-none origin-center [transform-box:fill-box]"
+                : undefined
+            }
+            style={
+              isPlaying
+                ? {
+                    animationDelay: `${END_DOT_DELAY_MS}ms`,
+                    animationDuration: `${END_DOT_POP_MS}ms`,
+                  }
+                : undefined
+            }
+            onAnimationEnd={finish}
+          />
           <text y={toY(maxRating)} {...yLabelProps}>
             {maxLabel}
           </text>

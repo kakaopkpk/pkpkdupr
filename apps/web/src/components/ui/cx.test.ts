@@ -37,4 +37,14 @@ describe("cx", () => {
     expect(cx("font-extrabold", "font-bold")).toBe("font-bold");
     expect(cx("font-num font-extrabold", "font-bold")).toBe("font-num font-bold");
   });
+
+  it("곡선은 pk 토큰끼리 뒤의 것만 남긴다", () => {
+    expect(cx("ease-pk-spring", "ease-pk-move")).toBe("ease-pk-move");
+    expect(cx("ease-pk-move", "ease-pk-pop")).toBe("ease-pk-pop");
+  });
+
+  it("애니메이션은 pk 토큰을 포함해 뒤의 것만 남긴다", () => {
+    expect(cx("animate-pk-pop", "animate-none")).toBe("animate-none");
+    expect(cx("animate-pk-rise-in", "animate-pk-sink-out")).toBe("animate-pk-sink-out");
+  });
 });

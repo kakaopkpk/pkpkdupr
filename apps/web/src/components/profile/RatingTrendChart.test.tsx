@@ -11,9 +11,10 @@ const render = (points: RatingTrendPoint[]) =>
     <RatingTrendChart points={points} ariaLabel="추세" now={now} />,
   );
 
-const getPolylineXs = (markup: string) => {
-  const points = /<polyline points="([^"]+)"/.exec(markup)?.[1] ?? "";
-  return points.split(" ").map((pair) => Number(pair.split(",")[0]));
+// 선은 fill="none"인 path이고, 영역 path와 구분된다
+const getLineXs = (markup: string) => {
+  const d = /<path d="([^"]+)"[^>]*fill="none"/.exec(markup)?.[1] ?? "";
+  return [...d.matchAll(/[ML]\s*(-?[\d.]+)/g)].map((match) => Number(match[1]));
 };
 
 describe("RatingTrendChart", () => {
@@ -23,7 +24,7 @@ describe("RatingTrendChart", () => {
       { rating: 3.2, createdAt: "2026-11-13T11:00:00.000Z", source: "match" },
     ]);
 
-    expect(getPolylineXs(markup)).toEqual([34, 318]);
+    expect(getLineXs(markup)).toEqual([34, 318]);
     expect(markup).toContain("11월 12일");
     expect(markup).toContain("오늘");
     expect(markup).toContain("3.50");
@@ -37,11 +38,31 @@ describe("RatingTrendChart", () => {
       { rating: 3.31, createdAt: "2026-11-12T11:00:00.000Z", source: "match" },
     ]);
 
-    expect(getPolylineXs(markup)).toEqual([34, 176, 318]);
+    expect(getLineXs(markup)).toEqual([34, 176, 318]);
     // 가운데 경기일 점(r 2.5) 하나와 끝점(r 4) 하나
     expect(markup.match(/<circle/g)).toHaveLength(2);
     expect(markup).toContain("10월 14일");
     expect(markup).toContain("11월 12일");
+  });
+
+  it("처음 렌더에서 선 그리기·면 페이드·끝점 pop 모션을 붙인다", () => {
+    const markup = render([
+      { rating: 3.3, createdAt: "2026-10-20T11:00:00.000Z", source: "match" },
+      { rating: 3.35, createdAt: "2026-11-12T11:00:00.000Z", source: "match" },
+    ]);
+
+    expect(markup).toMatch(
+      /<path d="[^"]+" pathLength="1"[^>]*class="animate-pk-draw motion-reduce:animate-none" style="animation-duration:700ms"/,
+    );
+    // 면과 경기일 점 묶음이 같은 지연·길이로 페이드한다
+    expect(
+      markup.match(
+        /class="animate-pk-fade-in motion-reduce:animate-none" style="animation-delay:400ms;animation-duration:400ms"/g,
+      ),
+    ).toHaveLength(2);
+    expect(markup).toMatch(
+      /<circle[^>]*class="animate-pk-pop motion-reduce:animate-none[^"]*" style="animation-delay:650ms;animation-duration:360ms"/,
+    );
   });
 
   it("오늘 처음 받은 평점 하나뿐이면 날짜 라벨 없이 오늘만 보인다", () => {

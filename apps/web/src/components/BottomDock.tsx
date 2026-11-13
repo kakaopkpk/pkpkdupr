@@ -1,6 +1,10 @@
 import React, { useEffect, useRef, useState } from "react";
 import type { MatchInfo } from "@/types/match";
 import type { TabKey } from "@/context/TabNavigationContext";
+import {
+  PRESENCE_ENTER_CLASS,
+  PRESENCE_EXIT_CLASS,
+} from "@/hooks/usePresence";
 
 const svgProps = {
   viewBox: "0 0 24 24",
@@ -211,23 +215,40 @@ export const PlusMenu: React.FC<{
   );
 };
 
-/** 하단 바 위 알림 알약(높이 60). 하이라이트 점, 두 줄 문구, 블루 버튼 */
+/**
+ * 하단 바 위 알림 알약(높이 60). 하이라이트 점, 두 줄 문구, 블루 버튼.
+ * 마운트되면 하단 바 뒤에서 올라오고, isExiting이면 가라앉으며 사라진다. 유리 재질이 흐림을 유지하도록 애니메이션은 이 루트에 건다
+ */
 const DockBar: React.FC<{
   title: string;
   description: string;
   actionLabel: string;
   isActionDisabled?: boolean;
+  isExiting?: boolean;
   onAction: () => void;
   role?: string;
-}> = ({ title, description, actionLabel, isActionDisabled, onAction, role }) => (
+}> = ({
+  title,
+  description,
+  actionLabel,
+  isActionDisabled,
+  isExiting = false,
+  onAction,
+  role,
+}) => (
   <div
     role={role}
-    className="app-glass flex h-[60px] items-center gap-2.5 rounded-full pr-[7px] pl-4"
+    inert={isExiting}
+    className={`app-glass flex h-[60px] items-center gap-2.5 rounded-full pr-[7px] pl-4 ${
+      isExiting
+        ? `pointer-events-none ${PRESENCE_EXIT_CLASS}`
+        : PRESENCE_ENTER_CLASS
+    }`}
   >
-    <span
-      aria-hidden="true"
-      className="size-2.5 shrink-0 rounded-full bg-pk-hl"
-    />
+    <span aria-hidden="true" className="relative size-2.5 shrink-0">
+      <span className="absolute inset-0 animate-pk-ping rounded-full bg-pk-hl motion-reduce:hidden" />
+      <span className="absolute inset-0 rounded-full bg-pk-hl" />
+    </span>
     <div className="flex min-w-0 flex-col">
       <span className="truncate text-pk-15 font-bold text-pk-ink">{title}</span>
       <span className="truncate text-pk-12 text-pk-sub">{description}</span>
@@ -265,8 +286,9 @@ export const MyMatchBar: React.FC<{
   match: MatchInfo;
   playerId: string;
   isActionDisabled: boolean;
-  onEnterScore: () => void;
-}> = ({ match, playerId, isActionDisabled, onEnterScore }) => {
+  isExiting?: boolean;
+  onEnterScore: (matchId: string) => void;
+}> = ({ match, playerId, isActionDisabled, isExiting, onEnterScore }) => {
   const now = useMinuteClock();
   const elapsedMinutes = Math.max(
     0,
@@ -292,7 +314,8 @@ export const MyMatchBar: React.FC<{
       description={description}
       actionLabel="점수 입력"
       isActionDisabled={isActionDisabled}
-      onAction={onEnterScore}
+      isExiting={isExiting}
+      onAction={() => onEnterScore(match.id)}
     />
   );
 };
@@ -303,8 +326,16 @@ export const JoinSessionBar: React.FC<{
   isPending: boolean;
   hasError: boolean;
   isActionDisabled: boolean;
+  isExiting?: boolean;
   onJoin: () => void;
-}> = ({ sessionName, isPending, hasError, isActionDisabled, onJoin }) => (
+}> = ({
+  sessionName,
+  isPending,
+  hasError,
+  isActionDisabled,
+  isExiting,
+  onJoin,
+}) => (
   <DockBar
     role="status"
     title={`${sessionName} 진행 중`}
@@ -313,6 +344,7 @@ export const JoinSessionBar: React.FC<{
     }
     actionLabel={isPending ? "참여 중…" : "참여하기"}
     isActionDisabled={isActionDisabled || isPending}
+    isExiting={isExiting}
     onAction={onJoin}
   />
 );
