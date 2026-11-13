@@ -1,5 +1,4 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import TabPanelStatus from "@/components/TabPanelStatus";
 import {
   RecordListFooter,
   RecordListSkeleton,
@@ -8,6 +7,7 @@ import {
 } from "@/components/records/RecordCards";
 import { TabHeader } from "@/components/ui/Headers";
 import { SectionLabel } from "@/components/ui/Section";
+import { StateMessage } from "@/components/ui/StateMessage";
 import {
   SegmentedControl,
   SegmentSwitchFade,
@@ -15,6 +15,7 @@ import {
 import { useAppNavigation } from "@/context/AppNavigationContext";
 import { useAuth } from "@/context/AuthContext";
 import { useTabNavigation } from "@/context/TabNavigationContext";
+import { getUserErrorMessage } from "@/lib/errors";
 import { formatKstLongDate } from "@/lib/format";
 import {
   fetchRecords,
@@ -41,9 +42,6 @@ interface RecordDateGroup {
   label: string;
   items: { item: RecordItemInfo; index: number }[];
 }
-
-const getErrorMessage = (error: unknown, fallback: string) =>
-  error instanceof Error && error.message ? error.message : fallback;
 
 /** 이어지는 같은 KST 날짜 항목을 날짜 제목 하나로 묶는다. index는 전체 목록 순번이다 */
 const groupByDate = (items: readonly RecordItemInfo[]): RecordDateGroup[] => {
@@ -106,6 +104,7 @@ const Records: React.FC = () => {
   const [firstStatus, setFirstStatus] = useState<FirstPageStatus>("loading");
   const [firstError, setFirstError] = useState<string | null>(null);
   const [moreStatus, setMoreStatus] = useState<MoreStatus>("idle");
+  const [moreError, setMoreError] = useState("");
 
   // 첫 묶음을 다시 받으면 올리고, 응답 때 다르면 버린다(이어 받던 요청도 함께 무효)
   const requestIdRef = useRef(0);
@@ -140,7 +139,7 @@ const Records: React.FC = () => {
         // 새로고침 실패는 보이던 목록을 그대로 둔다
         if (!showSkeleton) return;
         setIsListFading(false);
-        setFirstError(getErrorMessage(error, "기록을 불러오지 못했어요."));
+        setFirstError(getUserErrorMessage(error, "기록을 불러오지 못했어요"));
         setFirstStatus("error");
       }
     },
@@ -162,8 +161,9 @@ const Records: React.FC = () => {
       setItems((current) => mergeItems(current, data.items));
       setNextCursor(data.nextCursor);
       setMoreStatus("idle");
-    } catch {
+    } catch (error) {
       if (requestId !== requestIdRef.current) return;
+      setMoreError(getUserErrorMessage(error, "기록을 불러오지 못했어요"));
       setMoreStatus("error");
     } finally {
       if (requestId === requestIdRef.current) isLoadingMoreRef.current = false;
@@ -218,13 +218,17 @@ const Records: React.FC = () => {
     if (firstStatus === "loading") return <RecordListSkeleton />;
     if (firstStatus === "error" && items.length === 0) {
       return (
-        <TabPanelStatus
-          message={firstError ?? "기록을 불러오지 못했어요."}
-          tone="error"
+        <StateMessage
+          kind="error"
+          size="panel"
+          message={firstError ?? "기록을 불러오지 못했어요"}
+          onRetry={() => void loadFirstPage(true)}
         />
       );
     }
-    if (items.length === 0) return <TabPanelStatus message="기록이 없어요" />;
+    if (items.length === 0) {
+      return <StateMessage kind="empty" size="panel" message="기록이 없어요" />;
+    }
 
     return (
       <SegmentSwitchFade
@@ -259,6 +263,7 @@ const Records: React.FC = () => {
         {nextCursor && moreStatus !== "idle" ? (
           <RecordListFooter
             status={moreStatus}
+            errorMessage={moreError}
             onRetry={() => void loadMore()}
           />
         ) : null}

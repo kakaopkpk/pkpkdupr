@@ -167,8 +167,5 @@ export const buildPickList = <T extends PickListPlayer>(
     );
 };
 
-/** fetch 자체가 실패한 경우(오프라인·연결 끊김). 서버 응답 오류와 구분한다 */
-export const isNetworkError = (error: unknown) => error instanceof TypeError;
-
 export const getErrorMessage = (error: unknown, fallback: string) =>
   error instanceof Error && error.message ? error.message : fallback;

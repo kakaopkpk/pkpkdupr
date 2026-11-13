@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { MatchInfo } from "@/types/match";
+import { getUserErrorMessage } from "@/lib/errors";
 import {
   fetchUpcomingMatchSessions,
   type UpcomingMatchSessionsInfo,
@@ -74,11 +75,7 @@ export const usePreSessionData = ({
       setError(null);
     } catch (err) {
       if (requestIdRef.current !== requestId) return;
-      setError(
-        err instanceof Error && err.message
-          ? err.message
-          : "다가오는 세션을 불러오지 못했어요.",
-      );
+      setError(getUserErrorMessage(err, "다가오는 세션을 불러오지 못했어요"));
       setStatus("error");
     } finally {
       if (requestIdRef.current === requestId) setLoadedVersion(version);

@@ -4,6 +4,7 @@ import BottomSheet from "@/components/BottomSheet";
 import type { MatchInfo } from "@/types/match";
 import SkeletonBlock from "@/components/SkeletonBlock";
 import { SheetTitle } from "@/components/ui/SheetTitle";
+import { StateMessage } from "@/components/ui/StateMessage";
 import {
   GLOBAL_LAYER,
   type RecordMatchSheetRequest,
@@ -15,6 +16,7 @@ import {
 } from "@/context/TabNavigationContext";
 import { useLayerDepth } from "@/hooks/useLayerDepth";
 import { apiFetch } from "@/lib/api";
+import { getUserErrorMessage } from "@/lib/errors";
 import RecordMatchFlow, {
   SCORE_STEP_DEPTH_ID,
   type RecordMatchFlowInitial,
@@ -32,6 +34,7 @@ export interface RecordMatchSheetProps {
 }
 
 const DEPTH_ID = "global-record-match-sheet";
+const SCORE_MATCH_LOAD_FAILED = "경기를 불러오지 못했어요";
 
 // sheetKey는 이 상태를 받은 요청. 요청이 바뀐 직후 한 렌더 동안 남는 이전 결과를 거르는 데 쓴다
 type ScoreMatchState = { sheetKey: number } & (
@@ -65,6 +68,8 @@ export default function RecordMatchSheet({
   // 열 때마다 올려서 입력을 초기 상태로 리마운트한다
   const [sheetKey, setSheetKey] = useState(0);
   const [scoreMatch, setScoreMatch] = useState<ScoreMatchState | null>(null);
+  // 다시 시도할 때마다 올려서 시트를 닫지 않고 같은 경기를 다시 받는다
+  const [scoreLoadAttempt, setScoreLoadAttempt] = useState(0);
   // 닫히는 애니메이션 동안 마지막 요청의 화면을 유지한다
   const [displayedRequest, setDisplayedRequest] = useState(request);
   const isOpen = useLayerDepth({
@@ -98,10 +103,7 @@ export default function RecordMatchSheet({
         const res = await apiFetch(
           `/api/matches/${encodeURIComponent(scoreMatchId)}`,
         );
-        if (!res.ok) {
-          const errorData = await res.json().catch(() => ({}));
-          throw new Error(errorData.error || "경기를 불러오지 못했어요.");
-        }
+        if (!res.ok) throw new Error(SCORE_MATCH_LOAD_FAILED);
         const match = (await res.json()) as MatchInfo;
         if (!isCancelled) setScoreMatch({ sheetKey, status: "ready", match });
       } catch (err) {
@@ -109,8 +111,7 @@ export default function RecordMatchSheet({
           setScoreMatch({
             sheetKey,
             status: "error",
-            message:
-              err instanceof Error ? err.message : "경기를 불러오지 못했어요.",
+            message: getUserErrorMessage(err, SCORE_MATCH_LOAD_FAILED),
           });
         }
       }
@@ -120,7 +121,7 @@ export default function RecordMatchSheet({
       isCancelled = true;
     };
     // 같은 경기를 다시 열어도(sheetKey 증가) 최신 경기로 다시 받는다
-  }, [scoreMatchId, sheetKey]);
+  }, [scoreMatchId, sheetKey, scoreLoadAttempt]);
 
   const close = useCallback(() => {
     const closeSheet = () => {
@@ -146,9 +147,11 @@ export default function RecordMatchSheet({
         </BottomSheet.Header>
         <BottomSheet.Body>
           {currentScoreMatch?.status === "error" ? (
-            <p className="px-1 text-pk-13 font-bold text-pk-down" role="alert">
-              {currentScoreMatch.message}
-            </p>
+            <StateMessage
+              kind="error"
+              message={currentScoreMatch.message}
+              onRetry={() => setScoreLoadAttempt((attempt) => attempt + 1)}
+            />
           ) : (
             <div role="status" aria-label="경기 불러오는 중">
               <SkeletonBlock className="h-40 w-full rounded-pk-lg" />

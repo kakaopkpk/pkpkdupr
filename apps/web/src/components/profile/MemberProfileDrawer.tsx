@@ -111,7 +111,8 @@ export default function MemberProfileDrawer({
   const [category, setCategory] = useState<MatchTopLevelType>("doubles");
   const [isMatchHistoryRequested, setIsMatchHistoryRequested] = useState(false);
   const [isAchievementsRequested, setIsAchievementsRequested] = useState(false);
-  const { overview, hasError, reload } = useProfileOverview(playerId);
+  const { overview, hasError, loadErrorMessage, reload } =
+    useProfileOverview(playerId);
 
   const isOpen = useLayerDepth({
     isOpen: isRequested,
@@ -237,7 +238,10 @@ export default function MemberProfileDrawer({
               />
             </>
           ) : hasError ? (
-            <ProfileLoadError onRetry={() => void reload()} />
+            <ProfileLoadError
+              message={loadErrorMessage}
+              onRetry={() => void reload()}
+            />
           ) : (
             <ProfileBodySkeleton tileCount={4} />
           )}

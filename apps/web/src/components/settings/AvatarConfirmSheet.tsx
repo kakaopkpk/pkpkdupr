@@ -34,29 +34,31 @@ export const AvatarConfirmSheetBody: React.FC<AvatarConfirmSheetBodyProps> = ({
       ) : (
         <span className="size-[180px] rounded-full bg-pk-neutral" />
       )}
+    </BottomSheet.Body>
+    <BottomSheet.Footer className="flex flex-col gap-2">
       {error ? (
-        <p role="alert" className="text-center text-pk-13 font-bold text-pk-down">
+        <p role="alert" className="px-1 text-pk-13 font-bold text-pk-down">
           {error}
         </p>
       ) : null}
-    </BottomSheet.Body>
-    <BottomSheet.Footer className="flex items-center gap-2">
-      <PkButton
-        variant="ghost"
-        size="lg"
-        disabled={isSaving}
-        onClick={onPickAgain}
-      >
-        다시 고르기
-      </PkButton>
-      <PkButton
-        size="lg"
-        className="flex-1"
-        disabled={!previewUrl || isSaving}
-        onClick={onConfirm}
-      >
-        {isSaving ? "변경 중..." : "이 사진으로 변경"}
-      </PkButton>
+      <div className="flex items-center gap-2">
+        <PkButton
+          variant="ghost"
+          size="lg"
+          disabled={isSaving}
+          onClick={onPickAgain}
+        >
+          다시 고르기
+        </PkButton>
+        <PkButton
+          size="lg"
+          className="flex-1"
+          disabled={!previewUrl || isSaving}
+          onClick={onConfirm}
+        >
+          {isSaving ? "변경 중..." : "이 사진으로 변경"}
+        </PkButton>
+      </div>
     </BottomSheet.Footer>
   </>
 );

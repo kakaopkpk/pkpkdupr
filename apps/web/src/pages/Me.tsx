@@ -31,7 +31,7 @@ const Me: React.FC = () => {
   const { openSettings } = useAppNavigation();
   const { registerPullToRefresh, selectedTab } = useTabNavigation();
   const playerId = isAuthenticated ? (player?.id ?? null) : null;
-  const { overview, hasError, lastLoadedAt, reload } =
+  const { overview, hasError, loadErrorMessage, lastLoadedAt, reload } =
     useProfileOverview(playerId);
   const [category, setCategory] = useState<MatchTopLevelType>("doubles");
   const [isMatchHistoryRequested, setIsMatchHistoryRequested] = useState(false);
@@ -145,7 +145,10 @@ const Me: React.FC = () => {
             />
           </>
         ) : hasError ? (
-          <ProfileLoadError onRetry={() => void reload()} />
+          <ProfileLoadError
+            message={loadErrorMessage}
+            onRetry={() => void reload()}
+          />
         ) : (
           <ProfileBodySkeleton />
         )}

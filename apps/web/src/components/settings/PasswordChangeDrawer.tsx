@@ -5,7 +5,7 @@ import { useAuth } from "@/context/AuthContext";
 import { useSystemNotice } from "@/context/SystemNoticeContext";
 import { type TabKey, useTabNavigation } from "@/context/TabNavigationContext";
 import { useLayerDepth } from "@/hooks/useLayerDepth";
-import { isNetworkSaveFailure } from "./saveFailure";
+import { isNetworkError } from "@/lib/errors";
 
 const DEPTH_ID = "global-settings-password";
 
@@ -40,7 +40,7 @@ export default function PasswordChangeDrawer({
     try {
       await changePassword(newPassword);
     } catch (error) {
-      if (!isNetworkSaveFailure(error)) throw error;
+      if (!isNetworkError(error)) throw error;
       showSaveFailure({
         onRetry: async () => {
           await changePassword(newPassword);
