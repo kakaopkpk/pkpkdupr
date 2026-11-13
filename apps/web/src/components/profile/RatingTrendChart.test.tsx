@@ -44,6 +44,15 @@ describe("RatingTrendChart", () => {
     expect(markup).toContain("11월 12일");
   });
 
+  it("오늘 처음 받은 평점 하나뿐이면 날짜 라벨 없이 오늘만 보인다", () => {
+    const markup = render([
+      { rating: 3.5, createdAt: "2026-11-13T10:00:00.000Z", source: "match" },
+    ]);
+
+    expect(markup).toContain("오늘");
+    expect(markup).not.toContain("11월 13일");
+  });
+
   it("최고·최저가 너무 가까우면 최고 라벨만 보인다", () => {
     const markup = render([
       { rating: 3.3, createdAt: "2026-11-10T11:00:00.000Z", source: "match" },
