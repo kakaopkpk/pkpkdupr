@@ -19,7 +19,7 @@ import {
 import { useAppNavigation } from "@/context/AppNavigationContext";
 import { useAuth } from "@/context/AuthContext";
 import { useTabNavigation } from "@/context/TabNavigationContext";
-import { apiFetch } from "@/lib/api";
+import { fetchSessionMatches } from "@/lib/matchSessions";
 import {
   fetchSessionHistory,
   fetchSessionReport,
@@ -38,19 +38,6 @@ const SESSION_HISTORY_LIMIT = 30;
 
 type LoadStatus = "loading" | "ready" | "error";
 
-const fetchSessionMatches = async (sessionId: string) => {
-  const res = await apiFetch(
-    `/api/match-sessions/${encodeURIComponent(sessionId)}/matches`,
-  );
-  if (!res.ok) {
-    const errorData = (await res.json().catch(() => ({}))) as {
-      error?: string;
-    };
-    throw new Error(errorData.error || "세션 경기를 불러오지 못했어요.");
-  }
-  return (await res.json()) as MatchInfo[];
-};
-
 const getErrorMessage = (error: unknown, fallback: string) =>
   error instanceof Error && error.message ? error.message : fallback;
 
@@ -63,8 +50,7 @@ const isPlayerInMatch = (match: MatchInfo, playerId: string) =>
 const Records: React.FC = () => {
   const { player } = useAuth();
   const playerId = player?.id;
-  const { openMatchDetail, sessionReportRequest, dataVersion } =
-    useAppNavigation();
+  const { openMatchDetail, dataVersion } = useAppNavigation();
   const { registerPullToRefresh } = useTabNavigation();
 
   const [mode, setMode] = useState<RecordsMode>("all");
@@ -78,8 +64,6 @@ const Records: React.FC = () => {
   const [detailStatus, setDetailStatus] = useState<LoadStatus>("loading");
   const [detailError, setDetailError] = useState<string | null>(null);
 
-  // 다른 화면이 열어 달라고 한 세션. 칩 목록에 없어도 선택을 유지한다
-  const requestedSessionIdRef = useRef<string | null>(null);
   const selectedIdRef = useRef<string | null>(null);
   const sessionsRequestRef = useRef(0);
   selectedIdRef.current = selectedId;
@@ -97,15 +81,12 @@ const Records: React.FC = () => {
         setSessions(nextSessions);
         setSessionsStatus("ready");
         // 목록 없이 끝나면 페이드 래퍼가 그려지지 않으므로 대기 중인 페이드를 버린다. 남겨 두면 나중 재조회에서 재생된다
-        if (nextSessions.length === 0 && !requestedSessionIdRef.current) {
-          setIsListFading(false);
-        }
+        if (nextSessions.length === 0) setIsListFading(false);
         setSessionsError(null);
         setSelectedId((previous) => {
           if (
             previous &&
-            (previous === requestedSessionIdRef.current ||
-              nextSessions.some((session) => session.id === previous))
+            nextSessions.some((session) => session.id === previous)
           ) {
             return previous;
           }
@@ -151,12 +132,6 @@ const Records: React.FC = () => {
     [],
   );
 
-  useEffect(() => {
-    if (!sessionReportRequest) return;
-    requestedSessionIdRef.current = sessionReportRequest.sessionId;
-    setSelectedId(sessionReportRequest.sessionId);
-  }, [sessionReportRequest]);
-
   // 보기 전환·데이터 변경 시 칩 목록을 다시 받는다
   const lastSessionsKeyRef = useRef<string | null>(null);
   useEffect(() => {
@@ -191,27 +166,10 @@ const Records: React.FC = () => {
   );
 
   const handleModeChange = (nextMode: RecordsMode) => {
-    requestedSessionIdRef.current = null;
     setMode(nextMode);
     setIsListFading(true);
   };
 
-  const handleSelectSession = (sessionId: string) => {
-    requestedSessionIdRef.current = null;
-    setSelectedId(sessionId);
-  };
-
-  // 요청받은 세션이 칩 목록에 없으면 앞쪽에 넣어 보인다
-  const chipSessions = useMemo(() => {
-    if (
-      report &&
-      report.session.id === selectedId &&
-      !sessions.some((session) => session.id === report.session.id)
-    ) {
-      return [report.session, ...sessions];
-    }
-    return sessions;
-  }, [report, selectedId, sessions]);
 
   const visibleMatches = useMemo(
     () =>
@@ -275,7 +233,7 @@ const Records: React.FC = () => {
         </>
       );
     }
-    if (sessionsStatus === "error" && chipSessions.length === 0) {
+    if (sessionsStatus === "error" && sessions.length === 0) {
       return (
         <TabPanelStatus
           message={sessionsError ?? "세션 기록을 불러오지 못했어요."}
@@ -283,7 +241,7 @@ const Records: React.FC = () => {
         />
       );
     }
-    if (chipSessions.length === 0 && !selectedId) {
+    if (sessions.length === 0) {
       return <TabPanelStatus message="기록이 없어요" />;
     }
 
@@ -294,9 +252,9 @@ const Records: React.FC = () => {
         className="flex flex-col gap-2.5"
       >
         <SessionChips
-          sessions={chipSessions}
+          sessions={sessions}
           selectedId={selectedId}
-          onSelect={handleSelectSession}
+          onSelect={setSelectedId}
         />
         {renderDetail()}
       </SegmentSwitchFade>

@@ -1,5 +1,6 @@
 import React from "react";
 import type { SessionPlayerReport } from "@pkpkdupr/shared/ranking";
+import { getSessionRankChange } from "@/components/records/SessionReportParts";
 import { Card } from "@/components/ui/Card";
 import { RankChange, RatingDelta } from "@/components/ui/Delta";
 import { cx } from "@/components/ui/cx";
@@ -27,11 +28,7 @@ const Stat: React.FC<{
 const LastSessionMeCard: React.FC<{ report: SessionPlayerReport }> = ({
   report,
 }) => {
-  // 순위는 숫자가 작을수록 높으므로 이전 - 이후가 양수면 상승이다
-  const rankChange =
-    report.rankBefore !== null && report.rankAfter !== null
-      ? report.rankBefore - report.rankAfter
-      : null;
+  const rankChange = getSessionRankChange(report);
   const winRate =
     report.matchCount > 0
       ? Math.round((report.wins / report.matchCount) * 100)
