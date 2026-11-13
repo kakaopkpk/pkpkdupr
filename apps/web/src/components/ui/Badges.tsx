@@ -9,7 +9,11 @@ const highlightClassName =
 /** "● LIVE" 하이라이트 알약 */
 export const LivePill: React.FC = () => (
   <span className={cx(highlightClassName, "gap-1.5")}>
-    <span aria-hidden="true" className="size-[7px] rounded-full bg-pk-ink" />
+    {/* 점과 같은 색 고리가 퍼지며 사라지기를 반복한다. 고리는 장식이라 움직임 줄이기면 숨긴다 */}
+    <span aria-hidden="true" className="relative size-[7px]">
+      <span className="absolute inset-0 animate-pk-ping rounded-full bg-pk-ink motion-reduce:hidden" />
+      <span className="absolute inset-0 rounded-full bg-pk-ink" />
+    </span>
     LIVE
   </span>
 );

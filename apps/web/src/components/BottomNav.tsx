@@ -55,6 +55,7 @@ import {
   type PullToRefreshHandler,
 } from "@/context/TabNavigationContext";
 import { useOnlineStatus } from "@/hooks/useOnlineStatus";
+import { usePresence } from "@/hooks/usePresence";
 import {
   PULL_TO_REFRESH_BASE_RESISTANCE,
   PULL_TO_REFRESH_MIN_RESISTANCE,
@@ -702,6 +703,28 @@ const BottomNav: React.FC = () => {
   const isJoinSessionBarVisible =
     selectedTab === "home" && !!liveSession && !liveSessionState.isParticipant;
   const isDockBarVisible = isMyMatchBarVisible || isJoinSessionBarVisible;
+  // 바 자리는 하나다. 미니바 ↔ 알림 바로 바뀌면 key가 달라져 이전 바는 퇴장 없이 바로 바뀐다
+  const dockBarItem = useMemo(
+    () =>
+      isMyMatchBarVisible && myInProgressMatch && player?.id
+        ? {
+            kind: "my-match" as const,
+            match: myInProgressMatch,
+            playerId: player.id,
+          }
+        : isJoinSessionBarVisible && liveSession
+          ? { kind: "join-session" as const, sessionName: liveSession.name }
+          : null,
+    [
+      isJoinSessionBarVisible,
+      isMyMatchBarVisible,
+      liveSession,
+      myInProgressMatch,
+      player?.id,
+    ],
+  );
+  // 퇴장하는 동안 마지막 내용을 유지한다(경기가 끝나 myInProgressMatch가 null이 되어도)
+  const dockBar = usePresence(dockBarItem, { key: dockBarItem?.kind });
 
   useEffect(() => {
     if (!isJoinSessionBarVisible) setJoinLiveSessionError(false);
@@ -1186,29 +1209,30 @@ const BottomNav: React.FC = () => {
               <div
                 className={`fixed left-1/2 z-20 flex app-shell-width -translate-x-1/2 flex-col gap-2.5 px-4 ${dockBottom}`}
               >
-                {isMyMatchBarVisible && myInProgressMatch && player?.id ? (
+                {dockBar?.item.kind === "my-match" ? (
                   <MyMatchBar
-                    match={myInProgressMatch}
-                    playerId={player.id}
+                    key={dockBar.key}
+                    match={dockBar.item.match}
+                    playerId={dockBar.item.playerId}
                     isActionDisabled={!isOnline}
-                    onEnterScore={() =>
-                      openRecordMatch({
-                        kind: "score",
-                        matchId: myInProgressMatch.id,
-                      })
+                    isExiting={dockBar.isExiting}
+                    onEnterScore={(matchId) =>
+                      openRecordMatch({ kind: "score", matchId })
                     }
                   />
-                ) : null}
-                {isJoinSessionBarVisible && liveSession ? (
+                ) : dockBar?.item.kind === "join-session" ? (
                   <JoinSessionBar
-                    sessionName={liveSession.name}
+                    key={dockBar.key}
+                    sessionName={dockBar.item.sessionName}
                     isPending={isJoiningLiveSession}
                     hasError={joinLiveSessionError}
                     isActionDisabled={!isOnline || !player?.id}
+                    isExiting={dockBar.isExiting}
                     onJoin={() => void joinLiveSession()}
                   />
                 ) : null}
-                <div className="flex items-center gap-2.5">
+                {/* 바가 등장·퇴장하며 하단 바 뒤를 지나도록 하단 바 줄을 위 레이어에 둔다 */}
+                <div className="relative z-[1] flex items-center gap-2.5">
                   <NavPill selectedTab={selectedTab} onPressTab={handleTabPress} />
                   {/* + 버튼 자리. 버튼은 dim 위에 올라와야 해서 따로 그린다 */}
                   <div aria-hidden="true" className="size-[66px] shrink-0" />
