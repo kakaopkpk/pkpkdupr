@@ -110,24 +110,47 @@ export const toKstMinutesOfDay = (date: Date): number => {
   return kst.getUTCHours() * 60 + kst.getUTCMinutes();
 };
 
-/** 둘 다 "HH:MM"이고 종료가 시작보다 늦으면 true */
+/** 세션 시각 범위. 종료가 시작보다 이르거나 같으면 다음 날 그 시각에 끝난다 */
+export interface SessionTimeRange {
+  startTime: string | null;
+  endTime: string | null;
+}
+
+/** 둘 다 "HH:MM"이고 시각이 서로 다르면 true. 종료가 시작보다 이르면 다음 날 종료다 */
 export const isValidSessionTimeRange = (
   startTime: unknown,
   endTime: unknown,
 ): boolean =>
   isValidSessionTime(startTime) &&
   isValidSessionTime(endTime) &&
-  endTime > startTime;
+  endTime !== startTime;
 
-/** "18:00~22:00". 시각 없는 세션이면 null */
-export const formatSessionTimeRange = ({
+/** 종료 시각이 자정을 넘겨 다음 날이면 true */
+export const isOvernightSessionTimeRange = ({
   startTime,
   endTime,
-}: {
-  startTime: string | null;
-  endTime: string | null;
-}): string | null =>
-  startTime && endTime ? `${startTime}~${endTime}` : null;
+}: SessionTimeRange): boolean =>
+  !!startTime && !!endTime && endTime <= startTime;
+
+/** 시작부터 종료까지 분. 자정을 넘기면 다음 날 종료로 센다 */
+export const getSessionDurationMinutes = (
+  startTime: string,
+  endTime: string,
+): number => {
+  const diff = sessionTimeToMinutes(endTime) - sessionTimeToMinutes(startTime);
+  return diff > 0 ? diff : diff + 24 * 60;
+};
+
+/** "18:00~22:00" | "23:30~다음 날 01:30". 시각 없는 세션이면 null */
+export const formatSessionTimeRange = (
+  range: SessionTimeRange,
+): string | null => {
+  const { startTime, endTime } = range;
+  if (!startTime || !endTime) return null;
+  return isOvernightSessionTimeRange(range)
+    ? `${startTime}~다음 날 ${endTime}`
+    : `${startTime}~${endTime}`;
+};
 
 /** KST 날짜 키의 "HH:MM"(KST) 시각 */
 export const kstDateKeyTimeToDate = (dateKey: string, time: string): Date =>
@@ -140,20 +163,29 @@ export const isValidKstDateKey = (value: string): boolean =>
   /^\d{4}-\d{2}-\d{2}$/.test(value) &&
   toKstDateKey(kstDateKeyToDate(value)) === value;
 
-/** 경기가 하나도 없는 세션이 사라지는 시각. 정기=그날 22:00 KST, 그 외=다음 날 00:00 KST */
+/**
+ * 경기가 하나도 없는 세션이 사라지는 시각. 정기=그날 22:00 KST, 그 외=다음 날 00:00 KST.
+ * 회원 세션이 자정을 넘겨 끝나면 다음 날 종료 시각까지 남긴다
+ */
 export const getEmptySessionExpiresAt = (
   kind: MatchSessionKind,
   sessionDate: Date,
+  timeRange?: SessionTimeRange | null,
 ): Date => {
   const dayStart = kstDateKeyToDate(toKstDateKey(sessionDate));
-  return kind === "regular"
-    ? new Date(dayStart.getTime() + REGULAR_SESSION_END_HOUR * HOUR_MS)
-    : new Date(dayStart.getTime() + DAY_MS);
+  if (kind === "regular") {
+    return new Date(dayStart.getTime() + REGULAR_SESSION_END_HOUR * HOUR_MS);
+  }
+  const nextDayStart = dayStart.getTime() + DAY_MS;
+  return timeRange?.endTime && isOvernightSessionTimeRange(timeRange)
+    ? new Date(nextDayStart + sessionTimeToMinutes(timeRange.endTime) * 60_000)
+    : new Date(nextDayStart);
 };
 
 /**
  * 빈 세션 만료 판정을 세션 시각 비교 하나로 바꾼 기준 시각.
  * 세션 시각이 이 값보다 이르면(미만) `getEmptySessionExpiresAt(kind, 세션 시각) <= now`와 같다.
+ * 자정을 넘기는 회원 세션은 종료 시각에 따라 만료가 달라 이 기준을 쓰지 않는다(저장소가 따로 판정한다).
  * 만료 시각은 세션 날짜의 KST 0시에 고정 길이를 더한 값이므로, now에서 그 길이를 뺀 날의 다음 날 KST 0시가 경계가 된다.
  */
 export const getEmptySessionExpiryCutoff = (
@@ -191,7 +223,7 @@ export interface MatchSessionDetail {
   location: string;
   /** date의 KST 날짜 키 */
   dateKey: string;
-  /** 시작·종료 시각("HH:MM", KST). 정기 세션은 18:00~22:00, 시각 없이 만든 회원 세션은 null */
+  /** 시작·종료 시각("HH:MM", KST). 정기 세션은 18:00~22:00, 시각 없이 만든 회원 세션은 null. 종료 ≤ 시작이면 다음 날 종료 */
   startTime: string | null;
   endTime: string | null;
   /** 오늘(KST) 세션이면 true. 세션 경기 기록/시작·추천은 오늘 세션에서만 되고, 참여자 추가·삭제는 오늘·미래 세션에서 된다 */
@@ -217,7 +249,10 @@ export interface CreateMatchSessionRequest {
   location: string;
   /** 세션 날짜(KST, YYYY-MM-DD). 생략하면 오늘. 오늘보다 이르면 400 */
   dateKey?: string;
-  /** 시작·종료 시각("HH:MM", KST). 둘 다 주거나 둘 다 생략한다. 종료가 시작보다 늦어야 한다 */
+  /**
+   * 시작·종료 시각("HH:MM", KST). 둘 다 주거나 둘 다 생략한다. 둘이 같으면 400이고,
+   * 종료가 시작보다 이르면 다음 날 종료다. 오늘 세션은 시작 시각이 지금보다 이르면 400
+   */
   startTime?: string;
   endTime?: string;
 }

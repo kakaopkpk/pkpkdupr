@@ -33,6 +33,7 @@ import {
   isRegularSessionTime,
   isValidKstDateKey,
   isValidSessionTimeRange,
+  kstDateKeyTimeToDate,
   kstDateKeyToDate,
   MATCH_SESSION_LOCATION_MAX_LENGTH,
   MATCH_SESSION_NAME_MAX_LENGTH,
@@ -1233,7 +1234,8 @@ app.get("/api/match-sessions/upcoming", async (req, res) => {
     // 경기가 있는 세션은 만료 후에도 남지만, 다가오는 세션 목록에는 넣지 않는다.
     const details = sessions
       .filter(
-        (session) => getEmptySessionExpiresAt(session.kind, session.date) > now,
+        (session) =>
+          getEmptySessionExpiresAt(session.kind, session.date, session) > now,
       )
       .map((session) => toMatchSessionDetail(session, activePlayersById, now));
     // 저장소가 시각 오름차순으로 주므로 날짜 키·정기 여부로만 다시 정렬한다(정렬은 안정적이다).
@@ -1326,14 +1328,24 @@ app.post("/api/match-sessions", async (req, res) => {
     }
 
     // 시각을 보내지 않는 이전 클라이언트도 받도록 둘 다 생략하면 시각 없는 세션으로 만든다.
-    // 이미 시작한 모임을 뒤늦게 세션으로 만드는 경우가 있어 오늘의 지난 시각도 허용한다
+    // 종료가 시작보다 이르면 다음 날 종료이고, 세션 날짜는 시작 시각의 날짜다
     const { startTime = null, endTime = null } = body ?? {};
     if (
       (startTime != null || endTime != null) &&
       !isValidSessionTimeRange(startTime, endTime)
     ) {
       throw new MatchSessionRequestError(
-        "세션 시작·종료 시각은 HH:MM 형식으로 함께 보내고, 종료가 시작보다 늦어야 합니다.",
+        "세션 시작·종료 시각은 HH:MM 형식으로 함께 보내고, 서로 달라야 합니다.",
+        400,
+      );
+    }
+    if (
+      startTime != null &&
+      dateKey === todayKey &&
+      kstDateKeyTimeToDate(dateKey, startTime) < now
+    ) {
+      throw new MatchSessionRequestError(
+        "이미 지난 시각으로는 세션을 만들 수 없습니다.",
         400,
       );
     }

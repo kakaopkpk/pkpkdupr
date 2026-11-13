@@ -5,6 +5,8 @@ import {
   getEmptySessionExpiresAt,
   getEmptySessionExpiryCutoff,
   getNextRegularSessionDateKey,
+  getSessionDurationMinutes,
+  isOvernightSessionTimeRange,
   getRegularSessionName,
   IN_PROGRESS_MATCH_TIMEOUT_MS,
   isInProgressMatchExpired,
@@ -128,6 +130,29 @@ describe("getEmptySessionExpiresAt", () => {
         new Date("2026-11-09T23:30:00+09:00"),
       ).toISOString(),
     ).toBe("2026-11-09T15:00:00.000Z");
+  });
+
+  it("자정을 넘기는 회원 세션은 다음 날 종료 시각, 같은 날 끝나면 다음 날 00:00 KST", () => {
+    const sessionDate = new Date("2026-11-09T00:00:00+09:00");
+    expect(
+      getEmptySessionExpiresAt("custom", sessionDate, {
+        startTime: "23:30",
+        endTime: "01:30",
+      }),
+    ).toEqual(new Date("2026-11-10T01:30:00+09:00"));
+    expect(
+      getEmptySessionExpiresAt("custom", sessionDate, {
+        startTime: "18:00",
+        endTime: "20:00",
+      }),
+    ).toEqual(new Date("2026-11-10T00:00:00+09:00"));
+    // 정기 세션은 시각과 상관없이 그날 22:00 KST
+    expect(
+      getEmptySessionExpiresAt("regular", new Date("2026-11-09T18:00:00+09:00"), {
+        startTime: "23:00",
+        endTime: "01:00",
+      }),
+    ).toEqual(new Date("2026-11-09T22:00:00+09:00"));
   });
 
   it("UTC 날짜가 아닌 KST 날짜를 기준으로 한다", () => {
@@ -318,7 +343,8 @@ describe("세션 시각", () => {
   it("범위는 둘 다 유효하고 종료가 시작보다 늦어야 한다", () => {
     expect(isValidSessionTimeRange("18:00", "20:00")).toBe(true);
     expect(isValidSessionTimeRange("20:00", "20:00")).toBe(false);
-    expect(isValidSessionTimeRange("20:00", "18:00")).toBe(false);
+    // 종료가 시작보다 이르면 다음 날 종료다
+    expect(isValidSessionTimeRange("23:30", "01:30")).toBe(true);
     expect(isValidSessionTimeRange("18:00", null)).toBe(false);
   });
 
@@ -332,6 +358,18 @@ describe("세션 시각", () => {
     expect(formatSessionTimeRange({ startTime: null, endTime: null })).toBe(
       null,
     );
+  });
+
+  it("자정을 넘기면 끝나는 시각에 '다음 날'을 붙이고 길이를 다음 날까지 센다", () => {
+    expect(
+      formatSessionTimeRange({ startTime: "23:30", endTime: "01:30" }),
+    ).toBe("23:30~다음 날 01:30");
+    expect(isOvernightSessionTimeRange({ startTime: "23:30", endTime: "01:30" })).toBe(true);
+    expect(isOvernightSessionTimeRange({ startTime: "18:00", endTime: "20:00" })).toBe(false);
+    expect(isOvernightSessionTimeRange({ startTime: null, endTime: null })).toBe(false);
+    expect(getSessionDurationMinutes("23:30", "01:30")).toBe(120);
+    expect(getSessionDurationMinutes("18:00", "20:00")).toBe(120);
+    expect(getSessionDurationMinutes("22:00", "00:00")).toBe(120);
   });
 
   it("KST 0시부터 지난 분을 센다", () => {

@@ -50,7 +50,8 @@ export const pickLiveSession = (
     const startsAt = new Date(session.date);
     return (
       startsAt.getTime() <= now.getTime() &&
-      now.getTime() < getEmptySessionExpiresAt(session.kind, startsAt).getTime()
+      now.getTime() <
+        getEmptySessionExpiresAt(session.kind, startsAt, session).getTime()
     );
   });
 
@@ -73,7 +74,7 @@ export const getNextLiveSessionBoundary = (
   const todayKey = toKstDateKey(now);
   const candidates = sessions.flatMap((session) => {
     const startsAt = new Date(session.date);
-    return [startsAt, getEmptySessionExpiresAt(session.kind, startsAt)];
+    return [startsAt, getEmptySessionExpiresAt(session.kind, startsAt, session)];
   });
   // 24시는 다음 날 0시다
   candidates.push(kstDateKeyToDate(todayKey, 24));

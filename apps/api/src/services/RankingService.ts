@@ -59,6 +59,9 @@ export interface RankingSession {
   date: Date;
   location: string;
   participantIds: string[];
+  /** 회원 세션 시각("HH:MM", KST). 자정을 넘기면 만료가 다음 날 종료 시각으로 늦춰진다 */
+  startTime?: string | null;
+  endTime?: string | null;
 }
 
 export type RankingSourcePlayer = Pick<
@@ -599,7 +602,13 @@ export const findSessionDominations = (
   const matchesBySession = groupMatchesBySession(context.matches);
   const dominations = new Map<string, Set<string>>();
   for (const session of sessions) {
-    if (getEmptySessionExpiresAt(session.kind, session.date) > now) continue;
+    const timeRange = {
+      startTime: session.startTime ?? null,
+      endTime: session.endTime ?? null,
+    };
+    if (getEmptySessionExpiresAt(session.kind, session.date, timeRange) > now) {
+      continue;
+    }
     const sessionMatches = matchesBySession.get(session.id);
     if (!sessionMatches) continue;
     const stats = buildSessionPlayerStats(context, session, sessionMatches);

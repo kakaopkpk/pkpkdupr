@@ -326,7 +326,81 @@ describe("public match sessions", () => {
     });
   });
 
-  it("시작·종료 시각 중 하나만 있거나 형식이 틀리거나 종료가 시작보다 이르지 않으면 400", async () => {
+  it("종료가 시작보다 이르면 다음 날 종료로 그대로 저장한다", async () => {
+    const createSession = vi
+      .spyOn(MatchRepository.prototype, "createSession")
+      .mockImplementation(async (session) => ({ id: "Snight01", ...session }));
+    vi.spyOn(MatchRepository.prototype, "findSessionById").mockResolvedValue(
+      makeSession({
+        id: "Snight01",
+        date: new Date("2026-11-20T00:00:00+09:00"),
+        startTime: "23:30",
+        endTime: "01:30",
+      }),
+    );
+
+    const response = await request(app)
+      .post("/api/match-sessions")
+      .set("Authorization", "Bearer token")
+      .send({
+        name: "심야 번개",
+        location: "탄천",
+        dateKey: "2026-11-20",
+        startTime: "23:30",
+        endTime: "01:30",
+      });
+
+    expect(response.status).toBe(201);
+    // 세션 날짜는 시작 시각의 날짜(11월 20일)다
+    expect(createSession).toHaveBeenCalledWith(
+      {
+        name: "심야 번개",
+        date: new Date("2026-11-20T00:00:00+09:00"),
+        location: "탄천",
+        startTime: "23:30",
+        endTime: "01:30",
+      },
+      { conflictOnDuplicate: true },
+    );
+    expect(response.body).toMatchObject({
+      dateKey: "2026-11-20",
+      startTime: "23:30",
+      endTime: "01:30",
+    });
+  });
+
+  it("오늘 세션의 시작 시각이 이미 지났으면 400, 미래 날짜는 이른 시각도 된다", async () => {
+    const createSession = vi
+      .spyOn(MatchRepository.prototype, "createSession")
+      .mockImplementation(async (session) => ({ id: "Searly01", ...session }));
+    vi.spyOn(MatchRepository.prototype, "findSessionById").mockResolvedValue(
+      makeSession({ id: "Searly01" }),
+    );
+
+    const past = await request(app)
+      .post("/api/match-sessions")
+      .set("Authorization", "Bearer token")
+      .send({ name: "번개", location: "탄천", startTime: "06:00", endTime: "08:00" });
+    expect(past.status).toBe(400);
+    expect(past.body).toEqual({
+      error: "이미 지난 시각으로는 세션을 만들 수 없습니다.",
+    });
+    expect(createSession).not.toHaveBeenCalled();
+
+    const future = await request(app)
+      .post("/api/match-sessions")
+      .set("Authorization", "Bearer token")
+      .send({
+        name: "새벽 번개",
+        location: "탄천",
+        dateKey: "2026-11-13",
+        startTime: "06:00",
+        endTime: "08:00",
+      });
+    expect(future.status).toBe(201);
+  });
+
+  it("시작·종료 시각 중 하나만 있거나 형식이 틀리거나 서로 같으면 400", async () => {
     const createSession = vi.spyOn(MatchRepository.prototype, "createSession");
 
     for (const time of [
@@ -336,7 +410,6 @@ describe("public match sessions", () => {
       { startTime: "24:00", endTime: "24:30" },
       { startTime: "19:00", endTime: 2100 },
       { startTime: "21:00", endTime: "21:00" },
-      { startTime: "21:00", endTime: "19:00" },
     ]) {
       const response = await request(app)
         .post("/api/match-sessions")

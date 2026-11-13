@@ -279,6 +279,13 @@ const toRecordedMatchWriteError = (
   return new MatchRecordUpdateConflictError();
 };
 
+/** 회원 세션 종료 시각("HH:MM")이 시작보다 이르거나 같아 다음 날 끝나는 행 */
+const OVERNIGHT_SESSION_SQL =
+  "(s.start_time IS NOT NULL AND s.end_time IS NOT NULL AND s.end_time <= s.start_time)";
+/** 회원 세션 종료 시각("HH:MM")의 0시부터 분 */
+const SESSION_END_MINUTES_SQL =
+  "(split_part(s.end_time, ':', 1)::int * 60 + split_part(s.end_time, ':', 2)::int)";
+
 /**
  * MatchRepository - `packages/db`의 경기 저장소.
  *
@@ -613,6 +620,7 @@ export class MatchRepository {
       // 같은 경기에 점수 입력(updateRecordedMatch)이 동시에 들어오면 FOR UPDATE 행 잠금으로 순서를 정한다.
       // 잠금을 기다린 행은 갱신된 버전으로 WHERE를 다시 평가하므로, 먼저 completed가 된 경기는 지우지 않는다.
       // 세션 만료의 KST 계산은 TS(getEmptySessionExpiryCutoff)에서 하고 epoch 초 기준값만 넘긴다.
+      // 자정을 넘기는 회원 세션만 date(그날 00:00 KST) + 하루 + 종료 시각으로 만료를 직접 계산한다.
       sql: `
         WITH expired_matches AS (
           SELECT m.id
@@ -639,7 +647,16 @@ export class MatchRepository {
           DELETE FROM match_sessions s
           WHERE (
               (s.regular_date_key IS NOT NULL AND s."date" < $2)
-              OR (s.regular_date_key IS NULL AND s."date" < $3)
+              OR (
+                s.regular_date_key IS NULL
+                AND NOT ${OVERNIGHT_SESSION_SQL}
+                AND s."date" < $3
+              )
+              OR (
+                s.regular_date_key IS NULL
+                AND ${OVERNIGHT_SESSION_SQL}
+                AND s."date" + 86400 + ${SESSION_END_MINUTES_SQL} * 60 <= $4
+              )
             )
             AND NOT EXISTS (
               SELECT 1
@@ -661,6 +678,7 @@ export class MatchRepository {
         inProgressExpiryCutoff(now),
         toUnixTimestampSeconds(getEmptySessionExpiryCutoff("regular", now)),
         toUnixTimestampSeconds(getEmptySessionExpiryCutoff("custom", now)),
+        toUnixTimestampSeconds(now),
       ],
     });
     const row = result.rows[0];
