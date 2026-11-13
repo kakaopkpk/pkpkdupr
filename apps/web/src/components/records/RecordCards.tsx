@@ -12,7 +12,7 @@ import { rowPressClassName } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { ChevronRightIcon } from "@/components/ui/Icons";
 import { MatchRow } from "@/components/ui/MatchRow";
-import { TextLink } from "@/components/ui/Section";
+import { StateMessage } from "@/components/ui/StateMessage";
 import { cx } from "@/components/ui/cx";
 import type { MatchSessionHistoryInfo } from "@/lib/rankings";
 import type { MatchInfo } from "@/types/match";
@@ -115,11 +115,12 @@ export const RecordListSkeleton: React.FC = () => (
   </div>
 );
 
-/** 목록 끝 다음 묶음 상태. 받는 중이면 스켈레톤과 문구, 실패면 다시 시도 */
+/** 목록 끝 다음 묶음 상태. 받는 중이면 스켈레톤과 문구, 실패면 errorMessage와 다시 시도 */
 export const RecordListFooter: React.FC<{
   status: "loading" | "error";
+  errorMessage: string;
   onRetry: () => void;
-}> = ({ status, onRetry }) =>
+}> = ({ status, errorMessage, onRetry }) =>
   status === "loading" ? (
     <div className="flex flex-col gap-2.5">
       <RecordCardSkeleton />
@@ -129,8 +130,5 @@ export const RecordListFooter: React.FC<{
       </div>
     </div>
   ) : (
-    <div className="flex flex-col items-center py-2">
-      <p className="text-pk-13 text-pk-muted">기록을 불러오지 못했어요.</p>
-      <TextLink onPress={onRetry}>다시 시도</TextLink>
-    </div>
+    <StateMessage kind="error" message={errorMessage} onRetry={onRetry} />
   );

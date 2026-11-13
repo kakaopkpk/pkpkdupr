@@ -6,6 +6,7 @@ import { InfoIcon } from "@/components/ui/Icons";
 import { PlayerAvatar, type AvatarPlayer } from "@/components/ui/PlayerAvatar";
 import { SearchField } from "@/components/ui/SearchField";
 import { SheetTitle } from "@/components/ui/SheetTitle";
+import { StateMessage } from "@/components/ui/StateMessage";
 import { cx } from "@/components/ui/cx";
 import type { MemberListPlayerInfo } from "@/hooks/usePlayers";
 import {
@@ -312,6 +313,8 @@ export default function PickPlayersStep({
           <p className="px-1 text-pk-13 font-bold text-pk-down" role="alert">
             회원 목록을 불러오지 못했어요.
           </p>
+        ) : list.length === 0 && playersStatus !== "loading" ? (
+          <StateMessage kind="empty" message="검색 결과가 없어요" />
         ) : (
           <div className="grid shrink-0 grid-cols-2 gap-2 pt-0.5">
             {list.map((player) => {

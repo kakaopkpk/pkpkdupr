@@ -6,6 +6,7 @@ import { PersonAddIcon } from "@/components/ui/Icons";
 import { PlayerAvatar } from "@/components/ui/PlayerAvatar";
 import { SearchField } from "@/components/ui/SearchField";
 import { SheetTitle } from "@/components/ui/SheetTitle";
+import { StateMessage } from "@/components/ui/StateMessage";
 import { cx } from "@/components/ui/cx";
 import { useSystemNotice } from "@/context/SystemNoticeContext";
 import {
@@ -21,7 +22,8 @@ import {
   removeMatchSessionParticipant,
 } from "@/lib/matchSessions";
 import { getGuestAddOption, GUEST_USERNAME_FORMAT_HINT } from "./guestAdd";
-import { getErrorMessage, isNetworkError } from "./saveError";
+import { isNetworkError } from "@/lib/errors";
+import { getErrorMessage } from "./saveError";
 
 export interface ParticipantsSheetProps {
   isOpen: boolean;
@@ -189,7 +191,7 @@ const ParticipantsForm: React.FC<ParticipantsFormProps> = ({
           networkError = err;
           break;
         }
-        serverError ??= getErrorMessage(err, "참여자를 반영하지 못했어요.");
+        serverError ??= getErrorMessage(err, "참여자를 반영하지 못했어요");
       }
     }
 
@@ -237,7 +239,7 @@ const ParticipantsForm: React.FC<ParticipantsFormProps> = ({
         onChanged();
       } catch (err) {
         if (isNetworkError(err)) throw err;
-        setError(getErrorMessage(err, "게스트를 추가하지 못했어요."));
+        setError(getErrorMessage(err, "게스트를 추가하지 못했어요"));
       } finally {
         setIsAddingGuest(false);
       }
@@ -280,9 +282,7 @@ const ParticipantsForm: React.FC<ParticipantsFormProps> = ({
       <BottomSheet.Body className="min-w-0 gap-0 overflow-y-auto">
         {guestAddOption ? (
           <div className="flex flex-col">
-            <p className="py-4 text-center text-pk-13 text-pk-sub">
-              회원 중에 ‘{guestAddOption.username}’가 없어요.
-            </p>
+            <StateMessage kind="empty" message="검색 결과가 없어요" />
             <button
               type="button"
               disabled={!guestAddOption.isValid || isAddingGuest || isSaving}
@@ -320,13 +320,15 @@ const ParticipantsForm: React.FC<ParticipantsFormProps> = ({
             </button>
           </div>
         ) : rows.length === 0 ? (
-          <p className="py-6 text-center text-pk-13 text-pk-muted">
-            {playersStatus === "error"
-              ? "회원 목록을 불러오지 못했어요."
-              : playersStatus === "loading"
-                ? "회원 목록을 불러오는 중…"
-                : "검색 결과가 없어요."}
-          </p>
+          playersStatus === "error" || playersStatus === "loading" ? (
+            <p className="py-6 text-center text-pk-13 text-pk-muted">
+              {playersStatus === "error"
+                ? "회원 목록을 불러오지 못했어요."
+                : "회원 목록을 불러오는 중…"}
+            </p>
+          ) : (
+            <StateMessage kind="empty" message="검색 결과가 없어요" />
+          )
         ) : (
           <ul aria-label="회원" className="flex flex-col">
             {rows.map((player) => {
@@ -386,7 +388,7 @@ const ParticipantsForm: React.FC<ParticipantsFormProps> = ({
       </BottomSheet.Body>
       <BottomSheet.Footer className="flex flex-col gap-2">
         {error ? (
-          <p role="alert" className="px-1 text-pk-13 text-pk-down">
+          <p role="alert" className="px-1 text-pk-13 font-bold text-pk-down">
             {error}
           </p>
         ) : null}

@@ -19,7 +19,8 @@ import { resizeAvatarImage } from "@/utils/avatar";
 import { AvatarConfirmSheetBody } from "./AvatarConfirmSheet";
 import PasswordChangeDrawer from "./PasswordChangeDrawer";
 import { type StatusEditInput, StatusEditSheetBody } from "./StatusEditSheet";
-import { getSaveErrorMessage, isNetworkSaveFailure } from "./saveFailure";
+import { isNetworkError } from "@/lib/errors";
+import { getSaveErrorMessage } from "./saveFailure";
 
 export interface SettingsDrawerProps {
   isOpen: boolean;
@@ -140,7 +141,7 @@ export default function SettingsDrawer({
       await uploadAvatar(dataUrl);
       closeLayer(AVATAR_DEPTH_ID, closeAvatar);
     } catch (error) {
-      if (isNetworkSaveFailure(error)) {
+      if (isNetworkError(error)) {
         // 다시 시도는 저장 실패 알림이 맡는다
         showSaveFailure({
           onRetry: async () => {
@@ -150,7 +151,7 @@ export default function SettingsDrawer({
         closeLayer(AVATAR_DEPTH_ID, closeAvatar);
       } else {
         setAvatarError(
-          getSaveErrorMessage(error, "프로필 사진을 바꾸지 못했습니다."),
+          getSaveErrorMessage(error, "프로필 사진을 바꾸지 못했어요"),
         );
       }
     } finally {
@@ -173,7 +174,7 @@ export default function SettingsDrawer({
       await updateProfile(input);
       closeLayer(STATUS_DEPTH_ID, closeStatus);
     } catch (error) {
-      if (isNetworkSaveFailure(error)) {
+      if (isNetworkError(error)) {
         showSaveFailure({
           onRetry: async () => {
             await updateProfile(input);

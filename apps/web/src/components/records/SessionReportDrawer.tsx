@@ -23,6 +23,7 @@ import {
 import { Card } from "@/components/ui/Card";
 import { MatchRow } from "@/components/ui/MatchRow";
 import { SectionLabel, TextLink } from "@/components/ui/Section";
+import { StateMessage } from "@/components/ui/StateMessage";
 import {
   SegmentedControl,
   SegmentSwitchFade,
@@ -283,7 +284,9 @@ export default function SessionReportDrawer({
                 ))}
               </Card>
             ) : (
-              <TabPanelStatus message="기록이 없어요" />
+              <Card>
+                <StateMessage kind="empty" message="아직 경기가 없어요" />
+              </Card>
             )}
           </SegmentSwitchFade>
         </section>

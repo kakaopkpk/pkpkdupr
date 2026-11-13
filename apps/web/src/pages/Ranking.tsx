@@ -24,10 +24,12 @@ import {
   SegmentSwitchFade,
   type SegmentedOption,
 } from "@/components/ui/SegmentedControl";
+import { StateMessage } from "@/components/ui/StateMessage";
 import { StatusMessageChip } from "@/components/ui/StatusMessageChip";
 import { cx } from "@/components/ui/cx";
 import { useAppNavigation } from "@/context/AppNavigationContext";
 import { useTabNavigation } from "@/context/TabNavigationContext";
+import { getUserErrorMessage } from "@/lib/errors";
 import { fetchRankings } from "@/lib/rankings";
 import { formatRating } from "@/utils/dupr";
 
@@ -180,9 +182,7 @@ const Ranking: React.FC = () => {
     } catch (error) {
       if (requestId !== requestIdRef.current) return;
       setIsListFading(false);
-      setErrorMessage(
-        error instanceof Error ? error.message : "랭킹을 불러오지 못했어요.",
-      );
+      setErrorMessage(getUserErrorMessage(error, "랭킹을 불러오지 못했어요"));
     }
   }, [category]);
 
@@ -242,12 +242,26 @@ const Ranking: React.FC = () => {
                   ))}
                 </Card>
               </SegmentSwitchFade>
-            ) : null}
+            ) : (
+              <Card>
+                <StateMessage
+                  kind="empty"
+                  message="아직 랭킹에 오른 회원이 없어요"
+                />
+              </Card>
+            )}
           </>
         ) : errorMessage ? (
-          <p className="px-1 py-6 text-center text-pk-13 text-pk-sub">
-            {errorMessage}
-          </p>
+          <StateMessage
+            kind="error"
+            size="panel"
+            message={errorMessage}
+            onRetry={() => {
+              // 다시 받는 동안 스켈레톤을 보인다
+              setErrorMessage(null);
+              void loadRanking();
+            }}
+          />
         ) : (
           <RankingSkeleton />
         )}

@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/CountUpNumber";
 import { MatchRow } from "@/components/ui/MatchRow";
 import { SectionLabel, TextLink } from "@/components/ui/Section";
+import { StateMessage } from "@/components/ui/StateMessage";
 import { useAppNavigation } from "@/context/AppNavigationContext";
 
 const RECENT_MATCH_COUNT = 3;
@@ -145,9 +146,7 @@ export const RecentMatchesSection: React.FC<{
             />
           ))
         ) : (
-          <p className="py-6 text-center text-pk-13 text-pk-muted">
-            완료한 경기가 없어요.
-          </p>
+          <StateMessage kind="empty" message="완료한 경기가 없어요" />
         )}
       </Card>
     </section>
@@ -171,11 +170,11 @@ export const ProfileBodySkeleton: React.FC<{
 );
 
 /** 불러오기 실패 안내 */
-export const ProfileLoadError: React.FC<{ onRetry: () => void }> = ({
-  onRetry,
-}) => (
-  <Card className="flex flex-col items-center gap-1 py-6">
-    <p className="text-pk-15 font-bold text-pk-ink">프로필을 불러오지 못했어요.</p>
-    <TextLink onPress={onRetry}>다시 시도</TextLink>
+export const ProfileLoadError: React.FC<{
+  message: string;
+  onRetry: () => void;
+}> = ({ message, onRetry }) => (
+  <Card>
+    <StateMessage kind="error" message={message} onRetry={onRetry} />
   </Card>
 );
