@@ -24,6 +24,10 @@
   --color-pk-gold: #f2c14e;
   --color-pk-silver: #cfd5df;
   --color-pk-bronze: #e0a878;
+  /* 세션 지배자 불꽃 후광 */
+  --color-pk-flame-core: #ffd54a;
+  --color-pk-flame: #ff8a1f;
+  --color-pk-flame-hot: #f0441c;
   --font-num: "Barlow Condensed", sans-serif;
   --radius-pk-sm: 12px;
   --radius-pk-lg: 20px;
@@ -238,6 +242,52 @@
     }
   }
 
+  /*
+   * 세션 지배자 아바타의 불꽃 후광. 아바타를 감싸는 요소에 붙인다.
+   * 흐린 불꽃색 원(::before)이 돌며 깜빡이고, 흰 고리(::after)가 아바타와 불꽃을 떼어 놓는다.
+   */
+  .pk-flame-aura {
+    position: relative;
+    display: inline-flex;
+    isolation: isolate;
+  }
+
+  .pk-flame-aura::before,
+  .pk-flame-aura::after {
+    content: "";
+    position: absolute;
+    border-radius: 9999px;
+  }
+
+  .pk-flame-aura::before {
+    inset: -7px;
+    z-index: -2;
+    background: conic-gradient(
+      var(--color-pk-flame-core),
+      var(--color-pk-flame-hot),
+      var(--color-pk-flame),
+      var(--color-pk-flame-core),
+      var(--color-pk-flame-hot),
+      var(--color-pk-flame-core)
+    );
+    filter: blur(5px);
+    animation:
+      pk-flame-spin 2.4s linear infinite,
+      pk-flame-flicker 1.1s ease-in-out infinite;
+  }
+
+  .pk-flame-aura::after {
+    inset: -3px;
+    z-index: -1;
+    background: var(--color-white);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .pk-flame-aura::before {
+      animation: none;
+    }
+  }
+
   .app-mobile-input {
     min-height: 2.75rem;
     font-size: 16px;
@@ -255,5 +305,28 @@
     outline: none;
     border-color: var(--color-pk-primary);
     box-shadow: inset 0 0 0 1px var(--color-pk-primary);
+  }
+}
+
+@keyframes pk-flame-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* rotate와 따로 움직이도록 transform이 아닌 scale 속성을 쓴다 */
+@keyframes pk-flame-flicker {
+  0%,
+  100% {
+    opacity: 0.85;
+    scale: 1;
+  }
+  35% {
+    opacity: 1;
+    scale: 1.06;
+  }
+  70% {
+    opacity: 0.7;
+    scale: 0.98;
   }
 }

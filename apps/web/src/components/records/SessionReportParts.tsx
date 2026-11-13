@@ -75,12 +75,14 @@ export const SessionSummary: React.FC<{ session: MatchSessionHistoryInfo }> = ({
   </div>
 );
 
-/** 그 세션에서 평점이 가장 많이 오른 사람(세션 지배자) */
+/** 그 세션에서 평점이 가장 많이 오른 사람(세션 지배자). 아바타에 불꽃 후광을 두른다 */
 export const TopRiserCard: React.FC<{ report: SessionPlayerReport }> = ({
   report,
 }) => (
   <Card className="flex items-center gap-3 px-4 py-3.5">
-    <PlayerAvatar player={report.player} size={44} />
+    <span className="pk-flame-aura shrink-0">
+      <PlayerAvatar player={report.player} size={44} />
+    </span>
     <div className="flex min-w-0 flex-1 flex-col items-start gap-0.5">
       <SessionDominatorBadge />
       <span className="max-w-full truncate text-pk-17 font-extrabold text-pk-ink">
