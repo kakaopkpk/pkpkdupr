@@ -15,7 +15,7 @@ export interface AchievementsSectionProps {
   /** 업적 주인 */
   playerId: string;
   progress: readonly AchievementProgressInfo[];
-  /** "me": "업적 · N/18" + 전체 보기, "member": "받은 업적 · N" */
+  /** "me": "업적 · N/전체 수" + 전체 보기, "member": "받은 업적 · N" */
   variant: "me" | "member";
   /** 기본 48 */
   badgeSize?: number;
