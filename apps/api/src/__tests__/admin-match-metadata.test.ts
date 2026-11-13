@@ -11,6 +11,7 @@ import {
 
 const now = new Date("2026-07-23T10:00:00.000Z");
 const admin: Player = {
+  isGuest: false,
   id: "admin-001",
   username: "admin",
   gender: "M",
@@ -26,6 +27,7 @@ const adminSession: AuthenticatedSession = {
 };
 
 const buildMatch = (id: string): Match => ({
+  ratingExcluded: false,
   id,
   type: "singles",
   source: "admin_created",

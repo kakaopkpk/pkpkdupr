@@ -17,6 +17,7 @@ import {
 
 const now = new Date("2026-07-23T10:00:00.000Z");
 const admin: Player = {
+  isGuest: false,
   id: "admin-001",
   username: "admin",
   gender: "M",
@@ -35,6 +36,7 @@ const participants: Player[] = Array.from({ length: 4 }, (_, index) => ({
   username: `player-${index + 1}`,
   gender: "M",
   status: "active",
+  isGuest: false,
   duprRating: null,
   createdAt: now,
   updatedAt: now,
@@ -209,6 +211,7 @@ describe("admin match sessions", () => {
       "findSessionById",
     ).mockResolvedValue(managedSession);
     const createdMatch: Match = {
+      ratingExcluded: false,
       id: "Mmatch01",
       name: "1번 경기",
       type: "men-doubles",
@@ -280,6 +283,7 @@ describe("admin match sessions", () => {
 
   it("관리자가 세션 예정 경기의 결과를 입력하고 해당 경기 레이팅만 반영한다", async () => {
     const completedMatch: Match = {
+      ratingExcluded: false,
       id: "Mmatch01",
       name: "1번 경기",
       type: "men-doubles",

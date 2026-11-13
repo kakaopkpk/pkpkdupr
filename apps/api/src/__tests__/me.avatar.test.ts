@@ -12,6 +12,7 @@ const SUPABASE_URL = "http://storage.test";
 const PUBLIC_PREFIX = `${SUPABASE_URL}/storage/v1/object/public/avatars/`;
 const now = new Date("2026-11-10T10:00:00.000Z");
 const player: Player = {
+  isGuest: false,
   id: "Pavatar",
   username: "avatar-player",
   gender: "M",

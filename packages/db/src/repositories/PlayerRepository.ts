@@ -18,14 +18,21 @@ export interface StoredPlayerRecord extends Player {
   authUserId: string | null;
   /** 관리자가 발급·초기화한 비밀번호를 아직 바꾸지 않은 상태. */
   isFirstLogin: boolean;
+  /** 게스트를 추가한 회원과 세션. 정회원은 null이다. API 공개 응답에는 내보내지 않는다. */
+  guestAddedByPlayerId: string | null;
+  guestAddedSessionId: string | null;
 }
 
 export interface CreateStoredPlayerInput {
   id: string;
   username: string;
   duprRating: PlayerDupr | null;
-  gender: "M" | "F";
+  /** 게스트만 null */
+  gender: "M" | "F" | null;
   status: PlayerStatus;
+  isGuest?: boolean;
+  guestAddedByPlayerId?: string | null;
+  guestAddedSessionId?: string | null;
   avatarUrl?: string | null;
   affiliations?: PlayerAffiliation[];
   statusMessage?: string | null;
@@ -159,6 +166,10 @@ export class PlayerRepository {
       ...player,
       authUserId: player.authUserId ?? null,
       isFirstLogin: !!player.isFirstLogin,
+      gender: player.gender ?? null,
+      isGuest: player.isGuest === true,
+      guestAddedByPlayerId: player.guestAddedByPlayerId ?? null,
+      guestAddedSessionId: player.guestAddedSessionId ?? null,
       affiliations,
       ...(statusMessage ? { statusMessage } : {}),
       ...(statusMessageBackgroundColor ? { statusMessageBackgroundColor } : {}),
@@ -185,6 +196,9 @@ export class PlayerRepository {
       statusMessage: statusMessage ?? null,
       statusMessageBackgroundColor: statusMessageBackgroundColor ?? null,
       authUserId: storedData.authUserId ?? null,
+      isGuest: storedData.isGuest ?? false,
+      guestAddedByPlayerId: storedData.guestAddedByPlayerId ?? null,
+      guestAddedSessionId: storedData.guestAddedSessionId ?? null,
       duprRating,
       createdAt: new Date(storedData.createdAt),
       updatedAt: new Date(storedData.updatedAt),

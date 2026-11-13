@@ -25,7 +25,7 @@ export interface PlayerInfo {
   id: string;
   username?: string;
   duprRating?: PublicPlayerDupr | null;
-  gender?: "M" | "F";
+  gender?: "M" | "F" | null;
   avatarUrl?: string;
   affiliations?: PlayerAffiliation[];
   statusMessage?: string;

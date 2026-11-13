@@ -12,6 +12,7 @@ import type {
 } from "@pkpkdupr/shared/match";
 import {
   getMatchSessionStatus,
+  hasGuestPlayer,
   validateMatchScores,
 } from "@pkpkdupr/shared/match";
 import {
@@ -19,7 +20,17 @@ import {
   type Player,
   type PublicPlayerDupr,
 } from "@pkpkdupr/shared/player";
-import { and, asc, desc, eq, gte, isNotNull, lt, max } from "drizzle-orm";
+import {
+  and,
+  asc,
+  count,
+  desc,
+  eq,
+  gte,
+  isNotNull,
+  lt,
+  max,
+} from "drizzle-orm";
 import {
   matchParticipants,
   matches,
@@ -101,6 +112,8 @@ export interface CompletedMatchOutcome {
   /** 팀별 선수 id. [0]=팀 A, [1]=팀 B */
   teamPlayerIds: [string[], string[]];
   scores: MatchScore[];
+  /** 게스트가 낀 경기. 랭킹 경기 수·업적·세션 지배자에서 뺀다 */
+  ratingExcluded: boolean;
 }
 
 export interface SessionWithParticipantIds {
@@ -130,6 +143,8 @@ export interface CreateMatchInput {
   completedAt: Date | null;
   resultSubmittedByPlayerId?: string | null;
   resultSubmittedAt?: Date | null;
+  /** 완료 경기의 평점 미반영 여부. 생략하면 false */
+  ratingExcluded?: boolean;
 }
 
 /** 참가자의 경기 기록 수정 입력. 시작 시각·세션·코트·생성자는 바꾸지 않는다. */
@@ -141,6 +156,8 @@ export interface UpdateRecordedMatchInput {
   scores: MatchScore[];
   resultSubmittedByPlayerId: string;
   resultSubmittedAt: Date;
+  /** 저장 후 경기의 평점 미반영 여부 */
+  ratingExcluded: boolean;
   /** 주면 저장된 updated_at(초 단위)과 같을 때만 고치고, 다르면 MatchStaleUpdateError */
   expectedUpdatedAt?: Date;
 }
@@ -216,8 +233,9 @@ const toPublicPlayer = (record: StoredPlayer): Player => ({
   id: record.id,
   username: record.username,
   duprRating: normalizeNullablePlayerDupr(record.duprRating),
-  gender: record.gender as Player["gender"],
+  gender: (record.gender ?? null) as Player["gender"],
   status: record.status as Player["status"],
+  isGuest: record.isGuest === true,
   avatarUrl: record.avatarUrl ?? undefined,
   createdAt: toDate(record.createdAt),
   updatedAt: toDate(record.updatedAt),
@@ -776,6 +794,7 @@ export class MatchRepository {
         INNER JOIN matches ON matches.id = match_participants.match_id
         WHERE match_participants.player_id = $1
           AND matches.status = 'completed'
+          AND matches.rating_excluded = false
           AND matches.completed_at IS NOT NULL
           AND matches.completed_at < $2
           AND matches.type IN (${typePlaceholders})
@@ -807,6 +826,7 @@ export class MatchRepository {
       .where(
         and(
           eq(matches.status, "completed"),
+          eq(matches.ratingExcluded, false),
           isNotNull(matches.completedAt),
         ),
       )
@@ -819,6 +839,31 @@ export class MatchRepository {
       }) =>
         lastPlayedAt == null ? [] : [[playerId, toDate(lastPlayedAt)]],
       ),
+    );
+  }
+
+  /** 선수별로 참가한 평점 미반영(rating_excluded) 완료 경기 수. 0인 선수는 빠진다 */
+  async countRatingExcludedMatchesByPlayerId(): Promise<Record<string, number>> {
+    const rows = await this.db
+      .select({
+        playerId: matchParticipants.playerId,
+        matchCount: count(),
+      })
+      .from(matchParticipants)
+      .innerJoin(matches, eq(matchParticipants.matchId, matches.id))
+      .where(
+        and(
+          eq(matches.status, "completed"),
+          eq(matches.ratingExcluded, true),
+        ),
+      )
+      .groupBy(matchParticipants.playerId);
+
+    return Object.fromEntries(
+      rows.map(({ playerId, matchCount }: {
+        playerId: string;
+        matchCount: number | string;
+      }) => [playerId, Number(matchCount)]),
     );
   }
 
@@ -839,6 +884,7 @@ export class MatchRepository {
           sessionId: matches.sessionId,
           matchStartsAt: matches.matchStartsAt,
           completedAt: matches.completedAt,
+          ratingExcluded: matches.ratingExcluded,
         })
         .from(matches)
         .where(completedFilter),
@@ -896,6 +942,7 @@ export class MatchRepository {
         sessionId: string | null;
         matchStartsAt: Date | string | number;
         completedAt: Date | string | number;
+        ratingExcluded: boolean | null;
       }>
     ).map((row): CompletedMatchOutcome => ({
       id: row.id,
@@ -905,6 +952,7 @@ export class MatchRepository {
       completedAt: toDate(row.completedAt),
       teamPlayerIds: teamsByMatchId.get(row.id) ?? [[], []],
       scores: scoresByMatchId.get(row.id) ?? [],
+      ratingExcluded: row.ratingExcluded === true,
     }));
   }
 
@@ -1136,6 +1184,7 @@ export class MatchRepository {
       completedAt: toDateOrNull(data.completedAt),
       resultSubmittedByPlayerId: data.resultSubmittedByPlayerId ?? null,
       resultSubmittedAt: toDateOrNull(data.resultSubmittedAt),
+      ratingExcluded: data.ratingExcluded ?? false,
       createdAt: now,
       updatedAt: now,
     });
@@ -1248,10 +1297,11 @@ export class MatchRepository {
               completed_at,
               result_submitted_by_player_id,
               result_submitted_at,
+              rating_excluded,
               created_at,
               updated_at
             )
-            VALUES (${placeholders(17)})
+            VALUES (${placeholders(18)})
           `,
           args: [
             match.id,
@@ -1273,6 +1323,7 @@ export class MatchRepository {
             match.resultSubmittedAt
               ? toUnixTimestampSeconds(new Date(match.resultSubmittedAt))
               : null,
+            match.ratingExcluded ?? false,
             nowSeconds,
             nowSeconds,
           ],
@@ -1583,6 +1634,8 @@ export class MatchRepository {
     }
 
     validateMatchScores(scores);
+    // 완료되는 시점에 게스트가 낀 경기는 평점에 반영하지 않는다(참가자의 현재 게스트 여부로 정한다).
+    const ratingExcluded = hasGuestPlayer(existing.teams);
 
     const scoreColumns = await this.getMatchScoreColumns();
     const transaction = await this.client.transaction("write");
@@ -1598,7 +1651,8 @@ export class MatchRepository {
             result_submitted_by_player_id = $2,
             result_submitted_at = $3,
             completed_at = $4,
-            updated_at = $5
+            updated_at = $5,
+            rating_excluded = $7
           WHERE id = $6
             AND status = 'created'
         `,
@@ -1609,6 +1663,7 @@ export class MatchRepository {
           completedAtSeconds,
           completedAtSeconds,
           matchId,
+          ratingExcluded,
         ],
       });
       if (!updateResult.rowsAffected) {
@@ -1679,7 +1734,8 @@ export class MatchRepository {
             result_submitted_by_player_id = $4,
             result_submitted_at = $5,
             completed_at = COALESCE(completed_at, $5),
-            updated_at = GREATEST($5, updated_at + 1)
+            updated_at = GREATEST($5, updated_at + 1),
+            rating_excluded = $8
           WHERE id = $6
             AND status IN ('created', 'completed')
             AND ($7::bigint IS NULL OR updated_at = $7)
@@ -1692,6 +1748,7 @@ export class MatchRepository {
           submittedAtSeconds,
           matchId,
           toExpectedUpdatedAtSeconds(data.expectedUpdatedAt),
+          data.ratingExcluded,
         ],
       });
       if (!updateResult.rowsAffected) {
@@ -2029,6 +2086,7 @@ export class MatchRepository {
       createdAt: toDate(match.createdAt),
       completedAt: toDateOrNull(match.completedAt),
       updatedAt: toDate(match.updatedAt),
+      ratingExcluded: match.ratingExcluded === true,
     } as Match & { sessionName?: string };
 
     return hydratedMatch;

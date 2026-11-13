@@ -21,6 +21,7 @@ import {
 const now = new Date("2026-07-08T10:00:00.000Z");
 
 const creator: Player = {
+  isGuest: false,
   id: "player-creator",
   username: "creator",
   gender: "M",
@@ -31,6 +32,7 @@ const creator: Player = {
 };
 
 const femaleCreator: Player = {
+  isGuest: false,
   id: "player-f-creator",
   username: "female-creator",
   gender: "F",
@@ -46,6 +48,7 @@ const players: Player[] = [
     username: "male-1",
     gender: "M",
     status: "active",
+    isGuest: false,
     duprRating: null,
     createdAt: now,
     updatedAt: now,
@@ -55,6 +58,7 @@ const players: Player[] = [
     username: "male-2",
     gender: "M",
     status: "active",
+    isGuest: false,
     duprRating: null,
     createdAt: now,
     updatedAt: now,
@@ -64,6 +68,7 @@ const players: Player[] = [
     username: "female-1",
     gender: "F",
     status: "active",
+    isGuest: false,
     duprRating: null,
     createdAt: now,
     updatedAt: now,
@@ -73,6 +78,7 @@ const players: Player[] = [
     username: "female-2",
     gender: "F",
     status: "active",
+    isGuest: false,
     duprRating: null,
     createdAt: now,
     updatedAt: now,
@@ -95,6 +101,7 @@ const buildSession = (player: Player = creator): AuthenticatedSession => ({
 const buildCreatedMatch = (
   input: Omit<Match, "id" | "createdAt" | "updatedAt"> & { id?: string },
 ): Match => ({
+  ratingExcluded: false,
   id: input.id ?? "match-test-001",
   ...input,
   createdAt: now,
@@ -264,6 +271,7 @@ describe("POST /api/matches", () => {
           username: "male-3",
           gender: "M",
           status: "active",
+          isGuest: false,
           duprRating: null,
           createdAt: now,
           updatedAt: now,
@@ -284,6 +292,7 @@ describe("POST /api/matches", () => {
           username: "female-3",
           gender: "F",
           status: "active",
+          isGuest: false,
           duprRating: null,
           createdAt: now,
           updatedAt: now,
@@ -421,6 +430,7 @@ describe("POST /api/matches", () => {
 
   describe("newAchievements", () => {
     const priorWin = (id: string, completedAt: Date): CompletedMatchOutcome => ({
+      ratingExcluded: false,
       id,
       type: "mixed-doubles",
       sessionId: null,

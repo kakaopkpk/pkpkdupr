@@ -9,6 +9,7 @@ import {
 
 const now = new Date("2026-07-24T10:00:00.000Z");
 const player: Player = {
+  isGuest: false,
   id: "Pprofile",
   username: "profile-player",
   gender: "M",

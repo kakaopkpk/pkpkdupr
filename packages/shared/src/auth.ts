@@ -43,7 +43,7 @@ export type MeResponse = Player & { isAdmin: boolean; isFirstLogin: boolean };
 /** POST /api/admin/register 요청 */
 export interface AdminRegisterPlayerRequest {
   username: string;
-  gender: Player["gender"];
+  gender: "M" | "F";
 }
 
 /** POST /api/admin/register 응답. initialPassword는 이 응답에서만 보인다 */

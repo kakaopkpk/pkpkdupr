@@ -9,6 +9,7 @@ import {
 } from "../services/AuthService";
 
 const player: Player = {
+  isGuest: false,
   id: "Psession",
   username: "session-player",
   gender: "F",
