@@ -7,7 +7,7 @@ const ProfileStatTile: React.FC<{
   value: React.ReactNode;
   foot: React.ReactNode;
 }> = ({ label, value, foot }) => (
-  <Card className="flex min-w-0 flex-col gap-0.5 !px-4 !py-3">
+  <Card className="flex min-w-0 flex-col gap-0.5 px-4 py-3">
     <span className="truncate text-pk-13 text-pk-sub">{label}</span>
     <span className="truncate text-pk-22 font-extrabold leading-[1.4] tabular-nums text-pk-ink">
       {value}

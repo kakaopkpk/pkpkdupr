@@ -51,7 +51,7 @@ export const AchievementsSection: React.FC<AchievementsSectionProps> = ({
         {title}
       </SectionLabel>
       {earned.length > 0 ? (
-        <Card className="grid grid-cols-4 gap-1 !px-2 !py-4">
+        <Card className="grid grid-cols-4 gap-1 px-2 py-4">
           {earned.slice(0, MAX_VISIBLE_BADGES).map(({ definition }) => (
             <button
               key={definition.id}

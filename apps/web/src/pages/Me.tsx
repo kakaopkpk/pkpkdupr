@@ -122,7 +122,7 @@ const Me: React.FC = () => {
                 value={
                   <RatingDelta
                     value={ratingDelta.last7Days}
-                    className="!text-pk-22 leading-[1.4]"
+                    className="text-pk-22 leading-[1.4]"
                   />
                 }
                 foot={`${ratingDelta.last7DaysMatchCount}경기`}

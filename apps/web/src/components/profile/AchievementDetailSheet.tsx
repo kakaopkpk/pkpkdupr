@@ -177,7 +177,7 @@ export default function AchievementDetailSheet({
       <>
         <BottomSheet.Header className="flex flex-col items-center gap-1 px-1 pt-1 text-center">
           {isLoading ? (
-            <SkeletonBlock className="size-[72px] !rounded-full" />
+            <SkeletonBlock className="size-[72px] rounded-full" />
           ) : (
             <AchievementBadge achievement={definition} earned={earned} size={72} />
           )}
@@ -186,7 +186,7 @@ export default function AchievementDetailSheet({
           </h2>
           <p className="text-pk-15 text-pk-sub">{definition.condition}</p>
         </BottomSheet.Header>
-        <BottomSheet.Body className="!gap-0 px-1">
+        <BottomSheet.Body className="gap-0 px-1">
           {isError ? (
             <p role="alert" className="pb-2 text-pk-13 font-bold text-pk-down">
               업적 정보를 불러오지 못했어요.
