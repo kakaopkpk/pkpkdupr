@@ -51,7 +51,7 @@ export const StatRow: React.FC<{
   );
 };
 
-/** 회원별 승패·승률 줄을 담는 카드(안쪽 4px 16px는 Card 기본 패딩) */
+/** 회원별 승패·승률 줄을 담는 카드. 안쪽 여백은 Card 기본 패딩(상하 4px·좌우 16px)을 그대로 쓴다 */
 export const StatCard: React.FC<{ children: React.ReactNode }> = ({
   children,
 }) => (
