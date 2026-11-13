@@ -67,10 +67,10 @@ export default defineConfig({
         ],
       },
       includeAssets: [
-        "favicon-v2.png",
-        "pwa-192x192-v2.png",
-        "pwa-512x512-v2.png",
-        "pwa-maskable-512x512-v2.png",
+        "favicon-v3.png",
+        "pwa-192x192-v3.png",
+        "pwa-512x512-v3.png",
+        "pwa-maskable-512x512-v3.png",
       ],
       manifest: {
         name: "pkpkdupr",
@@ -85,17 +85,17 @@ export default defineConfig({
         theme_color: "#f3f5f9",
         icons: [
           {
-            src: `${basePath}pwa-192x192-v2.png`,
+            src: `${basePath}pwa-192x192-v3.png`,
             sizes: "192x192",
             type: "image/png",
           },
           {
-            src: `${basePath}pwa-512x512-v2.png`,
+            src: `${basePath}pwa-512x512-v3.png`,
             sizes: "512x512",
             type: "image/png",
           },
           {
-            src: `${basePath}pwa-maskable-512x512-v2.png`,
+            src: `${basePath}pwa-maskable-512x512-v3.png`,
             sizes: "512x512",
             type: "image/png",
             purpose: "maskable",
