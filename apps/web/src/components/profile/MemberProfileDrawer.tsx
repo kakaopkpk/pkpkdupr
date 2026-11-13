@@ -48,7 +48,7 @@ export interface MemberProfileDrawerProps {
 /** 보는 사람 기준 맞대결 승패 타일 */
 const HeadToHeadTile: React.FC<{ stat: HeadToHeadStat | null }> = ({ stat }) => (
   <ProfileStatTile
-    label="나와의 전적"
+    label="나는 이 상대에게"
     value={
       stat && stat.matchCount > 0 ? (
         <WinLossCount wins={stat.wins} losses={stat.losses} />
@@ -96,7 +96,7 @@ const HeadToHeadRatingTile: React.FC<{ stat: HeadToHeadStat | null }> = ({
   );
 };
 
-/** 전역 회원 프로필 화면. 평점 카드·통계 4칸(승률·최근 7일·나와의 전적·상대가 바꾼 내 평점)·받은 업적·최근 경기 */
+/** 전역 회원 프로필 화면. 평점 카드·통계 4칸(승률·최근 7일·맞대결 승패·상대가 바꾼 내 평점)·받은 업적·최근 경기 */
 export default function MemberProfileDrawer({
   playerId,
   isOpen: isRequested,
