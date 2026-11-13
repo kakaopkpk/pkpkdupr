@@ -18,7 +18,7 @@ import {
 } from "@/components/profile/ProfileSections";
 import { useProfileOverview } from "@/components/profile/useProfileOverview";
 import {
-  CountUpInteger,
+  CountUpNumber,
   CountUpRatingDelta,
 } from "@/components/ui/CountUpNumber";
 import { PlayerAvatar } from "@/components/ui/PlayerAvatar";
@@ -120,15 +120,10 @@ const Me: React.FC = () => {
               onCategoryChange={setCategory}
               fallbackRating={player?.duprRating?.[category] ?? null}
             />
-            <div className="grid grid-cols-2 gap-2.5">
-              {/* 분류를 바꾸면 key로 다시 마운트해 카운트업을 처음부터 재생한다 */}
-              <WinRateTile
-                key={`win-${category}`}
-                overview={overview}
-                category={category}
-              />
+            {/* 분류를 바꾸면 key로 다시 마운트해 카운트업을 처음부터 재생한다 */}
+            <div key={category} className="grid grid-cols-2 gap-2.5">
+              <WinRateTile overview={overview} category={category} />
               <ProfileStatTile
-                key={`last7-${category}`}
                 label="최근 7일"
                 value={
                   <CountUpRatingDelta
@@ -139,7 +134,7 @@ const Me: React.FC = () => {
                 }
                 foot={
                   <>
-                    <CountUpInteger
+                    <CountUpNumber
                       value={ratingDelta.last7DaysMatchCount}
                       {...PROFILE_STAT_COUNT}
                     />

@@ -9,27 +9,15 @@ interface CountUpTiming {
   durationMs: number;
 }
 
-/** 0부터 value까지 세는 정수. 세는 동안 폭은 최종 값으로 고정한다 */
-export const CountUpInteger: React.FC<
-  CountUpTiming & { value: number; align?: "start" | "end" }
-> = ({ value, delayMs, durationMs, align = "end" }) => {
-  const count = useCountUp(value, { delayMs, durationMs });
-  return (
-    <CountUpText finalContent={value} align={align}>
-      {Math.round(count.value)}
-    </CountUpText>
-  );
-};
+const formatInteger = (value: number) => String(Math.round(value));
 
-/** 0.000부터 value까지 세는 평점(소수 셋째 자리) */
-export const CountUpRating: React.FC<
-  CountUpTiming & { value: number; align?: "start" | "end" }
-> = ({ value, delayMs, durationMs, align = "start" }) => {
+/** 0부터 value까지 세는 숫자. 기본은 정수이고, 세는 동안 폭은 최종 값으로 고정한다 */
+export const CountUpNumber: React.FC<
+  CountUpTiming & { value: number; format?: (value: number) => string }
+> = ({ value, format = formatInteger, delayMs, durationMs }) => {
   const count = useCountUp(value, { delayMs, durationMs });
   return (
-    <CountUpText finalContent={value.toFixed(3)} align={align}>
-      {count.value.toFixed(3)}
-    </CountUpText>
+    <CountUpText finalContent={format(value)}>{format(count.value)}</CountUpText>
   );
 };
 
@@ -40,7 +28,6 @@ export const CountUpRatingDelta: React.FC<
   const count = useCountUp(value, { delayMs, durationMs });
   return (
     <CountUpText
-      align="end"
       finalContent={<RatingDelta value={value} className={className} />}
     >
       <RatingDelta value={count.value} signValue={value} className={className} />

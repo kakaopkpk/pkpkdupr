@@ -6,6 +6,7 @@ import SkeletonBlock from "@/components/SkeletonBlock";
 import PlayerMatchesDrawer from "@/components/profile/PlayerMatchesDrawer";
 import ProfileStatTile, {
   PROFILE_STAT_COUNT,
+  WinLossCount,
 } from "@/components/profile/ProfileStatTile";
 import {
   ProfileBodySkeleton,
@@ -15,7 +16,7 @@ import {
   WinRateTile,
 } from "@/components/profile/ProfileSections";
 import { useProfileOverview } from "@/components/profile/useProfileOverview";
-import { CountUpInteger } from "@/components/ui/CountUpNumber";
+import { CountUpNumber } from "@/components/ui/CountUpNumber";
 import { PlayerAvatar } from "@/components/ui/PlayerAvatar";
 import { StatusMessageChip } from "@/components/ui/StatusMessageChip";
 import { useAuth } from "@/context/AuthContext";
@@ -25,9 +26,6 @@ import {
 } from "@/context/TabNavigationContext";
 import { useLayerDepth } from "@/hooks/useLayerDepth";
 import { usePlayers } from "@/hooks/usePlayers";
-
-/** 머리 줄 전체 경기 수·승패 카운트업 길이(ms). 평점 카드와 함께 바로 시작한다 */
-const HEADER_COUNT_DURATION_MS = 500;
 
 export interface MemberProfileDrawerProps {
   playerId: string;
@@ -134,21 +132,17 @@ export default function MemberProfileDrawer({
               ) : null}
               {totalStats ? (
                 <span className="text-pk-13 text-pk-sub tabular-nums">
-                  <CountUpInteger
+                  {/* 머리 줄은 평점 카드와 함께 바로 센다 */}
+                  <CountUpNumber
                     value={totalStats.wins + totalStats.losses}
-                    durationMs={HEADER_COUNT_DURATION_MS}
+                    durationMs={PROFILE_STAT_COUNT.durationMs}
                   />
                   경기 ·{" "}
-                  <CountUpInteger
-                    value={totalStats.wins}
-                    durationMs={HEADER_COUNT_DURATION_MS}
+                  <WinLossCount
+                    wins={totalStats.wins}
+                    losses={totalStats.losses}
+                    delayMs={0}
                   />
-                  승{" "}
-                  <CountUpInteger
-                    value={totalStats.losses}
-                    durationMs={HEADER_COUNT_DURATION_MS}
-                  />
-                  패
                 </span>
               ) : (
                 <SkeletonBlock className="h-4 w-32" />
@@ -164,7 +158,7 @@ export default function MemberProfileDrawer({
                 fallbackRating={member?.duprRating?.[category] ?? null}
               />
               <div className="grid grid-cols-2 gap-2.5">
-                {/* 분류를 바꾸면 key로 다시 마운트해 카운트업을 처음부터 재생한다 */}
+                {/* 분류를 바꾸면 key로 다시 마운트해 카운트업을 처음부터 재생한다. 상대 전적은 분류와 무관해 그대로 둔다 */}
                 <WinRateTile
                   key={category}
                   overview={overview}
@@ -174,18 +168,10 @@ export default function MemberProfileDrawer({
                   label="나와의 상대 전적"
                   value={
                     headToHead && headToHead.matchCount > 0 ? (
-                      <>
-                        <CountUpInteger
-                          value={headToHead.wins}
-                          {...PROFILE_STAT_COUNT}
-                        />
-                        승{" "}
-                        <CountUpInteger
-                          value={headToHead.losses}
-                          {...PROFILE_STAT_COUNT}
-                        />
-                        패
-                      </>
+                      <WinLossCount
+                        wins={headToHead.wins}
+                        losses={headToHead.losses}
+                      />
                     ) : (
                       "–"
                     )
