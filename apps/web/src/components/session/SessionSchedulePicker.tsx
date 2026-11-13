@@ -1,11 +1,10 @@
 import React, { useLayoutEffect, useRef, useState } from "react";
 import {
-  kstDateKeyTimeToDate,
+  addKstDays,
   kstDateKeyToDate,
   minutesToSessionTime,
   REGULAR_SESSION_WEEKDAYS,
   sessionTimeToMinutes,
-  toKstDateKey,
   WEEKDAY_LABELS,
 } from "@pkpkdupr/shared/session";
 import { ChevronRightIcon } from "@/components/ui/Icons";
@@ -13,31 +12,32 @@ import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { cx } from "@/components/ui/cx";
 import { formatKstLongDate } from "@/lib/format";
 
-const DAY_MS = 24 * 60 * 60 * 1000;
 /** 오늘부터 고를 수 있는 날 수(3주) */
 const DATE_OPTION_COUNT = 21;
 const SESSION_TIME_STEP_MINUTES = 30;
 /** 길이 1~6시간 */
-export const SESSION_DURATION_OPTIONS_MINUTES = [60, 120, 180, 240, 300, 360];
+const SESSION_DURATION_OPTIONS_MINUTES = [60, 120, 180, 240, 300, 360];
 
-export type StartTimeSegment = "dawn" | "morning" | "afternoon" | "evening";
+/** "2시간" */
+export const formatDurationHours = (minutes: number) => `${minutes / 60}시간`;
 
-/** 시간대마다 6시간(30분 칸 12개) */
-const START_TIME_SEGMENTS: readonly {
-  value: StartTimeSegment;
-  label: string;
-  fromHour: number;
-}[] = [
-  { value: "dawn", label: "새벽", fromHour: 0 },
-  { value: "morning", label: "오전", fromHour: 6 },
-  { value: "afternoon", label: "오후", fromHour: 12 },
-  { value: "evening", label: "저녁", fromHour: 18 },
-];
-const SEGMENT_SLOT_COUNT = (6 * 60) / SESSION_TIME_STEP_MINUTES;
+type StartTimeSegment = "dawn" | "morning" | "afternoon" | "evening";
+
+/** 시간대마다 6시간(30분 칸 12개). 순서대로 0·6·12·18시에 시작한다 */
+const SEGMENT_HOURS = 6;
+const START_TIME_SEGMENTS: readonly { value: StartTimeSegment; label: string }[] =
+  [
+    { value: "dawn", label: "새벽" },
+    { value: "morning", label: "오전" },
+    { value: "afternoon", label: "오후" },
+    { value: "evening", label: "저녁" },
+  ];
+const SEGMENT_SLOT_COUNT = (SEGMENT_HOURS * 60) / SESSION_TIME_STEP_MINUTES;
 
 export const getStartTimeSegment = (startTime: string): StartTimeSegment =>
-  START_TIME_SEGMENTS[Math.floor(sessionTimeToMinutes(startTime) / (6 * 60))]
-    .value;
+  START_TIME_SEGMENTS[
+    Math.floor(sessionTimeToMinutes(startTime) / (SEGMENT_HOURS * 60))
+  ].value;
 
 /** 날짜 키의 일·요일(0=일). 날짜 키는 이미 KST 날짜라 UTC로 읽는다 */
 const getDateParts = (dateKey: string) => {
@@ -48,19 +48,6 @@ const getDateParts = (dateKey: string) => {
     weekday: new Date(Date.UTC(year, month - 1, day)).getUTCDay(),
   };
 };
-
-const addDays = (dateKey: string, days: number) =>
-  toKstDateKey(new Date(kstDateKeyToDate(dateKey).getTime() + days * DAY_MS));
-
-/** 오늘(KST)이면 지금보다 이른 시작 시각은 고를 수 없다 */
-export const isPastSessionStart = (
-  dateKey: string,
-  startTime: string,
-  todayKey: string,
-  now: Date,
-) =>
-  dateKey === todayKey &&
-  kstDateKeyTimeToDate(dateKey, startTime).getTime() < now.getTime();
 
 const FieldLabel: React.FC<{
   id: string;
@@ -95,12 +82,12 @@ export const SessionCalendar: React.FC<{
   value: string | null;
   onChange: (dateKey: string) => void;
 }> = ({ todayKey, value, onChange }) => {
-  const lastKey = addDays(todayKey, DATE_OPTION_COUNT - 1);
-  const firstCellKey = addDays(todayKey, -getDateParts(todayKey).weekday);
-  const lastCellKey = addDays(lastKey, 6 - getDateParts(lastKey).weekday);
+  const lastKey = addKstDays(todayKey, DATE_OPTION_COUNT - 1);
+  const firstCellKey = addKstDays(todayKey, -getDateParts(todayKey).weekday);
+  const lastCellKey = addKstDays(lastKey, 6 - getDateParts(lastKey).weekday);
   const cellKeys: string[] = [];
   // YYYY-MM-DD 문자열은 사전순이 날짜순이다
-  for (let key = firstCellKey; key <= lastCellKey; key = addDays(key, 1)) {
+  for (let key = firstCellKey; key <= lastCellKey; key = addKstDays(key, 1)) {
     cellKeys.push(key);
   }
 
@@ -197,6 +184,55 @@ export const SessionCalendar: React.FC<{
   );
 };
 
+/** 6칸 그리드 라디오. 시작 시각과 길이가 같은 모양을 쓴다 */
+function ChoiceGrid<T extends string | number>({
+  labelId,
+  options,
+  value,
+  format,
+  isDisabled,
+  onChange,
+}: {
+  labelId: string;
+  options: readonly T[];
+  value: T | null;
+  format: (option: T) => string;
+  isDisabled?: (option: T) => boolean;
+  onChange: (option: T) => void;
+}): React.ReactElement {
+  return (
+    <div
+      role="radiogroup"
+      aria-labelledby={labelId}
+      className="grid grid-cols-6 gap-1.5"
+    >
+      {options.map((option) => {
+        const isSelected = option === value;
+        return (
+          <button
+            key={option}
+            type="button"
+            role="radio"
+            aria-checked={isSelected}
+            disabled={isDisabled?.(option)}
+            onClick={() => onChange(option)}
+            className={cx(
+              "h-10 rounded-pk-sm text-pk-13 tabular-nums transition-colors duration-150 motion-reduce:transition-none",
+              isSelected
+                ? "bg-pk-primary font-extrabold text-white"
+                : "bg-pk-bg font-bold text-pk-sub disabled:text-pk-quiet",
+            )}
+          >
+            {format(option)}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+const formatTime = (time: string) => time;
+
 /**
  * 시작 시각. 새벽·오전·오후·저녁 시간대를 고르면 그 시간대의 30분 칸 12개(6칸×2줄)를 보인다.
  * isDisabled가 true인 시각(오늘의 지난 시각)은 누를 수 없다
@@ -209,11 +245,12 @@ export const SessionStartTimePicker: React.FC<{
   const [segment, setSegment] = useState<StartTimeSegment>(() =>
     value ? getStartTimeSegment(value) : "evening",
   );
-  const fromHour =
-    START_TIME_SEGMENTS.find((option) => option.value === segment)?.fromHour ??
-    0;
+  const fromMinutes =
+    START_TIME_SEGMENTS.findIndex((option) => option.value === segment) *
+    SEGMENT_HOURS *
+    60;
   const times = Array.from({ length: SEGMENT_SLOT_COUNT }, (_, index) =>
-    minutesToSessionTime(fromHour * 60 + index * SESSION_TIME_STEP_MINUTES),
+    minutesToSessionTime(fromMinutes + index * SESSION_TIME_STEP_MINUTES),
   );
 
   return (
@@ -225,33 +262,14 @@ export const SessionStartTimePicker: React.FC<{
         onChange={setSegment}
         ariaLabel="시간대"
       />
-      <div
-        role="radiogroup"
-        aria-labelledby="session-start-label"
-        className="grid grid-cols-6 gap-1.5"
-      >
-        {times.map((time) => {
-          const isSelected = time === value;
-          return (
-            <button
-              key={time}
-              type="button"
-              role="radio"
-              aria-checked={isSelected}
-              disabled={isDisabled(time)}
-              onClick={() => onChange(time)}
-              className={cx(
-                "h-10 rounded-pk-sm text-pk-13 tabular-nums transition-colors duration-150 motion-reduce:transition-none",
-                isSelected
-                  ? "bg-pk-primary font-extrabold text-white"
-                  : "bg-pk-bg font-bold text-pk-sub disabled:text-pk-quiet",
-              )}
-            >
-              {time}
-            </button>
-          );
-        })}
-      </div>
+      <ChoiceGrid
+        labelId="session-start-label"
+        options={times}
+        value={value}
+        format={formatTime}
+        isDisabled={isDisabled}
+        onChange={onChange}
+      />
     </div>
   );
 };
@@ -268,32 +286,13 @@ export const SessionDurationPicker: React.FC<{
       label="길이"
       detail={endLabel ? `${endLabel} 종료` : undefined}
     />
-    <div
-      role="radiogroup"
-      aria-labelledby="session-duration-label"
-      className="grid grid-cols-6 gap-1.5"
-    >
-      {SESSION_DURATION_OPTIONS_MINUTES.map((minutes) => {
-        const isSelected = minutes === value;
-        return (
-          <button
-            key={minutes}
-            type="button"
-            role="radio"
-            aria-checked={isSelected}
-            onClick={() => onChange(minutes)}
-            className={cx(
-              "h-10 rounded-pk-sm text-pk-13 transition-colors duration-150 motion-reduce:transition-none",
-              isSelected
-                ? "bg-pk-primary font-extrabold text-white"
-                : "bg-pk-bg font-bold text-pk-sub",
-            )}
-          >
-            {minutes / 60}시간
-          </button>
-        );
-      })}
-    </div>
+    <ChoiceGrid
+      labelId="session-duration-label"
+      options={SESSION_DURATION_OPTIONS_MINUTES}
+      value={value}
+      format={formatDurationHours}
+      onChange={onChange}
+    />
   </div>
 );
 

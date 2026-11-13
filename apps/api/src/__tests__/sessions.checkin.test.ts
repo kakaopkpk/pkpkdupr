@@ -123,10 +123,14 @@ describe("public match sessions", () => {
     vi.spyOn(
       MatchRepository.prototype,
       "findSessionsByDateKey",
-    ).mockResolvedValue([
-      makeSession({ participantIds: [other.id, inactive.id] }),
-      { ...regularSession, participantIds: [requester.id], matchCount: 2 },
-    ]);
+    ).mockImplementation(async (dateKey) =>
+      dateKey === "2026-11-12"
+        ? [
+            makeSession({ participantIds: [other.id, inactive.id] }),
+            { ...regularSession, participantIds: [requester.id], matchCount: 2 },
+          ]
+        : [],
+    );
 
     const response = await request(app)
       .get("/api/match-sessions/today")

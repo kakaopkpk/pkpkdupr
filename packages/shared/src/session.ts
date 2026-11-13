@@ -104,12 +104,6 @@ export const REGULAR_SESSION_END_TIME = minutesToSessionTime(
   REGULAR_SESSION_END_HOUR * 60,
 );
 
-/** 시각의 KST 0시부터 지난 분 */
-export const toKstMinutesOfDay = (date: Date): number => {
-  const kst = toKstShifted(date);
-  return kst.getUTCHours() * 60 + kst.getUTCMinutes();
-};
-
 /** 세션 시각 범위. 종료가 시작보다 이르거나 같으면 다음 날 그 시각에 끝난다 */
 export interface SessionTimeRange {
   startTime: string | null;
@@ -132,14 +126,13 @@ export const isOvernightSessionTimeRange = ({
 }: SessionTimeRange): boolean =>
   !!startTime && !!endTime && endTime <= startTime;
 
-/** 시작부터 종료까지 분. 자정을 넘기면 다음 날 종료로 센다 */
-export const getSessionDurationMinutes = (
-  startTime: string,
-  endTime: string,
-): number => {
-  const diff = sessionTimeToMinutes(endTime) - sessionTimeToMinutes(startTime);
-  return diff > 0 ? diff : diff + 24 * 60;
-};
+/** 종료 시각. 자정을 넘기면 "다음 날 01:30" */
+export const formatSessionEndTime = (
+  range: SessionTimeRange & { endTime: string },
+): string =>
+  isOvernightSessionTimeRange(range)
+    ? `다음 날 ${range.endTime}`
+    : range.endTime;
 
 /** "18:00~22:00" | "23:30~다음 날 01:30". 시각 없는 세션이면 null */
 export const formatSessionTimeRange = (
@@ -147,9 +140,7 @@ export const formatSessionTimeRange = (
 ): string | null => {
   const { startTime, endTime } = range;
   if (!startTime || !endTime) return null;
-  return isOvernightSessionTimeRange(range)
-    ? `${startTime}~다음 날 ${endTime}`
-    : `${startTime}~${endTime}`;
+  return `${startTime}~${formatSessionEndTime({ startTime, endTime })}`;
 };
 
 /** KST 날짜 키의 "HH:MM"(KST) 시각 */
@@ -158,9 +149,18 @@ export const kstDateKeyTimeToDate = (dateKey: string, time: string): Date =>
     kstDateKeyToDate(dateKey).getTime() + sessionTimeToMinutes(time) * 60_000,
   );
 
-/** 전날 KST 날짜 키 */
-export const getPreviousKstDateKey = (dateKey: string): string =>
-  toKstDateKey(new Date(kstDateKeyToDate(dateKey).getTime() - DAY_MS));
+/** KST 날짜 키에서 days일 뒤(음수면 앞)의 날짜 키 */
+export const addKstDays = (dateKey: string, days: number): string =>
+  toKstDateKey(new Date(kstDateKeyToDate(dateKey).getTime() + days * DAY_MS));
+
+/** 오늘(KST) 세션이면 지금보다 이른 시작 시각은 지난 시각이다 */
+export const isPastSessionStart = (
+  dateKey: string,
+  startTime: string,
+  now: Date,
+): boolean =>
+  dateKey === toKstDateKey(now) &&
+  kstDateKeyTimeToDate(dateKey, startTime).getTime() < now.getTime();
 
 /** YYYY-MM-DD 형식이고 실제 있는 날짜면 true */
 export const isValidKstDateKey = (value: string): boolean =>
@@ -196,13 +196,12 @@ export const isSessionOnToday = (
 ): boolean => {
   const dateKey = toKstDateKey(session.date);
   const todayKey = toKstDateKey(now);
-  if (dateKey === todayKey) return true;
+  // 지난 날 세션은 만료 시각이 다음 날로 넘어가는 자정 넘김 회원 세션만 아직 남아 있을 수 있다
   return (
-    session.kind !== "regular" &&
-    dateKey < todayKey &&
-    isOvernightSessionTimeRange(session) &&
-    now.getTime() <
-      getEmptySessionExpiresAt(session.kind, session.date, session).getTime()
+    dateKey === todayKey ||
+    (dateKey < todayKey &&
+      now.getTime() <
+        getEmptySessionExpiresAt(session.kind, session.date, session).getTime())
   );
 };
 

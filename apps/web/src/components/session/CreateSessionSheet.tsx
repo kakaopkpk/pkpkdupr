@@ -1,8 +1,10 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
+  addKstDays,
   DEFAULT_MATCH_LOCATION,
+  formatSessionEndTime,
   formatSessionTimeRange,
-  isOvernightSessionTimeRange,
+  isPastSessionStart,
   kstDateKeyToDate,
   MATCH_SESSION_LOCATION_MAX_LENGTH,
   MATCH_SESSION_NAME_MAX_LENGTH,
@@ -29,7 +31,7 @@ import {
 import { getErrorMessage, isNetworkError } from "./saveError";
 import {
   AnimatedHeight,
-  isPastSessionStart,
+  formatDurationHours,
   SessionCalendar,
   SessionDurationPicker,
   SessionStartTimePicker,
@@ -44,20 +46,16 @@ export interface CreateSessionSheetProps {
 }
 
 const DEPTH_ID = "global-create-session-sheet";
-const DAY_MS = 24 * 60 * 60 * 1000;
 
-/** 날짜 → 시작 → 길이 → 이름·장소 순서로 하나씩 연다. fields는 이름·장소 */
-const STEPS = ["date", "start", "duration", "fields"] as const;
-type PickerStep = Exclude<(typeof STEPS)[number], "fields">;
+/** 날짜 → 시작 → 길이 순서로 하나씩 열고, 셋 다 고르면 이름·장소 칸이 나타난다 */
+const PICKER_STEPS = ["date", "start", "duration"] as const;
+type PickerStep = (typeof PICKER_STEPS)[number];
 
 /** 접힌 날짜 줄. "오늘 · 11월 14일 금" | "내일 · 11월 15일 토" | "11월 17일 월" */
 const formatDateSummary = (dateKey: string, todayKey: string) => {
   const label = formatKstShortDate(kstDateKeyToDate(dateKey));
   if (dateKey === todayKey) return `오늘 · ${label}`;
-  const tomorrowKey = toKstDateKey(
-    new Date(kstDateKeyToDate(todayKey).getTime() + DAY_MS),
-  );
-  if (dateKey === tomorrowKey) return `내일 · ${label}`;
+  if (dateKey === addKstDays(todayKey, 1)) return `내일 · ${label}`;
   return label;
 };
 
@@ -83,9 +81,8 @@ const CreateSessionForm: React.FC<CreateSessionFormProps> = ({
   const [dateKey, setDateKey] = useState<string | null>(null);
   const [startTime, setStartTime] = useState<string | null>(null);
   const [durationMinutes, setDurationMinutes] = useState<number | null>(null);
-  // 지금까지 나타난 마지막 단계와 지금 펼친 단계
-  const [reachedIndex, setReachedIndex] = useState(0);
-  const [openStep, setOpenStep] = useState<PickerStep | null>("date");
+  // 접힌 줄을 눌러 다시 펼친 단계. 값을 고르면 비운다
+  const [reopenedStep, setReopenedStep] = useState<PickerStep | null>(null);
   const [name, setName] = useState("");
   const [location, setLocation] = useState(DEFAULT_MATCH_LOCATION);
   const [isSaving, setIsSaving] = useState(false);
@@ -93,40 +90,30 @@ const CreateSessionForm: React.FC<CreateSessionFormProps> = ({
   const nameInputRef = useRef<HTMLInputElement | null>(null);
   const trimmedName = name.trim();
   const trimmedLocation = location.trim();
+
+  const values = [dateKey, startTime, durationMinutes];
+  const firstMissingIndex = values.findIndex((value) => value == null);
+  // 다시 펼친 단계가 없으면 아직 안 고른 첫 단계를 연다. 다 골랐으면 모두 접는다
+  const openStep =
+    reopenedStep ??
+    (firstMissingIndex < 0 ? null : PICKER_STEPS[firstMissingIndex]);
+  // 고른 단계 다음 단계까지 보인다. 시작은 날짜를 바꾸면 비워질 수 있지만 길이는 지워지지 않으므로
+  // 한 번 나타난 단계는 남는다
+  const shownStepCount =
+    durationMinutes != null || startTime != null ? 3 : dateKey != null ? 2 : 1;
+  const isFieldsShown = durationMinutes != null;
   const endTime =
     startTime && durationMinutes ? getEndTime(startTime, durationMinutes) : null;
-  const timeRangeLabel =
-    startTime && endTime ? formatSessionTimeRange({ startTime, endTime }) : null;
-  // 길이 칸 오른쪽 "다음 날 01:30 종료"의 시각 부분
-  const endLabel =
-    startTime && endTime
-      ? isOvernightSessionTimeRange({ startTime, endTime })
-        ? `다음 날 ${endTime}`
-        : endTime
-      : null;
-  const isFieldsShown = reachedIndex >= STEPS.indexOf("fields");
+  const timeRange = startTime && endTime ? { startTime, endTime } : null;
   const canSave =
     !!dateKey &&
-    !!startTime &&
-    !!endTime &&
+    !!timeRange &&
     !!trimmedName &&
     !!trimmedLocation &&
     !isSaving;
 
-  /** 값을 고른 뒤 아직 안 고른 첫 단계를 열고, 다 골랐으면 모두 접는다 */
-  const advance = (values: {
-    dateKey: string | null;
-    startTime: string | null;
-    durationMinutes: number | null;
-  }) => {
-    const firstMissing = [
-      values.dateKey,
-      values.startTime,
-      values.durationMinutes,
-    ].findIndex((value) => value == null);
-    const nextIndex = firstMissing < 0 ? STEPS.indexOf("fields") : firstMissing;
-    setReachedIndex((reached) => Math.max(reached, nextIndex));
-    setOpenStep(firstMissing < 0 ? null : (STEPS[firstMissing] as PickerStep));
+  const afterPick = () => {
+    setReopenedStep(null);
     setError(null);
   };
 
@@ -135,11 +122,8 @@ const CreateSessionForm: React.FC<CreateSessionFormProps> = ({
     if (isFieldsShown) nameInputRef.current?.focus({ preventScroll: true });
   }, [isFieldsShown]);
 
-  const isStartDisabled = (time: string) =>
-    !!dateKey && isPastSessionStart(dateKey, time, todayKey, new Date());
-
   const save = useCallback(async () => {
-    if (!dateKey || !startTime || !endTime) return;
+    if (!dateKey || !timeRange) return;
     setIsSaving(true);
     setError(null);
     try {
@@ -147,8 +131,7 @@ const CreateSessionForm: React.FC<CreateSessionFormProps> = ({
         name: trimmedName,
         location: trimmedLocation,
         dateKey,
-        startTime,
-        endTime,
+        ...timeRange,
       });
       // 시트가 닫힐 때까지 다시 누르지 못하게 성공 후에도 저장 중 상태를 유지한다
       onCreated(session);
@@ -157,7 +140,7 @@ const CreateSessionForm: React.FC<CreateSessionFormProps> = ({
       if (isNetworkError(err)) throw err;
       setError(getErrorMessage(err, "세션을 만들지 못했어요."));
     }
-  }, [dateKey, endTime, onCreated, startTime, trimmedLocation, trimmedName]);
+  }, [dateKey, onCreated, timeRange, trimmedLocation, trimmedName]);
 
   // 토스트의 "다시 시도"는 그 시점의 입력으로 다시 저장한다
   const saveRef = useRef(save);
@@ -182,88 +165,65 @@ const CreateSessionForm: React.FC<CreateSessionFormProps> = ({
     void handleSave();
   };
 
-  const renderStep = (step: PickerStep) => {
-    if (openStep === step) {
-      // key가 접힌 줄과 달라 펼칠 때마다 새로 마운트되며 등장 모션이 재생된다
-      const panelClassName = "animate-pk-fade-up motion-reduce:animate-none";
-      if (step === "date") {
-        return (
-          <div key="date-open" className={panelClassName}>
-            <SessionCalendar
-              todayKey={todayKey}
-              value={dateKey}
-              onChange={(nextDateKey) => {
-                setDateKey(nextDateKey);
-                // 오늘로 바꿔 이미 고른 시작 시각이 지났으면 시작을 다시 고르게 한다
-                const nextStartTime =
-                  startTime &&
-                  isPastSessionStart(nextDateKey, startTime, todayKey, new Date())
-                    ? null
-                    : startTime;
-                setStartTime(nextStartTime);
-                advance({
-                  dateKey: nextDateKey,
-                  startTime: nextStartTime,
-                  durationMinutes,
-                });
-              }}
-            />
-          </div>
-        );
-      }
-      if (step === "start") {
-        return (
-          <div key="start-open" className={panelClassName}>
-            <SessionStartTimePicker
-              value={startTime}
-              isDisabled={isStartDisabled}
-              onChange={(nextStartTime) => {
-                setStartTime(nextStartTime);
-                advance({ dateKey, startTime: nextStartTime, durationMinutes });
-              }}
-            />
-          </div>
-        );
-      }
-      return (
-        <div key="duration-open" className={panelClassName}>
-          <SessionDurationPicker
-            value={durationMinutes}
-            endLabel={endLabel}
-            onChange={(nextDuration) => {
-              setDurationMinutes(nextDuration);
-              advance({ dateKey, startTime, durationMinutes: nextDuration });
-            }}
-          />
-        </div>
-      );
-    }
-
-    const summary =
-      step === "date"
-        ? {
-            label: "날짜",
-            value: dateKey ? formatDateSummary(dateKey, todayKey) : "고르기",
+  const pickers: Record<PickerStep, React.ReactNode> = {
+    date: (
+      <SessionCalendar
+        todayKey={todayKey}
+        value={dateKey}
+        onChange={(nextDateKey) => {
+          setDateKey(nextDateKey);
+          // 오늘로 바꿔 이미 고른 시작 시각이 지났으면 시작을 다시 고르게 한다
+          if (
+            startTime &&
+            isPastSessionStart(nextDateKey, startTime, new Date())
+          ) {
+            setStartTime(null);
           }
-        : step === "start"
-          ? { label: "시작", value: startTime ?? "고르기" }
-          : {
-              label: "길이",
-              value: durationMinutes
-                ? [`${durationMinutes / 60}시간`, timeRangeLabel]
-                    .filter(Boolean)
-                    .join(" · ")
-                : "고르기",
-            };
-    return (
-      <StepSummaryRow
-        key={`${step}-row`}
-        label={summary.label}
-        value={summary.value}
-        onPress={() => setOpenStep(step)}
-        className="animate-pk-fade-up motion-reduce:animate-none"
+          afterPick();
+        }}
       />
-    );
+    ),
+    start: (
+      <SessionStartTimePicker
+        value={startTime}
+        isDisabled={(time) =>
+          !!dateKey && isPastSessionStart(dateKey, time, new Date())
+        }
+        onChange={(nextStartTime) => {
+          setStartTime(nextStartTime);
+          afterPick();
+        }}
+      />
+    ),
+    duration: (
+      <SessionDurationPicker
+        value={durationMinutes}
+        endLabel={timeRange ? formatSessionEndTime(timeRange) : null}
+        onChange={(nextDuration) => {
+          setDurationMinutes(nextDuration);
+          afterPick();
+        }}
+      />
+    ),
+  };
+
+  const summaries: Record<PickerStep, { label: string; value: string }> = {
+    date: {
+      label: "날짜",
+      value: dateKey ? formatDateSummary(dateKey, todayKey) : "고르기",
+    },
+    start: { label: "시작", value: startTime ?? "고르기" },
+    duration: {
+      label: "길이",
+      value: durationMinutes
+        ? [
+            formatDurationHours(durationMinutes),
+            timeRange && formatSessionTimeRange(timeRange),
+          ]
+            .filter(Boolean)
+            .join(" · ")
+        : "고르기",
+    },
   };
 
   return (
@@ -280,9 +240,25 @@ const CreateSessionForm: React.FC<CreateSessionFormProps> = ({
               void handleSave();
             }}
           >
-            {(["date", "start", "duration"] as const)
-              .filter((step) => STEPS.indexOf(step) <= reachedIndex)
-              .map(renderStep)}
+            {PICKER_STEPS.slice(0, shownStepCount).map((step) =>
+              // 펼침과 접힌 줄은 key가 달라 바뀔 때마다 새로 마운트되며 등장 모션이 재생된다
+              openStep === step ? (
+                <div
+                  key={`${step}-open`}
+                  className="animate-pk-fade-up motion-reduce:animate-none"
+                >
+                  {pickers[step]}
+                </div>
+              ) : (
+                <StepSummaryRow
+                  key={`${step}-row`}
+                  label={summaries[step].label}
+                  value={summaries[step].value}
+                  onPress={() => setReopenedStep(step)}
+                  className="animate-pk-fade-up motion-reduce:animate-none"
+                />
+              ),
+            )}
             {isFieldsShown ? (
               <div className="mt-2 flex animate-pk-fade-up flex-col gap-5 motion-reduce:animate-none">
                 <TextField

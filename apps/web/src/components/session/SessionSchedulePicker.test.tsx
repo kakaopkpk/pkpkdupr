@@ -2,22 +2,8 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import {
   getStartTimeSegment,
-  isPastSessionStart,
   SessionCalendar,
 } from "@/components/session/SessionSchedulePicker";
-
-describe("isPastSessionStart", () => {
-  const now = new Date("2026-11-13T15:50:00+09:00");
-
-  it("오늘이면 지금보다 이른 시작 시각만 지난 시각이다", () => {
-    expect(isPastSessionStart("2026-11-13", "15:30", "2026-11-13", now)).toBe(true);
-    expect(isPastSessionStart("2026-11-13", "16:00", "2026-11-13", now)).toBe(false);
-  });
-
-  it("미래 날짜는 이른 시각도 고를 수 있다", () => {
-    expect(isPastSessionStart("2026-11-14", "06:00", "2026-11-13", now)).toBe(false);
-  });
-});
 
 describe("getStartTimeSegment", () => {
   it("6시간 단위로 새벽·오전·오후·저녁을 정한다", () => {

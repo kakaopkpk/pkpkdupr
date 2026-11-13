@@ -25,17 +25,17 @@ import {
   validateMatchScores,
 } from "@pkpkdupr/shared/match";
 import {
+  addKstDays,
   canOpenRegularSession,
   DEFAULT_MATCH_LOCATION,
   getEmptySessionExpiresAt,
   getNextRegularSessionDateKey,
-  getPreviousKstDateKey,
   isInProgressMatchExpired,
+  isPastSessionStart,
   isRegularSessionTime,
   isSessionOnToday,
   isValidKstDateKey,
   isValidSessionTimeRange,
-  kstDateKeyTimeToDate,
   kstDateKeyToDate,
   MATCH_SESSION_LOCATION_MAX_LENGTH,
   MATCH_SESSION_NAME_MAX_LENGTH,
@@ -1200,16 +1200,12 @@ app.get("/api/match-sessions/today", async (req, res) => {
     const [todaySessions, yesterdaySessions, activePlayersById] =
       await Promise.all([
         matchRepository.findSessionsByDateKey(dateKey),
-        matchRepository.findSessionsByDateKey(getPreviousKstDateKey(dateKey)),
+        matchRepository.findSessionsByDateKey(addKstDays(dateKey, -1)),
         loadActivePlayersById(),
       ]);
     // 전날 시작해 자정을 넘긴 회원 세션은 끝나기 전까지 오늘 세션으로 함께 준다
     const sessions = [
-      ...yesterdaySessions.filter(
-        (session) =>
-          toKstDateKey(session.date) !== dateKey &&
-          isSessionOnToday(session, now),
-      ),
+      ...yesterdaySessions.filter((session) => isSessionOnToday(session, now)),
       ...todaySessions,
     ];
     // 저장소가 시각 오름차순으로 주므로 정기 세션만 맨 앞으로 옮긴다(정렬은 안정적이다).
@@ -1244,7 +1240,7 @@ app.get("/api/match-sessions/upcoming", async (req, res) => {
     const dateKey = toKstDateKey(now);
     const [sessions, activePlayersById] = await Promise.all([
       // 전날 시작해 자정을 넘긴 회원 세션도 끝나기 전까지 보이도록 전날부터 읽고 만료로 거른다
-      matchRepository.findSessionsFromDateKey(getPreviousKstDateKey(dateKey)),
+      matchRepository.findSessionsFromDateKey(addKstDays(dateKey, -1)),
       loadActivePlayersById(),
     ]);
     // 정리가 best-effort라 만료됐지만 아직 남은 빈 세션도 응답에서 뺀다.
@@ -1356,11 +1352,7 @@ app.post("/api/match-sessions", async (req, res) => {
         400,
       );
     }
-    if (
-      startTime != null &&
-      dateKey === todayKey &&
-      kstDateKeyTimeToDate(dateKey, startTime) < now
-    ) {
+    if (startTime != null && isPastSessionStart(dateKey, startTime, now)) {
       throw new MatchSessionRequestError(
         "이미 지난 시각으로는 세션을 만들 수 없습니다.",
         400,
