@@ -122,7 +122,7 @@ const Me: React.FC = () => {
                 value={
                   <RatingDelta
                     value={ratingDelta.last7Days}
-                    className="!text-pk-22 leading-[1.4]"
+                    className="text-pk-22 leading-[1.4]"
                   />
                 }
                 foot={`${ratingDelta.last7DaysMatchCount}경기`}
@@ -134,10 +134,12 @@ const Me: React.FC = () => {
                 <PartnerChemistryCard partners={partners} />
               </section>
             ) : null}
-            <section className="flex flex-col gap-2.5 pt-1">
-              <SectionLabel>상성 · 자주 진 상대</SectionLabel>
-              <RivalCard rivals={rivals} />
-            </section>
+            {rivals.length > 0 ? (
+              <section className="flex flex-col gap-2.5 pt-1">
+                <SectionLabel>천적</SectionLabel>
+                <RivalCard rivals={rivals} />
+              </section>
+            ) : null}
             {playerId ? (
               <AchievementsSection
                 playerId={playerId}

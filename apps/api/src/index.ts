@@ -102,7 +102,6 @@ import {
   attachMatchRatingChanges,
   PROFILE_RATING_TREND_WINDOW_DAYS,
   PlayerRatingChartProjectionService,
-  buildRankingRatingTrend,
   selectRatingTrendWindow,
 } from "./services/PlayerRatingChartProjectionService";
 import { buildPlayerProfileSummary } from "./services/PlayerProfileSummaryService";
@@ -115,7 +114,6 @@ import {
   countAchievementHolders,
   createRankingContext,
   findSessionDominations,
-  rankPlayersAt,
   toAchievementMatch,
 } from "./services/RankingService";
 import {
@@ -2603,32 +2601,6 @@ const loadRankingSource = async () => {
   return { context: createRankingContext(players, logs, matches), sessions };
 };
 
-/** 경기일별 평점 projection을 90일 추이로 압축한 평점 값. 없는 선수만 하나씩 다시 만든다 */
-const loadRatingTrends = async (
-  playerIds: string[],
-  category: MatchTopLevelType,
-) => {
-  const projections = await Promise.all(
-    playerIds.map((playerId) =>
-      matchRepository.getPlayerRatingChartProjection(playerId),
-    ),
-  );
-  const trends = new Map<string, number[]>();
-  const now = new Date();
-  for (const [index, playerId] of playerIds.entries()) {
-    const projection =
-      projections[index] ??
-      (await playerRatingChartProjectionService.rebuildPlayer(playerId));
-    trends.set(
-      playerId,
-      buildRankingRatingTrend(projection.history, now)[category].map(
-        (point) => point.rating,
-      ),
-    );
-  }
-  return trends;
-};
-
 const parseRankingCategory = (value: unknown): MatchTopLevelType => {
   if (value === undefined) {
     return "doubles";
@@ -2666,15 +2638,10 @@ app.get("/api/rankings", async (req, res) => {
     const category = parseRankingCategory(req.query.category);
     const now = new Date();
     const { context, sessions } = await loadRankingSource();
-    const rankedPlayerIds = rankPlayersAt(context, category, null).map(
-      (entry) => entry.player.id,
-    );
-    const trendByPlayerId = await loadRatingTrends(rankedPlayerIds, category);
     const response: RankingResponse = buildRankingResponse({
       context,
       category,
       sessions,
-      trendByPlayerId,
       now,
     });
     res.json(response);

@@ -1262,7 +1262,6 @@ const BottomNav: React.FC = () => {
             <AchievementDetailSheet
               request={achievementDetailLayer.value}
               tabKey={achievementDetailLayer.tabKey}
-              canOpenMatch={!recordMatchLayer.value}
               onClose={closeAchievementDetail}
             />
 

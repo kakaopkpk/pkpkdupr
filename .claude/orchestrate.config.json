@@ -34,7 +34,7 @@
       "lint": null,
       "typecheck": null,
       "build": "pnpm build",
-      "test": "pnpm --filter @pkpkdupr/api --filter @pkpkdupr/shared test",
+      "test": "pnpm --filter @pkpkdupr/api --filter @pkpkdupr/shared --filter @pkpkdupr/web test",
       "e2e": null
     },
     "commandsByApp": {},

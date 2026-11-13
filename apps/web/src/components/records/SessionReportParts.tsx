@@ -91,10 +91,10 @@ export const TopRiserCard: React.FC<{ report: SessionPlayerReport }> = ({
         · {report.matchCount}경기 {report.wins}승
       </span>
     </div>
-    {/* 이 화면의 주인공 숫자라 Barlow로 크게 보인다 */}
+    {/* 이 화면의 주인공 숫자라 본문 글꼴로 크게 보인다 */}
     <RatingDelta
       value={report.ratingDelta}
-      className="shrink-0 font-num text-[28px] font-bold leading-none"
+      className="shrink-0 text-pk-22 font-extrabold leading-none"
     />
   </Card>
 );

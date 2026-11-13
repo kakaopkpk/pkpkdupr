@@ -22,6 +22,7 @@ import type {
   MatchSessionHistoryItem,
   MatchSessionReport,
   RankingEntry,
+  RankingEntryPlayer,
   RankingPlayer,
   RankingResponse,
   SessionPlayerReport,
@@ -62,7 +63,13 @@ export interface RankingSession {
 
 export type RankingSourcePlayer = Pick<
   Player,
-  "id" | "username" | "avatarUrl" | "duprRating" | "status"
+  | "id"
+  | "username"
+  | "avatarUrl"
+  | "duprRating"
+  | "status"
+  | "statusMessage"
+  | "statusMessageBackgroundColor"
 >;
 
 /** 시점 평점·순위 계산에 쓰는 데이터 묶음 */
@@ -290,6 +297,17 @@ const toRankingPlayer = (player: RankingSourcePlayer): RankingPlayer => ({
   avatarUrl: player.avatarUrl,
 });
 
+/** 상태메시지 필드는 값이 있을 때만 넣는다(Player와 같은 규칙) */
+const toRankingEntryPlayer = (
+  player: RankingSourcePlayer,
+): RankingEntryPlayer => ({
+  ...toRankingPlayer(player),
+  ...(player.statusMessage ? { statusMessage: player.statusMessage } : {}),
+  ...(player.statusMessageBackgroundColor
+    ? { statusMessageBackgroundColor: player.statusMessageBackgroundColor }
+    : {}),
+});
+
 const groupMatchesBySession = (matches: RankingMatch[]) => {
   const bySession = new Map<string, RankingMatch[]>();
   for (const match of matches) {
@@ -353,14 +371,11 @@ export const buildRankingResponse = ({
   context,
   category,
   sessions,
-  trendByPlayerId,
   now,
 }: {
   context: RankingContext;
   category: MatchTopLevelType;
   sessions: RankingSession[];
-  /** 프로필 차트와 같은 90일 이력의 평점 값(오래된 순) */
-  trendByPlayerId: Map<string, number[]>;
   now: Date;
 }): RankingResponse => {
   const current = rankPlayersAt(context, category, null);
@@ -378,11 +393,10 @@ export const buildRankingResponse = ({
     const baselineRank = baselineRanks?.get(entry.player.id);
     return {
       rank: entry.rank,
-      player: toRankingPlayer(entry.player),
+      player: toRankingEntryPlayer(entry.player),
       rating: entry.rating,
       matchCount: entry.matchCount,
       rankChange: baselineRank == null ? null : baselineRank - entry.rank,
-      trend: trendByPlayerId.get(entry.player.id) ?? [],
     };
   });
 
@@ -393,7 +407,7 @@ export const buildRankingResponse = ({
         player.status === "active" && player.duprRating?.[category] == null,
     )
     .map((player) => ({
-      player: toRankingPlayer(player),
+      player: toRankingEntryPlayer(player),
       matchCount: matchCounts.get(player.id) ?? 0,
     }))
     .sort(
