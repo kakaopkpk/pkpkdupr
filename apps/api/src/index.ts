@@ -103,6 +103,7 @@ import {
 } from "./services/AuthService";
 import {
   attachMatchRatingChanges,
+  groupRatingChangeLogsByMatchId,
   PROFILE_RATING_TREND_WINDOW_DAYS,
   PlayerRatingChartProjectionService,
   selectRatingTrendWindow,
@@ -1046,10 +1047,7 @@ app.get("/api/players/:playerId/profile-summary", async (req, res) => {
           return null;
         }),
       ]);
-    const matches = attachMatchRatingChanges(result.matches, [
-      ...ratingChangeLogs,
-      ...viewerRatingChangeLogs,
-    ]);
+    const matches = attachMatchRatingChanges(result.matches, ratingChangeLogs);
     const dominations = rankingSource
       ? findSessionDominations(
           rankingSource.context,
@@ -1068,6 +1066,7 @@ app.get("/api/players/:playerId/profile-summary", async (req, res) => {
         viewerPlayerId,
         now,
         dominations?.get(playerId),
+        groupRatingChangeLogsByMatchId(viewerRatingChangeLogs),
       ),
     );
   } catch (err) {

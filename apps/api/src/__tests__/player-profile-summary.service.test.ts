@@ -339,10 +339,14 @@ describe("buildPlayerProfileSummary", () => {
         delta,
         createdAt: now,
       });
+      const viewerChanges = new Map<string, PlayerRatingChangeLog[]>();
       const withViewerChange = (
         match: Match,
         delta: { singles: number; doubles: number },
-      ) => ({ ...match, ratingChanges: [viewerChange(match.id, delta)] });
+      ) => {
+        viewerChanges.set(match.id, [viewerChange(match.id, delta)]);
+        return match;
+      };
       const matches = [
         // 대상(me)이 viewer를 단식에서 이김 → viewer 1패, 단식 평점 −0.02
         withViewerChange(
@@ -400,6 +404,8 @@ describe("buildPlayerProfileSummary", () => {
         emptyHistory,
         viewer.id,
         now,
+        undefined,
+        viewerChanges,
       );
 
       expect(summary.headToHead).toEqual({

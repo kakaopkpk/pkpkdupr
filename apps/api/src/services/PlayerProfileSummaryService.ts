@@ -135,6 +135,8 @@ export const buildPlayerProfileSummary = (
   now: Date = new Date(),
   /** 이 회원이 세션 지배자로 확정된 세션 id(세션 지배자 업적용) */
   dominatedSessionIds?: ReadonlySet<string>,
+  /** 요청자 평점 변경 로그(경기 id별). 상대 전적의 요청자 평점 변화 합에 쓴다 */
+  viewerRatingChangesByMatchId?: ReadonlyMap<string, PlayerRatingChangeLog[]>,
 ): PlayerProfileSummary => {
   const matchStats = createEmptyMatchStats();
   const ratingDelta = createEmptyRatingDelta();
@@ -216,10 +218,7 @@ export const buildPlayerProfileSummary = (
         // 요청자 기준 승패라 대상 선수의 승패와 반대다.
         if (won) stat.losses += 1;
         else stat.wins += 1;
-        // ratingChanges에 요청자 로그가 함께 붙어 와야 더해진다
-        const viewerChange = match.ratingChanges?.find(
-          (candidate) => candidate.playerId === viewerPlayerId,
-        );
+        const viewerChange = viewerRatingChangesByMatchId?.get(match.id)?.[0];
         stat.ratingDelta += viewerChange?.delta[category] ?? 0;
       }
 

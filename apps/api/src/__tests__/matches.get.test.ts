@@ -474,8 +474,13 @@ describe("GET /api/players/:playerId/profile-summary", () => {
       singles: { matchCount: 1, wins: 0, losses: 1, ratingDelta: -0.04 },
       doubles: { matchCount: 0, wins: 0, losses: 0, ratingDelta: 0 },
     });
-    // 대상 회원 자신의 평점 변화는 요청자 로그와 섞이지 않는다
+    // 대상 회원 자신의 평점 변화·경기 평점 변화에는 요청자 로그가 섞이지 않는다
     expect(response.body.ratingDelta.singles.last7Days).toBeCloseTo(0.04);
+    expect(
+      response.body.recentMatches[0].ratingChanges.map(
+        (log: PlayerRatingChangeLog) => log.playerId,
+      ),
+    ).toEqual([opponent.id]);
   });
 });
 
