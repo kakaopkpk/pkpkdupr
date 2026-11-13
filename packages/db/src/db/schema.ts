@@ -6,6 +6,7 @@ import {
   index,
   jsonb,
   pgTable,
+  primaryKey,
   text,
   uniqueIndex,
   uuid,
@@ -262,5 +263,22 @@ export const matchDeletionLogs = pgTable(
   },
   (table) => ({
     matchIdIndex: index("match_deletion_logs_match_id_idx").on(table.matchId),
+  }),
+);
+
+/** 회원이 확인한 업적. 업적별로 확인할 때의 획득 경기(earnedMatchId)를 남긴다 */
+export const playerSeenAchievements = pgTable(
+  "player_seen_achievements",
+  {
+    playerId: id("player_id").notNull(),
+    achievementId: varchar("achievement_id", { length: 64 }).notNull(),
+    earnedMatchId: id("earned_match_id").notNull(),
+    seenAt: unixTimestamp("seen_at").notNull(),
+  },
+  (table) => ({
+    pk: primaryKey({
+      name: "player_seen_achievements_pkey",
+      columns: [table.playerId, table.achievementId],
+    }),
   }),
 );
