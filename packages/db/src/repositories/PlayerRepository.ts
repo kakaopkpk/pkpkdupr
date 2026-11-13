@@ -131,6 +131,38 @@ export class PlayerRepository {
     return updated.length > 0;
   }
 
+  /**
+   * active 게스트를 정회원으로 바꾸고 성별을 저장하며 첫 로그인 비밀번호 변경을 켠다.
+   * authUserId를 주면 아직 Auth 사용자가 연결되지 않은 게스트에만 연결한다.
+   * 조건에 맞는 행이 없으면(이미 정회원·inactive·이미 연결됨) undefined다.
+   */
+  async promoteGuest(
+    id: string,
+    gender: "M" | "F",
+    authUserId: string | null,
+  ): Promise<StoredPlayerRecord | undefined> {
+    const conditions = [
+      eq(players.id, id),
+      eq(players.isGuest, true),
+      eq(players.status, "active"),
+    ];
+    if (authUserId) {
+      conditions.push(isNull(players.authUserId));
+    }
+    const updated = await this.db
+      .update(players)
+      .set({
+        isGuest: false,
+        gender,
+        isFirstLogin: true,
+        ...(authUserId ? { authUserId } : {}),
+        updatedAt: new Date(),
+      })
+      .where(and(...conditions))
+      .returning({ id: players.id });
+    return updated.length > 0 ? await this.findById(id) : undefined;
+  }
+
   async findAll(): Promise<StoredPlayerRecord[]> {
     const records = await this.db
       .select()

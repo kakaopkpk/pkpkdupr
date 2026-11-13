@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from "react";
 import type {
+  AdminPromoteGuestRequest,
+  GuestAddedInfo,
   OfficialDuprAdjustmentPreview,
   Player,
   PlayerCreationLog,
@@ -27,6 +29,7 @@ import { rememberRecentInputValue } from "@pkpkdupr/shared/recentInputHistory";
 import {
   isValidUsername,
   type AdminPasswordResetResponse,
+  type AdminPromoteGuestResponse,
   type AdminRegisterPlayerRequest,
   type AdminRegisterPlayerResponse,
   type AdminUpdateUsernameRequest,
@@ -41,6 +44,7 @@ import AdminMatchBatchForm, {
   type AdminBatchMatchSubmitPayload,
 } from "../components/AdminMatchBatchForm";
 import AdminSessionManager from "../components/AdminSessionManager";
+import PromoteGuestDialog from "../components/PromoteGuestDialog";
 import AdminSidebar, {
   adminSectionInfo,
   type AdminSection,
@@ -49,15 +53,44 @@ import RecentValueComboBox from "../components/RecentValueComboBox";
 
 type PlayerInfo = Pick<
   Player,
-  "id" | "username" | "duprRating" | "gender" | "status"
+  "id" | "username" | "duprRating" | "gender" | "status" | "isGuest"
 > & {
   duprMetrics: PlayerDuprMetrics;
+  /** 게스트만 있다. sessionDate는 JSON 문자열로 온다 */
+  guestAddedInfo:
+    | (Omit<GuestAddedInfo, "sessionDate"> & { sessionDate: string | null })
+    | null;
+  ratingExcludedMatchCount: number;
   createdAt: string;
   updatedAt: string;
 };
 
 /** 정회원 성별. 게스트는 성별이 없다(null) */
 type PlayerGender = NonNullable<Player["gender"]>;
+type MemberKindFilter = "all" | "member" | "guest";
+
+const memberKindFilterLabels: Record<MemberKindFilter, string> = {
+  all: "전체",
+  member: "정회원",
+  guest: "게스트",
+};
+
+const matchesMemberKind = (
+  player: Pick<PlayerInfo, "isGuest">,
+  kind: MemberKindFilter,
+) => kind === "all" || player.isGuest === (kind === "guest");
+
+/** 게스트를 추가한 세션 날짜. 예: "11/13" (KST) */
+const formatGuestSessionDate = (value: string) =>
+  new Intl.DateTimeFormat("ko-KR", {
+    timeZone: "Asia/Seoul",
+    month: "numeric",
+    day: "numeric",
+  })
+    .formatToParts(new Date(value))
+    .filter((part) => part.type === "month" || part.type === "day")
+    .map((part) => part.value)
+    .join("/");
 type PlayerStatusLogsByPlayerId = Record<string, PlayerStatusChangeLog[]>;
 type PlayerCreationLogsByPlayerId = Record<string, PlayerCreationLog[]>;
 type MatchPlayerInfo = Pick<
@@ -299,6 +332,13 @@ const AdminDashboard: React.FC = () => {
   // 서버가 한 번만 돌려주는 발급 비밀번호. 화면 상태에만 두고 저장하지 않는다.
   const [issuedCredential, setIssuedCredential] =
     useState<IssuedCredential | null>(null);
+  const [memberKindFilter, setMemberKindFilter] =
+    useState<MemberKindFilter>("all");
+  const [promoteTarget, setPromoteTarget] = useState<PlayerInfo | null>(null);
+  const [isPromotingGuest, setIsPromotingGuest] = useState(false);
+  const filteredPlayers = players.filter((player) =>
+    matchesMemberKind(player, memberKindFilter),
+  );
   const [savingMatchMetadataIds, setSavingMatchMetadataIds] = useState<
     string[]
   >([]);
@@ -546,6 +586,47 @@ const AdminDashboard: React.FC = () => {
       setError(err instanceof Error ? err.message : "알 수 없는 오류");
     } finally {
       setResettingPasswordPlayerId(null);
+    }
+  };
+
+  const handlePromoteGuest = async (gender: PlayerGender) => {
+    if (!promoteTarget) {
+      return;
+    }
+
+    try {
+      setIsPromotingGuest(true);
+      setError(null);
+      setSuccess(null);
+
+      const res = await apiFetch(
+        `/api/admin/players/${promoteTarget.id}/promote`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ gender } satisfies AdminPromoteGuestRequest),
+        },
+      );
+      if (!res.ok) {
+        throw new Error(await readErrorMessage(res, "정회원 승급 실패"));
+      }
+
+      const data = (await res.json()) as AdminPromoteGuestResponse;
+      setPromoteTarget(null);
+      setSuccess(`${data.player.username} 님을 정회원으로 승급했습니다.`);
+      setIssuedCredential({
+        username: data.player.username,
+        password: data.initialPassword,
+        kind: "initial",
+      });
+      await loadDashboardData();
+    } catch (err: unknown) {
+      setPromoteTarget(null);
+      setError(err instanceof Error ? err.message : "알 수 없는 오류");
+    } finally {
+      setIsPromotingGuest(false);
     }
   };
 
@@ -1349,6 +1430,17 @@ const AdminDashboard: React.FC = () => {
               {success}
             </div>
           )}
+          {promoteTarget && (
+            <PromoteGuestDialog
+              username={promoteTarget.username}
+              ratingExcludedMatchCount={promoteTarget.ratingExcludedMatchCount}
+              isSubmitting={isPromotingGuest}
+              onCancel={() => setPromoteTarget(null)}
+              onConfirm={(selectedGender) =>
+                void handlePromoteGuest(selectedGender)
+              }
+            />
+          )}
           {issuedCredential && (
             <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
               <div className="w-full max-w-md rounded-xl bg-white p-4 shadow-xl">
@@ -2017,12 +2109,45 @@ const AdminDashboard: React.FC = () => {
         {activeSection === "members" ? (
         <section className="space-y-4">
           <h2 className="text-lg font-semibold text-gray-700">
-            회원 목록 ({players.length})
+            회원 목록
           </h2>
 
-          {players.length === 0 ? (
+          <div
+            role="tablist"
+            aria-label="회원 구분"
+            className="inline-flex rounded-lg bg-slate-100 p-1 text-sm"
+          >
+            {(Object.keys(memberKindFilterLabels) as MemberKindFilter[]).map(
+              (kind) => {
+                const count = players.filter((player) =>
+                  matchesMemberKind(player, kind),
+                ).length;
+                const isSelected = memberKindFilter === kind;
+                return (
+                  <button
+                    key={kind}
+                    type="button"
+                    role="tab"
+                    aria-selected={isSelected}
+                    onClick={() => setMemberKindFilter(kind)}
+                    className={`rounded-md px-3 py-1.5 font-medium ${
+                      isSelected
+                        ? "bg-white text-slate-800 shadow-sm"
+                        : "text-slate-500 hover:text-slate-700"
+                    }`}
+                  >
+                    {memberKindFilterLabels[kind]} {count}
+                  </button>
+                );
+              },
+            )}
+          </div>
+
+          {filteredPlayers.length === 0 ? (
             <p className="text-gray-400 text-center py-8">
-              등록된 회원이 없습니다.
+              {memberKindFilter === "guest"
+                ? "게스트가 없습니다."
+                : "등록된 회원이 없습니다."}
             </p>
           ) : (
             <div className="overflow-x-auto">
@@ -2041,7 +2166,7 @@ const AdminDashboard: React.FC = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {players.map((p) => {
+                  {filteredPlayers.map((p) => {
                     const creationLogs = creationLogsByPlayerId[p.id] ?? [];
                     const statusLogs = statusLogsByPlayerId[p.id] ?? [];
                     const latestCreationLog = creationLogs[0];
@@ -2076,7 +2201,48 @@ const AdminDashboard: React.FC = () => {
                         className="border-b align-top hover:bg-gray-50"
                       >
                         <td className="px-4 py-4 min-w-[260px]">
-                          <div className="font-medium">{p.username}</div>
+                          <div className="flex items-center gap-2">
+                            <span className="font-medium">{p.username}</span>
+                            <span
+                              className={`inline-flex rounded-full px-2 py-0.5 text-xs font-semibold ${
+                                p.isGuest
+                                  ? "bg-amber-100 text-amber-800"
+                                  : "bg-blue-50 text-blue-700"
+                              }`}
+                            >
+                              {p.isGuest ? "게스트" : "정회원"}
+                            </span>
+                          </div>
+                          {p.isGuest ? (
+                            <div className="mt-2 space-y-1 text-xs text-slate-600">
+                              <div>
+                                {p.guestAddedInfo?.addedByUsername
+                                  ? `${p.guestAddedInfo.addedByUsername}가 추가`
+                                  : "추가한 회원 정보 없음"}
+                              </div>
+                              <div>
+                                {p.guestAddedInfo?.sessionName
+                                  ? [
+                                      p.guestAddedInfo.sessionDate
+                                        ? formatGuestSessionDate(
+                                            p.guestAddedInfo.sessionDate,
+                                          )
+                                        : null,
+                                      p.guestAddedInfo.sessionName,
+                                    ]
+                                      .filter(Boolean)
+                                      .join(" ")
+                                  : "추가한 세션 정보 없음"}
+                              </div>
+                              <div>
+                                경기 {p.ratingExcludedMatchCount}
+                                {p.ratingExcludedMatchCount > 0
+                                  ? " · 모두 미반영"
+                                  : ""}
+                              </div>
+                            </div>
+                          ) : (
+                          <>
                           <div className="mt-2 flex items-center gap-2">
                             <input
                               type="text"
@@ -2106,8 +2272,25 @@ const AdminDashboard: React.FC = () => {
                               저장하면 회원은 새 아이디로 로그인해야 합니다.
                             </p>
                           )}
+                          </>
+                          )}
                         </td>
                         <td className="px-4 py-4 min-w-[180px]">
+                          {p.isGuest ? (
+                            <button
+                              type="button"
+                              // 발급 비밀번호가 서로 덮어쓰지 않게 비밀번호 초기화 중에는 승급하지 않는다.
+                              disabled={
+                                resettingPasswordPlayerId !== null ||
+                                isPromotingGuest
+                              }
+                              onClick={() => setPromoteTarget(p)}
+                              className="px-3 py-2 rounded-lg bg-blue-600 text-white font-medium hover:bg-blue-700 disabled:bg-slate-300"
+                            >
+                              정회원으로 승급
+                            </button>
+                          ) : (
+                          <>
                           <button
                             type="button"
                             // 발급 비밀번호는 한 번만 보이므로, 응답이 서로 덮어쓰지 않게 초기화는 한 번에 하나만 한다.
@@ -2122,6 +2305,8 @@ const AdminDashboard: React.FC = () => {
                           <p className="mt-1 text-xs text-slate-500">
                             계정이 없는 회원은 이 버튼으로 발급합니다.
                           </p>
+                          </>
+                          )}
                         </td>
                         <td className="px-4 py-4 min-w-[120px] text-blue-600">
                           <div className="space-y-1 text-xs">
@@ -2136,6 +2321,12 @@ const AdminDashboard: React.FC = () => {
                           </div>
                         </td>
                         <td className="px-4 py-4 min-w-[220px]">
+                          {p.isGuest ? (
+                            <span className="text-xs text-slate-400">
+                              승급 때 정합니다
+                            </span>
+                          ) : (
+                          <>
                           <div className="flex items-center gap-2">
                             <select
                               value={draftGender ?? ""}
@@ -2167,6 +2358,8 @@ const AdminDashboard: React.FC = () => {
                           <p className="mt-1 text-xs text-slate-500">
                             현재: {p.gender ? genderLabelMap[p.gender] : "없음"}
                           </p>
+                          </>
+                          )}
                         </td>
                         <td className="px-4 py-4 whitespace-nowrap">
                           <span
@@ -2176,6 +2369,9 @@ const AdminDashboard: React.FC = () => {
                           </span>
                         </td>
                         <td className="px-4 py-4 min-w-[200px]">
+                          {p.isGuest ? (
+                            <span className="text-xs text-slate-400">-</span>
+                          ) : (
                           <div className="flex items-center gap-2">
                             <select
                               value={draftStatus}
@@ -2199,6 +2395,7 @@ const AdminDashboard: React.FC = () => {
                               {isSaving ? "저장 중..." : "저장"}
                             </button>
                           </div>
+                          )}
                         </td>
                         <td className="px-4 py-4 min-w-[240px] text-xs text-gray-600">
                           {!latestCreationLog ? (

@@ -67,6 +67,7 @@ import {
   PLAYER_STATUS_MESSAGE_MAX_LENGTH,
 } from "@pkpkdupr/shared/player";
 import type {
+  AdminPromoteGuestRequest,
   MemberListPlayer,
   Player,
   PlayerAffiliation,
@@ -3083,6 +3084,25 @@ app.patch(
       res.json(
         await authService.updatePlayerUsername(req.params.playerId, username),
       );
+    } catch (err) {
+      sendAccountRequestFailure(res, err);
+    }
+  },
+);
+
+app.post(
+  "/api/admin/players/:playerId/promote",
+  requireAdmin,
+  async (req, res) => {
+    const { gender } = (req.body ?? {}) as Partial<
+      Record<keyof AdminPromoteGuestRequest, unknown>
+    >;
+    if (!isPlayerGender(gender)) {
+      return res.status(400).json({ error: "gender는 M 또는 F 여야 합니다." });
+    }
+
+    try {
+      res.json(await authService.promoteGuest(req.params.playerId, gender));
     } catch (err) {
       sendAccountRequestFailure(res, err);
     }
