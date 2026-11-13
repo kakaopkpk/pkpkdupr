@@ -6,6 +6,7 @@ import {
   SessionRatingCount,
   SessionRatingDeltaCount,
 } from "@/components/records/SessionReportParts";
+import { WinLossCount } from "@/components/profile/ProfileStatTile";
 import { Card } from "@/components/ui/Card";
 import { CountUpNumber } from "@/components/ui/CountUpNumber";
 import { RankChange } from "@/components/ui/Delta";
@@ -88,10 +89,11 @@ const LastSessionMeCard: React.FC<{ report: SessionPlayerReport }> = ({
         <Stat
           label="결과"
           value={
-            <>
-              <CountUpNumber value={report.wins} {...SESSION_COUNT} />승{" "}
-              <CountUpNumber value={report.losses} {...SESSION_COUNT} />패
-            </>
+            <WinLossCount
+              wins={report.wins}
+              losses={report.losses}
+              timing={SESSION_COUNT}
+            />
           }
           withDivider
         />
