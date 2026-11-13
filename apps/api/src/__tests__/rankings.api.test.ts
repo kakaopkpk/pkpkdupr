@@ -236,6 +236,8 @@ describe("랭킹·세션 리포트 API", () => {
       earned(alice.id, "matches-1"),
       earned(bob.id, "matches-1"),
       earned(alice.id, "wins-1"),
+      // 끝난 세션의 topRiser
+      earned(alice.id, "dominator-1"),
     ]);
   });
 
@@ -243,12 +245,13 @@ describe("랭킹·세션 리포트 API", () => {
     const response = await authorized("/api/achievements/holders");
 
     expect(response.status).toBe(200);
-    expect(Object.keys(response.body.counts)).toHaveLength(32);
+    expect(Object.keys(response.body.counts)).toHaveLength(34);
     expect(response.body.counts).toMatchObject({
       "matches-1": 2,
       "wins-1": 1,
       "matches-10": 0,
       "streak-3": 0,
+      "dominator-1": 1,
     });
   });
 

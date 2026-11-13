@@ -23,7 +23,8 @@ type BadgeIconKind =
   | "versus"
   | "target"
   | "rotate"
-  | "star";
+  | "star"
+  | "crown";
 
 /** 24 viewBox 선 아이콘 */
 const BADGE_ICON_PATHS: Record<BadgeIconKind, React.ReactNode> = {
@@ -99,6 +100,12 @@ const BADGE_ICON_PATHS: Record<BadgeIconKind, React.ReactNode> = {
   star: (
     <path d="M12 3.5l2.6 5.3 5.8.8-4.2 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8-4.2-4.1 5.8-.8z" />
   ),
+  crown: (
+    <>
+      <path d="M4 8l4 3.5L12 5l4 6.5L20 8l-1.5 8.5h-13z" />
+      <path d="M5.5 20h13" />
+    </>
+  ),
 };
 
 /** 특별·세션 분류는 업적마다 아이콘이 다르다 */
@@ -114,6 +121,8 @@ const BADGE_ICON_BY_ID: Partial<Record<string, BadgeIconKind>> = {
   revenge: "rotate",
   "iron-8": "timer",
   "unbeaten-session": "star",
+  "dominator-1": "crown",
+  "dominator-10": "crown",
 };
 
 const BADGE_ICON_BY_CATEGORY: Record<

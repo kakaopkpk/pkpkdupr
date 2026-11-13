@@ -5,6 +5,7 @@ import {
   buildSessionHistory,
   buildSessionReport,
   createRankingContext,
+  findSessionDominations,
   getRatingAt,
   rankPlayersAt,
   selectBaselineSession,
@@ -409,6 +410,7 @@ describe("buildSessionReport", () => {
     const report = buildSessionReport({
       context: createRankingContext(players, logs, matches),
       session,
+      dominations: new Map(),
     });
 
     expect(report?.session).toMatchObject({
@@ -448,6 +450,7 @@ describe("buildSessionReport", () => {
     const report = buildSessionReport({
       context: createRankingContext(players, flatLogs, matches),
       session,
+      dominations: new Map(),
     });
     expect(report?.topRiser).toBeNull();
   });
@@ -493,6 +496,7 @@ describe("buildSessionReport", () => {
     const report = buildSessionReport({
       context: createRankingContext(nrPlayers, nrLogs, nrMatches),
       session: nrSession,
+      dominations: new Map(),
     });
 
     expect(report?.topRiser?.player.username).toBe("erin");
@@ -519,8 +523,65 @@ describe("buildSessionReport", () => {
       buildSessionReport({
         context: createRankingContext(players, logs, []),
         session,
+        dominations: new Map(),
       }),
     ).toBeNull();
+  });
+
+  // 정기 세션(2026-11-09)은 그날 22:00 KST(13:00Z)에 끝난다.
+  const sessionEndsAt = at("2026-11-09T13:00:00Z");
+
+  const reportAt = (reportNow: Date) => {
+    const context = createRankingContext(players, logs, matches);
+    return buildSessionReport({
+      context,
+      session,
+      dominations: findSessionDominations(context, [session], reportNow),
+    });
+  };
+
+  it("끝난 세션의 topRiser는 세션 지배자 업적을 그 세션 마지막 경기로 받는다", () => {
+    const report = reportAt(sessionEndsAt);
+    expect(
+      report?.achievements.filter((item) =>
+        item.achievementId.startsWith("dominator-"),
+      ),
+    ).toEqual([
+      {
+        playerId: "Palice01",
+        achievementId: "dominator-1",
+        earnedMatchId: "Mmatch02",
+        earnedAt: second,
+      },
+    ]);
+  });
+
+  it("끝나지 않은 세션의 topRiser는 세션 지배자 업적을 받지 않는다", () => {
+    const report = reportAt(new Date(sessionEndsAt.getTime() - 1));
+    expect(report?.topRiser?.player.username).toBe("alice");
+    expect(
+      report?.achievements.some((item) =>
+        item.achievementId.startsWith("dominator-"),
+      ),
+    ).toBe(false);
+  });
+
+  it("findSessionDominations는 끝난 세션마다 지배자를 모으고 오른 사람이 없는 세션은 뺀다", () => {
+    const flatSession = makeSession("Sflat001", at("2026-11-05T09:00:00Z"));
+    const flatMatch = makeMatch(
+      "Mflat001",
+      at("2026-11-05T10:00:00Z"),
+      [["Palice01"], ["Pbob0001"]],
+      { type: "unrestricted-singles", sessionId: flatSession.id },
+    );
+    const dominations = findSessionDominations(
+      createRankingContext(players, logs, [...matches, flatMatch]),
+      [session, flatSession],
+      sessionEndsAt,
+    );
+    expect([...dominations.entries()]).toEqual([
+      ["Palice01", new Set([session.id])],
+    ]);
   });
 });
 

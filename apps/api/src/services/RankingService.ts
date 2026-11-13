@@ -27,7 +27,11 @@ import type {
   SessionPlayerReport,
   UnratedRankingEntry,
 } from "@pkpkdupr/shared/ranking";
-import { toKstDateKey, type MatchSessionKind } from "@pkpkdupr/shared/session";
+import {
+  getEmptySessionExpiresAt,
+  toKstDateKey,
+  type MatchSessionKind,
+} from "@pkpkdupr/shared/session";
 
 /**
  * 랭킹·세션 리포트 계산. 순위 스냅샷을 저장하지 않고 평점 변경 로그로
@@ -471,10 +475,13 @@ export const buildSessionHistory = ({
     );
 };
 
+/** 순위를 뺀 세션 참가자 보고 */
+type SessionPlayerStats = Omit<SessionPlayerReport, "rankBefore" | "rankAfter">;
+
 /** ratingDelta 내림차순 → 경기 수 내림차순 → 아이디(username) 오름차순 */
 const compareSessionPlayerReports = (
-  left: SessionPlayerReport,
-  right: SessionPlayerReport,
+  left: SessionPlayerStats,
+  right: SessionPlayerStats,
 ) =>
   right.ratingDelta - left.ratingDelta ||
   right.matchCount - left.matchCount ||
@@ -482,20 +489,18 @@ const compareSessionPlayerReports = (
   compareText(left.player.id, right.player.id);
 
 /**
- * 세션 리포트. 완료 경기가 없으면 null.
- * 평점·순위는 복식 기준, 경기 수·승패는 세션의 완료 경기 전체 기준이다.
- * players는 ratingDelta 내림차순(topRiser와 같은 기준)이다.
+ * 세션 참가자별 경기·승패와 복식 평점 전후(순위 제외). ratingDelta 내림차순(topRiser와 같은 기준)이다.
+ * 평점은 복식 기준, 경기 수·승패는 세션의 완료 경기 전체 기준이다. 완료 경기가 없으면 null.
  */
-export const buildSessionReport = ({
-  context,
-  session,
-}: {
-  context: RankingContext;
-  session: RankingSession;
-}): MatchSessionReport | null => {
-  const sessionMatches = context.matches.filter(
-    (match) => match.sessionId === session.id,
-  );
+const buildSessionPlayerStats = (
+  context: RankingContext,
+  session: RankingSession,
+  sessionMatches: RankingMatch[],
+): {
+  before: RankingPoint;
+  after: RankingPoint;
+  players: SessionPlayerStats[];
+} | null => {
   const endAt = getSessionEndAt(sessionMatches);
   if (!endAt) return null;
 
@@ -504,8 +509,6 @@ export const buildSessionReport = ({
     inclusive: false,
   };
   const after: RankingPoint = { at: endAt, inclusive: true };
-  const ranksBefore = toRankMap(rankPlayersAt(context, "doubles", before));
-  const ranksAfter = toRankMap(rankPlayersAt(context, "doubles", after));
 
   const statsByPlayerId = new Map<
     string,
@@ -529,7 +532,7 @@ export const buildSessionReport = ({
   }
 
   const players = [...statsByPlayerId.entries()]
-    .flatMap(([playerId, stats]): SessionPlayerReport[] => {
+    .flatMap(([playerId, stats]): SessionPlayerStats[] => {
       const player = context.playersById.get(playerId);
       if (!player) return [];
       const ratingAfter = getPlayerRatingAt(
@@ -554,14 +557,76 @@ export const buildSessionReport = ({
             ratingBefore == null || ratingAfter == null
               ? 0
               : roundDuprRating(ratingAfter - ratingBefore),
-          rankBefore: ranksBefore.get(playerId) ?? null,
-          rankAfter: ranksAfter.get(playerId) ?? null,
         },
       ];
     })
     .sort(compareSessionPlayerReports);
 
-  const topRiser = players[0] && players[0].ratingDelta > 0 ? players[0] : null;
+  return { before, after, players };
+};
+
+/** 세션 지배자: 복식 평점이 가장 많이 오른 참가자. 오른 사람이 없으면 null */
+const pickTopRiser = <T extends SessionPlayerStats>(players: T[]): T | null =>
+  players[0] && players[0].ratingDelta > 0 ? players[0] : null;
+
+/** 회원 id → 세션 지배자로 확정된 세션 id(`findSessionDominations`) */
+export type SessionDominations = ReadonlyMap<string, ReadonlySet<string>>;
+
+/**
+ * 끝난 세션(만료 시각 `getEmptySessionExpiresAt` ≤ now)의 지배자를 모은다.
+ * 진행 중이거나 오늘 아직 끝나지 않은 세션은 지배자가 바뀔 수 있어 넣지 않는다.
+ * 다른 업적처럼 조회 때마다 계산하므로, 끝난 뒤 경기를 수정·삭제하면 지배자도 다시 정해진다.
+ */
+export const findSessionDominations = (
+  context: RankingContext,
+  sessions: RankingSession[],
+  now: Date,
+): SessionDominations => {
+  const matchesBySession = groupMatchesBySession(context.matches);
+  const dominations = new Map<string, Set<string>>();
+  for (const session of sessions) {
+    if (getEmptySessionExpiresAt(session.kind, session.date) > now) continue;
+    const sessionMatches = matchesBySession.get(session.id);
+    if (!sessionMatches) continue;
+    const stats = buildSessionPlayerStats(context, session, sessionMatches);
+    const topRiser = stats && pickTopRiser(stats.players);
+    if (!topRiser) continue;
+    const sessionIds = dominations.get(topRiser.player.id) ?? new Set();
+    sessionIds.add(session.id);
+    dominations.set(topRiser.player.id, sessionIds);
+  }
+  return dominations;
+};
+
+/**
+ * 세션 리포트. 완료 경기가 없으면 null.
+ * 평점·순위는 복식 기준, 경기 수·승패는 세션의 완료 경기 전체 기준이다.
+ * players는 ratingDelta 내림차순(topRiser와 같은 기준)이다.
+ */
+export const buildSessionReport = ({
+  context,
+  session,
+  dominations,
+}: {
+  context: RankingContext;
+  session: RankingSession;
+  dominations: SessionDominations;
+}): MatchSessionReport | null => {
+  const sessionMatches = context.matches.filter(
+    (match) => match.sessionId === session.id,
+  );
+  const stats = buildSessionPlayerStats(context, session, sessionMatches);
+  if (!stats) return null;
+
+  const ranksBefore = toRankMap(
+    rankPlayersAt(context, "doubles", stats.before),
+  );
+  const ranksAfter = toRankMap(rankPlayersAt(context, "doubles", stats.after));
+  const players: SessionPlayerReport[] = stats.players.map((report) => ({
+    ...report,
+    rankBefore: ranksBefore.get(report.player.id) ?? null,
+    rankAfter: ranksAfter.get(report.player.id) ?? null,
+  }));
 
   return {
     session: toSessionHistoryItem(
@@ -570,11 +635,12 @@ export const buildSessionReport = ({
       getActivePlayerIds(context),
     ),
     players,
-    topRiser,
+    topRiser: pickTopRiser(players),
     achievements: buildSessionAchievements(
       context,
       sessionMatches,
       players.map((report) => report.player.id),
+      dominations,
     ),
   };
 };
@@ -605,12 +671,16 @@ const buildSessionAchievements = (
   context: RankingContext,
   sessionMatches: RankingMatch[],
   playerIds: string[],
+  dominations: SessionDominations,
 ): EarnedAchievement[] => {
   const sessionMatchIds = new Set(sessionMatches.map((match) => match.id));
   const matches = context.matches.map(toAchievementMatch);
   return playerIds
     .flatMap((playerId) =>
-      toEarnedAchievements(playerId, computeAchievements(playerId, matches)),
+      toEarnedAchievements(
+        playerId,
+        computeAchievements(playerId, matches, dominations.get(playerId)),
+      ),
     )
     .filter((item) => sessionMatchIds.has(item.earnedMatchId))
     .sort(
@@ -625,13 +695,18 @@ const buildSessionAchievements = (
 /** 업적 id별 받은 활성 회원 수. 아무도 받지 않은 업적도 0으로 넣는다 */
 export const countAchievementHolders = (
   context: RankingContext,
+  dominations: SessionDominations,
 ): Record<string, number> => {
   const counts: Record<string, number> = Object.fromEntries(
     ACHIEVEMENTS.map((definition) => [definition.id, 0]),
   );
   const matches = context.matches.map(toAchievementMatch);
   for (const playerId of getActivePlayerIds(context)) {
-    for (const item of computeAchievements(playerId, matches)) {
+    for (const item of computeAchievements(
+      playerId,
+      matches,
+      dominations.get(playerId),
+    )) {
       if (item.earned) counts[item.id] += 1;
     }
   }
