@@ -2,13 +2,13 @@ import React from "react";
 import type { MatchTopLevelType } from "@pkpkdupr/shared/match";
 import { Card } from "@/components/ui/Card";
 import {
+  COUNT_UP,
   CountUpNumber,
   CountUpRatingDelta,
 } from "@/components/ui/CountUpNumber";
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { formatRating } from "@/utils/dupr";
 import RatingTrendChart, {
-  LINE_DRAW_MS,
   type RatingTrendPoint,
 } from "@/components/profile/RatingTrendChart";
 
@@ -55,7 +55,7 @@ const ProfileRatingCard: React.FC<{
             <CountUpNumber
               value={rating}
               format={formatRating}
-              durationMs={LINE_DRAW_MS}
+              {...COUNT_UP}
             />
           ) : (
             "–"
@@ -63,7 +63,7 @@ const ProfileRatingCard: React.FC<{
         </span>
         <span className="whitespace-nowrap">
           <span className="text-pk-13 font-medium text-pk-sub">30일</span>{" "}
-          <CountUpRatingDelta value={last30Days} durationMs={LINE_DRAW_MS} />
+          <CountUpRatingDelta value={last30Days} {...COUNT_UP} />
         </span>
       </div>
       <RatingTrendChart

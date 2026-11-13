@@ -2,10 +2,14 @@ import React from "react";
 import type { SessionPlayerReport } from "@pkpkdupr/shared/ranking";
 import { Spinner } from "@heroui/react";
 import SkeletonBlock from "@/components/SkeletonBlock";
-import { getSessionRankChange } from "@/components/records/SessionReportParts";
+import {
+  SessionRankChangePop,
+  SessionRankCount,
+  SessionRatingDeltaCount,
+} from "@/components/records/SessionReportParts";
+import { WinLossCount } from "@/components/profile/ProfileStatTile";
 import { rowPressClassName } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
-import { RankChange, RatingDelta } from "@/components/ui/Delta";
 import { ChevronRightIcon } from "@/components/ui/Icons";
 import { MatchRow } from "@/components/ui/MatchRow";
 import { TextLink } from "@/components/ui/Section";
@@ -25,34 +29,19 @@ const MineStat: React.FC<{ label: string; children: React.ReactNode }> = ({
   </div>
 );
 
-/** 세션 카드 아래 내 기록 띠: 결과 / 평점 변화 / 세션 후 순위·변동 */
+/** 세션 카드 아래 내 기록 띠: 결과 / 평점 변화 / 세션 후 순위·변동. 승패·변화는 0부터, 순위는 세션 전 값부터 센다 */
 const SessionMineStrip: React.FC<{ mine: SessionPlayerReport }> = ({ mine }) => {
-  const rankChange = getSessionRankChange(mine);
   return (
     <div className="mt-2.5 grid grid-cols-3 gap-2 rounded-pk-sm bg-pk-bg px-3 py-2.5">
       <MineStat label="결과">
-        {mine.wins}승 {mine.losses}패
+        <WinLossCount wins={mine.wins} losses={mine.losses} />
       </MineStat>
       <MineStat label="평점">
-        <RatingDelta
-          value={
-            mine.ratingBefore !== null && mine.ratingAfter !== null
-              ? mine.ratingDelta
-              : null
-          }
-        />
+        <SessionRatingDeltaCount report={mine} />
       </MineStat>
       <MineStat label="랭킹">
-        {mine.rankAfter === null ? (
-          "–"
-        ) : (
-          <>
-            {mine.rankAfter}위
-            {rankChange !== null && rankChange !== 0 ? (
-              <RankChange value={rankChange} className="text-pk-13" />
-            ) : null}
-          </>
-        )}
+        <SessionRankCount report={mine} />
+        <SessionRankChangePop report={mine} className="text-pk-13" />
       </MineStat>
     </div>
   );

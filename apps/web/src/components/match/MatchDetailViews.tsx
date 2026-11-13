@@ -8,8 +8,12 @@ import {
 import SkeletonBlock from "@/components/SkeletonBlock";
 import { FooterError } from "@/components/record/RecordMatchParts";
 import { PkButton, rowPressClassName } from "@/components/ui/Button";
+import { MatchRatingChangeCount } from "@/components/match/MatchRatingChangeCount";
 import { Card } from "@/components/ui/Card";
-import { RatingDelta } from "@/components/ui/Delta";
+import {
+  COUNT_UP,
+  CountUpNumber,
+} from "@/components/ui/CountUpNumber";
 import { PlayerAvatar, TeamAvatars } from "@/components/ui/PlayerAvatar";
 import { LinkChevron } from "@/components/ui/Section";
 import { cx } from "@/components/ui/cx";
@@ -18,7 +22,6 @@ import {
   formatKstTime,
   formatKstWeekdayTime,
 } from "@/lib/format";
-import { formatRating } from "@/utils/dupr";
 
 type MatchTeam = MatchInfo["teams"][number];
 
@@ -169,7 +172,7 @@ export const LiveMatchActions: React.FC<{ onEnterScore: () => void }> = ({
   </PkButton>
 );
 
-/** 큰 점수 블록. 이긴 쪽 점수는 블루, 진 쪽은 회색 */
+/** 큰 점수 블록. 이긴 쪽 점수는 블루, 진 쪽은 회색. 점수는 0부터 센다(평점 변화보다 한 박자 먼저) */
 const ScoreBlock: React.FC<{
   match: MatchInfo;
   onOpenPlayer: (playerId: string) => void;
@@ -192,9 +195,13 @@ const ScoreBlock: React.FC<{
           {hasScores ? `${scoreA} 대 ${scoreB}` : "점수 없음"}
         </span>
         <span aria-hidden="true">
-          <span className={scoreClassName(0)}>{hasScores ? scoreA : "–"}</span>
+          <span className={scoreClassName(0)}>
+            {hasScores ? <CountUpNumber value={scoreA} {...COUNT_UP} /> : "–"}
+          </span>
           <span className="px-2 text-[#c5ccda]">:</span>
-          <span className={scoreClassName(1)}>{hasScores ? scoreB : "–"}</span>
+          <span className={scoreClassName(1)}>
+            {hasScores ? <CountUpNumber value={scoreB} {...COUNT_UP} /> : "–"}
+          </span>
         </span>
       </div>
       <TeamColumn
@@ -210,7 +217,7 @@ const RatingChangeCard: React.FC<{
   match: MatchInfo;
   onOpenPlayer: (playerId: string) => void;
 }> = ({ match, onOpenPlayer }) => {
-  // 경기 분류(단식/복식)에 맞는 평점의 이전·이후 값을 보인다
+  // 경기 분류(단식/복식)에 맞는 평점으로 이전 평점에서 새 평점까지 센다
   const ratingCategory =
     getMatchTopLevelType(match.type) === "singles" ? "singles" : "doubles";
   const entries = useMemo(() => {
@@ -260,13 +267,10 @@ const RatingChangeCard: React.FC<{
           <span className="min-w-0 truncate text-pk-15 font-bold">
             {player.username}
           </span>
-          <span className="text-pk-13 text-pk-sub tabular-nums">
-            {formatRating(change.previousRating[ratingCategory])} →{" "}
-            {formatRating(change.nextRating[ratingCategory])}
-          </span>
-          <RatingDelta
-            value={change.delta[ratingCategory]}
-            className="text-right"
+          <MatchRatingChangeCount
+            previousRating={change.previousRating[ratingCategory]}
+            nextRating={change.nextRating[ratingCategory]}
+            delta={change.delta[ratingCategory]}
           />
         </button>
       ))}

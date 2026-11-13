@@ -4,12 +4,12 @@ import type { MatchInfo } from "@/types/match";
 import SkeletonBlock from "@/components/SkeletonBlock";
 import ProfileRatingCard from "@/components/profile/ProfileRatingCard";
 import ProfileStatTile, {
-  PROFILE_STAT_COUNT,
   WinLossCount,
 } from "@/components/profile/ProfileStatTile";
 import type { ProfileOverview } from "@/components/profile/useProfileOverview";
 import { Card } from "@/components/ui/Card";
 import {
+  COUNT_UP,
   CountUpNumber,
   CountUpRatingDelta,
 } from "@/components/ui/CountUpNumber";
@@ -68,7 +68,7 @@ export const WinRateTile: React.FC<{
           <>
             <CountUpNumber
               value={Math.round((matchWins / total) * 100)}
-              {...PROFILE_STAT_COUNT}
+              {...COUNT_UP}
             />
             %
           </>
@@ -95,12 +95,12 @@ export const Last7DaysTile: React.FC<{
         <CountUpRatingDelta
           value={last7Days}
           className="text-pk-22 leading-[1.4]"
-          {...PROFILE_STAT_COUNT}
+          {...COUNT_UP}
         />
       }
       foot={
         <>
-          <CountUpNumber value={last7DaysMatchCount} {...PROFILE_STAT_COUNT} />
+          <CountUpNumber value={last7DaysMatchCount} {...COUNT_UP} />
           경기
         </>
       }

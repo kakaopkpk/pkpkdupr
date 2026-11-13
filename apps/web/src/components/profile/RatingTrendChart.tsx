@@ -1,5 +1,6 @@
 import React from "react";
 import { toKstDateKey } from "@pkpkdupr/shared/session";
+import { COUNT_UP } from "@/components/ui/CountUpNumber";
 import { usePlayOnShow } from "@/hooks/usePlayOnShow";
 
 export interface RatingTrendPoint {
@@ -23,14 +24,12 @@ const EMPTY_TEXT_Y = 58;
 // 작은 변동이 차트 높이 전체로 과장되지 않게 하는 최소 세로 범위
 const MIN_RATING_SPAN = 0.3;
 
-// 화면이 보일 때의 그리기 모션(ms). 끝점 pop의 onAnimationEnd가 재생 종료를 알리므로
-// END_DOT_DELAY_MS + END_DOT_POP_MS가 선 그리기(LINE_DRAW_MS)와 면 페이드(FILL_DELAY_MS + FILL_FADE_MS)보다
-// 늦게 끝나야 한다. 아니면 다른 모션이 끝나기 전에 animate 클래스가 떨어진다
-/** 선 그리기 길이(ms). 평점 카드의 평점 카운트업도 같은 길이로 맞춘다 */
-export const LINE_DRAW_MS = 700;
-const FILL_DELAY_MS = 400;
+// 화면이 보일 때의 그리기 모션(ms). 선은 숫자 카운트업(COUNT_UP)과 같은 박자로 그린다.
+// 끝점 pop의 onAnimationEnd가 재생 종료를 알리므로 END_DOT_DELAY_MS + END_DOT_POP_MS가
+// 선 그리기와 면 페이드(FILL_DELAY_MS + FILL_FADE_MS)보다 늦게 끝나야 한다. 아니면 다른 모션이 끝나기 전에 animate 클래스가 떨어진다
+const FILL_DELAY_MS = COUNT_UP.delayMs + 300;
 const FILL_FADE_MS = 400;
-const END_DOT_DELAY_MS = 650;
+const END_DOT_DELAY_MS = COUNT_UP.delayMs + COUNT_UP.durationMs - 50;
 const END_DOT_POP_MS = 360;
 
 const kstMonthDayFormatter = new Intl.DateTimeFormat("ko-KR", {
@@ -176,7 +175,14 @@ const RatingTrendChart: React.FC<{
             className={
               isPlaying ? "animate-pk-draw motion-reduce:animate-none" : undefined
             }
-            style={isPlaying ? { animationDuration: `${LINE_DRAW_MS}ms` } : undefined}
+            style={
+              isPlaying
+                ? {
+                    animationDelay: `${COUNT_UP.delayMs}ms`,
+                    animationDuration: `${COUNT_UP.durationMs}ms`,
+                  }
+                : undefined
+            }
           />
           {/* SVG 요소의 scale 기준점을 점 중심으로 맞추려면 fill-box가 필요하다 */}
           <circle

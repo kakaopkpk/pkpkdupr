@@ -8,7 +8,6 @@ import AchievementsSection from "@/components/profile/AchievementsSection";
 import SkeletonBlock from "@/components/SkeletonBlock";
 import PlayerMatchesDrawer from "@/components/profile/PlayerMatchesDrawer";
 import ProfileStatTile, {
-  PROFILE_STAT_COUNT,
   WinLossCount,
 } from "@/components/profile/ProfileStatTile";
 import {
@@ -21,6 +20,7 @@ import {
 } from "@/components/profile/ProfileSections";
 import { useProfileOverview } from "@/components/profile/useProfileOverview";
 import {
+  COUNT_UP,
   CountUpNumber,
   CountUpRatingDelta,
 } from "@/components/ui/CountUpNumber";
@@ -58,7 +58,7 @@ const HeadToHeadTile: React.FC<{ stat: HeadToHeadStat | null }> = ({ stat }) => 
     }
     foot={
       <>
-        <CountUpNumber value={stat?.matchCount ?? 0} {...PROFILE_STAT_COUNT} />
+        <CountUpNumber value={stat?.matchCount ?? 0} {...COUNT_UP} />
         경기
       </>
     }
@@ -80,7 +80,7 @@ const HeadToHeadRatingTile: React.FC<{ stat: HeadToHeadStat | null }> = ({
           <CountUpRatingDelta
             value={stat.ratingDelta}
             className="text-pk-22 leading-[1.4]"
-            {...PROFILE_STAT_COUNT}
+            {...COUNT_UP}
           />
         ) : (
           "–"
@@ -88,7 +88,7 @@ const HeadToHeadRatingTile: React.FC<{ stat: HeadToHeadStat | null }> = ({
       }
       foot={
         <>
-          <CountUpNumber value={matchCount} {...PROFILE_STAT_COUNT} />
+          <CountUpNumber value={matchCount} {...COUNT_UP} />
           경기 합계
         </>
       }
@@ -197,7 +197,7 @@ export default function MemberProfileDrawer({
                 <span className="text-pk-13 text-pk-sub tabular-nums">
                   <CountUpNumber
                     value={totalStats.wins + totalStats.losses}
-                    {...PROFILE_STAT_COUNT}
+                    {...COUNT_UP}
                   />
                   경기 ·{" "}
                   <WinLossCount wins={totalStats.wins} losses={totalStats.losses} />

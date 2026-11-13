@@ -1,20 +1,15 @@
 import React from "react";
 import { Card } from "@/components/ui/Card";
-import { CountUpNumber } from "@/components/ui/CountUpNumber";
-import { LINE_DRAW_MS } from "@/components/profile/RatingTrendChart";
+import { COUNT_UP, CountUpNumber } from "@/components/ui/CountUpNumber";
 
-/** 프로필 통계 숫자의 카운트업 길이(ms). 평점 카드의 평점·차트 선 그리기와 함께 움직인다 */
-export const PROFILE_STAT_COUNT = { durationMs: LINE_DRAW_MS } as const;
-
-/** 0부터 세는 "N승 M패". 타이밍 기본값은 프로필 통계 숫자 것이다 */
-export const WinLossCount: React.FC<{
-  wins: number;
-  losses: number;
-  timing?: { delayMs?: number; durationMs: number };
-}> = ({ wins, losses, timing = PROFILE_STAT_COUNT }) => (
+/** 0부터 세는 "N승 M패" */
+export const WinLossCount: React.FC<{ wins: number; losses: number }> = ({
+  wins,
+  losses,
+}) => (
   <>
-    <CountUpNumber value={wins} {...timing} />
-    승 <CountUpNumber value={losses} {...timing} />
+    <CountUpNumber value={wins} {...COUNT_UP} />
+    승 <CountUpNumber value={losses} {...COUNT_UP} />
     패
   </>
 );
