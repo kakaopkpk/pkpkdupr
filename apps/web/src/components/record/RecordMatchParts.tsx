@@ -1,10 +1,12 @@
 import React from "react";
 import { cx } from "@/components/ui/cx";
 
-export const CheckIcon: React.FC<{ size?: number; className?: string }> = ({
-  size = 16,
-  className,
-}) => (
+export const CheckIcon: React.FC<{
+  size?: number;
+  className?: string;
+  /** true면 마운트 때 선을 그리듯 나타난다(움직임 줄이기면 정적) */
+  draw?: boolean;
+}> = ({ size = 16, className, draw = false }) => (
   <svg
     width={size}
     height={size}
@@ -17,7 +19,11 @@ export const CheckIcon: React.FC<{ size?: number; className?: string }> = ({
     strokeLinejoin="round"
     className={cx("shrink-0", className)}
   >
-    <path d="M5 12.5l4.5 4.5L19 7.5" />
+    <path
+      d="M5 12.5l4.5 4.5L19 7.5"
+      pathLength={draw ? 1 : undefined}
+      className={draw ? "animate-pk-draw motion-reduce:animate-none" : undefined}
+    />
   </svg>
 );
 
