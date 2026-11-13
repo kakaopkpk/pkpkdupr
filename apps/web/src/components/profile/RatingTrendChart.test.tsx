@@ -11,9 +11,10 @@ const render = (points: RatingTrendPoint[]) =>
     <RatingTrendChart points={points} ariaLabel="추세" now={now} />,
   );
 
-const getPolylineXs = (markup: string) => {
-  const points = /<polyline points="([^"]+)"/.exec(markup)?.[1] ?? "";
-  return points.split(" ").map((pair) => Number(pair.split(",")[0]));
+// 선은 fill="none"인 path이고, 영역 path와 구분된다
+const getLineXs = (markup: string) => {
+  const d = /<path d="([^"]+)"[^>]*fill="none"/.exec(markup)?.[1] ?? "";
+  return [...d.matchAll(/[ML]\s*(-?[\d.]+)/g)].map((match) => Number(match[1]));
 };
 
 describe("RatingTrendChart", () => {
@@ -23,7 +24,7 @@ describe("RatingTrendChart", () => {
       { rating: 3.2, createdAt: "2026-11-13T11:00:00.000Z", source: "match" },
     ]);
 
-    expect(getPolylineXs(markup)).toEqual([34, 318]);
+    expect(getLineXs(markup)).toEqual([34, 318]);
     expect(markup).toContain("11월 12일");
     expect(markup).toContain("오늘");
     expect(markup).toContain("3.50");
@@ -37,7 +38,7 @@ describe("RatingTrendChart", () => {
       { rating: 3.31, createdAt: "2026-11-12T11:00:00.000Z", source: "match" },
     ]);
 
-    expect(getPolylineXs(markup)).toEqual([34, 176, 318]);
+    expect(getLineXs(markup)).toEqual([34, 176, 318]);
     // 가운데 경기일 점(r 2.5) 하나와 끝점(r 4) 하나
     expect(markup.match(/<circle/g)).toHaveLength(2);
     expect(markup).toContain("10월 14일");
