@@ -24,6 +24,7 @@ import {
 
 const now = new Date("2026-11-12T12:00:00.000Z");
 const makePlayer = (id: string, username: string, doubles: number): Player => ({
+  isGuest: false,
   id,
   username,
   gender: "M",
@@ -63,6 +64,7 @@ const emptySession: SessionWithParticipantIds = {
 };
 const completedAt = new Date("2026-11-09T10:00:00.000Z");
 const match: CompletedMatchOutcome = {
+  ratingExcluded: false,
   id: "Mmatch01",
   type: "unrestricted-doubles",
   sessionId: session.id,

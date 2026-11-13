@@ -43,7 +43,7 @@ export type MeResponse = Player & { isAdmin: boolean; isFirstLogin: boolean };
 /** POST /api/admin/register 요청 */
 export interface AdminRegisterPlayerRequest {
   username: string;
-  gender: Player["gender"];
+  gender: "M" | "F";
 }
 
 /** POST /api/admin/register 응답. initialPassword는 이 응답에서만 보인다 */
@@ -51,6 +51,9 @@ export interface AdminRegisterPlayerResponse {
   player: Player;
   initialPassword: string;
 }
+
+/** POST /api/admin/players/:playerId/promote 응답. 게스트를 정회원으로 바꾸며 발급한 initialPassword는 이 응답에서만 보인다 */
+export type AdminPromoteGuestResponse = AdminRegisterPlayerResponse;
 
 /** POST /api/admin/players/:playerId/password-reset 응답. temporaryPassword는 이 응답에서만 보인다 */
 export interface AdminPasswordResetResponse {

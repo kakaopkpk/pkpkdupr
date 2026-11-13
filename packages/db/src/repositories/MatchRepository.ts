@@ -12,6 +12,7 @@ import type {
 } from "@pkpkdupr/shared/match";
 import {
   getMatchSessionStatus,
+  hasGuestPlayer,
   validateMatchScores,
 } from "@pkpkdupr/shared/match";
 import {
@@ -19,7 +20,17 @@ import {
   type Player,
   type PublicPlayerDupr,
 } from "@pkpkdupr/shared/player";
-import { and, asc, desc, eq, gte, isNotNull, lt, max } from "drizzle-orm";
+import {
+  and,
+  asc,
+  count,
+  desc,
+  eq,
+  gte,
+  isNotNull,
+  lt,
+  max,
+} from "drizzle-orm";
 import {
   matchParticipants,
   matches,
@@ -42,6 +53,11 @@ import {
 } from "@pkpkdupr/shared/session";
 import { firstRow, placeholders, type RawQueryResult } from "../db/client";
 import { buildMatchDeletionLogInsert } from "./MatchDeletionLogRepository";
+import {
+  PlayerRepository,
+  type CreateStoredPlayerInput,
+  type StoredPlayerRecord,
+} from "./PlayerRepository";
 
 type StoredMatch = typeof matches.$inferSelect;
 type StoredMatchParticipant = typeof matchParticipants.$inferSelect;
@@ -101,6 +117,8 @@ export interface CompletedMatchOutcome {
   /** 팀별 선수 id. [0]=팀 A, [1]=팀 B */
   teamPlayerIds: [string[], string[]];
   scores: MatchScore[];
+  /** 게스트가 낀 경기. 랭킹 경기 수·업적·세션 지배자에서 뺀다 */
+  ratingExcluded: boolean;
 }
 
 export interface SessionWithParticipantIds {
@@ -131,6 +149,8 @@ export interface CreateMatchInput {
   completedAt: Date | null;
   resultSubmittedByPlayerId?: string | null;
   resultSubmittedAt?: Date | null;
+  /** 완료 경기의 평점 미반영 여부. 생략하면 false */
+  ratingExcluded?: boolean;
 }
 
 /** 참가자의 경기 기록 수정 입력. 시작 시각·세션·코트·생성자는 바꾸지 않는다. */
@@ -142,6 +162,8 @@ export interface UpdateRecordedMatchInput {
   scores: MatchScore[];
   resultSubmittedByPlayerId: string;
   resultSubmittedAt: Date;
+  /** 저장 후 경기의 평점 미반영 여부 */
+  ratingExcluded: boolean;
   /** 주면 저장된 updated_at(초 단위)과 같을 때만 고치고, 다르면 MatchStaleUpdateError */
   expectedUpdatedAt?: Date;
 }
@@ -190,6 +212,8 @@ export interface TimestampUnitAudit {
 export interface ExpiredCleanupResult {
   deletedMatchCount: number;
   deletedSessionCount: number;
+  /** 이번 정리로 지운 세션 id */
+  deletedSessionIds: string[];
 }
 
 const toDateOrNull = (value: Date | string | number | null | undefined) =>
@@ -217,8 +241,9 @@ const toPublicPlayer = (record: StoredPlayer): Player => ({
   id: record.id,
   username: record.username,
   duprRating: normalizeNullablePlayerDupr(record.duprRating),
-  gender: record.gender as Player["gender"],
+  gender: (record.gender ?? null) as Player["gender"],
   status: record.status as Player["status"],
+  isGuest: record.isGuest === true,
   avatarUrl: record.avatarUrl ?? undefined,
   createdAt: toDate(record.createdAt),
   updatedAt: toDate(record.updatedAt),
@@ -465,7 +490,7 @@ export class MatchRepository {
    */
   async findOrCreateRegularSession(
     dateKey: string,
-  ): Promise<ManagedMatchSession> {
+  ): Promise<{ session: ManagedMatchSession; created: boolean }> {
     if (!REGULAR_DATE_KEY_PATTERN.test(dateKey)) {
       throw new Error("유효한 정기 세션 날짜가 필요합니다.");
     }
@@ -480,7 +505,7 @@ export class MatchRepository {
 
     const existing = await findStored();
     if (existing) {
-      return await this.toManagedSession(existing);
+      return { session: await this.toManagedSession(existing), created: false };
     }
 
     const sessionDate = kstDateKeyToDate(dateKey, REGULAR_SESSION_START_HOUR);
@@ -488,10 +513,11 @@ export class MatchRepository {
     // 같은 날 18:00 KST에 정기 세션과 이름이 같은 다른 세션이 있으면 (name, date) 유니크 충돌로 끝까지 실패한다.
     for (let attempt = 0; attempt < 8; attempt += 1) {
       const now = new Date();
+      const candidateId = generateEntityId("session");
       await this.db
         .insert(matchSessions)
         .values({
-          id: generateEntityId("session"),
+          id: candidateId,
           name: getRegularSessionName(dateKey),
           date: sessionDate,
           location: REGULAR_SESSION_LOCATION,
@@ -503,24 +529,28 @@ export class MatchRepository {
 
       const stored = await findStored();
       if (stored) {
-        return await this.toManagedSession(stored);
+        // 동시 호출이 먼저 만든 행이면 id가 달라 created=false다
+        return {
+          session: await this.toManagedSession(stored),
+          created: stored.id === candidateId,
+        };
       }
     }
 
     throw new Error("정기 세션을 만들지 못했습니다.");
   }
 
-  /** 세션 참여자를 추가한다. 이미 있는 참여자는 그대로 둔다. */
+  /** 세션 참여자를 추가한다. 이미 있는 참여자는 그대로 둔다. 새로 들어간 참여자가 있으면 true */
   async addSessionParticipants(
     sessionId: string,
     playerIds: string[],
-  ): Promise<void> {
+  ): Promise<boolean> {
     if (!isEntityId(sessionId, "session")) {
       throw new Error("유효한 세션 ID가 필요합니다.");
     }
     const uniquePlayerIds = [...new Set(playerIds)];
     if (uniquePlayerIds.length === 0) {
-      return;
+      return false;
     }
 
     const now = toUnixTimestampSeconds(new Date());
@@ -545,19 +575,65 @@ export class MatchRepository {
         now,
       ]),
     });
-    if (inserted.rowsAffected > 0) {
-      await this.client.execute({
+    if (inserted.rowsAffected === 0) {
+      return false;
+    }
+    await this.client.execute({
+      sql: "UPDATE match_sessions SET updated_at = $1 WHERE id = $2",
+      args: [now, sessionId],
+    });
+    return true;
+  }
+
+  /**
+   * 게스트 회원을 만들고 그 세션의 참여자로 넣는다.
+   * 한 트랜잭션이라 참여자 추가가 실패하면 게스트 행도 남지 않는다.
+   * 아이디가 겹치면 Postgres unique_violation(23505)을 그대로 던진다.
+   */
+  async createGuestParticipant(
+    sessionId: string,
+    guest: CreateStoredPlayerInput,
+  ): Promise<StoredPlayerRecord> {
+    if (!isEntityId(sessionId, "session")) {
+      throw new Error("유효한 세션 ID가 필요합니다.");
+    }
+
+    const transaction = await this.client.transaction("write");
+    let committed = false;
+    const now = toUnixTimestampSeconds(new Date());
+    try {
+      const created = await new PlayerRepository(transaction.db).create(guest);
+      await transaction.execute({
+        sql: `
+          INSERT INTO match_session_participants (
+            id,
+            session_id,
+            player_id,
+            created_at
+          )
+          VALUES ($1, $2, $3, $4)
+        `,
+        args: [`${sessionId}-${created.id}`, sessionId, created.id, now],
+      });
+      await transaction.execute({
         sql: "UPDATE match_sessions SET updated_at = $1 WHERE id = $2",
         args: [now, sessionId],
       });
+      await transaction.commit();
+      committed = true;
+      return created;
+    } finally {
+      if (!committed) {
+        transaction.close();
+      }
     }
   }
 
-  /** 세션 참여자 한 명을 뺀다. 참여 중이 아니면 아무것도 하지 않는다. */
+  /** 세션 참여자 한 명을 뺀다. 참여 중이 아니면 아무것도 하지 않는다. 실제로 뺐으면 true */
   async removeSessionParticipant(
     sessionId: string,
     playerId: string,
-  ): Promise<void> {
+  ): Promise<boolean> {
     if (!isEntityId(sessionId, "session")) {
       throw new Error("유효한 세션 ID가 필요합니다.");
     }
@@ -568,12 +644,14 @@ export class MatchRepository {
       `,
       args: [sessionId, playerId],
     });
-    if (deleted.rowsAffected > 0) {
-      await this.client.execute({
-        sql: "UPDATE match_sessions SET updated_at = $1 WHERE id = $2",
-        args: [toUnixTimestampSeconds(new Date()), sessionId],
-      });
+    if (deleted.rowsAffected === 0) {
+      return false;
     }
+    await this.client.execute({
+      sql: "UPDATE match_sessions SET updated_at = $1 WHERE id = $2",
+      args: [toUnixTimestampSeconds(new Date()), sessionId],
+    });
+    return true;
   }
 
   /** 세션 시각이 [from, to) 범위인 세션을 시각 오름차순으로 돌려준다. */
@@ -676,7 +754,8 @@ export class MatchRepository {
         )
         SELECT
           (SELECT count(*) FROM deleted_matches) AS deleted_match_count,
-          (SELECT count(*) FROM deleted_sessions) AS deleted_session_count
+          (SELECT count(*) FROM deleted_sessions) AS deleted_session_count,
+          (SELECT string_agg(id, ',') FROM deleted_sessions) AS deleted_session_ids
       `,
       args: [
         inProgressExpiryCutoff(now),
@@ -686,9 +765,15 @@ export class MatchRepository {
       ],
     });
     const row = result.rows[0];
+    // 세션 id(엔티티 id)에는 쉼표가 없어 쉼표로 이어 받는다
+    const deletedSessionIds =
+      typeof row?.deleted_session_ids === "string" && row.deleted_session_ids
+        ? row.deleted_session_ids.split(",")
+        : [];
     return {
       deletedMatchCount: Number(row?.deleted_match_count ?? 0),
       deletedSessionCount: Number(row?.deleted_session_count ?? 0),
+      deletedSessionIds,
     };
   }
 
@@ -795,6 +880,7 @@ export class MatchRepository {
         INNER JOIN matches ON matches.id = match_participants.match_id
         WHERE match_participants.player_id = $1
           AND matches.status = 'completed'
+          AND matches.rating_excluded = false
           AND matches.completed_at IS NOT NULL
           AND matches.completed_at < $2
           AND matches.type IN (${typePlaceholders})
@@ -826,6 +912,7 @@ export class MatchRepository {
       .where(
         and(
           eq(matches.status, "completed"),
+          eq(matches.ratingExcluded, false),
           isNotNull(matches.completedAt),
         ),
       )
@@ -838,6 +925,31 @@ export class MatchRepository {
       }) =>
         lastPlayedAt == null ? [] : [[playerId, toDate(lastPlayedAt)]],
       ),
+    );
+  }
+
+  /** 선수별로 참가한 평점 미반영(rating_excluded) 완료 경기 수. 0인 선수는 빠진다 */
+  async countRatingExcludedMatchesByPlayerId(): Promise<Record<string, number>> {
+    const rows = await this.db
+      .select({
+        playerId: matchParticipants.playerId,
+        matchCount: count(),
+      })
+      .from(matchParticipants)
+      .innerJoin(matches, eq(matchParticipants.matchId, matches.id))
+      .where(
+        and(
+          eq(matches.status, "completed"),
+          eq(matches.ratingExcluded, true),
+        ),
+      )
+      .groupBy(matchParticipants.playerId);
+
+    return Object.fromEntries(
+      rows.map(({ playerId, matchCount }: {
+        playerId: string;
+        matchCount: number | string;
+      }) => [playerId, Number(matchCount)]),
     );
   }
 
@@ -858,6 +970,7 @@ export class MatchRepository {
           sessionId: matches.sessionId,
           matchStartsAt: matches.matchStartsAt,
           completedAt: matches.completedAt,
+          ratingExcluded: matches.ratingExcluded,
         })
         .from(matches)
         .where(completedFilter),
@@ -915,6 +1028,7 @@ export class MatchRepository {
         sessionId: string | null;
         matchStartsAt: Date | string | number;
         completedAt: Date | string | number;
+        ratingExcluded: boolean | null;
       }>
     ).map((row): CompletedMatchOutcome => ({
       id: row.id,
@@ -924,6 +1038,7 @@ export class MatchRepository {
       completedAt: toDate(row.completedAt),
       teamPlayerIds: teamsByMatchId.get(row.id) ?? [[], []],
       scores: scoresByMatchId.get(row.id) ?? [],
+      ratingExcluded: row.ratingExcluded === true,
     }));
   }
 
@@ -1158,6 +1273,7 @@ export class MatchRepository {
       completedAt: toDateOrNull(data.completedAt),
       resultSubmittedByPlayerId: data.resultSubmittedByPlayerId ?? null,
       resultSubmittedAt: toDateOrNull(data.resultSubmittedAt),
+      ratingExcluded: data.ratingExcluded ?? false,
       createdAt: now,
       updatedAt: now,
     });
@@ -1270,10 +1386,11 @@ export class MatchRepository {
               completed_at,
               result_submitted_by_player_id,
               result_submitted_at,
+              rating_excluded,
               created_at,
               updated_at
             )
-            VALUES (${placeholders(17)})
+            VALUES (${placeholders(18)})
           `,
           args: [
             match.id,
@@ -1295,6 +1412,7 @@ export class MatchRepository {
             match.resultSubmittedAt
               ? toUnixTimestampSeconds(new Date(match.resultSubmittedAt))
               : null,
+            match.ratingExcluded ?? false,
             nowSeconds,
             nowSeconds,
           ],
@@ -1359,7 +1477,13 @@ export class MatchRepository {
     data: CreateMatchInput,
     now: Date,
   ): Promise<
-    { match: Match; conflictPlayerId?: undefined } | { conflictPlayerId: string }
+    | {
+        match: Match;
+        /** 이 경기로 세션 참여자가 새로 들어갔으면 true */
+        sessionParticipantsAdded: boolean;
+        conflictPlayerId?: undefined;
+      }
+    | { conflictPlayerId: string }
   > {
     if (!isEntityId(data.id, "match")) {
       throw new Error("유효한 매치 ID가 필요합니다.");
@@ -1379,6 +1503,7 @@ export class MatchRepository {
 
     const transaction = await this.client.transaction("write");
     let committed = false;
+    let sessionParticipantsAdded = false;
     try {
       await transaction.execute(
         "SELECT pg_advisory_xact_lock(hashtext('pkpkdupr:start-in-progress-match'))",
@@ -1431,6 +1556,7 @@ export class MatchRepository {
           ]),
         });
         if (inserted.rowsAffected > 0) {
+          sessionParticipantsAdded = true;
           await transaction.execute({
             sql: "UPDATE match_sessions SET updated_at = $1 WHERE id = $2",
             args: [nowSeconds, session.id],
@@ -1518,7 +1644,7 @@ export class MatchRepository {
     if (!created) {
       throw new Error("매치 생성에 실패했습니다.");
     }
-    return { match: created };
+    return { match: created, sessionParticipantsAdded };
   }
 
   /**
@@ -1605,6 +1731,8 @@ export class MatchRepository {
     }
 
     validateMatchScores(scores);
+    // 완료되는 시점에 게스트가 낀 경기는 평점에 반영하지 않는다(참가자의 현재 게스트 여부로 정한다).
+    const ratingExcluded = hasGuestPlayer(existing.teams);
 
     const scoreColumns = await this.getMatchScoreColumns();
     const transaction = await this.client.transaction("write");
@@ -1620,7 +1748,8 @@ export class MatchRepository {
             result_submitted_by_player_id = $2,
             result_submitted_at = $3,
             completed_at = $4,
-            updated_at = $5
+            updated_at = $5,
+            rating_excluded = $7
           WHERE id = $6
             AND status = 'created'
         `,
@@ -1631,6 +1760,7 @@ export class MatchRepository {
           completedAtSeconds,
           completedAtSeconds,
           matchId,
+          ratingExcluded,
         ],
       });
       if (!updateResult.rowsAffected) {
@@ -1701,7 +1831,8 @@ export class MatchRepository {
             result_submitted_by_player_id = $4,
             result_submitted_at = $5,
             completed_at = COALESCE(completed_at, $5),
-            updated_at = GREATEST($5, updated_at + 1)
+            updated_at = GREATEST($5, updated_at + 1),
+            rating_excluded = $8
           WHERE id = $6
             AND status IN ('created', 'completed')
             AND ($7::bigint IS NULL OR updated_at = $7)
@@ -1714,6 +1845,7 @@ export class MatchRepository {
           submittedAtSeconds,
           matchId,
           toExpectedUpdatedAtSeconds(data.expectedUpdatedAt),
+          data.ratingExcluded,
         ],
       });
       if (!updateResult.rowsAffected) {
@@ -2051,6 +2183,7 @@ export class MatchRepository {
       createdAt: toDate(match.createdAt),
       completedAt: toDateOrNull(match.completedAt),
       updatedAt: toDate(match.updatedAt),
+      ratingExcluded: match.ratingExcluded === true,
     } as Match & { sessionName?: string };
 
     return hydratedMatch;

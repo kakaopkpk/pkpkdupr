@@ -1,6 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import BottomSheet from "@/components/BottomSheet";
 import { PkButton } from "@/components/ui/Button";
+import { GuestLabel } from "@/components/ui/GuestLabel";
+import { PersonAddIcon } from "@/components/ui/Icons";
 import { PlayerAvatar } from "@/components/ui/PlayerAvatar";
 import { SearchField } from "@/components/ui/SearchField";
 import { SheetTitle } from "@/components/ui/SheetTitle";
@@ -11,12 +13,14 @@ import {
   useTabNavigation,
 } from "@/context/TabNavigationContext";
 import { useLayerDepth } from "@/hooks/useLayerDepth";
-import { usePlayers } from "@/hooks/usePlayers";
+import { type MemberListPlayerInfo, usePlayers } from "@/hooks/usePlayers";
 import {
+  addMatchSessionGuest,
   addMatchSessionParticipant,
   type MatchSessionDetailInfo,
   removeMatchSessionParticipant,
 } from "@/lib/matchSessions";
+import { getGuestAddOption, GUEST_USERNAME_FORMAT_HINT } from "./guestAdd";
 import { getErrorMessage, isNetworkError } from "./saveError";
 
 export interface ParticipantsSheetProps {
@@ -67,6 +71,11 @@ const CheckMark: React.FC<{ isChecked: boolean; isLocked: boolean }> = ({
     />
   );
 
+type ParticipantRow = Pick<
+  MemberListPlayerInfo,
+  "id" | "username" | "avatarUrl" | "status" | "isGuest"
+>;
+
 /** 저장할 변경. 실패한 것만 남겨 다시 시도한다 */
 interface ParticipantChange {
   playerId: string;
@@ -86,7 +95,11 @@ const ParticipantsForm: React.FC<ParticipantsFormProps> = ({
   onDone,
   onChanged,
 }) => {
-  const { players, status: playersStatus } = usePlayers();
+  const {
+    players,
+    status: playersStatus,
+    reload: reloadPlayers,
+  } = usePlayers();
   const { showSaveFailure } = useSystemNotice();
   const [query, setQuery] = useState("");
   // 열 때의 참여자. 저장에 성공한 변경만큼 따라 바뀐다
@@ -95,14 +108,22 @@ const ParticipantsForm: React.FC<ParticipantsFormProps> = ({
   );
   const [selectedIds, setSelectedIds] = useState(() => new Set(savedIds));
   const [isSaving, setIsSaving] = useState(false);
+  const [isAddingGuest, setIsAddingGuest] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  // 정렬은 열 때의 참여자 기준으로 고정해 체크를 바꿔도 행이 움직이지 않게 한다
-  const [sortAnchorIds] = useState(() => savedIds);
+  // 이 시트에서 만든 게스트. 회원 목록을 다시 받기 전에도 목록에 보인다
+  const [addedGuests, setAddedGuests] = useState<ParticipantRow[]>([]);
+  // 정렬은 열 때의 참여자(와 새로 만든 게스트) 기준으로 고정해 체크를 바꿔도 행이 움직이지 않게 한다
+  const [sortAnchorIds, setSortAnchorIds] = useState(() => savedIds);
   const lockedIds = useMemo(() => new Set(lockedPlayerIds), [lockedPlayerIds]);
 
   const rows = useMemo(() => {
     const normalizedQuery = query.trim().toLocaleLowerCase();
-    return players
+    const playerIds = new Set(players.map((player) => player.id));
+    const allRows: ParticipantRow[] = [
+      ...players,
+      ...addedGuests.filter((guest) => !playerIds.has(guest.id)),
+    ];
+    return allRows
       .filter((player) => player.status === "active")
       .filter(
         (player) =>
@@ -114,10 +135,16 @@ const ParticipantsForm: React.FC<ParticipantsFormProps> = ({
         const rankB = sortAnchorIds.has(b.id) ? 0 : 1;
         return rankA - rankB || a.username.localeCompare(b.username, "ko");
       });
-  }, [players, query, sortAnchorIds]);
+  }, [addedGuests, players, query, sortAnchorIds]);
+
+  const guestAddOption = getGuestAddOption({
+    query,
+    playersStatus,
+    resultCount: rows.length,
+  });
 
   const toggle = (playerId: string) => {
-    if (lockedIds.has(playerId) || isSaving) return;
+    if (lockedIds.has(playerId) || isSaving || isAddingGuest) return;
     setError(null);
     setSelectedIds((current) => {
       const next = new Set(current);
@@ -144,7 +171,7 @@ const ParticipantsForm: React.FC<ParticipantsFormProps> = ({
 
     setIsSaving(true);
     setError(null);
-    const nextSavedIds = new Set(savedIds);
+    const applied: ParticipantChange[] = [];
     let serverError: string | null = null;
     let networkError: unknown = null;
 
@@ -152,11 +179,10 @@ const ParticipantsForm: React.FC<ParticipantsFormProps> = ({
       try {
         if (change.action === "add") {
           await addMatchSessionParticipant(session.id, change.playerId);
-          nextSavedIds.add(change.playerId);
         } else {
           await removeMatchSessionParticipant(session.id, change.playerId);
-          nextSavedIds.delete(change.playerId);
         }
+        applied.push(change);
       } catch (err) {
         if (isNetworkError(err)) {
           // 연결이 끊겼으면 나머지도 실패하므로 멈춘다
@@ -167,11 +193,17 @@ const ParticipantsForm: React.FC<ParticipantsFormProps> = ({
       }
     }
 
-    setSavedIds(nextSavedIds);
+    // 저장 중에 게스트 추가로 늘어난 savedIds를 덮지 않도록 반영한 변경만 합친다
+    setSavedIds((current) => {
+      const next = new Set(current);
+      for (const change of applied) {
+        if (change.action === "add") next.add(change.playerId);
+        else next.delete(change.playerId);
+      }
+      return next;
+    });
     setIsSaving(false);
-    const didApplyAny =
-      nextSavedIds.size !== savedIds.size ||
-      [...nextSavedIds].some((id) => !savedIds.has(id));
+    const didApplyAny = applied.length > 0;
 
     if (!networkError && !serverError) {
       onDone(true);
@@ -189,8 +221,41 @@ const ParticipantsForm: React.FC<ParticipantsFormProps> = ({
     saveRef.current = save;
   }, [save]);
 
+  /** 게스트를 만들면 서버가 바로 참여자로 넣으므로, 저장된 참여자로 체크해 둔다 */
+  const addGuest = useCallback(
+    async (username: string) => {
+      setIsAddingGuest(true);
+      setError(null);
+      try {
+        const guest = await addMatchSessionGuest(session.id, username);
+        setQuery("");
+        setAddedGuests((current) => [...current, guest]);
+        setSortAnchorIds((current) => new Set(current).add(guest.id));
+        setSavedIds((current) => new Set(current).add(guest.id));
+        setSelectedIds((current) => new Set(current).add(guest.id));
+        void reloadPlayers();
+        onChanged();
+      } catch (err) {
+        if (isNetworkError(err)) throw err;
+        setError(getErrorMessage(err, "게스트를 추가하지 못했어요."));
+      } finally {
+        setIsAddingGuest(false);
+      }
+    },
+    [onChanged, reloadPlayers, session.id],
+  );
+
+  const handleAddGuest = async (username: string) => {
+    if (isSaving || isAddingGuest) return;
+    try {
+      await addGuest(username);
+    } catch {
+      showSaveFailure({ onRetry: () => addGuest(username) });
+    }
+  };
+
   const handleDone = async () => {
-    if (isSaving) return;
+    if (isSaving || isAddingGuest) return;
     try {
       await save();
     } catch {
@@ -206,14 +271,55 @@ const ParticipantsForm: React.FC<ParticipantsFormProps> = ({
           sub={`${session.name} · ${selectedIds.size}명`}
         />
         <SearchField
-          aria-label="이름 검색"
-          placeholder="이름 검색"
+          aria-label="아이디 검색"
+          placeholder="아이디 검색"
           value={query}
           onValueChange={setQuery}
         />
       </BottomSheet.Header>
       <BottomSheet.Body className="min-w-0 gap-0 overflow-y-auto">
-        {rows.length === 0 ? (
+        {guestAddOption ? (
+          <div className="flex flex-col">
+            <p className="py-4 text-center text-pk-13 text-pk-sub">
+              회원 중에 ‘{guestAddOption.username}’가 없어요.
+            </p>
+            <button
+              type="button"
+              disabled={!guestAddOption.isValid || isAddingGuest || isSaving}
+              onClick={() => void handleAddGuest(guestAddOption.username)}
+              className="flex min-h-14 w-full items-center gap-3 px-1 text-left text-pk-primary active:opacity-70 disabled:active:opacity-100"
+            >
+              <span
+                aria-hidden="true"
+                className={cx(
+                  "flex size-8 shrink-0 items-center justify-center rounded-full border-2 border-dashed",
+                  guestAddOption.isValid
+                    ? "border-pk-primary"
+                    : "border-pk-muted text-pk-muted",
+                )}
+              >
+                <PersonAddIcon />
+              </span>
+              <span className="flex min-w-0 flex-1 flex-col">
+                <span
+                  className={cx(
+                    "truncate text-pk-15 font-bold",
+                    !guestAddOption.isValid && "text-pk-muted",
+                  )}
+                >
+                  ‘{guestAddOption.username}’ 게스트로 추가
+                </span>
+                <span className="text-pk-12 text-pk-sub">
+                  {isAddingGuest
+                    ? "추가하는 중…"
+                    : guestAddOption.isValid
+                      ? "이 아이디로 게스트를 만들고 이 세션에 넣어요"
+                      : GUEST_USERNAME_FORMAT_HINT}
+                </span>
+              </span>
+            </button>
+          </div>
+        ) : rows.length === 0 ? (
           <p className="py-6 text-center text-pk-13 text-pk-muted">
             {playersStatus === "error"
               ? "회원 목록을 불러오지 못했어요."
@@ -230,8 +336,11 @@ const ParticipantsForm: React.FC<ParticipantsFormProps> = ({
                 <>
                   <PlayerAvatar player={player} size={32} />
                   <span className="flex min-w-0 flex-1 flex-col">
-                    <span className="truncate text-pk-15 font-bold text-pk-ink">
-                      {player.username}
+                    <span className="flex min-w-0 items-baseline gap-1">
+                      <span className="truncate text-pk-15 font-bold text-pk-ink">
+                        {player.username}
+                      </span>
+                      {player.isGuest ? <GuestLabel /> : null}
                     </span>
                     {isLocked ? (
                       <span className="text-pk-12 text-pk-muted">경기 중</span>
@@ -262,7 +371,7 @@ const ParticipantsForm: React.FC<ParticipantsFormProps> = ({
                       type="button"
                       role="checkbox"
                       aria-checked={isChecked}
-                      disabled={isSaving}
+                      disabled={isSaving || isAddingGuest}
                       onClick={() => toggle(player.id)}
                       className={rowClassName}
                     >
@@ -284,7 +393,7 @@ const ParticipantsForm: React.FC<ParticipantsFormProps> = ({
         <PkButton
           size="lg"
           fullWidth
-          disabled={isSaving}
+          disabled={isSaving || isAddingGuest}
           onClick={() => void handleDone()}
         >
           {isSaving ? "저장 중…" : "완료"}

@@ -6,7 +6,7 @@ import {
 import type { Player, PlayerRatingChangeLog } from "@pkpkdupr/shared/player";
 import BottomSheet from "@/components/BottomSheet";
 import { AchievementBadge } from "@/components/profile/AchievementBadge";
-import type { MatchInfo } from "@/types/match";
+import { type MatchInfo, RATING_EXCLUDED_NOTICE } from "@/types/match";
 import { PkButton } from "@/components/ui/Button";
 import { CountUpText } from "@/components/ui/CountUpText";
 import { RatingDelta } from "@/components/ui/Delta";
@@ -86,13 +86,13 @@ export default function RecordDoneStep({
         return change ? [{ player: teamPlayer, change }] : [];
       });
   }, [match]);
-  // 참가자 전원이 받은 업적 중 내 것만 띠로 보인다
+  // 참가자 전원이 받은 업적 중 내 것만 띠로 보인다. 게스트가 낀 경기는 업적이 없으므로 띠·축하 연출도 없다
   const myNewAchievementItems = useMemo(
     () =>
-      viewer
+      viewer && !match.ratingExcluded
         ? pickPlayerEarnedAchievements(match.newAchievements ?? [], viewer.id)
         : [],
-    [match.newAchievements, viewer],
+    [match.newAchievements, match.ratingExcluded, viewer],
   );
   const myNewAchievements = useMemo(
     () => myNewAchievementItems.map(({ definition }) => definition),
@@ -199,19 +199,25 @@ export default function RecordDoneStep({
             ))}
           </div>
         ) : null}
-        {ratingRows.length > 0 ? (
+        {match.ratingExcluded || ratingRows.length > 0 ? (
           <div className="shrink-0 rounded-pk-lg bg-pk-bg px-4 py-1">
             <h3 className="mt-3 mb-0.5 text-pk-13 font-bold text-pk-sub">
               평점 변화
             </h3>
-            {ratingRows.map(({ player, change }) => (
-              <RatingRow
-                key={player.id}
-                player={player}
-                change={change}
-                ratingCategory={ratingCategory}
-              />
-            ))}
+            {match.ratingExcluded ? (
+              <p className="py-[11px] text-pk-15 text-pk-sub">
+                {RATING_EXCLUDED_NOTICE}
+              </p>
+            ) : (
+              ratingRows.map(({ player, change }) => (
+                <RatingRow
+                  key={player.id}
+                  player={player}
+                  change={change}
+                  ratingCategory={ratingCategory}
+                />
+              ))
+            )}
           </div>
         ) : null}
       </BottomSheet.Body>

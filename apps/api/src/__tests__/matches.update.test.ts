@@ -21,6 +21,7 @@ import {
 const now = new Date("2026-07-14T10:00:00.000Z");
 
 const buildPlayer = (id: string, gender: Player["gender"]): Player => ({
+  isGuest: false,
   id,
   username: id,
   gender,
@@ -45,6 +46,7 @@ const buildSession = (player: Player): AuthenticatedSession => ({
 });
 
 const buildExistingMatch = (overrides: Partial<Match> = {}): Match => ({
+  ratingExcluded: false,
   id: "match-edit-001",
   type: "mixed-doubles",
   source: "player_created",
@@ -220,6 +222,7 @@ describe("PUT /api/matches/:matchId", () => {
       id: string,
       completedAt: Date,
     ): CompletedMatchOutcome => ({
+      ratingExcluded: false,
       id,
       type: "mixed-doubles",
       sessionId: null,

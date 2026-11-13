@@ -4,6 +4,7 @@ import type { NextFunction, Request, Response } from "express";
 const sensitiveRequestPathPatterns = [
   /^\/api\/admin\/register$/i,
   /^\/api\/admin\/players\/[^/]+\/password-reset$/i,
+  /^\/api\/admin\/players\/[^/]+\/promote$/i,
 ];
 
 const normalizePath = (path: string) => path.replace(/\/+$/, "") || "/";

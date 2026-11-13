@@ -157,7 +157,8 @@ export const buildPlayerProfileSummary = (
       : { singles: createEmptyHeadToHead(), doubles: createEmptyHeadToHead() };
 
   for (const match of matches) {
-    if (match.status !== "completed") continue;
+    // 게스트가 낀 경기는 승패·파트너 궁합·상대 전적·최근 경기 수에 세지 않는다(최근 경기 목록에는 나온다).
+    if (match.status !== "completed" || match.ratingExcluded) continue;
 
     const playerTeamIndex = getPlayerTeamIndex(match, playerId);
     const winningTeamIndex = getWinningTeamIndex(match);

@@ -40,8 +40,14 @@ export const players = pgTable("players", {
   id: id("id").primaryKey(),
   username: varchar("username", { length: 191 }).notNull(),
   duprRating: text("dupr_rating"),
-  gender: varchar("gender", { length: 8 }).notNull(),
+  /** 게스트만 null이다. 정회원 성별 필수는 api가 검사한다 */
+  gender: varchar("gender", { length: 8 }),
   status: varchar("status", { length: 32 }).notNull(),
+  /** 회원이 세션에서 추가한 게스트. Auth 계정 없이 active로 만든다 */
+  isGuest: boolean("is_guest").notNull().default(false),
+  /** 게스트를 추가한 회원과 세션. 정회원은 null이다 */
+  guestAddedByPlayerId: id("guest_added_by_player_id"),
+  guestAddedSessionId: id("guest_added_session_id"),
   avatarUrl: text("avatar_url"),
   affiliationsJson: text("affiliations_json"),
   statusMessage: varchar("status_message", {
@@ -157,6 +163,8 @@ export const matches = pgTable("matches", {
   completedAt: unixTimestamp("completed_at"),
   resultSubmittedByPlayerId: id("result_submitted_by_player_id"),
   resultSubmittedAt: unixTimestamp("result_submitted_at"),
+  /** completed가 될 때 게스트가 낀 경기. 평점·통계에서 빠진다 */
+  ratingExcluded: boolean("rating_excluded").notNull().default(false),
   createdAt: unixTimestamp("created_at").notNull(),
   updatedAt: unixTimestamp("updated_at").notNull(),
 }, (table) => ({

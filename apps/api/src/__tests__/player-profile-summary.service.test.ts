@@ -6,6 +6,7 @@ import { buildPlayerProfileSummary } from "../services/PlayerProfileSummaryServi
 const now = new Date("2026-11-12T12:00:00.000Z");
 
 const makePlayer = (id: string): Player => ({
+  isGuest: false,
   id,
   username: id,
   gender: "M",
@@ -25,6 +26,7 @@ const emptyHistory = { singles: [], doubles: [] };
 const dayMs = 24 * 60 * 60 * 1000;
 
 const makeMatch = (overrides: Partial<Match>): Match => ({
+  ratingExcluded: false,
   id: "Mmatch01",
   type: "unrestricted-singles",
   source: "player_created",

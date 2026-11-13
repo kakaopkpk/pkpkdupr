@@ -23,6 +23,7 @@ const makePlayer = (
   doubles: number | null,
   overrides: Partial<RankingSourcePlayer> = {},
 ): RankingSourcePlayer => ({
+  isGuest: false,
   id,
   username,
   status: "active",

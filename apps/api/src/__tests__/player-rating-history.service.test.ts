@@ -6,6 +6,7 @@ import { buildPlayerRatingHistory } from "../services/PlayerRatingHistoryService
 const DAY_MS = 24 * 60 * 60 * 1000;
 const now = new Date("2026-08-01T12:00:00.000Z");
 const player: Player = {
+  isGuest: false,
   id: "cloud",
   username: "cloud.lee",
   gender: "M",
@@ -33,6 +34,7 @@ const buildMatch = (
     createdAt: completedAt,
   };
   const match: Match = {
+    ratingExcluded: false,
     id,
     type,
     source: "player_created",

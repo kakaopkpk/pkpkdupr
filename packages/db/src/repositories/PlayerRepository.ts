@@ -18,14 +18,21 @@ export interface StoredPlayerRecord extends Player {
   authUserId: string | null;
   /** 관리자가 발급·초기화한 비밀번호를 아직 바꾸지 않은 상태. */
   isFirstLogin: boolean;
+  /** 게스트를 추가한 회원과 세션. 정회원은 null이다. API 공개 응답에는 내보내지 않는다. */
+  guestAddedByPlayerId: string | null;
+  guestAddedSessionId: string | null;
 }
 
 export interface CreateStoredPlayerInput {
   id: string;
   username: string;
   duprRating: PlayerDupr | null;
-  gender: "M" | "F";
+  /** 게스트만 null */
+  gender: "M" | "F" | null;
   status: PlayerStatus;
+  isGuest?: boolean;
+  guestAddedByPlayerId?: string | null;
+  guestAddedSessionId?: string | null;
   avatarUrl?: string | null;
   affiliations?: PlayerAffiliation[];
   statusMessage?: string | null;
@@ -124,6 +131,38 @@ export class PlayerRepository {
     return updated.length > 0;
   }
 
+  /**
+   * active 게스트를 정회원으로 바꾸고 성별을 저장하며 첫 로그인 비밀번호 변경을 켠다.
+   * authUserId를 주면 아직 Auth 사용자가 연결되지 않은 게스트에만 연결한다.
+   * 조건에 맞는 행이 없으면(이미 정회원·inactive·이미 연결됨) undefined다.
+   */
+  async promoteGuest(
+    id: string,
+    gender: "M" | "F",
+    authUserId: string | null,
+  ): Promise<StoredPlayerRecord | undefined> {
+    const conditions = [
+      eq(players.id, id),
+      eq(players.isGuest, true),
+      eq(players.status, "active"),
+    ];
+    if (authUserId) {
+      conditions.push(isNull(players.authUserId));
+    }
+    const updated = await this.db
+      .update(players)
+      .set({
+        isGuest: false,
+        gender,
+        isFirstLogin: true,
+        ...(authUserId ? { authUserId } : {}),
+        updatedAt: new Date(),
+      })
+      .where(and(...conditions))
+      .returning({ id: players.id });
+    return updated.length > 0 ? await this.findById(id) : undefined;
+  }
+
   async findAll(): Promise<StoredPlayerRecord[]> {
     const records = await this.db
       .select()
@@ -159,6 +198,10 @@ export class PlayerRepository {
       ...player,
       authUserId: player.authUserId ?? null,
       isFirstLogin: !!player.isFirstLogin,
+      gender: player.gender ?? null,
+      isGuest: player.isGuest === true,
+      guestAddedByPlayerId: player.guestAddedByPlayerId ?? null,
+      guestAddedSessionId: player.guestAddedSessionId ?? null,
       affiliations,
       ...(statusMessage ? { statusMessage } : {}),
       ...(statusMessageBackgroundColor ? { statusMessageBackgroundColor } : {}),
@@ -185,6 +228,9 @@ export class PlayerRepository {
       statusMessage: statusMessage ?? null,
       statusMessageBackgroundColor: statusMessageBackgroundColor ?? null,
       authUserId: storedData.authUserId ?? null,
+      isGuest: storedData.isGuest ?? false,
+      guestAddedByPlayerId: storedData.guestAddedByPlayerId ?? null,
+      guestAddedSessionId: storedData.guestAddedSessionId ?? null,
       duprRating,
       createdAt: new Date(storedData.createdAt),
       updatedAt: new Date(storedData.updatedAt),

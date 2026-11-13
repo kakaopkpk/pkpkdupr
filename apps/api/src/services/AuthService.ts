@@ -1,4 +1,5 @@
 import {
+  GuestAddedInfo,
   OfficialDuprAdjustmentLog,
   OfficialDuprAdjustmentImpact,
   OfficialDuprAdjustmentPreview,
@@ -32,6 +33,7 @@ import {
   isValidUsername,
   toInternalEmail,
   type AdminPasswordResetResponse,
+  type AdminPromoteGuestResponse,
   type AdminRegisterPlayerRequest,
   type AdminRegisterPlayerResponse,
   type AdminUpdateUsernameResponse,
@@ -78,6 +80,8 @@ interface StoredPlayerRecord extends Player {
   isFirstLogin: boolean;
   duprMetrics: PlayerDuprMetrics;
   duprState: StoredPlayerDupr;
+  guestAddedByPlayerId: string | null;
+  guestAddedSessionId: string | null;
 }
 
 export interface AuthenticatedSession {
@@ -125,13 +129,17 @@ export class AccountRequestError extends Error {
 
 export interface AdminPlayer extends Player {
   duprMetrics: PlayerDuprMetrics;
+  /** 게스트를 추가한 회원·세션. 정회원은 null */
+  guestAddedInfo: GuestAddedInfo | null;
+  /** 참가한 평점 미반영(게스트가 낀) 완료 경기 수 */
+  ratingExcludedMatchCount: number;
 }
 
 const buildId = (prefix: string) =>
   `${prefix}-${randomUUID()}`;
 
 const createPlayer = (
-  input: Pick<Player, "username" | "gender">,
+  input: Pick<Player, "username" | "gender"> & { isGuest?: boolean },
 ): Player & { duprRating: null } => {
   const now = new Date();
 
@@ -141,6 +149,7 @@ const createPlayer = (
     duprRating: null,
     gender: input.gender,
     status: "active",
+    isGuest: input.isGuest ?? false,
     createdAt: now,
     updatedAt: now,
   };
@@ -157,6 +166,10 @@ const hydratePlayer = (record: any): StoredPlayerRecord => {
     duprMetrics: duprState.metrics,
     duprState,
     isFirstLogin: record.isFirstLogin === true,
+    gender: record.gender ?? null,
+    isGuest: record.isGuest === true,
+    guestAddedByPlayerId: record.guestAddedByPlayerId ?? null,
+    guestAddedSessionId: record.guestAddedSessionId ?? null,
     status: record.status === "deleted" ? "inactive" : record.status,
     createdAt: toDate(record.createdAt),
     updatedAt: toDate(record.updatedAt),
@@ -343,15 +356,12 @@ const toPublicPlayer = (stored: StoredPlayerRecord): Player => {
     isFirstLogin: _isFirstLogin,
     duprMetrics: _duprMetrics,
     duprState: _duprState,
+    guestAddedByPlayerId: _guestAddedByPlayerId,
+    guestAddedSessionId: _guestAddedSessionId,
     ...player
   } = stored;
   return player;
 };
-
-const toAdminPlayer = (stored: StoredPlayerRecord): AdminPlayer => ({
-  ...toPublicPlayer(stored),
-  duprMetrics: stored.duprMetrics,
-});
 
 /** Postgres unique_violation(23505). 표현식 유니크 인덱스(lower(username)) 위반도 같은 코드다. */
 const isUniqueViolation = (error: unknown) => {
@@ -724,6 +734,7 @@ export class AuthService {
   /**
    * 관리자가 회원 비밀번호를 임시 비밀번호로 초기화한다. 연결된 Auth 사용자가 없으면 새로 만들어 연결한다(계정 발급).
    * 연결된 사용자의 이메일도 현재 아이디의 내부 이메일로 맞춰, 예전 방식으로 만든 계정도 아이디로 로그인하게 한다.
+   * 게스트는 정회원 승급(`promoteGuest`)으로만 계정을 받으므로 409로 거절한다.
    */
   async resetPlayerPassword(
     playerId: string,
@@ -731,6 +742,12 @@ export class AuthService {
     const stored = await this.getStoredPlayerById(playerId);
     if (!stored) {
       throw new AccountRequestError(404, "사용자를 찾을 수 없습니다.");
+    }
+    if (stored.isGuest) {
+      throw new AccountRequestError(
+        409,
+        "게스트에게는 비밀번호를 발급할 수 없습니다. 정회원으로 승급해 계정을 발급해주세요.",
+      );
     }
     if (stored.status !== "active") {
       throw new AccountRequestError(
@@ -777,6 +794,82 @@ export class AuthService {
       );
     }
     return { temporaryPassword };
+  }
+
+  /**
+   * 관리자가 게스트를 정회원으로 승급한다. 성별을 저장하고 로그인 계정을 함께 발급하며(첫 로그인 비밀번호 변경 강제),
+   * 초기 비밀번호는 응답으로만 돌려준다. 이미 게스트로 뛴 ratingExcluded 경기는 그대로 미반영이다.
+   * 게스트가 아니면 409, 없으면 404, inactive거나 아이디가 로그인 형식이 아니면 400이다.
+   */
+  async promoteGuest(
+    playerId: string,
+    gender: "M" | "F",
+  ): Promise<AdminPromoteGuestResponse> {
+    const stored = await this.getStoredPlayerById(playerId);
+    if (!stored) {
+      throw new AccountRequestError(404, "사용자를 찾을 수 없습니다.");
+    }
+    if (!stored.isGuest) {
+      throw new AccountRequestError(409, "게스트가 아닌 회원입니다.");
+    }
+    if (stored.status !== "active") {
+      throw new AccountRequestError(
+        400,
+        "비활성 회원에게는 비밀번호를 발급할 수 없습니다. 먼저 활성화해주세요.",
+      );
+    }
+    if (!isValidUsername(stored.username)) {
+      throw new AccountRequestError(
+        400,
+        `현재 아이디로는 로그인 계정을 만들 수 없습니다. 먼저 아이디를 바꿔주세요. ${USERNAME_FORMAT_MESSAGE}`,
+      );
+    }
+
+    const initialPassword = generateInitialPassword();
+    const stateChangedError = () =>
+      new AccountRequestError(
+        409,
+        "회원 상태가 바뀌어 승급하지 못했습니다. 다시 시도해주세요.",
+      );
+
+    if (stored.authUserId) {
+      // 게스트에게 이미 Auth 사용자가 연결돼 있으면 새로 만들지 않고 비밀번호만 바꾼다.
+      // 승급을 먼저 확정해, 다른 요청이 먼저 승급한 경우 그 회원의 비밀번호를 덮어쓰지 않는다.
+      // Auth 갱신이 실패해도 첫 로그인 플래그가 켜져 있어 관리자가 비밀번호 초기화로 복구할 수 있다.
+      const promoted = await db.players.promoteGuest(stored.id, gender, null);
+      if (!promoted) {
+        throw stateChangedError();
+      }
+      await this.updateAuthUser(stored.authUserId, {
+        email: toInternalEmail(stored.username),
+        password: initialPassword,
+      });
+      return {
+        player: toPublicPlayer(hydratePlayer(promoted)),
+        initialPassword,
+      };
+    }
+
+    const authUserId = await this.createAuthUser(
+      stored.username,
+      initialPassword,
+    );
+    let promoted: Awaited<ReturnType<typeof db.players.promoteGuest>>;
+    try {
+      promoted = await db.players.promoteGuest(stored.id, gender, authUserId);
+    } catch (error) {
+      await this.deleteOrphanAuthUser(authUserId);
+      throw error;
+    }
+    if (!promoted) {
+      // 조회 뒤 다른 요청이 먼저 승급했거나 회원이 inactive로 바뀌었다.
+      await this.deleteOrphanAuthUser(authUserId);
+      throw stateChangedError();
+    }
+    return {
+      player: toPublicPlayer(hydratePlayer(promoted)),
+      initialPassword,
+    };
   }
 
   /**
@@ -1037,8 +1130,88 @@ export class AuthService {
   }
 
   async getAdminPlayers(): Promise<AdminPlayer[]> {
-    const players = await db.players.findAll();
-    return players.map((record) => toAdminPlayer(hydratePlayer(record)));
+    const [players, excludedMatchCountByPlayerId] = await Promise.all([
+      db.players.findAll().then((records) => records.map(hydratePlayer)),
+      db.matches.countRatingExcludedMatchesByPlayerId(),
+    ]);
+    const usernameById = new Map(
+      players.map((player) => [player.id, player.username]),
+    );
+    const guestSessionIds = [
+      ...new Set(
+        players.flatMap((player) =>
+          player.isGuest && player.guestAddedSessionId
+            ? [player.guestAddedSessionId]
+            : [],
+        ),
+      ),
+    ];
+    const sessionById = new Map(
+      (
+        await Promise.all(
+          guestSessionIds.map((sessionId) =>
+            db.matches.findSessionById(sessionId),
+          ),
+        )
+      ).flatMap((session) => (session ? [[session.id, session] as const] : [])),
+    );
+
+    return players.map((player): AdminPlayer => {
+      const session = player.guestAddedSessionId
+        ? sessionById.get(player.guestAddedSessionId)
+        : undefined;
+      return {
+        ...toPublicPlayer(player),
+        duprMetrics: player.duprMetrics,
+        // 추가한 회원·세션이 지워졌으면 id만 남기고 이름·날짜는 null이다.
+        guestAddedInfo: player.isGuest
+          ? {
+              addedByPlayerId: player.guestAddedByPlayerId,
+              addedByUsername: player.guestAddedByPlayerId
+                ? (usernameById.get(player.guestAddedByPlayerId) ?? null)
+                : null,
+              sessionId: player.guestAddedSessionId,
+              sessionName: session?.name ?? null,
+              sessionDate: session?.date ?? null,
+            }
+          : null,
+        ratingExcludedMatchCount: excludedMatchCountByPlayerId[player.id] ?? 0,
+      };
+    });
+  }
+
+  /**
+   * 세션에서 게스트를 만들고 그 세션의 참여자로 넣는다. Auth 계정 없이 active·성별 없음·NR로 만들고,
+   * 추가한 회원과 세션을 남긴다. 아이디 형식이 틀리면 400, 대소문자 무시로 이미 있으면 409다.
+   * 두 쓰기는 한 트랜잭션이라 참여자 추가가 실패하면 게스트도 남지 않아 같은 아이디로 다시 요청할 수 있다.
+   */
+  async createGuestPlayer(input: {
+    username: string;
+    addedByPlayerId: string;
+    sessionId: string;
+  }): Promise<Player> {
+    const username = input.username.trim();
+    if (!isValidUsername(username)) {
+      throw new AccountRequestError(400, USERNAME_FORMAT_MESSAGE);
+    }
+    if (await db.players.findByUsernameIgnoringCase(username)) {
+      throw new AccountRequestError(409, DUPLICATE_USERNAME_MESSAGE);
+    }
+
+    try {
+      const created = await db.matches.createGuestParticipant(input.sessionId, {
+        ...createPlayer({ username, gender: null, isGuest: true }),
+        guestAddedByPlayerId: input.addedByPlayerId,
+        guestAddedSessionId: input.sessionId,
+      });
+      return toPublicPlayer(hydratePlayer(created));
+    } catch (error) {
+      // 동시 요청은 lower(username) 유니크 위반으로 걸러진다.
+      if (isUniqueViolation(error)) {
+        throw new AccountRequestError(409, DUPLICATE_USERNAME_MESSAGE);
+      }
+      throw error;
+    }
   }
 
   async getPublicPlayers(): Promise<Player[]> {
@@ -1302,8 +1475,14 @@ export class AuthService {
     const matchParticipantDuprSnapshots: MatchParticipantDuprSnapshot[] = [];
     const perMatchChanges: DuprRecalculationResult["perMatchChanges"] = [];
     const fixedOfficialAnchorKeys = new Set<string>();
+    // 게스트가 낀 경기(ratingExcluded)는 정회원 승급 뒤 재계산에서도 평점에 넣지 않는다.
     const replayMatches = completedMatches
-      .filter((match) => match.status === "completed" && match.completedAt)
+      .filter(
+        (match) =>
+          match.status === "completed" &&
+          match.completedAt &&
+          !match.ratingExcluded,
+      )
       .sort(
         (a, b) =>
           new Date(a.completedAt!).getTime() -
@@ -1823,7 +2002,7 @@ export class AuthService {
     options: { refreshProjection?: boolean } = {},
   ): Promise<MatchRatingApplyResult> {
     const match = await db.matches.findById(requested.id);
-    if (!match || match.status !== "completed") {
+    if (!match || match.status !== "completed" || match.ratingExcluded) {
       return { ratingChangeLogs: [], changedPlayerCount: 0 };
     }
     const winnerTeamIndex = buildWinnerTeamIndex(match);

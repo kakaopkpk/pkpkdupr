@@ -30,19 +30,31 @@ describe("MatchRepository.deleteExpiredInProgressMatchesAndEmptySessions", () =>
 
     await expect(
       repository.deleteExpiredInProgressMatchesAndEmptySessions(now),
-    ).resolves.toEqual({ deletedMatchCount: 0, deletedSessionCount: 0 });
+    ).resolves.toEqual({
+      deletedMatchCount: 0,
+      deletedSessionCount: 0,
+      deletedSessionIds: [],
+    });
     expect(execute).toHaveBeenCalledTimes(1);
     expect(transaction).not.toHaveBeenCalled();
   });
 
-  it("지울 대상이 있어도 execute 1회로 끝나고 삭제 수를 숫자로 돌려준다", async () => {
+  it("지울 대상이 있어도 execute 1회로 끝나고 삭제 수를 숫자로, 지운 세션 id를 목록으로 돌려준다", async () => {
     const { repository, execute, transaction } = createRepository([
-      { deleted_match_count: "2", deleted_session_count: "1" },
+      {
+        deleted_match_count: "2",
+        deleted_session_count: "2",
+        deleted_session_ids: "Sfirst,Ssecond",
+      },
     ]);
 
     await expect(
       repository.deleteExpiredInProgressMatchesAndEmptySessions(now),
-    ).resolves.toEqual({ deletedMatchCount: 2, deletedSessionCount: 1 });
+    ).resolves.toEqual({
+      deletedMatchCount: 2,
+      deletedSessionCount: 2,
+      deletedSessionIds: ["Sfirst", "Ssecond"],
+    });
     expect(execute).toHaveBeenCalledTimes(1);
     expect(transaction).not.toHaveBeenCalled();
   });
@@ -75,7 +87,11 @@ describe("MatchRepository.deleteExpiredInProgressMatchesAndEmptySessions", () =>
 
     await expect(
       repository.deleteExpiredInProgressMatchesAndEmptySessions(now),
-    ).resolves.toEqual({ deletedMatchCount: 0, deletedSessionCount: 0 });
+    ).resolves.toEqual({
+      deletedMatchCount: 0,
+      deletedSessionCount: 0,
+      deletedSessionIds: [],
+    });
 
     const { args } = executedStatement(execute);
     expect(args[0]).toBe(

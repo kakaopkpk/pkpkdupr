@@ -54,6 +54,8 @@ export interface RankingMatch {
   completedAt: Date;
   teamPlayerIds: [string[], string[]];
   scores: MatchScore[];
+  /** 게스트가 낀 경기. 랭킹 경기 수·순위 변동 기준 세션·세션 지배자·업적에서 뺀다 */
+  ratingExcluded?: boolean;
 }
 
 export interface RankingSession {
@@ -78,6 +80,7 @@ export type RankingSourcePlayer = Pick<
   | "avatarUrl"
   | "duprRating"
   | "status"
+  | "isGuest"
   | "statusMessage"
   | "statusMessageBackgroundColor"
 >;
@@ -211,6 +214,14 @@ export const createRankingContext = (
   };
 };
 
+/** 평점에 반영된 완료 경기만(게스트가 낀 경기 제외) */
+const getRatedMatches = (matches: RankingMatch[]) =>
+  matches.filter((match) => !match.ratingExcluded);
+
+/** 랭킹 대상 회원: 활성 정회원. 게스트는 랭킹에 나오지 않는다 */
+const isRankablePlayer = (player: RankingSourcePlayer) =>
+  player.status === "active" && !player.isGuest;
+
 /** 시점. null이면 현재 */
 export interface RankingPoint {
   at: Date;
@@ -230,7 +241,7 @@ const countCategoryMatches = (
   point: RankingPoint | null,
 ) => {
   const counts = new Map<string, number>();
-  for (const match of context.matches) {
+  for (const match of getRatedMatches(context.matches)) {
     if (context.categoryByMatchId.get(match.id) !== category) continue;
     if (!isMatchApplied(match, point)) continue;
     for (const playerId of new Set(match.teamPlayerIds.flat())) {
@@ -271,7 +282,7 @@ const compareText = (left: string, right: string) =>
   left < right ? -1 : left > right ? 1 : 0;
 
 /**
- * 시점의 순위. 활성 회원 중 평점이 있는 사람을 평점 내림차순 → 분류 완료 경기 수
+ * 시점의 순위. 활성 정회원 중 평점이 있는 사람을 평점 내림차순 → 분류 완료 경기 수
  * 내림차순 → 아이디(username) 오름차순으로 세우고 1부터 연속 번호를 붙인다.
  */
 export const rankPlayersAt = (
@@ -281,7 +292,7 @@ export const rankPlayersAt = (
 ): RankedPlayer[] => {
   const matchCounts = countCategoryMatches(context, category, point);
   return [...context.playersById.values()]
-    .filter((player) => player.status === "active")
+    .filter(isRankablePlayer)
     .flatMap((player) => {
       const rating = getPlayerRatingAt(context, player.id, category, point);
       return rating == null
@@ -389,7 +400,11 @@ export const buildRankingResponse = ({
   now: Date;
 }): RankingResponse => {
   const current = rankPlayersAt(context, category, null);
-  const baseline = selectBaselineSession(sessions, context.matches, now);
+  const baseline = selectBaselineSession(
+    sessions,
+    getRatedMatches(context.matches),
+    now,
+  );
   const baselineRanks = baseline
     ? toRankMap(
         rankPlayersAt(context, category, {
@@ -414,7 +429,7 @@ export const buildRankingResponse = ({
   const unrated: UnratedRankingEntry[] = [...context.playersById.values()]
     .filter(
       (player) =>
-        player.status === "active" && player.duprRating?.[category] == null,
+        isRankablePlayer(player) && player.duprRating?.[category] == null,
     )
     .map((player) => ({
       player: toRankingEntryPlayer(player),
@@ -627,7 +642,9 @@ export const findSessionDominations = (
   sessions: RankingSession[],
   now: Date,
 ): SessionDominations => {
-  const matchesBySession = groupMatchesBySession(context.matches);
+  const matchesBySession = groupMatchesBySession(
+    getRatedMatches(context.matches),
+  );
   const dominations = new Map<string, Set<string>>();
   for (const session of sessions) {
     if (getEmptySessionExpiresAt(session.kind, session.date, session) > now) {
@@ -694,6 +711,7 @@ export const toAchievementMatch = (match: RankingMatch): AchievementMatch => ({
   ],
   scores: match.scores,
   session: match.sessionId ? { id: match.sessionId } : null,
+  ratingExcluded: match.ratingExcluded ?? false,
 });
 
 /** 한 회원이 지금 받은 업적(ACHIEVEMENTS 순서). 세션 지배자는 끝난 세션 기준이다 */

@@ -25,6 +25,7 @@ const now = new Date("2026-07-14T10:00:00.000Z");
 const HOUR_MS = 60 * 60 * 1000;
 
 const buildPlayer = (id: string, gender: Player["gender"]): Player => ({
+  isGuest: false,
   id,
   username: id,
   gender,
@@ -50,6 +51,7 @@ const secondsPrecision = (date: Date) =>
   new Date(Math.floor(date.getTime() / 1000) * 1000);
 
 const buildExistingMatch = (overrides: Partial<Match> = {}): Match => ({
+  ratingExcluded: false,
   id: "Mdelete1",
   type: "mixed-doubles",
   source: "player_created",

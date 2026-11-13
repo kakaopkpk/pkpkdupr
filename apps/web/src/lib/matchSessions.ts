@@ -1,5 +1,7 @@
 import type { MatchSessionRecommendationResponse } from "@pkpkdupr/shared/matchmaking";
+import type { Player } from "@pkpkdupr/shared/player";
 import type {
+  AddMatchSessionGuestRequest,
   AddMatchSessionParticipantRequest,
   CreateMatchSessionRequest,
   MatchSessionDetail,
@@ -100,6 +102,34 @@ export const addMatchSessionParticipant = async (
     "참여자를 추가하지 못했어요.",
     jsonInit("POST", body),
   );
+};
+
+/** JSON 응답 형태의 게스트(날짜는 문자열) */
+export type GuestPlayerInfo = Omit<Player, "createdAt" | "updatedAt"> & {
+  createdAt: string;
+  updatedAt: string;
+};
+
+/** 그 아이디로 게스트를 만들고 세션 참여자로 넣는다. 이미 있는 아이디(409)는 고정 문구로 알린다 */
+export const addMatchSessionGuest = async (
+  sessionId: string,
+  username: string,
+): Promise<GuestPlayerInfo> => {
+  const body: AddMatchSessionGuestRequest = { username };
+  const res = await apiFetch(
+    `${sessionPath(sessionId)}/guests`,
+    jsonInit("POST", body),
+  );
+  if (res.status === 409) {
+    throw new Error("이미 있는 아이디예요.");
+  }
+  if (!res.ok) {
+    const errorData = (await res.json().catch(() => ({}))) as {
+      error?: string;
+    };
+    throw new Error(errorData.error || "게스트를 추가하지 못했어요.");
+  }
+  return (await res.json()) as GuestPlayerInfo;
 };
 
 export const removeMatchSessionParticipant = async (

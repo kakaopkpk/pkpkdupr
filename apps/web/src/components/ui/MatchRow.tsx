@@ -69,6 +69,7 @@ const TeamLine: React.FC<{
 /**
  * 경기 한 줄. 이긴 팀이 위에 오고 이긴 쪽만 굵게·블루 점수로 강조한다.
  * 줄 맨 위 메타 줄에 시간을 두고, 내 경기면 시간 뒤에 " · 내 경기" 글자만 붙는다(바탕 강조 없음).
+ * 게스트가 낀 경기(ratingExcluded)는 메타 줄 끝에 " · 평점 미반영"을 붙인다.
  * 코트 번호는 보이지 않는다.
  */
 export const MatchRow: React.FC<{
@@ -116,6 +117,7 @@ export const MatchRow: React.FC<{
         {isMine ? (
           <span className="font-bold text-pk-sub"> · 내 경기</span>
         ) : null}
+        {match.ratingExcluded ? " · 평점 미반영" : null}
       </div>
       {lines.map(({ team, score }, index) => (
         <TeamLine
