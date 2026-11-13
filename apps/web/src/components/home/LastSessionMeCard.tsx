@@ -1,14 +1,20 @@
 import React from "react";
 import type { SessionPlayerReport } from "@pkpkdupr/shared/ranking";
-import { getSessionRankChange } from "@/components/records/SessionReportParts";
+import {
+  getSessionRankChange,
+  SESSION_COUNT,
+  SessionRatingCount,
+  SessionRatingDeltaCount,
+} from "@/components/records/SessionReportParts";
+import { WinLossCount } from "@/components/profile/ProfileStatTile";
 import { Card } from "@/components/ui/Card";
-import { RankChange, RatingDelta } from "@/components/ui/Delta";
+import { CountUpNumber } from "@/components/ui/CountUpNumber";
+import { RankChange } from "@/components/ui/Delta";
 import { cx } from "@/components/ui/cx";
-import { formatRating } from "@/utils/dupr";
 
 const Stat: React.FC<{
   label: string;
-  value: string;
+  value: React.ReactNode;
   withDivider?: boolean;
 }> = ({ label, value, withDivider = false }) => (
   <div
@@ -24,7 +30,10 @@ const Stat: React.FC<{
   </div>
 );
 
-/** 지난 세션 피드의 내 변동 카드: 복식 평점·세션 후 순위와 변화, 경기 수·승패·승률 */
+/**
+ * 지난 세션 피드·세션 상세의 내 변동 카드: 복식 평점·세션 후 순위와 변화, 경기 수·승패·승률.
+ * 평점·순위는 세션 전 값에서, 나머지 숫자는 0부터 세션 지배자 카드와 함께 센다
+ */
 const LastSessionMeCard: React.FC<{ report: SessionPlayerReport }> = ({
   report,
 }) => {
@@ -41,22 +50,27 @@ const LastSessionMeCard: React.FC<{ report: SessionPlayerReport }> = ({
           <span className="text-pk-13 font-bold text-pk-sub">내 복식 평점</span>
           <span className="flex items-baseline gap-1.5">
             <span className="text-pk-26 font-extrabold text-pk-ink tabular-nums">
-              {formatRating(report.ratingAfter)}
+              <SessionRatingCount report={report} />
             </span>
-            <RatingDelta
-              value={
-                report.ratingBefore !== null && report.ratingAfter !== null
-                  ? report.ratingDelta
-                  : null
-              }
-            />
+            <SessionRatingDeltaCount report={report} />
           </span>
         </div>
         <div className="flex min-w-0 flex-col items-end text-right">
           <span className="text-pk-13 text-pk-sub">랭킹</span>
           <span className="flex items-baseline gap-1.5">
             <span className="text-pk-26 font-extrabold text-pk-ink tabular-nums">
-              {report.rankAfter === null ? "–" : `${report.rankAfter}위`}
+              {report.rankAfter === null ? (
+                "–"
+              ) : (
+                <>
+                  <CountUpNumber
+                    value={report.rankAfter}
+                    from={report.rankBefore ?? report.rankAfter}
+                    {...SESSION_COUNT}
+                  />
+                  위
+                </>
+              )}
             </span>
             {rankChange !== null && rankChange !== 0 && (
               <RankChange
@@ -68,13 +82,30 @@ const LastSessionMeCard: React.FC<{ report: SessionPlayerReport }> = ({
         </div>
       </div>
       <div className="grid grid-cols-3 border-t border-pk-divider pt-3.5">
-        <Stat label="경기" value={`${report.matchCount}`} />
+        <Stat
+          label="경기"
+          value={<CountUpNumber value={report.matchCount} {...SESSION_COUNT} />}
+        />
         <Stat
           label="결과"
-          value={`${report.wins}승 ${report.losses}패`}
+          value={
+            <WinLossCount
+              wins={report.wins}
+              losses={report.losses}
+              timing={SESSION_COUNT}
+            />
+          }
           withDivider
         />
-        <Stat label="승률" value={`${winRate}%`} withDivider />
+        <Stat
+          label="승률"
+          value={
+            <>
+              <CountUpNumber value={winRate} {...SESSION_COUNT} />%
+            </>
+          }
+          withDivider
+        />
       </div>
     </Card>
   );

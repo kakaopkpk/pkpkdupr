@@ -54,6 +54,12 @@ export function useCountUp(to: number, options: CountUpOptions): CountUpState {
       return;
     }
 
+    // 시작 값과 최종 값이 같으면 셀 것이 없으니 프레임을 돌리지 않고 바로 끝낸다
+    if (latestRef.current.from === latestRef.current.to) {
+      setDoneKey(playKey);
+      return;
+    }
+
     let frameId = 0;
     const { delayMs = 0 } = latestRef.current.options;
     const timerId = window.setTimeout(() => {
