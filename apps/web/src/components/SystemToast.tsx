@@ -5,15 +5,20 @@ import {
   PRESENCE_EXIT_CLASS,
 } from "@/hooks/usePresence";
 
-/** 토스트와 하단 바 사이 간격(px). 위치 클래스의 12px과 같아야 한다 */
+/** 토스트와 하단 바 사이 간격(px) */
 const TOAST_DOCK_GAP_PX = 12;
 
+/** 미니바·알림 바가 없을 때의 하단 바 윗변 높이. index.css의 --app-bottom-dock-height 기본값과 같아야 한다 */
+const BASE_DOCK_HEIGHT = "66px + 8px + var(--safe-bottom)";
+
 /**
- * 바 높이 변화만큼 올리는 이동. 위치(bottom)는 미니바·알림 바가 없을 때의 하단 바 윗변(index.css의 --app-bottom-dock-height 기본값)에 고정하고,
+ * 위치(bottom)는 기본 하단 바 윗변에 고정하고, 바 높이 변화만큼 transform으로 올린다.
  * 바가 나타나거나 사라지면 이 transform이 transition으로 새 자리까지 움직인다.
  */
-const DOCK_OFFSET_TRANSFORM =
-  "translateY(calc(66px + 8px + var(--safe-bottom) - var(--app-bottom-dock-height)))";
+const TOAST_POSITION_STYLE: React.CSSProperties = {
+  bottom: `calc(${BASE_DOCK_HEIGHT} + ${TOAST_DOCK_GAP_PX}px + var(--app-keyboard-offset))`,
+  transform: `translateY(calc(${BASE_DOCK_HEIGHT} - var(--app-bottom-dock-height)))`,
+};
 
 /**
  * 하단 바 위에 뜨는 흰 토스트. 화면당 한 번에 하나만 보인다.
@@ -59,9 +64,9 @@ const SystemToast: React.FC<{
 
   return (
     <div
-      style={{ transform: DOCK_OFFSET_TRANSFORM }}
+      style={TOAST_POSITION_STYLE}
       className={cx(
-        "pointer-events-none fixed bottom-[calc(66px+8px+var(--safe-bottom)+12px+var(--app-keyboard-offset))] left-1/2 app-shell-width -translate-x-1/2 px-4 transition-transform duration-[320ms] ease-pk-move motion-reduce:transition-none",
+        "pointer-events-none fixed left-1/2 app-shell-width -translate-x-1/2 px-4 transition-transform duration-[320ms] ease-pk-move motion-reduce:transition-none",
         className,
       )}
     >

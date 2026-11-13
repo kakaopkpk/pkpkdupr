@@ -13,9 +13,9 @@ export const PRESENCE_ENTER_CLASS =
 /** 아래로 가라앉으며 사라지는 퇴장(260ms) */
 export const PRESENCE_EXIT_CLASS = "animate-pk-sink-out motion-reduce:animate-none";
 
-const prefersReducedMotion = () =>
+const prefersReducedMotion = (): boolean =>
   typeof window !== "undefined" &&
-  window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+  window.matchMedia?.("(prefers-reduced-motion: reduce)").matches === true;
 
 export interface PresenceEntry<T> {
   item: T;

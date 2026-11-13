@@ -48,6 +48,9 @@ type NoticeItem = { kind: "save-failure" } | { kind: "toast"; toast: ShownToast 
 
 const SAVE_FAILURE_NOTICE: NoticeItem = { kind: "save-failure" };
 
+const getNoticeKey = (item: NoticeItem) =>
+  item.kind === "save-failure" ? "save-failure" : `toast-${item.toast.id}`;
+
 const SystemNoticeContext = createContext<SystemNoticeContextValue | null>(
   null,
 );
@@ -136,12 +139,10 @@ export const SystemNoticeProvider: React.FC<{ children: React.ReactNode }> = ({
     [toast],
   );
   // 다른 알림으로 바뀌면(저장 실패 ↔ 일반, 일반 토스트 id 변경) 이전 것은 퇴장 없이 바로 바뀐다
-  const notice = usePresence<NoticeItem>(
-    saveFailure ? SAVE_FAILURE_NOTICE : toastNotice,
-    {
-      key: saveFailure ? "save-failure" : toast ? `toast-${toast.id}` : undefined,
-    },
-  );
+  const activeNotice = saveFailure ? SAVE_FAILURE_NOTICE : toastNotice;
+  const notice = usePresence<NoticeItem>(activeNotice, {
+    key: activeNotice ? getNoticeKey(activeNotice) : undefined,
+  });
 
   const value = useMemo<SystemNoticeContextValue>(
     () => ({ showSaveFailure, showToast }),
