@@ -754,8 +754,14 @@ export const formatRecordsCursor = ({ atMs, id }: RecordsCursor) =>
   `${atMs}_${id}`;
 
 /** 형식이 틀리면 null */
+// 15자리면 Number.MAX_SAFE_INTEGER(16자리) 안이라 ms 값이 정확히 복원된다
+const MAX_RECORDS_CURSOR_MS_DIGITS = 15;
+const RECORDS_CURSOR_PATTERN = new RegExp(
+  `^(\\d{1,${MAX_RECORDS_CURSOR_MS_DIGITS}})_([A-Za-z0-9]+)$`,
+);
+
 export const parseRecordsCursor = (value: string): RecordsCursor | null => {
-  const matched = /^(\d{1,15})_([A-Za-z0-9]+)$/.exec(value);
+  const matched = RECORDS_CURSOR_PATTERN.exec(value);
   if (!matched) return null;
   const id = matched[2];
   if (!isEntityId(id, "session") && !isEntityId(id, "match")) return null;

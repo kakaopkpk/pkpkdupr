@@ -2711,11 +2711,7 @@ app.get("/api/records", async (req, res) => {
     }
     const rawCursor = req.query.cursor;
     const cursor =
-      rawCursor === undefined
-        ? null
-        : typeof rawCursor === "string"
-          ? parseRecordsCursor(rawCursor)
-          : null;
+      typeof rawCursor === "string" ? parseRecordsCursor(rawCursor) : null;
     if (rawCursor !== undefined && !cursor) {
       throw new RankingRequestError("cursor 형식이 올바르지 않습니다.", 400);
     }
