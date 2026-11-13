@@ -1,6 +1,9 @@
 import React, { useMemo } from "react";
-import { getMatchTopLevelType } from "@pkpkdupr/shared/match";
-import type { PlayerRatingChangeLog } from "@pkpkdupr/shared/player";
+import {
+  getMatchTopLevelType,
+  type MatchTopLevelType,
+} from "@pkpkdupr/shared/match";
+import type { Player, PlayerRatingChangeLog } from "@pkpkdupr/shared/player";
 import BottomSheet from "@/components/BottomSheet";
 import { AchievementBadge } from "@/components/profile/AchievementBadge";
 import type { MatchInfo } from "@/types/match";
@@ -25,6 +28,7 @@ const SCORE_COUNT_DURATION_MS = 450;
 const RATING_COUNT_DELAY_MS = 650;
 const RATING_COUNT_DURATION_MS = 500;
 const ACHIEVEMENT_DELAY_MS = 1150;
+const ACHIEVEMENT_BADGE_POP_MS = 420;
 
 export interface RecordDoneStepProps {
   match: MatchInfo;
@@ -157,7 +161,7 @@ export default function RecordDoneStep({
                     isPlaying
                       ? {
                           animationDelay: `${ACHIEVEMENT_DELAY_MS}ms`,
-                          animationDuration: "420ms",
+                          animationDuration: `${ACHIEVEMENT_BADGE_POP_MS}ms`,
                         }
                       : undefined
                   }
@@ -245,9 +249,9 @@ const CountedScore: React.FC<{
  * 변화의 부호·색은 처음부터 최종값을 따른다. 이전 평점이 NR이면 세지 않고 최종값을 보인다
  */
 const RatingRow: React.FC<{
-  player: MatchInfo["teams"][number]["players"][number];
+  player: Player;
   change: PlayerRatingChangeLog;
-  ratingCategory: ReturnType<typeof getMatchTopLevelType>;
+  ratingCategory: MatchTopLevelType;
 }> = ({ player, change, ratingCategory }) => {
   const previousRating = change.previousRating[ratingCategory];
   const nextRating = change.nextRating[ratingCategory];

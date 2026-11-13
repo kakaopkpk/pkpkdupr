@@ -17,6 +17,9 @@ import {
 } from "./recordMatch.utils";
 import { CheckIcon, FooterError } from "./RecordMatchParts";
 
+/** 목록에서 새로 들어온 선수 아바타의 pop 시간 */
+const NEW_PLAYER_POP_MS = 300;
+
 export interface PickPlayersStepProps {
   slots: RecordSlots;
   onSlotsChange: (slots: RecordSlots) => void;
@@ -204,7 +207,7 @@ export default function PickPlayersStep({
               {/* 선수가 바뀌면 key로 다시 마운트해, 새로 들어온 선수일 때만 pop을 처음부터 재생한다 */}
               <span
                 key={player.id}
-                style={{ animationDuration: "300ms" }}
+                style={{ animationDuration: `${NEW_PLAYER_POP_MS}ms` }}
                 className={cx(
                   "flex",
                   poppedIds.has(player.id) &&
