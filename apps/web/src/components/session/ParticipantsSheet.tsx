@@ -171,7 +171,7 @@ const ParticipantsForm: React.FC<ParticipantsFormProps> = ({
 
     setIsSaving(true);
     setError(null);
-    const nextSavedIds = new Set(savedIds);
+    const applied: ParticipantChange[] = [];
     let serverError: string | null = null;
     let networkError: unknown = null;
 
@@ -179,11 +179,10 @@ const ParticipantsForm: React.FC<ParticipantsFormProps> = ({
       try {
         if (change.action === "add") {
           await addMatchSessionParticipant(session.id, change.playerId);
-          nextSavedIds.add(change.playerId);
         } else {
           await removeMatchSessionParticipant(session.id, change.playerId);
-          nextSavedIds.delete(change.playerId);
         }
+        applied.push(change);
       } catch (err) {
         if (isNetworkError(err)) {
           // 연결이 끊겼으면 나머지도 실패하므로 멈춘다
@@ -194,11 +193,17 @@ const ParticipantsForm: React.FC<ParticipantsFormProps> = ({
       }
     }
 
-    setSavedIds(nextSavedIds);
+    // 저장 중에 게스트 추가로 늘어난 savedIds를 덮지 않도록 반영한 변경만 합친다
+    setSavedIds((current) => {
+      const next = new Set(current);
+      for (const change of applied) {
+        if (change.action === "add") next.add(change.playerId);
+        else next.delete(change.playerId);
+      }
+      return next;
+    });
     setIsSaving(false);
-    const didApplyAny =
-      nextSavedIds.size !== savedIds.size ||
-      [...nextSavedIds].some((id) => !savedIds.has(id));
+    const didApplyAny = applied.length > 0;
 
     if (!networkError && !serverError) {
       onDone(true);

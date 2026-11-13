@@ -198,28 +198,25 @@ export default function RecordDoneStep({
             ))}
           </div>
         ) : null}
-        {match.ratingExcluded ? (
+        {match.ratingExcluded || ratingRows.length > 0 ? (
           <div className="shrink-0 rounded-pk-lg bg-pk-bg px-4 py-1">
             <h3 className="mt-3 mb-0.5 text-pk-13 font-bold text-pk-sub">
               평점 변화
             </h3>
-            <p className="py-[11px] text-pk-15 text-pk-sub">
-              {RATING_EXCLUDED_NOTICE}
-            </p>
-          </div>
-        ) : ratingRows.length > 0 ? (
-          <div className="shrink-0 rounded-pk-lg bg-pk-bg px-4 py-1">
-            <h3 className="mt-3 mb-0.5 text-pk-13 font-bold text-pk-sub">
-              평점 변화
-            </h3>
-            {ratingRows.map(({ player, change }) => (
-              <RatingRow
-                key={player.id}
-                player={player}
-                change={change}
-                ratingCategory={ratingCategory}
-              />
-            ))}
+            {match.ratingExcluded ? (
+              <p className="py-[11px] text-pk-15 text-pk-sub">
+                {RATING_EXCLUDED_NOTICE}
+              </p>
+            ) : (
+              ratingRows.map(({ player, change }) => (
+                <RatingRow
+                  key={player.id}
+                  player={player}
+                  change={change}
+                  ratingCategory={ratingCategory}
+                />
+              ))
+            )}
           </div>
         ) : null}
       </BottomSheet.Body>
