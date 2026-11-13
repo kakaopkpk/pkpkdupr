@@ -11,6 +11,10 @@ const TOKEN_LIFETIME_SECONDS = 3600;
 /** 토큰 만료 직전 요청이 실패하지 않도록 이만큼 일찍 새로 받는다 */
 const TOKEN_REFRESH_MARGIN_MS = 60_000;
 const REQUEST_TIMEOUT_MS = 10_000;
+/** 로그가 길어지지 않도록 오류 응답 본문은 이만큼만 남긴다 */
+const MAX_ERROR_BODY_LENGTH = 500;
+/** 200으로 왔지만 토큰이 없는 응답은 구글 쪽 이상으로 보고 서버 오류 코드로 다룬다 */
+const EMPTY_TOKEN_RESPONSE_STATUS = 500;
 
 export interface GoogleServiceAccount {
   client_email: string;
@@ -43,7 +47,7 @@ export interface GoogleCalendarClient {
   deleteEvent(eventId: string): Promise<void>;
 }
 
-export class GoogleCalendarApiError extends Error {
+class GoogleCalendarApiError extends Error {
   constructor(
     message: string,
     readonly status: number,
@@ -120,7 +124,7 @@ const pemToDer = (pem: string): ArrayBuffer => {
 };
 
 /** 서비스 계정 OAuth 2.0 JWT(RS256) 어서션을 만든다 */
-export const createServiceAccountAssertion = async (
+const createServiceAccountAssertion = async (
   serviceAccount: GoogleServiceAccount,
   now: Date,
 ): Promise<string> => {
@@ -149,7 +153,7 @@ export const createServiceAccountAssertion = async (
 
 const readErrorBody = async (response: Response) => {
   try {
-    return (await response.text()).slice(0, 500);
+    return (await response.text()).slice(0, MAX_ERROR_BODY_LENGTH);
   } catch {
     return "";
   }
@@ -211,7 +215,10 @@ export const createGoogleCalendarClient = (
       expires_in?: number;
     };
     if (!body.access_token) {
-      throw new GoogleCalendarApiError("구글 액세스 토큰 응답이 비어 있습니다.", 500);
+      throw new GoogleCalendarApiError(
+        "구글 액세스 토큰 응답이 비어 있습니다.",
+        EMPTY_TOKEN_RESPONSE_STATUS,
+      );
     }
     cachedToken = {
       value: body.access_token,
