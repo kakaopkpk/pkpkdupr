@@ -111,12 +111,12 @@ export const RecentMatchesSection: React.FC<{
 /** 평점 카드·타일·경기 목록 자리 스켈레톤 */
 export const ProfileBodySkeleton: React.FC = () => (
   <div aria-busy="true" aria-label="불러오는 중" className="flex flex-col gap-2.5">
-    <SkeletonBlock className="h-[268px] !rounded-pk-lg" />
+    <SkeletonBlock className="h-[268px] rounded-pk-lg" />
     <div className="grid grid-cols-2 gap-2.5">
-      <SkeletonBlock className="h-[92px] !rounded-pk-lg" />
-      <SkeletonBlock className="h-[92px] !rounded-pk-lg" />
+      <SkeletonBlock className="h-[92px] rounded-pk-lg" />
+      <SkeletonBlock className="h-[92px] rounded-pk-lg" />
     </div>
-    <SkeletonBlock className="mt-3 h-[180px] !rounded-pk-lg" />
+    <SkeletonBlock className="mt-3 h-[180px] rounded-pk-lg" />
   </div>
 );
 
@@ -124,7 +124,7 @@ export const ProfileBodySkeleton: React.FC = () => (
 export const ProfileLoadError: React.FC<{ onRetry: () => void }> = ({
   onRetry,
 }) => (
-  <Card className="flex flex-col items-center gap-1 !py-6">
+  <Card className="flex flex-col items-center gap-1 py-6">
     <p className="text-pk-15 font-bold text-pk-ink">프로필을 불러오지 못했어요.</p>
     <TextLink onPress={onRetry}>다시 시도</TextLink>
   </Card>

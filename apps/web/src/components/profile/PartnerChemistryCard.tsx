@@ -59,7 +59,7 @@ export const StatBarRow: React.FC<{
 export const StatBarCard: React.FC<{ children: React.ReactNode }> = ({
   children,
 }) => (
-  <Card className="!p-4">
+  <Card className="p-4">
     <ul className="flex flex-col gap-3.5">{children}</ul>
   </Card>
 );

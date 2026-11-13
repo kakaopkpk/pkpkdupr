@@ -2,6 +2,7 @@ import React from "react";
 import { createPortal } from "react-dom";
 import { prefersReducedMotion, useSheetDrag } from "@/hooks/useSheetDrag";
 import { DIMMED_THEME_COLOR } from "@/lib/themeColor";
+import { cx } from "@/components/ui/cx";
 
 const OPEN_DURATION_MS = 240;
 const CLOSE_DURATION_MS = 180;
@@ -37,9 +38,7 @@ const BottomSheetHeader: React.FC<BottomSheetHeaderProps> = ({
   className,
 }) => (
   <div
-    className={["relative z-10 shrink-0 bg-white pb-4", className]
-      .filter(Boolean)
-      .join(" ")}
+    className={cx("relative z-10 shrink-0 bg-white pb-4", className)}
   >
     {children}
   </div>
@@ -50,12 +49,10 @@ const BottomSheetBody: React.FC<BottomSheetBodyProps> = ({
   className,
 }) => (
   <div
-    className={[
+    className={cx(
       "app-bottom-sheet-body min-h-0 flex-1 flex flex-col gap-4",
       className,
-    ]
-      .filter(Boolean)
-      .join(" ")}
+    )}
   >
     {children}
   </div>
@@ -70,9 +67,7 @@ const BottomSheetFooter: React.FC<BottomSheetBodyProps> = ({
   className,
 }) => (
   <div
-    className={["app-bottom-sheet-footer shrink-0 bg-white pt-3", className]
-      .filter(Boolean)
-      .join(" ")}
+    className={cx("app-bottom-sheet-footer shrink-0 bg-white pt-3", className)}
   >
     {children}
   </div>
@@ -270,13 +265,11 @@ const BottomSheet: BottomSheetComponent = ({
           ref={surfaceRef}
           role="dialog"
           aria-label={ariaLabel}
-          className={[
+          className={cx(
             "app-bottom-sheet-surface relative flex min-h-0 w-full flex-col overflow-hidden rounded-t-pk-lg bg-white px-4 pt-2.5 pb-[calc(1rem+var(--safe-bottom)+var(--app-keyboard-offset))] text-pk-ink shadow-[0_-10px_40px] shadow-pk-ink/20",
-            isFixedHeight ? "app-bottom-sheet-surface--fixed" : null,
+            isFixedHeight && "app-bottom-sheet-surface--fixed",
             className,
-          ]
-            .filter(Boolean)
-            .join(" ")}
+          )}
           onMouseDown={(event) => event.stopPropagation()}
         >
           <div

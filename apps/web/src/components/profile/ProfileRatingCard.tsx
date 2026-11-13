@@ -27,7 +27,7 @@ const ProfileRatingCard: React.FC<{
   last90Days: number;
   history: readonly RatingTrendPoint[];
 }> = ({ category, onCategoryChange, rank, rating, last90Days, history }) => (
-  <Card className="flex flex-col gap-2.5 !p-4">
+  <Card className="flex flex-col gap-2.5 p-4">
     <div className="flex items-center justify-between gap-2">
       <span className="text-pk-13 font-bold text-pk-sub">
         {rank !== null ? `랭킹 ${rank}위` : "평점 없음"}

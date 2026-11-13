@@ -90,6 +90,9 @@
 - 모바일 중심 화면이므로 고정 폭/하단 탭/오버레이가 깨지지 않게 확인합니다.
 - HeroUI를 사용할 때도 기존 Tailwind 클래스 기반 레이아웃 규칙과 충돌하지 않게 유지합니다.
 - 색·둥글기·글자 크기는 `src/index.css` `@theme`의 `pk-*` 토큰만 씁니다(예: `bg-pk-primary`, `text-pk-sub`, `rounded-pk-lg`, `text-pk-15`, `font-num`). 16진수 색을 클래스에 직접 쓰지 않습니다.
+- 기본 클래스에 className prop을 합칠 때는 `components/ui/cx.ts`의 `cx`를 씁니다. tailwind-merge 기반이라 충돌하는 클래스는 뒤에 온 것만 남으므로 넘겨받은 className을 뒤에 둡니다. `!` 접두(important)로 우회하지 않습니다.
+- `@theme`에 `pk-*` 토큰(색·둥글기·글자 크기)을 추가하거나 바꾸면 `cx.ts`의 tailwind-merge 토큰 등록도 함께 고칩니다. 빠지면 `text-pk-15`와 `text-pk-ink`처럼 접두가 같은 클래스를 같은 종류로 오인하거나 충돌을 못 정리합니다.
+- Barlow Condensed는 600·700 굵기만 로드하므로 `font-num`에는 `font-bold` 이하만 씁니다.
 
 ## 디자인 규칙
 
