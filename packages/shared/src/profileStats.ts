@@ -12,11 +12,13 @@ export interface PartnerStat {
   losses: number;
 }
 
-/** 요청자(보는 사람) 기준 맞대결 승패 */
+/** 요청자(보는 사람) 기준 한 분류의 맞대결 승패 */
 export interface HeadToHeadStat {
   matchCount: number;
   wins: number;
   losses: number;
+  /** 그 맞대결들에서 요청자 평점이 바뀐 양의 합(이 분류 평점) */
+  ratingDelta: number;
 }
 
 /** 상성에 넣는 최소 맞대결 완료 경기 수 */
