@@ -36,11 +36,11 @@ const SKELETON_ROW_COUNT = 6;
 const rowGridClassName =
   "grid min-h-[52px] w-full grid-cols-[24px_32px_minmax(0,1fr)_auto] items-center gap-1.5 rounded-pk-sm py-2 text-left text-pk-ink";
 
-// 평점과 변동은 한 칸에 두고 글자 기준선을 맞춘다. 글꼴 크기·기기 폰트가 달라도 숫자 밑선이 어긋나지 않는다
-const ratingCellClassName = "flex items-baseline gap-1.5";
+// 평점(15px)과 변동(12px)의 글자 세로 중심을 맞춘다. 줄 높이를 1로 두어 브라우저마다 다른 기본 줄 높이에 흔들리지 않게 한다
+const ratingCellClassName = "flex items-center gap-1.5";
 
-/** 변동 32px 폭. 왼쪽 정렬이라 ▲·▼·– 시작 위치와 평점과의 간격이 모든 줄에서 같다 */
-const changeSlotClassName = "w-8 shrink-0 whitespace-nowrap";
+/** 변동 32px 폭. 왼쪽 정렬이라 ▲·▼·– 시작 위치와 평점과의 간격이 모든 줄에서 같다. flex라 부모 글꼴 줄 높이(strut)가 끼지 않는다 */
+const changeSlotClassName = "flex w-8 shrink-0 items-center whitespace-nowrap";
 
 /** 랭킹 카드: Card 기본 좌우 여백 16을 12로 줄인다 */
 const rankingCardClassName = "px-3 py-1.5";
@@ -78,11 +78,11 @@ const RankingRow: React.FC<{
     <PlayerAvatar player={entry.player} size={32} />
     <PlayerNameCell player={entry.player} />
     <span className={ratingCellClassName}>
-      <span className="text-pk-15 font-extrabold tabular-nums">
+      <span className="text-pk-15 leading-none font-extrabold tabular-nums">
         {formatRating(entry.rating)}
       </span>
       <span className={changeSlotClassName}>
-        <RankChange value={entry.rankChange} />
+        <RankChange value={entry.rankChange} className="leading-none" />
       </span>
     </span>
   </button>
