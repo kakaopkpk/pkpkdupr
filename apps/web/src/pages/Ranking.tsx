@@ -32,9 +32,9 @@ const CATEGORY_OPTIONS: readonly SegmentedOption<MatchTopLevelType>[] = [
 
 const SKELETON_ROW_COUNT = 6;
 
-// 순위 24 · 아바타 32 · 이름 · 평점 · 변동 28. 줄 좌우 여백 없이 카드 안쪽 12px에 맞춘다
+// 순위 24 · 아바타 32 · 이름 · 평점 · 변동 32. 줄 좌우 여백 없이 카드 안쪽 12px에 맞춘다
 const rowGridClassName =
-  "grid min-h-[52px] w-full grid-cols-[24px_32px_minmax(0,1fr)_auto_28px] items-center gap-1.5 rounded-pk-sm py-2 text-left text-pk-ink";
+  "grid min-h-[52px] w-full grid-cols-[24px_32px_minmax(0,1fr)_auto_32px] items-center gap-1.5 rounded-pk-sm py-2 text-left text-pk-ink";
 
 /** 랭킹 카드: Card 기본 좌우 여백 16을 12로 줄인다 */
 const rankingCardClassName = "px-3 py-1.5";
@@ -74,7 +74,8 @@ const RankingRow: React.FC<{
     <span className="text-right text-pk-15 font-extrabold tabular-nums">
       {formatRating(entry.rating)}
     </span>
-    <span className="text-right">
+    {/* 왼쪽 정렬: 변동 값 너비와 상관없이 ▲·▼·– 시작 위치와 평점과의 간격을 모든 줄에서 맞춘다 */}
+    <span className="whitespace-nowrap">
       <RankChange value={entry.rankChange} />
     </span>
   </button>
