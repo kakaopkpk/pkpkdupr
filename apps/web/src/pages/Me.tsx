@@ -134,10 +134,12 @@ const Me: React.FC = () => {
                 <PartnerChemistryCard partners={partners} />
               </section>
             ) : null}
-            <section className="flex flex-col gap-2.5 pt-1">
-              <SectionLabel>상성 · 자주 진 상대</SectionLabel>
-              <RivalCard rivals={rivals} />
-            </section>
+            {rivals.length > 0 ? (
+              <section className="flex flex-col gap-2.5 pt-1">
+                <SectionLabel>천적</SectionLabel>
+                <RivalCard rivals={rivals} />
+              </section>
+            ) : null}
             {playerId ? (
               <AchievementsSection
                 playerId={playerId}
