@@ -100,7 +100,9 @@ import {
 } from "./services/AuthService";
 import {
   attachMatchRatingChanges,
+  PROFILE_RATING_TREND_WINDOW_DAYS,
   PlayerRatingChartProjectionService,
+  selectRatingTrendWindow,
 } from "./services/PlayerRatingChartProjectionService";
 import { buildPlayerProfileSummary } from "./services/PlayerProfileSummaryService";
 import {
@@ -1044,7 +1046,10 @@ app.get("/api/players/:playerId/profile-summary", async (req, res) => {
       buildPlayerProfileSummary(
         matches,
         playerId,
-        projection.history,
+        selectRatingTrendWindow(
+          projection.history,
+          PROFILE_RATING_TREND_WINDOW_DAYS,
+        ),
         decoded.playerId,
         now,
         dominations?.get(playerId),

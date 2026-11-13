@@ -40,7 +40,7 @@ export const ProfileRatingSection: React.FC<{
       onCategoryChange={onCategoryChange}
       rank={rank}
       rating={rating}
-      last90Days={overview.summary.ratingDelta[category].last90Days}
+      last30Days={overview.summary.ratingDelta[category].last30Days}
       history={overview.summary.ratingHistory[category]}
     />
   );

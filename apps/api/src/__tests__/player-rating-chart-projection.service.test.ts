@@ -3,16 +3,85 @@ import { describe, expect, it, vi } from "vitest";
 import type { MatchRepository } from "../repositories/MatchRepository";
 import type { AuthService } from "../services/AuthService";
 import {
-  PLAYER_RATING_CHART_MAX_POINTS,
-  buildPlayerRatingChartProjection,
+  RANKING_RATING_TREND_MAX_POINTS,
+  buildRankingRatingTrend,
+  collapseRatingHistoryByKstDay,
   PlayerRatingChartProjectionService,
+  PROFILE_RATING_TREND_WINDOW_DAYS,
+  selectRatingTrendWindow,
 } from "../services/PlayerRatingChartProjectionService";
 
 const now = new Date("2026-08-03T12:00:00.000Z");
 const dayBefore = (days: number) =>
   new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
 
-describe("buildPlayerRatingChartProjection", () => {
+describe("collapseRatingHistoryByKstDay", () => {
+  it("KST 날짜마다 그날 마지막 평점만 남긴다", () => {
+    const history: PlayerRatingHistory = {
+      singles: [],
+      doubles: [
+        // 8월 1일 21:00 KST
+        { rating: 3.4, createdAt: new Date("2026-08-01T12:00:00.000Z"), source: "match" },
+        // 8월 1일 19:00 KST
+        { rating: 3.5, createdAt: new Date("2026-08-01T10:00:00.000Z"), source: "match" },
+        // UTC로는 8월 1일이지만 KST로는 8월 2일 00:30
+        { rating: 3.3, createdAt: new Date("2026-08-01T15:30:00.000Z"), source: "match" },
+      ],
+    };
+
+    expect(collapseRatingHistoryByKstDay(history).doubles).toEqual([
+      expect.objectContaining({ rating: 3.4 }),
+      expect.objectContaining({ rating: 3.3 }),
+    ]);
+  });
+});
+
+describe("selectRatingTrendWindow", () => {
+  it("NR에서 처음 받은 평점부터는 anchor 없이 경기일 점만 준다", () => {
+    const history: PlayerRatingHistory = {
+      singles: [],
+      doubles: [
+        { rating: 3.5, createdAt: dayBefore(1), source: "match" },
+        { rating: 3.2, createdAt: dayBefore(0.1), source: "match" },
+      ],
+    };
+
+    const trend = selectRatingTrendWindow(
+      history,
+      PROFILE_RATING_TREND_WINDOW_DAYS,
+      now,
+    ).doubles;
+
+    expect(trend.map((point) => [point.rating, point.source])).toEqual([
+      [3.5, "match"],
+      [3.2, "match"],
+    ]);
+  });
+
+  it("기간 이전 마지막 평점을 기간 시작 anchor로 앞에 둔다", () => {
+    const history: PlayerRatingHistory = {
+      singles: [],
+      doubles: [
+        { rating: 3.1, createdAt: dayBefore(45), source: "match" },
+        { rating: 3.25, createdAt: dayBefore(31), source: "match" },
+        { rating: 3.3, createdAt: dayBefore(10), source: "match" },
+      ],
+    };
+
+    const trend = selectRatingTrendWindow(history, 30, now).doubles;
+
+    expect(trend).toEqual([
+      expect.objectContaining({
+        rating: 3.25,
+        source: "anchor",
+        createdAt: dayBefore(30),
+      }),
+      expect.objectContaining({ rating: 3.3, source: "match" }),
+    ]);
+  });
+});
+
+describe("buildRankingRatingTrend", () => {
   it("90일 시작 anchor와 현재 양끝점을 고정하고 내부 지점을 최대 여섯 개만 남긴다", () => {
     const history: PlayerRatingHistory = {
       singles: [
@@ -33,9 +102,9 @@ describe("buildPlayerRatingChartProjection", () => {
       doubles: [],
     };
 
-    const projection = buildPlayerRatingChartProjection(history, now).singles;
+    const projection = buildRankingRatingTrend(history, now).singles;
 
-    expect(projection).toHaveLength(PLAYER_RATING_CHART_MAX_POINTS);
+    expect(projection).toHaveLength(RANKING_RATING_TREND_MAX_POINTS);
     expect(projection[0]).toMatchObject({
       rating: 3.2,
       source: "anchor",
@@ -59,7 +128,7 @@ describe("buildPlayerRatingChartProjection", () => {
       doubles: [],
     };
 
-    const projection = buildPlayerRatingChartProjection(history, now).singles;
+    const projection = buildRankingRatingTrend(history, now).singles;
 
     expect(projection).toEqual([
       expect.objectContaining({ rating: 3.4, source: "match" }),
@@ -79,7 +148,7 @@ describe("buildPlayerRatingChartProjection", () => {
       doubles: [],
     };
 
-    const projection = buildPlayerRatingChartProjection(history, now).singles;
+    const projection = buildRankingRatingTrend(history, now).singles;
 
     expect(projection).toEqual([
       expect.objectContaining({
@@ -100,7 +169,7 @@ describe("buildPlayerRatingChartProjection", () => {
       doubles: [],
     };
 
-    const projection = buildPlayerRatingChartProjection(history, now).singles;
+    const projection = buildRankingRatingTrend(history, now).singles;
 
     expect(projection).toHaveLength(2);
     expect(projection[0]?.source).toBe("match");

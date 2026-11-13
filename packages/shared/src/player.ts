@@ -78,7 +78,7 @@ export interface PlayerRatingHistoryPoint {
   createdAt: Date;
   /**
    * 완료 경기, 현재 레이팅 또는 차트 표시 범위 시작을 위한 기준점입니다.
-   * `anchor`는 원본 경기 데이터를 변형하지 않고 90일 projection의 시작값을
+   * `anchor`는 원본 경기 데이터를 변형하지 않고 추세 기간 시작값을
    * 연속적으로 연결하기 위한 파생 지점입니다.
    */
   source: "match" | "current" | "anchor";
