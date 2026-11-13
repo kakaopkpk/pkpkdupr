@@ -7,6 +7,24 @@ export const isEdgeRuntime = (): boolean => {
   return runtime.EdgeRuntime !== undefined || runtime.Deno !== undefined;
 };
 
+/**
+ * Edge Runtime의 `EdgeRuntime.waitUntil`. 응답 뒤에도 함수가 끝나기 전에 작업을 마치게 한다.
+ * Node처럼 상주 프로세스면 없어도 되므로 undefined를 돌려준다.
+ */
+export const getRuntimeWaitUntil = ():
+  | ((task: Promise<unknown>) => void)
+  | undefined => {
+  const runtime = (
+    globalThis as {
+      EdgeRuntime?: { waitUntil?: (task: Promise<unknown>) => void };
+    }
+  ).EdgeRuntime;
+  const waitUntil = runtime?.waitUntil;
+  return typeof waitUntil === "function"
+    ? (task) => waitUntil.call(runtime, task)
+    : undefined;
+};
+
 const FUNCTIONS_PATH_PREFIX = "/functions/v1";
 
 /**

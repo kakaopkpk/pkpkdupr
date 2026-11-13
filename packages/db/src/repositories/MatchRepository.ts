@@ -206,6 +206,8 @@ export interface TimestampUnitAudit {
 export interface ExpiredCleanupResult {
   deletedMatchCount: number;
   deletedSessionCount: number;
+  /** 이번 정리로 지운 세션 id */
+  deletedSessionIds: string[];
 }
 
 const toDateOrNull = (value: Date | string | number | null | undefined) =>
@@ -475,7 +477,7 @@ export class MatchRepository {
    */
   async findOrCreateRegularSession(
     dateKey: string,
-  ): Promise<ManagedMatchSession> {
+  ): Promise<{ session: ManagedMatchSession; created: boolean }> {
     if (!REGULAR_DATE_KEY_PATTERN.test(dateKey)) {
       throw new Error("유효한 정기 세션 날짜가 필요합니다.");
     }
@@ -490,7 +492,7 @@ export class MatchRepository {
 
     const existing = await findStored();
     if (existing) {
-      return await this.toManagedSession(existing);
+      return { session: await this.toManagedSession(existing), created: false };
     }
 
     const sessionDate = kstDateKeyToDate(dateKey, REGULAR_SESSION_START_HOUR);
@@ -498,10 +500,11 @@ export class MatchRepository {
     // 같은 날 18:00 KST에 정기 세션과 이름이 같은 다른 세션이 있으면 (name, date) 유니크 충돌로 끝까지 실패한다.
     for (let attempt = 0; attempt < 8; attempt += 1) {
       const now = new Date();
+      const candidateId = generateEntityId("session");
       await this.db
         .insert(matchSessions)
         .values({
-          id: generateEntityId("session"),
+          id: candidateId,
           name: getRegularSessionName(dateKey),
           date: sessionDate,
           location: REGULAR_SESSION_LOCATION,
@@ -513,24 +516,28 @@ export class MatchRepository {
 
       const stored = await findStored();
       if (stored) {
-        return await this.toManagedSession(stored);
+        // 동시 호출이 먼저 만든 행이면 id가 달라 created=false다
+        return {
+          session: await this.toManagedSession(stored),
+          created: stored.id === candidateId,
+        };
       }
     }
 
     throw new Error("정기 세션을 만들지 못했습니다.");
   }
 
-  /** 세션 참여자를 추가한다. 이미 있는 참여자는 그대로 둔다. */
+  /** 세션 참여자를 추가한다. 이미 있는 참여자는 그대로 둔다. 새로 들어간 참여자가 있으면 true */
   async addSessionParticipants(
     sessionId: string,
     playerIds: string[],
-  ): Promise<void> {
+  ): Promise<boolean> {
     if (!isEntityId(sessionId, "session")) {
       throw new Error("유효한 세션 ID가 필요합니다.");
     }
     const uniquePlayerIds = [...new Set(playerIds)];
     if (uniquePlayerIds.length === 0) {
-      return;
+      return false;
     }
 
     const now = toUnixTimestampSeconds(new Date());
@@ -555,19 +562,21 @@ export class MatchRepository {
         now,
       ]),
     });
-    if (inserted.rowsAffected > 0) {
-      await this.client.execute({
-        sql: "UPDATE match_sessions SET updated_at = $1 WHERE id = $2",
-        args: [now, sessionId],
-      });
+    if (inserted.rowsAffected === 0) {
+      return false;
     }
+    await this.client.execute({
+      sql: "UPDATE match_sessions SET updated_at = $1 WHERE id = $2",
+      args: [now, sessionId],
+    });
+    return true;
   }
 
-  /** 세션 참여자 한 명을 뺀다. 참여 중이 아니면 아무것도 하지 않는다. */
+  /** 세션 참여자 한 명을 뺀다. 참여 중이 아니면 아무것도 하지 않는다. 실제로 뺐으면 true */
   async removeSessionParticipant(
     sessionId: string,
     playerId: string,
-  ): Promise<void> {
+  ): Promise<boolean> {
     if (!isEntityId(sessionId, "session")) {
       throw new Error("유효한 세션 ID가 필요합니다.");
     }
@@ -578,12 +587,14 @@ export class MatchRepository {
       `,
       args: [sessionId, playerId],
     });
-    if (deleted.rowsAffected > 0) {
-      await this.client.execute({
-        sql: "UPDATE match_sessions SET updated_at = $1 WHERE id = $2",
-        args: [toUnixTimestampSeconds(new Date()), sessionId],
-      });
+    if (deleted.rowsAffected === 0) {
+      return false;
     }
+    await this.client.execute({
+      sql: "UPDATE match_sessions SET updated_at = $1 WHERE id = $2",
+      args: [toUnixTimestampSeconds(new Date()), sessionId],
+    });
+    return true;
   }
 
   /** 세션 시각이 [from, to) 범위인 세션을 시각 오름차순으로 돌려준다. */
@@ -676,7 +687,8 @@ export class MatchRepository {
         )
         SELECT
           (SELECT count(*) FROM deleted_matches) AS deleted_match_count,
-          (SELECT count(*) FROM deleted_sessions) AS deleted_session_count
+          (SELECT count(*) FROM deleted_sessions) AS deleted_session_count,
+          (SELECT string_agg(id, ',') FROM deleted_sessions) AS deleted_session_ids
       `,
       args: [
         inProgressExpiryCutoff(now),
@@ -685,9 +697,15 @@ export class MatchRepository {
       ],
     });
     const row = result.rows[0];
+    // 세션 id(엔티티 id)에는 쉼표가 없어 쉼표로 이어 받는다
+    const deletedSessionIds =
+      typeof row?.deleted_session_ids === "string" && row.deleted_session_ids
+        ? row.deleted_session_ids.split(",")
+        : [];
     return {
       deletedMatchCount: Number(row?.deleted_match_count ?? 0),
       deletedSessionCount: Number(row?.deleted_session_count ?? 0),
+      deletedSessionIds,
     };
   }
 
@@ -1388,7 +1406,13 @@ export class MatchRepository {
     data: CreateMatchInput,
     now: Date,
   ): Promise<
-    { match: Match; conflictPlayerId?: undefined } | { conflictPlayerId: string }
+    | {
+        match: Match;
+        /** 이 경기로 세션 참여자가 새로 들어갔으면 true */
+        sessionParticipantsAdded: boolean;
+        conflictPlayerId?: undefined;
+      }
+    | { conflictPlayerId: string }
   > {
     if (!isEntityId(data.id, "match")) {
       throw new Error("유효한 매치 ID가 필요합니다.");
@@ -1408,6 +1432,7 @@ export class MatchRepository {
 
     const transaction = await this.client.transaction("write");
     let committed = false;
+    let sessionParticipantsAdded = false;
     try {
       await transaction.execute(
         "SELECT pg_advisory_xact_lock(hashtext('pkpkdupr:start-in-progress-match'))",
@@ -1460,6 +1485,7 @@ export class MatchRepository {
           ]),
         });
         if (inserted.rowsAffected > 0) {
+          sessionParticipantsAdded = true;
           await transaction.execute({
             sql: "UPDATE match_sessions SET updated_at = $1 WHERE id = $2",
             args: [nowSeconds, session.id],
@@ -1547,7 +1573,7 @@ export class MatchRepository {
     if (!created) {
       throw new Error("매치 생성에 실패했습니다.");
     }
-    return { match: created };
+    return { match: created, sessionParticipantsAdded };
   }
 
   /**

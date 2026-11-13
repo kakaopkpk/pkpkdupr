@@ -135,7 +135,12 @@ import {
   uploadAvatarObject,
 } from "./services/AvatarStorage";
 import { sensitiveResponseHeaders } from "./middleware/sensitiveResponseHeaders";
-import { isEdgeRuntime } from "./runtime";
+import { getRuntimeWaitUntil, isEdgeRuntime } from "./runtime";
+import {
+  createSessionCalendarSync,
+  getEnvGoogleCalendarClient,
+  type CalendarSessionSnapshot,
+} from "./services/SessionCalendarSync";
 
 const app: express.Express = express();
 const PORT = process.env.PORT || 4000;
@@ -180,7 +185,9 @@ app.get("/api/ping", (_req, res) => {
 });
 
 const authService = new AuthService();
-const matchRepository = new MatchRepository();
+const matchRepository = new MatchRepository({
+  onSessionsChanged: (sessionIds) => sessionCalendarSync.syncSessions(sessionIds),
+});
 const playerRatingChartProjectionService =
   new PlayerRatingChartProjectionService(matchRepository, authService);
 authService.setPlayerRatingChartProjectionRefresher(
@@ -814,6 +821,34 @@ const loadMatchSessionDetail = async (
     ? toMatchSessionDetail(session, activePlayersById, now)
     : undefined;
 };
+
+/**
+ * 세션 일정을 동호회 구글 캘린더에 반영한다. 세션 쓰기는 matchRepository의 onSessionsChanged로 들어온다.
+ * GOOGLE_CALENDAR_SERVICE_ACCOUNT_JSON·GOOGLE_CALENDAR_ID가 없으면 아무것도 하지 않는다.
+ */
+const sessionCalendarSync = createSessionCalendarSync({
+  getClient: getEnvGoogleCalendarClient,
+  getWebAppUrl: () => process.env.WEB_APP_URL,
+  waitUntil: getRuntimeWaitUntil(),
+  loadSession: async (sessionId): Promise<CalendarSessionSnapshot | undefined> => {
+    const detail = await loadMatchSessionDetail(sessionId, new Date());
+    return detail
+      ? {
+          id: detail.id,
+          name: detail.name,
+          kind: detail.kind,
+          location: detail.location,
+          dateKey: detail.dateKey,
+          startTime: detail.startTime,
+          endTime: detail.endTime,
+          participants: detail.participants.map((member) => ({
+            username: member.username,
+            isGuest: member.isGuest,
+          })),
+        }
+      : undefined;
+  },
+});
 
 const requireMatchSessionDetail = async (sessionId: string, now: Date) => {
   const detail = await loadMatchSessionDetail(sessionId, now);
