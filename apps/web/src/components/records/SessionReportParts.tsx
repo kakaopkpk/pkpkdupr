@@ -1,4 +1,5 @@
 import React from "react";
+import { formatSessionTimeRange } from "@pkpkdupr/shared/session";
 import type { SessionPlayerReport } from "@pkpkdupr/shared/ranking";
 import SkeletonBlock from "@/components/SkeletonBlock";
 import { SessionDominatorBadge } from "@/components/ui/Badges";
@@ -16,16 +17,8 @@ import { RankChange, RatingDelta } from "@/components/ui/Delta";
 import { PlayerAvatar } from "@/components/ui/PlayerAvatar";
 import { cx } from "@/components/ui/cx";
 import { usePlayOnShow } from "@/hooks/usePlayOnShow";
+import { formatKstShortDate } from "@/lib/format";
 import type { MatchSessionHistoryInfo } from "@/lib/rankings";
-
-const WEEKDAYS = ["일", "월", "화", "수", "목", "금", "토"] as const;
-
-/** dateKey("2026-11-12")를 짧은 날짜 "11/12 목"으로 바꾼다 */
-export const formatShortSessionDate = (dateKey: string) => {
-  const [year, month, day] = dateKey.split("-").map(Number);
-  const weekday = WEEKDAYS[new Date(Date.UTC(year, month - 1, day)).getUTCDay()];
-  return `${month}/${day} ${weekday}`;
-};
 
 const formatRating = (rating: number | null) =>
   rating === null ? "NR" : rating.toFixed(3);
@@ -43,27 +36,36 @@ export const wasUnratedBeforeSession = (
   report: Pick<SessionPlayerReport, "rankBefore" | "ratingBefore">,
 ): boolean => report.rankBefore === null || report.ratingBefore === null;
 
-export const SessionSummary: React.FC<{ session: MatchSessionHistoryInfo }> = ({
-  session,
-}) => (
-  <div className="flex flex-col gap-0.5 px-1 pb-1">
-    <h2 className="text-pk-22 font-extrabold tracking-[-0.02em] text-pk-ink">
-      {session.name}
-    </h2>
-    <span className="text-pk-13 text-pk-sub tabular-nums">
-      {[
-        session.startTime
-          ? `${formatShortSessionDate(session.dateKey)} ${session.startTime}`
-          : formatShortSessionDate(session.dateKey),
-        session.location,
-        `${session.participantCount}명`,
-        `${session.matchCount}경기`,
-      ]
-        .filter(Boolean)
-        .join(" · ")}
-    </span>
-  </div>
-);
+/**
+ * 세션 상세 머리. 메타 줄은 "11월 13일 목 18:00~22:00 · 장소".
+ * 종료 시각을 모르면 시작 시각만, 시작 시각도 없으면 날짜만 보인다.
+ */
+export const SessionSummary: React.FC<{
+  session: MatchSessionHistoryInfo;
+  /** 세션 상세 조회로 얻은 종료 시각("HH:MM"). 리포트 응답에는 없다 */
+  endTime?: string | null;
+}> = ({ session, endTime = null }) => {
+  const time =
+    formatSessionTimeRange({ startTime: session.startTime, endTime }) ??
+    session.startTime;
+  return (
+    <div className="flex flex-col gap-0.5 px-1 pb-1">
+      <h2 className="text-pk-22 font-extrabold tracking-[-0.02em] text-pk-ink">
+        {session.name}
+      </h2>
+      <span className="text-pk-13 text-pk-sub tabular-nums">
+        {[
+          time
+            ? `${formatKstShortDate(session.date)} ${time}`
+            : formatKstShortDate(session.date),
+          session.location,
+        ]
+          .filter(Boolean)
+          .join(" · ")}
+      </span>
+    </div>
+  );
+};
 
 /**
  * 세션 후 평점. 후 평점이 없으면 "NR".

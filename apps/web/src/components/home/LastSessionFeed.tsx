@@ -26,18 +26,24 @@ export const getPlayerSessionAchievements = (
       })
     : [];
 
-/** 그 세션에서 받은 내 새 업적. 누르면 업적 상세 시트를 연다 */
+/**
+ * 그 세션에서 받은 내 새 업적. 누르면 업적 상세 시트를 연다.
+ * titlePlacement가 "card"(기본)면 카드 안 제목 "내 새 업적 N개", "section"이면 카드 밖 SectionLabel "내 새 업적 · N"
+ */
 export const MyNewAchievementsCard: React.FC<{
   playerId: string;
   achievements: readonly AchievementDefinition[];
-}> = ({ playerId, achievements }) => {
+  titlePlacement?: "card" | "section";
+}> = ({ playerId, achievements, titlePlacement = "card" }) => {
   const { openAchievementDetail } = useAppNavigation();
 
-  return (
+  const card = (
     <Card>
-      <h3 className="mt-3 text-pk-13 font-bold text-pk-sub">
-        내 새 업적 {achievements.length}개
-      </h3>
+      {titlePlacement === "card" ? (
+        <h3 className="mt-3 text-pk-13 font-bold text-pk-sub">
+          내 새 업적 {achievements.length}개
+        </h3>
+      ) : null}
       {achievements.map((definition) => (
         <button
           key={definition.id}
@@ -60,6 +66,14 @@ export const MyNewAchievementsCard: React.FC<{
         </button>
       ))}
     </Card>
+  );
+
+  if (titlePlacement === "card") return card;
+  return (
+    <section className="flex flex-col gap-2.5 pt-1">
+      <SectionLabel>내 새 업적 · {achievements.length}</SectionLabel>
+      {card}
+    </section>
   );
 };
 
@@ -115,6 +129,7 @@ const LastSessionFeed: React.FC<{
         <MyNewAchievementsCard
           playerId={playerId}
           achievements={myAchievements}
+          titlePlacement="section"
         />
       ) : null}
     </>
