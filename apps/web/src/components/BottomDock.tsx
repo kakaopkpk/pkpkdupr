@@ -1,6 +1,8 @@
 import React, { useEffect, useRef, useState } from "react";
 import type { MatchInfo } from "@/types/match";
 import type { TabKey } from "@/context/TabNavigationContext";
+import { useMinuteClock } from "@/hooks/useMinuteClock";
+import { formatElapsed } from "@/lib/format";
 import {
   PRESENCE_ENTER_CLASS,
   PRESENCE_EXIT_CLASS,
@@ -264,20 +266,6 @@ const DockBar: React.FC<{
   </div>
 );
 
-const MINUTE_MS = 60_000;
-
-/** 1분마다 바뀌는 현재 시각 */
-const useMinuteClock = () => {
-  const [now, setNow] = useState(() => Date.now());
-
-  useEffect(() => {
-    const intervalId = window.setInterval(() => setNow(Date.now()), MINUTE_MS);
-    return () => window.clearInterval(intervalId);
-  }, []);
-
-  return now;
-};
-
 const joinNames = (players: { username: string }[]) =>
   players.map((teamPlayer) => teamPlayer.username).join(" · ");
 
@@ -290,10 +278,6 @@ export const MyMatchBar: React.FC<{
   onEnterScore: (matchId: string) => void;
 }> = ({ match, playerId, isActionDisabled, isExiting, onEnterScore }) => {
   const now = useMinuteClock();
-  const elapsedMinutes = Math.max(
-    0,
-    Math.floor((now - new Date(match.matchStartsAt).getTime()) / MINUTE_MS),
-  );
   const myTeamIndex = match.teams[1].players.some(
     (teamPlayer) => teamPlayer.id === playerId,
   )
@@ -310,7 +294,7 @@ export const MyMatchBar: React.FC<{
 
   return (
     <DockBar
-      title={`내 경기 · ${elapsedMinutes}분째`}
+      title={`내 경기 · ${formatElapsed(match.matchStartsAt, now)}`}
       description={description}
       actionLabel="점수 입력"
       isActionDisabled={isActionDisabled}

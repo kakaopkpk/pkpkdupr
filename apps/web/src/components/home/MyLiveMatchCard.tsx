@@ -1,15 +1,12 @@
 import React from "react";
 import type { MatchInfo } from "@/types/match";
 import { PkButton } from "@/components/ui/Button";
+import { formatElapsed } from "@/lib/format";
 import { TeamsVersus } from "./TeamBlock";
-
-const getElapsedMinutes = (startsAt: string, now: Date) =>
-  Math.max(0, Math.floor((now.getTime() - new Date(startsAt).getTime()) / 60_000));
 
 /** "방금 시작"·"N분째"에 세션 밖 경기면 " · 세션 없음"을 붙인다 */
 const getStatusLabel = (match: MatchInfo, now: Date) => {
-  const elapsedMinutes = getElapsedMinutes(match.matchStartsAt, now);
-  const elapsedLabel = elapsedMinutes === 0 ? "방금 시작" : `${elapsedMinutes}분째`;
+  const elapsedLabel = formatElapsed(match.matchStartsAt, now);
   return match.session ? elapsedLabel : `${elapsedLabel} · 세션 없음`;
 };
 

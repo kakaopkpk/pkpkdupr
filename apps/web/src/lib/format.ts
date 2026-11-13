@@ -58,3 +58,15 @@ export const formatKstWeekdayTime = (date: Date | string) => {
   const { weekday } = getKstParts(date);
   return `${weekday.charAt(0)} ${formatKstTime(date)}`;
 };
+
+/** "11월 13일 목 20:01" */
+export const formatKstDateTime = (date: Date | string) =>
+  `${formatKstShortDate(date)} ${formatKstTime(date)}`;
+
+/** 진행 중 경기 경과 시간. 0분(시작 전 포함)이면 "방금 시작", 그 뒤로 "N분째" */
+export const formatElapsed = (startsAt: Date | string, now: Date) => {
+  const elapsedMinutes = Math.floor(
+    (now.getTime() - toDate(startsAt).getTime()) / 60_000,
+  );
+  return elapsedMinutes <= 0 ? "방금 시작" : `${elapsedMinutes}분째`;
+};
