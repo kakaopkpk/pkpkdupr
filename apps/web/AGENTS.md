@@ -37,6 +37,7 @@
   - `LiveSessionContext.tsx`: `useLiveSession()`으로 오늘 진행 중 세션·그 경기, 세션과 상관없는 진행 중 경기(`GET /api/matches/in-progress`)와 그중 내 경기
   - `SystemNoticeContext.tsx`: `useSystemNotice().showSaveFailure({ onRetry })`로 저장 실패 토스트(네트워크 오류에만, 서버 4xx·5xx는 화면 인라인), `showToast({ message, actionLabel?, onAction?, durationMs? })`로 하단 바 위 알약 토스트(기본 5초, 동작 글자 하나)
   - `AppUpdateContext.tsx`: `useAppUpdate()`로 PWA 업데이트 확인·적용 상태
+- `src/hooks/`: `useSheetDrag.ts`(바텀시트 끌어 닫기·`prefersReducedMotion`), `useCountUp.ts`(숫자 카운트업), `usePlayOnce.ts`(CSS 애니메이션 한 번만 재생), `useLayerDepth.ts`, `usePullToRefresh.ts`, `usePlayers.ts`, `useOnlineStatus.ts`, `useStartedMatchToast.ts`
 - `src/types/match.ts`: API JSON 응답 기준 경기 타입(`MatchInfo`, `MatchListResponse`)과 `getTeamResultScores`
 - `src/lib/`: API 호출(`api.ts`)·Supabase 클라이언트·도메인별 요청 함수·포맷터, `src/utils/`: 평점(`dupr.ts`)·아바타 유틸
 - 도메인 타입은 `@pkpkdupr/shared/*`에서 import합니다. 웹 전용 응답 형태만 `src/types/`에 둡니다.
@@ -92,6 +93,10 @@
 - 색·둥글기·글자 크기는 `src/index.css` `@theme`의 `pk-*` 토큰만 씁니다(예: `bg-pk-primary`, `text-pk-sub`, `rounded-pk-lg`, `text-pk-15`, `font-num`). 16진수 색을 클래스에 직접 쓰지 않습니다.
 - 기본 클래스에 className prop을 합칠 때는 `components/ui/cx.ts`의 `cx`를 씁니다. tailwind-merge 기반이라 충돌하는 클래스는 뒤에 온 것만 남으므로 넘겨받은 className을 뒤에 둡니다. `!` 접두(important)로 우회하지 않습니다.
 - `@theme`에 `pk-*` 토큰(색·둥글기·글자 크기)을 추가하거나 바꾸면 `cx.ts`의 tailwind-merge 토큰 등록도 함께 고칩니다. 빠지면 `text-pk-15`와 `text-pk-ink`처럼 접두가 같은 클래스를 같은 종류로 오인하거나 충돌을 못 정리합니다.
+- 모션 곡선은 `@theme`의 `ease-pk-move`(이동·전환)와 `ease-pk-pop`(튀어나오는 등장) 두 개를 씁니다. arbitrary `ease-[cubic-bezier(...)]`를 새로 쓰지 않습니다.
+- 공용 애니메이션은 `index.css`의 `animate-pk-*`(`fade-in`·`fade-up`·`pop`·`draw`·`sheen`·`ping`·`spin-slow`·`rise-in`·`sink-out`)를 재사용합니다. 모두 fill-mode both이고 지연·길이는 inline style `animationDelay`·`animationDuration`으로 덮어씁니다. `animate-pk-draw`는 요소에 `pathLength="1"`이 필요합니다. transform·opacity만 움직이고 height·top·width·left는 애니메이션하지 않습니다. 새 keyframes는 `@theme`에 `pk-` 접두로 추가하고 `cx.ts` 등록도 함께 고칩니다.
+- 움직임 줄이기는 소비처에서 `motion-reduce:`(`motion-reduce:animate-none`, `motion-reduce:transition-none`, 장식 요소는 `motion-reduce:hidden`)로 끄고 최종 상태를 바로 보입니다.
+- keep-alive 탭 안의 CSS 애니메이션은 탭을 다시 보이면 다시 재생되므로 `hooks/usePlayOnce.ts`의 `isPlaying`일 때만 클래스를 붙이고 가장 늦게 끝나는 요소(자식에 다른 애니메이션이 없는 요소)의 `onAnimationEnd`에 `finish`를 겁니다. 무한 반복(`ping`·`spin-slow`)은 끝나지 않으므로 `usePlayOnce`에 쓰지 않습니다. 숫자 카운트업은 `hooks/useCountUp.ts`의 `useCountUp`(마운트 때 한 번, 움직임 줄이기면 바로 최종 값)을 씁니다.
 - Barlow Condensed는 600·700 굵기만 로드하므로 `font-num`에는 `font-bold` 이하만 씁니다.
 
 ## 디자인 규칙
