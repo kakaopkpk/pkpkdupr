@@ -682,6 +682,24 @@ describe("Supabase Auth 기반 인증", () => {
         expect(fixture.deleteAuthUser).toHaveBeenCalledOnce();
       });
 
+      it("게스트는 409로 거절하고 Auth 사용자와 연결을 만들지 않는다", async () => {
+        fixture.addPlayer("Pguest01", "guest_member").isGuest = true;
+
+        const response = await request(app)
+          .post("/api/admin/players/Pguest01/password-reset")
+          .set(bearer("admin"));
+
+        expect(response.status).toBe(409);
+        expect(response.body.error).toContain("승급");
+        expect(fixture.createAuthUser).not.toHaveBeenCalled();
+        expect(fixture.updateAuthUser).not.toHaveBeenCalled();
+        expect(fixture.linkAuthUser).not.toHaveBeenCalled();
+        expect(fixture.players.get("Pguest01")).toMatchObject({
+          authUserId: null,
+          isFirstLogin: false,
+        });
+      });
+
       it("없는 회원은 404를 준다", async () => {
         const response = await request(app)
           .post("/api/admin/players/Pnone001/password-reset")
