@@ -54,7 +54,7 @@ const TeamLine: React.FC<{
     {score !== undefined ? (
       <span
         className={cx(
-          "min-w-[22px] text-right text-pk-17 font-extrabold tabular-nums",
+          "min-w-6 text-right text-pk-17 font-extrabold tabular-nums",
           emphasis === "win" ? "text-pk-primary" : "text-pk-muted",
         )}
       >
@@ -66,11 +66,12 @@ const TeamLine: React.FC<{
 
 /**
  * 경기 한 줄. 이긴 팀이 위에 오고 이긴 쪽만 굵게·블루 점수로 강조한다.
- * 내 경기는 다른 줄과 같은 모양에 시간 아래 "내 경기" 글자만 붙는다. 코트 번호는 보이지 않는다.
+ * 줄 맨 위 메타 줄에 시간을 두고, 내 경기면 시간 뒤에 " · 내 경기" 글자만 붙는다(바탕 강조 없음).
+ * 시간 열은 따로 없어 팀 줄이 줄 폭을 다 쓴다. 코트 번호는 보이지 않는다.
  */
 export const MatchRow: React.FC<{
   match: MatchInfo;
-  /** 이 선수가 든 경기면 시간 아래 "내 경기"를 붙인다 */
+  /** 이 선수가 든 경기면 메타 줄 시간 뒤에 " · 내 경기"를 붙인다 */
   currentPlayerId?: string;
   onPress?: () => void;
   /** 기본 "time"("20:01"), "weekday-time"은 "목 20:01". 기준은 matchStartsAt */
@@ -104,26 +105,24 @@ export const MatchRow: React.FC<{
     <RowContainer
       onPress={onPress}
       className={cx(
-        "grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 py-3 text-pk-ink",
+        "flex min-w-0 flex-col gap-1.5 py-3 text-pk-ink",
         rowDividerClassName,
       )}
     >
-      <div className="flex min-w-0 flex-col gap-1.5">
-        {lines.map(({ team, score }, index) => (
-          <TeamLine
-            key={team.id}
-            team={team}
-            score={hasScores ? score : undefined}
-            emphasis={hasWinner ? (index === 0 ? "win" : "lose") : "none"}
-          />
-        ))}
-      </div>
-      <div className="flex flex-col items-end gap-1 justify-self-end whitespace-nowrap text-right">
-        <span className="text-pk-12 text-pk-muted tabular-nums">{time}</span>
+      <div className="whitespace-nowrap text-pk-12 text-pk-muted tabular-nums">
+        {time}
         {isMine ? (
-          <span className="text-pk-12 font-bold text-pk-sub">내 경기</span>
+          <span className="font-bold text-pk-sub"> · 내 경기</span>
         ) : null}
       </div>
+      {lines.map(({ team, score }, index) => (
+        <TeamLine
+          key={team.id}
+          team={team}
+          score={hasScores ? score : undefined}
+          emphasis={hasWinner ? (index === 0 ? "win" : "lose") : "none"}
+        />
+      ))}
     </RowContainer>
   );
 };
