@@ -270,7 +270,7 @@ const ACHIEVEMENT_TABLE: readonly {
       id: "hard-won",
       category: "special",
       name: "힘겹게 쟁취한 승리",
-      condition: "연이은 듀스 끝에 15점 이상 내고 2점 차로 승리",
+      condition: "듀스 끝에 15:14로 승리",
       badgeNumber: null,
       target: 1,
     },
@@ -466,8 +466,8 @@ export const ACHIEVEMENT_CATEGORY_LABEL: Record<AchievementCategory, string> = {
 /** 듀스 승부사에서 두 팀 모두 넘어야 하는 점수 */
 export const DEUCE_MIN_POINTS = 10;
 
-/** 힘겹게 쟁취한 승리에서 이긴 팀이 내야 하는 점수. 듀스 끝 승리라 2점 차여야 한다 */
-export const HARD_WON_MIN_POINTS = 15;
+/** 동호회 듀스 상한 점수. 14:14에서 다음 점수를 낸 팀이 15점으로 이긴다 */
+export const DEUCE_CAP_POINTS = 15;
 
 export interface AchievementProgress {
   id: string;
@@ -579,14 +579,14 @@ const isDeuceGame = (scores: readonly MatchScore[]) =>
   );
 
 /**
- * 연이은 듀스 끝에 15점 이상 내고 2점 차로 이긴 게임이 있다. 몇 점제 경기인지 기록이 없어
- * 2점 차로 듀스 끝 승리를 알아보므로, 15:7 같은 대회룰 승리는 빠지고 대회룰 15:13은 들어간다.
+ * 듀스 끝에 15:14로 이긴 게임이 있다. 동호회 듀스는 15점 상한이라 14:14 다음 점수로 끝나므로,
+ * 15:13·16:14 같은 점수는 듀스 상한까지 간 승리가 아니다.
  */
 const isHardWon = (scores: readonly MatchScore[], teamIndex: 0 | 1) =>
   scores.some((score) => {
     const mine = teamIndex === 0 ? score.scoreA : score.scoreB;
     const theirs = teamIndex === 0 ? score.scoreB : score.scoreA;
-    return mine >= HARD_WON_MIN_POINTS && mine - theirs === 2;
+    return mine === DEUCE_CAP_POINTS && theirs === DEUCE_CAP_POINTS - 1;
   });
 
 /** 무패 세션에 필요한 한 세션 경기 수 */
