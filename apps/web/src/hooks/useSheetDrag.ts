@@ -13,6 +13,8 @@ const VELOCITY_WINDOW_MS = 100;
 const SETTLE_DURATION_MS = 180;
 /** 닫기를 요청했는데 부모가 닫지 않으면 이 시간 뒤 제자리로 돌린다 */
 const DISMISS_FALLBACK_MS = 1000;
+/** 끄는 만큼 딤을 옅게 하는 배율(1→0). index.css `.app-bottom-sheet-backdrop`이 읽는다 */
+const DRAG_FADE_PROPERTY = "--sheet-drag-fade";
 
 interface UseSheetDragOptions {
   /** 끌려 움직이는 시트 표면 */
@@ -82,7 +84,15 @@ export function useSheetDrag({
         const height = surface?.offsetHeight ?? 0;
         const progress = height > 0 ? Math.max(0, offset) / height : 0;
         dim.style.transition = transition;
-        dim.style.opacity = progress === 0 ? "" : `${Math.max(0, 1 - progress)}`;
+        // 딤 opacity는 CSS에서 열림 상태와 이 값을 곱해 정한다(.app-bottom-sheet-backdrop)
+        if (progress === 0) {
+          dim.style.removeProperty(DRAG_FADE_PROPERTY);
+        } else {
+          dim.style.setProperty(
+            DRAG_FADE_PROPERTY,
+            `${Math.max(0, 1 - progress)}`,
+          );
+        }
       }
     },
     [dimRef, surfaceRef],
@@ -103,25 +113,18 @@ export function useSheetDrag({
     }, duration);
   }, [applyOffset, clearSettleTimeout]);
 
-  // 닫는 도중 다시 열리면 끌린 위치를 지운다
   React.useEffect(() => {
     isOpenRef.current = isOpen;
+    clearSettleTimeout();
     if (isOpen) {
-      clearSettleTimeout();
+      // 닫는 도중 다시 열리면 끌린 위치를 지운다
       applyOffset(0, "");
       return;
     }
-    // 닫힐 때 딤을 지금 옅어진 정도에서 바로 0으로 내린다. 인라인 opacity를 비우면
-    // 아직 남은 opacity-100 클래스 쪽으로 잠깐 되짙어지므로 0을 직접 쓴다.
-    // 시트 표면은 끌린 위치에서 그대로 내려가야 하므로 두고 간다.
-    // 전환 길이는 BottomSheet 닫힘 전환(180ms)과 같다.
-    clearSettleTimeout();
-    const dim = dimRef.current;
-    if (dim) {
-      const duration = prefersReducedMotion() ? 0 : SETTLE_DURATION_MS;
-      dim.style.transition =
-        duration > 0 ? `opacity ${duration}ms ease-out` : "none";
-      dim.style.opacity = "0";
+    // 끌다 닫히면 끄는 동안 막아 둔 딤 전환만 풀어, 옅어진 정도에서 BottomSheet의
+    // 닫힘 전환으로 이어지게 한다. 시트 표면은 끌린 위치에서 그대로 내려간다.
+    if (dimRef.current) {
+      dimRef.current.style.transition = "";
     }
   }, [applyOffset, clearSettleTimeout, dimRef, isOpen]);
 

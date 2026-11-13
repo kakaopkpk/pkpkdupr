@@ -354,10 +354,12 @@
 
   /*
    * 바텀시트 뒤 배경. 딤 위에 뒤 화면을 흐리게 비치는 유리 효과를 준다.
-   * 전환 시간은 BottomSheet가 --sheet-transition-duration으로 넘기고, 끄는 동안에는
-   * useSheetDrag가 인라인 transition·opacity로 덮어쓴다.
+   * opacity는 열림 상태(--sheet-visible, BottomSheet)와 끌어 닫는 정도
+   * (--sheet-drag-fade, useSheetDrag)의 곱이다. 끄는 동안에는 useSheetDrag가
+   * 인라인 transition으로 전환을 덮어쓴다.
    */
   .app-bottom-sheet-backdrop {
+    opacity: calc(var(--sheet-visible, 0) * var(--sheet-drag-fade, 1));
     background-color: color-mix(in srgb, var(--color-pk-ink) 45%, transparent);
     -webkit-backdrop-filter: blur(8px) saturate(140%);
     backdrop-filter: blur(8px) saturate(140%);

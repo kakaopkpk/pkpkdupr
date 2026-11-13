@@ -104,6 +104,14 @@ const BottomSheet: BottomSheetComponent = ({
     () => ({ transitionDuration: `${transitionDurationMs}ms` }),
     [transitionDurationMs],
   );
+  const backdropStyle = React.useMemo(
+    () =>
+      ({
+        "--sheet-visible": isVisible ? 1 : 0,
+        "--sheet-transition-duration": `${transitionDurationMs}ms`,
+      }) as React.CSSProperties,
+    [isVisible, transitionDurationMs],
+  );
 
   useSheetDrag({
     surfaceRef,
@@ -240,15 +248,8 @@ const BottomSheet: BottomSheetComponent = ({
       <div
         ref={dimRef}
         aria-hidden="true"
-        className={cx(
-          "app-bottom-sheet-backdrop pointer-events-none absolute inset-0",
-          isVisible ? "opacity-100" : "opacity-0",
-        )}
-        style={
-          {
-            "--sheet-transition-duration": `${transitionDurationMs}ms`,
-          } as React.CSSProperties
-        }
+        className="app-bottom-sheet-backdrop pointer-events-none absolute inset-0"
+        style={backdropStyle}
       />
       <div
         className={[
