@@ -12,7 +12,7 @@ import type { MatchSessionHistoryInfo } from "@/lib/rankings";
 const WEEKDAYS = ["일", "월", "화", "수", "목", "금", "토"] as const;
 
 /** dateKey("2026-11-12")를 짧은 날짜 "11/12 목"으로 바꾼다 */
-export const formatSessionChipLabel = (dateKey: string) => {
+export const formatShortSessionDate = (dateKey: string) => {
   const [year, month, day] = dateKey.split("-").map(Number);
   const weekday = WEEKDAYS[new Date(Date.UTC(year, month - 1, day)).getUTCDay()];
   return `${month}/${day} ${weekday}`;
@@ -39,8 +39,8 @@ export const SessionSummary: React.FC<{ session: MatchSessionHistoryInfo }> = ({
     <span className="text-pk-13 text-pk-sub tabular-nums">
       {[
         session.startTime
-          ? `${formatSessionChipLabel(session.dateKey)} ${session.startTime}`
-          : formatSessionChipLabel(session.dateKey),
+          ? `${formatShortSessionDate(session.dateKey)} ${session.startTime}`
+          : formatShortSessionDate(session.dateKey),
         session.location,
         `${session.participantCount}명`,
         `${session.matchCount}경기`,
