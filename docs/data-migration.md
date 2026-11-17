@@ -41,11 +41,11 @@
 월·목 18~22시(KST) 정기 세션 시간에는 운영에서 실행하지 않습니다.
 
 1. **공지·입력 중지**: 회원에게 이관 시간 동안 앱을 쓰지 말라고 알립니다. 이관 뒤 지금 로그인은 모두 풀립니다.
-2. **백업**: `docs/backup-restore.md`의 수동 실행으로 운영 DB를 백업하고 성공을 확인합니다. Auth 사용자는 백업 대상이 아니며 이관에서 모두 다시 만듭니다.
+2. **백업**: `docs/backup-restore.md`의 수동 실행으로 운영 DB(앱 테이블과 로그인 계정)를 백업하고 성공을 확인합니다.
 
    ```bash
-   gh workflow run db-backup.yml --repo kakaopkpk/pkpkdupr
-   gh run list --workflow db-backup.yml --repo kakaopkpk/pkpkdupr --limit 1
+   gh workflow run db-backup.yml --repo kakaopkpk/pkpkdupr-backup
+   gh run list --workflow db-backup.yml --repo kakaopkpk/pkpkdupr-backup --limit 1
    ```
 
 3. **dry-run**: 넣을 행 수와 정기 세션 변환 결과, 운영 DB의 현재 행 수를 확인합니다.
