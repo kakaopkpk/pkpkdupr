@@ -1232,6 +1232,7 @@ const BottomNav: React.FC = () => {
                     onEnterScore={(matchId) =>
                       openRecordMatch({ kind: "score", matchId })
                     }
+                    onOpenDetail={openMatchDetail}
                   />
                 ) : dockBar?.item.kind === "join-session" ? (
                   <JoinSessionBar
