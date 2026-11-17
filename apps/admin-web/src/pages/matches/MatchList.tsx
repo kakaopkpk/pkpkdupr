@@ -158,7 +158,7 @@ export const MatchList: React.FC<{
   selection?: { selectedIds: ReadonlySet<string>; onToggle: (matchId: string) => void };
 }> = ({ matches, players, selectedMatchId, onSelect, selection }) => {
   const lookup = useMemo(() => buildPlayerLookup(players, matches), [players, matches]);
-  // 목록을 그릴 때마다 "오늘·어제"와 24시간 판정 기준이 같도록 한 번만 잰다
+  // 목록(matches)이 바뀔 때 "오늘·어제"와 24시간 판정 기준 시각을 한 번 잰다
   const now = useMemo(() => new Date(), [matches]);
   const groups = useMemo(() => groupMatches(matches, now), [matches, now]);
 

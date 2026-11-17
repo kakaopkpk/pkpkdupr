@@ -17,6 +17,7 @@ import { useToast } from "../../components/ui/Toast";
 import { formatKstDateTime, formatKstMonthDay } from "../../lib/format";
 import { MatchLineupEditor } from "./MatchLineupEditor";
 import {
+  ADMIN_MAX_SCORE,
   isSameLineupScores,
   toMatchScore,
   toRecordTeams,
@@ -197,9 +198,6 @@ export const MatchCorrectionPanel: React.FC<{
     };
     try {
       await updateMatch(match.id, body);
-      showToast("경기를 고쳤어요");
-      // 다시 읽으면 updatedAt이 바뀌어 패널이 새 값으로 다시 열린다
-      await onReload();
     } catch (err) {
       if (isClientError(err) && err.status === 409) {
         setConflict(true);
@@ -208,6 +206,16 @@ export const MatchCorrectionPanel: React.FC<{
       } else {
         showToast(err instanceof Error ? err.message : "경기를 고치지 못했어요.");
       }
+      setSaving(false);
+      return;
+    }
+    showToast("경기를 고쳤어요");
+    // 다시 읽으면 updatedAt이 바뀌어 패널이 새 값으로 다시 열린다.
+    // 저장은 이미 끝났으므로 재조회 실패는 저장 실패와 따로 알린다
+    try {
+      await onReload();
+    } catch {
+      showToast("저장했지만 목록을 새로 불러오지 못했어요.");
     } finally {
       setSaving(false);
     }
@@ -268,7 +276,7 @@ export const MatchCorrectionPanel: React.FC<{
           disabled={inputsDisabled}
         />
         <p className="mt-3 text-pk-12 text-pk-muted">
-          점수를 바꾸면 이긴 쪽 점수만 진하게 보여요. 15점을 넘거나 동점이면 저장할 수 없어요.
+          점수를 바꾸면 이긴 쪽 점수만 진하게 보여요. {ADMIN_MAX_SCORE}점을 넘거나 동점이면 저장할 수 없어요.
         </p>
       </PanelSection>
 
