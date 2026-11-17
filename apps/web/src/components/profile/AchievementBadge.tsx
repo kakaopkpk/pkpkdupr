@@ -238,6 +238,7 @@ export const AchievementBadge: React.FC<AchievementBadgeProps> = ({
 }) => {
   const isDeep = isLowRatingAchievement(achievement.id);
   const earnedColor = isDeep ? EARNED_DEEP_COLOR : EARNED_COLOR;
+  const earnedTextClass = isDeep ? "text-pk-deep" : "text-pk-primary";
   const hexColor = earned ? earnedColor : UNEARNED_FILL;
   const iconSize = Math.round(size * 0.46);
   const iconKind =
@@ -282,11 +283,7 @@ export const AchievementBadge: React.FC<AchievementBadgeProps> = ({
             isLarge
               ? "-bottom-[9px] h-7 min-w-9 px-[9px] text-pk-17"
               : "-bottom-[5px] h-[17px] min-w-5 px-[5px] text-pk-12",
-            earned
-              ? isDeep
-                ? "text-pk-deep"
-                : "text-pk-primary"
-              : "text-pk-muted",
+            earned ? earnedTextClass : "text-pk-muted",
           )}
           style={{
             boxShadow: `inset 0 0 0 ${isLarge ? 2.5 : 1.5}px ${tagBorder}`,

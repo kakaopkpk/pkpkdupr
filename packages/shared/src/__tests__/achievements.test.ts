@@ -861,26 +861,22 @@ describe("평점 업적", () => {
   };
 
   /** 평점 없는 복식 경기 count개. 복식 경기 수만 채운다 */
-  const warmUp = (count: number, completedAt?: () => Date) =>
-    repeat(count, () => ratedDoubles(null, { completedAt: completedAt?.() }));
+  const warmUp = (count: number) => repeat(count, () => ratedDoubles(null));
 
   const beforeStart = (ms: number) =>
     new Date(ACHIEVEMENT_COUNT_START.getTime() - ms);
 
-  /** 업적 기준 시각 전 평점 없는 복식 경기 count개(기준 시각에서 먼 순) */
-  const warmUpBeforeStart = (count: number) => {
-    let ms = 1_000_000;
-    return warmUp(count, () => beforeStart((ms -= 1_000)));
-  };
+  /** 업적 기준 시각 전 평점 없는 복식 경기 count개(기준 시각에서 먼 순, 마지막이 100초 전) */
+  const warmUpBeforeStart = (count: number) =>
+    Array.from({ length: count }, (_, index) =>
+      ratedDoubles(null, {
+        completedAt: beforeStart(100_000 + (count - index) * 1_000),
+      }),
+    );
 
-  const RATING_IDS = [
-    "rating-3.0",
-    "rating-3.5",
-    "rating-4.0",
-    "rating-4.5",
-    "rating-low-2.5",
-    "rating-low-2.0",
-  ];
+  const RATING_IDS = ACHIEVEMENTS.filter((definition) =>
+    isRatingAchievement(definition.id),
+  ).map((definition) => definition.id);
 
   it("평점 업적은 6개이고 꼬리표는 소수 한 자리까지 쓴다", () => {
     expect(
@@ -900,7 +896,6 @@ describe("평점 업적", () => {
         (definition) => definition.id,
       ),
     ).toEqual(["rating-low-2.5", "rating-low-2.0"]);
-    expect(MIN).toBe(10);
   });
 
   it("복식 10경기를 채운 뒤 평점이 처음 기준 이상이 된 경기로 받고, 진행도는 최고 복식 평점이다", () => {

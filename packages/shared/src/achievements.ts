@@ -765,27 +765,21 @@ const getPreCountStartDoublesMatches = (
     )
     .sort(compareCountedMatches);
 
-/** 평점 진행도에 경기 직후 복식 평점을 반영한다. 0은 아직 센 평점이 없다는 뜻이다 */
+/** 평점 진행도에 경기 직후 복식 평점을 반영한다 */
 const applyDoublesRating = (
   metrics: Record<AchievementMetric, number>,
   rating: number,
 ) => {
   metrics.peakDoublesRating = Math.max(metrics.peakDoublesRating, rating);
-  metrics.lowestDoublesRating =
-    metrics.lowestDoublesRating === 0
-      ? rating
-      : Math.min(metrics.lowestDoublesRating, rating);
+  metrics.lowestDoublesRating = Math.min(metrics.lowestDoublesRating, rating);
 };
 
-/** 진행도가 목표에 닿았는지. 낮은 평점은 센 평점이 있고 목표 이하일 때다 */
+/** 진행도가 목표에 닿았는지. 낮은 평점은 목표 이하일 때다 */
 const isTargetReached = (
   metric: AchievementMetric,
   value: number,
   target: number,
-) =>
-  metric === "lowestDoublesRating"
-    ? value > 0 && value <= target
-    : value >= target;
+) => (metric === "lowestDoublesRating" ? value <= target : value >= target);
 
 /** 아직 받지 않은 경기 단위 업적 중 진행도가 목표에 닿은 것을 이 경기로 받은 것으로 정한다 */
 const markReachedAchievements = (
@@ -844,7 +838,8 @@ export function computeAchievements(
     unbeatenSessions: 0,
     dominatedSessions: 0,
     peakDoublesRating: 0,
-    lowestDoublesRating: 0,
+    // 센 평점이 없으면 Infinity이고, 진행도에는 0으로 넣는다
+    lowestDoublesRating: Infinity,
   };
   const progress: AchievementProgress[] = ACHIEVEMENTS.map((definition) => ({
     id: definition.id,
@@ -870,20 +865,17 @@ export function computeAchievements(
   );
   let ratedDoublesMatches = preCountStartDoublesMatches.length;
   // 경기 수는 평점 로그 유무와 상관없이 세고, 시작 평점은 평점 로그가 있는 마지막 경기에서 찾는다
-  const ratedCountStartMatches = preCountStartDoublesMatches.filter(
-    (match) => getDoublesRatingAfter(match, playerId) != null,
-  );
-  const countStartRatingMatch =
-    ratedCountStartMatches[ratedCountStartMatches.length - 1];
+  let countStart: { match: CountedMatch; rating: number } | null = null;
+  for (const match of preCountStartDoublesMatches) {
+    const rating = getDoublesRatingAfter(match, playerId);
+    if (rating != null) countStart = { match, rating };
+  }
   if (
-    countStartRatingMatch &&
+    countStart &&
     ratedDoublesMatches >= RATING_ACHIEVEMENT_MIN_DOUBLES_MATCHES
   ) {
-    applyDoublesRating(
-      metrics,
-      getDoublesRatingAfter(countStartRatingMatch, playerId)!,
-    );
-    markReachedAchievements(progress, metrics, countStartRatingMatch);
+    applyDoublesRating(metrics, countStart.rating);
+    markReachedAchievements(progress, metrics, countStart.match);
   }
 
   for (const match of getCountedMatches(matches)) {
@@ -926,6 +918,7 @@ export function computeAchievements(
     metrics.distinctBeatenOpponents = beatenOpponents.size;
 
     if (isDoublesMatchType(match.type)) {
+      ratedDoublesMatches += 1;
       const partnerIds = new Set(
         match.teams[teamIndex].players
           .map((player) => player.id)
@@ -971,7 +964,6 @@ export function computeAchievements(
       );
     }
 
-    if (isDoublesMatchType(match.type)) ratedDoublesMatches += 1;
     const doublesRatingAfter = getDoublesRatingAfter(match, playerId);
     if (
       doublesRatingAfter != null &&
@@ -1004,7 +996,7 @@ export function computeAchievements(
 
   for (const item of progress) {
     const metric = ACHIEVEMENT_METRIC_BY_ID.get(item.id)!;
-    item.current = metrics[metric];
+    item.current = Number.isFinite(metrics[metric]) ? metrics[metric] : 0;
     if (isRatingAchievement(item.id)) {
       item.ratedDoublesMatches = ratedDoublesMatches;
     }

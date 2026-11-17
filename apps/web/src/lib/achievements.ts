@@ -104,7 +104,7 @@ const clampRatio = (ratio: number) => Math.min(Math.max(ratio, 0), 1);
 /**
  * 진행 막대 비율(0~1). 평점 업적은 복식 경기 수를 채우기 전이면 경기 수 비율이고,
  * 채운 뒤에는 기본 평점(3.0)에서 목표까지 간 비율이다(목표가 기본 평점에 가까우면 0.5 앞에서 출발).
- * 낮은 평점 업적은 최저 평점이 출발점에서 목표까지 내려간 비율이다.
+ * 낮은 평점 업적은 최저 평점이 기본 평점에서 목표까지 내려간 비율이다.
  */
 export const getAchievementProgressRatio = (
   definition: AchievementDefinition,
@@ -118,8 +118,9 @@ export const getAchievementProgressRatio = (
   }
   if (isLowRatingAchievement(definition.id)) {
     if (current <= 0) return 0;
-    const start = Math.max(DUPR_DEFAULT_RATING, target + RATING_PROGRESS_MIN_SPAN);
-    return clampRatio((start - current) / (start - target));
+    return clampRatio(
+      (DUPR_DEFAULT_RATING - current) / (DUPR_DEFAULT_RATING - target),
+    );
   }
   if (isRatingAchievement(definition.id)) {
     const start = Math.min(DUPR_DEFAULT_RATING, target - RATING_PROGRESS_MIN_SPAN);
