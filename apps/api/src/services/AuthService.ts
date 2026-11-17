@@ -1,5 +1,5 @@
 import {
-  GuestAddedInfo,
+  AdminPlayer,
   OfficialDuprAdjustmentLog,
   OfficialDuprAdjustmentImpact,
   OfficialDuprAdjustmentPreview,
@@ -125,14 +125,6 @@ export class AccountRequestError extends Error {
     super(message);
     this.name = "AccountRequestError";
   }
-}
-
-export interface AdminPlayer extends Player {
-  duprMetrics: PlayerDuprMetrics;
-  /** 게스트를 추가한 회원·세션. 정회원은 null */
-  guestAddedInfo: GuestAddedInfo | null;
-  /** 참가한 평점 미반영(게스트가 낀) 완료 경기 수 */
-  ratingExcludedMatchCount: number;
 }
 
 const buildId = (prefix: string) =>
@@ -1130,10 +1122,12 @@ export class AuthService {
   }
 
   async getAdminPlayers(): Promise<AdminPlayer[]> {
-    const [players, excludedMatchCountByPlayerId] = await Promise.all([
-      db.players.findAll().then((records) => records.map(hydratePlayer)),
-      db.matches.countRatingExcludedMatchesByPlayerId(),
-    ]);
+    const [players, excludedMatchCountByPlayerId, matchStatsByPlayerId] =
+      await Promise.all([
+        db.players.findAll().then((records) => records.map(hydratePlayer)),
+        db.matches.countRatingExcludedMatchesByPlayerId(),
+        db.matches.findMatchStatsByPlayerId(),
+      ]);
     const usernameById = new Map(
       players.map((player) => [player.id, player.username]),
     );
@@ -1176,8 +1170,50 @@ export class AuthService {
             }
           : null,
         ratingExcludedMatchCount: excludedMatchCountByPlayerId[player.id] ?? 0,
+        isFirstLogin: player.isFirstLogin,
+        hasLoginAccount: player.authUserId !== null,
+        matchCount: matchStatsByPlayerId[player.id]?.matchCount ?? 0,
+        lastMatchStartsAt:
+          matchStatsByPlayerId[player.id]?.lastMatchStartsAt ?? null,
       };
     });
+  }
+
+  /**
+   * 관리자가 경기 행이 하나도 없는 회원(정회원·게스트)을 지운다. 자기 자신 400, 없는 회원 404, 관리자·경기 있음 409다.
+   * DB 삭제 뒤 연결된 Auth 사용자를 지우며, 실패해도 DB는 되돌리지 않고 로그만 남긴다(회원이 없는 Auth 계정은 로그인해도 API가 거절한다).
+   * 참여 신청을 지운 세션 id를 돌려준다.
+   */
+  async deletePlayer(
+    playerId: string,
+    requesterPlayerId: string,
+  ): Promise<{ sessionIds: string[] }> {
+    if (playerId === requesterPlayerId) {
+      throw new AccountRequestError(400, "자기 자신은 지울 수 없어요.");
+    }
+    const result = await db.players.deletePlayerWithoutMatches(playerId);
+    switch (result.status) {
+      case "not_found":
+        throw new AccountRequestError(404, "사용자를 찾을 수 없습니다.");
+      case "admin":
+        throw new AccountRequestError(409, "관리자 계정은 지울 수 없어요.");
+      case "has_matches":
+        throw new AccountRequestError(
+          409,
+          "경기 기록이 있는 회원은 지울 수 없어요. 비활성으로 바꾸세요.",
+        );
+    }
+    if (result.authUserId) {
+      try {
+        await this.authAdmin.deleteUser(result.authUserId);
+      } catch (error) {
+        console.error(
+          "[AUTH] 지운 회원의 Auth 사용자를 지우지 못했습니다. 수동으로 지워주세요.",
+          { playerId, authUserId: result.authUserId, error },
+        );
+      }
+    }
+    return { sessionIds: result.sessionIds };
   }
 
   /**
