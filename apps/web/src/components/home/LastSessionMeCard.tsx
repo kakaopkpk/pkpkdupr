@@ -50,7 +50,10 @@ const LastSessionMeCard: React.FC<{ report: SessionPlayerReport }> = ({
             <span className="text-pk-26 font-extrabold text-pk-ink tabular-nums">
               <SessionRatingCount report={report} />
             </span>
-            <SessionRatingDeltaCount report={report} />
+            {/* 평점이 없으면 변화도 없으므로 큰 "–" 하나만 보인다 */}
+            {report.ratingAfter !== null ? (
+              <SessionRatingDeltaCount report={report} />
+            ) : null}
           </span>
         </div>
         <div className="flex min-w-0 flex-col items-end text-right">

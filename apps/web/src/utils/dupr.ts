@@ -8,8 +8,9 @@ import {
   type PublicPlayerDupr,
 } from "@pkpkdupr/shared/player";
 
+/** 평점 소수 3자리. 평점이 없으면 "–" */
 export const formatRating = (rating?: number | null) =>
-  rating?.toFixed(3) ?? "NR";
+  rating?.toFixed(3) ?? "–";
 
 export const getCompositeSinglesRating = (
   duprRating?: PublicPlayerDupr | null,

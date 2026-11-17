@@ -19,9 +19,7 @@ import { cx } from "@/components/ui/cx";
 import { usePlayOnShow } from "@/hooks/usePlayOnShow";
 import { formatKstShortDate } from "@/lib/format";
 import type { MatchSessionHistoryInfo } from "@/lib/rankings";
-
-const formatRating = (rating: number | null) =>
-  rating === null ? "NR" : rating.toFixed(3);
+import { formatRating } from "@/utils/dupr";
 
 /** 세션 전후 복식 순위 변동(rankBefore - rankAfter, 양수=상승). 둘 중 하나라도 null이면 null */
 export const getSessionRankChange = (
@@ -71,14 +69,14 @@ export const SessionSummary: React.FC<{
 };
 
 /**
- * 세션 후 평점. 후 평점이 없으면 "NR".
+ * 세션 후 평점. 후 평점이 없으면 "–".
  * 기본은 0.000부터 세고, from을 주면(세션 전 평점을 옆에 보이는 "전 → 후" 줄) 그 값부터 센다
  */
 export const SessionRatingCount: React.FC<{
   report: Pick<SessionPlayerReport, "ratingAfter">;
   from?: number;
 }> = ({ report, from }) => {
-  if (report.ratingAfter === null) return <>NR</>;
+  if (report.ratingAfter === null) return <>–</>;
   return (
     <CountUpNumber
       value={report.ratingAfter}
@@ -209,9 +207,15 @@ export const SessionPlayerRatingRow: React.FC<{
           {report.player.username}
         </span>
         <span className="truncate text-pk-12 text-pk-muted tabular-nums">
-          <WinLossCount wins={report.wins} losses={report.losses} /> ·{" "}
-          {showsBefore ? `${formatRating(report.ratingBefore)} → ` : null}
-          <SessionRatingCount report={report} from={ratingFrom} />
+          <WinLossCount wins={report.wins} losses={report.losses} />
+          {/* 세션 후 평점이 없으면(게스트 등) 평점 부분 없이 승패만 보인다 */}
+          {report.ratingAfter !== null ? (
+            <>
+              {" · "}
+              {showsBefore ? `${formatRating(report.ratingBefore)} → ` : null}
+              <SessionRatingCount report={report} from={ratingFrom} />
+            </>
+          ) : null}
         </span>
       </span>
       <span className="flex shrink-0 flex-col items-end gap-0.5">
