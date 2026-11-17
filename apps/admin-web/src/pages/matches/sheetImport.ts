@@ -18,6 +18,8 @@ export const REQUIRED_IMPORT_HEADERS = [
 export const OPTIONAL_IMPORT_HEADERS = ["시간", "코트명"] as const;
 /** 시간 칸이 없거나 비었을 때 쓰는 시각(KST) */
 export const DEFAULT_IMPORT_TIME = "12:00";
+/** 시트는 복식만 읽는다. 선수 칸 네 개 중 앞 둘이 A팀, 뒤 둘이 B팀이다 */
+const TEAM_SIZE = 2;
 
 type ImportHeader =
   | (typeof REQUIRED_IMPORT_HEADERS)[number]
@@ -67,22 +69,38 @@ export const parseImportedTime = (
   return { hour, minute };
 };
 
-/** "2026년 11월 12일"(또는 Date가 읽는 날짜)과 KST 시각을 ISO 문자열로. 읽지 못하면 null */
+/** 그 해에 실제로 있는 월·일이면 true(2월 31일·13월은 false) */
+const isExistingDate = (year: number, monthIndex: number, day: number) => {
+  const date = new Date(Date.UTC(year, monthIndex, day));
+  return (
+    date.getUTCFullYear() === year &&
+    date.getUTCMonth() === monthIndex &&
+    date.getUTCDate() === day
+  );
+};
+
+/**
+ * "2026년 11월 12일"·"2026-11-12"·"2026. 11. 12"(또는 Date가 읽는 날짜)과 KST 시각을 ISO 문자열로.
+ * 읽지 못하거나 없는 날짜면 null
+ */
 export const parseImportedDateToIso = (
   value: string,
   time: { hour: number; minute: number },
 ): string | null => {
   const trimmed = value.trim();
-  const koreanDateMatch = trimmed.match(/^(\d{4})년\s*(\d{1,2})월\s*(\d{1,2})일$/);
+  if (!trimmed) return null;
+  const numericDateMatch =
+    trimmed.match(/^(\d{4})년\s*(\d{1,2})월\s*(\d{1,2})일$/) ??
+    trimmed.match(/^(\d{4})\s*[-./]\s*(\d{1,2})\s*[-./]\s*(\d{1,2})\.?$/);
   let year: number;
   let monthIndex: number;
   let day: number;
-  if (koreanDateMatch) {
-    year = Number(koreanDateMatch[1]);
-    monthIndex = Number(koreanDateMatch[2]) - 1;
-    day = Number(koreanDateMatch[3]);
+  if (numericDateMatch) {
+    year = Number(numericDateMatch[1]);
+    monthIndex = Number(numericDateMatch[2]) - 1;
+    day = Number(numericDateMatch[3]);
+    if (!isExistingDate(year, monthIndex, day)) return null;
   } else {
-    if (!trimmed) return null;
     const fallbackDate = new Date(trimmed);
     if (Number.isNaN(fallbackDate.getTime())) return null;
     year = fallbackDate.getFullYear();
@@ -119,13 +137,16 @@ export const buildImportedPreview = (
   players: readonly ImportPlayer[],
   location: string,
 ): ImportedPreview | null => {
+  // 빈 줄을 건너뛰어도 붙여 넣은 원래 줄 번호를 남긴다
   const lines = rawText
     .replace(/\r\n?/g, "\n")
     .split("\n")
-    .filter((line) => line.trim().length > 0);
+    .map((text, index) => ({ text, lineNumber: index + 1 }))
+    .filter((line) => line.text.trim().length > 0);
   if (lines.length === 0) return null;
 
-  const headers = lines[0].split("\t").map((header) => header.trim());
+  const headerLine = lines[0];
+  const headers = headerLine.text.split("\t").map((header) => header.trim());
   const headerIndexByKey = new Map(
     headers.map((header, index) => [normalizeHeader(header), index]),
   );
@@ -140,8 +161,8 @@ export const buildImportedPreview = (
     columns[headerIndexByKey.get(normalizeHeader(header)) ?? -1]?.trim() ?? "";
   const playerByUsername = new Map(players.map((player) => [player.username, player]));
 
-  const rows = lines.slice(1).map((line, rowIndex): ImportedPreviewRow => {
-    const columns = line.split("\t");
+  const rows = lines.slice(1).map((line): ImportedPreviewRow => {
+    const columns = line.text.split("\t");
     const matchNumber = getCell(columns, "경기번호");
     const dateLabel = getCell(columns, "날짜");
     const timeLabel = getCell(columns, "시간");
@@ -194,7 +215,7 @@ export const buildImportedPreview = (
       ? (participants as ImportPlayer[])
       : null;
     const inferredType = resolved
-      ? inferDoublesType(resolved.slice(0, 2), resolved.slice(2, 4))
+      ? inferDoublesType(resolved.slice(0, TEAM_SIZE), resolved.slice(TEAM_SIZE))
       : null;
 
     const payload: AdminBatchMatchItemRequest | null =
@@ -202,8 +223,8 @@ export const buildImportedPreview = (
         ? {
             type: inferredType,
             teams: [
-              { playerIds: resolved.slice(0, 2).map((player) => player.id) },
-              { playerIds: resolved.slice(2, 4).map((player) => player.id) },
+              { playerIds: resolved.slice(0, TEAM_SIZE).map((player) => player.id) },
+              { playerIds: resolved.slice(TEAM_SIZE).map((player) => player.id) },
             ],
             location,
             ...(courtName && { courtName }),
@@ -213,7 +234,7 @@ export const buildImportedPreview = (
         : null;
 
     return {
-      sourceRowNumber: rowIndex + 2,
+      sourceRowNumber: line.lineNumber - headerLine.lineNumber + 1,
       matchNumber,
       dateLabel,
       timeLabel,

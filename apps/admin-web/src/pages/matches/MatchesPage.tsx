@@ -147,11 +147,6 @@ const MatchesPage: React.FC = () => {
     [data?.sessions],
   );
 
-  const selectedMatches = useMemo(
-    () => data?.matches.filter((match) => selectedIds.has(match.id)) ?? [],
-    [data, selectedIds],
-  );
-
   const toggleSelected = (matchId: string) => {
     setSelectedIds((current) => {
       const next = new Set(current);
@@ -198,6 +193,12 @@ const MatchesPage: React.FC = () => {
       return true;
     });
   }, [data, memberQuery, period, category, excludedOnly, noSessionOnly, sessionFilterId]);
+
+  // 고른 뒤 필터로 목록에서 빠진 경기는 연결하지 않는다
+  const selectedMatches = useMemo(
+    () => filteredMatches.filter((match) => selectedIds.has(match.id)),
+    [filteredMatches, selectedIds],
+  );
 
   // 필터가 바뀌면 다시 50개부터 보인다
   useEffect(() => {
