@@ -211,9 +211,6 @@ export default function RecordDoneStep({
                   player={player}
                   change={change}
                   ratingCategory={ratingCategory}
-                  isUnratedBefore={
-                    match.unratedBeforePlayerIds?.includes(player.id) ?? false
-                  }
                 />
               ))
             )}
@@ -277,16 +274,12 @@ const CountedScore: React.FC<{
   </CountUpText>
 );
 
-/**
- * 평점 변화 한 줄. 점수를 다 센 뒤 평점(이전 → 새)과 변화(0부터)를 센다.
- * 이 경기 전 평점이 없던 회원은 새 평점과 NEW 태그를 보인다
- */
+/** 평점 변화 한 줄. 점수를 다 센 뒤 평점(이전 → 새)과 변화(0부터)를 센다 */
 const RatingRow: React.FC<{
   player: Player;
   change: PlayerRatingChangeLog;
   ratingCategory: MatchTopLevelType;
-  isUnratedBefore: boolean;
-}> = ({ player, change, ratingCategory, isUnratedBefore }) => (
+}> = ({ player, change, ratingCategory }) => (
   <div className="grid grid-cols-[24px_minmax(0,1fr)_auto_60px] items-center gap-2.5 py-[11px] not-last:border-b not-last:border-[#e6e9f0]">
     <PlayerAvatar player={player} size={24} />
     <span className="truncate text-pk-15 font-bold">{player.username}</span>
@@ -294,7 +287,6 @@ const RatingRow: React.FC<{
       previousRating={change.previousRating[ratingCategory]}
       nextRating={change.nextRating[ratingCategory]}
       delta={change.delta[ratingCategory]}
-      isUnratedBefore={isUnratedBefore}
     />
   </div>
 );

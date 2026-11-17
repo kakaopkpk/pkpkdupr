@@ -48,10 +48,3 @@ export const SessionDominatorBadge: React.FC<{ isPlaying?: boolean }> = ({
     ) : null}
   </span>
 );
-
-/** 이전 평점이 없던 회원의 새 평점 옆·변화 자리에 붙는 "NEW" 연한 파랑 알약 */
-export const NewRatingTag: React.FC = () => (
-  <span className="inline-flex shrink-0 items-center rounded-full bg-pk-primary-soft px-2 py-0.5 text-pk-12 font-extrabold text-pk-primary">
-    NEW
-  </span>
-);

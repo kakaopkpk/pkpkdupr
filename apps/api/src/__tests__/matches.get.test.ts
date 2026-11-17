@@ -64,14 +64,6 @@ describe("GET /api/matches/:matchId", () => {
       .spyOn(MatchRepository.prototype, "cleanupExpired")
       .mockResolvedValue(undefined);
     vi.spyOn(
-      MatchRepository.prototype,
-      "getPlayerRatingChangeLogs",
-    ).mockResolvedValue([]);
-    vi.spyOn(
-      MatchRepository.prototype,
-      "findCompletedMatchOutcomes",
-    ).mockResolvedValue([]);
-    vi.spyOn(
       AuthService.prototype,
       "authenticateAccessToken",
     ).mockResolvedValue(session);
@@ -118,48 +110,6 @@ describe("GET /api/matches/:matchId", () => {
         }),
       ],
     });
-  });
-
-  it("그 분류 첫 평점 경기면 unratedBeforePlayerIds에 담고, 평점 미반영 경기는 빈 배열이다", async () => {
-    const firstLog: PlayerRatingChangeLog = {
-      id: "log-first-001",
-      playerId: player.id,
-      source: "match_completed",
-      sourceLogId: `match-completed-${match.id}-${now.getTime()}`,
-      previousRating: { singles: 3.0, doubles: 3.0 },
-      nextRating: { singles: 3.2, doubles: 3.0 },
-      delta: { singles: 0.2, doubles: 0 },
-      createdAt: now,
-    };
-    const completed: Match = { ...match, status: "completed", completedAt: now };
-    const findByIdWithRatingChanges = vi
-      .spyOn(MatchRepository.prototype, "findByIdWithRatingChanges")
-      .mockResolvedValue({ match: completed, ratingChanges: [firstLog] });
-    vi.spyOn(
-      MatchRepository.prototype,
-      "findCompletedMatchOutcomes",
-    ).mockResolvedValue([]);
-    const getPlayerRatingChangeLogs = vi
-      .spyOn(MatchRepository.prototype, "getPlayerRatingChangeLogs")
-      .mockResolvedValue([firstLog]);
-
-    const first = await request(app)
-      .get(`/api/matches/${match.id}`)
-      .set("Authorization", "Bearer test-token");
-    expect(first.status).toBe(200);
-    expect(first.body.unratedBeforePlayerIds).toEqual([player.id]);
-
-    getPlayerRatingChangeLogs.mockClear();
-    findByIdWithRatingChanges.mockResolvedValue({
-      match: { ...completed, ratingExcluded: true },
-      ratingChanges: [firstLog],
-    });
-    const excluded = await request(app)
-      .get(`/api/matches/${match.id}`)
-      .set("Authorization", "Bearer test-token");
-    expect(excluded.status).toBe(200);
-    expect(excluded.body.unratedBeforePlayerIds).toEqual([]);
-    expect(getPlayerRatingChangeLogs).not.toHaveBeenCalled();
   });
 
   it("인증 토큰이 없으면 401을 반환한다", async () => {

@@ -2,7 +2,7 @@ import React from "react";
 import { formatSessionTimeRange } from "@pkpkdupr/shared/session";
 import type { SessionPlayerReport } from "@pkpkdupr/shared/ranking";
 import SkeletonBlock from "@/components/SkeletonBlock";
-import { NewRatingTag, SessionDominatorBadge } from "@/components/ui/Badges";
+import { SessionDominatorBadge } from "@/components/ui/Badges";
 import { rowPressClassName } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { WinLossCount } from "@/components/profile/ProfileStatTile";
@@ -31,15 +31,13 @@ export const getSessionRankChange = (
     ? report.rankBefore - report.rankAfter
     : null;
 
-/** 세션 전에 NR이었는지. 세션 전 NR이던 회원도 ratingBefore에 기본값이 들어 있으므로 rankBefore로 판정한다 */
-export const wasUnratedBeforeSession = (
-  report: Pick<SessionPlayerReport, "rankBefore" | "ratingBefore">,
-): boolean => report.rankBefore === null || report.ratingBefore === null;
-
-/** 세션 전 평점이 없다가 세션 후 평점이 생긴 회원. "전 → 후" 대신 후 평점과 NEW 태그를 보인다 */
-const isNewlyRatedInSession = (
-  report: Pick<SessionPlayerReport, "rankBefore" | "ratingBefore" | "ratingAfter">,
-): boolean => report.ratingAfter !== null && wasUnratedBeforeSession(report);
+/**
+ * 세션 전후 평점이 모두 있는지. 세션 전 NR이던 회원도 ratingBefore에 첫 경기 시작 평점(3.0)이 들어 있어
+ * 다른 회원처럼 "3.000 → 3.124"와 변화량을 보인다. 첫 평점이 공식 DUPR 조정이면 ratingBefore가 null이다
+ */
+const hasRatingBeforeAndAfter = (
+  report: Pick<SessionPlayerReport, "ratingBefore" | "ratingAfter">,
+): boolean => report.ratingBefore !== null && report.ratingAfter !== null;
 
 /**
  * 세션 상세 머리. 메타 줄은 "11월 13일 목 18:00~22:00 · 장소".
@@ -121,16 +119,11 @@ export const SessionRankChangePop: React.FC<{
   ) : null;
 };
 
-/** 세션 평점 변화량. 0부터 세며, 세션 전 평점이 없다가 생겼으면 NEW 태그, 세션 후 평점이 없으면 "–" */
+/** 세션 평점 변화량. 0부터 세며, 전후 평점 중 하나라도 없으면 "–" */
 export const SessionRatingDeltaCount: React.FC<{
-  report: Pick<
-    SessionPlayerReport,
-    "rankBefore" | "ratingBefore" | "ratingAfter" | "ratingDelta"
-  >;
+  report: Pick<SessionPlayerReport, "ratingBefore" | "ratingAfter" | "ratingDelta">;
 }> = ({ report }) =>
-  isNewlyRatedInSession(report) ? (
-    <NewRatingTag />
-  ) : report.ratingBefore !== null && report.ratingAfter !== null ? (
+  hasRatingBeforeAndAfter(report) ? (
     <CountUpRatingDelta value={report.ratingDelta} {...COUNT_UP} />
   ) : (
     <RatingDelta value={null} />
@@ -163,17 +156,12 @@ export const TopRiserCard: React.FC<{ report: SessionPlayerReport }> = ({
         <span className="max-w-full truncate text-pk-17 font-extrabold text-pk-ink">
           {report.player.username}
         </span>
-        {isNewlyRatedInSession(report) ? (
-          <span className="flex items-center gap-1 text-pk-13 text-pk-sub tabular-nums">
-            {formatRating(report.ratingAfter)}
-            <NewRatingTag />· {report.matchCount}경기 {report.wins}승
-          </span>
-        ) : (
-          <span className="text-pk-13 text-pk-sub tabular-nums">
-            {formatRating(report.ratingBefore)} → {formatRating(report.ratingAfter)}{" "}
-            · {report.matchCount}경기 {report.wins}승
-          </span>
-        )}
+        <span className="text-pk-13 text-pk-sub tabular-nums">
+          {hasRatingBeforeAndAfter(report)
+            ? `${formatRating(report.ratingBefore)} → `
+            : null}
+          {formatRating(report.ratingAfter)} · {report.matchCount}경기 {report.wins}승
+        </span>
       </div>
       {/* 이 화면의 주인공 숫자라 본문 글꼴로 크게 보인다 */}
       <CountUpRatingDelta
@@ -196,11 +184,9 @@ export const SessionPlayerRatingRow: React.FC<{
   order?: number;
   onPress: () => void;
 }> = ({ report, ratingLabel, order, onPress }) => {
-  // 세션 전 평점이 없던 회원은 "전 →" 없이 후 평점만 0부터 센다
+  // 세션 전 평점이 없으면(공식 DUPR 조정이 첫 평점) "전 →" 없이 후 평점만 0부터 센다
   const showsBefore =
-    ratingLabel === "before-after" &&
-    report.ratingAfter !== null &&
-    !wasUnratedBeforeSession(report);
+    ratingLabel === "before-after" && hasRatingBeforeAndAfter(report);
   // "전 → 후"로 보일 때는 후 평점을 전 평점부터 센다
   const ratingFrom = showsBefore ? report.ratingBefore ?? undefined : undefined;
   return (
