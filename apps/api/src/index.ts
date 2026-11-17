@@ -2736,6 +2736,8 @@ app.put("/api/matches/:matchId", async (req, res) => {
     }
     if (targetSessionId) {
       // 바뀐 팀의 새 선수(세션을 옮기면 팀 전원)도 세션 참여자로 넣는다. 빠진 선수는 참여자에서 지우지 않는다.
+      // 참여자 추가는 경기 UPDATE와 따로 먼저 커밋된다. 그래서 아래 저장이 409로 막혀도 참여자는 남지만,
+      // 저장된 세션 경기의 선수가 참여자에서 빠지는 일은 없다.
       await matchRepository.addSessionParticipants(
         targetSessionId,
         getTeamPlayerIds(prepared.teams),
@@ -2745,7 +2747,7 @@ app.put("/api/matches/:matchId", async (req, res) => {
     previous = existing;
     // 요청에 없어도 미리 읽은 updatedAt을 조건으로 저장해, 그사이 다른 회원이 고쳤으면 409로 막는다.
     // 그래서 아래 재계산 여부(wasCompleted)는 실제로 고친 행의 이전 상태와 같다.
-    // 관리자의 세션·시각 변경도 같은 UPDATE로 저장돼 점수·팀과 함께 반영되거나 함께 막힌다.
+    // 관리자의 세션·시각 컬럼 변경도 같은 UPDATE로 저장돼 점수·팀과 함께 반영되거나 함께 막힌다.
     match = await matchRepository.updateRecordedMatch(matchId, {
       ...prepared,
       ...adminEdit,

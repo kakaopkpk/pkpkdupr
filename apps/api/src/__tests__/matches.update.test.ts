@@ -692,6 +692,7 @@ describe("PUT /api/matches/:matchId", () => {
         "경기는 저장됐지만 평점 반영에 실패했습니다. 관리자에게 평점 재계산을 요청해 주세요.",
     });
   });
+
   describe("관리자 정정", () => {
     const admin = buildPlayer("player-admin", "M");
     const movedSession: ManagedMatchSession = {
@@ -901,7 +902,6 @@ describe("PUT /api/matches/:matchId", () => {
       expect(addSessionParticipants).not.toHaveBeenCalled();
     });
   });
-
 });
 
 describe("삭제된 합의·자동 합의 라우트", () => {
