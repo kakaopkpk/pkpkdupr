@@ -972,6 +972,36 @@ export class MatchRepository {
     );
   }
 
+  /** 선수별로 팀에 든 경기 행 수와 가장 늦은 경기 시각. 상태·평점 미반영 여부를 가리지 않는다. 경기가 없는 선수는 빠진다 */
+  async findMatchStatsByPlayerId(): Promise<
+    Record<string, { matchCount: number; lastMatchStartsAt: Date | null }>
+  > {
+    const rows = await this.db
+      .select({
+        playerId: matchParticipants.playerId,
+        matchCount: count(),
+        lastMatchStartsAt: max(matches.matchStartsAt),
+      })
+      .from(matchParticipants)
+      .innerJoin(matches, eq(matchParticipants.matchId, matches.id))
+      .groupBy(matchParticipants.playerId);
+
+    return Object.fromEntries(
+      rows.map(({ playerId, matchCount, lastMatchStartsAt }: {
+        playerId: string;
+        matchCount: number | string;
+        lastMatchStartsAt: Date | string | number | null;
+      }) => [
+        playerId,
+        {
+          matchCount: Number(matchCount),
+          lastMatchStartsAt:
+            lastMatchStartsAt == null ? null : toDate(lastMatchStartsAt),
+        },
+      ]),
+    );
+  }
+
   /**
    * 완료 경기의 분류·세션·팀 구성·점수만 쿼리 3번으로 읽는다.
    * 경기마다 참가자·점수·세션을 따로 읽는 hydrate를 거치지 않아 랭킹처럼 전체 경기를 훑는 조회에 쓴다.

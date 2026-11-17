@@ -4,6 +4,7 @@ export * from "./db/schema";
 export {
   PlayerRepository,
   type CreateStoredPlayerInput,
+  type DeletePlayerWithoutMatchesResult,
   type StoredPlayerRecord,
 } from "./repositories/PlayerRepository";
 export { PlayerAdminRepository } from "./repositories/PlayerAdminRepository";

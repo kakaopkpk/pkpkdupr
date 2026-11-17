@@ -36,7 +36,7 @@ if (
 const drizzleDb = getDb();
 const client = getDbClient();
 
-const players = new PlayerRepository(drizzleDb);
+const players = new PlayerRepository(drizzleDb, client);
 const playerCreationLogs = new PlayerCreationLogRepository(drizzleDb);
 const playerStatusChangeLogs = new PlayerStatusChangeLogRepository(drizzleDb);
 

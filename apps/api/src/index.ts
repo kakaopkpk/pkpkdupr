@@ -3132,6 +3132,20 @@ app.get("/api/admin/players", requireAdmin, async (_req, res) => {
   }
 });
 
+app.delete("/api/admin/players/:playerId", requireAdmin, async (req, res) => {
+  const session = res.locals.authSession as AuthenticatedSession;
+  try {
+    const { sessionIds } = await authService.deletePlayer(
+      req.params.playerId,
+      session.payload.playerId,
+    );
+    matchRepository.notifySessionsChanged(sessionIds);
+    res.status(204).send();
+  } catch (err) {
+    sendAccountRequestFailure(res, err);
+  }
+});
+
 app.get("/api/admin/player-creation-logs", requireAdmin, async (_req, res) => {
   try {
     const logs = await authService.getPlayerCreationLogs();
