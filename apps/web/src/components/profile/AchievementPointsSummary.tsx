@@ -1,6 +1,7 @@
 import React from "react";
 import { ACHIEVEMENT_MAX_POINTS } from "@pkpkdupr/shared/achievements";
 import { COUNT_UP, CountUpNumber } from "@/components/ui/CountUpNumber";
+import { ProgressBar } from "@/components/ui/ProgressBar";
 import { cx } from "@/components/ui/cx";
 import { formatAchievementPoints } from "@/lib/format";
 
@@ -27,15 +28,7 @@ export const AchievementPointsSummary: React.FC<{
           </span>
         </span>
       </div>
-      <span
-        aria-hidden="true"
-        className="block h-1.5 overflow-hidden rounded-full bg-pk-neutral"
-      >
-        <span
-          className="block h-full rounded-full bg-pk-primary"
-          style={{ width: `${ratio * 100}%` }}
-        />
-      </span>
+      <ProgressBar ratio={ratio} className="h-1.5" />
     </div>
   );
 };

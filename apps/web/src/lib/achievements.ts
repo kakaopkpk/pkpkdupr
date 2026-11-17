@@ -110,16 +110,15 @@ export const interpolateAchievementProgress = (
   if (unfilledMatches != null) {
     return { ...progress, ratedDoublesMatches: Math.round(unfilledMatches * t) };
   }
-  if (isRatingAchievement(definition.id)) {
-    return progress.current > 0
-      ? {
-          ...progress,
-          current:
-            DUPR_DEFAULT_RATING + (progress.current - DUPR_DEFAULT_RATING) * t,
-        }
-      : progress;
+  if (!isRatingAchievement(definition.id)) {
+    return { ...progress, current: Math.round(progress.current * t) };
   }
-  return { ...progress, current: Math.round(progress.current * t) };
+  // 평점이 아직 없으면("–") 셀 값이 없다
+  if (progress.current <= 0) return progress;
+  return {
+    ...progress,
+    current: DUPR_DEFAULT_RATING + (progress.current - DUPR_DEFAULT_RATING) * t,
+  };
 };
 
 /** 평점 업적 막대의 출발 평점과 목표 사이 최소 폭 */

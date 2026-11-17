@@ -9,12 +9,14 @@ import {
 import PushScreen from "@/components/PushScreen";
 import { AchievementBadge } from "@/components/profile/AchievementBadge";
 import { Card } from "@/components/ui/Card";
+import { CountUpText } from "@/components/ui/CountUpText";
+import { CheckIcon } from "@/components/ui/Icons";
+import { ProgressBar } from "@/components/ui/ProgressBar";
 import {
   COUNT_UP,
   CountUpNumber,
   getRowCountUp,
 } from "@/components/ui/CountUpNumber";
-import { CheckIcon } from "@/components/record/RecordMatchParts";
 import { SectionLabel } from "@/components/ui/Section";
 import { cx } from "@/components/ui/cx";
 import { useAppNavigation } from "@/context/AppNavigationContext";
@@ -112,31 +114,25 @@ const AchievementRow: React.FC<{
         <span className="line-clamp-2 text-pk-13 text-pk-muted">
           {definition.condition}
         </span>
-        {earned ? (
-          progress?.earnedAt ? (
-            <span className="mt-0.5 text-pk-12 text-pk-sub tabular-nums">
-              {formatKstNumericDate(progress.earnedAt)}
-            </span>
-          ) : null
-        ) : (
+        {earned && progress?.earnedAt ? (
+          <span className="mt-0.5 text-pk-12 text-pk-sub tabular-nums">
+            {formatKstNumericDate(progress.earnedAt)}
+          </span>
+        ) : null}
+        {!earned ? (
           <span className="mt-1.5 flex items-center gap-2">
-            <span
-              aria-hidden="true"
-              className="h-1.5 flex-1 overflow-hidden rounded-full bg-pk-neutral"
+            <ProgressBar ratio={ratio} className="h-1.5 flex-1" />
+            <CountUpText
+              finalContent={formatAchievementProgress(definition, progress)}
+              className="shrink-0 text-pk-12 text-pk-sub tabular-nums"
             >
-              <span
-                className="block h-full rounded-full bg-pk-primary"
-                style={{ width: `${ratio * 100}%` }}
-              />
-            </span>
-            <span className="shrink-0 text-pk-12 text-pk-sub tabular-nums">
               {formatAchievementProgress(
                 definition,
                 interpolateAchievementProgress(definition, progress, t),
               )}
-            </span>
+            </CountUpText>
           </span>
-        )}
+        ) : null}
       </span>
     </button>
   );

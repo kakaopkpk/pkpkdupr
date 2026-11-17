@@ -19,7 +19,8 @@ import {
   swapSlots,
   type RecordSlots,
 } from "./recordMatch.utils";
-import { CheckIcon, FooterError } from "./RecordMatchParts";
+import { FooterError } from "./RecordMatchParts";
+import { CheckIcon } from "@/components/ui/Icons";
 
 /** 자리에 그릴 플레이어. 게스트면 이름 아래에 "게스트"를 붙인다 */
 export type SlotPlayer = AvatarPlayer & { isGuest?: boolean };

@@ -22,13 +22,9 @@ const kstNumericDateFormatter = new Intl.DateTimeFormat("ko-KR", {
   day: "numeric",
 });
 
-/** "2026. 11. 17." 항상 연도까지 쓰는 숫자 날짜 */
-export const formatKstNumericDate = (date: Date | string) => {
-  const parts = kstNumericDateFormatter.formatToParts(toDate(date));
-  const get = (type: Intl.DateTimeFormatPartTypes) =>
-    parts.find((part) => part.type === type)?.value ?? "";
-  return `${get("year")}. ${get("month")}. ${get("day")}.`;
-};
+/** "2026. 11. 17." 항상 연도까지 쓰는 숫자 날짜(ko-KR 숫자 날짜 형식 그대로) */
+export const formatKstNumericDate = (date: Date | string) =>
+  kstNumericDateFormatter.format(toDate(date));
 
 const getKstParts = (date: Date | string) => {
   const parts = kstPartsFormatter.formatToParts(toDate(date));

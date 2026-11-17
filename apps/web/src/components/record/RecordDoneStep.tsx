@@ -27,7 +27,8 @@ import {
   pickPlayerEarnedAchievements,
 } from "@/lib/achievements";
 import AchievementCelebration from "./AchievementCelebration";
-import { CheckIcon, FooterError } from "./RecordMatchParts";
+import { FooterError } from "./RecordMatchParts";
+import { CheckIcon } from "@/components/ui/Icons";
 
 /*
  * 완료 화면 연출 시각(ms, 완료 단계가 보이게 된 시점 기준).
