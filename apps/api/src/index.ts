@@ -128,14 +128,13 @@ import {
   buildRecordsPage,
   buildSessionHistory,
   buildSessionReport,
-  buildDoublesRatingAfterByMatchId,
   countAchievementHolders,
   createRankingContext,
   findPlayerEarnedAchievements,
   findSessionDominations,
   parseRecordsCursor,
-  toAchievementMatch,
   toAchievementMatches,
+  toContextAchievementMatches,
 } from "./services/RankingService";
 import {
   AvatarValidationError,
@@ -923,18 +922,20 @@ const findNewAchievementsForSavedMatch = async (
         ),
       ),
     ]);
-    const ratingsByMatchId = buildDoublesRatingAfterByMatchId(
-      logsByPlayer.flat(),
-    );
-    const after = outcomes.map((outcome) =>
-      toAchievementMatch(outcome, ratingsByMatchId.get(outcome.id)),
-    );
+    const after = toAchievementMatches(outcomes, logsByPlayer.flat());
     // 수정 전 평점 로그는 재계산으로 덮어써져 없으므로, 이미 완료였던 경기는 지금 평점을 그대로 붙인다.
     // 그래서 완료 경기 수정으로는 평점 업적이 새 업적으로 나오지 않는다(미확인 업적 조회로 축하한다).
     const before = [
       ...after.filter((candidate) => candidate.id !== match.id),
       ...(previous?.status === "completed"
-        ? [{ ...previous, doublesRatingAfter: ratingsByMatchId.get(match.id) }]
+        ? [
+            {
+              ...previous,
+              doublesRatingAfter: after.find(
+                (candidate) => candidate.id === match.id,
+              )?.doublesRatingAfter,
+            },
+          ]
         : []),
     ];
     return findNewAchievements({
@@ -3052,7 +3053,7 @@ app.get("/api/me/achievements/unseen", async (req, res) => {
       db.playerSeenAchievements.findByPlayerId(decoded.playerId),
     ]);
     const earned = findPlayerEarnedAchievements(
-      toAchievementMatches(context),
+      toContextAchievementMatches(context),
       findSessionDominations(context, sessions, new Date()),
       decoded.playerId,
     );

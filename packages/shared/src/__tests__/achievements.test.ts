@@ -6,6 +6,7 @@ import {
   findNewAchievements,
   findUnseenAchievements,
   isBestStreakAchievement,
+  isRatingAchievement,
   type AchievementMatch,
   type AchievementProgress,
   type EarnedAchievement,
@@ -851,7 +852,7 @@ describe("평점 업적", () => {
 
   it("평점 업적 꼬리표는 소수 한 자리까지 쓴다", () => {
     expect(
-      ACHIEVEMENTS.filter((definition) => definition.category === "rating").map(
+      ACHIEVEMENTS.filter((definition) => isRatingAchievement(definition.id)).map(
         ({ id, name, badgeNumber, target }) => ({ id, name, badgeNumber, target }),
       ),
     ).toEqual([

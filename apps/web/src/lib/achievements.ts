@@ -8,6 +8,7 @@ import {
   type SeenAchievementRef,
   type UnseenAchievementsResponse,
   isBestStreakAchievement,
+  isRatingAchievement,
 } from "@pkpkdupr/shared/achievements";
 import { DUPR_DEFAULT_RATING } from "@pkpkdupr/shared/player";
 import { apiFetch } from "@/lib/api";
@@ -67,7 +68,7 @@ export const formatAchievementProgress = (
   progress: AchievementProgressInfo | null | undefined,
 ) => {
   const current = progress?.current ?? 0;
-  if (definition.category === "rating") {
+  if (isRatingAchievement(definition.id)) {
     return `최고 ${formatRating(current > 0 ? current : null)}`;
   }
   return isBestStreakAchievement(definition.id)
@@ -82,7 +83,7 @@ export const getAchievementProgressRatio = (
 ) => {
   const current = progress?.current ?? 0;
   const [start, end] =
-    definition.category === "rating"
+    isRatingAchievement(definition.id)
       ? [DUPR_DEFAULT_RATING, definition.target]
       : [0, definition.target];
   if (end <= start) return 0;

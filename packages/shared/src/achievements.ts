@@ -492,6 +492,10 @@ export const isBestStreakAchievement = (achievementId: string) => {
   return metric === "bestStreak" || metric === "bestPartnerStreak";
 };
 
+/** 진행도가 최고 복식 평점인 업적(평점 3.5·4.0·4.5) */
+export const isRatingAchievement = (achievementId: string) =>
+  ACHIEVEMENT_METRIC_BY_ID.get(achievementId) === "peakDoublesRating";
+
 export const ACHIEVEMENT_CATEGORY_LABEL: Record<AchievementCategory, string> = {
   matches: "경기 수",
   wins: "승리",
