@@ -9,7 +9,7 @@
 1. **비우기·이관(한 트랜잭션)**: `public` 앱 테이블을 모두 `TRUNCATE`하고 덤프 행을 지금 스키마로 바꿔 넣습니다. 실패하면 대상 DB는 그대로입니다. 스크립트가 모르는 테이블이 public에 있으면 쓰기 전에 멈춥니다.
 2. **평점 재계산**: 관리자 '평점 재계산'과 같은 경로(`AuthService.recalculateDuprRatings`, 경기별 로그 포함)로 평점·경기별 평점 로그·경기 전 평점 스냅샷을 처음부터 다시 만듭니다.
 3. **Auth 정리·계정 발급**: 기존 Auth 사용자를 모두 지우고, active 정회원마다 `toInternalEmail(아이디)` 계정을 공통 초기 비밀번호로 만들어 연결합니다. `is_first_login = true`라 첫 로그인 때 비밀번호를 바꿔야 합니다.
-4. **캘린더 정리**: 지운 세션의 구글 캘린더 일정을 지웁니다(캘린더 설정이 있을 때만).
+4. **캘린더 정리**: 지운 세션의 구글 캘린더 일정을 지웁니다(캘린더 설정이 있을 때만). 유지한 정기 세션(아래 `--keep-upcoming-regular-sessions`)의 일정은 지우지 않습니다.
 5. **검증**: 테이블별 행 수, 덤프 평점과 재계산 평점의 차이, 계정 연결 수를 출력하고 `verify.md`로 남깁니다.
 
 ### 데이터 변환 규칙
@@ -23,6 +23,7 @@
   - 그 밖의 세션(대회·행사)은 이름 그대로 일반 세션으로 옮깁니다.
   - 세션 경기의 선수는 모두 그 세션 참여자로 넣습니다.
 - 평점 로그: 덤프의 경기별 로그(`match_completed`)와 재계산 요약 로그(`manual_recalculation`)는 옮기지 않고 재계산이 다시 만듭니다. 공식 DUPR 조정 로그(`official_dupr_adjustment_logs`)와 그 영향 로그(`official_adjustment_recalculation`, 프로필 차트가 씀)는 옮깁니다.
+- 앞으로의 정기 세션(`--keep-upcoming-regular-sessions`): 비우기 직전(같은 트랜잭션) 대상 DB의 오늘(KST) 이후 정기 세션을 같은 id·날짜·이름의 빈 정기 세션으로 다시 넣습니다. 구글 캘린더 일정 id가 세션 id에서 나오므로, 서비스 계정 키 없이도 기존 일정을 그대로 이어 쓰고 예약 작업이 같은 날 일정을 하나 더 만들지 않습니다. 참여자는 지운 회원을 가리키므로 옮기지 않습니다. 덤프에 같은 날짜의 정기 세션이 있으면 덤프 쪽을 씁니다.
 - 옮기지 않는 테이블: `match_result_approvals`(지금 스키마에 없음), 차트 캐시 `player_rating_chart_points`·`player_rating_chart_projections`(조회 때 다시 만듦), `__pkpkdupr_migrations`.
 
 ## 준비물
@@ -60,14 +61,14 @@
    export SUPABASE_URL=https://<project-ref>.supabase.co SUPABASE_SERVICE_ROLE_KEY=<service role key>
    read -rs IMPORT_INITIAL_PASSWORD; export IMPORT_INITIAL_PASSWORD
    pnpm db:import-mysql --dump ~/Downloads/pkpkdupr-dump.sql --admin <관리자 아이디> \
-     --execute --confirm-target <project-ref>
+     --keep-upcoming-regular-sessions --execute --confirm-target <project-ref>
    ```
 
    - 계정 발급 도중 멈췄으면 `--issue-accounts --confirm-target <project-ref>`로 발급만 다시 합니다. 이미 연결된 회원은 건너뜁니다.
    - 검증만 다시 보려면 `--verify`(쓰기 없음)입니다.
 
 5. **검증 확인**: 출력과 `verify.md`에서 행 수가 모두 "같음"인지, 활성 회원 평점 차이가 기준(0.01) 안인지, active 회원이 모두 계정에 연결됐는지 봅니다. 평점 차이의 원인은 아래 "덤프 평점과 재계산 평점"을 참고합니다.
-6. **캘린더**: 캘린더 env 없이 실행했다면 `wiped-sessions.json`의 세션 일정을 캘린더에서 지웁니다. 일정 id는 `pks` + 세션 id UTF-8 바이트의 16진수입니다(`toCalendarEventId`).
+6. **캘린더**: 캘린더 env 없이 실행했다면 `wiped-sessions.json`의 세션 중 유지하지 않은 세션의 일정(지난 세션 등)이 캘린더에 남습니다. 필요하면 캘린더에서 지웁니다. 유지한 정기 세션 일정의 참석 표기는 그 세션 참여자가 처음 바뀔 때 새 값으로 다시 써집니다. 일정 id는 `pks` + 세션 id UTF-8 바이트의 16진수입니다(`toCalendarEventId`).
 7. **정기 세션 만들기**: 예약 작업을 바로 한 번 돌려 앞으로 28일의 정기 세션·공휴일·캘린더 일정을 다시 만듭니다.
 
    ```bash
