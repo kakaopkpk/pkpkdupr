@@ -2,7 +2,7 @@
  * v0.12.7 MySQL 덤프로 Supabase DB를 비우고 다시 채운다. 절차와 주의 사항은 docs/data-migration.md.
  *
  *   pnpm db:import-mysql --dump <덤프.sql> --admin <아이디>                 # dry-run(쓰기 없음)
- *   pnpm db:import-mysql --dump <덤프.sql> --admin <아이디> --execute --confirm-target <프로젝트 ref 또는 DB 호스트>
+ *   pnpm db:import-mysql --dump <덤프.sql> --admin <아이디> [--keep-upcoming-regular-sessions] --execute --confirm-target <프로젝트 ref 또는 DB 호스트>
  *   pnpm db:import-mysql --dump <덤프.sql> --issue-accounts --confirm-target <프로젝트 ref 또는 DB 호스트>  # 계정 발급만 다시
  *   pnpm db:import-mysql --dump <덤프.sql> --verify                         # 검증만(쓰기 없음)
  *
@@ -16,6 +16,7 @@ import { join, resolve } from "node:path";
 import { parseArgs } from "node:util";
 import { getDbClient } from "@pkpkdupr/db";
 import { isValidUsername, toInternalEmail } from "@pkpkdupr/shared/auth";
+import { toKstDateKey } from "@pkpkdupr/shared/session";
 import {
   isValidInitialPassword,
   SupabaseAuthAdmin,
@@ -69,6 +70,7 @@ const { values: args } = parseArgs({
     verify: { type: "boolean", default: false },
     "confirm-target": { type: "string" },
     "out-dir": { type: "string" },
+    "keep-upcoming-regular-sessions": { type: "boolean", default: false },
   },
 });
 
@@ -178,6 +180,41 @@ const insertRows = async (
   }
 };
 
+/**
+ * 대상 DB의 오늘(KST) 이후 정기 세션 중 덤프에 같은 날짜가 없는 것. `--keep-upcoming-regular-sessions`면
+ * 같은 id의 빈 정기 세션으로 다시 넣어, 세션 id로 묶인 구글 캘린더 일정을 그대로 이어 쓴다.
+ * 참여자는 지우는 회원을 가리키므로 옮기지 않는다.
+ */
+const findUpcomingRegularSessions = async (
+  execute: (sql: string, values?: unknown[]) => Promise<{ rows: Record<string, unknown>[] }>,
+  plan: ImportPlan,
+  lock = false,
+): Promise<TargetRow[]> => {
+  const plannedDateKeys = new Set(
+    plan.rows.match_sessions.map((session) => session.regular_date_key).filter(Boolean),
+  );
+  const { rows } = await execute(
+    `SELECT id, name, "date", location, created_at, updated_at, regular_date_key, start_time, end_time
+     FROM match_sessions
+     WHERE regular_date_key >= $1
+     ORDER BY regular_date_key${lock ? " FOR UPDATE" : ""}`,
+    [toKstDateKey(new Date())],
+  );
+  return rows
+    .filter((row) => !plannedDateKeys.has(row.regular_date_key as string))
+    .map((row) => ({
+      id: String(row.id),
+      name: String(row.name),
+      date: Number(row.date),
+      location: String(row.location),
+      created_at: Number(row.created_at),
+      updated_at: Number(row.updated_at),
+      regular_date_key: String(row.regular_date_key),
+      start_time: (row.start_time as string | null) ?? null,
+      end_time: (row.end_time as string | null) ?? null,
+    }));
+};
+
 /** 비우기와 이관을 한 트랜잭션으로 한다. 실패하면 대상 DB는 그대로다 */
 const wipeAndImport = async (client: DbClient, plan: ImportPlan) => {
   await assertExpectedSchema(client);
@@ -192,6 +229,14 @@ const wipeAndImport = async (client: DbClient, plan: ImportPlan) => {
   try {
     const execute = (sql: string, values: unknown[] = []) =>
       transaction.execute({ sql, args: values });
+    if (args["keep-upcoming-regular-sessions"]) {
+      const kept = await findUpcomingRegularSessions(execute, plan, true);
+      // 검증 행 수와 캘린더 정리 대상 제외가 같은 목록을 보도록 계획에 더한다
+      plan.rows.match_sessions.push(...kept);
+      log(
+        `  유지하는 정기 세션 ${kept.length}개: ${kept.map((session) => `${session.regular_date_key}(${session.id})`).join(", ") || "없음"}`,
+      );
+    }
     await execute(
       `TRUNCATE TABLE ${EXPECTED_PUBLIC_TABLES.map((table) => `"${table}"`).join(", ")}`,
     );
@@ -381,6 +426,14 @@ const parseRatingJson = (json: unknown): Rating => JSON.parse(String(json)) as R
 const verify = async (client: DbClient, tables: DumpTables, plan: ImportPlan) => {
   log("\n[검증] 테이블별 행 수 (기대 / 실제)");
   const counts = await countRows(client, EXPECTED_PUBLIC_TABLES);
+  // 덤프 밖 정기 세션(--keep-upcoming-regular-sessions로 유지한 것, 이관 뒤 예약 작업·조회가 만든 것)은 따로 센다
+  const plannedSessionIds = new Set(plan.rows.match_sessions.map((session) => String(session.id)));
+  const { rows: regularSessionRows } = await client.execute(
+    "SELECT id FROM match_sessions WHERE regular_date_key IS NOT NULL",
+  );
+  const extraRegularSessionCount = regularSessionRows.filter(
+    (row) => !plannedSessionIds.has(String(row.id)),
+  ).length;
   const dumpMatchCompletedLogs = tables.player_rating_change_logs.filter(
     (row) => row.source === "match_completed",
   );
@@ -390,7 +443,11 @@ const verify = async (client: DbClient, tables: DumpTables, plan: ImportPlan) =>
     const planned = (plan.rows as Partial<Record<string, TargetRow[]>>)[table]?.length ?? 0;
     // 평점 로그는 옮긴 공식 조정 영향 로그에 재계산이 만든 경기별 로그(덤프와 같은 수)가 더해진다
     const expected =
-      table === "player_rating_change_logs" ? planned + dumpMatchCompletedLogs.length : planned;
+      table === "player_rating_change_logs"
+        ? planned + dumpMatchCompletedLogs.length
+        : table === "match_sessions"
+          ? planned + extraRegularSessionCount
+          : planned;
     const actual = counts[table];
     const ok = expected === actual;
     if (!ok) countMismatch += 1;
@@ -401,6 +458,9 @@ const verify = async (client: DbClient, tables: DumpTables, plan: ImportPlan) =>
   log(
     "  * player_rating_change_logs 기대값 = 옮긴 공식 조정 영향 로그 + 덤프의 경기별 로그 수(재계산이 같은 수를 만들어야 함)",
   );
+  if (extraRegularSessionCount > 0) {
+    log(`  * match_sessions 기대값에 덤프 밖 정기 세션 ${extraRegularSessionCount}개(유지분·예약 작업분)를 더했습니다.`);
+  }
 
   // 경기별 평점 로그: 덤프 값과 재계산 값을 (경기, 회원)으로 맞춰 본다
   const { rows: logRows } = await client.execute(
@@ -546,6 +606,15 @@ const main = async () => {
       for (const [table, count] of Object.entries(await countRows(client, tablesInDb))) {
         log(`  ${table}: ${count}`);
       }
+    }
+    if (target && args["keep-upcoming-regular-sessions"]) {
+      const kept = await findUpcomingRegularSessions(
+        (sql, values = []) => getDbClient().execute({ sql, args: values }),
+        plan,
+      );
+      log(
+        `\n위 match_sessions에 더해, 같은 id의 빈 세션으로 유지할 정기 세션 ${kept.length}개: ${kept.map((session) => session.regular_date_key).join(", ") || "없음"}`,
+      );
     }
     log("\ndry-run입니다. 실제로 하려면 --execute --confirm-target <프로젝트 ref 또는 DB 호스트>를 붙입니다.");
     return;
