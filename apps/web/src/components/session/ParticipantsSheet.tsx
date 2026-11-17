@@ -89,8 +89,6 @@ interface ParticipantChange {
 
 interface ParticipantsFormProps {
   tabKey: TabKey;
-  /** 시트가 보이는 탭인지. 확인 창도 따라 숨는다 */
-  isActive: boolean;
   session: MatchSessionDetailInfo;
   lockedPlayerIds: readonly string[];
   onDone: (didChange: boolean) => void;
@@ -99,7 +97,6 @@ interface ParticipantsFormProps {
 
 const ParticipantsForm: React.FC<ParticipantsFormProps> = ({
   tabKey,
-  isActive,
   session,
   lockedPlayerIds,
   onDone,
@@ -111,6 +108,7 @@ const ParticipantsForm: React.FC<ParticipantsFormProps> = ({
     reload: reloadPlayers,
   } = usePlayers();
   const { showSaveFailure } = useSystemNotice();
+  const { selectedTab } = useTabNavigation();
   const [query, setQuery] = useState("");
   // 열 때의 참여자. 저장에 성공한 변경만큼 따라 바뀐다
   const [savedIds, setSavedIds] = useState(
@@ -137,13 +135,17 @@ const ParticipantsForm: React.FC<ParticipantsFormProps> = ({
   const [sortAnchorIds, setSortAnchorIds] = useState(() => savedIds);
   const lockedIds = useMemo(() => new Set(lockedPlayerIds), [lockedPlayerIds]);
 
-  const rows = useMemo(() => {
-    const normalizedQuery = query.trim().toLocaleLowerCase();
+  // 상태와 상관없는 모든 회원과 이 시트에서 만든 게스트. 아이디 중복 판정에도 쓴다
+  const allRows = useMemo(() => {
     const playerIds = new Set(players.map((player) => player.id));
-    const allRows: ParticipantRow[] = [
+    return [
       ...players,
       ...addedGuests.filter((guest) => !playerIds.has(guest.id)),
     ];
+  }, [addedGuests, players]);
+
+  const rows = useMemo(() => {
+    const normalizedQuery = query.trim().toLocaleLowerCase();
     return allRows
       .filter((player) => player.status === "active")
       .filter(
@@ -156,13 +158,17 @@ const ParticipantsForm: React.FC<ParticipantsFormProps> = ({
         const rankB = sortAnchorIds.has(b.id) ? 0 : 1;
         return rankA - rankB || a.username.localeCompare(b.username, "ko");
       });
-  }, [addedGuests, players, query, sortAnchorIds]);
+  }, [allRows, query, sortAnchorIds]);
 
-  const guestAddOption = getGuestAddOption({
-    query,
-    playersStatus,
-    resultUsernames: rows.map((row) => row.username),
-  });
+  const guestAddOption = useMemo(
+    () =>
+      getGuestAddOption({
+        query,
+        playersStatus,
+        existingUsernames: allRows.map((row) => row.username),
+      }),
+    [allRows, playersStatus, query],
+  );
 
   const toggle = (playerId: string) => {
     if (lockedIds.has(playerId) || isSaving || isAddingGuest) return;
@@ -276,9 +282,8 @@ const ParticipantsForm: React.FC<ParticipantsFormProps> = ({
   };
 
   /** 성공·실패와 상관없이 창을 닫는다. 실패 문구는 시트 하단·토스트가 보인다 */
-  const confirmGuest = async () => {
-    if (pendingGuestUsername === null) return;
-    await handleAddGuest(pendingGuestUsername);
+  const confirmGuest = async (username: string) => {
+    await handleAddGuest(username);
     setPendingGuestUsername(null);
   };
 
@@ -306,16 +311,17 @@ const ParticipantsForm: React.FC<ParticipantsFormProps> = ({
         />
       </BottomSheet.Header>
       <BottomSheet.Body className="min-w-0 gap-0 overflow-y-auto">
-        {rows.length === 0 &&
-        (playersStatus === "error" || playersStatus === "loading") ? (
-          <p className="py-6 text-center text-pk-13 text-pk-muted">
-            {playersStatus === "error"
-              ? "회원 목록을 불러오지 못했어요."
-              : "회원 목록을 불러오는 중…"}
-          </p>
-        ) : rows.length === 0 && !guestAddOption ? (
-          <StateMessage kind="empty" message="검색 결과가 없어요" />
-        ) : rows.length > 0 ? (
+        {rows.length === 0 ? (
+          playersStatus !== "ready" ? (
+            <p className="py-6 text-center text-pk-13 text-pk-muted">
+              {playersStatus === "error"
+                ? "회원 목록을 불러오지 못했어요."
+                : "회원 목록을 불러오는 중…"}
+            </p>
+          ) : guestAddOption ? null : (
+            <StateMessage kind="empty" message="검색 결과가 없어요" />
+          )
+        ) : (
           <ul aria-label="회원" className="flex flex-col">
             {rows.map((player) => {
               const isLocked = lockedIds.has(player.id);
@@ -370,7 +376,7 @@ const ParticipantsForm: React.FC<ParticipantsFormProps> = ({
               );
             })}
           </ul>
-        ) : null}
+        )}
         {guestAddOption ? (
           <button
             type="button"
@@ -431,36 +437,34 @@ const ParticipantsForm: React.FC<ParticipantsFormProps> = ({
           {isSaving ? "저장 중…" : "완료"}
         </PkButton>
       </BottomSheet.Footer>
-      <ConfirmDialog
-        isOpen={isGuestConfirmLayerOpen && pendingGuestUsername !== null}
-        isActive={isActive}
-        layer={GUEST_CONFIRM_LAYER}
-        title="게스트로 추가할까요?"
-        confirmLabel={isAddingGuest ? "추가하는 중…" : "추가"}
-        isConfirming={isAddingGuest}
-        onCancel={() => setPendingGuestUsername(null)}
-        onConfirm={() => void confirmGuest()}
-      >
-        {pendingGuestUsername !== null ? (
-          <>
-            <div className="flex min-w-0 items-center justify-center gap-2.5 rounded-pk-sm bg-pk-bg px-3 py-3.5">
-              <PlayerAvatar
-                player={{ id: pendingGuestUsername, username: pendingGuestUsername }}
-                size={40}
-              />
-              <span className="flex min-w-0 items-baseline gap-1">
-                <span className="truncate text-pk-17 font-extrabold">
-                  {pendingGuestUsername}
-                </span>
-                <GuestLabel />
+      {pendingGuestUsername !== null ? (
+        <ConfirmDialog
+          isOpen={isGuestConfirmLayerOpen}
+          isActive={tabKey === selectedTab}
+          layer={GUEST_CONFIRM_LAYER}
+          title="게스트로 추가할까요?"
+          confirmLabel={isAddingGuest ? "추가하는 중…" : "추가"}
+          isConfirming={isAddingGuest}
+          onCancel={() => setPendingGuestUsername(null)}
+          onConfirm={() => void confirmGuest(pendingGuestUsername)}
+        >
+          <div className="flex min-w-0 items-center justify-center gap-2.5 rounded-pk-sm bg-pk-bg px-3 py-3.5">
+            <PlayerAvatar
+              player={{ id: pendingGuestUsername, username: pendingGuestUsername }}
+              size={40}
+            />
+            <span className="flex min-w-0 items-baseline gap-1">
+              <span className="truncate text-pk-17 font-extrabold">
+                {pendingGuestUsername}
               </span>
-            </div>
-            <p className="px-1 text-center text-pk-13 text-pk-sub">
-              이 아이디로 게스트를 만들어 {session.name}에 넣어요.
-            </p>
-          </>
-        ) : null}
-      </ConfirmDialog>
+              <GuestLabel />
+            </span>
+          </div>
+          <p className="px-1 text-center text-pk-13 text-pk-sub">
+            이 아이디로 게스트를 만들어 {session.name}에 넣어요.
+          </p>
+        </ConfirmDialog>
+      ) : null}
     </>
   );
 };
@@ -517,7 +521,6 @@ export default function ParticipantsSheet({
       <ParticipantsForm
         key={`${session.id}:${sheetKey}`}
         tabKey={tabKey}
-        isActive={tabKey === selectedTab}
         session={session}
         lockedPlayerIds={lockedPlayerIds}
         onDone={handleDone}

@@ -20,9 +20,12 @@ export interface ConfirmDialogProps {
   onConfirm: () => void;
 }
 
+const FOCUSABLE_SELECTOR =
+  'button:not(:disabled), a[href], input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])';
+
 /**
  * 시트 위에 띄우는 가운데 확인 창. 바텀시트를 겹쳐 쌓지 않을 때 쓴다.
- * 열리면 취소 버튼에 포커스를 두고 Tab은 두 버튼 사이만 돈다. Esc·딤 누르기는 취소와 같다.
+ * 열리면 취소 버튼에 포커스를 두고 Tab은 창 안에서만 돈다. Esc·딤 누르기는 취소와 같다.
  */
 export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
   isOpen,
@@ -37,9 +40,15 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
   onConfirm,
 }) => {
   const titleId = useId();
+  const sectionRef = useRef<HTMLElement>(null);
   const cancelRef = useRef<HTMLButtonElement>(null);
-  const confirmRef = useRef<HTMLButtonElement>(null);
+  // 호출부가 매 렌더 새 콜백을 넘겨도 keydown 리스너를 다시 붙이지 않게 ref로 읽는다
+  const onCancelRef = useRef(onCancel);
   const isVisible = isOpen && isActive;
+
+  useEffect(() => {
+    onCancelRef.current = onCancel;
+  }, [onCancel]);
 
   // 열리면 취소 버튼으로 포커스를 옮기고, 닫히면 원래 포커스로 돌려준다
   useEffect(() => {
@@ -58,21 +67,28 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         event.preventDefault();
-        if (!isConfirming) onCancel();
+        if (!isConfirming) onCancelRef.current();
         return;
       }
       if (event.key !== "Tab") return;
-      // 뒤 시트로 포커스가 빠지지 않게 두 버튼 사이에서만 돈다
+      // 뒤 시트로 포커스가 빠지지 않게 창 안의 누를 수 있는 요소 사이에서만 돈다
       event.preventDefault();
-      const next =
-        document.activeElement === cancelRef.current
-          ? confirmRef.current
-          : cancelRef.current;
-      next?.focus({ preventScroll: true });
+      const focusables = Array.from(
+        sectionRef.current?.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR) ??
+          [],
+      );
+      if (focusables.length === 0) return;
+      const index = focusables.indexOf(document.activeElement as HTMLElement);
+      const step = event.shiftKey ? -1 : 1;
+      const nextIndex =
+        index === -1
+          ? 0
+          : (index + step + focusables.length) % focusables.length;
+      focusables[nextIndex].focus({ preventScroll: true });
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [isConfirming, isVisible, onCancel]);
+  }, [isConfirming, isVisible]);
 
   if (!isOpen || typeof document === "undefined") return null;
 
@@ -93,6 +109,7 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
       />
       <div className="app-shell-width pointer-events-none relative mx-auto flex w-full justify-center px-6">
         <section
+          ref={sectionRef}
           role="alertdialog"
           aria-modal="true"
           aria-labelledby={titleId}
@@ -116,7 +133,6 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
               {cancelLabel}
             </PkButton>
             <PkButton
-              ref={confirmRef}
               size="lg"
               fullWidth
               disabled={isConfirming}
