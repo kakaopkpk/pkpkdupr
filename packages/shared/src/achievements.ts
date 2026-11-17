@@ -430,7 +430,7 @@ const ACHIEVEMENT_TABLE: readonly {
       id: "revenge",
       category: "special",
       name: "리벤지",
-      condition: "같은 날 진 조합에 바로 설욕",
+      condition: "패배한 조합 그대로 바로 다음 경기에서 승리",
       badgeNumber: null,
       target: 1,
     },
