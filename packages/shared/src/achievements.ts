@@ -532,6 +532,42 @@ const ACHIEVEMENT_METRIC_BY_ID = new Map<string, AchievementMetric>(
   ACHIEVEMENT_TABLE.map((row) => [row.definition.id, row.metric]),
 );
 
+/**
+ * 지표별 집계 시작 시각. 이 시각 전에 완료된 경기는 그 지표에 세지 않고, null이면 전체 기록을 센다.
+ * - 경기 수·승 수·개근은 그냥 쌓이는 기록이라 이관 경기를 포함한 전체 기록을 센다.
+ * - 새 지표를 쓰는 업적을 추가하면 그 지표는 추가를 배포한 날 00:00 KST부터 센다(여기에 그 시각을 적는다).
+ * - 기존 지표에 단계만 늘리는 업적(예: 1000경기 다음 5000경기)은 그 지표의 시작 시각을 그대로 따른다.
+ * - 기존 업적의 조건을 고치면 그 지표의 원래 시작 시각부터 다시 계산한다.
+ * - 평점 지표는 시작 시각 전 경기 대신 시작 시각 시점 평점에서 시작한다(computeAchievements 참고).
+ */
+const METRIC_COUNT_START: Record<AchievementMetric, Date | null> = {
+  matches: null,
+  wins: null,
+  attendedSessions: null,
+  bestStreak: ACHIEVEMENT_COUNT_START,
+  perfectWins: ACHIEVEMENT_COUNT_START,
+  hardWonWins: ACHIEVEMENT_COUNT_START,
+  deuceWins: ACHIEVEMENT_COUNT_START,
+  bestPartnerMatches: ACHIEVEMENT_COUNT_START,
+  bestSessionMatches: ACHIEVEMENT_COUNT_START,
+  singlesWins: ACHIEVEMENT_COUNT_START,
+  revenges: ACHIEVEMENT_COUNT_START,
+  distinctPartners: ACHIEVEMENT_COUNT_START,
+  distinctBeatenOpponents: ACHIEVEMENT_COUNT_START,
+  bestOpponentMatches: ACHIEVEMENT_COUNT_START,
+  bestPartnerStreak: ACHIEVEMENT_COUNT_START,
+  unbeatenSessions: ACHIEVEMENT_COUNT_START,
+  dominatedSessions: ACHIEVEMENT_COUNT_START,
+  peakDoublesRating: ACHIEVEMENT_COUNT_START,
+  lowestDoublesRating: ACHIEVEMENT_COUNT_START,
+};
+
+/** 이 시각에 완료된 경기를 이 지표에 세는지 */
+const isCountedForMetric = (metric: AchievementMetric, completedAt: Date) => {
+  const start = METRIC_COUNT_START[metric];
+  return start == null || completedAt.getTime() >= start.getTime();
+};
+
 /** 진행도가 누적 수가 아니라 최고 연승 기록인 업적(연승·환상의 콤비) */
 export const isBestStreakAchievement = (achievementId: string) => {
   const metric = ACHIEVEMENT_METRIC_BY_ID.get(achievementId);
@@ -654,20 +690,16 @@ const isRatedCompletedMatch = (
   !match.ratingExcluded &&
   match.completedAt != null;
 
-/** 업적에 세는 경기: 업적 기준 시각 이후 완료된 평점 반영 완료 경기. compareCountedMatches 순 */
+/** 업적 계산에 넣는 경기: 평점 반영 완료 경기 전부. 지표마다 집계 시작 시각으로 다시 거른다. compareCountedMatches 순 */
 const getCountedMatches = (
   matches: readonly AchievementMatch[],
 ): CountedMatch[] =>
-  matches
-    .filter(
-      (match): match is CountedMatch =>
-        isRatedCompletedMatch(match) && isOnOrAfterCountStart(match.completedAt),
-    )
-    .sort(compareCountedMatches);
+  matches.filter(isRatedCompletedMatch).sort(compareCountedMatches);
 
 /**
- * 받은 업적이 업적에 세는 경기(업적 기준 시각 이후 완료)로 받은 것인지.
- * 아니면 업적 기준 시각 시점 평점으로 받은 평점 업적이라, 받은 경기에서 받은 업적으로 보여 주지 않는다.
+ * 받은 업적을 업적 기준 시각 이후 완료 경기로 받았는지.
+ * 아니면 이관 경기(경기 수·승 수·개근)나 업적 기준 시각 시점 평점(평점 업적)으로 받은 것이라,
+ * 세션 리포트·새 업적에서 그 경기로 받은 업적으로 보여 주지 않는다.
  */
 export const isEarnedByCountedMatch = (achievement: EarnedAchievement) =>
   isOnOrAfterCountStart(achievement.earnedAt);
@@ -738,13 +770,12 @@ const increment = (map: Map<string, number>, key: string) => {
   return count;
 };
 
-interface SessionRecord {
+/** 무패 세션 판정용 세션 기록 */
+interface UnbeatenSessionRecord {
   matches: number;
   allWon: boolean;
   /** 전승 상태로 UNBEATEN_SESSION_MIN_MATCHES번째 경기를 마친 경기 */
   qualifiedMatch: CountedMatch | null;
-  /** 이 세션에서 한 마지막 경기 */
-  lastMatch: CountedMatch;
 }
 
 /** 세션 단위로 다 훑은 뒤에 판정하는 지표. 나중 경기나 세션 종료로 결과가 정해진다 */
@@ -812,9 +843,10 @@ const markReachedAchievements = (
 };
 
 /**
- * 한 회원의 업적 42개 진행 상태(ACHIEVEMENTS 순서).
+ * 한 회원의 업적 진행 상태(ACHIEVEMENTS 순서).
  * 완료 경기만(진행 중·취소 제외) 완료 시각 순으로 훑어, 진행도가 목표에 처음 닿은
  * 경기를 받게 된 경기로, 그 경기 완료 시각을 받은 날로 정한다.
+ * 지표마다 집계 시작 시각(METRIC_COUNT_START) 전에 완료된 경기는 그 지표에 세지 않는다.
  * 승패가 갈리지 않은 경기는 승리에는 세지 않고 연승·콤비 연승·무패 세션·리벤지는 끊는다.
  * 경기 수·단짝·라이벌·세션 진행도에는 센다.
  * 무패 세션은 그 세션의 모든 경기로 판정하므로, 4경기 전승 뒤 같은 세션에서 지면 받지 않은 상태가 된다.
@@ -862,20 +894,26 @@ export function computeAchievements(
     target: definition.target,
   }));
 
+  // 지표마다 집계 시작 시각이 다를 수 있어, 지표별 상태를 따로 둔다
   let streak = 0;
   const partnerMatches = new Map<string, number>();
+  const partners = new Set<string>();
   const partnerStreaks = new Map<string, number>();
   const opponentMatches = new Map<string, number>();
   const beatenOpponents = new Set<string>();
   /** 이 회원의 직전 경기가 패배면 그 경기의 "KST 날짜|조합" 키, 아니면 null */
   let previousLossKey: string | null = null;
-  const sessions = new Map<string, SessionRecord>();
+  const attendedSessionIds = new Set<string>();
+  const sessionMatchCounts = new Map<string, number>();
+  const unbeatenSessionRecords = new Map<string, UnbeatenSessionRecord>();
+  /** 세션 id → 이 세션에서 한 마지막 경기 */
+  const lastSessionMatches = new Map<string, CountedMatch>();
+  let ratedDoublesMatches = 0;
 
   const preCountStartDoublesMatches = getPreCountStartDoublesMatches(
     playerId,
     matches,
   );
-  let ratedDoublesMatches = preCountStartDoublesMatches.length;
   // 경기 수는 평점 로그 유무와 상관없이 세고, 시작 평점은 평점 로그가 있는 마지막 경기에서 찾는다
   let countStart: { match: CountedMatch; rating: number } | null = null;
   for (const match of preCountStartDoublesMatches) {
@@ -884,7 +922,7 @@ export function computeAchievements(
   }
   if (
     countStart &&
-    ratedDoublesMatches >= RATING_ACHIEVEMENT_MIN_DOUBLES_MATCHES
+    preCountStartDoublesMatches.length >= RATING_ACHIEVEMENT_MIN_DOUBLES_MATCHES
   ) {
     applyDoublesRating(metrics, countStart.rating);
     markReachedAchievements(progress, metrics, countStart.match);
@@ -893,42 +931,55 @@ export function computeAchievements(
   for (const match of getCountedMatches(matches)) {
     const teamIndex = findTeamIndex(match, playerId);
     if (teamIndex === null) continue;
+    const counts = (metric: AchievementMetric) =>
+      isCountedForMetric(metric, match.completedAt);
 
     const scores = match.scores ?? [];
     const winningTeamIndex = getWinningTeamIndex(match);
     const won = winningTeamIndex === teamIndex;
+    const isDoubles = isDoublesMatchType(match.type);
 
-    metrics.matches += 1;
+    if (counts("matches")) metrics.matches += 1;
     if (won) {
-      metrics.wins += 1;
-      streak += 1;
+      if (counts("wins")) metrics.wins += 1;
+      if (counts("perfectWins") && isPerfect(scores, teamIndex)) {
+        metrics.perfectWins += 1;
+      }
+      if (counts("deuceWins") && isDeuceGame(scores)) metrics.deuceWins += 1;
+      if (counts("hardWonWins") && isHardWon(scores, teamIndex)) {
+        metrics.hardWonWins += 1;
+      }
+      if (counts("singlesWins") && !isDoubles) metrics.singlesWins += 1;
+    }
+    if (counts("bestStreak")) {
+      streak = won ? streak + 1 : 0;
       metrics.bestStreak = Math.max(metrics.bestStreak, streak);
-      if (isPerfect(scores, teamIndex)) metrics.perfectWins += 1;
-      if (isDeuceGame(scores)) metrics.deuceWins += 1;
-      if (isHardWon(scores, teamIndex)) metrics.hardWonWins += 1;
-      if (!isDoublesMatchType(match.type)) metrics.singlesWins += 1;
-    } else {
-      streak = 0;
     }
 
     // 리벤지는 같은 날 진 조합 그대로 이 회원의 바로 다음 경기에서 이길 때만 센다.
-    const revengeKey = `${toKstDateKey(match.completedAt)}|${getLineupKey(match, teamIndex)}`;
-    if (won && previousLossKey === revengeKey) metrics.revenges += 1;
-    previousLossKey = !won && winningTeamIndex !== null ? revengeKey : null;
+    if (counts("revenges")) {
+      const revengeKey = `${toKstDateKey(match.completedAt)}|${getLineupKey(match, teamIndex)}`;
+      if (won && previousLossKey === revengeKey) metrics.revenges += 1;
+      previousLossKey = !won && winningTeamIndex !== null ? revengeKey : null;
+    }
 
     const opponentIds = new Set(
       match.teams[teamIndex === 0 ? 1 : 0].players.map((player) => player.id),
     );
     for (const opponentId of opponentIds) {
-      metrics.bestOpponentMatches = Math.max(
-        metrics.bestOpponentMatches,
-        increment(opponentMatches, opponentId),
-      );
-      if (won) beatenOpponents.add(opponentId);
+      if (counts("bestOpponentMatches")) {
+        metrics.bestOpponentMatches = Math.max(
+          metrics.bestOpponentMatches,
+          increment(opponentMatches, opponentId),
+        );
+      }
+      if (counts("distinctBeatenOpponents") && won) {
+        beatenOpponents.add(opponentId);
+      }
     }
     metrics.distinctBeatenOpponents = beatenOpponents.size;
 
-    if (isDoublesMatchType(match.type)) {
+    if (isDoubles) {
       ratedDoublesMatches += 1;
       const partnerIds = new Set(
         match.teams[teamIndex].players
@@ -936,43 +987,54 @@ export function computeAchievements(
           .filter((id) => id !== playerId),
       );
       for (const partnerId of partnerIds) {
-        metrics.bestPartnerMatches = Math.max(
-          metrics.bestPartnerMatches,
-          increment(partnerMatches, partnerId),
-        );
-
-        const partnerStreak = won
-          ? (partnerStreaks.get(partnerId) ?? 0) + 1
-          : 0;
-        partnerStreaks.set(partnerId, partnerStreak);
-        metrics.bestPartnerStreak = Math.max(
-          metrics.bestPartnerStreak,
-          partnerStreak,
-        );
+        if (counts("bestPartnerMatches")) {
+          metrics.bestPartnerMatches = Math.max(
+            metrics.bestPartnerMatches,
+            increment(partnerMatches, partnerId),
+          );
+        }
+        if (counts("distinctPartners")) partners.add(partnerId);
+        if (counts("bestPartnerStreak")) {
+          const partnerStreak = won
+            ? (partnerStreaks.get(partnerId) ?? 0) + 1
+            : 0;
+          partnerStreaks.set(partnerId, partnerStreak);
+          metrics.bestPartnerStreak = Math.max(
+            metrics.bestPartnerStreak,
+            partnerStreak,
+          );
+        }
       }
-      metrics.distinctPartners = partnerMatches.size;
+      metrics.distinctPartners = partners.size;
     }
 
     const sessionId = match.session?.id;
     if (sessionId) {
-      const session = sessions.get(sessionId) ?? {
-        matches: 0,
-        allWon: true,
-        qualifiedMatch: null,
-        lastMatch: match,
-      };
-      sessions.set(sessionId, session);
-      session.matches += 1;
-      session.lastMatch = match;
-      if (!won) session.allWon = false;
-      if (session.allWon && session.matches === UNBEATEN_SESSION_MIN_MATCHES) {
-        session.qualifiedMatch = match;
+      if (counts("attendedSessions")) attendedSessionIds.add(sessionId);
+      metrics.attendedSessions = attendedSessionIds.size;
+      if (counts("bestSessionMatches")) {
+        metrics.bestSessionMatches = Math.max(
+          metrics.bestSessionMatches,
+          increment(sessionMatchCounts, sessionId),
+        );
       }
-      if (session.matches === 1) metrics.attendedSessions += 1;
-      metrics.bestSessionMatches = Math.max(
-        metrics.bestSessionMatches,
-        session.matches,
-      );
+      if (counts("unbeatenSessions")) {
+        const session = unbeatenSessionRecords.get(sessionId) ?? {
+          matches: 0,
+          allWon: true,
+          qualifiedMatch: null,
+        };
+        unbeatenSessionRecords.set(sessionId, session);
+        session.matches += 1;
+        if (!won) session.allWon = false;
+        if (
+          session.allWon &&
+          session.matches === UNBEATEN_SESSION_MIN_MATCHES
+        ) {
+          session.qualifiedMatch = match;
+        }
+      }
+      if (counts("dominatedSessions")) lastSessionMatches.set(sessionId, match);
     }
 
     const doublesRatingAfter = getDoublesRatingAfter(match, playerId);
@@ -980,7 +1042,18 @@ export function computeAchievements(
       doublesRatingAfter != null &&
       ratedDoublesMatches >= RATING_ACHIEVEMENT_MIN_DOUBLES_MATCHES
     ) {
-      applyDoublesRating(metrics, doublesRatingAfter);
+      if (counts("peakDoublesRating")) {
+        metrics.peakDoublesRating = Math.max(
+          metrics.peakDoublesRating,
+          doublesRatingAfter,
+        );
+      }
+      if (counts("lowestDoublesRating")) {
+        metrics.lowestDoublesRating = Math.min(
+          metrics.lowestDoublesRating,
+          doublesRatingAfter,
+        );
+      }
     }
 
     markReachedAchievements(progress, metrics, match);
@@ -989,17 +1062,14 @@ export function computeAchievements(
   // 세션 단위 지표는 해당 세션마다 조건을 채운 경기를 모아, 시간순 target번째 경기를 받은 경기로 정한다.
   // 무패 세션: 끝까지 전승인 세션의 전승 4번째 경기. 세션 지배자: 지배 세션의 내 마지막 경기.
   const sessionEventMatches: Record<SessionEventMetric, CountedMatch[]> = {
-    unbeatenSessions: [],
-    dominatedSessions: [],
+    unbeatenSessions: [...unbeatenSessionRecords.values()].flatMap((session) =>
+      session.allWon && session.qualifiedMatch ? [session.qualifiedMatch] : [],
+    ),
+    dominatedSessions: [...lastSessionMatches].flatMap(
+      ([sessionId, lastMatch]) =>
+        dominatedSessionIds.has(sessionId) ? [lastMatch] : [],
+    ),
   };
-  for (const [sessionId, session] of sessions) {
-    if (session.allWon && session.qualifiedMatch) {
-      sessionEventMatches.unbeatenSessions.push(session.qualifiedMatch);
-    }
-    if (dominatedSessionIds.has(sessionId)) {
-      sessionEventMatches.dominatedSessions.push(session.lastMatch);
-    }
-  }
   for (const metric of SESSION_EVENT_METRICS) {
     sessionEventMatches[metric].sort(compareCountedMatches);
     metrics[metric] = sessionEventMatches[metric].length;
@@ -1043,6 +1113,7 @@ export const toEarnedAchievements = (
  * 경기 저장 전후 계산 차이로 새로 받은 업적을 구한다.
  * 저장 후에 받았고 저장 전에는 받지 않은 업적만 돌려준다(회원 순서 → ACHIEVEMENTS 순서).
  * 세션 지배자는 세션이 끝난 뒤 정해지므로 넣지 않는다.
+ * 업적 기준 시각 전 경기로 받은 업적(isEarnedByCountedMatch가 아닌 것)도 넣지 않는다.
  */
 export const findNewAchievements = ({
   playerIds,
@@ -1062,7 +1133,10 @@ export const findNewAchievements = ({
     return toEarnedAchievements(
       playerId,
       computeAchievements(playerId, after),
-    ).filter((item) => !earnedBefore.has(item.achievementId));
+    ).filter(
+      (item) =>
+        !earnedBefore.has(item.achievementId) && isEarnedByCountedMatch(item),
+    );
   });
 
 const ACHIEVEMENT_ORDER = new Map(
