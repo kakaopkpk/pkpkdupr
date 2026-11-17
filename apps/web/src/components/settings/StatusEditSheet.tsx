@@ -132,7 +132,7 @@ export const StatusEditSheetBody: React.FC<StatusEditSheetBodyProps> = ({
       </BottomSheet.Body>
       <BottomSheet.Footer className="flex items-center gap-2">
         <PkButton
-          variant="ghost"
+          variant="secondary"
           size="lg"
           disabled={isSaving}
           onClick={onCancel}

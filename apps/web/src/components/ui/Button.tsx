@@ -1,7 +1,7 @@
 import React from "react";
 import { cx } from "./cx";
 
-export type PkButtonVariant = "primary" | "soft" | "outline" | "ghost";
+export type PkButtonVariant = "primary" | "soft" | "outline" | "secondary" | "ghost";
 
 export interface PkButtonProps
   extends React.ButtonHTMLAttributes<HTMLButtonElement> {
@@ -30,6 +30,7 @@ const variantClassName: Record<PkButtonVariant, string> = {
   primary: "bg-pk-primary text-white",
   soft: "bg-pk-primary-soft text-pk-primary",
   outline: "border-[1.5px] border-pk-primary-line bg-transparent text-pk-primary",
+  secondary: "bg-pk-bg text-pk-ink",
   ghost: "bg-transparent text-pk-sub",
 };
 
