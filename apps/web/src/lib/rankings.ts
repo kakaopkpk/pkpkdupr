@@ -1,7 +1,9 @@
 import type { MatchTopLevelType } from "@pkpkdupr/shared/match";
 import type {
+  AchievementRankingResponse,
   MatchSessionHistoryItem,
   MatchSessionReport,
+  RankingCategory,
   RankingResponse,
 } from "@pkpkdupr/shared/ranking";
 import { apiFetch } from "@/lib/api";
@@ -41,11 +43,22 @@ const requestJson = async <T>(
   return (await res.json()) as T;
 };
 
-export const fetchRankings = (category: MatchTopLevelType) =>
-  requestJson<RankingResponse>(
+/** 평점 분류면 평점 순위, achievements면 업적 점수 순위 */
+export function fetchRankings(
+  category: MatchTopLevelType,
+): Promise<RankingResponse>;
+export function fetchRankings(
+  category: "achievements",
+): Promise<AchievementRankingResponse>;
+export function fetchRankings(
+  category: RankingCategory,
+): Promise<RankingResponse | AchievementRankingResponse>;
+export function fetchRankings(category: RankingCategory) {
+  return requestJson<RankingResponse | AchievementRankingResponse>(
     `/api/rankings?category=${encodeURIComponent(category)}`,
     "랭킹을 불러오지 못했어요.",
   );
+}
 
 export const fetchSessionHistory = async (
   options: { limit?: number; playerId?: string } = {},

@@ -2,9 +2,12 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type { AchievementDefinition } from "@pkpkdupr/shared/achievements";
 import { AchievementBadge } from "@/components/profile/AchievementBadge";
+import { formatAchievementPoints } from "@/components/profile/AchievementPointsSummary";
 import { PkButton } from "@/components/ui/Button";
+import { CountUpNumber } from "@/components/ui/CountUpNumber";
 import { cx } from "@/components/ui/cx";
 import { GLOBAL_LAYER } from "@/context/AppNavigationContext";
+import { getCelebrationPointSteps } from "@/lib/achievements";
 import { prefersReducedMotion } from "@/hooks/useSheetDrag";
 import { createConfettiEngine, type ConfettiEngine } from "./confettiEngine";
 
@@ -20,6 +23,9 @@ const ACTIONS_DELAY_MS = 820;
 // 폭죽을 쏘는 아래 모서리 위치(캔버스 가장자리에서 떨어진 거리)
 const POPPER_INSET_X = 6;
 const POPPER_INSET_BOTTOM = 40;
+// 업적 점수는 이름·조건이 떠오른 뒤 센다
+const POINTS_COUNT_DELAY_MS = 700;
+const POINTS_COUNT_MS = 600;
 
 type Phase = "enter" | "leaving" | "closing";
 
@@ -28,6 +34,11 @@ const ms = (value: number) => `${value}ms`;
 export interface AchievementCelebrationProps {
   /** 띄울 업적. 한 장씩 넘긴다 */
   achievements: readonly AchievementDefinition[];
+  /**
+   * 띄울 업적을 모두 받은 뒤의 업적 점수 합. 주면 장마다 "업적 점수 이전 → 새"를 세어 올린다.
+   * 장마다 그 장까지 받은 점수만 더한 값이라, 마지막 장의 새 점수가 이 값이다
+   */
+  totalPoints?: number | null;
   /** 마운트 후 이만큼 기다렸다가 띄운다 */
   delayMs: number;
   onClose: () => void;
@@ -40,6 +51,7 @@ export interface AchievementCelebrationProps {
  */
 export default function AchievementCelebration({
   achievements,
+  totalPoints = null,
   delayMs,
   onClose,
 }: AchievementCelebrationProps): React.ReactElement | null {
@@ -56,6 +68,9 @@ export default function AchievementCelebration({
   const engineRef = useRef<ConfettiEngine | null>(null);
 
   const current = achievements[index];
+  const pointSteps =
+    totalPoints == null ? null : getCelebrationPointSteps(achievements, totalPoints);
+  const pointStep = pointSteps?.[index] ?? null;
   const isFirst = index === 0;
   const isLast = index >= achievements.length - 1;
   const badgeDelayMs = isFirst ? FIRST_CARD_DELAY_MS : 0;
@@ -246,6 +261,27 @@ export default function AchievementCelebration({
             <p className="text-pk-13 font-extrabold tracking-[0.06em] text-pk-hl">새 업적</p>
             <p className="text-pk-26 font-extrabold tracking-[-0.02em] text-white">{current.name}</p>
             <p className="text-pk-15 leading-[1.45] text-white/78">{current.condition}</p>
+            {current.points > 0 ? (
+              <>
+                <p className="mt-3 font-num text-[40px] leading-none font-bold text-pk-hl tabular-nums">
+                  +{current.points}점
+                </p>
+                {pointStep ? (
+                  <p className="text-pk-13 text-white/78 tabular-nums">
+                    업적 점수 {formatAchievementPoints(pointStep.before)} →{" "}
+                    <b className="font-bold text-white">
+                      <CountUpNumber
+                        value={pointStep.after}
+                        from={pointStep.before}
+                        format={formatAchievementPoints}
+                        delayMs={badgeDelayMs + POINTS_COUNT_DELAY_MS}
+                        durationMs={POINTS_COUNT_MS}
+                      />
+                    </b>
+                  </p>
+                ) : null}
+              </>
+            ) : null}
           </div>
           {achievements.length > 1 ? (
             <div aria-hidden="true" className="flex h-1.5 gap-1.5">

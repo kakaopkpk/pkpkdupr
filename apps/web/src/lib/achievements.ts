@@ -166,17 +166,25 @@ export const pickPlayerEarnedAchievements = (
 const pendingSeenRequests = new Set<Promise<void>>();
 
 /** 내가 받은 업적 중 아직 축하 연출로 보지 않은 것(받은 시각 → 업적 정의 순서) */
-export const fetchUnseenAchievements = async (): Promise<
-  EarnedAchievementInfo[]
-> => {
-  await Promise.allSettled(pendingSeenRequests);
-  const res = await apiFetch("/api/me/achievements/unseen");
-  if (!res.ok) {
-    throw new Error("새 업적을 불러오지 못했어요.");
-  }
-  const body = (await res.json()) as UnseenAchievementsResponseInfo;
-  return body.achievements;
-};
+export interface UnseenAchievementsResult {
+  achievements: EarnedAchievementInfo[];
+  /** 지금 업적 점수 합. 응답에 없으면(점수 추가 전 서버) null */
+  points: number | null;
+}
+
+export const fetchUnseenAchievements =
+  async (): Promise<UnseenAchievementsResult> => {
+    await Promise.allSettled(pendingSeenRequests);
+    const res = await apiFetch("/api/me/achievements/unseen");
+    if (!res.ok) {
+      throw new Error("새 업적을 불러오지 못했어요.");
+    }
+    const body = (await res.json()) as Partial<UnseenAchievementsResponseInfo>;
+    return {
+      achievements: body.achievements ?? [],
+      points: typeof body.points === "number" ? body.points : null,
+    };
+  };
 
 type UnseenAchievementsResponseInfo = Omit<
   UnseenAchievementsResponse,
@@ -214,4 +222,22 @@ export const markAchievementsSeen = async (
   } finally {
     pendingSeenRequests.delete(request);
   }
+};
+
+/**
+ * 축하 연출 장마다 받기 전·후 업적 점수. totalPoints는 모든 장의 업적을 받은 뒤의 합이라,
+ * 뒤 장들의 점수를 합계에서 거꾸로 빼서 구한다
+ */
+export const getCelebrationPointSteps = (
+  achievements: readonly Pick<AchievementDefinition, "points">[],
+  totalPoints: number,
+): { before: number; after: number }[] => {
+  const steps: { before: number; after: number }[] = [];
+  let after = totalPoints;
+  for (let index = achievements.length - 1; index >= 0; index -= 1) {
+    const before = after - achievements[index].points;
+    steps.unshift({ before, after });
+    after = before;
+  }
+  return steps;
 };

@@ -1,6 +1,8 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import type { MatchTopLevelType } from "@pkpkdupr/shared/match";
 import type {
+  AchievementRankingEntry,
+  AchievementRankingResponse,
+  RankingCategory,
   RankingEntry,
   RankingEntryPlayer,
   RankingResponse,
@@ -33,9 +35,10 @@ import { getUserErrorMessage } from "@/lib/errors";
 import { fetchRankings } from "@/lib/rankings";
 import { formatRating } from "@/utils/dupr";
 
-const CATEGORY_OPTIONS: readonly SegmentedOption<MatchTopLevelType>[] = [
+const CATEGORY_OPTIONS: readonly SegmentedOption<RankingCategory>[] = [
   { value: "doubles", label: "복식" },
   { value: "singles", label: "단식" },
+  { value: "achievements", label: "업적" },
 ];
 
 const SKELETON_ROW_COUNT = 6;
@@ -106,6 +109,28 @@ const RankingRow: React.FC<{
   );
 };
 
+/** 업적 점수 순위 줄. 점수는 0부터 줄 순서만큼 늦게 세고, 순위 변동은 없다 */
+const AchievementRankingRow: React.FC<{
+  entry: AchievementRankingEntry;
+  index: number;
+  onPress: () => void;
+}> = ({ entry, index, onPress }) => (
+  <button
+    type="button"
+    onClick={onPress}
+    className={cx(rowGridClassName, rowPressClassName, "active:bg-pk-bg")}
+  >
+    <span className="flex justify-center">
+      <RankBadge rank={entry.rank} />
+    </span>
+    <PlayerAvatar player={entry.player} size={32} />
+    <PlayerNameCell player={entry.player} />
+    <span className="text-pk-15 leading-none font-extrabold tabular-nums">
+      <CountUpNumber value={entry.points} {...getRowCountUp(index)} />점
+    </span>
+  </button>
+);
+
 /** 평점 없는(NR) 회원 줄. 순위 카드 맨 아래에 순위·평점 모두 "–"로 이어 붙고 변동은 비운다 */
 const UnratedRow: React.FC<{
   entry: UnratedRankingEntry;
@@ -138,6 +163,13 @@ const sortUnrated = (entries: readonly UnratedRankingEntry[]) =>
       a.player.username.localeCompare(b.player.username),
   );
 
+const countRankingRows = (
+  response: RankingResponse | AchievementRankingResponse,
+) =>
+  response.category === "achievements"
+    ? response.entries.length
+    : response.entries.length + response.unrated.length;
+
 const RankingSkeleton: React.FC = () => (
   <Card className={rankingCardClassName}>
     {Array.from({ length: SKELETON_ROW_COUNT }, (_, index) => (
@@ -161,9 +193,11 @@ const RankingSkeleton: React.FC = () => (
 const Ranking: React.FC = () => {
   const { openMemberProfile, dataVersion } = useAppNavigation();
   const { registerPullToRefresh } = useTabNavigation();
-  const [category, setCategory] = useState<MatchTopLevelType>("doubles");
+  const [category, setCategory] = useState<RankingCategory>("doubles");
   const [isListFading, setIsListFading] = useState(false);
-  const [ranking, setRanking] = useState<RankingResponse | null>(null);
+  const [ranking, setRanking] = useState<
+    RankingResponse | AchievementRankingResponse | null
+  >(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   // 늦게 끝난 이전 요청(분류 전환 전 등)이 최신 결과를 덮지 않게 한다
   const requestIdRef = useRef(0);
@@ -176,7 +210,7 @@ const Ranking: React.FC = () => {
       setRanking(response);
       setErrorMessage(null);
       // 빈 결과면 페이드 래퍼가 그려지지 않으므로 대기 중인 페이드를 버린다. 남겨 두면 나중 재조회에서 재생된다
-      if (response.entries.length + response.unrated.length === 0) {
+      if (countRankingRows(response) === 0) {
         setIsListFading(false);
       }
     } catch (error) {
@@ -218,28 +252,40 @@ const Ranking: React.FC = () => {
       <div className="flex flex-col gap-2.5 px-4">
         {currentRanking ? (
           <>
-            {currentRanking.entries.length + currentRanking.unrated.length >
-            0 ? (
+            {countRankingRows(currentRanking) > 0 ? (
               <SegmentSwitchFade
                 isPlaying={isListFading}
                 onFinish={() => setIsListFading(false)}
               >
                 <Card className={rankingCardClassName}>
-                  {currentRanking.entries.map((entry, index) => (
-                    <RankingRow
-                      key={entry.player.id}
-                      entry={entry}
-                      index={index}
-                      onPress={() => openMemberProfile(entry.player.id)}
-                    />
-                  ))}
-                  {sortUnrated(currentRanking.unrated).map((entry) => (
-                    <UnratedRow
-                      key={entry.player.id}
-                      entry={entry}
-                      onPress={() => openMemberProfile(entry.player.id)}
-                    />
-                  ))}
+                  {currentRanking.category === "achievements" ? (
+                    currentRanking.entries.map((entry, index) => (
+                      <AchievementRankingRow
+                        key={entry.player.id}
+                        entry={entry}
+                        index={index}
+                        onPress={() => openMemberProfile(entry.player.id)}
+                      />
+                    ))
+                  ) : (
+                    <>
+                      {currentRanking.entries.map((entry, index) => (
+                        <RankingRow
+                          key={entry.player.id}
+                          entry={entry}
+                          index={index}
+                          onPress={() => openMemberProfile(entry.player.id)}
+                        />
+                      ))}
+                      {sortUnrated(currentRanking.unrated).map((entry) => (
+                        <UnratedRow
+                          key={entry.player.id}
+                          entry={entry}
+                          onPress={() => openMemberProfile(entry.player.id)}
+                        />
+                      ))}
+                    </>
+                  )}
                 </Card>
               </SegmentSwitchFade>
             ) : (

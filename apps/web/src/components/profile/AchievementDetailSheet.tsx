@@ -76,7 +76,7 @@ export interface AchievementDetailSheetProps {
   onClose: () => void;
 }
 
-/** 업적 상세 바텀시트: 배지·이름·조건, 받은 날·진행·받은 회원 수 */
+/** 업적 상세 바텀시트: 배지·이름·조건, 받은 날·진행·점수·받은 회원 수 */
 export default function AchievementDetailSheet({
   request,
   tabKey,
@@ -174,6 +174,13 @@ export default function AchievementDetailSheet({
               {formatAchievementProgress(definition, progress)}
             </DetailRow>
           ) : null}
+          <DetailRow label="점수">
+            {definition.points > 0 ? (
+              <span className="text-pk-primary">{definition.points}점</span>
+            ) : (
+              <span className="font-medium text-pk-muted">점수 없음</span>
+            )}
+          </DetailRow>
           <DetailRow label="받은 회원">
             {isLoading ? (
               <ValueSkeleton />

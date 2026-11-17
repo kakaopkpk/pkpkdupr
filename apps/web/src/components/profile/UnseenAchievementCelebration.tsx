@@ -27,6 +27,7 @@ export default function UnseenAchievementCelebration({
   dataVersion,
 }: UnseenAchievementCelebrationProps): React.ReactElement | null {
   const [unseen, setUnseen] = useState<PlayerEarnedAchievement[] | null>(null);
+  const [totalPoints, setTotalPoints] = useState<number | null>(null);
   const [resumeCount, setResumeCount] = useState(0);
   const isShowing = unseen !== null;
 
@@ -51,10 +52,13 @@ export default function UnseenAchievementCelebration({
     // 그사이 다시 조회했거나 다른 화면이 열렸으면 결과를 버린다(닫히면 다시 조회한다)
     let isCancelled = false;
     fetchUnseenAchievements()
-      .then((items) => {
+      .then(({ achievements, points }) => {
         if (isCancelled) return;
-        const picked = pickPlayerEarnedAchievements(items, playerId);
-        if (picked.length > 0) setUnseen(picked);
+        const picked = pickPlayerEarnedAchievements(achievements, playerId);
+        if (picked.length > 0) {
+          setUnseen(picked);
+          setTotalPoints(points);
+        }
       })
       // 조회 실패는 알리지 않는다. 다음 조회 때 다시 시도한다
       .catch(() => {});
@@ -68,6 +72,7 @@ export default function UnseenAchievementCelebration({
   return (
     <AchievementCelebration
       achievements={unseen.map(({ definition }) => definition)}
+      totalPoints={totalPoints}
       delayMs={0}
       onClose={() => {
         // 확인 처리가 실패하면 다음 조회 때 다시 뜬다
