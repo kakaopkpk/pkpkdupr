@@ -77,6 +77,18 @@ describe("measureKeyboardViewport", () => {
     expect(result.offset).toBe(0);
   });
 
+  it("키보드가 닫히기 전에 다시 포커스하면 그대로 열림이다", () => {
+    const result = run([
+      sample({}),
+      sample({ inputFocused: true, innerHeight: 480, visualHeight: 480 }),
+      sample({ innerHeight: 480, visualHeight: 480 }),
+      sample({ inputFocused: true, innerHeight: 480, visualHeight: 480 }),
+    ]);
+
+    expect(result.state.baselineHeight).toBe(800);
+    expect(result.open).toBe(true);
+  });
+
   it("포커스 중 키보드를 내리면 닫힘이다", () => {
     const result = run([
       sample({}),

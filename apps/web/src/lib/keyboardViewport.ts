@@ -53,7 +53,13 @@ export const measureKeyboardViewport = (
     baselineWidth = width;
     baselineHeight = inputFocused ? null : visualHeight;
   } else if (!inputFocused) {
-    baselineHeight = visualHeight;
+    // 포커스가 빠진 직후 키보드가 아직 닫히는 중이면 줄어든 높이를 기준으로 받지 않는다
+    const keyboardStillOpen =
+      baselineHeight !== null &&
+      baselineHeight - visualHeight >= KEYBOARD_OPEN_MIN_SHRINK_PX;
+    if (!keyboardStillOpen) {
+      baselineHeight = visualHeight;
+    }
   } else if (baselineHeight !== null) {
     // 포커스 중 주소창이 접히는 등으로 커지면 기준도 올린다
     baselineHeight = Math.max(baselineHeight, visualHeight);
