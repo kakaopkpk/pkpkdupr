@@ -283,7 +283,7 @@ describe("랭킹·세션 리포트 API", () => {
     const response = await authorized("/api/achievements/holders");
 
     expect(response.status).toBe(200);
-    expect(Object.keys(response.body.counts)).toHaveLength(41);
+    expect(Object.keys(response.body.counts)).toHaveLength(42);
     expect(response.body.counts).toMatchObject({
       "matches-1": 2,
       "wins-1": 1,
