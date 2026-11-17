@@ -105,6 +105,24 @@ export const InfoIcon: React.FC<{ className?: string }> = ({ className }) => (
   </svg>
 );
 
+/** 초승달 (비활성 회원) */
+export const MoonIcon: React.FC<{ className?: string }> = ({ className }) => (
+  <svg
+    width="40"
+    height="40"
+    viewBox="0 0 24 24"
+    aria-hidden="true"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.8"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    className={className ?? "shrink-0"}
+  >
+    <path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z" />
+  </svg>
+);
+
 /** 사람 + 더하기 (게스트 추가) */
 export const PersonAddIcon: React.FC<{ className?: string }> = ({
   className,

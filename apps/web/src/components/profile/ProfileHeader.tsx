@@ -28,6 +28,8 @@ export interface ProfileHeaderProps {
   matchStats: PlayerProfileSummaryInfo["matchStats"] | null | undefined;
   /** 프로필 요약을 불러오지 못했으면 승패 줄을 숨긴다 */
   statsError?: boolean;
+  /** false면 승패 줄 자리(스켈레톤 포함)를 두지 않는다. 비활성 회원 프로필용 */
+  showStats?: boolean;
   /** 이름 제목 태그. 화면 머리에 다른 h1이 있으면 h2를 쓴다 */
   headingAs?: "h1" | "h2";
   /** 오른쪽 슬롯(예: 나 탭 설정 버튼) */
@@ -46,6 +48,7 @@ const ProfileHeader: React.FC<ProfileHeaderProps> = ({
   statusMessageBackgroundColor,
   matchStats,
   statsError = false,
+  showStats = true,
   headingAs: Heading = "h1",
   right,
   className,
@@ -69,7 +72,7 @@ const ProfileHeader: React.FC<ProfileHeaderProps> = ({
             color={statusMessageBackgroundColor}
           />
         ) : null}
-        {totalStats ? (
+        {!showStats ? null : totalStats ? (
           <span className="text-pk-13 text-pk-sub tabular-nums">
             <CountUpNumber
               value={totalStats.wins + totalStats.losses}

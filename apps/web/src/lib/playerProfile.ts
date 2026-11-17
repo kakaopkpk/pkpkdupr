@@ -1,5 +1,8 @@
 import type { MatchTopLevelType } from "@pkpkdupr/shared/match";
-import type { PlayerRatingHistory } from "@pkpkdupr/shared/player";
+import type {
+  Player,
+  PlayerRatingHistory,
+} from "@pkpkdupr/shared/player";
 import type {
   HeadToHeadStat,
   OpponentStat,
@@ -9,8 +12,18 @@ import type { MatchInfo, MatchListResponse } from "@/types/match";
 import type { AchievementProgressInfo } from "@/lib/achievements";
 import { apiFetch } from "@/lib/api";
 
+/** 프로필 요약에 실린 회원 정보(날짜는 문자열). 회원 목록에 없는 비활성 회원도 들어 있다 */
+export type PlayerProfileSummaryPlayer = Omit<
+  Player,
+  "createdAt" | "updatedAt"
+> & {
+  createdAt: string;
+  updatedAt: string;
+};
+
 /** `GET /api/players/:playerId/profile-summary` JSON 응답(날짜는 문자열) */
 export interface PlayerProfileSummaryInfo {
+  player: PlayerProfileSummaryPlayer;
   matchStats: Record<
     MatchTopLevelType,
     { matchWins: number; matchLosses: number; setWins: number; setLosses: number }
