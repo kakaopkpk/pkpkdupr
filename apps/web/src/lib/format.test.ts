@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { formatElapsed, formatKstDateTime } from "@/lib/format";
+import {
+  formatElapsed,
+  formatKstDateTime,
+  formatKstNumericDate,
+} from "@/lib/format";
 
 describe("formatElapsed", () => {
   const startsAt = "2026-11-13T11:14:00.000Z";
@@ -27,6 +31,18 @@ describe("formatKstDateTime", () => {
   it("KST 날짜·요일·시각을 붙인다", () => {
     expect(formatKstDateTime("2026-11-13T11:14:00.000Z")).toBe(
       "11월 13일 금 20:14",
+    );
+  });
+});
+
+describe("formatKstNumericDate", () => {
+  it("KST 날짜를 연도까지 숫자로 쓴다", () => {
+    expect(formatKstNumericDate("2026-11-17T03:00:00.000Z")).toBe("2026. 11. 17.");
+  });
+
+  it("UTC로는 전날이어도 KST 날짜를 쓴다", () => {
+    expect(formatKstNumericDate(new Date("2025-03-02T16:30:00.000Z"))).toBe(
+      "2025. 3. 3.",
     );
   });
 });

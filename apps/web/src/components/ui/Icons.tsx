@@ -1,4 +1,5 @@
 import React from "react";
+import { cx } from "./cx";
 
 export const ChevronRightIcon: React.FC<{ className?: string }> = ({
   className,
@@ -141,5 +142,31 @@ export const PersonAddIcon: React.FC<{ className?: string }> = ({
   >
     <circle cx="10" cy="8" r="3.5" />
     <path d="M3.5 19.5c.8-3.3 3.4-5 6.5-5s5.7 1.7 6.5 5M19 8v6M16 11h6" />
+  </svg>
+);
+
+export const CheckIcon: React.FC<{
+  size?: number;
+  className?: string;
+  /** true면 마운트 때 선을 그리듯 나타난다(움직임 줄이기면 정적) */
+  draw?: boolean;
+}> = ({ size = 16, className, draw = false }) => (
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 24 24"
+    aria-hidden="true"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="3"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    className={cx("shrink-0", className)}
+  >
+    <path
+      d="M5 12.5l4.5 4.5L19 7.5"
+      pathLength={draw ? 1 : undefined}
+      className={draw ? "animate-pk-draw motion-reduce:animate-none" : undefined}
+    />
   </svg>
 );

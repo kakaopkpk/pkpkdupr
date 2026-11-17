@@ -96,6 +96,31 @@ export const formatAchievementProgress = (
     : `${Math.min(current, definition.target)}/${definition.target}`;
 };
 
+/**
+ * 진행 애니메이션 도중(t: 0 → 1)의 진행 상태. 숫자는 0부터, 평점은 기본 평점(3.000)부터
+ * 지금 값까지 간다. 평점이 아직 없으면(0) 그대로 둔다. 문구는 formatAchievementProgress로 만든다
+ */
+export const interpolateAchievementProgress = (
+  definition: AchievementDefinition,
+  progress: AchievementProgressInfo | null | undefined,
+  t: number,
+): AchievementProgressInfo | null | undefined => {
+  if (!progress || t >= 1) return progress;
+  const unfilledMatches = getUnfilledRatedDoublesMatches(definition, progress);
+  if (unfilledMatches != null) {
+    return { ...progress, ratedDoublesMatches: Math.round(unfilledMatches * t) };
+  }
+  if (!isRatingAchievement(definition.id)) {
+    return { ...progress, current: Math.round(progress.current * t) };
+  }
+  // 평점이 아직 없으면("–") 셀 값이 없다
+  if (progress.current <= 0) return progress;
+  return {
+    ...progress,
+    current: DUPR_DEFAULT_RATING + (progress.current - DUPR_DEFAULT_RATING) * t,
+  };
+};
+
 /** 평점 업적 막대의 출발 평점과 목표 사이 최소 폭 */
 const RATING_PROGRESS_MIN_SPAN = 0.5;
 
