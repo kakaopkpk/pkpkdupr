@@ -1,15 +1,13 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import type { MatchTopLevelType } from "@pkpkdupr/shared/match";
 import { IoSettingsOutline } from "react-icons/io5";
+import ListPushScreen from "@/components/ListPushScreen";
 import AchievementsScreen from "@/components/profile/AchievementsScreen";
 import AchievementsSection from "@/components/profile/AchievementsSection";
-import PartnerChemistryCard, {
-  StatPreviewSection,
-} from "@/components/profile/PartnerChemistryCard";
+import PartnerChemistryCard from "@/components/profile/PartnerChemistryCard";
 import PlayerMatchesDrawer from "@/components/profile/PlayerMatchesDrawer";
 import ProfileHeader from "@/components/profile/ProfileHeader";
 import RivalCard from "@/components/profile/RivalCard";
-import StatListScreen from "@/components/profile/StatListScreen";
 import {
   Last7DaysTile,
   ProfileBodySkeleton,
@@ -19,6 +17,7 @@ import {
   WinRateTile,
 } from "@/components/profile/ProfileSections";
 import { useProfileOverview } from "@/components/profile/useProfileOverview";
+import { PreviewSection } from "@/components/ui/Section";
 import { useAppNavigation } from "@/context/AppNavigationContext";
 import { useAuth } from "@/context/AuthContext";
 import { useTabNavigation } from "@/context/TabNavigationContext";
@@ -117,20 +116,20 @@ const Me: React.FC = () => {
               <Last7DaysTile overview={overview} category={category} />
             </div>
             {partners.length > 0 ? (
-              <StatPreviewSection
+              <PreviewSection
                 title="파트너 궁합"
                 items={partners}
-                renderCard={(preview) => (
+                renderPreview={(preview) => (
                   <PartnerChemistryCard partners={preview} />
                 )}
                 onViewAll={() => setIsPartnersRequested(true)}
               />
             ) : null}
             {rivals.length > 0 ? (
-              <StatPreviewSection
+              <PreviewSection
                 title="천적"
                 items={rivals}
-                renderCard={(preview) => <RivalCard rivals={preview} />}
+                renderPreview={(preview) => <RivalCard rivals={preview} />}
                 onViewAll={() => setIsRivalsRequested(true)}
               />
             ) : null}
@@ -167,7 +166,7 @@ const Me: React.FC = () => {
         depthId={MATCH_HISTORY_DEPTH_ID}
         onClose={closeMatchHistory}
       />
-      <StatListScreen
+      <ListPushScreen
         isOpen={isPartnersRequested}
         tabKey="me"
         depthId={PARTNERS_DEPTH_ID}
@@ -175,8 +174,8 @@ const Me: React.FC = () => {
         onClose={closePartners}
       >
         <PartnerChemistryCard partners={partners} ordered />
-      </StatListScreen>
-      <StatListScreen
+      </ListPushScreen>
+      <ListPushScreen
         isOpen={isRivalsRequested}
         tabKey="me"
         depthId={RIVALS_DEPTH_ID}
@@ -184,7 +183,7 @@ const Me: React.FC = () => {
         onClose={closeRivals}
       >
         <RivalCard rivals={rivals} ordered />
-      </StatListScreen>
+      </ListPushScreen>
       <AchievementsScreen
         isOpen={isAchievementsRequested}
         tabKey="me"

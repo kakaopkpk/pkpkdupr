@@ -6,26 +6,26 @@ import {
 } from "@/context/TabNavigationContext";
 import { useLayerDepth } from "@/hooks/useLayerDepth";
 
-export interface StatListScreenProps {
+export interface ListPushScreenProps {
   /** 열어 달라는 요청 */
   isOpen: boolean;
   tabKey: TabKey;
   depthId: string;
   title: string;
   onClose: () => void;
-  /** 전체 목록 카드. 받은 프로필 요약을 그대로 그린다 */
+  /** 전체 목록. 호출부가 이미 받은 데이터를 그린다 */
   children: React.ReactNode;
 }
 
-/** 파트너 궁합·천적 전체 보기 화면. 추가 조회 없이 호출부가 넘긴 카드를 보인다 */
-export default function StatListScreen({
+/** 미리보기 섹션의 "전체 보기"로 여는 목록 화면. 추가 조회 없이 호출부가 넘긴 목록을 보인다 */
+export default function ListPushScreen({
   isOpen,
   tabKey,
   depthId,
   title,
   onClose,
   children,
-}: StatListScreenProps): React.ReactElement {
+}: ListPushScreenProps): React.ReactElement {
   const { closeDepth, restoreScrollTop, selectedTab } = useTabNavigation();
 
   const isLayerOpen = useLayerDepth({
