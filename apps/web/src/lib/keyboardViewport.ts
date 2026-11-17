@@ -47,6 +47,8 @@ export const measureKeyboardViewport = (
   const { inputFocused, width, innerHeight, visualHeight, visualOffsetTop } =
     sample;
   let { baselineHeight, baselineWidth } = prev;
+  const shrunkFrom = (base: number | null) =>
+    base !== null && base - visualHeight >= KEYBOARD_OPEN_MIN_SHRINK_PX;
 
   if (baselineWidth !== width) {
     // 포커스 중 회전하면 키보드가 열린 높이일 수 있어 기준을 모르는 상태로 둔다
@@ -54,10 +56,7 @@ export const measureKeyboardViewport = (
     baselineHeight = inputFocused ? null : visualHeight;
   } else if (!inputFocused) {
     // 포커스가 빠진 직후 키보드가 아직 닫히는 중이면 줄어든 높이를 기준으로 받지 않는다
-    const keyboardStillOpen =
-      baselineHeight !== null &&
-      baselineHeight - visualHeight >= KEYBOARD_OPEN_MIN_SHRINK_PX;
-    if (!keyboardStillOpen) {
+    if (!shrunkFrom(baselineHeight)) {
       baselineHeight = visualHeight;
     }
   } else if (baselineHeight !== null) {
@@ -70,9 +69,7 @@ export const measureKeyboardViewport = (
     : 0;
   const open =
     inputFocused &&
-    (baselineHeight !== null
-      ? baselineHeight - visualHeight >= KEYBOARD_OPEN_MIN_SHRINK_PX
-      : offset > 0);
+    (baselineHeight !== null ? shrunkFrom(baselineHeight) : offset > 0);
 
   return { state: { baselineHeight, baselineWidth }, open, offset };
 };

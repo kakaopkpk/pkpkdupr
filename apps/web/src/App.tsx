@@ -179,6 +179,8 @@ function App() {
 
     let isKeyboardInputFocused = isKeyboardInputElement(document.activeElement);
     let keyboardViewportState = INITIAL_KEYBOARD_VIEWPORT_STATE;
+    let appliedOffset: number | null = null;
+    let appliedOpen: boolean | null = null;
 
     const updateViewportMetrics = () => {
       const visualViewport = window.visualViewport;
@@ -194,12 +196,19 @@ function App() {
       );
       keyboardViewportState = state;
 
-      document.documentElement.style.setProperty(
-        "--app-keyboard-offset",
-        `${offset}px`,
-      );
-      // 키보드가 열려 있는 동안 하단 버튼(index.css `html[data-keyboard-open]`)을 숨기는 기준
-      document.documentElement.toggleAttribute("data-keyboard-open", open);
+      // resize·scroll마다 불리므로 값이 바뀔 때만 DOM에 쓴다
+      if (offset !== appliedOffset) {
+        appliedOffset = offset;
+        document.documentElement.style.setProperty(
+          "--app-keyboard-offset",
+          `${offset}px`,
+        );
+      }
+      if (open !== appliedOpen) {
+        appliedOpen = open;
+        // 키보드가 열려 있는 동안 하단 버튼(index.css `html[data-keyboard-open]`)을 숨기는 기준
+        document.documentElement.toggleAttribute("data-keyboard-open", open);
+      }
     };
 
     const syncKeyboardFocusState = () => {

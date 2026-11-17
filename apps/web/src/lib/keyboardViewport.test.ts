@@ -2,17 +2,15 @@ import { describe, expect, it } from "vitest";
 import {
   INITIAL_KEYBOARD_VIEWPORT_STATE,
   measureKeyboardViewport,
+  type KeyboardViewportResult,
   type KeyboardViewportSample,
-  type KeyboardViewportState,
 } from "./keyboardViewport";
 
-const WIDTH = 390;
-
 const sample = (
-  overrides: Partial<KeyboardViewportSample>,
+  overrides: Partial<KeyboardViewportSample> = {},
 ): KeyboardViewportSample => ({
   inputFocused: false,
-  width: WIDTH,
+  width: 390,
   innerHeight: 800,
   visualHeight: 800,
   visualOffsetTop: 0,
@@ -20,14 +18,10 @@ const sample = (
 });
 
 /** 여러 측정을 차례로 적용하고 마지막 결과를 돌려준다 */
-const run = (
-  samples: KeyboardViewportSample[],
-  initial: KeyboardViewportState = INITIAL_KEYBOARD_VIEWPORT_STATE,
-) => {
-  let state = initial;
-  let result = measureKeyboardViewport(state, samples[0]);
-  state = result.state;
-  for (const next of samples.slice(1)) {
+const run = (samples: KeyboardViewportSample[]) => {
+  let state = INITIAL_KEYBOARD_VIEWPORT_STATE;
+  let result!: KeyboardViewportResult;
+  for (const next of samples) {
     result = measureKeyboardViewport(state, next);
     state = result.state;
   }
@@ -37,7 +31,7 @@ const run = (
 describe("measureKeyboardViewport", () => {
   it("안드로이드처럼 레이아웃도 같이 줄면 열림이고 가려지는 양은 0이다", () => {
     const result = run([
-      sample({}),
+      sample(),
       sample({ inputFocused: true }),
       sample({ inputFocused: true, innerHeight: 480, visualHeight: 480 }),
     ]);
@@ -48,7 +42,7 @@ describe("measureKeyboardViewport", () => {
 
   it("iOS처럼 보이는 높이만 줄면 열림이고 가려지는 양을 준다", () => {
     const result = run([
-      sample({}),
+      sample(),
       sample({ inputFocused: true, visualHeight: 500 }),
     ]);
 
@@ -58,7 +52,7 @@ describe("measureKeyboardViewport", () => {
 
   it("iOS가 visual viewport를 밀어 올려도 열림이다", () => {
     const result = run([
-      sample({}),
+      sample(),
       sample({ inputFocused: true, visualHeight: 500, visualOffsetTop: 300 }),
     ]);
 
@@ -68,7 +62,7 @@ describe("measureKeyboardViewport", () => {
 
   it("포커스가 빠지면 높이가 줄어 있어도 닫힘이다", () => {
     const result = run([
-      sample({}),
+      sample(),
       sample({ inputFocused: true, innerHeight: 480, visualHeight: 480 }),
       sample({ innerHeight: 480, visualHeight: 480 }),
     ]);
@@ -79,7 +73,7 @@ describe("measureKeyboardViewport", () => {
 
   it("키보드가 닫히기 전에 다시 포커스하면 그대로 열림이다", () => {
     const result = run([
-      sample({}),
+      sample(),
       sample({ inputFocused: true, innerHeight: 480, visualHeight: 480 }),
       sample({ innerHeight: 480, visualHeight: 480 }),
       sample({ inputFocused: true, innerHeight: 480, visualHeight: 480 }),
@@ -91,7 +85,7 @@ describe("measureKeyboardViewport", () => {
 
   it("포커스 중 키보드를 내리면 닫힘이다", () => {
     const result = run([
-      sample({}),
+      sample(),
       sample({ inputFocused: true, innerHeight: 480, visualHeight: 480 }),
       sample({ inputFocused: true }),
     ]);
@@ -101,7 +95,7 @@ describe("measureKeyboardViewport", () => {
 
   it("주소창 접힘 정도의 작은 변화는 열림으로 보지 않는다", () => {
     const result = run([
-      sample({}),
+      sample(),
       sample({ inputFocused: true, innerHeight: 740, visualHeight: 740 }),
     ]);
 
@@ -121,7 +115,7 @@ describe("measureKeyboardViewport", () => {
 
   it("포커스 없이 회전하면 새 너비의 높이를 기준으로 삼는다", () => {
     const result = run([
-      sample({}),
+      sample(),
       sample({ width: 800, innerHeight: 360, visualHeight: 360 }),
       sample({
         inputFocused: true,
