@@ -28,6 +28,7 @@ export interface ApiJsonInit {
 /**
  * API를 호출해 JSON 본문을 돌려준다. 204면 undefined를 돌려주고,
  * 2xx가 아니면 응답 `{ error }`를 message로 가진 ApiError를 던진다.
+ * 2xx인데 본문이 JSON이 아니어도(프록시의 HTML·빈 본문 등) ApiError를 던진다.
  */
 export const apiJson = async <T>(
   path: string,
@@ -63,5 +64,9 @@ export const apiJson = async <T>(
   if (res.status === 204) {
     return undefined as T;
   }
-  return (await res.json()) as T;
+  try {
+    return (await res.json()) as T;
+  } catch {
+    throw new ApiError(res.status, DEFAULT_ERROR_MESSAGE);
+  }
 };
