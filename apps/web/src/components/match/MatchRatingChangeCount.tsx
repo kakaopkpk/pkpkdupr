@@ -4,24 +4,21 @@ import {
   CountUpNumber,
   CountUpRatingDelta,
 } from "@/components/ui/CountUpNumber";
-import { NewRatingTag } from "@/components/ui/Badges";
 import { RatingDelta } from "@/components/ui/Delta";
 import { formatRating } from "@/utils/dupr";
 
 /**
  * 경기 평점 변화 줄의 평점·변화 두 칸(기록 완료·경기 상세 공통).
  * 점수 다음 박자(COUNT_UP_SECOND)에 평점은 숫자 하나로 이전 평점에서 새 평점으로, 변화는 0부터 센다. 변화의 부호·색은 처음부터 최종값을 따른다.
- * 이 경기 전 그 분류 평점이 없던 회원(isUnratedBefore)은 세지 않고 새 평점만 보이며 변화 자리에 NEW 태그를 붙인다
+ * 처음 평점을 받은 회원도 이전 평점(시작 평점 3.0)이 로그에 있어 같은 방식으로 센다
  */
 export const MatchRatingChangeCount: React.FC<{
   previousRating: number | null;
   nextRating: number | null;
   delta: number | null;
-  isUnratedBefore?: boolean;
-}> = ({ previousRating, nextRating, delta, isUnratedBefore = false }) => {
-  const isNew = isUnratedBefore && nextRating !== null;
+}> = ({ previousRating, nextRating, delta }) => {
   const isCounting =
-    !isNew && previousRating !== null && nextRating !== null && delta !== null;
+    previousRating !== null && nextRating !== null && delta !== null;
 
   return (
     <>
@@ -38,9 +35,7 @@ export const MatchRatingChangeCount: React.FC<{
         )}
       </span>
       <span className="text-right">
-        {isNew ? (
-          <NewRatingTag />
-        ) : isCounting ? (
+        {isCounting ? (
           <CountUpRatingDelta value={delta} {...COUNT_UP_SECOND} />
         ) : (
           <RatingDelta value={delta} />
