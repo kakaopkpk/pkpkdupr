@@ -36,3 +36,37 @@ export const TextLink: React.FC<{
     {chevron ? <LinkChevron /> : null}
   </button>
 );
+
+/** 미리보기 섹션에 보이는 줄 수. 넘으면 제목 옆 "전체 보기"로 전체 화면을 연다 */
+export const PREVIEW_COUNT = 3;
+
+/**
+ * 목록 앞 PREVIEW_COUNT개만 보이는 섹션. 제목에 전체 개수를 붙이고(" · N"),
+ * 더 있으면 제목 옆 "전체 보기"를 보인다. 빈 목록은 호출부가 그리지 않는다.
+ */
+export const PreviewSection = <T,>({
+  title,
+  items,
+  renderPreview,
+  onViewAll,
+}: {
+  title: string;
+  items: readonly T[];
+  renderPreview: (preview: readonly T[]) => React.ReactNode;
+  onViewAll: () => void;
+}): React.ReactElement => (
+  <section className="flex flex-col gap-2.5 pt-1">
+    <SectionLabel
+      right={
+        items.length > PREVIEW_COUNT ? (
+          <TextLink onPress={onViewAll} chevron>
+            전체 보기
+          </TextLink>
+        ) : undefined
+      }
+    >
+      {title} · {items.length}
+    </SectionLabel>
+    {renderPreview(items.slice(0, PREVIEW_COUNT))}
+  </section>
+);

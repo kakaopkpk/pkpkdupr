@@ -22,7 +22,7 @@ import {
 } from "@/components/records/SessionReportParts";
 import { Card } from "@/components/ui/Card";
 import { MatchRow } from "@/components/ui/MatchRow";
-import { SectionLabel, TextLink } from "@/components/ui/Section";
+import { PreviewSection, SectionLabel } from "@/components/ui/Section";
 import { StateMessage } from "@/components/ui/StateMessage";
 import {
   SegmentedControl,
@@ -47,9 +47,6 @@ const MATCH_FILTER_OPTIONS = [
   { value: "all", label: "전체" },
   { value: "mine", label: "내 경기" },
 ] as const;
-
-/** 세션 상세에서 미리 보이는 평점 변화 줄 수. 넘으면 "전체 보기"로 전체 화면을 연다 */
-const RATING_PREVIEW_COUNT = 3;
 
 type LoadState =
   | { kind: "loading" }
@@ -248,29 +245,23 @@ export default function SessionReportDrawer({
           />
         ) : null}
         {players.length > 0 ? (
-          <section className="flex flex-col gap-2.5 pt-1">
-            <SectionLabel
-              right={
-                players.length > RATING_PREVIEW_COUNT ? (
-                  <TextLink onPress={() => setIsPlayersRequested(true)} chevron>
-                    전체 보기
-                  </TextLink>
-                ) : undefined
-              }
-            >
-              평점 변화 · {players.length}
-            </SectionLabel>
-            <Card>
-              {players.slice(0, RATING_PREVIEW_COUNT).map((entry) => (
-                <SessionPlayerRatingRow
-                  key={entry.player.id}
-                  report={entry}
-                  ratingLabel="after"
-                  onPress={() => openMemberProfile(entry.player.id)}
-                />
-              ))}
-            </Card>
-          </section>
+          <PreviewSection
+            title="평점 변화"
+            items={players}
+            renderPreview={(preview) => (
+              <Card>
+                {preview.map((entry) => (
+                  <SessionPlayerRatingRow
+                    key={entry.player.id}
+                    report={entry}
+                    ratingLabel="after"
+                    onPress={() => openMemberProfile(entry.player.id)}
+                  />
+                ))}
+              </Card>
+            )}
+            onViewAll={() => setIsPlayersRequested(true)}
+          />
         ) : null}
         <section className="flex flex-col gap-2.5 pt-1">
           <SectionLabel

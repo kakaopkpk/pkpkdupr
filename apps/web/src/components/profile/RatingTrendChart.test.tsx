@@ -84,4 +84,17 @@ describe("RatingTrendChart", () => {
     expect(markup).toContain("3.31");
     expect(markup).not.toContain(">3.30<");
   });
+
+  it("0.1보다 작은 변동은 세로 범위 0.1로 펼쳐 최고·최저 라벨이 함께 보인다", () => {
+    const markup = render([
+      { rating: 3.3, createdAt: "2026-11-10T11:00:00.000Z" },
+      { rating: 3.32, createdAt: "2026-11-12T11:00:00.000Z" },
+    ]);
+
+    // 범위 3.26~3.36이 y 94~14에 놓인다
+    const labelY = (label: string) =>
+      Number(new RegExp(`y="([\\d.]+)"[^>]*>${label}<`).exec(markup)?.[1]);
+    expect(labelY("3.30")).toBeCloseTo(62);
+    expect(labelY("3.32")).toBeCloseTo(46);
+  });
 });

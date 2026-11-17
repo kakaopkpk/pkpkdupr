@@ -270,7 +270,7 @@ describe("buildPlayerProfileSummary", () => {
     });
   });
 
-  describe("상성", () => {
+  describe("천적", () => {
     let seq = 0;
     const versus = (
       opponents: Player[],
@@ -359,7 +359,7 @@ describe("buildPlayerProfileSummary", () => {
       ).toEqual([{ id: partnerA.id, matchCount: 3, losses: 3 }]);
     });
 
-    it("진 비율 → 경기 수 → 아이디 순으로 정렬하고 최대 3명만 넣는다", () => {
+    it("진 비율 → 경기 수 → 아이디 순으로 정렬하고 조건에 맞는 상대를 전부 넣는다", () => {
       const extra = makePlayer("Pextra01");
       const matches = [
         // opponent: 3전 3패(100%)
@@ -376,7 +376,13 @@ describe("buildPlayerProfileSummary", () => {
         ),
       ];
 
-      expect(rivalIds(matches)).toEqual([opponent.id, partnerC.id, extra.id]);
+      expect(rivalIds(matches)).toEqual([
+        opponent.id,
+        partnerC.id,
+        extra.id,
+        partnerA.id,
+        partnerB.id,
+      ]);
     });
   });
 
