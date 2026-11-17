@@ -917,6 +917,91 @@ describe("평점 업적", () => {
     }
   });
 
+  /** 업적 기준 시각 전에 완료된 복식 경기에 경기 직후 내 복식 평점을 붙인다 */
+  const ratedDoublesBeforeStart = (msBeforeStart: number, rating: number) => ({
+    ...makeMatch({
+      partnerId: "partner-1",
+      completedAt: new Date(ACHIEVEMENT_COUNT_START.getTime() - msBeforeStart),
+    }),
+    doublesRatingAfter: { [ME]: rating },
+  });
+
+  it("업적 기준 시각 시점 평점이 기준 이상이면 그 평점을 낸 기준 시각 전 마지막 경기로 받는다", () => {
+    const older = ratedDoublesBeforeStart(2_000, 3.3);
+    const last = ratedDoublesBeforeStart(1_000, 3.8);
+    const progress = compute([last, older]);
+    expect(progressOf(progress, "rating-3.5")).toEqual({
+      id: "rating-3.5",
+      earned: true,
+      earnedAt: last.completedAt,
+      earnedMatchId: last.id,
+      current: 3.8,
+      target: 3.5,
+    });
+    expect(progressOf(progress, "rating-4.0")).toMatchObject({
+      earned: false,
+      current: 3.8,
+    });
+    // 평점 업적 말고는 기준 시각 전 경기를 세지 않는다
+    expect(progressOf(progress, "matches-1")).toMatchObject({
+      earned: false,
+      current: 0,
+    });
+  });
+
+  it("업적 기준 시각 전 최고치는 세지 않고, 기준 시각 이후 경기로 넘으면 그 경기로 받는다", () => {
+    const peak = ratedDoublesBeforeStart(2_000, 4.1);
+    const last = ratedDoublesBeforeStart(1_000, 3.6);
+    const afterStart = ratedDoubles(4.02);
+    const progress = compute([peak, last, afterStart]);
+    expect(progressOf(progress, "rating-3.5")).toMatchObject({
+      earned: true,
+      earnedMatchId: last.id,
+    });
+    expect(progressOf(progress, "rating-4.0")).toMatchObject({
+      earned: true,
+      earnedMatchId: afterStart.id,
+      current: 4.02,
+    });
+    expect(progressOf(compute([peak, last]), "rating-4.0")).toMatchObject({
+      earned: false,
+      current: 3.6,
+    });
+  });
+
+  it("업적 기준 시각 시점 평점은 평점 미반영·단식·평점이 없는 경기를 건너뛴다", () => {
+    const counted = ratedDoublesBeforeStart(4_000, 3.55);
+    const excluded = {
+      ...ratedDoublesBeforeStart(3_000, 3.2),
+      ratingExcluded: true,
+    };
+    const singles = {
+      ...makeMatch({
+        completedAt: new Date(ACHIEVEMENT_COUNT_START.getTime() - 2_000),
+      }),
+      doublesRatingAfter: { [ME]: 3.2 },
+    };
+    const unrated = makeMatch({
+      partnerId: "partner-1",
+      completedAt: new Date(ACHIEVEMENT_COUNT_START.getTime() - 1_000),
+    });
+    expect(
+      progressOf(compute([counted, excluded, singles, unrated]), "rating-3.5"),
+    ).toMatchObject({ earned: true, earnedMatchId: counted.id, current: 3.55 });
+  });
+
+  it("업적 기준 시각 시점 평점으로 받은 업적은 새 경기를 저장해도 새 업적으로 나오지 않는다", () => {
+    const last = ratedDoublesBeforeStart(1_000, 3.7);
+    const saved = ratedDoubles(3.75);
+    expect(
+      findNewAchievements({
+        playerIds: [ME],
+        before: [last],
+        after: [last, saved],
+      }).filter((item) => isRatingAchievement(item.achievementId)),
+    ).toEqual([]);
+  });
+
   it("저장 전 상태에 평점이 없으면 이번 경기로 넘긴 기준을 새 업적으로 준다", () => {
     const earlier = ratedDoubles(3.4);
     const saved = ratedDoubles(3.55);

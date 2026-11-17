@@ -681,6 +681,53 @@ const isSessionEventMetric = (
 const NO_SESSIONS: ReadonlySet<string> = new Set();
 
 /**
+ * 업적 기준 시각 시점 복식 평점: 기준 시각 전에 완료된 마지막 평점 반영 복식 경기의 경기 직후 복식 평점.
+ * 평점 업적의 시작 값이며, 그 전 최고치는 보지 않는다.
+ */
+const findCountStartDoublesRating = (
+  playerId: string,
+  matches: readonly AchievementMatch[],
+): { match: CountedMatch; rating: number } | null => {
+  let last: CountedMatch | null = null;
+  for (const match of matches) {
+    if (
+      match.status !== "completed" ||
+      match.ratingExcluded ||
+      match.completedAt == null ||
+      match.completedAt.getTime() >= ACHIEVEMENT_COUNT_START.getTime() ||
+      !isDoublesMatchType(match.type) ||
+      match.doublesRatingAfter?.[playerId] == null ||
+      findTeamIndex(match, playerId) === null
+    ) {
+      continue;
+    }
+    const counted = match as CountedMatch;
+    if (!last || compareCountedMatches(last, counted) < 0) last = counted;
+  }
+  return last
+    ? { match: last, rating: roundDuprRating(last.doublesRatingAfter![playerId]) }
+    : null;
+};
+
+/** 아직 받지 않은 경기 단위 업적 중 진행도가 목표에 닿은 것을 이 경기로 받은 것으로 정한다 */
+const markReachedAchievements = (
+  progress: AchievementProgress[],
+  metrics: Readonly<Record<AchievementMetric, number>>,
+  match: CountedMatch,
+) => {
+  for (const item of progress) {
+    if (item.earned) continue;
+    const metric = ACHIEVEMENT_METRIC_BY_ID.get(item.id)!;
+    if (isSessionEventMetric(metric)) continue;
+    if (metrics[metric] >= item.target) {
+      item.earned = true;
+      item.earnedAt = match.completedAt;
+      item.earnedMatchId = match.id;
+    }
+  }
+};
+
+/**
  * 한 회원의 업적 38개 진행 상태(ACHIEVEMENTS 순서).
  * 완료 경기만(진행 중·취소 제외) 완료 시각 순으로 훑어, 진행도가 목표에 처음 닿은
  * 경기를 받게 된 경기로, 그 경기 완료 시각을 받은 날로 정한다.
@@ -690,6 +737,8 @@ const NO_SESSIONS: ReadonlySet<string> = new Set();
  * 세션 지배자는 경기만으로 알 수 없어 서버가 정한 dominatedSessionIds(이 회원이 지배자로 확정된
  * 끝난 세션)로 세고, 그 세션에서 이 회원의 마지막 경기를 받은 경기로 정한다.
  * 평점 업적은 복식 경기 직후 복식 평점(doublesRatingAfter)의 최고치로 세므로, 받은 뒤 평점이 내려가도 유지된다.
+ * 평점 업적만은 업적 기준 시각 시점 평점(findCountStartDoublesRating)에서 시작해, 그때 이미 기준 이상이면
+ * 그 평점을 낸 기준 시각 전 경기로 받는다. 그 전 최고치는 세지 않는다.
  */
 export function computeAchievements(
   playerId: string,
@@ -733,6 +782,12 @@ export function computeAchievements(
   /** 같은 조합의 직전 경기에서 진 조합 */
   const lostLineups = new Set<string>();
   const sessions = new Map<string, SessionRecord>();
+
+  const countStartRating = findCountStartDoublesRating(playerId, matches);
+  if (countStartRating) {
+    metrics.peakDoublesRating = countStartRating.rating;
+    markReachedAchievements(progress, metrics, countStartRating.match);
+  }
 
   for (const match of getCountedMatches(matches)) {
     const teamIndex = findTeamIndex(match, playerId);
@@ -827,16 +882,7 @@ export function computeAchievements(
       );
     }
 
-    for (const item of progress) {
-      if (item.earned) continue;
-      const metric = ACHIEVEMENT_METRIC_BY_ID.get(item.id)!;
-      if (isSessionEventMetric(metric)) continue;
-      if (metrics[metric] >= item.target) {
-        item.earned = true;
-        item.earnedAt = match.completedAt;
-        item.earnedMatchId = match.id;
-      }
-    }
+    markReachedAchievements(progress, metrics, match);
   }
 
   // 세션 단위 지표는 해당 세션마다 조건을 채운 경기를 모아, 시간순 target번째 경기를 받은 경기로 정한다.
