@@ -163,7 +163,10 @@ describe("PATCH /api/admin/match-sessions/:sessionId", () => {
     [{ name: "" }, "세션 이름이 필요합니다."],
     [{ name: "가".repeat(31) }, "세션 이름은 30자 이하여야 합니다."],
     [{ location: " " }, "세션 장소가 필요합니다."],
-    [{ dateKey: "2026-02-30" }, "세션 날짜는 YYYY-MM-DD 형식의 실제 날짜여야 합니다."],
+    [
+      { dateKey: "2026-02-30" },
+      "세션 날짜는 YYYY-MM-DD 형식의 실제 날짜여야 합니다.",
+    ],
     [{ dateKey: "2026-11-11" }, "오늘이나 이후 날짜로만 바꿀 수 있습니다."],
     [
       { startTime: "19:00" },
@@ -252,7 +255,12 @@ describe("PATCH /api/admin/match-sessions/:sessionId", () => {
 
     const sameDate = await asAdmin(
       request(app).patch("/api/admin/match-sessions/Scustom1"),
-    ).send({ dateKey: "2026-11-14", name: "토요 번개 2", startTime: "19:00", endTime: "21:00" });
+    ).send({
+      dateKey: "2026-11-14",
+      name: "토요 번개 2",
+      startTime: "19:00",
+      endTime: "21:00",
+    });
     expect(sameDate.status).toBe(200);
     expect(updateSession).toHaveBeenCalledWith(
       "Scustom1",
@@ -493,7 +501,10 @@ describe("비관리자", () => {
     ["post", "/api/admin/regular-session-skips"],
     ["delete", "/api/admin/regular-session-skips/2026-11-16"],
   ] as const)("%s %s는 403", async (method, path) => {
-    vi.spyOn(AuthService.prototype, "authenticateAccessToken").mockResolvedValue({
+    vi.spyOn(
+      AuthService.prototype,
+      "authenticateAccessToken",
+    ).mockResolvedValue({
       ...adminSession,
       payload: { playerId: admin.id, isAdmin: false },
     });

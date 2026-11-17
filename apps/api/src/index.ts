@@ -2181,12 +2181,14 @@ app.delete(
           400,
         );
       }
+      const notFound = () =>
+        new MatchSessionRequestError("쉬는 날을 찾을 수 없습니다.", 404);
       const [skip] = await matchRepository.findRegularSessionSkips(
         dateKey,
         addKstDays(dateKey, 1),
       );
       if (!skip) {
-        throw new MatchSessionRequestError("쉬는 날을 찾을 수 없습니다.", 404);
+        throw notFound();
       }
       if (skip.reason === "holiday") {
         throw new MatchSessionRequestError("공휴일은 되돌릴 수 없어요.", 409);
@@ -2200,7 +2202,7 @@ app.delete(
         );
       }
       if (!(await matchRepository.deleteRegularSessionCancellation(dateKey))) {
-        throw new MatchSessionRequestError("쉬는 날을 찾을 수 없습니다.", 404);
+        throw notFound();
       }
 
       const canCreate = dateKey !== todayKey || canOpenRegularSession(now);
