@@ -5,6 +5,7 @@ import {
   fetchUnseenAchievements,
   formatAchievementProgress,
   getAchievementProgressRatio,
+  getCelebrationPointSteps,
   markAchievementsSeen,
 } from "@/lib/achievements";
 
@@ -24,7 +25,7 @@ describe("업적 확인 처리와 미확인 조회", () => {
         ? new Promise((resolve) => {
             resolveSeen = resolve;
           })
-        : Promise.resolve(Response.json({ achievements: [] })),
+        : Promise.resolve(Response.json({ achievements: [], points: 0 })),
     );
 
     const marking = markAchievementsSeen([seen]);
@@ -42,7 +43,7 @@ describe("업적 확인 처리와 미확인 조회", () => {
 
     resolveSeen(new Response(null, { status: 204 }));
     await marking;
-    await expect(fetching).resolves.toEqual([]);
+    await expect(fetching).resolves.toEqual({ achievements: [], points: 0 });
     expect(apiFetch).toHaveBeenLastCalledWith("/api/me/achievements/unseen");
   });
 
@@ -56,7 +57,11 @@ describe("업적 확인 처리와 미확인 조회", () => {
     );
 
     await expect(markAchievementsSeen([seen])).rejects.toThrow();
-    await expect(fetchUnseenAchievements()).resolves.toEqual([]);
+    // 점수가 없는 응답(점수 추가 전 서버)은 null로 받는다
+    await expect(fetchUnseenAchievements()).resolves.toEqual({
+      achievements: [],
+      points: null,
+    });
   });
 
   it("보낼 업적이 없으면 요청하지 않는다", async () => {
@@ -154,5 +159,17 @@ describe("업적 진행 표시", () => {
         progress("rating-low-2.5", 0),
       ),
     ).toBe(0);
+  });
+});
+
+describe("축하 연출 업적 점수", () => {
+  it("장마다 그 장까지 받은 점수를 더해 마지막 장의 새 점수가 합계다", () => {
+    expect(
+      getCelebrationPointSteps([{ points: 10 }, { points: 0 }, { points: 25 }], 100),
+    ).toEqual([
+      { before: 65, after: 75 },
+      { before: 75, after: 75 },
+      { before: 75, after: 100 },
+    ]);
   });
 });

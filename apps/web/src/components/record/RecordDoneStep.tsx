@@ -95,6 +95,7 @@ export default function RecordDoneStep({
     [myNewAchievementItems],
   );
 
+
   return (
     <>
       {/* 제목까지 본문에 넣어 그랩바 아래 전부가 함께 스크롤된다 */}
@@ -237,6 +238,7 @@ export default function RecordDoneStep({
       {viewer && myNewAchievements.length > 0 && isCelebrationOpen ? (
         <AchievementCelebration
           achievements={myNewAchievements}
+          totalPoints={viewer ? match.achievementPoints?.[viewer.id] : null}
           // 움직임 줄이기면 평점 세기가 없으므로 바로 띄운다
           delayMs={prefersReducedMotion() ? 0 : CELEBRATION_DELAY_MS}
           onClose={() => {

@@ -168,6 +168,16 @@ describe("POST /api/matches", () => {
       MatchRepository.prototype,
       "getPlayerRatingChangeLogs",
     ).mockResolvedValue([]);
+    // 새 업적을 받은 참가자의 업적 점수 합은 랭킹 원천(회원·평점 로그·세션)으로 계산한다
+    vi.spyOn(AuthService.prototype, "getAllPlayers").mockResolvedValue([]);
+    vi.spyOn(
+      MatchRepository.prototype,
+      "getAllRatingChangeLogs",
+    ).mockResolvedValue([]);
+    vi.spyOn(
+      MatchRepository.prototype,
+      "findSessionsWithParticipantIds",
+    ).mockResolvedValue([]);
     findOrCreateRegularSession = vi
       .spyOn(MatchRepository.prototype, "findOrCreateRegularSession")
       .mockResolvedValue(buildManagedSession());
@@ -484,6 +494,11 @@ describe("POST /api/matches", () => {
           earnedMatchId: "match-test-001",
         }),
       ]);
+      // 새 업적을 받은 참가자만: 첫 경기 10 + 첫 승 10 + 3연승 10
+      expect(response.body.achievementPoints).toEqual({
+        [creator.id]: 30,
+        "player-f-1": 30,
+      });
     });
 
     it("참가자의 평점 로그로 이번 경기에서 처음 넘긴 평점 업적만 새 업적으로 응답한다", async () => {
@@ -568,6 +583,7 @@ describe("POST /api/matches", () => {
       const empty = await postMatch([[creator.id], ["player-m-1"]]);
       expect(empty.status).toBe(201);
       expect(empty.body.newAchievements).toEqual([]);
+      expect(empty.body.achievementPoints).toEqual({});
 
       vi.spyOn(console, "error").mockImplementation(() => undefined);
       findCompletedMatchOutcomes.mockRejectedValue(new Error("db down"));

@@ -1,6 +1,7 @@
 import type { PlayerRatingChangeLog } from "@pkpkdupr/shared/player";
 import { describe, expect, it, vi } from "vitest";
 import {
+  buildAchievementRankingResponse,
   buildDoublesRatingAfterByMatchId,
   buildRankingResponse,
   buildSessionHistory,
@@ -741,5 +742,54 @@ describe("평점 업적 입력", () => {
     );
     expect(counts["rating-3.5"]).toBe(1);
     expect(counts["rating-4.0"]).toBe(0);
+  });
+});
+
+describe("buildAchievementRankingResponse", () => {
+  const first = at("2026-11-10T10:00:00Z");
+  const second = at("2026-11-10T10:30:00Z");
+
+  it("활성 정회원을 점수 내림차순 → 그 점수에 먼저 도달한 순 → 아이디 순으로 세우고 0점 회원은 맨 아래에 둔다", () => {
+    const players = [
+      makePlayer("Pcarol01", "carol", 3),
+      makePlayer("Pbob0001", "bob", 3),
+      makePlayer("Palice01", "alice", 3),
+      makePlayer("Pdave001", "dave", 3),
+      makePlayer("Pzed0001", "zed", null),
+      makePlayer("Pguest01", "guest", null, { isGuest: true }),
+      makePlayer("Pivy0001", "ivy", null, { status: "inactive" }),
+    ];
+    const matches = [
+      // 모두 첫 경기 10, alice·bob 첫 승 10
+      makeMatch("Mmatch01", first, [
+        ["Palice01", "Pbob0001"],
+        ["Pcarol01", "Pdave001"],
+      ]),
+      // carol은 첫 승 10을 늦게 받아 20점에 늦게 도달한다
+      makeMatch("Mmatch02", second, [
+        ["Palice01", "Pcarol01"],
+        ["Pbob0001", "Pdave001"],
+      ]),
+    ];
+
+    const response = buildAchievementRankingResponse(
+      createRankingContext(players, [], matches),
+      new Map(),
+    );
+
+    expect(response.category).toBe("achievements");
+    expect(
+      response.entries.map((entry) => [
+        entry.rank,
+        entry.player.username,
+        entry.points,
+      ]),
+    ).toEqual([
+      [1, "alice", 20],
+      [2, "bob", 20],
+      [3, "carol", 20],
+      [4, "dave", 10],
+      [5, "zed", 0],
+    ]);
   });
 });

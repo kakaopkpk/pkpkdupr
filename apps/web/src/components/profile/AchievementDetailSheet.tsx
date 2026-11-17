@@ -19,7 +19,10 @@ import {
   formatAchievementProgress,
   getAchievementDefinition,
 } from "@/lib/achievements";
-import { formatKstLongDate } from "@/lib/format";
+import {
+  formatAchievementPointsLabel,
+  formatKstLongDate,
+} from "@/lib/format";
 import { fetchPlayerProfileSummary } from "@/lib/playerProfile";
 
 const DEPTH_ID = "global-achievement-detail";
@@ -76,7 +79,7 @@ export interface AchievementDetailSheetProps {
   onClose: () => void;
 }
 
-/** 업적 상세 바텀시트: 배지·이름·조건, 받은 날·진행·받은 회원 수 */
+/** 업적 상세 바텀시트: 배지·이름·조건, 받은 날·진행·점수·받은 회원 수 */
 export default function AchievementDetailSheet({
   request,
   tabKey,
@@ -174,6 +177,17 @@ export default function AchievementDetailSheet({
               {formatAchievementProgress(definition, progress)}
             </DetailRow>
           ) : null}
+          <DetailRow label="점수">
+            <span
+              className={
+                definition.points > 0
+                  ? "text-pk-primary"
+                  : "font-medium text-pk-muted"
+              }
+            >
+              {formatAchievementPointsLabel(definition.points)}
+            </span>
+          </DetailRow>
           <DetailRow label="받은 회원">
             {isLoading ? (
               <ValueSkeleton />

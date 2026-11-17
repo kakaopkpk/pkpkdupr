@@ -291,6 +291,8 @@ export type RecordedMatchResponse = Match & {
   ratingChanges: PlayerRatingChangeLog[];
   /** 이 저장으로 참가자 전원이 새로 받은 업적. 없으면 빈 배열 */
   newAchievements: EarnedAchievement[];
+  /** 새 업적을 받은 참가자별 지금 업적 점수 합(새 업적 포함). 새 업적이 없으면 빈 객체 */
+  achievementPoints: Record<string, number>;
 };
 
 export type MatchFeedItem =

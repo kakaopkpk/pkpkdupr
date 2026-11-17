@@ -195,7 +195,27 @@ describe("랭킹·세션 리포트 API", () => {
     expect(projectionSpy).not.toHaveBeenCalled();
   });
 
-  it("GET /api/rankings는 category가 doubles·singles가 아니면 400이다", async () => {
+  it("GET /api/rankings?category=achievements는 업적 점수 순위를 돌려준다", async () => {
+    const response = await authorized("/api/rankings?category=achievements");
+
+    expect(response.status).toBe(200);
+    expect(response.body.category).toBe("achievements");
+    // alice: 첫 경기 10 + 첫 승 10 + 세션 지배자 25, bob: 첫 경기 10
+    expect(
+      response.body.entries.map(
+        (entry: { rank: number; player: { username: string }; points: number }) => [
+          entry.rank,
+          entry.player.username,
+          entry.points,
+        ],
+      ),
+    ).toEqual([
+      [1, "alice", 45],
+      [2, "bob", 10],
+    ]);
+  });
+
+  it("GET /api/rankings는 category가 doubles·singles·achievements가 아니면 400이다", async () => {
     const response = await authorized("/api/rankings?category=mixed");
     expect(response.status).toBe(400);
   });
@@ -334,6 +354,8 @@ describe("랭킹·세션 리포트 API", () => {
         earnedAt: completedAt.toISOString(),
       },
     ]);
+    // 확인한 업적(첫 경기 10)까지 받은 업적 점수 합
+    expect(response.body.points).toBe(45);
   });
 
   it("POST /api/me/achievements/seen은 요청자의 확인 기록을 남기고 204다", async () => {
