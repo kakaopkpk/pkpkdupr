@@ -1,9 +1,11 @@
 import type { PlayerRatingChangeLog } from "@pkpkdupr/shared/player";
 import { describe, expect, it, vi } from "vitest";
 import {
+  buildDoublesRatingAfterByMatchId,
   buildRankingResponse,
   buildSessionHistory,
   buildSessionReport,
+  countAchievementHolders,
   createRankingContext,
   findSessionDominations,
   getRatingAt,
@@ -689,5 +691,53 @@ describe("buildSessionHistory", () => {
         (item) => item.id,
       ),
     ).toEqual(["Snew0001"]);
+  });
+});
+
+describe("평점 업적 입력", () => {
+  const first = at("2026-11-10T10:00:00Z");
+  const second = at("2026-11-10T10:30:00Z");
+
+  it("경기·선수별로 가장 늦게 쓴 로그의 복식 평점을 쓰고, 경기 완료가 아닌 로그는 뺀다", () => {
+    const adjustment: PlayerRatingChangeLog = {
+      ...makeLog("Palice01", "unused", second, 3.4, 3.9),
+      source: "manual_recalculation",
+      sourceLogId: "adjust-1",
+    };
+    expect(
+      buildDoublesRatingAfterByMatchId([
+        makeLog("Palice01", "Mmatch01", second, 3.3, 3.42),
+        makeLog("Palice01", "Mmatch01", first, 3.3, 3.31),
+        makeLog("Pbob0001", "Mmatch01", first, 3.0, 2.95),
+        adjustment,
+      ]),
+    ).toEqual(
+      new Map([["Mmatch01", { Palice01: 3.42, Pbob0001: 2.95 }]]),
+    );
+  });
+
+  it("업적 보유자 수는 랭킹 원천의 평점 로그로 평점 업적을 센다", () => {
+    const players = [
+      makePlayer("Palice01", "alice", 3.52),
+      makePlayer("Pbob0001", "bob", 3.48),
+      makePlayer("Pcarol01", "carol", 3.0),
+      makePlayer("Pdave001", "dave", 3.0),
+    ];
+    const matches = [
+      makeMatch("Mmatch01", first, [
+        ["Palice01", "Pbob0001"],
+        ["Pcarol01", "Pdave001"],
+      ]),
+    ];
+    const logs = [
+      makeLog("Palice01", "Mmatch01", first, 3.45, 3.52),
+      makeLog("Pbob0001", "Mmatch01", first, 3.41, 3.48),
+    ];
+    const counts = countAchievementHolders(
+      createRankingContext(players, logs, matches),
+      new Map(),
+    );
+    expect(counts["rating-3.5"]).toBe(1);
+    expect(counts["rating-4.0"]).toBe(0);
   });
 });

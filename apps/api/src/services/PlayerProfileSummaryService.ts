@@ -1,5 +1,6 @@
 import {
   computeAchievements,
+  type AchievementMatch,
   type AchievementProgress,
 } from "@pkpkdupr/shared/achievements";
 import {
@@ -284,6 +285,29 @@ export const buildPlayerProfileSummary = (
     partners,
     rivals,
     headToHead,
-    achievements: computeAchievements(playerId, matches, dominatedSessionIds),
+    achievements: computeAchievements(
+      playerId,
+      matches.map((match) => withDoublesRatingAfter(match, playerId)),
+      dominatedSessionIds,
+    ),
   };
+};
+
+/** 경기에 붙은 이 회원의 마지막 평점 변경 로그로 경기 직후 복식 평점(평점 업적 입력)을 붙인다 */
+const withDoublesRatingAfter = (
+  match: MatchWithRatingChanges,
+  playerId: string,
+): AchievementMatch => {
+  const latest = (match.ratingChanges ?? [])
+    .filter((log) => log.playerId === playerId)
+    .reduce<PlayerRatingChangeLog | null>(
+      (current, log) =>
+        !current || log.createdAt.getTime() >= current.createdAt.getTime()
+          ? log
+          : current,
+      null,
+    );
+  return latest
+    ? { ...match, doublesRatingAfter: { [playerId]: latest.nextRating.doubles } }
+    : match;
 };

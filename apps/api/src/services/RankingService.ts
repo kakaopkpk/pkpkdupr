@@ -699,8 +699,38 @@ export const buildSessionReport = ({
   };
 };
 
+/**
+ * 경기 id별 그 경기 직후 선수별 복식 평점(평점 업적 입력).
+ * 같은 경기·선수의 로그가 여럿이면 가장 늦게 쓴 로그를 쓴다.
+ */
+export const buildDoublesRatingAfterByMatchId = (
+  logs: Iterable<PlayerRatingChangeLog>,
+): Map<string, Record<string, number>> => {
+  const latestByKey = new Map<string, PlayerRatingChangeLog>();
+  for (const log of logs) {
+    const matchId = getLogMatchId(log);
+    if (!matchId) continue;
+    const key = `${matchId}|${log.playerId}`;
+    const latest = latestByKey.get(key);
+    if (!latest || log.createdAt.getTime() >= latest.createdAt.getTime()) {
+      latestByKey.set(key, log);
+    }
+  }
+  const ratingsByMatchId = new Map<string, Record<string, number>>();
+  for (const log of latestByKey.values()) {
+    const matchId = getLogMatchId(log)!;
+    const ratings = ratingsByMatchId.get(matchId) ?? {};
+    ratings[log.playerId] = log.nextRating.doubles;
+    ratingsByMatchId.set(matchId, ratings);
+  }
+  return ratingsByMatchId;
+};
+
 /** 완료 경기 요약을 업적 계산 입력으로 바꾼다 */
-export const toAchievementMatch = (match: RankingMatch): AchievementMatch => ({
+export const toAchievementMatch = (
+  match: RankingMatch,
+  doublesRatingAfter?: Readonly<Record<string, number>>,
+): AchievementMatch => ({
   id: match.id,
   type: match.type,
   status: "completed",
@@ -712,7 +742,20 @@ export const toAchievementMatch = (match: RankingMatch): AchievementMatch => ({
   scores: match.scores,
   session: match.sessionId ? { id: match.sessionId } : null,
   ratingExcluded: match.ratingExcluded ?? false,
+  doublesRatingAfter,
 });
+
+/** 랭킹 원천의 완료 경기 전체를 평점 업적 입력까지 붙여 업적 계산 입력으로 바꾼다 */
+export const toAchievementMatches = (
+  context: RankingContext,
+): AchievementMatch[] => {
+  const ratingsByMatchId = buildDoublesRatingAfterByMatchId(
+    [...context.logsByPlayerId.values()].flat(),
+  );
+  return context.matches.map((match) =>
+    toAchievementMatch(match, ratingsByMatchId.get(match.id)),
+  );
+};
 
 /** 한 회원이 지금 받은 업적(ACHIEVEMENTS 순서). 세션 지배자는 끝난 세션 기준이다 */
 export const findPlayerEarnedAchievements = (
@@ -736,7 +779,7 @@ const buildSessionAchievements = (
   dominations: SessionDominations,
 ): EarnedAchievement[] => {
   const sessionMatchIds = new Set(sessionMatches.map((match) => match.id));
-  const matches = context.matches.map(toAchievementMatch);
+  const matches = toAchievementMatches(context);
   return playerIds
     .flatMap((playerId) =>
       findPlayerEarnedAchievements(matches, dominations, playerId),
@@ -757,7 +800,7 @@ export const countAchievementHolders = (
   const counts: Record<string, number> = Object.fromEntries(
     ACHIEVEMENTS.map((definition) => [definition.id, 0]),
   );
-  const matches = context.matches.map(toAchievementMatch);
+  const matches = toAchievementMatches(context);
   for (const playerId of getActivePlayerIds(context)) {
     for (const item of computeAchievements(
       playerId,

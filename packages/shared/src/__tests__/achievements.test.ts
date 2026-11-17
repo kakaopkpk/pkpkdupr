@@ -89,7 +89,7 @@ const compute = (matches: AchievementMatch[]) =>
   computeAchievements(ME, matches);
 
 describe("ACHIEVEMENTS", () => {
-  it("업적 35개를 표 순서로 정의한다", () => {
+  it("업적 38개를 표 순서로 정의한다", () => {
     expect(ACHIEVEMENTS.map((definition) => definition.id)).toEqual([
       "matches-1",
       "matches-10",
@@ -109,6 +109,9 @@ describe("ACHIEVEMENTS", () => {
       "streak-5",
       "streak-10",
       "streak-20",
+      "rating-3.5",
+      "rating-4.0",
+      "rating-4.5",
       "perfect-win",
       "hard-won",
       "deuce-master",
@@ -127,14 +130,15 @@ describe("ACHIEVEMENTS", () => {
       "dominator-1",
       "dominator-10",
     ]);
-    expect(new Set(ACHIEVEMENTS.map((item) => item.id)).size).toBe(35);
+    expect(new Set(ACHIEVEMENTS.map((item) => item.id)).size).toBe(38);
   });
 
-  it("분류 이름은 경기 수·승리·연승·특별·세션이다", () => {
+  it("분류 이름은 경기 수·승리·연승·평점·특별·세션이다", () => {
     expect(ACHIEVEMENT_CATEGORY_LABEL).toEqual({
       matches: "경기 수",
       wins: "승리",
       streak: "연승",
+      rating: "평점",
       special: "특별",
       session: "세션",
     });
@@ -152,9 +156,9 @@ describe("isBestStreakAchievement", () => {
 });
 
 describe("computeAchievements", () => {
-  it("경기가 없으면 35개 모두 진행도 0으로 받지 않은 상태다", () => {
+  it("경기가 없으면 38개 모두 진행도 0으로 받지 않은 상태다", () => {
     const progress = compute([]);
-    expect(progress).toHaveLength(35);
+    expect(progress).toHaveLength(38);
     expect(progress.map((item) => item.id)).toEqual(
       ACHIEVEMENTS.map((definition) => definition.id),
     );
@@ -833,5 +837,97 @@ describe("findUnseenAchievements", () => {
         ],
       ),
     ).toEqual([regained]);
+  });
+});
+
+describe("평점 업적", () => {
+  /** 복식 경기에 경기 직후 내 복식 평점을 붙인다 */
+  const ratedDoubles = (rating: number | null, won = true) => {
+    const match = makeMatch({ won, partnerId: "partner-1" });
+    return rating == null
+      ? match
+      : { ...match, doublesRatingAfter: { [ME]: rating } };
+  };
+
+  it("평점 업적 꼬리표는 소수 한 자리까지 쓴다", () => {
+    expect(
+      ACHIEVEMENTS.filter((definition) => definition.category === "rating").map(
+        ({ id, name, badgeNumber, target }) => ({ id, name, badgeNumber, target }),
+      ),
+    ).toEqual([
+      { id: "rating-3.5", name: "평점 3.5", badgeNumber: "3.5", target: 3.5 },
+      { id: "rating-4.0", name: "평점 4.0", badgeNumber: "4.0", target: 4 },
+      { id: "rating-4.5", name: "평점 4.5", badgeNumber: "4.5", target: 4.5 },
+    ]);
+  });
+
+  it("복식 평점이 처음 기준 이상이 된 경기로 받고, 진행도는 최고 복식 평점이다", () => {
+    const matches = [
+      ratedDoubles(3.2),
+      ratedDoubles(3.4999),
+      ratedDoubles(3.61),
+      ratedDoubles(3.7),
+    ];
+    const progress = compute(matches);
+    expect(progressOf(progress, "rating-3.5")).toEqual({
+      id: "rating-3.5",
+      earned: true,
+      earnedAt: matches[1].completedAt,
+      earnedMatchId: matches[1].id,
+      current: 3.7,
+      target: 3.5,
+    });
+    expect(progressOf(progress, "rating-4.0")).toMatchObject({
+      earned: false,
+      current: 3.7,
+    });
+  });
+
+  it("받은 뒤 평점이 내려가도 유지한다", () => {
+    const matches = [ratedDoubles(4.05), ratedDoubles(3.6, false)];
+    const progress = compute(matches);
+    expect(progressOf(progress, "rating-4.0")).toMatchObject({
+      earned: true,
+      earnedMatchId: matches[0].id,
+      current: 4.05,
+    });
+    expect(progressOf(progress, "rating-3.5")).toMatchObject({
+      earned: true,
+      earnedMatchId: matches[0].id,
+    });
+  });
+
+  it("단식 경기·평점 미반영 경기·평점이 없는 경기·다른 회원 평점은 세지 않는다", () => {
+    const singles = {
+      ...makeMatch(),
+      doublesRatingAfter: { [ME]: 4.6 },
+    };
+    const excluded = { ...ratedDoubles(4.6), ratingExcluded: true };
+    const othersOnly = {
+      ...makeMatch({ partnerId: "partner-1" }),
+      doublesRatingAfter: { "partner-1": 4.6 },
+    };
+    const progress = compute([singles, excluded, othersOnly, ratedDoubles(null)]);
+    for (const id of ["rating-3.5", "rating-4.0", "rating-4.5"]) {
+      expect(progressOf(progress, id)).toMatchObject({
+        earned: false,
+        current: 0,
+      });
+    }
+  });
+
+  it("저장 전 상태에 평점이 없으면 이번 경기로 넘긴 기준을 새 업적으로 준다", () => {
+    const earlier = ratedDoubles(3.4);
+    const saved = ratedDoubles(3.55);
+    const { doublesRatingAfter: _ignored, ...savedBefore } = saved;
+    expect(
+      findNewAchievements({
+        playerIds: [ME],
+        before: [earlier, savedBefore],
+        after: [earlier, saved],
+      })
+        .filter((item) => item.achievementId.startsWith("rating-"))
+        .map((item) => [item.achievementId, item.earnedMatchId]),
+    ).toEqual([["rating-3.5", saved.id]]);
   });
 });

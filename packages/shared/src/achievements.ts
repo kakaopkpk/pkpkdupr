@@ -6,6 +6,7 @@ import {
   type MatchType,
 } from "./match.js";
 import { ACHIEVEMENT_COUNT_START } from "./achievementCountStart.js";
+import { roundDuprRating } from "./player.js";
 
 /**
  * 업적. 따로 저장하지 않고 조회할 때 완료 경기로 계산한다.
@@ -16,6 +17,7 @@ export type AchievementCategory =
   | "matches"
   | "wins"
   | "streak"
+  | "rating"
   | "special"
   | "session";
 
@@ -26,8 +28,8 @@ export interface AchievementDefinition {
   name: string;
   /** 조건 문구 */
   condition: string;
-  /** 배지 아래 숫자 꼬리표. 없으면 null */
-  badgeNumber: number | null;
+  /** 배지 아래 숫자 꼬리표 문구("10", "4.0"). 없으면 null */
+  badgeNumber: string | null;
   target: number;
 }
 
@@ -49,7 +51,8 @@ type AchievementMetric =
   | "bestOpponentMatches"
   | "bestPartnerStreak"
   | "unbeatenSessions"
-  | "dominatedSessions";
+  | "dominatedSessions"
+  | "peakDoublesRating";
 
 /** 업적 정의와 진행도 지표를 한 행에 함께 둔 표(표 순서) */
 const ACHIEVEMENT_TABLE: readonly {
@@ -74,7 +77,7 @@ const ACHIEVEMENT_TABLE: readonly {
       category: "matches",
       name: "10경기",
       condition: "경기 10개 완료",
-      badgeNumber: 10,
+      badgeNumber: "10",
       target: 10,
     },
   },
@@ -85,7 +88,7 @@ const ACHIEVEMENT_TABLE: readonly {
       category: "matches",
       name: "50경기",
       condition: "경기 50개 완료",
-      badgeNumber: 50,
+      badgeNumber: "50",
       target: 50,
     },
   },
@@ -96,7 +99,7 @@ const ACHIEVEMENT_TABLE: readonly {
       category: "matches",
       name: "100경기",
       condition: "경기 100개 완료",
-      badgeNumber: 100,
+      badgeNumber: "100",
       target: 100,
     },
   },
@@ -107,7 +110,7 @@ const ACHIEVEMENT_TABLE: readonly {
       category: "matches",
       name: "300경기",
       condition: "경기 300개 완료",
-      badgeNumber: 300,
+      badgeNumber: "300",
       target: 300,
     },
   },
@@ -118,7 +121,7 @@ const ACHIEVEMENT_TABLE: readonly {
       category: "matches",
       name: "1000경기",
       condition: "경기 1000개 완료",
-      badgeNumber: 1000,
+      badgeNumber: "1000",
       target: 1000,
     },
   },
@@ -140,7 +143,7 @@ const ACHIEVEMENT_TABLE: readonly {
       category: "wins",
       name: "10승",
       condition: "이긴 경기 10개",
-      badgeNumber: 10,
+      badgeNumber: "10",
       target: 10,
     },
   },
@@ -151,7 +154,7 @@ const ACHIEVEMENT_TABLE: readonly {
       category: "wins",
       name: "50승",
       condition: "이긴 경기 50개",
-      badgeNumber: 50,
+      badgeNumber: "50",
       target: 50,
     },
   },
@@ -162,7 +165,7 @@ const ACHIEVEMENT_TABLE: readonly {
       category: "wins",
       name: "100승",
       condition: "이긴 경기 100개",
-      badgeNumber: 100,
+      badgeNumber: "100",
       target: 100,
     },
   },
@@ -173,7 +176,7 @@ const ACHIEVEMENT_TABLE: readonly {
       category: "wins",
       name: "500승",
       condition: "이긴 경기 500개",
-      badgeNumber: 500,
+      badgeNumber: "500",
       target: 500,
     },
   },
@@ -184,7 +187,7 @@ const ACHIEVEMENT_TABLE: readonly {
       category: "wins",
       name: "1000승",
       condition: "이긴 경기 1000개",
-      badgeNumber: 1000,
+      badgeNumber: "1000",
       target: 1000,
     },
   },
@@ -206,7 +209,7 @@ const ACHIEVEMENT_TABLE: readonly {
       category: "wins",
       name: "단식 10승",
       condition: "단식에서 이긴 경기 10개",
-      badgeNumber: 10,
+      badgeNumber: "10",
       target: 10,
     },
   },
@@ -217,7 +220,7 @@ const ACHIEVEMENT_TABLE: readonly {
       category: "streak",
       name: "3연승",
       condition: "세 경기 연달아 승리",
-      badgeNumber: 3,
+      badgeNumber: "3",
       target: 3,
     },
   },
@@ -228,7 +231,7 @@ const ACHIEVEMENT_TABLE: readonly {
       category: "streak",
       name: "5연승",
       condition: "다섯 경기 연달아 승리",
-      badgeNumber: 5,
+      badgeNumber: "5",
       target: 5,
     },
   },
@@ -239,7 +242,7 @@ const ACHIEVEMENT_TABLE: readonly {
       category: "streak",
       name: "10연승",
       condition: "열 경기 연달아 승리",
-      badgeNumber: 10,
+      badgeNumber: "10",
       target: 10,
     },
   },
@@ -250,8 +253,41 @@ const ACHIEVEMENT_TABLE: readonly {
       category: "streak",
       name: "20연승",
       condition: "스무 경기 연달아 승리",
-      badgeNumber: 20,
+      badgeNumber: "20",
       target: 20,
+    },
+  },
+  {
+    metric: "peakDoublesRating",
+    definition: {
+      id: "rating-3.5",
+      category: "rating",
+      name: "평점 3.5",
+      condition: "복식 평점 3.5 달성",
+      badgeNumber: "3.5",
+      target: 3.5,
+    },
+  },
+  {
+    metric: "peakDoublesRating",
+    definition: {
+      id: "rating-4.0",
+      category: "rating",
+      name: "평점 4.0",
+      condition: "복식 평점 4.0 달성",
+      badgeNumber: "4.0",
+      target: 4,
+    },
+  },
+  {
+    metric: "peakDoublesRating",
+    definition: {
+      id: "rating-4.5",
+      category: "rating",
+      name: "평점 4.5",
+      condition: "복식 평점 4.5 달성",
+      badgeNumber: "4.5",
+      target: 4.5,
     },
   },
   {
@@ -294,7 +330,7 @@ const ACHIEVEMENT_TABLE: readonly {
       category: "special",
       name: "단짝",
       condition: "같은 파트너와 복식 20경기",
-      badgeNumber: 20,
+      badgeNumber: "20",
       target: 20,
     },
   },
@@ -305,7 +341,7 @@ const ACHIEVEMENT_TABLE: readonly {
       category: "special",
       name: "단짝 50경기",
       condition: "같은 파트너와 복식 50경기",
-      badgeNumber: 50,
+      badgeNumber: "50",
       target: 50,
     },
   },
@@ -371,7 +407,7 @@ const ACHIEVEMENT_TABLE: readonly {
       category: "session",
       name: "개근 10회",
       condition: "경기를 한 세션 10번",
-      badgeNumber: 10,
+      badgeNumber: "10",
       target: 10,
     },
   },
@@ -382,7 +418,7 @@ const ACHIEVEMENT_TABLE: readonly {
       category: "session",
       name: "개근 30회",
       condition: "경기를 한 세션 30번",
-      badgeNumber: 30,
+      badgeNumber: "30",
       target: 30,
     },
   },
@@ -393,7 +429,7 @@ const ACHIEVEMENT_TABLE: readonly {
       category: "session",
       name: "개근 100회",
       condition: "경기를 한 세션 100번",
-      badgeNumber: 100,
+      badgeNumber: "100",
       target: 100,
     },
   },
@@ -437,7 +473,7 @@ const ACHIEVEMENT_TABLE: readonly {
       category: "session",
       name: "세션 지배자 10회",
       condition: "세션 지배자 10번",
-      badgeNumber: 10,
+      badgeNumber: "10",
       target: 10,
     },
   },
@@ -460,6 +496,7 @@ export const ACHIEVEMENT_CATEGORY_LABEL: Record<AchievementCategory, string> = {
   matches: "경기 수",
   wins: "승리",
   streak: "연승",
+  rating: "평점",
   special: "특별",
   session: "세션",
 };
@@ -525,6 +562,11 @@ export interface AchievementMatch {
   session?: { id: string } | null;
   /** 게스트가 낀 경기(Match.ratingExcluded)는 업적에 세지 않는다 */
   ratingExcluded?: boolean;
+  /**
+   * 이 경기 직후 선수별 복식 평점(평점 변경 로그의 nextRating.doubles). 평점 업적에 쓴다.
+   * 없는 선수는 이 경기로 평점 업적 진행도가 바뀌지 않는다
+   */
+  doublesRatingAfter?: Readonly<Record<string, number>>;
 }
 
 export interface AchievementTeam {
@@ -635,7 +677,7 @@ const isSessionEventMetric = (
 const NO_SESSIONS: ReadonlySet<string> = new Set();
 
 /**
- * 한 회원의 업적 35개 진행 상태(ACHIEVEMENTS 순서).
+ * 한 회원의 업적 38개 진행 상태(ACHIEVEMENTS 순서).
  * 완료 경기만(진행 중·취소 제외) 완료 시각 순으로 훑어, 진행도가 목표에 처음 닿은
  * 경기를 받게 된 경기로, 그 경기 완료 시각을 받은 날로 정한다.
  * 승패가 갈리지 않은 경기는 승리에는 세지 않고 연승·콤비 연승·무패 세션은 끊는다.
@@ -643,6 +685,7 @@ const NO_SESSIONS: ReadonlySet<string> = new Set();
  * 무패 세션은 그 세션의 모든 경기로 판정하므로, 4경기 전승 뒤 같은 세션에서 지면 받지 않은 상태가 된다.
  * 세션 지배자는 경기만으로 알 수 없어 서버가 정한 dominatedSessionIds(이 회원이 지배자로 확정된
  * 끝난 세션)로 세고, 그 세션에서 이 회원의 마지막 경기를 받은 경기로 정한다.
+ * 평점 업적은 복식 경기 직후 복식 평점(doublesRatingAfter)의 최고치로 세므로, 받은 뒤 평점이 내려가도 유지된다.
  */
 export function computeAchievements(
   playerId: string,
@@ -667,6 +710,7 @@ export function computeAchievements(
     bestPartnerStreak: 0,
     unbeatenSessions: 0,
     dominatedSessions: 0,
+    peakDoublesRating: 0,
   };
   const progress: AchievementProgress[] = ACHIEVEMENTS.map((definition) => ({
     id: definition.id,
@@ -768,6 +812,14 @@ export function computeAchievements(
       metrics.bestSessionMatches = Math.max(
         metrics.bestSessionMatches,
         session.matches,
+      );
+    }
+
+    const doublesRatingAfter = match.doublesRatingAfter?.[playerId];
+    if (isDoublesMatchType(match.type) && doublesRatingAfter != null) {
+      metrics.peakDoublesRating = Math.max(
+        metrics.peakDoublesRating,
+        roundDuprRating(doublesRatingAfter),
       );
     }
 

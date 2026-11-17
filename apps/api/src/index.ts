@@ -128,12 +128,14 @@ import {
   buildRecordsPage,
   buildSessionHistory,
   buildSessionReport,
+  buildDoublesRatingAfterByMatchId,
   countAchievementHolders,
   createRankingContext,
   findPlayerEarnedAchievements,
   findSessionDominations,
   parseRecordsCursor,
   toAchievementMatch,
+  toAchievementMatches,
 } from "./services/RankingService";
 import {
   AvatarValidationError,
@@ -904,6 +906,7 @@ const getTeamPlayerIds = (teams: Team[]) =>
 /**
  * 경기 저장으로 참가자 전원이 새로 받은 업적. 저장 후 완료 경기 전체와, 그중 이 경기만
  * 저장 전 상태(previous, 완료 경기가 아니었으면 뺌)로 되돌린 목록의 계산 차이로 구한다.
+ * 평점 업적 입력은 참가자들의 지금 평점 변경 로그로 붙이고, 저장 전 상태의 이 경기에는 붙이지 않는다.
  * 저장은 이미 끝났으므로 업적 계산이 실패하면 빈 배열로 응답한다.
  */
 const findNewAchievementsForSavedMatch = async (
@@ -911,15 +914,27 @@ const findNewAchievementsForSavedMatch = async (
   previous: Match | null,
 ): Promise<EarnedAchievement[]> => {
   try {
-    const after = (await matchRepository.findCompletedMatchOutcomes()).map(
-      toAchievementMatch,
+    const playerIds = getTeamPlayerIds(match.teams);
+    const [outcomes, logsByPlayer] = await Promise.all([
+      matchRepository.findCompletedMatchOutcomes(),
+      Promise.all(
+        playerIds.map((playerId) =>
+          matchRepository.getPlayerRatingChangeLogs(playerId),
+        ),
+      ),
+    ]);
+    const ratingsByMatchId = buildDoublesRatingAfterByMatchId(
+      logsByPlayer.flat(),
+    );
+    const after = outcomes.map((outcome) =>
+      toAchievementMatch(outcome, ratingsByMatchId.get(outcome.id)),
     );
     const before = [
       ...after.filter((candidate) => candidate.id !== match.id),
       ...(previous?.status === "completed" ? [previous] : []),
     ];
     return findNewAchievements({
-      playerIds: getTeamPlayerIds(match.teams),
+      playerIds,
       before,
       after,
     });
@@ -3033,7 +3048,7 @@ app.get("/api/me/achievements/unseen", async (req, res) => {
       db.playerSeenAchievements.findByPlayerId(decoded.playerId),
     ]);
     const earned = findPlayerEarnedAchievements(
-      context.matches.map(toAchievementMatch),
+      toAchievementMatches(context),
       findSessionDominations(context, sessions, new Date()),
       decoded.playerId,
     );

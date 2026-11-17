@@ -311,6 +311,10 @@ describe("게스트가 낀 경기 기록·수정의 ratingExcluded", () => {
     ).mockResolvedValue([]);
     vi.spyOn(
       MatchRepository.prototype,
+      "getPlayerRatingChangeLogs",
+    ).mockResolvedValue([]);
+    vi.spyOn(
+      MatchRepository.prototype,
       "addSessionParticipants",
     ).mockResolvedValue(undefined);
     applyMatchResult = vi
@@ -888,6 +892,10 @@ describe("POST /api/admin/players/:playerId/promote", () => {
       vi.spyOn(
         MatchRepository.prototype,
         "findCompletedMatchOutcomes",
+      ).mockResolvedValue([]);
+      vi.spyOn(
+        MatchRepository.prototype,
+        "getPlayerRatingChangeLogs",
       ).mockResolvedValue([]);
       vi.spyOn(
         MatchRepository.prototype,

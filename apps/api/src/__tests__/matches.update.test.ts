@@ -125,6 +125,10 @@ describe("PUT /api/matches/:matchId", () => {
     findCompletedMatchOutcomes = vi
       .spyOn(MatchRepository.prototype, "findCompletedMatchOutcomes")
       .mockResolvedValue([]);
+    vi.spyOn(
+      MatchRepository.prototype,
+      "getPlayerRatingChangeLogs",
+    ).mockResolvedValue([]);
     cleanupExpired = vi
       .spyOn(MatchRepository.prototype, "cleanupExpired")
       .mockResolvedValue(undefined);

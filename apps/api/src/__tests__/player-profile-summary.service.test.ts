@@ -84,7 +84,7 @@ describe("buildPlayerProfileSummary", () => {
     ]);
   });
 
-  it("업적 35개 진행 상태를 정의 순서로 넣고 진행 중 경기는 세지 않는다", () => {
+  it("업적 38개 진행 상태를 정의 순서로 넣고 진행 중 경기는 세지 않는다", () => {
     const completed = makeMatch({ id: "Mcomplet" });
     const inProgress = makeMatch({
       id: "Minprogr",
@@ -101,7 +101,7 @@ describe("buildPlayerProfileSummary", () => {
       now,
     );
 
-    expect(achievements).toHaveLength(35);
+    expect(achievements).toHaveLength(38);
     expect(achievements[0]).toEqual({
       id: "matches-1",
       earned: true,
@@ -112,6 +112,58 @@ describe("buildPlayerProfileSummary", () => {
     });
     expect(achievements.find((item) => item.id === "matches-10")).toMatchObject(
       { earned: false, current: 1, target: 10 },
+    );
+  });
+
+  it("평점 업적은 경기에 붙은 이 회원의 마지막 평점 로그로 센다", () => {
+    const log = (
+      playerId: string,
+      nextDoubles: number,
+      createdAt: Date,
+    ): PlayerRatingChangeLog => ({
+      id: `log-${playerId}-${createdAt.getTime()}`,
+      playerId,
+      source: "match_completed",
+      sourceLogId: `match-completed-Mdouble1-${createdAt.getTime()}`,
+      previousRating: { singles: 3, doubles: 3.4 },
+      nextRating: { singles: 3, doubles: nextDoubles },
+      delta: { singles: 0, doubles: nextDoubles - 3.4 },
+      createdAt,
+    });
+    const doublesMatch = {
+      ...makeMatch({
+        id: "Mdouble1",
+        type: "mixed-doubles",
+        teams: [
+          { id: "team-a", name: "Team A", players: [me, partnerA] },
+          { id: "team-b", name: "Team B", players: [opponent, viewer] },
+        ],
+      }),
+      ratingChanges: [
+        log(me.id, 3.51, now),
+        log(me.id, 3.45, new Date(now.getTime() - 1000)),
+        log(partnerA.id, 4.1, now),
+      ],
+    };
+
+    const { achievements } = buildPlayerProfileSummary(
+      [doublesMatch],
+      me.id,
+      emptyHistory,
+      me.id,
+      now,
+    );
+
+    expect(achievements.find((item) => item.id === "rating-3.5")).toEqual({
+      id: "rating-3.5",
+      earned: true,
+      earnedAt: now,
+      earnedMatchId: "Mdouble1",
+      current: 3.51,
+      target: 3.5,
+    });
+    expect(achievements.find((item) => item.id === "rating-4.0")).toMatchObject(
+      { earned: false, current: 3.51 },
     );
   });
 
