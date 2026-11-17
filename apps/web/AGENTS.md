@@ -28,7 +28,7 @@
   - 탭 전용 조각: `home/`, `records/`(세션 리포트 조각 `SessionReportParts`는 기록 탭·세션 상세·홈이 같이 씀), `ranking/`
   - `ui/`: 새 디자인 공통 컴포넌트. 새 화면은 여기 것을 먼저 씁니다.
     - `Button.tsx`(`PkButton`, variant `primary`·`soft`·`outline`·`secondary`·`ghost`), `Card.tsx`, `SegmentedControl.tsx`, `Headers.tsx`(`TabHeader`·`DetailHeader`), `Form.tsx`(`TextField`), `Section.tsx`(`ListRow`·`SectionLabel`·`TextLink`), `SheetTitle.tsx`
-    - `MatchRow.tsx`(`MatchRow`·`LiveMatchRow`), `PlayerAvatar.tsx`(`PlayerAvatar`·`TeamAvatars`), `Delta.tsx`(`RatingDelta`·`RankChange`), `RankBadge.tsx`, `Badges.tsx`(`LivePill`·`HighlightBadge`), `StatusMessageChip.tsx`, `StateMessage.tsx`(빈 상태 `empty`·불러오기 실패 `error`(항상 "다시 시도") 문구, size `panel` 탭·화면 전체·`inline` 카드·목록·시트 안), `CountUpText.tsx`(카운트업 숫자의 자리 폭을 최종 내용으로 고정), `SheenOverlay.tsx`(한 번 지나가는 흰 빛, 부모 `relative`·`overflow-hidden` 필요), `Icons.tsx`, `cx.ts`
+    - `MatchRow.tsx`(`MatchRow`·`LiveMatchRow`), `PlayerAvatar.tsx`(`PlayerAvatar`·`TeamAvatars`), `Delta.tsx`(`RatingDelta`·`RankChange`), `RankBadge.tsx`, `Badges.tsx`(`LivePill`·`HighlightBadge`·이전 평점 없음 `NewRatingTag`), `StatusMessageChip.tsx`, `StateMessage.tsx`(빈 상태 `empty`·불러오기 실패 `error`(항상 "다시 시도") 문구, size `panel` 탭·화면 전체·`inline` 카드·목록·시트 안), `CountUpText.tsx`(카운트업 숫자의 자리 폭을 최종 내용으로 고정), `SheenOverlay.tsx`(한 번 지나가는 흰 빛, 부모 `relative`·`overflow-hidden` 필요), `Icons.tsx`, `cx.ts`
   - `profile/UnseenAchievementCelebration.tsx`: `BottomNav`가 렌더. 전역 화면·바텀시트·+ 메뉴가 하나도 열려 있지 않을 때 앱 진입·`dataVersion` 변경·앱 복귀(visibilitychange)·열린 화면이 모두 닫힐 때 `GET /api/me/achievements/unseen`을 조회해, 아직 보지 않은 내 업적(남이 입력한 경기·세션 지배자·관리자 정정 포함)을 `AchievementCelebration`으로 한 장씩 띄우고 닫으면 `POST /api/me/achievements/seen`. 미확인 조회(`fetchUnseenAchievements`)는 진행 중인 확인 처리 요청이 끝난 뒤 보내 방금 본 업적이 다시 뜨지 않는다
   - 공용 레이어·상태: `BottomSheet.tsx`, `PushScreen.tsx`, `SkeletonBlock.tsx`, `TabPanelStatus.tsx`, `HoldToConfirmButton.tsx`, `SystemToast.tsx`, `OfflineBanner.tsx`, `PwaInstallPrompt.tsx`, `PwaUpdatePrompt.tsx`
 - `src/context/`
@@ -107,6 +107,7 @@
 - 테두리가 필요한 곳(진행 중인 내 경기 카드, 테두리 버튼)은 옅은 파랑 `pk-primary-line`입니다.
 - 하이라이트 `pk-hl`(#d4f04a)은 테두리 없이 LIVE 표시와 오늘의 급상승에만 씁니다. 예외로 경기 삭제 버튼의 길게 누르기 채움 앞 끝 선에 씁니다. 평점 추세선 끝점은 블루 점입니다.
 - 랭킹 1~3위는 금·은·동(`pk-gold`·`pk-silver`·`pk-bronze`) 원입니다. 상승은 `pk-up`, 하락은 모두 `pk-down`, 보합은 회색입니다. 빨강(`pk-down`) 채움 버튼은 경기 삭제 확인 시트의 "길게 눌러 삭제"(`HoldToConfirmButton` `danger`, 1초)뿐입니다.
+- 평점 없음은 "–"로 표기하고 NR 알약을 새로 만들지 않습니다. "이전 → 새" 평점 표기에서 이전 평점이 없으면 새 평점만 보이고 변화 자리(또는 새 평점 뒤)에 `NewRatingTag`(NEW)를 붙입니다(경기 상세·기록 완료 평점 변화는 `unratedBeforePlayerIds`, 세션은 `wasUnratedBeforeSession`). 팀 평균 등 평균 표시는 NR을 3.0으로 칩니다.
 - 카드에는 테두리가 없습니다. 둥글기는 12/20/999만, 글자 크기는 12/13/15/17/22/26만 씁니다.
 - Barlow Condensed(`font-num`)는 화면당 주인공 큰 숫자 하나에만 쓰고, 본문은 Pretendard입니다.
 - 경기 행은 팀 아바타 쌍을 넣고 이긴 쪽만 강조합니다(A·B팀 색 구분·승 배지 없음). 줄 맨 위 메타 줄에 시간을 두고 내 경기면 시간 뒤에 " · 내 경기" 글자만 붙으며(바탕 강조 없음), 시간 열은 따로 없고, 코트 번호는 어디에도 표시하지 않습니다.

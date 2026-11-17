@@ -2,7 +2,7 @@ import React from "react";
 import { formatSessionTimeRange } from "@pkpkdupr/shared/session";
 import type { SessionPlayerReport } from "@pkpkdupr/shared/ranking";
 import SkeletonBlock from "@/components/SkeletonBlock";
-import { SessionDominatorBadge } from "@/components/ui/Badges";
+import { NewRatingTag, SessionDominatorBadge } from "@/components/ui/Badges";
 import { rowPressClassName } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { WinLossCount } from "@/components/profile/ProfileStatTile";
@@ -35,6 +35,11 @@ export const getSessionRankChange = (
 export const wasUnratedBeforeSession = (
   report: Pick<SessionPlayerReport, "rankBefore" | "ratingBefore">,
 ): boolean => report.rankBefore === null || report.ratingBefore === null;
+
+/** 세션 전 평점이 없다가 세션 후 평점이 생긴 회원. "전 → 후" 대신 후 평점과 NEW 태그를 보인다 */
+const isNewlyRatedInSession = (
+  report: Pick<SessionPlayerReport, "rankBefore" | "ratingBefore" | "ratingAfter">,
+): boolean => report.ratingAfter !== null && wasUnratedBeforeSession(report);
 
 /**
  * 세션 상세 머리. 메타 줄은 "11월 13일 목 18:00~22:00 · 장소".
@@ -116,11 +121,16 @@ export const SessionRankChangePop: React.FC<{
   ) : null;
 };
 
-/** 세션 평점 변화량. 0부터 세며, 전후 평점 중 하나라도 없으면 "–" */
+/** 세션 평점 변화량. 0부터 세며, 세션 전 평점이 없다가 생겼으면 NEW 태그, 세션 후 평점이 없으면 "–" */
 export const SessionRatingDeltaCount: React.FC<{
-  report: Pick<SessionPlayerReport, "ratingBefore" | "ratingAfter" | "ratingDelta">;
+  report: Pick<
+    SessionPlayerReport,
+    "rankBefore" | "ratingBefore" | "ratingAfter" | "ratingDelta"
+  >;
 }> = ({ report }) =>
-  report.ratingBefore !== null && report.ratingAfter !== null ? (
+  isNewlyRatedInSession(report) ? (
+    <NewRatingTag />
+  ) : report.ratingBefore !== null && report.ratingAfter !== null ? (
     <CountUpRatingDelta value={report.ratingDelta} {...COUNT_UP} />
   ) : (
     <RatingDelta value={null} />
@@ -153,10 +163,17 @@ export const TopRiserCard: React.FC<{ report: SessionPlayerReport }> = ({
         <span className="max-w-full truncate text-pk-17 font-extrabold text-pk-ink">
           {report.player.username}
         </span>
-        <span className="text-pk-13 text-pk-sub tabular-nums">
-          {formatRating(report.ratingBefore)} → {formatRating(report.ratingAfter)}{" "}
-          · {report.matchCount}경기 {report.wins}승
-        </span>
+        {isNewlyRatedInSession(report) ? (
+          <span className="flex items-center gap-1 text-pk-13 text-pk-sub tabular-nums">
+            {formatRating(report.ratingAfter)}
+            <NewRatingTag />· {report.matchCount}경기 {report.wins}승
+          </span>
+        ) : (
+          <span className="text-pk-13 text-pk-sub tabular-nums">
+            {formatRating(report.ratingBefore)} → {formatRating(report.ratingAfter)}{" "}
+            · {report.matchCount}경기 {report.wins}승
+          </span>
+        )}
       </div>
       {/* 이 화면의 주인공 숫자라 본문 글꼴로 크게 보인다 */}
       <CountUpRatingDelta
@@ -179,15 +196,13 @@ export const SessionPlayerRatingRow: React.FC<{
   order?: number;
   onPress: () => void;
 }> = ({ report, ratingLabel, order, onPress }) => {
-  const beforeText = wasUnratedBeforeSession(report)
-    ? "NR"
-    : formatRating(report.ratingBefore);
-  const showsBefore = ratingLabel === "before-after" && report.ratingAfter !== null;
-  // "전 → 후"로 보일 때는 후 평점을 전 평점부터 센다(전이 NR이면 0부터)
-  const ratingFrom =
-    showsBefore && !wasUnratedBeforeSession(report)
-      ? report.ratingBefore ?? undefined
-      : undefined;
+  // 세션 전 평점이 없던 회원은 "전 →" 없이 후 평점만 0부터 센다
+  const showsBefore =
+    ratingLabel === "before-after" &&
+    report.ratingAfter !== null &&
+    !wasUnratedBeforeSession(report);
+  // "전 → 후"로 보일 때는 후 평점을 전 평점부터 센다
+  const ratingFrom = showsBefore ? report.ratingBefore ?? undefined : undefined;
   return (
     <button
       type="button"
@@ -209,7 +224,7 @@ export const SessionPlayerRatingRow: React.FC<{
         </span>
         <span className="truncate text-pk-12 text-pk-muted tabular-nums">
           <WinLossCount wins={report.wins} losses={report.losses} /> ·{" "}
-          {showsBefore ? `${beforeText} → ` : null}
+          {showsBefore ? `${formatRating(report.ratingBefore)} → ` : null}
           <SessionRatingCount report={report} from={ratingFrom} />
         </span>
       </span>
