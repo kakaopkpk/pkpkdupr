@@ -7,6 +7,7 @@ import {
 } from "./match.js";
 import { ACHIEVEMENT_COUNT_START } from "./achievementCountStart.js";
 import { roundDuprRating } from "./player.js";
+import { toKstDateKey } from "./session.js";
 
 /**
  * 업적. 따로 저장하지 않고 조회할 때 완료 경기로 계산한다.
@@ -429,7 +430,7 @@ const ACHIEVEMENT_TABLE: readonly {
       id: "revenge",
       category: "special",
       name: "리벤지",
-      condition: "졌던 파트너·상대 조합 그대로 다시 붙어 승리",
+      condition: "같은 날 진 파트너·상대 조합 그대로 바로 다음 경기에서 승리",
       badgeNumber: null,
       target: 1,
     },
@@ -803,7 +804,7 @@ const markReachedAchievements = (
  * 한 회원의 업적 41개 진행 상태(ACHIEVEMENTS 순서).
  * 완료 경기만(진행 중·취소 제외) 완료 시각 순으로 훑어, 진행도가 목표에 처음 닿은
  * 경기를 받게 된 경기로, 그 경기 완료 시각을 받은 날로 정한다.
- * 승패가 갈리지 않은 경기는 승리에는 세지 않고 연승·콤비 연승·무패 세션은 끊는다.
+ * 승패가 갈리지 않은 경기는 승리에는 세지 않고 연승·콤비 연승·무패 세션·리벤지는 끊는다.
  * 경기 수·단짝·라이벌·세션 진행도에는 센다.
  * 무패 세션은 그 세션의 모든 경기로 판정하므로, 4경기 전승 뒤 같은 세션에서 지면 받지 않은 상태가 된다.
  * 세션 지배자는 경기만으로 알 수 없어 서버가 정한 dominatedSessionIds(이 회원이 지배자로 확정된
@@ -855,8 +856,8 @@ export function computeAchievements(
   const partnerStreaks = new Map<string, number>();
   const opponentMatches = new Map<string, number>();
   const beatenOpponents = new Set<string>();
-  /** 같은 조합의 직전 경기에서 진 조합 */
-  const lostLineups = new Set<string>();
+  /** 이 회원의 직전 경기가 패배면 그 조합과 KST 날짜, 아니면 null */
+  let previousLoss = null as { lineupKey: string; dateKey: string } | null;
   const sessions = new Map<string, SessionRecord>();
 
   const preCountStartDoublesMatches = getPreCountStartDoublesMatches(
@@ -899,11 +900,18 @@ export function computeAchievements(
       streak = 0;
     }
 
+    // 리벤지는 같은 날 진 조합 그대로 이 회원의 바로 다음 경기에서 이길 때만 센다.
     const lineupKey = getLineupKey(match, teamIndex);
-    if (won && lostLineups.has(lineupKey)) metrics.revenges += 1;
-    // 승패가 갈리지 않은 경기도 직전 경기가 되므로 진 상태를 지운다.
-    if (!won && winningTeamIndex !== null) lostLineups.add(lineupKey);
-    else lostLineups.delete(lineupKey);
+    const dateKey = toKstDateKey(match.completedAt);
+    if (
+      won &&
+      previousLoss?.lineupKey === lineupKey &&
+      previousLoss.dateKey === dateKey
+    ) {
+      metrics.revenges += 1;
+    }
+    previousLoss =
+      !won && winningTeamIndex !== null ? { lineupKey, dateKey } : null;
 
     const opponentIds = new Set(
       match.teams[teamIndex === 0 ? 1 : 0].players.map((player) => player.id),

@@ -575,47 +575,125 @@ describe("computeAchievements", () => {
     );
   });
 
-  it("리벤지는 파트너·상대가 같은 조합의 직전 경기에서 지고 다음 같은 조합 경기에서 이기면 받는다", () => {
-    const lineup = (won: boolean) =>
-      makeMatch({ won, partnerId: "mate", opponentIds: ["opp-1", "opp-2"] });
-    const loss = lineup(false);
-    const notRevenge = [
-      loss,
-      // 파트너가 다르거나 상대가 한 명이라도 다르면 다른 조합이다.
-      makeMatch({ partnerId: "other", opponentIds: ["opp-1", "opp-2"] }),
-      makeMatch({ partnerId: "mate", opponentIds: ["opp-1", "opp-3"] }),
-    ];
-    expect(progressOf(compute(notRevenge), "revenge")).toMatchObject({
-      earned: false,
-      current: 0,
+  describe("리벤지", () => {
+    /** KST 2026-12-03 hh:mm 완료 시각 */
+    const kst = (time: string, day = "2026-12-03") =>
+      new Date(`${day}T${time}:00+09:00`);
+    const lineup = (
+      won: boolean,
+      completedAt: Date,
+      opponentIds = ["opp-1", "opp-2"],
+    ) => makeMatch({ won, partnerId: "mate", opponentIds, completedAt });
+    const revengeOf = (matches: AchievementMatch[]) =>
+      progressOf(compute(matches), "revenge");
+
+    it("같은 날 진 조합 그대로 바로 다음 경기에서 이기면 받는다(상대 순서 무관)", () => {
+      const win = lineup(true, kst("19:20"), ["opp-2", "opp-1"]);
+      expect(revengeOf([lineup(false, kst("19:00")), win])).toMatchObject({
+        earned: true,
+        earnedMatchId: win.id,
+        current: 1,
+      });
     });
 
-    // 상대 팀 선수 순서가 바뀌어도 같은 조합이다.
-    const revenge = makeMatch({
-      partnerId: "mate",
-      opponentIds: ["opp-2", "opp-1"],
+    it("같은 조합으로 연달아 진 뒤 이겨도 받는다", () => {
+      const matches = [
+        lineup(false, kst("19:00")),
+        lineup(false, kst("19:20")),
+        lineup(true, kst("19:40")),
+      ];
+      expect(revengeOf(matches)).toMatchObject({
+        earned: true,
+        earnedMatchId: matches[2].id,
+      });
     });
-    expect(
-      progressOf(compute([...notRevenge, revenge]), "revenge"),
-    ).toMatchObject({ earned: true, earnedMatchId: revenge.id, current: 1 });
 
-    // 같은 조합의 직전 경기가 승리였으면 리벤지가 아니다.
-    expect(
-      progressOf(
-        compute([lineup(false), lineup(true), lineup(true)]),
-        "revenge",
-      ).current,
-    ).toBe(1);
-  });
+    it("사이에 이 회원이 뛰지 않은 경기와 업적에 세지 않는 경기는 무시한다", () => {
+      const othersMatch: AchievementMatch = {
+        ...makeMatch({ completedAt: kst("19:10") }),
+        teams: [{ players: [{ id: "x" }] }, { players: [{ id: "y" }] }],
+      };
+      const guestMatch: AchievementMatch = {
+        ...makeMatch({ partnerId: "guest", completedAt: kst("19:15") }),
+        ratingExcluded: true,
+      };
+      expect(
+        revengeOf([
+          lineup(false, kst("19:00")),
+          othersMatch,
+          guestMatch,
+          lineup(true, kst("19:20")),
+        ]).earned,
+      ).toBe(true);
+    });
 
-  it("리벤지는 단식에서 같은 상대에게 진 뒤 이겨도 받는다", () => {
-    const matches = [
-      makeMatch({ won: false, opponentIds: ["rival"] }),
-      makeMatch({ won: true, opponentIds: ["rival"] }),
-    ];
-    expect(progressOf(compute(matches), "revenge")).toMatchObject({
-      earned: true,
-      earnedMatchId: matches[1].id,
+    it("사이에 이 회원이 다른 조합으로 뛰었으면 받지 않는다", () => {
+      for (const between of [
+        makeMatch({ partnerId: "other", completedAt: kst("19:10") }),
+        lineup(true, kst("19:10"), ["opp-1", "opp-3"]),
+      ]) {
+        expect(
+          revengeOf([
+            lineup(false, kst("19:00")),
+            between,
+            lineup(true, kst("19:20")),
+          ]),
+        ).toMatchObject({ earned: false, current: 0 });
+      }
+    });
+
+    it("사이에 같은 조합으로 승부가 갈리지 않은 경기가 있으면 받지 않는다", () => {
+      const draw = makeMatch({
+        partnerId: "mate",
+        scoreA: 11,
+        scoreB: 11,
+        completedAt: kst("19:10"),
+      });
+      expect(
+        revengeOf([
+          lineup(false, kst("19:00")),
+          draw,
+          lineup(true, kst("19:20")),
+        ]).earned,
+      ).toBe(false);
+    });
+
+    it("KST 날짜가 다르면 받지 않는다", () => {
+      expect(
+        revengeOf([
+          lineup(false, kst("23:50")),
+          lineup(true, kst("00:10", "2026-12-04")),
+        ]).earned,
+      ).toBe(false);
+    });
+
+    it("직전 같은 조합 경기가 승리였으면 리벤지가 아니다", () => {
+      expect(
+        revengeOf([
+          lineup(false, kst("19:00")),
+          lineup(true, kst("19:20")),
+          lineup(true, kst("19:40")),
+        ]).current,
+      ).toBe(1);
+    });
+
+    it("단식에서 같은 상대에게 진 뒤 바로 이겨도 받는다", () => {
+      const matches = [
+        makeMatch({
+          won: false,
+          opponentIds: ["rival"],
+          completedAt: kst("19:00"),
+        }),
+        makeMatch({
+          won: true,
+          opponentIds: ["rival"],
+          completedAt: kst("19:20"),
+        }),
+      ];
+      expect(revengeOf(matches)).toMatchObject({
+        earned: true,
+        earnedMatchId: matches[1].id,
+      });
     });
   });
 
