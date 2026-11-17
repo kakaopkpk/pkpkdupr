@@ -1114,8 +1114,17 @@ app.get("/api/players/:playerId/profile-summary", async (req, res) => {
     const playerId = req.params.playerId;
     const viewerPlayerId = decoded.playerId;
     const now = new Date();
-    const [result, ratingChangeLogs, viewerRatingChangeLogs, projection, rankingSource] =
+    const [
+      player,
+      result,
+      ratingChangeLogs,
+      viewerRatingChangeLogs,
+      projection,
+      rankingSource,
+    ] =
       await Promise.all([
+        // 회원 목록(active만)에 없는 비활성 회원도 이름·상태를 보이도록 요약에 함께 싣는다
+        authService.getPlayerById(playerId),
         matchRepository.findByPlayerId(playerId, 0, 10_000),
         matchRepository.getPlayerRatingChangeLogs(playerId),
         // 상대 전적의 "상대가 바꾼 내 평점"용. 본인 프로필이면 필요 없다
@@ -1130,6 +1139,9 @@ app.get("/api/players/:playerId/profile-summary", async (req, res) => {
           return null;
         }),
       ]);
+    if (!player) {
+      return res.status(404).json({ error: "회원을 찾을 수 없습니다." });
+    }
     const matches = attachMatchRatingChanges(result.matches, ratingChangeLogs);
     const dominations = rankingSource
       ? findSessionDominations(
@@ -1138,8 +1150,9 @@ app.get("/api/players/:playerId/profile-summary", async (req, res) => {
           now,
         )
       : null;
-    res.json(
-      buildPlayerProfileSummary(
+    res.json({
+      player,
+      ...buildPlayerProfileSummary(
         matches,
         playerId,
         selectRatingTrendWindow(
@@ -1151,7 +1164,7 @@ app.get("/api/players/:playerId/profile-summary", async (req, res) => {
         dominations?.get(playerId),
         groupRatingChangeLogsByMatchId(viewerRatingChangeLogs),
       ),
-    );
+    });
   } catch (err) {
     res.status(500).json({ error: (err as Error).message });
   }
