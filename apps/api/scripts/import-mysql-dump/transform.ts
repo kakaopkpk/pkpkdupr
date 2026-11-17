@@ -1,0 +1,434 @@
+import { createHash } from "node:crypto";
+import { isEntityId } from "@pkpkdupr/shared/entityId";
+import {
+  getRegularSessionName,
+  isRegularSessionTime,
+  kstDateKeyToDate,
+  REGULAR_SESSION_LOCATION,
+  REGULAR_SESSION_START_HOUR,
+  REGULAR_SESSION_WEEKDAYS,
+  toKstDateKey,
+} from "@pkpkdupr/shared/session";
+import type { DumpRow, DumpTables, DumpValue } from "./parseDump";
+
+/**
+ * v0.12.7 MySQL 덤프 행을 지금 Supabase 스키마의 행으로 바꾼다. DB에 쓰지 않는 순수 함수다.
+ * 시각은 덤프와 같은 epoch 초, id는 덤프 값을 그대로 쓴다.
+ */
+
+export type TargetRow = Record<string, DumpValue | boolean>;
+
+/** 대상 테이블과 넣는 순서. 외래 키가 있는 player_admins는 players 뒤에 넣는다 */
+export const TARGET_TABLES = [
+  "players",
+  "player_creation_logs",
+  "player_status_change_logs",
+  "official_dupr_adjustment_logs",
+  "player_rating_change_logs",
+  "match_sessions",
+  "match_session_participants",
+  "matches",
+  "match_scores",
+  "match_participants",
+  "player_admins",
+] as const;
+export type TargetTable = (typeof TARGET_TABLES)[number];
+
+/** 덤프에 있지만 옮기지 않는 테이블과 이유 */
+export const SKIPPED_DUMP_TABLES: Record<string, string> = {
+  __pkpkdupr_migrations: "MySQL 마이그레이션 기록. 스키마는 supabase/migrations가 기준이다",
+  match_result_approvals: "결과 합의 단계가 없어져 지금 스키마에 테이블이 없다",
+  player_rating_chart_points: "차트 캐시. 조회 때 다시 만든다",
+  player_rating_chart_projections: "차트 캐시. 조회 때 다시 만든다",
+};
+
+/** 덤프 평점 로그 중 그대로 옮기는 source. 나머지는 재계산이 다시 만든다 */
+const COPIED_RATING_LOG_SOURCES = new Set(["official_adjustment_recalculation"]);
+
+/** 옛 서비스에서 날짜별로 만든 정기운동 세션 이름. 예 "9/14 정기운동" */
+const LEGACY_REGULAR_SESSION_NAME = /^\d{1,2}\/\d{1,2} 정기운동$/;
+
+export interface ImportOptions {
+  /** 비운 뒤 player_admins에 넣을 회원 아이디(대소문자 무시) */
+  adminUsernames: string[];
+  /** player_admins.created_at(epoch 초) */
+  nowSeconds: number;
+}
+
+export interface RegularSessionPlan {
+  dateKey: string;
+  sessionId: string;
+  name: string;
+  /** 덤프 세션을 바꾼 것이면 원래 이름, 경기만으로 새로 만든 것이면 null */
+  legacySessionName: string | null;
+  matchCount: number;
+  participantCount: number;
+}
+
+export interface ImportPlan {
+  rows: Record<TargetTable, TargetRow[]>;
+  report: {
+    dumpCounts: Record<string, number>;
+    bootstrapUsernames: string[];
+    regularSessions: RegularSessionPlan[];
+    customSessionNames: string[];
+    /** 세션 경기 선수라서 새로 넣은 세션 참여자 수 */
+    addedSessionParticipantCount: number;
+    skippedRatingLogCounts: Record<string, number>;
+    multiScoreMatchCount: number;
+    adminPlayerIds: string[];
+  };
+}
+
+const str = (row: DumpRow, column: string): string => {
+  const value = row[column];
+  if (typeof value !== "string") {
+    throw new Error(`${column}: 문자열이 필요합니다 (${JSON.stringify(value)})`);
+  }
+  return value;
+};
+
+const num = (row: DumpRow, column: string): number => {
+  const value = row[column];
+  if (typeof value !== "number") {
+    throw new Error(`${column}: 숫자가 필요합니다 (${JSON.stringify(value)})`);
+  }
+  return value;
+};
+
+const pick = (row: DumpRow, columns: string[]): TargetRow =>
+  Object.fromEntries(
+    columns.map((column) => {
+      if (!(column in row)) {
+        throw new Error(`덤프 행에 ${column} 컬럼이 없습니다.`);
+      }
+      return [column, row[column]];
+    }),
+  );
+
+const toSeconds = (date: Date) => Math.floor(date.getTime() / 1000);
+
+/** 정기 세션 18:00 KST의 epoch 초. 지금 api가 만드는 정기 세션의 date와 같다 */
+const regularSessionDateSeconds = (dateKey: string) =>
+  toSeconds(kstDateKeyToDate(dateKey, REGULAR_SESSION_START_HOUR));
+
+/**
+ * 경기만으로 만드는 정기 세션 id. 날짜에서 정해 다시 돌려도 같은 id가 나온다.
+ * 형식은 isEntityId(…, "session")(S + 소문자·숫자 7자)이고, 16진수는 그 문자 집합에 들어간다.
+ */
+export const buildRegularSessionId = (dateKey: string) =>
+  `S${createHash("sha256").update(`regular-session:${dateKey}`).digest("hex").slice(0, 7)}`;
+
+const requireTable = (tables: DumpTables, table: string): DumpRow[] => {
+  const rows = tables[table];
+  if (!rows) {
+    throw new Error(`덤프에 ${table} 테이블이 없습니다.`);
+  }
+  return rows;
+};
+
+export const buildImportPlan = (
+  tables: DumpTables,
+  options: ImportOptions,
+): ImportPlan => {
+  const knownTables = new Set<string>([
+    ...TARGET_TABLES,
+    ...Object.keys(SKIPPED_DUMP_TABLES),
+  ]);
+  const unknownTables = Object.keys(tables).filter(
+    (table) => !knownTables.has(table),
+  );
+  if (unknownTables.length > 0) {
+    throw new Error(`처리 방법을 정하지 않은 덤프 테이블: ${unknownTables.join(", ")}`);
+  }
+
+  const dumpPlayers = requireTable(tables, "players");
+  const dumpCreationLogs = requireTable(tables, "player_creation_logs");
+  const dumpMatches = requireTable(tables, "matches");
+  const dumpSessions = requireTable(tables, "match_sessions");
+  const dumpParticipants = requireTable(tables, "match_participants");
+
+  // 부트스트랩 관리자 계정은 경기 생성자·로그 작성자로 참조되므로 지우지 않고 inactive로 옮긴다
+  const bootstrapPlayerIds = new Set(
+    dumpCreationLogs
+      .filter((log) => log.creation_source === "bootstrap")
+      .map((log) => str(log, "player_id")),
+  );
+
+  const players = dumpPlayers.map((row): TargetRow => ({
+    ...pick(row, [
+      "id",
+      "username",
+      "dupr_rating",
+      "gender",
+      "status",
+      "affiliations_json",
+      "status_message",
+      "status_message_background_color",
+      "created_at",
+      "updated_at",
+    ]),
+    status: bootstrapPlayerIds.has(str(row, "id")) ? "inactive" : str(row, "status"),
+    // 아바타 파일은 옮기지 않는다. 회원이 새로 올린다
+    avatar_url: null,
+    // 계정 발급 단계가 연결하고 is_first_login을 켠다
+    auth_user_id: null,
+    is_first_login: false,
+    is_guest: false,
+    guest_added_by_player_id: null,
+    guest_added_session_id: null,
+  }));
+  const playerIds = new Set(players.map((player) => String(player.id)));
+
+  const adminPlayerIds = options.adminUsernames.map((username) => {
+    const found = dumpPlayers.find(
+      (row) => str(row, "username").toLowerCase() === username.toLowerCase(),
+    );
+    if (!found) {
+      throw new Error(`관리자로 넣을 회원 ${username}이 덤프에 없습니다.`);
+    }
+    if (bootstrapPlayerIds.has(str(found, "id")) || found.status !== "active") {
+      throw new Error(`관리자로 넣을 회원 ${username}이 active가 아닙니다.`);
+    }
+    return str(found, "id");
+  });
+
+  // 정기 세션: 옛 "M/D 정기운동" 세션을 바꾸고, 세션 없는 월·목 18~22시 경기를 그날 정기 세션으로 묶는다
+  const regularByDateKey = new Map<
+    string,
+    { sessionId: string; legacySessionName: string | null; createdAt: number; updatedAt: number }
+  >();
+  const legacyRegularSessionIds = new Set<string>();
+  for (const session of dumpSessions) {
+    const name = str(session, "name");
+    if (!LEGACY_REGULAR_SESSION_NAME.test(name)) continue;
+    const dateKey = toKstDateKey(new Date(num(session, "date") * 1000));
+    const weekday = new Date(`${dateKey}T00:00:00Z`).getUTCDay();
+    if (!REGULAR_SESSION_WEEKDAYS.includes(weekday)) {
+      throw new Error(`${name}(${dateKey})은 정기 요일이 아니라 정기 세션으로 바꿀 수 없습니다.`);
+    }
+    if (regularByDateKey.has(dateKey)) {
+      throw new Error(`${dateKey}에 정기운동 세션이 둘 이상입니다.`);
+    }
+    regularByDateKey.set(dateKey, {
+      sessionId: str(session, "id"),
+      legacySessionName: name,
+      createdAt: num(session, "created_at"),
+      updatedAt: num(session, "updated_at"),
+    });
+    legacyRegularSessionIds.add(str(session, "id"));
+  }
+
+  const dumpSessionIds = new Set(dumpSessions.map((session) => str(session, "id")));
+  const backfillDateKeyByMatchId = new Map<string, string>();
+  for (const match of dumpMatches) {
+    if (match.session_id !== null) continue;
+    const startsAt = new Date(num(match, "match_starts_at") * 1000);
+    if (!isRegularSessionTime(startsAt)) continue;
+    const dateKey = toKstDateKey(startsAt);
+    backfillDateKeyByMatchId.set(str(match, "id"), dateKey);
+    const createdAt = num(match, "created_at");
+    const existing = regularByDateKey.get(dateKey);
+    if (!existing) {
+      const sessionId = buildRegularSessionId(dateKey);
+      if (dumpSessionIds.has(sessionId) || !isEntityId(sessionId, "session")) {
+        throw new Error(`${dateKey} 정기 세션 id ${sessionId}를 쓸 수 없습니다.`);
+      }
+      regularByDateKey.set(dateKey, {
+        sessionId,
+        legacySessionName: null,
+        createdAt,
+        updatedAt: createdAt,
+      });
+    } else if (existing.legacySessionName === null && createdAt < existing.createdAt) {
+      existing.createdAt = createdAt;
+      existing.updatedAt = createdAt;
+    }
+  }
+
+  const matchSessions: TargetRow[] = [];
+  const sessionNameById = new Map<string, string>();
+  const sessionDateById = new Map<string, number>();
+  for (const session of dumpSessions) {
+    const id = str(session, "id");
+    if (legacyRegularSessionIds.has(id)) continue;
+    matchSessions.push({
+      ...pick(session, ["id", "name", "date", "location", "created_at", "updated_at"]),
+      regular_date_key: null,
+      start_time: null,
+      end_time: null,
+    });
+    sessionNameById.set(id, str(session, "name"));
+    sessionDateById.set(id, num(session, "date"));
+  }
+  for (const [dateKey, session] of [...regularByDateKey].sort(([a], [b]) => a.localeCompare(b))) {
+    const name = getRegularSessionName(dateKey);
+    const date = regularSessionDateSeconds(dateKey);
+    matchSessions.push({
+      id: session.sessionId,
+      name,
+      date,
+      location: REGULAR_SESSION_LOCATION,
+      created_at: session.createdAt,
+      updated_at: session.updatedAt,
+      regular_date_key: dateKey,
+      start_time: null,
+      end_time: null,
+    });
+    sessionNameById.set(session.sessionId, name);
+    sessionDateById.set(session.sessionId, date);
+  }
+
+  const matches = dumpMatches.map((row): TargetRow => {
+    const id = str(row, "id");
+    if (row.status !== "completed") {
+      // 덤프의 경기는 모두 completed다. 다른 상태가 오면 처리 규칙을 정하고 다시 돌린다
+      throw new Error(`${id}: completed가 아닌 경기(${String(row.status)})는 옮기지 않습니다.`);
+    }
+    const backfillDateKey = backfillDateKeyByMatchId.get(id);
+    const sessionId = backfillDateKey
+      ? regularByDateKey.get(backfillDateKey)!.sessionId
+      : (row.session_id as string | null);
+    if (sessionId !== null && !sessionNameById.has(sessionId)) {
+      throw new Error(`${id}: 없는 세션 ${sessionId}를 참조합니다.`);
+    }
+    return {
+      ...pick(row, [
+        "id",
+        "type",
+        "source",
+        "creator_player_id",
+        "name",
+        "status",
+        "location",
+        "court_name",
+        "match_starts_at",
+        "completed_at",
+        "result_submitted_by_player_id",
+        "result_submitted_at",
+        "created_at",
+        "updated_at",
+      ]),
+      session_id: sessionId,
+      session_name: sessionId === null ? null : sessionNameById.get(sessionId)!,
+      session_date: sessionId === null ? null : sessionDateById.get(sessionId)!,
+      // 덤프에는 게스트가 없다
+      rating_excluded: false,
+    };
+  });
+
+  const matchParticipants = dumpParticipants.map((row): TargetRow => {
+    if (!playerIds.has(str(row, "player_id"))) {
+      throw new Error(`${str(row, "id")}: 없는 회원 ${str(row, "player_id")}를 참조합니다.`);
+    }
+    return {
+      ...pick(row, ["id", "match_id", "team_index", "player_id"]),
+      // 경기 전 평점 스냅샷은 재계산이 지금 산식으로 다시 채운다
+      dupr_rating_json: null,
+    };
+  });
+
+  // 세션 참여자: 덤프 참여자 + 세션 경기의 모든 선수(지금 api는 세션 경기 선수를 항상 참여자로 넣는다)
+  const sessionParticipants = new Map<string, TargetRow>();
+  for (const row of requireTable(tables, "match_session_participants")) {
+    sessionParticipants.set(`${str(row, "session_id")}:${str(row, "player_id")}`, {
+      ...pick(row, ["id", "session_id", "player_id", "created_at"]),
+    });
+  }
+  const dumpParticipantCount = sessionParticipants.size;
+  const matchById = new Map(matches.map((match) => [String(match.id), match]));
+  const sortedParticipants = [...matchParticipants].sort(
+    (a, b) =>
+      Number(matchById.get(String(a.match_id))!.created_at) -
+      Number(matchById.get(String(b.match_id))!.created_at),
+  );
+  for (const participant of sortedParticipants) {
+    const match = matchById.get(String(participant.match_id));
+    if (!match) {
+      throw new Error(`${String(participant.id)}: 없는 경기를 참조합니다.`);
+    }
+    if (match.session_id === null) continue;
+    const sessionId = String(match.session_id);
+    const playerId = String(participant.player_id);
+    const key = `${sessionId}:${playerId}`;
+    if (sessionParticipants.has(key)) continue;
+    sessionParticipants.set(key, {
+      id: `${sessionId}-${playerId}`,
+      session_id: sessionId,
+      player_id: playerId,
+      created_at: Number(match.created_at),
+    });
+  }
+
+  const dumpRatingLogs = requireTable(tables, "player_rating_change_logs");
+  const skippedRatingLogCounts: Record<string, number> = {};
+  for (const log of dumpRatingLogs) {
+    const source = str(log, "source");
+    if (!COPIED_RATING_LOG_SOURCES.has(source)) {
+      skippedRatingLogCounts[source] = (skippedRatingLogCounts[source] ?? 0) + 1;
+    }
+  }
+
+  const scoreCountByMatchId = new Map<string, number>();
+  for (const score of requireTable(tables, "match_scores")) {
+    const matchId = str(score, "match_id");
+    scoreCountByMatchId.set(matchId, (scoreCountByMatchId.get(matchId) ?? 0) + 1);
+  }
+
+  const regularSessions: RegularSessionPlan[] = [...regularByDateKey]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([dateKey, session]) => ({
+      dateKey,
+      sessionId: session.sessionId,
+      name: getRegularSessionName(dateKey),
+      legacySessionName: session.legacySessionName,
+      matchCount: matches.filter((match) => match.session_id === session.sessionId).length,
+      participantCount: [...sessionParticipants.values()].filter(
+        (participant) => participant.session_id === session.sessionId,
+      ).length,
+    }));
+
+  return {
+    rows: {
+      players,
+      player_creation_logs: requireTable(tables, "player_creation_logs").map((row) => ({
+        ...row,
+      })),
+      player_status_change_logs: requireTable(tables, "player_status_change_logs").map(
+        (row) => ({ ...row }),
+      ),
+      official_dupr_adjustment_logs: requireTable(tables, "official_dupr_adjustment_logs").map(
+        (row) => ({ ...row }),
+      ),
+      player_rating_change_logs: dumpRatingLogs
+        .filter((log) => COPIED_RATING_LOG_SOURCES.has(str(log, "source")))
+        .map((row) => ({ ...row })),
+      match_sessions: matchSessions,
+      match_session_participants: [...sessionParticipants.values()],
+      matches,
+      match_scores: requireTable(tables, "match_scores").map((row) => ({ ...row })),
+      match_participants: matchParticipants,
+      player_admins: adminPlayerIds.map((playerId) => ({
+        player_id: playerId,
+        created_at: options.nowSeconds,
+      })),
+    },
+    report: {
+      dumpCounts: Object.fromEntries(
+        Object.entries(tables).map(([table, rows]) => [table, rows.length]),
+      ),
+      bootstrapUsernames: dumpPlayers
+        .filter((row) => bootstrapPlayerIds.has(str(row, "id")))
+        .map((row) => str(row, "username")),
+      regularSessions,
+      customSessionNames: dumpSessions
+        .filter((session) => !legacyRegularSessionIds.has(str(session, "id")))
+        .map((session) => str(session, "name")),
+      addedSessionParticipantCount: sessionParticipants.size - dumpParticipantCount,
+      skippedRatingLogCounts,
+      multiScoreMatchCount: [...scoreCountByMatchId.values()].filter((count) => count > 1)
+        .length,
+      adminPlayerIds,
+    },
+  };
+};

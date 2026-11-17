@@ -5,7 +5,7 @@
     "type": "module",
     "scripts": {
         "dev": "tsx watch src/index.ts",
-        "build": "tsc",
+        "build": "tsc && tsc -p scripts/import-mysql-dump/tsconfig.json",
         "build:edge": "node scripts/build-edge.mjs",
         "lint": "eslint .",
         "test": "vitest run",

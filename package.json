@@ -26,6 +26,7 @@
         "db:migration:new": "supabase migration new",
         "supabase:link": "supabase link",
         "db:push": "supabase db push",
+        "db:import-mysql": "pnpm --filter @pkpkdupr/api exec tsx scripts/import-mysql-dump/index.ts",
         "functions:serve": "pnpm build:edge && supabase functions serve api"
     },
     "devDependencies": {
