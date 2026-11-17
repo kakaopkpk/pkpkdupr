@@ -6,13 +6,13 @@ import { formatKstShortDate } from "@/lib/format";
 import type { MatchSessionDetailInfo } from "@/lib/matchSessions";
 
 const MINUTE_MS = 60_000;
-const DAY_MS = 24 * 60 * MINUTE_MS;
+const HOUR_MINUTES = 60;
+const DAY_MS = 24 * HOUR_MINUTES * MINUTE_MS;
 
 type SessionTimeSource = Pick<
   MatchSessionDetailInfo,
   "kind" | "date" | "dateKey" | "isToday" | "startTime" | "endTime"
 >;
-
 
 /** "2026-11-17" → UTC 자정 시각(날짜 차 계산용) */
 const dateKeyToUtc = (dateKey: string) => {
@@ -29,8 +29,8 @@ const formatDaysLater = (days: number) => (days === 1 ? "내일" : `${days}일 �
 const formatTimeUntil = (startsAt: Date, now: Date) => {
   const minutes = Math.ceil((startsAt.getTime() - now.getTime()) / MINUTE_MS);
   if (minutes <= 0) return null;
-  if (minutes < 60) return `${minutes}분 뒤`;
-  return `${Math.floor(minutes / 60)}시간 뒤`;
+  if (minutes < HOUR_MINUTES) return `${minutes}분 뒤`;
+  return `${Math.floor(minutes / HOUR_MINUTES)}시간 뒤`;
 };
 
 /** 다음 세션 카드의 칩. 오늘 정기 세션은 "정기", 오늘 회원 세션은 "오늘", 미래는 "다음 세션" */
@@ -38,6 +38,10 @@ export const getSessionChipLabel = (session: SessionTimeSource) => {
   if (!session.isToday) return "다음 세션";
   return session.kind === "regular" ? "정기" : "오늘";
 };
+
+/** 비어 있지 않은 메타 조각을 " · "로 잇는다 */
+const joinMetaParts = (parts: (string | null | undefined)[]) =>
+  parts.filter(Boolean).join(" · ");
 
 type SessionMetaSource = SessionTimeSource &
   Pick<MatchSessionDetailInfo, "location">;
@@ -48,10 +52,7 @@ type SessionMetaSource = SessionTimeSource &
  */
 export const formatSessionTimePlace = (
   session: Pick<SessionMetaSource, "startTime" | "endTime" | "location">,
-) =>
-  [formatSessionTimeRange(session), session.location]
-    .filter(Boolean)
-    .join(" · ");
+) => joinMetaParts([formatSessionTimeRange(session), session.location]);
 
 /**
  * 다음 세션 카드 칩 옆의 남은 시간.
@@ -85,7 +86,8 @@ export const getSessionMetaLabel = (
   }
   const timeRange = formatSessionTimeRange(session);
   const date = formatKstShortDate(new Date(session.date));
-  return [timeRange ? `${date} ${timeRange}` : date, session.location]
-    .filter(Boolean)
-    .join(" · ");
+  return joinMetaParts([
+    timeRange ? `${date} ${timeRange}` : date,
+    session.location,
+  ]);
 };
