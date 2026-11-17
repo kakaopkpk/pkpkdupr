@@ -6,6 +6,7 @@ import {
   formatAchievementProgress,
   getAchievementProgressRatio,
   getCelebrationPointSteps,
+  interpolateAchievementProgress,
   markAchievementsSeen,
 } from "@/lib/achievements";
 
@@ -96,6 +97,29 @@ describe("업적 진행 표시", () => {
     expect(
       formatAchievementProgress(definition("rating-3.5"), progress("rating-3.5", 0)),
     ).toBe("최고 –");
+  });
+
+  it("진행 애니메이션 도중에는 숫자는 0부터, 평점은 3.000부터, 채우기 전 경기 수는 0부터 센다", () => {
+    const format = (id: string, current: number, t: number, matches = 10) =>
+      formatAchievementProgress(
+        definition(id),
+        interpolateAchievementProgress(
+          definition(id),
+          progress(id, current, matches),
+          t,
+        ),
+      );
+    expect(format("streak-10", 6, 0)).toBe("최고 0");
+    expect(format("streak-10", 6, 0.5)).toBe("최고 3");
+    expect(format("matches-50", 30, 0.5)).toBe("15/50");
+    expect(format("rating-3.5", 3.212, 0)).toBe("최고 3.000");
+    expect(format("rating-low-2.0", 2.45, 0.5)).toBe("최저 2.725");
+    expect(format("rating-3.5", 0, 0.5)).toBe("최고 –");
+    expect(format("rating-3.5", 0, 0.5, 7)).toBe("복식 4/10경기");
+    const done = progress("streak-10", 6);
+    expect(interpolateAchievementProgress(definition("streak-10"), done, 1)).toBe(
+      done,
+    );
   });
 
   it("낮은 평점 업적은 최저 복식 평점으로 보여 준다", () => {
