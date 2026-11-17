@@ -30,6 +30,7 @@ import {
   toPublicPlayerDupr,
 } from "@pkpkdupr/shared/player";
 import {
+  ADMIN_ISSUED_PASSWORD,
   isValidUsername,
   toInternalEmail,
   type AdminPasswordResetResponse,
@@ -44,7 +45,6 @@ import { generateEntityId } from "@pkpkdupr/shared/entityId";
 import { SupabaseAuthUserVerifier } from "./supabaseAuthUser";
 import {
   AuthEmailExistsError,
-  generateInitialPassword,
   SupabaseAuthAdmin,
 } from "./supabaseAuthAdmin";
 import type { RatingServiceContract } from "./RatingContract";
@@ -762,7 +762,7 @@ export class AuthService {
       );
     }
 
-    const temporaryPassword = generateInitialPassword();
+    const temporaryPassword = ADMIN_ISSUED_PASSWORD;
 
     if (stored.authUserId) {
       // 플래그를 먼저 켠다. Auth 갱신이 실패해도 다음 로그인에서 비밀번호 변경을 한 번 더 요구할 뿐이다.
@@ -825,7 +825,7 @@ export class AuthService {
       );
     }
 
-    const initialPassword = generateInitialPassword();
+    const initialPassword = ADMIN_ISSUED_PASSWORD;
     const stateChangedError = () =>
       new AccountRequestError(
         409,
@@ -2206,7 +2206,7 @@ export class AuthService {
     }
 
     const player = createPlayer({ username, gender: input.gender });
-    const initialPassword = generateInitialPassword();
+    const initialPassword = ADMIN_ISSUED_PASSWORD;
     const authUserId = await this.createAuthUser(username, initialPassword);
 
     let created: StoredPlayerRecord;

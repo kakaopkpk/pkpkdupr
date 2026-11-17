@@ -1,4 +1,8 @@
-import { INTERNAL_EMAIL_DOMAIN, toInternalEmail } from "@pkpkdupr/shared/auth";
+import {
+  ADMIN_ISSUED_PASSWORD,
+  INTERNAL_EMAIL_DOMAIN,
+  toInternalEmail,
+} from "@pkpkdupr/shared/auth";
 import type { StoredPlayerRecord } from "@pkpkdupr/db";
 import request from "supertest";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -7,7 +11,7 @@ import { app } from "../index";
 import { AuthService } from "../services/AuthService";
 import {
   AuthEmailExistsError,
-  generateInitialPassword,
+  isValidInitialPassword,
   SupabaseAuthAdmin,
 } from "../services/supabaseAuthAdmin";
 import { SupabaseAuthUserVerifier } from "../services/supabaseAuthUser";
@@ -538,6 +542,11 @@ describe("Supabase Auth 기반 인증", () => {
       fixture.admins.add("Padmin01");
     });
 
+    it("관리자 발급 비밀번호는 123qwe이고 Auth 비밀번호 요구를 통과한다", () => {
+      expect(ADMIN_ISSUED_PASSWORD).toBe("123qwe");
+      expect(isValidInitialPassword(ADMIN_ISSUED_PASSWORD)).toBe(true);
+    });
+
     describe("POST /api/admin/register", () => {
       it("Auth 사용자를 만들어 연결하고 초기 비밀번호를 응답으로만 준다", async () => {
         const response = await request(app)
@@ -551,8 +560,7 @@ describe("Supabase Auth 기반 인증", () => {
         expect(player).toMatchObject({ username: "New_Member", gender: "M" });
         expect(player).not.toHaveProperty("authUserId");
         expect(player).not.toHaveProperty("isFirstLogin");
-        expect(initialPassword).toMatch(/^[A-Za-z0-9]{10}$/);
-        expect(initialPassword).not.toBe("ignored");
+        expect(initialPassword).toBe(ADMIN_ISSUED_PASSWORD);
 
         expect(fixture.createAuthUser).toHaveBeenCalledWith({
           email: `new_member@${INTERNAL_EMAIL_DOMAIN}`,
@@ -641,7 +649,7 @@ describe("Supabase Auth 기반 인증", () => {
         expect(response.status).toBe(200);
         expect(response.headers["cache-control"]).toBe("no-store");
         const { temporaryPassword } = response.body;
-        expect(temporaryPassword).toMatch(/^[A-Za-z0-9]{10}$/);
+        expect(temporaryPassword).toBe(ADMIN_ISSUED_PASSWORD);
         expect(fixture.updateAuthUser).toHaveBeenCalledWith(memberUser.id, {
           email: `member@${INTERNAL_EMAIL_DOMAIN}`,
           password: temporaryPassword,
@@ -659,6 +667,7 @@ describe("Supabase Auth 기반 인증", () => {
 
         expect(response.status).toBe(200);
         const { temporaryPassword } = response.body;
+        expect(temporaryPassword).toBe(ADMIN_ISSUED_PASSWORD);
         expect(fixture.createAuthUser).toHaveBeenCalledWith({
           email: `member@${INTERNAL_EMAIL_DOMAIN}`,
           password: temporaryPassword,
@@ -986,18 +995,6 @@ describe("SupabaseAuthUserVerifier 토큰 검증", () => {
       id: "auth-es",
     });
     expect(requestedPaths()).toEqual(["/auth/v1/.well-known/jwks.json", "/auth/v1/user"]);
-  });
-});
-
-describe("generateInitialPassword", () => {
-  it("헷갈리는 문자 없이 영문과 숫자를 각각 1자 이상 넣은 10자다", () => {
-    for (let i = 0; i < 200; i += 1) {
-      const password = generateInitialPassword();
-      expect(password).toMatch(/^[A-Za-z0-9]{10}$/);
-      expect(password).toMatch(/[A-Za-z]/);
-      expect(password).toMatch(/\d/);
-      expect(password).not.toMatch(/[0O1Il]/);
-    }
   });
 });
 
