@@ -88,7 +88,7 @@ const Me: React.FC = () => {
         statusMessage={player?.statusMessage}
         statusMessageBackgroundColor={player?.statusMessageBackgroundColor}
         matchStats={overview?.summary.matchStats}
-        statsError={hasError}
+        hideStats={hasError}
         right={
           <button
             type="button"

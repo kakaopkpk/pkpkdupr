@@ -24,12 +24,10 @@ export interface ProfileHeaderProps {
   player: { id: string; username: string; avatarUrl?: string | null } | null;
   statusMessage?: string | null;
   statusMessageBackgroundColor?: string | null;
-  /** 프로필 요약의 matchStats. 없으면 불러오는 중(스켈레톤)이거나 실패(statsError)다 */
+  /** 프로필 요약의 matchStats. 없으면 불러오는 중(스켈레톤)이거나 숨김(hideStats)이다 */
   matchStats: PlayerProfileSummaryInfo["matchStats"] | null | undefined;
-  /** 프로필 요약을 불러오지 못했으면 승패 줄을 숨긴다 */
-  statsError?: boolean;
-  /** false면 승패 줄 자리(스켈레톤 포함)를 두지 않는다. 비활성 회원 프로필용 */
-  showStats?: boolean;
+  /** matchStats가 없을 때 스켈레톤 대신 승패 줄 자리를 비운다. 요약을 불러오지 못했거나 비활성 회원일 때 */
+  hideStats?: boolean;
   /** 이름 제목 태그. 화면 머리에 다른 h1이 있으면 h2를 쓴다 */
   headingAs?: "h1" | "h2";
   /** 오른쪽 슬롯(예: 나 탭 설정 버튼) */
@@ -47,8 +45,7 @@ const ProfileHeader: React.FC<ProfileHeaderProps> = ({
   statusMessage,
   statusMessageBackgroundColor,
   matchStats,
-  statsError = false,
-  showStats = true,
+  hideStats = false,
   headingAs: Heading = "h1",
   right,
   className,
@@ -72,7 +69,7 @@ const ProfileHeader: React.FC<ProfileHeaderProps> = ({
             color={statusMessageBackgroundColor}
           />
         ) : null}
-        {!showStats ? null : totalStats ? (
+        {totalStats ? (
           <span className="text-pk-13 text-pk-sub tabular-nums">
             <CountUpNumber
               value={totalStats.wins + totalStats.losses}
@@ -81,7 +78,7 @@ const ProfileHeader: React.FC<ProfileHeaderProps> = ({
             경기 ·{" "}
             <WinLossCount wins={totalStats.wins} losses={totalStats.losses} />
           </span>
-        ) : statsError ? null : (
+        ) : hideStats ? null : (
           <SkeletonBlock className="h-4 w-32" />
         )}
       </div>

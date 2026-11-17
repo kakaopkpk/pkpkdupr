@@ -1,5 +1,5 @@
 import type { MatchSessionRecommendationResponse } from "@pkpkdupr/shared/matchmaking";
-import type { Player } from "@pkpkdupr/shared/player";
+import type { PlayerInfo } from "@/hooks/usePlayers";
 import type {
   AddMatchSessionGuestRequest,
   AddMatchSessionParticipantRequest,
@@ -105,10 +105,7 @@ export const addMatchSessionParticipant = async (
 };
 
 /** JSON 응답 형태의 게스트(날짜는 문자열) */
-export type GuestPlayerInfo = Omit<Player, "createdAt" | "updatedAt"> & {
-  createdAt: string;
-  updatedAt: string;
-};
+export type GuestPlayerInfo = PlayerInfo;
 
 /** 그 아이디로 게스트를 만들고 세션 참여자로 넣는다. 이미 있는 아이디(409)는 고정 문구로 알린다 */
 export const addMatchSessionGuest = async (

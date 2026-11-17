@@ -157,15 +157,10 @@ export default function MemberProfileDrawer({
     [playerId, players],
   );
   // 회원 목록은 active만 담으므로 비활성 회원은 요약에 실린 회원 정보로 채운다
-  const summaryPlayer = overview?.summary.player ?? null;
+  const summaryPlayer = overview?.summary.player;
+  const shownPlayer = member ?? summaryPlayer;
   const isInactive = summaryPlayer?.status === "inactive";
-  const username =
-    member?.username ??
-    summaryPlayer?.username ??
-    overview?.rankings[category]?.entries.find(
-      (entry) => entry.player.id === playerId,
-    )?.player.username ??
-    "";
+  const username = shownPlayer?.username ?? "";
 
   const headToHead = overview?.summary.headToHead?.[category] ?? null;
 
@@ -189,16 +184,11 @@ export default function MemberProfileDrawer({
           <ProfileHeader
             className="px-1 pb-1.5"
             headingAs="h2"
-            player={{
-              id: playerId,
-              username,
-              avatarUrl: member?.avatarUrl ?? summaryPlayer?.avatarUrl,
-            }}
+            player={{ id: playerId, username, avatarUrl: shownPlayer?.avatarUrl }}
             statusMessage={member?.statusMessage}
             statusMessageBackgroundColor={member?.statusMessageBackgroundColor}
-            matchStats={overview?.summary.matchStats}
-            statsError={hasError}
-            showStats={!isInactive}
+            matchStats={isInactive ? null : overview?.summary.matchStats}
+            hideStats={hasError || isInactive}
           />
           {isInactive ? (
             <InactiveMemberNotice />
