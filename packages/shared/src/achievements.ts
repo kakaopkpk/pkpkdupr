@@ -738,11 +738,11 @@ const sumPoints = (scores: readonly MatchScore[], teamIndex: 0 | 1) =>
     0,
   );
 
-/** 상대 팀이 1점도 못 냈다. 과거 다중 점수 기록은 모든 게임 합계로 본다 */
+/** 상대 팀이 1점도 못 냈다 */
 const isPerfect = (scores: readonly MatchScore[], teamIndex: 0 | 1) =>
   scores.length > 0 && sumPoints(scores, teamIndex === 0 ? 1 : 0) === 0;
 
-/** 두 팀 모두 10점 이상. 과거 다중 점수 기록은 게임 하나라도 그러면 해당한다 */
+/** 두 팀 모두 10점 이상 */
 const isDeuceGame = (scores: readonly MatchScore[]) =>
   scores.some(
     (score) =>

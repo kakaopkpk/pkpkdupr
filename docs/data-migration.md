@@ -16,7 +16,7 @@
 
 - `players`: `password_hash`는 버리고 `avatar_url`·`auth_user_id`는 null입니다. 아바타 파일은 옮기지 않으므로 회원이 새로 올립니다. 부트스트랩 관리자 계정(`creation_source = 'bootstrap'`)은 경기 생성자·로그 작성자로 참조되므로 지우지 않고 inactive로 옮깁니다.
 - `player_admins`: `--admin <아이디>`로 준 회원만 넣습니다. 비운 뒤 admin-web에 들어갈 관리자이므로 실행 모드에서는 필수입니다.
-- `matches`: `mode`와 자동 합의 컬럼은 버리고 `rating_excluded = false`입니다. 옛 2선승 경기는 점수를 그대로 옮겨 조회 전용 과거 다중 점수 기록이 됩니다.
+- `matches`: `mode`와 자동 합의 컬럼은 버리고 `rating_excluded = false`입니다. 옛 2선승 경기는 게임마다 단판 경기 하나로 쪼개 넣습니다. 규칙은 마이그레이션 `20261117120000_split_multi_score_matches.sql`과 같습니다(첫 게임은 원래 id, k번째 게임은 `M` + md5(`<원래 id>:game:<k>`) 16진수 7자, 시작 +(k-1)×10분·완료와 결과 입력 +(k-1)초).
 - 정기 세션
   - 옛 "M/D 정기운동" 세션은 지금 정기 세션으로 바꿉니다. id는 유지하고, 이름은 요일별 이름(`getRegularSessionName`), 장소는 야탑초등학교, 시각은 그날 18:00 KST, `regular_date_key`를 채웁니다.
   - 세션 없이 기록된 경기 중 KST 월·목 18:00~22:00에 시작한 경기는 그날 정기 세션으로 묶습니다(`20261111070332_regular_sessions.sql` backfill과 같은 규칙). 새로 만드는 정기 세션 id는 날짜에서 정하므로 다시 돌려도 같습니다.
