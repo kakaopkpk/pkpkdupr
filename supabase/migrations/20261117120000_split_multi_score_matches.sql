@@ -1,15 +1,16 @@
 -- 점수가 여러 개인 과거 2선승 경기를 게임마다 단판 경기 하나로 쪼갠다.
--- - 게임 순서는 점수 행 id 자연 정렬(길이 → 문자열) 순서다.
+-- - 게임 순서는 점수 행 id 자연 정렬(길이 → 바이트 순 문자열) 순서다. MySQL 덤프 이관 스크립트(splitMultiScoreMatches)와 같은 순서가 되게 COLLATE "C"로 비교한다.
 -- - 첫 게임은 원래 경기 id를 그대로 쓰고, k번째 게임(k >= 2)은 'M' || md5('<원래 id>:game:<k>') 16진수 7자를 쓴다(isEntityId 경기 형식, 다시 돌려도 같은 id).
 -- - 팀·종류·세션·장소·코트·기록자·source·평점 제외 여부는 원래 경기에서 복사한다.
 -- - 게임마다 실제 시각 기록이 없으므로 k번째 게임은 시작에 (k-1)×10분, 완료·결과 입력에 (k-1)초를 더해 목록·평점 재생 순서가 게임 순서가 되게 한다.
--- 쪼갠 뒤 평점은 전체 재계산(관리자 '평점 재계산')으로 다시 만든다. 재계산은 비어 있는 경기 전 평점 스냅샷만 채우므로 모든 경기의 스냅샷을 비운다.
+-- 이 마이그레이션은 평점을 다시 계산하지 않는다. 적용 직후 관리자 '평점 재계산'을 실행해야 쪼갠 경기가 게임마다 평점·평점 이력에 반영된다.
+-- 재계산은 비어 있는 경기 전 평점 스냅샷만 채우므로 모든 경기의 스냅샷을 비운다.
 
 CREATE TEMP TABLE split_games AS
 SELECT
   s.id AS score_id,
   s.match_id,
-  row_number() OVER (PARTITION BY s.match_id ORDER BY length(s.id), s.id) AS game_no
+  row_number() OVER (PARTITION BY s.match_id ORDER BY length(s.id), s.id COLLATE "C") AS game_no
 FROM match_scores s
 WHERE s.match_id IN (
   SELECT match_id FROM match_scores GROUP BY match_id HAVING count(*) > 1
