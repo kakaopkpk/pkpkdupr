@@ -2,12 +2,13 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import {
   getMatchTopLevelType,
+  type AdminMatchDeletionLog,
   type ManagedMatchSession,
   type Match,
   type MatchTopLevelType,
 } from "@pkpkdupr/shared/match";
 import type { AdminPlayer } from "@pkpkdupr/shared/player";
-import { fetchAdminMatches } from "../../api/matches";
+import { fetchAdminMatches, fetchMatchDeletionLogs } from "../../api/matches";
 import { fetchAdminPlayers } from "../../api/players";
 import { fetchAdminSessions } from "../../api/sessions";
 import { Button } from "../../components/ui/Button";
@@ -26,9 +27,14 @@ import {
   type MatchesRouteParams,
 } from "../../lib/adminRoutes";
 import { formatKstMonthDay } from "../../lib/format";
+import { AddMatchDialog } from "./AddMatchDialog";
+import { DeletedMatchesTable } from "./DeletedMatchesTable";
 import { MatchCorrectionPanel } from "./MatchCorrectionPanel";
 import { MatchList } from "./MatchList";
 import { compareMatchesLatestFirst, normalizeMatch, toDate } from "./matchView";
+import { SessionLinkBar } from "./SessionLinkBar";
+import { buildSessionOptions } from "./sessionOptions";
+import { SheetImportDialog } from "./SheetImportDialog";
 
 const PAGE_SIZE = 50;
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -57,20 +63,31 @@ interface MatchesData {
   matches: Match[];
   players: AdminPlayer[];
   sessions: ManagedMatchSession[];
+  /** 지운 시각 내림차순 */
+  deletionLogs: AdminMatchDeletionLog[];
 }
 
 const loadMatchesData = async (): Promise<MatchesData> => {
-  const [matches, players, sessions] = await Promise.all([
+  const [matches, players, sessions, deletionLogs] = await Promise.all([
     fetchAdminMatches(),
     fetchAdminPlayers(),
     fetchAdminSessions(),
+    fetchMatchDeletionLogs(),
   ]);
   return {
     matches: matches.map(normalizeMatch).sort(compareMatchesLatestFirst),
     players,
     sessions,
+    deletionLogs,
   };
 };
+
+type OpenDialog = "add" | "sheet" | null;
+
+const TABS: Array<{ value: "list" | "deleted"; label: string }> = [
+  { value: "list", label: "경기 목록" },
+  { value: "deleted", label: "삭제된 경기" },
+];
 
 const getErrorMessage = (error: unknown) =>
   error instanceof Error && error.message
@@ -93,6 +110,8 @@ const MatchesPage: React.FC = () => {
   const [category, setCategory] = useState<CategoryFilter>("all");
   const [excludedOnly, setExcludedOnly] = useState(false);
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
+  const [selectedIds, setSelectedIds] = useState<ReadonlySet<string>>(() => new Set());
+  const [openDialog, setOpenDialog] = useState<OpenDialog>(null);
 
   const reload = useCallback(async () => {
     const next = await loadMatchesData();
@@ -116,6 +135,35 @@ const MatchesPage: React.FC = () => {
 
   const sessionFilterId = routeParams.sessionId ?? null;
   const noSessionOnly = routeParams.noSession === true;
+  const activeTab = routeParams.tab ?? "list";
+
+  // 세션 없는 경기 토글을 끄면 고른 경기를 푼다
+  useEffect(() => {
+    if (!noSessionOnly) setSelectedIds(new Set());
+  }, [noSessionOnly]);
+
+  const sessionOptions = useMemo(
+    () => buildSessionOptions(data?.sessions ?? []),
+    [data?.sessions],
+  );
+
+  const selectedMatches = useMemo(
+    () => data?.matches.filter((match) => selectedIds.has(match.id)) ?? [],
+    [data, selectedIds],
+  );
+
+  const toggleSelected = (matchId: string) => {
+    setSelectedIds((current) => {
+      const next = new Set(current);
+      if (next.has(matchId)) next.delete(matchId);
+      else next.add(matchId);
+      return next;
+    });
+  };
+
+  const reloadWithToast = () => {
+    reload().catch((error: unknown) => showToast(getErrorMessage(error)));
+  };
 
   const filteredMatches = useMemo(() => {
     if (!data) return [];
@@ -181,7 +229,12 @@ const MatchesPage: React.FC = () => {
   const handleDeleted = () => {
     updateRoute({ matchId: undefined });
     showToast("경기를 지웠어요");
-    reload().catch((error: unknown) => showToast(getErrorMessage(error)));
+    reloadWithToast();
+  };
+
+  const handleLinked = () => {
+    setSelectedIds(new Set());
+    reloadWithToast();
   };
 
   const filterBar = (
@@ -266,6 +319,9 @@ const MatchesPage: React.FC = () => {
           players={data.players}
           selectedMatchId={selectedMatch?.id ?? null}
           onSelect={(matchId) => updateRoute({ matchId })}
+          selection={
+            noSessionOnly ? { selectedIds, onToggle: toggleSelected } : undefined
+          }
         />
         {filteredMatches.length > visibleCount && (
           <div className="mt-5 flex justify-center">
@@ -281,36 +337,107 @@ const MatchesPage: React.FC = () => {
     );
   };
 
+  const renderDeletedTab = () => {
+    if (!data) {
+      return renderList();
+    }
+    return <DeletedMatchesTable logs={data.deletionLogs} />;
+  };
+
   return (
     <>
-      <PageHeader title="경기" />
-      <div role="tablist" aria-label="경기 화면" className="mb-5 flex gap-1 border-b border-pk-divider">
-        <button
-          type="button"
-          role="tab"
-          aria-selected="true"
-          className="-mb-px border-b-2 border-pk-primary px-1 pb-2.5 text-pk-15 font-bold text-pk-ink"
-        >
-          경기 목록
-        </button>
-      </div>
-      {filterBar}
-      <ListWithPanel
-        list={renderList()}
-        panel={
-          selectedMatch && data ? (
-            <MatchCorrectionPanel
-              key={`${selectedMatch.id}:${toDate(selectedMatch.updatedAt).getTime()}`}
-              match={selectedMatch}
-              players={data.players}
-              sessions={data.sessions}
-              onClose={() => updateRoute({ matchId: undefined })}
-              onReload={reload}
-              onDeleted={handleDeleted}
-            />
-          ) : null
+      <PageHeader
+        title="경기"
+        actions={
+          <>
+            <Button
+              variant="soft"
+              disabled={!data}
+              onClick={() => setOpenDialog("sheet")}
+            >
+              시트로 한꺼번에 넣기
+            </Button>
+            <Button disabled={!data} onClick={() => setOpenDialog("add")}>
+              + 경기 넣기
+            </Button>
+          </>
         }
       />
+      <div role="tablist" aria-label="경기 화면" className="mb-5 flex gap-5 border-b border-pk-divider">
+        {TABS.map((tab) => {
+          const selected = tab.value === activeTab;
+          return (
+            <button
+              key={tab.value}
+              type="button"
+              role="tab"
+              aria-selected={selected}
+              onClick={() =>
+                updateRoute(
+                  tab.value === "deleted"
+                    ? { tab: "deleted", matchId: undefined }
+                    : { tab: undefined },
+                )
+              }
+              className={cx(
+                "-mb-px border-b-2 px-1 pb-2.5 text-pk-15 focus-visible:outline-2 focus-visible:outline-pk-primary",
+                selected
+                  ? "border-pk-primary font-bold text-pk-ink"
+                  : "border-transparent font-semibold text-pk-sub hover:text-pk-ink",
+              )}
+            >
+              {tab.label}
+              {tab.value === "deleted" && data && ` ${data.deletionLogs.length}`}
+            </button>
+          );
+        })}
+      </div>
+      {activeTab === "deleted" ? (
+        renderDeletedTab()
+      ) : (
+        <>
+          {filterBar}
+          {noSessionOnly && data && (
+            <SessionLinkBar
+              selectedMatches={selectedMatches}
+              sessionOptions={sessionOptions}
+              onLinked={handleLinked}
+            />
+          )}
+          <ListWithPanel
+            list={renderList()}
+            panel={
+              selectedMatch && data ? (
+                <MatchCorrectionPanel
+                  key={`${selectedMatch.id}:${toDate(selectedMatch.updatedAt).getTime()}`}
+                  match={selectedMatch}
+                  players={data.players}
+                  sessions={data.sessions}
+                  onClose={() => updateRoute({ matchId: undefined })}
+                  onReload={reload}
+                  onDeleted={handleDeleted}
+                />
+              ) : null
+            }
+          />
+        </>
+      )}
+      {data && openDialog === "add" && (
+        <AddMatchDialog
+          players={data.players}
+          sessionOptions={sessionOptions}
+          onClose={() => setOpenDialog(null)}
+          onCreated={reloadWithToast}
+        />
+      )}
+      {data && openDialog === "sheet" && (
+        <SheetImportDialog
+          players={data.players}
+          sessionOptions={sessionOptions}
+          onClose={() => setOpenDialog(null)}
+          onCreated={reloadWithToast}
+        />
+      )}
     </>
   );
 };
