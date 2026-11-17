@@ -32,7 +32,9 @@ export const CountUpText: React.FC<CountUpTextProps> = ({
       {finalContent}
     </span>
     <span className={cx("absolute inset-0 flex", ALIGN_CLASS[align])}>
-      {children}
+      {/* 글자 크기가 다른 요소가 바로 flex 항목이 되면 바깥 글꼴의 줄 기준선을 잃어 위로 뜬다.
+          바깥 글꼴을 물려받는 span으로 감싸 자리 잡기 글자와 같은 기준선에 놓는다 */}
+      <span>{children}</span>
     </span>
   </span>
 );
