@@ -19,6 +19,7 @@ import { useLayerDepth } from "@/hooks/useLayerDepth";
 import {
   type AchievementProgressInfo,
   formatAchievementProgress,
+  getAchievementProgressRatio,
 } from "@/lib/achievements";
 import { formatKstShortDate } from "@/lib/format";
 
@@ -32,10 +33,7 @@ const AchievementRow: React.FC<{
   onPress: () => void;
 }> = ({ definition, progress, onPress }) => {
   const earned = !!progress?.earned;
-  const ratio =
-    definition.target > 0
-      ? Math.min((progress?.current ?? 0) / definition.target, 1)
-      : 0;
+  const ratio = getAchievementProgressRatio(definition, progress);
 
   return (
     <button

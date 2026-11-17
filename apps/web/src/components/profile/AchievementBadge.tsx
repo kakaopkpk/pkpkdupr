@@ -27,7 +27,8 @@ type BadgeIconKind =
   | "target"
   | "fist"
   | "star"
-  | "crown";
+  | "crown"
+  | "rising";
 
 /** 24 viewBox 선 아이콘. 글자는 아이콘 색(currentColor)으로 채운다 */
 const BADGE_ICON_PATHS: Record<BadgeIconKind, React.ReactNode> = {
@@ -135,6 +136,13 @@ const BADGE_ICON_PATHS: Record<BadgeIconKind, React.ReactNode> = {
       <path d="M5.5 20h13" />
     </>
   ),
+  // 오르는 꺾은선 그래프
+  rising: (
+    <>
+      <path d="M4 17l5-5 3.5 3.5L20 8" />
+      <path d="M14.5 8H20v5.5" />
+    </>
+  ),
 };
 
 /** 특별·세션 분류는 업적마다 아이콘이 다르다 */
@@ -162,6 +170,7 @@ const BADGE_ICON_BY_CATEGORY: Record<
   matches: "ball",
   wins: "trophy",
   streak: "flame",
+  rating: "rising",
   special: "shield",
   session: "calendar",
 };
