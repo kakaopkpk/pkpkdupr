@@ -297,6 +297,11 @@ export interface InProgressMatchesResponse {
 /** 기록·수정 응답. GET /api/matches/:matchId 응답과 같은 형태다 */
 export type RecordedMatchResponse = Match & {
   ratingChanges: PlayerRatingChangeLog[];
+  /**
+   * 이 경기가 그 분류(단식/복식) 첫 평점 반영인 참가자 id. 경기 전 그 분류가 NR이던 회원이다.
+   * 평점 미반영 경기·평점 로그가 없는 경기는 빈 배열
+   */
+  unratedBeforePlayerIds: string[];
   /** 이 저장으로 참가자 전원이 새로 받은 업적. 없으면 빈 배열 */
   newAchievements: EarnedAchievement[];
 };

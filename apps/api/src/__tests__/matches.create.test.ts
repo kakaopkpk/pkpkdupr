@@ -153,11 +153,17 @@ describe("POST /api/matches", () => {
   let findCompletedMatchOutcomes: MockInstance<
     MatchRepository["findCompletedMatchOutcomes"]
   >;
+  let getPlayerRatingChangeLogs: MockInstance<
+    MatchRepository["getPlayerRatingChangeLogs"]
+  >;
 
   beforeEach(() => {
     capturedCreatePayload = null;
     findCompletedMatchOutcomes = vi
       .spyOn(MatchRepository.prototype, "findCompletedMatchOutcomes")
+      .mockResolvedValue([]);
+    getPlayerRatingChangeLogs = vi
+      .spyOn(MatchRepository.prototype, "getPlayerRatingChangeLogs")
       .mockResolvedValue([]);
     findOrCreateRegularSession = vi
       .spyOn(MatchRepository.prototype, "findOrCreateRegularSession")
@@ -487,6 +493,51 @@ describe("POST /api/matches", () => {
       const failed = await postMatch([[creator.id], ["player-m-1"]]);
       expect(failed.status).toBe(201);
       expect(failed.body.newAchievements).toEqual([]);
+    });
+  });
+
+  describe("unratedBeforePlayerIds", () => {
+    it("그 분류 첫 평점 경기면 그 회원 id를 담는다", async () => {
+      getPlayerRatingChangeLogs.mockImplementation(async (playerId) =>
+        playerId === creator.id ? [ratingChangeLog] : [],
+      );
+
+      const response = await postMatch([[creator.id], ["player-m-1"]]);
+
+      expect(response.status).toBe(201);
+      expect(response.body.unratedBeforePlayerIds).toEqual([creator.id]);
+    });
+
+    it("앞서 같은 분류 경기가 있었으면 시작값이 3.0이어도 담지 않는다", async () => {
+      const priorAt = new Date("2026-07-01T10:00:00.000Z");
+      findCompletedMatchOutcomes.mockResolvedValue([
+        {
+          ratingExcluded: false,
+          id: "match-prior-singles",
+          type: "singles",
+          sessionId: null,
+          matchStartsAt: priorAt,
+          completedAt: priorAt,
+          teamPlayerIds: [[creator.id], ["player-f-1"]],
+          scores: [{ scoreA: 11, scoreB: 9 }],
+        },
+      ]);
+      getPlayerRatingChangeLogs.mockResolvedValue([
+        {
+          ...ratingChangeLog,
+          id: "log-prior",
+          sourceLogId: `match-completed-match-prior-singles-${priorAt.getTime()}`,
+          nextRating: { singles: 3, doubles: 3 },
+          delta: { singles: 0, doubles: 0 },
+          createdAt: priorAt,
+        },
+        ratingChangeLog,
+      ]);
+
+      const response = await postMatch([[creator.id], ["player-m-1"]]);
+
+      expect(response.status).toBe(201);
+      expect(response.body.unratedBeforePlayerIds).toEqual([]);
     });
   });
 

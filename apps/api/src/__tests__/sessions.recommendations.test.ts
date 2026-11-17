@@ -152,6 +152,31 @@ describe("GET /api/match-sessions/:sessionId/recommendations", () => {
     });
   });
 
+  it("팀 평균은 NR 선수를 기본 평점 3.0으로 친다", async () => {
+    // 참여자 평점 중앙값(3.1)으로 대체하는 팀 나누기와 달리, 표시용 평균은 NR을 3.0으로 계산한다.
+    sessions = [
+      makeSession({
+        participantIds: [playerIds[0], playerIds[1], playerIds[2], playerIds[9]],
+      }),
+    ];
+
+    const response = await recommend("Stoday00", "?courts=1&seed=7");
+
+    expect(response.status).toBe(200);
+    const body = response.body as MatchSessionRecommendationResponse;
+    const nrTeam = body.courts[0]!.teams.find((team) =>
+      team.players.some((player) => player.id === playerIds[9]),
+    )!;
+    const partner = nrTeam.players.find(
+      (player) => player.id !== playerIds[9],
+    )!;
+    expect(partner.doublesRating).not.toBeNull();
+    expect(nrTeam.averageRating).toBeCloseTo(
+      (partner.doublesRating! + 3) / 2,
+      10,
+    );
+  });
+
   it("같은 courts·seed면 같은 결과를 낸다", async () => {
     const first = await recommend("Stoday00", "?courts=2&seed=42");
     const second = await recommend("Stoday00", "?courts=2&seed=42");
