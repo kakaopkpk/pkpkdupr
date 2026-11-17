@@ -767,19 +767,13 @@ describe("public match sessions", () => {
       expect(again.body.participants).toHaveLength(1);
     });
 
-    it("동시 추가 요청은 전체 교체 없이 개별 추가만 써서 둘 다 남는다", async () => {
-      const replace = vi.spyOn(
-        MatchRepository.prototype,
-        "replaceSessionParticipants",
-      );
-
+    it("동시 추가 요청은 둘 다 남는다", async () => {
       const responses = await Promise.all([add(requester.id), add(other.id)]);
 
       expect(responses.map((response) => response.status)).toEqual([200, 200]);
       expect([...participantIds].sort()).toEqual(
         [requester.id, other.id].sort(),
       );
-      expect(replace).not.toHaveBeenCalled();
     });
 
     it("참여자를 삭제하고, 참여 중이 아니어도 200(멱등)", async () => {

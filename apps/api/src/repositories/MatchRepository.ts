@@ -16,7 +16,6 @@ import type {
   PlayerRatingHistory,
 } from "@pkpkdupr/shared/player";
 import {
-  CompletedMatchResultEditError,
   MatchNotFoundError,
   MatchRecordUpdateConflictError,
   MatchStaleUpdateError,
@@ -669,48 +668,6 @@ export class MatchRepository {
       throw new MatchRepositoryError("세션을 찾을 수 없습니다.", 404);
     }
     this.notifySessionsChanged([sessionId]);
-  }
-
-  async replaceSessionParticipants(
-    sessionId: string,
-    playerIds: string[],
-  ): Promise<ManagedMatchSession> {
-    const validPlayerIds = Array.isArray(playerIds)
-      ? playerIds.filter(
-          (playerId: unknown): playerId is string =>
-            typeof playerId === "string",
-        )
-      : [];
-    const updated = await this.run(
-      () => db.matches.replaceSessionParticipants(sessionId, validPlayerIds),
-      400,
-    );
-    if (!updated) {
-      throw new MatchRepositoryError("세션을 찾을 수 없습니다.", 404);
-    }
-    this.notifySessionsChanged([sessionId]);
-    return hydrateManagedSession(updated);
-  }
-
-  async recordAdminResult(
-    matchId: string,
-    submittedByPlayerId: string,
-    scores: MatchScore[],
-  ): Promise<Match> {
-    const updated = await this.run(
-      () =>
-        db.matches.recordAdminResult(
-          matchId,
-          submittedByPlayerId,
-          scores,
-          new Date(),
-        ),
-      400,
-      (error) =>
-        error instanceof CompletedMatchResultEditError ? 409 : undefined,
-    );
-
-    return hydrateMatch(updated);
   }
 
   /**

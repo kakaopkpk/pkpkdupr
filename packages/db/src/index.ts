@@ -30,7 +30,6 @@ export {
 } from "./repositories/OfficialDuprAdjustmentLogRepository";
 export {
   MatchRepository,
-  CompletedMatchResultEditError,
   MatchRecordUpdateConflictError,
   MatchNotFoundError,
   MatchStaleUpdateError,
