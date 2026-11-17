@@ -250,7 +250,8 @@ export const hasGuestPlayer = (
 
 /**
  * 경기 기록 수정(PUT /api/matches/:matchId) 뒤의 평점 미반영 여부.
- * 처음 completed가 되면 다음 팀의 게스트 여부로 정하고, 이미 completed면 기존 true를 유지하며 게스트가 새로 들면 true다.
+ * 처음 completed가 되면 수정 후 팀 구성(nextTeams)의 게스트 여부로 정하고,
+ * 이미 completed면 기존 true를 유지하며 수정 후 팀 구성에 게스트가 있으면 true다.
  */
 export const resolveRatingExcludedAfterEdit = (
   existing: Pick<Match, "status" | "ratingExcluded">,
