@@ -723,15 +723,17 @@ describe("평점 업적 입력", () => {
       makePlayer("Pcarol01", "carol", 3.0),
       makePlayer("Pdave001", "dave", 3.0),
     ];
-    const matches = [
-      makeMatch("Mmatch01", first, [
+    // 평점 업적은 복식 10경기부터 센다. 마지막(10번째) 경기 직후 평점만 로그로 둔다
+    const at = (index: number) => new Date(first.getTime() + index * 60_000);
+    const matches = Array.from({ length: 10 }, (_, index) =>
+      makeMatch(`Mmatch${String(index + 1).padStart(2, "0")}`, at(index), [
         ["Palice01", "Pbob0001"],
         ["Pcarol01", "Pdave001"],
       ]),
-    ];
+    );
     const logs = [
-      makeLog("Palice01", "Mmatch01", first, 3.45, 3.52),
-      makeLog("Pbob0001", "Mmatch01", first, 3.41, 3.48),
+      makeLog("Palice01", "Mmatch10", at(9), 3.45, 3.52),
+      makeLog("Pbob0001", "Mmatch10", at(9), 3.41, 3.48),
     ];
     const counts = countAchievementHolders(
       createRankingContext(players, logs, matches),

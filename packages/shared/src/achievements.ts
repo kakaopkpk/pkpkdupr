@@ -52,7 +52,8 @@ type AchievementMetric =
   | "bestPartnerStreak"
   | "unbeatenSessions"
   | "dominatedSessions"
-  | "peakDoublesRating";
+  | "peakDoublesRating"
+  | "lowestDoublesRating";
 
 /** 업적 정의와 진행도 지표를 한 행에 함께 둔 표(표 순서) */
 const ACHIEVEMENT_TABLE: readonly {
@@ -260,10 +261,21 @@ const ACHIEVEMENT_TABLE: readonly {
   {
     metric: "peakDoublesRating",
     definition: {
+      id: "rating-3.0",
+      category: "rating",
+      name: "수면 위로",
+      condition: "복식 10경기 이상, 복식 평점 3.0 달성",
+      badgeNumber: "3.0",
+      target: 3,
+    },
+  },
+  {
+    metric: "peakDoublesRating",
+    definition: {
       id: "rating-3.5",
       category: "rating",
-      name: "평점 3.5",
-      condition: "복식 평점 3.5 달성",
+      name: "구름 위 산책",
+      condition: "복식 10경기 이상, 복식 평점 3.5 달성",
       badgeNumber: "3.5",
       target: 3.5,
     },
@@ -273,8 +285,8 @@ const ACHIEVEMENT_TABLE: readonly {
     definition: {
       id: "rating-4.0",
       category: "rating",
-      name: "평점 4.0",
-      condition: "복식 평점 4.0 달성",
+      name: "성층권",
+      condition: "복식 10경기 이상, 복식 평점 4.0 달성",
       badgeNumber: "4.0",
       target: 4,
     },
@@ -284,10 +296,32 @@ const ACHIEVEMENT_TABLE: readonly {
     definition: {
       id: "rating-4.5",
       category: "rating",
-      name: "평점 4.5",
-      condition: "복식 평점 4.5 달성",
+      name: "궤도 진입",
+      condition: "복식 10경기 이상, 복식 평점 4.5 달성",
       badgeNumber: "4.5",
       target: 4.5,
+    },
+  },
+  {
+    metric: "lowestDoublesRating",
+    definition: {
+      id: "rating-low-2.5",
+      category: "rating",
+      name: "심해 탐사",
+      condition: "복식 10경기 이상, 복식 평점 2.5 이하",
+      badgeNumber: "2.5",
+      target: 2.5,
+    },
+  },
+  {
+    metric: "lowestDoublesRating",
+    definition: {
+      id: "rating-low-2.0",
+      category: "rating",
+      name: "마리아나 해구",
+      condition: "복식 10경기 이상, 복식 평점 2.0 이하",
+      badgeNumber: "2.0",
+      target: 2,
     },
   },
   {
@@ -492,9 +526,18 @@ export const isBestStreakAchievement = (achievementId: string) => {
   return metric === "bestStreak" || metric === "bestPartnerStreak";
 };
 
-/** 진행도가 최고 복식 평점인 업적(평점 3.5·4.0·4.5) */
-export const isRatingAchievement = (achievementId: string) =>
-  ACHIEVEMENT_METRIC_BY_ID.get(achievementId) === "peakDoublesRating";
+/** 평점 업적(높은 평점 3.0~4.5, 낮은 평점 2.5·2.0). 진행도는 복식 평점이다 */
+export const isRatingAchievement = (achievementId: string) => {
+  const metric = ACHIEVEMENT_METRIC_BY_ID.get(achievementId);
+  return metric === "peakDoublesRating" || metric === "lowestDoublesRating";
+};
+
+/** 낮은 평점 업적(2.5·2.0 이하). 진행도는 최저 복식 평점이고 목표 이하가 되면 받는다 */
+export const isLowRatingAchievement = (achievementId: string) =>
+  ACHIEVEMENT_METRIC_BY_ID.get(achievementId) === "lowestDoublesRating";
+
+/** 평점 업적에 필요한 평점 반영 복식 경기 수. 이 경기 수를 채운 뒤의 평점만 센다 */
+export const RATING_ACHIEVEMENT_MIN_DOUBLES_MATCHES = 10;
 
 export const ACHIEVEMENT_CATEGORY_LABEL: Record<AchievementCategory, string> = {
   matches: "경기 수",
@@ -518,10 +561,13 @@ export interface AchievementProgress {
   earnedMatchId: string | null;
   /**
    * 지금까지 진행도. 연승은 최고 연승, 단짝은 한 파트너와의 최대 복식 경기 수,
-   * 환상의 콤비는 한 파트너와의 최고 연승, 라이벌은 한 상대와의 최대 맞대결 수, 철인은 한 세션 최대 경기 수
+   * 환상의 콤비는 한 파트너와의 최고 연승, 라이벌은 한 상대와의 최대 맞대결 수, 철인은 한 세션 최대 경기 수.
+   * 평점 업적은 복식 경기 수를 채운 뒤의 최고(낮은 평점 업적은 최저) 복식 평점이고, 그런 평점이 없으면 0이다
    */
   current: number;
   target: number;
+  /** 평점 업적만: 지금까지 평점 반영 복식 경기 수(업적 기준 시각 전 경기 포함) */
+  ratedDoublesMatches?: number;
 }
 
 export interface EarnedAchievement {
@@ -704,25 +750,42 @@ const isSessionEventMetric = (
 
 const NO_SESSIONS: ReadonlySet<string> = new Set();
 
-/**
- * 업적 기준 시각 시점 복식 평점을 낸 경기: 기준 시각 전에 완료된 마지막 평점 반영 복식 경기.
- * 그 경기 직후 복식 평점이 평점 업적의 시작 값이며, 그 전 최고치는 보지 않는다.
- */
-const findCountStartRatingMatch = (
+/** 업적 기준 시각 전에 완료된 이 회원의 평점 반영 복식 경기(compareCountedMatches 순) */
+const getPreCountStartDoublesMatches = (
   playerId: string,
   matches: readonly AchievementMatch[],
-): CountedMatch | undefined => {
-  const candidates = matches
+): CountedMatch[] =>
+  matches
     .filter(
       (match): match is CountedMatch =>
         isRatedCompletedMatch(match) &&
         !isOnOrAfterCountStart(match.completedAt) &&
-        getDoublesRatingAfter(match, playerId) != null &&
+        isDoublesMatchType(match.type) &&
         findTeamIndex(match, playerId) !== null,
     )
     .sort(compareCountedMatches);
-  return candidates[candidates.length - 1];
+
+/** 평점 진행도에 경기 직후 복식 평점을 반영한다. 0은 아직 센 평점이 없다는 뜻이다 */
+const applyDoublesRating = (
+  metrics: Record<AchievementMetric, number>,
+  rating: number,
+) => {
+  metrics.peakDoublesRating = Math.max(metrics.peakDoublesRating, rating);
+  metrics.lowestDoublesRating =
+    metrics.lowestDoublesRating === 0
+      ? rating
+      : Math.min(metrics.lowestDoublesRating, rating);
 };
+
+/** 진행도가 목표에 닿았는지. 낮은 평점은 센 평점이 있고 목표 이하일 때다 */
+const isTargetReached = (
+  metric: AchievementMetric,
+  value: number,
+  target: number,
+) =>
+  metric === "lowestDoublesRating"
+    ? value > 0 && value <= target
+    : value >= target;
 
 /** 아직 받지 않은 경기 단위 업적 중 진행도가 목표에 닿은 것을 이 경기로 받은 것으로 정한다 */
 const markReachedAchievements = (
@@ -734,7 +797,7 @@ const markReachedAchievements = (
     if (item.earned) continue;
     const metric = ACHIEVEMENT_METRIC_BY_ID.get(item.id)!;
     if (isSessionEventMetric(metric)) continue;
-    if (metrics[metric] >= item.target) {
+    if (isTargetReached(metric, metrics[metric], item.target)) {
       item.earned = true;
       item.earnedAt = match.completedAt;
       item.earnedMatchId = match.id;
@@ -743,7 +806,7 @@ const markReachedAchievements = (
 };
 
 /**
- * 한 회원의 업적 38개 진행 상태(ACHIEVEMENTS 순서).
+ * 한 회원의 업적 41개 진행 상태(ACHIEVEMENTS 순서).
  * 완료 경기만(진행 중·취소 제외) 완료 시각 순으로 훑어, 진행도가 목표에 처음 닿은
  * 경기를 받게 된 경기로, 그 경기 완료 시각을 받은 날로 정한다.
  * 승패가 갈리지 않은 경기는 승리에는 세지 않고 연승·콤비 연승·무패 세션은 끊는다.
@@ -751,9 +814,11 @@ const markReachedAchievements = (
  * 무패 세션은 그 세션의 모든 경기로 판정하므로, 4경기 전승 뒤 같은 세션에서 지면 받지 않은 상태가 된다.
  * 세션 지배자는 경기만으로 알 수 없어 서버가 정한 dominatedSessionIds(이 회원이 지배자로 확정된
  * 끝난 세션)로 세고, 그 세션에서 이 회원의 마지막 경기를 받은 경기로 정한다.
- * 평점 업적은 복식 경기 직후 복식 평점(doublesRatingAfter)의 최고치로 세므로, 받은 뒤 평점이 내려가도 유지된다.
- * 평점 업적만은 업적 기준 시각 시점 평점(findCountStartRatingMatch)에서 시작해, 그때 이미 기준 이상이면
- * 그 평점을 낸 기준 시각 전 경기로 받는다. 그 전 최고치는 세지 않는다.
+ * 평점 업적은 평점 반영 복식 경기가 RATING_ACHIEVEMENT_MIN_DOUBLES_MATCHES개 이상인 뒤의 복식 경기 직후
+ * 복식 평점(doublesRatingAfter)의 최고치(낮은 평점 업적은 최저치)로 세므로, 받은 뒤 평점이 바뀌어도 유지된다.
+ * 복식 경기 수는 업적 기준 시각 전 경기도 센다. 평점은 업적 기준 시각 시점 평점(기준 시각 전 마지막
+ * 복식 경기 직후 평점)에서 시작해, 그때 이미 경기 수와 기준을 채웠으면 그 경기로 받는다.
+ * 그 전 최고치·최저치는 세지 않는다.
  */
 export function computeAchievements(
   playerId: string,
@@ -779,6 +844,7 @@ export function computeAchievements(
     unbeatenSessions: 0,
     dominatedSessions: 0,
     peakDoublesRating: 0,
+    lowestDoublesRating: 0,
   };
   const progress: AchievementProgress[] = ACHIEVEMENTS.map((definition) => ({
     id: definition.id,
@@ -798,12 +864,21 @@ export function computeAchievements(
   const lostLineups = new Set<string>();
   const sessions = new Map<string, SessionRecord>();
 
-  const countStartRatingMatch = findCountStartRatingMatch(playerId, matches);
-  if (countStartRatingMatch) {
-    metrics.peakDoublesRating = getDoublesRatingAfter(
-      countStartRatingMatch,
-      playerId,
-    )!;
+  const preCountStartDoublesMatches = getPreCountStartDoublesMatches(
+    playerId,
+    matches,
+  );
+  let ratedDoublesMatches = preCountStartDoublesMatches.length;
+  const countStartRatingMatch =
+    preCountStartDoublesMatches[preCountStartDoublesMatches.length - 1];
+  const countStartRating = countStartRatingMatch
+    ? getDoublesRatingAfter(countStartRatingMatch, playerId)
+    : null;
+  if (
+    countStartRating != null &&
+    ratedDoublesMatches >= RATING_ACHIEVEMENT_MIN_DOUBLES_MATCHES
+  ) {
+    applyDoublesRating(metrics, countStartRating);
     markReachedAchievements(progress, metrics, countStartRatingMatch);
   }
 
@@ -892,12 +967,13 @@ export function computeAchievements(
       );
     }
 
+    if (isDoublesMatchType(match.type)) ratedDoublesMatches += 1;
     const doublesRatingAfter = getDoublesRatingAfter(match, playerId);
-    if (doublesRatingAfter != null) {
-      metrics.peakDoublesRating = Math.max(
-        metrics.peakDoublesRating,
-        doublesRatingAfter,
-      );
+    if (
+      doublesRatingAfter != null &&
+      ratedDoublesMatches >= RATING_ACHIEVEMENT_MIN_DOUBLES_MATCHES
+    ) {
+      applyDoublesRating(metrics, doublesRatingAfter);
     }
 
     markReachedAchievements(progress, metrics, match);
@@ -925,6 +1001,9 @@ export function computeAchievements(
   for (const item of progress) {
     const metric = ACHIEVEMENT_METRIC_BY_ID.get(item.id)!;
     item.current = metrics[metric];
+    if (isRatingAchievement(item.id)) {
+      item.ratedDoublesMatches = ratedDoublesMatches;
+    }
     if (isSessionEventMetric(metric) && item.current >= item.target) {
       const earnedMatch = sessionEventMatches[metric][item.target - 1];
       item.earned = true;

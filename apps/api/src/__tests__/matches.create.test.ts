@@ -488,7 +488,15 @@ describe("POST /api/matches", () => {
 
     it("참가자의 평점 로그로 이번 경기에서 처음 넘긴 평점 업적만 새 업적으로 응답한다", async () => {
       const priorAt = new Date("2026-01-01T00:00:00.000Z");
+      // 평점 업적은 복식 10경기부터 센다. 평점 로그 없는 앞선 9경기로 match-prior-1이 10경기째가 된다
+      const warmUps = Array.from({ length: 9 }, (_, index) =>
+        priorWin(
+          `match-warmup-${index}`,
+          new Date(priorAt.getTime() - (9 - index) * 60_000),
+        ),
+      );
       findCompletedMatchOutcomes.mockImplementation(async () => [
+        ...warmUps,
         priorWin("match-prior-1", priorAt),
         priorWin("match-test-001", capturedCreatePayload?.completedAt ?? new Date()),
       ]);
