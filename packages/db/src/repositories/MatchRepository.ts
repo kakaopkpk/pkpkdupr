@@ -252,6 +252,17 @@ const toPublicPlayer = (record: StoredPlayer): Player => ({
   updatedAt: toDate(record.updatedAt),
 });
 
+/** 행을 읽은 순서를 유지한 채 경기 id별로 묶는다 */
+const groupByMatchId = <T extends { matchId: string }>(rows: T[]) => {
+  const grouped = new Map<string, T[]>();
+  for (const row of rows) {
+    const group = grouped.get(row.matchId);
+    if (group) group.push(row);
+    else grouped.set(row.matchId, [row]);
+  }
+  return grouped;
+};
+
 const toMatchScore = (score: StoredMatchScore): MatchScore => ({
   scoreA: score.scoreA,
   scoreB: score.scoreB,
@@ -830,7 +841,8 @@ export class MatchRepository {
       return undefined;
     }
 
-    return await this.hydrateMatch(match, executor);
+    const [hydrated] = await this.hydrateMatches([match], executor);
+    return hydrated;
   }
 
   async findAll(
@@ -1699,10 +1711,7 @@ export class MatchRepository {
     for (let offset = 0; offset < rows.length; offset += chunkSize) {
       const chunk = rows.slice(offset, offset + chunkSize);
       const values = chunk
-        .map((_, index) => {
-          const base = index * 3;
-          return `($${base + 1}::text, $${base + 2}::text, $${base + 3}::text)`;
-        })
+        .map((_, index) => `(${placeholders(3, index * 3 + 1)})`)
         .join(", ");
       const result = await this.client.execute({
         sql: `
@@ -2227,14 +2236,6 @@ export class MatchRepository {
     return await this.findById(id);
   }
 
-  private async hydrateMatch(
-    match: StoredMatch,
-    executor: any = this.db,
-  ): Promise<Match> {
-    const [hydrated] = await this.hydrateMatches([match], executor);
-    return hydrated!;
-  }
-
   /**
    * 경기들을 공개 계약 형태로 조립한다. 참가자·점수·세션·선수를 경기 수와 상관없이
    * 테이블마다 쿼리 하나로 읽는다(Edge Function CPU 한도 안에서 전체 재계산을 끝내기 위함).
@@ -2291,15 +2292,6 @@ export class MatchRepository {
       sessionRows.map((session) => [session.id, session]),
     );
     // id 순으로 읽었으므로 경기별로 묶어도 경기 안의 순서는 id 순이다
-    const groupByMatchId = <T extends { matchId: string }>(rows: T[]) => {
-      const grouped = new Map<string, T[]>();
-      for (const row of rows) {
-        const group = grouped.get(row.matchId);
-        if (group) group.push(row);
-        else grouped.set(row.matchId, [row]);
-      }
-      return grouped;
-    };
     const participantsByMatchId = groupByMatchId(participantRows);
     const scoresByMatchId = groupByMatchId(scoreRows);
 
