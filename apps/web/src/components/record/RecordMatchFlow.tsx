@@ -35,6 +35,7 @@ import RecordDoneStep from "./RecordDoneStep";
 import {
   getErrorMessage,
   getSlotTeams,
+  removeSlotPlayer,
   toDecidedScore,
   type RecordSlots,
   type ScoreDraft,
@@ -174,6 +175,17 @@ export default function RecordMatchFlow({
       ),
     [editingMatchId, inProgressMatches],
   );
+  // 진행 중 경기 목록을 받기 전에 열려 경기 중인 나를 미리 넣었으면 그 자리를 비운다
+  const currentPlayerId = currentPlayer?.id ?? null;
+  if (
+    step === "pick" &&
+    !editingMatchId &&
+    currentPlayerId &&
+    busyIds.has(currentPlayerId) &&
+    slots.includes(currentPlayerId)
+  ) {
+    setSlots(removeSlotPlayer(slots, currentPlayerId));
+  }
 
   const slotTeams = getSlotTeams(slots);
   const teamPlayers = useMemo<[AvatarPlayer[], AvatarPlayer[]]>(() => {
@@ -355,7 +367,7 @@ export default function RecordMatchFlow({
       playerById={playerById}
       participantIds={participantIds}
       busyIds={busyIds}
-      currentPlayerId={currentPlayer?.id ?? null}
+      currentPlayerId={currentPlayerId}
       footerMode={editingMatchId ? "edit" : "new"}
       isBusy={isBusy}
       error={error}
