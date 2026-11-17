@@ -106,7 +106,7 @@ const RankingRow: React.FC<{
   );
 };
 
-/** 평점 없는(NR) 회원 줄. 순위 카드 맨 아래에 순위 "–"·NR 칩으로 이어 붙고 변동은 비운다 */
+/** 평점 없는(NR) 회원 줄. 순위 카드 맨 아래에 순위·평점 모두 "–"로 이어 붙고 변동은 비운다 */
 const UnratedRow: React.FC<{
   entry: UnratedRankingEntry;
   onPress: () => void;
@@ -121,9 +121,9 @@ const UnratedRow: React.FC<{
     </span>
     <PlayerAvatar player={entry.player} size={32} />
     <PlayerNameCell player={entry.player} />
-    <span className="flex items-center justify-end gap-1.5">
-      <span className="rounded-full bg-pk-neutral px-2 py-0.5 text-pk-12 font-extrabold text-pk-muted">
-        NR
+    <span className={cx(ratingCellClassName, "justify-end")}>
+      <span className="text-pk-15 leading-none font-extrabold text-pk-muted">
+        –
       </span>
       <span className={changeSlotClassName} />
     </span>
