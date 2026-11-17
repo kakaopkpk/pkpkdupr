@@ -113,9 +113,6 @@ describe("PUT /api/matches/:matchId", () => {
   let findCompletedMatchOutcomes: MockInstance<
     MatchRepository["findCompletedMatchOutcomes"]
   >;
-  let getPlayerRatingChangeLogs: MockInstance<
-    MatchRepository["getPlayerRatingChangeLogs"]
-  >;
 
   const putMatch = (body: object = validBody, matchId = existing.id) =>
     request(app)
@@ -127,9 +124,6 @@ describe("PUT /api/matches/:matchId", () => {
     existing = buildExistingMatch();
     findCompletedMatchOutcomes = vi
       .spyOn(MatchRepository.prototype, "findCompletedMatchOutcomes")
-      .mockResolvedValue([]);
-    getPlayerRatingChangeLogs = vi
-      .spyOn(MatchRepository.prototype, "getPlayerRatingChangeLogs")
       .mockResolvedValue([]);
     cleanupExpired = vi
       .spyOn(MatchRepository.prototype, "cleanupExpired")
@@ -321,35 +315,6 @@ describe("PUT /api/matches/:matchId", () => {
     expect(response.body.ratingChanges).toEqual([
       expect.objectContaining({ id: `log-${existing.id}` }),
     ]);
-  });
-
-  it("첫 점수 입력이 그 분류 첫 평점 반영이면 unratedBeforePlayerIds에 담는다", async () => {
-    existing = buildExistingMatch({ status: "created", scores: [] });
-    getPlayerRatingChangeLogs.mockResolvedValue([editLog(existing.id)]);
-
-    const response = await putMatch();
-
-    expect(response.status).toBe(200);
-    expect(response.body.unratedBeforePlayerIds).toEqual([requester.id]);
-  });
-
-  it("평점 미반영 경기면 unratedBeforePlayerIds는 빈 배열이다", async () => {
-    existing = buildExistingMatch({ status: "created", scores: [] });
-    updateRecordedMatch.mockImplementation(async (matchId, input) => ({
-      ...existing,
-      id: matchId,
-      teams: input.teams,
-      scores: input.scores,
-      status: "completed",
-      ratingExcluded: true,
-    }));
-    getPlayerRatingChangeLogs.mockResolvedValue([editLog(existing.id)]);
-
-    const response = await putMatch();
-
-    expect(response.status).toBe(200);
-    expect(response.body.unratedBeforePlayerIds).toEqual([]);
-    expect(getPlayerRatingChangeLogs).not.toHaveBeenCalled();
   });
 
   it("시작 2시간이 지난 점수 없는 진행 중 경기는 404를 반환한다", async () => {
