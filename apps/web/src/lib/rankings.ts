@@ -48,6 +48,9 @@ export function fetchRankings(
   category: MatchTopLevelType,
 ): Promise<RankingResponse>;
 export function fetchRankings(
+  category: "achievements",
+): Promise<AchievementRankingResponse>;
+export function fetchRankings(
   category: RankingCategory,
 ): Promise<RankingResponse | AchievementRankingResponse>;
 export function fetchRankings(category: RankingCategory) {
@@ -58,8 +61,7 @@ export function fetchRankings(category: RankingCategory) {
 }
 
 /** 업적 점수 순위 */
-export const fetchAchievementRanking = () =>
-  fetchRankings("achievements") as Promise<AchievementRankingResponse>;
+export const fetchAchievementRanking = () => fetchRankings("achievements");
 
 export const fetchSessionHistory = async (
   options: { limit?: number; playerId?: string } = {},
