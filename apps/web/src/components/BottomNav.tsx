@@ -1136,8 +1136,7 @@ const BottomNav: React.FC = () => {
     ],
   );
 
-  const dockBottom =
-    "bottom-[calc(var(--safe-bottom)+var(--app-keyboard-offset)+8px)]";
+  const dockBottom = "bottom-[calc(var(--safe-bottom)+8px)]";
 
   return (
     <TabNavigationProvider value={navigationContextValue}>
@@ -1211,17 +1210,17 @@ const BottomNav: React.FC = () => {
               {/* 바 뒤 콘텐츠가 흐려지며 끝나게 한다. 유리 바 뒤로 콘텐츠가 비치도록 끝까지 가리지는 않는다 */}
               <div
                 aria-hidden="true"
-                className="pointer-events-none absolute inset-x-0 bottom-0 z-10 h-[calc(var(--app-bottom-dock-height)+var(--app-keyboard-offset)+5.5rem)] bg-[linear-gradient(to_bottom,transparent,color-mix(in_srgb,var(--color-pk-bg)_55%,transparent)_75%)]"
+                className="app-keyboard-hidden pointer-events-none absolute inset-x-0 bottom-0 z-10 h-[calc(var(--app-bottom-dock-height)+5.5rem)] bg-[linear-gradient(to_bottom,transparent,color-mix(in_srgb,var(--color-pk-bg)_55%,transparent)_75%)]"
               />
 
               {/* 바를 살짝 빗나간 터치(바 아래 여백·바 위 가장자리)가 뒤 콘텐츠로 가지 않게 막는다 */}
               <div
                 aria-hidden="true"
-                className="absolute inset-x-0 bottom-0 z-[15] h-[calc(var(--app-bottom-dock-height)+var(--app-keyboard-offset)+12px)]"
+                className="app-keyboard-hidden absolute inset-x-0 bottom-0 z-[15] h-[calc(var(--app-bottom-dock-height)+12px)]"
               />
 
               <div
-                className={`fixed left-1/2 z-20 flex app-shell-width -translate-x-1/2 flex-col gap-2.5 px-4 ${dockBottom}`}
+                className={`app-keyboard-hidden fixed left-1/2 z-20 flex app-shell-width -translate-x-1/2 flex-col gap-2.5 px-4 ${dockBottom}`}
               >
                 {dockBar?.item.kind === "my-match" ? (
                   <MyMatchBar
@@ -1233,6 +1232,7 @@ const BottomNav: React.FC = () => {
                     onEnterScore={(matchId) =>
                       openRecordMatch({ kind: "score", matchId })
                     }
+                    onOpenDetail={openMatchDetail}
                   />
                 ) : dockBar?.item.kind === "join-session" ? (
                   <JoinSessionBar

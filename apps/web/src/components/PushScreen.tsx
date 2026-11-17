@@ -360,7 +360,7 @@ export const PushScreen: React.FC<PushScreenProps> = ({
             </PushScreenPullToRefreshContext.Provider>
           </div>
           {actions ? (
-            <div className="shrink-0 border-t border-pk-divider bg-pk-bg px-4 pt-3 pb-[var(--safe-bottom)]">
+            <div className="app-keyboard-hidden shrink-0 border-t border-pk-divider bg-pk-bg px-4 pt-3 pb-[var(--safe-bottom)]">
               {actions}
             </div>
           ) : null}

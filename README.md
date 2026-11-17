@@ -10,7 +10,7 @@
 ## 구성
 
 - **GitHub** (`kakaopkpk` 조직): 소스 코드, GitHub Pages(web·admin 정적 호스팅), GitHub Actions(배포·DB 유지 작업)
-- **Supabase** (프로젝트 ref `uvybzkypmbllmpgzmvmr`): Postgres DB, 로그인(Auth), 프로필 이미지(Storage), API(Edge Function `api`)
+- **Supabase** (프로젝트 ref `tkjsfzrzhsteyghniawp`): Postgres DB, 로그인(Auth), 프로필 이미지(Storage), API(Edge Function `api`)
 - 로그인은 관리자가 발급한 아이디·비밀번호만 씁니다. 공개 가입은 막혀 있습니다.
 - 모두 무료 플랜입니다. 결제 수단은 등록하지 않습니다.
 
@@ -50,7 +50,7 @@
 - **A. 같은 조직에 멤버 추가 (권장)**: Supabase 대시보드 → 조직 **Settings → Team → Invite**로 새 운영자를 **Owner**로 초대합니다. 프로젝트와 설정은 그대로입니다.
 - **B. 프로젝트를 새 운영자의 조직으로 옮기기**: 프로젝트 **Settings → General → Transfer project**. 옮기는 사람이 두 조직 모두의 Owner여야 합니다. 받는 조직이 무료 프로젝트 개수 제한에 걸려 있으면 옮겨지지 않습니다.
 
-어느 쪽이든 project ref와 주소(`https://uvybzkypmbllmpgzmvmr.supabase.co`)는 바뀌지 않습니다. 그래서 앱 설정과 회원 데이터는 그대로입니다.
+어느 쪽이든 project ref와 주소(`https://tkjsfzrzhsteyghniawp.supabase.co`)는 바뀌지 않습니다. 그래서 앱 설정과 회원 데이터는 그대로입니다.
 
 ### 3. 개인에게 묶인 값 교체
 
@@ -60,7 +60,7 @@ GitHub Actions secret 중에는 이전 운영자 개인 계정에 묶인 값이 
 | --- | --- | --- |
 | `SUPABASE_ACCESS_TOKEN` | **새 운영자**가 Supabase 대시보드 우측 상단 계정 → **Access Tokens**에서 새 토큰을 만들어 넣습니다. 이전 운영자의 토큰은 그 사람이 Supabase에서 빠지면 더 이상 동작하지 않습니다. | 예 |
 | `SUPABASE_DB_PASSWORD` | 이전 운영자가 DB 비밀번호를 알고 있으므로 바꾸는 것을 권장합니다. 프로젝트 **Database → Settings → Reset database password**로 바꾼 뒤 이 값과 아래 `SUPABASE_DB_URL`을 함께 고칩니다. 비밀번호는 영문·숫자만 쓰면 URL이 깨지지 않습니다. | 권장 |
-| `SUPABASE_DB_URL` | Session pooler 접속 문자열에 새 비밀번호를 넣은 값입니다. 현재 프로젝트 기준으로는 `postgresql://postgres.uvybzkypmbllmpgzmvmr:<DB 비밀번호>@aws-0-ap-southeast-1.pooler.supabase.com:5432/postgres?sslmode=require`입니다. 호스트는 대시보드 **Connect** 화면에서 확인할 수 있습니다. | DB 비밀번호를 바꿨으면 예 |
+| `SUPABASE_DB_URL` | Session pooler 접속 문자열에 새 비밀번호를 넣은 값입니다. 현재 프로젝트 기준으로는 `postgresql://postgres.tkjsfzrzhsteyghniawp:<DB 비밀번호>@aws-0-ap-northeast-2.pooler.supabase.com:5432/postgres?sslmode=require`입니다. 호스트는 대시보드 **Connect** 화면에서 확인할 수 있습니다. | DB 비밀번호를 바꿨으면 예 |
 | `BACKUP_DEPLOY_KEY` | 백업을 켜 둔 경우에만 해당합니다. [docs/backup-restore.md](docs/backup-restore.md)대로 새로 만듭니다. 백업 복호화 키(age 개인키)도 새 운영자에게 안전하게 넘깁니다. | 백업 사용 시 |
 
 Supabase 함수 secret(`CORS_ALLOWED_ORIGINS` 등)은 프로젝트에 저장되어 있습니다. 그래서 운영자가 바뀌어도 그대로 둡니다.
@@ -99,7 +99,7 @@ GitHub 조직이나 저장소 이름이 바뀌어 Pages 주소가 달라졌을 �
 1. 함수 secret `CORS_ALLOWED_ORIGINS`를 새 origin(예: `https://<새 조직>.github.io`)으로 바꿉니다. 바꾸지 않으면 web·admin에서 API 호출이 막힙니다.
 
    ```bash
-   pnpm exec supabase secrets set --project-ref uvybzkypmbllmpgzmvmr CORS_ALLOWED_ORIGINS='https://<새 조직>.github.io'
+   pnpm exec supabase secrets set --project-ref tkjsfzrzhsteyghniawp CORS_ALLOWED_ORIGINS='https://<새 조직>.github.io'
    ```
 
 2. Supabase 대시보드 **Authentication → URL Configuration**에서 Site URL을 새 주소로 바꿉니다. 아이디·비밀번호 로그인은 리다이렉트를 쓰지 않아 Redirect URLs는 비워 둬도 됩니다. 값이 들어 있으면 새 주소로 맞춥니다. 자세한 설명은 [docs/deploy.md](docs/deploy.md)의 "Supabase Auth URL"에 있습니다.

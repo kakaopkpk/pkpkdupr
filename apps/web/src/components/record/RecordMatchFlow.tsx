@@ -13,6 +13,7 @@ import {
 import type { MatchInfo } from "@/types/match";
 import type { AvatarPlayer } from "@/components/ui/PlayerAvatar";
 import { useAppNavigation } from "@/context/AppNavigationContext";
+import { useAuth } from "@/context/AuthContext";
 import { useLiveSession } from "@/context/LiveSessionContext";
 import { useSystemNotice } from "@/context/SystemNoticeContext";
 import {
@@ -34,6 +35,7 @@ import RecordDoneStep from "./RecordDoneStep";
 import {
   getErrorMessage,
   getSlotTeams,
+  removeSlotPlayer,
   toDecidedScore,
   type RecordSlots,
   type ScoreDraft,
@@ -102,6 +104,7 @@ export default function RecordMatchFlow({
   onClose,
 }: RecordMatchFlowProps): React.ReactElement {
   const { notifyDataChanged, selectTab } = useAppNavigation();
+  const { player: currentPlayer } = useAuth();
   const { liveSession, inProgressMatches } = useLiveSession();
   const { showSaveFailure } = useSystemNotice();
   const showStartedMatchToast = useStartedMatchToast();
@@ -146,8 +149,16 @@ export default function RecordMatchFlow({
     players.forEach(add);
     liveSession?.participants.forEach(add);
     initial.editMatch?.teams.forEach((team) => team.players.forEach(add));
+    // 처음부터 자리에 넣는 나는 회원 목록을 받기 전에도 그린다
+    if (currentPlayer?.username) {
+      add({
+        id: currentPlayer.id,
+        username: currentPlayer.username,
+        avatarUrl: currentPlayer.avatarUrl,
+      });
+    }
     return map;
-  }, [initial.editMatch, liveSession, players]);
+  }, [currentPlayer, initial.editMatch, liveSession, players]);
 
   const participantIds = useMemo(
     () => liveSession?.participants.map((participant) => participant.id) ?? [],
@@ -164,6 +175,17 @@ export default function RecordMatchFlow({
       ),
     [editingMatchId, inProgressMatches],
   );
+  // 새 경기에 미리 넣은 내가 경기 중이면(진행 중 경기 목록이 늦게 와도) 그 자리를 비운다. 경기 중인 사람은 고를 수 없다
+  const currentPlayerId = currentPlayer?.id ?? null;
+  if (
+    step === "pick" &&
+    !editingMatchId &&
+    currentPlayerId &&
+    busyIds.has(currentPlayerId) &&
+    slots.includes(currentPlayerId)
+  ) {
+    setSlots(removeSlotPlayer(slots, currentPlayerId));
+  }
 
   const slotTeams = getSlotTeams(slots);
   const teamPlayers = useMemo<[AvatarPlayer[], AvatarPlayer[]]>(() => {
@@ -345,6 +367,7 @@ export default function RecordMatchFlow({
       playerById={playerById}
       participantIds={participantIds}
       busyIds={busyIds}
+      currentPlayerId={currentPlayerId}
       footerMode={editingMatchId ? "edit" : "new"}
       isBusy={isBusy}
       error={error}

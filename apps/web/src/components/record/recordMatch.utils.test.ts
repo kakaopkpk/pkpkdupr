@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   EMPTY_SLOTS,
   addSlotPlayer,
+  buildPickList,
   getNextSlotIndex,
   getSlotTeams,
   removeSlotPlayer,
@@ -108,5 +109,47 @@ describe("slotsFromTeams", () => {
       "c",
       "d",
     ]);
+  });
+});
+
+describe("buildPickList", () => {
+  const player = (id: string, lastPlayedAt: string | null = null) => ({
+    id,
+    username: id,
+    status: "active",
+    lastPlayedAt,
+  });
+  const players = [
+    player("me", "2026-11-01T00:00:00Z"),
+    player("busy", "2026-11-16T00:00:00Z"),
+    player("joined", "2026-11-02T00:00:00Z"),
+    player("recent", "2026-11-15T00:00:00Z"),
+  ];
+  const ids = (list: { id: string }[]) => list.map((item) => item.id);
+
+  it("나를 세션 참여자·경기 중인 사람보다 먼저 맨 위에 둔다", () => {
+    expect(
+      ids(
+        buildPickList(players, {
+          query: "",
+          participantIds: ["joined"],
+          busyIds: new Set(["busy", "me"]),
+          currentPlayerId: "me",
+        }),
+      ),
+    ).toEqual(["me", "joined", "busy", "recent"]);
+  });
+
+  it("검색어에 맞지 않으면 나도 거른다", () => {
+    expect(
+      ids(
+        buildPickList(players, {
+          query: "rec",
+          participantIds: [],
+          busyIds: new Set(),
+          currentPlayerId: "me",
+        }),
+      ),
+    ).toEqual(["recent"]);
   });
 });

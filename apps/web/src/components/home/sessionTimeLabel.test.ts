@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   formatSessionTimePlace,
+  getSessionChipLabel,
   getSessionMetaLabel,
   getSessionTimeUntilLabel,
 } from "./sessionTimeLabel";
@@ -20,7 +21,6 @@ const makeSession = (
   kind: "regular" as const,
   date: kstMidnight(dateKey),
   dateKey,
-  isToday: dateKey <= TODAY_KEY,
   location: "야탑초등학교",
   ...times,
 });
@@ -112,5 +112,29 @@ describe("formatSessionTimePlace", () => {
       "18:00~22:00 · 야탑초등학교",
     );
     expect(formatSessionTimePlace(makeSession(TODAY_KEY, NO_TIME))).toBe("야탑초등학교");
+  });
+});
+
+describe("다음 세션 카드 날짜 기준(자정 넘김)", () => {
+  // 2026-11-16(월) 18:00~22:00 정기 세션
+  const regular = makeSession(TODAY_KEY);
+
+  it("자정 전(일요일 밤)에는 월요 정기 세션이 '내일'이고 칩은 '다음 세션'", () => {
+    const now = new Date("2026-11-15T23:00:00+09:00");
+    expect(getSessionChipLabel(regular, "2026-11-15")).toBe("다음 세션");
+    expect(getSessionTimeUntilLabel(regular, "2026-11-15", now)).toBe("내일");
+    expect(getSessionMetaLabel(regular, "2026-11-15")).toBe(
+      "11월 16일 월 18:00~22:00 · 야탑초등학교",
+    );
+  });
+
+  it("자정을 넘기면(월요일 아침) 같은 세션이 오늘 기준으로 바뀐다", () => {
+    expect(getSessionChipLabel(regular, TODAY_KEY)).toBe("정기");
+    expect(getSessionTimeUntilLabel(regular, TODAY_KEY, at("08:00"))).toBe("10시간 뒤");
+    expect(getSessionMetaLabel(regular, TODAY_KEY)).toBe("18:00~22:00 · 야탑초등학교");
+  });
+
+  it("오늘 회원 세션은 '오늘' 칩", () => {
+    expect(getSessionChipLabel({ ...regular, kind: "custom" }, TODAY_KEY)).toBe("오늘");
   });
 });
