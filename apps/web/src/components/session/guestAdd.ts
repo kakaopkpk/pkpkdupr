@@ -10,19 +10,24 @@ export interface GuestAddOption {
 }
 
 /**
- * 회원 목록을 다 받았고 검색어가 있는데 결과가 없을 때만 게스트 추가 줄을 보인다.
- * 아이디는 앞뒤 공백을 뗀 검색어다.
+ * 회원 목록을 다 받았고 검색어가 있으면 검색 결과와 상관없이 게스트 추가 줄을 보인다.
+ * 아이디는 앞뒤 공백을 뗀 검색어다. 대소문자만 다른 같은 아이디가 결과에 있으면
+ * 서버가 중복으로 거절하므로 보이지 않는다.
  */
 export const getGuestAddOption = ({
   query,
   playersStatus,
-  resultCount,
+  resultUsernames,
 }: {
   query: string;
   playersStatus: "loading" | "ready" | "error";
-  resultCount: number;
+  resultUsernames: readonly string[];
 }): GuestAddOption | null => {
   const username = query.trim();
-  if (playersStatus !== "ready" || resultCount > 0 || !username) return null;
+  if (playersStatus !== "ready" || !username) return null;
+  const normalized = username.toLocaleLowerCase();
+  if (resultUsernames.some((name) => name.toLocaleLowerCase() === normalized)) {
+    return null;
+  }
   return { username, isValid: isValidUsername(username) };
 };

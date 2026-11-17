@@ -10,6 +10,7 @@ export interface PkButtonProps
   /** sm 36px 알약, md 44px, lg 52px */
   size?: "sm" | "md" | "lg";
   fullWidth?: boolean;
+  ref?: React.Ref<HTMLButtonElement>;
 }
 
 /**
