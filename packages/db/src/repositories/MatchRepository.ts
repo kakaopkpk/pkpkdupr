@@ -27,6 +27,7 @@ import {
   desc,
   eq,
   gte,
+  inArray,
   isNotNull,
   lt,
   max,
@@ -250,6 +251,17 @@ const toPublicPlayer = (record: StoredPlayer): Player => ({
   createdAt: toDate(record.createdAt),
   updatedAt: toDate(record.updatedAt),
 });
+
+/** 행을 읽은 순서를 유지한 채 경기 id별로 묶는다 */
+const groupByMatchId = <T extends { matchId: string }>(rows: T[]) => {
+  const grouped = new Map<string, T[]>();
+  for (const row of rows) {
+    const group = grouped.get(row.matchId);
+    if (group) group.push(row);
+    else grouped.set(row.matchId, [row]);
+  }
+  return grouped;
+};
 
 const toMatchScore = (score: StoredMatchScore): MatchScore => ({
   scoreA: score.scoreA,
@@ -829,7 +841,8 @@ export class MatchRepository {
       return undefined;
     }
 
-    return await this.hydrateMatch(match, executor);
+    const [hydrated] = await this.hydrateMatches([match], executor);
+    return hydrated;
   }
 
   async findAll(
@@ -837,9 +850,8 @@ export class MatchRepository {
     limit: number = 20,
     playerId?: string,
   ): Promise<{ matches: Match[]; total: number }> {
-    // 플레이어별 조회는 이전에는 모든 경기를 hydrate한 뒤 메모리에서
-    // 필터링했다. 평점 반영과 차트 projection은 이 경로를 자주 사용하므로
-    // 참가자 인덱스를 통해 DB에서 먼저 대상을 줄인다.
+    // 플레이어별 조회는 참가자 인덱스로 DB에서 먼저 대상을 줄이고,
+    // hydrate는 요청한 페이지의 경기만 한다.
     const allMatches = playerId
       ? (await this.db
           .select({ match: matches })
@@ -862,15 +874,11 @@ export class MatchRepository {
             desc(matches.createdAt),
             desc(matches.id),
           );
-    const hydratedMatches: Match[] = await Promise.all(
-      allMatches.map((match: StoredMatch) => this.hydrateMatch(match)),
-    );
-    const filteredMatches = hydratedMatches;
     const start = page * limit;
 
     return {
-      matches: filteredMatches.slice(start, start + limit),
-      total: filteredMatches.length,
+      matches: await this.hydrateMatches(allMatches.slice(start, start + limit)),
+      total: allMatches.length,
     };
   }
 
@@ -1687,32 +1695,44 @@ export class MatchRepository {
     updatedParticipantCount: number;
     updatedMatchCount: number;
   }> {
+    // 같은 참가자가 여러 번 오면 앞의 스냅샷이 이긴다(비어 있을 때만 채우므로)
+    const uniqueSnapshots = new Map<string, MatchParticipantDuprSnapshot>();
+    for (const snapshot of snapshots) {
+      if (!snapshot.matchId || !snapshot.playerId) continue;
+      const key = `${snapshot.matchId}\u0000${snapshot.playerId}`;
+      if (!uniqueSnapshots.has(key)) uniqueSnapshots.set(key, snapshot);
+    }
+
     const updatedMatchIds = new Set<string>();
     let updatedParticipantCount = 0;
-
-    for (const snapshot of snapshots) {
-      if (!snapshot.matchId || !snapshot.playerId) {
-        continue;
-      }
-
+    const rows = [...uniqueSnapshots.values()];
+    // 전체 재계산은 참가자 행 수만큼 스냅샷이 오므로 묶어서 한 문장씩 보낸다
+    const chunkSize = 500;
+    for (let offset = 0; offset < rows.length; offset += chunkSize) {
+      const chunk = rows.slice(offset, offset + chunkSize);
+      const values = chunk
+        .map((_, index) => `(${placeholders(3, index * 3 + 1)})`)
+        .join(", ");
       const result = await this.client.execute({
         sql: `
           UPDATE match_participants
-          SET dupr_rating_json = $1
-          WHERE match_id = $2
-            AND player_id = $3
-            AND dupr_rating_json IS NULL
+          SET dupr_rating_json = snapshot.dupr_rating_json
+          FROM (VALUES ${values}) AS snapshot(dupr_rating_json, match_id, player_id)
+          WHERE match_participants.match_id = snapshot.match_id
+            AND match_participants.player_id = snapshot.player_id
+            AND match_participants.dupr_rating_json IS NULL
+          RETURNING match_participants.match_id
         `,
-        args: [
+        args: chunk.flatMap((snapshot) => [
           JSON.stringify(snapshot.duprRating ?? null),
           snapshot.matchId,
           snapshot.playerId,
-        ],
+        ]),
       });
 
-      if (result.rowsAffected) {
-        updatedParticipantCount += result.rowsAffected;
-        updatedMatchIds.add(snapshot.matchId);
+      updatedParticipantCount += result.rowsAffected;
+      for (const row of result.rows) {
+        updatedMatchIds.add(String(row.match_id));
       }
     }
 
@@ -2216,98 +2236,118 @@ export class MatchRepository {
     return await this.findById(id);
   }
 
-  private async hydrateMatch(
-    match: StoredMatch,
+  /**
+   * 경기들을 공개 계약 형태로 조립한다. 참가자·점수·세션·선수를 경기 수와 상관없이
+   * 테이블마다 쿼리 하나로 읽는다(Edge Function CPU 한도 안에서 전체 재계산을 끝내기 위함).
+   */
+  private async hydrateMatches(
+    storedMatches: StoredMatch[],
     executor: any = this.db,
-  ): Promise<Match> {
-    const [participants, scores, session] = await Promise.all([
+  ): Promise<Match[]> {
+    if (storedMatches.length === 0) return [];
+
+    const matchIds = [...new Set(storedMatches.map((match) => match.id))];
+    const sessionIds = [
+      ...new Set(
+        storedMatches
+          .map((match) => match.sessionId)
+          .filter((sessionId): sessionId is string => Boolean(sessionId)),
+      ),
+    ];
+    const [participantRows, scoreRows, sessionRows] = await Promise.all([
       executor
         .select()
         .from(matchParticipants)
-        .where(eq(matchParticipants.matchId, match.id))
-        .orderBy(matchParticipants.id),
+        .where(inArray(matchParticipants.matchId, matchIds))
+        .orderBy(matchParticipants.id) as Promise<StoredMatchParticipant[]>,
       executor
         .select()
         .from(matchScores)
-        .where(eq(matchScores.matchId, match.id))
-        .orderBy(matchScores.id),
-      match.sessionId
-        ? executor
+        .where(inArray(matchScores.matchId, matchIds))
+        .orderBy(matchScores.id) as Promise<StoredMatchScore[]>,
+      sessionIds.length > 0
+        ? (executor
             .select()
             .from(matchSessions)
-            .where(eq(matchSessions.id, match.sessionId))
-            .limit(1)
-            .then(firstRow)
-        : Promise.resolve(undefined),
+            .where(inArray(matchSessions.id, sessionIds)) as Promise<
+            StoredMatchSession[]
+          >)
+        : Promise.resolve([] as StoredMatchSession[]),
     ]);
-    const playerRecords = await Promise.all(
-      participants.map((participant: StoredMatchParticipant) =>
-        executor
-          .select()
-          .from(players)
-          .where(eq(players.id, participant.playerId))
-          .limit(1)
-          .then(firstRow),
-      ),
-    );
+    const playerIds = [
+      ...new Set(participantRows.map((participant) => participant.playerId)),
+    ];
+    const playerRows: StoredPlayer[] =
+      playerIds.length > 0
+        ? await executor
+            .select()
+            .from(players)
+            .where(inArray(players.id, playerIds))
+        : [];
+
     const playerById = new Map<string, Player>(
-      playerRecords
-        .filter(Boolean)
-        .map((player: StoredPlayer) => [player.id, toPublicPlayer(player)]),
+      playerRows.map((player) => [player.id, toPublicPlayer(player)]),
     );
-    const teams: [Team, Team] = [0, 1].map((teamIndex) => ({
-      id: `${match.id}-team-${teamIndex}`,
-      name: `Team ${teamIndex === 0 ? "A" : "B"}`,
-      players: participants
-        .filter(
-          (participant: StoredMatchParticipant) =>
-            participant.teamIndex === teamIndex,
-        )
-        .map((participant: StoredMatchParticipant) => {
-          const player = playerById.get(participant.playerId);
-          const duprRating = parseParticipantDuprSnapshot(
-            participant.duprRatingJson,
-          );
+    const sessionById = new Map(
+      sessionRows.map((session) => [session.id, session]),
+    );
+    // id 순으로 읽었으므로 경기별로 묶어도 경기 안의 순서는 id 순이다
+    const participantsByMatchId = groupByMatchId(participantRows);
+    const scoresByMatchId = groupByMatchId(scoreRows);
 
-          return player && duprRating !== undefined
-            ? { ...player, duprRating }
-            : player;
-        })
-        .filter((player: Player | undefined): player is Player =>
-          Boolean(player),
-        ),
-    })) as [Team, Team];
+    return storedMatches.map((match) => {
+      const participants = participantsByMatchId.get(match.id) ?? [];
+      const scores = scoresByMatchId.get(match.id) ?? [];
+      const session = match.sessionId
+        ? sessionById.get(match.sessionId)
+        : undefined;
+      const teams: [Team, Team] = [0, 1].map((teamIndex) => ({
+        id: `${match.id}-team-${teamIndex}`,
+        name: `Team ${teamIndex === 0 ? "A" : "B"}`,
+        players: participants
+          .filter((participant) => participant.teamIndex === teamIndex)
+          .map((participant) => {
+            const player = playerById.get(participant.playerId);
+            const duprRating = parseParticipantDuprSnapshot(
+              participant.duprRatingJson,
+            );
 
-    const hydratedMatch = {
-      id: match.id,
-      type: match.type as MatchType,
-      source: (match.source as MatchSource | null) ?? "player_created",
-      creatorPlayerId: match.creatorPlayerId,
-      name: match.name?.trim() || undefined,
-      sessionName: match.sessionName?.trim() || undefined,
-      session: session
-        ? {
-            id: session.id,
-            name: session.name,
-            date: toDate(session.date),
-            location: session.location,
-          }
-        : undefined,
-      status: match.status as Match["status"],
-      teams,
-      scores: scores.map(toMatchScore),
-      resultSubmittedByPlayerId: match.resultSubmittedByPlayerId ?? null,
-      resultSubmittedAt: toDateOrNull(match.resultSubmittedAt),
-      location: match.location,
-      courtName: match.courtName?.trim() || undefined,
-      matchStartsAt: toDate(match.matchStartsAt),
-      createdAt: toDate(match.createdAt),
-      completedAt: toDateOrNull(match.completedAt),
-      updatedAt: toDate(match.updatedAt),
-      ratingExcluded: match.ratingExcluded === true,
-    } as Match & { sessionName?: string };
+            return player && duprRating !== undefined
+              ? { ...player, duprRating }
+              : player;
+          })
+          .filter((player): player is Player => Boolean(player)),
+      })) as [Team, Team];
 
-    return hydratedMatch;
+      return {
+        id: match.id,
+        type: match.type as MatchType,
+        source: (match.source as MatchSource | null) ?? "player_created",
+        creatorPlayerId: match.creatorPlayerId,
+        name: match.name?.trim() || undefined,
+        sessionName: match.sessionName?.trim() || undefined,
+        session: session
+          ? {
+              id: session.id,
+              name: session.name,
+              date: toDate(session.date),
+              location: session.location,
+            }
+          : undefined,
+        status: match.status as Match["status"],
+        teams,
+        scores: scores.map(toMatchScore),
+        resultSubmittedByPlayerId: match.resultSubmittedByPlayerId ?? null,
+        resultSubmittedAt: toDateOrNull(match.resultSubmittedAt),
+        location: match.location,
+        courtName: match.courtName?.trim() || undefined,
+        matchStartsAt: toDate(match.matchStartsAt),
+        createdAt: toDate(match.createdAt),
+        completedAt: toDateOrNull(match.completedAt),
+        updatedAt: toDate(match.updatedAt),
+        ratingExcluded: match.ratingExcluded === true,
+      } as Match & { sessionName?: string };
+    });
   }
 
   private async loadAllMatches(): Promise<Match[]> {
@@ -2319,9 +2359,7 @@ export class MatchRepository {
         desc(matches.createdAt),
         desc(matches.id),
       );
-    return await Promise.all(
-      storedMatches.map((match: StoredMatch) => this.hydrateMatch(match)),
-    );
+    return await this.hydrateMatches(storedMatches);
   }
 
   private getSessionKey(match: Match): string | null {
