@@ -92,9 +92,9 @@ export class SupabaseAuthAdmin {
     }
   }
 
-  /** 이메일(소문자 비교)로 사용자 id를 찾는다. 전체 목록을 훑으므로 dev 시딩처럼 드문 경로에서만 쓴다. */
-  async findUserIdByEmail(email: string): Promise<string | null> {
-    const target = email.toLowerCase();
+  /** 모든 Auth 사용자(id·이메일). 전체 목록을 훑으므로 dev 시딩·데이터 이관처럼 드문 경로에서만 쓴다. */
+  async listUsers(): Promise<Array<{ id: string; email: string | null }>> {
+    const users: Array<{ id: string; email: string | null }> = [];
     for (let page = 1; ; page += 1) {
       const { data, error } = await this.getClient().auth.admin.listUsers({
         page,
@@ -103,16 +103,20 @@ export class SupabaseAuthAdmin {
       if (error) {
         throw error;
       }
-      const found = data.users.find(
-        (user) => user.email?.toLowerCase() === target,
-      );
-      if (found) {
-        return found.id;
-      }
+      users.push(...data.users.map((user) => ({ id: user.id, email: user.email ?? null })));
       if (data.users.length < LIST_USERS_PAGE_SIZE) {
-        return null;
+        return users;
       }
     }
+  }
+
+  /** 이메일(소문자 비교)로 사용자 id를 찾는다. */
+  async findUserIdByEmail(email: string): Promise<string | null> {
+    const target = email.toLowerCase();
+    const found = (await this.listUsers()).find(
+      (user) => user.email?.toLowerCase() === target,
+    );
+    return found?.id ?? null;
   }
 }
 
@@ -122,6 +126,10 @@ const PASSWORD_LETTERS =
   "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz";
 const PASSWORD_DIGITS = "23456789";
 const PASSWORD_ALPHABET = PASSWORD_LETTERS + PASSWORD_DIGITS;
+
+/** Auth 비밀번호 요구(최소 6자, `letters_digits`)를 통과하는지. 초기 비밀번호를 사람이 정할 때 확인한다 */
+export const isValidInitialPassword = (password: string): boolean =>
+  password.length >= 6 && /[A-Za-z]/.test(password) && /\d/.test(password);
 
 /**
  * 관리자가 회원에게 전달할 초기·임시 비밀번호. 영문과 숫자를 각각 1자 이상 넣어
@@ -133,7 +141,7 @@ export const generateInitialPassword = (): string => {
       { length: INITIAL_PASSWORD_LENGTH },
       () => PASSWORD_ALPHABET[randomInt(PASSWORD_ALPHABET.length)],
     ).join("");
-    if (/[A-Za-z]/.test(password) && /\d/.test(password)) {
+    if (isValidInitialPassword(password)) {
       return password;
     }
   }

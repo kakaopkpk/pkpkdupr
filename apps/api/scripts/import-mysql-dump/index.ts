@@ -14,9 +14,12 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { parseArgs } from "node:util";
-import { createClient } from "@supabase/supabase-js";
 import { getDbClient } from "@pkpkdupr/db";
 import { isValidUsername, toInternalEmail } from "@pkpkdupr/shared/auth";
+import {
+  isValidInitialPassword,
+  SupabaseAuthAdmin,
+} from "../../src/services/supabaseAuthAdmin";
 import { parseMysqlDump, type DumpTables } from "./parseDump";
 import {
   buildImportPlan,
@@ -50,7 +53,6 @@ const EXPECTED_PUBLIC_TABLES = [
 /** 활성 회원의 덤프 평점과 재계산 평점이 이 값 이상 다르면 차이로 본다 */
 const RATING_DIFF_THRESHOLD = 0.01;
 const INSERT_BATCH_SIZE = 200;
-const AUTH_LIST_PAGE_SIZE = 1000;
 
 const log = (message = "") => console.log(message);
 
@@ -260,43 +262,28 @@ const deleteWipedCalendarEvents = async (wipedSessionIds: string[], plan: Import
 
 // ───────────────────────── 계정 ─────────────────────────
 
-const createAuthAdminClient = () => {
+/** Auth 관리 클라이언트. Auth 사용자를 모두 지우는 단계가 있어, DB와 다른 프로젝트의 Auth를 가리키면 멈춘다 */
+const createAuthAdmin = () => {
   const url = process.env.SUPABASE_URL?.trim() || fail("SUPABASE_URL이 필요합니다.");
-  const key =
-    process.env.SUPABASE_SERVICE_ROLE_KEY?.trim() || fail("SUPABASE_SERVICE_ROLE_KEY가 필요합니다.");
-  // Auth 사용자를 모두 지우는 단계라, DB와 다른 프로젝트의 Auth를 가리키면 멈춘다
+  if (!process.env.SUPABASE_SERVICE_ROLE_KEY?.trim()) fail("SUPABASE_SERVICE_ROLE_KEY가 필요합니다.");
   const authRef = /^([a-z0-9]+)\.supabase\.co$/.exec(new URL(url).hostname)?.[1];
   if (authRef && authRef !== getDatabaseTarget()) {
     fail(`SUPABASE_URL 프로젝트(${authRef})가 DATABASE_URL 프로젝트(${getDatabaseTarget()})와 다릅니다.`);
   }
-  return createClient(url, key, {
-    auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
-  }).auth.admin;
-};
-type AuthAdmin = ReturnType<typeof createAuthAdminClient>;
-
-const listAuthUsers = async (authAdmin: AuthAdmin) => {
-  const users: Array<{ id: string; email?: string }> = [];
-  for (let page = 1; ; page += 1) {
-    const { data, error } = await authAdmin.listUsers({ page, perPage: AUTH_LIST_PAGE_SIZE });
-    if (error) throw error;
-    users.push(...data.users);
-    if (data.users.length < AUTH_LIST_PAGE_SIZE) return users;
-  }
+  return new SupabaseAuthAdmin();
 };
 
-const deleteAllAuthUsers = async (authAdmin: AuthAdmin) => {
-  const users = await listAuthUsers(authAdmin);
+const deleteAllAuthUsers = async (authAdmin: SupabaseAuthAdmin) => {
+  const users = await authAdmin.listUsers();
   for (const user of users) {
-    const { error } = await authAdmin.deleteUser(user.id);
-    if (error) throw error;
+    await authAdmin.deleteUser(user.id);
   }
   log(`  기존 Auth 사용자 ${users.length}명을 지웠습니다.`);
 };
 
 const requireInitialPassword = (): string => {
   const password = process.env.IMPORT_INITIAL_PASSWORD ?? "";
-  if (password.length < 6 || !/[A-Za-z]/.test(password) || !/\d/.test(password)) {
+  if (!isValidInitialPassword(password)) {
     // 값 자체는 출력하지 않는다
     fail("IMPORT_INITIAL_PASSWORD는 6자 이상이고 영문과 숫자를 모두 넣어야 합니다.");
   }
@@ -305,18 +292,21 @@ const requireInitialPassword = (): string => {
 
 /**
  * 연결되지 않은 active 정회원마다 Auth 사용자를 만들어 연결하고 첫 로그인 비밀번호 변경을 켠다.
+ * 관리자 '비밀번호 초기화'의 계정 발급과 결과가 같다(내부 이메일·이메일 확인됨·is_first_login = true).
  * 이미 연결된 회원은 건너뛰므로 다시 돌려도 계정이 두 번 만들어지지 않는다.
  * 같은 이메일의 사용자가 남아 있으면(앞선 실행이 연결 전에 멈춘 경우) 그 사용자를 연결한다.
  */
-const issueAccounts = async (client: DbClient, authAdmin: AuthAdmin) => {
+const issueAccounts = async (client: DbClient, authAdmin: SupabaseAuthAdmin) => {
   const password = requireInitialPassword();
+  // api 저장소는 import 시점에 DB 연결을 만들므로 쓰기 단계에서만 불러온다
+  const { db } = await import("../../src/db");
   const { rows } = await client.execute(
     `SELECT id, username FROM players
      WHERE status = 'active' AND is_guest = false AND auth_user_id IS NULL
      ORDER BY lower(username)`,
   );
   const existingByEmail = new Map(
-    (await listAuthUsers(authAdmin)).map((user) => [user.email?.toLowerCase(), user.id]),
+    (await authAdmin.listUsers()).map((user) => [user.email?.toLowerCase(), user.id]),
   );
   const invalidUsernames: string[] = [];
   let issued = 0;
@@ -329,19 +319,11 @@ const issueAccounts = async (client: DbClient, authAdmin: AuthAdmin) => {
     const email = toInternalEmail(username);
     let authUserId = existingByEmail.get(email);
     if (authUserId) {
-      const { error } = await authAdmin.updateUserById(authUserId, { password, email_confirm: true });
-      if (error) throw error;
+      await authAdmin.updateUser(authUserId, { password });
     } else {
-      const { data, error } = await authAdmin.createUser({ email, password, email_confirm: true });
-      if (error) throw error;
-      authUserId = data.user.id;
+      authUserId = await authAdmin.createUser({ email, password });
     }
-    const linked = await client.execute({
-      sql: `UPDATE players SET auth_user_id = $1, is_first_login = true, updated_at = $2
-            WHERE id = $3 AND auth_user_id IS NULL AND status = 'active'`,
-      args: [authUserId, Math.floor(Date.now() / 1000), String(row.id)],
-    });
-    if (linked.rowsAffected !== 1) {
+    if (!(await db.players.linkAuthUser(String(row.id), authUserId, true))) {
       fail(`${username}: 회원을 Auth 사용자와 연결하지 못했습니다.`);
     }
     issued += 1;
@@ -384,11 +366,17 @@ const printPlan = (plan: ImportPlan) => {
   );
 };
 
-const parseRating = (json: unknown): { singles: number; doubles: number } | null => {
-  if (typeof json !== "string") return null;
-  const parsed = JSON.parse(json) as { rating?: { singles: number; doubles: number } };
-  return parsed.rating ?? null;
-};
+interface Rating {
+  singles: number;
+  doubles: number;
+}
+
+/** players.dupr_rating(`{ rating, metrics }`)의 평점. 없으면(NR 회원) null */
+const parseRating = (json: unknown): Rating | null =>
+  typeof json === "string" ? ((JSON.parse(json) as { rating?: Rating }).rating ?? null) : null;
+
+/** 평점 변경 로그의 *_rating_json(`{ singles, doubles }`) */
+const parseRatingJson = (json: unknown): Rating => JSON.parse(String(json)) as Rating;
 
 const verify = async (client: DbClient, tables: DumpTables, plan: ImportPlan) => {
   log("\n[검증] 테이블별 행 수 (기대 / 실제)");
@@ -399,12 +387,10 @@ const verify = async (client: DbClient, tables: DumpTables, plan: ImportPlan) =>
   const lines: string[] = ["| 테이블 | 덤프 | 기대 | 실제 | 결과 |", "| --- | --- | --- | --- | --- |"];
   let countMismatch = 0;
   for (const table of EXPECTED_PUBLIC_TABLES) {
+    const planned = (plan.rows as Partial<Record<string, TargetRow[]>>)[table]?.length ?? 0;
+    // 평점 로그는 옮긴 공식 조정 영향 로그에 재계산이 만든 경기별 로그(덤프와 같은 수)가 더해진다
     const expected =
-      table === "player_rating_change_logs"
-        ? plan.rows.player_rating_change_logs.length + dumpMatchCompletedLogs.length
-        : TARGET_TABLES.includes(table as (typeof TARGET_TABLES)[number])
-          ? plan.rows[table as (typeof TARGET_TABLES)[number]].length
-          : 0;
+      table === "player_rating_change_logs" ? planned + dumpMatchCompletedLogs.length : planned;
     const actual = counts[table];
     const ok = expected === actual;
     if (!ok) countMismatch += 1;
@@ -425,7 +411,7 @@ const verify = async (client: DbClient, tables: DumpTables, plan: ImportPlan) =>
   const recalculatedLogs = new Map(
     logRows.map((row) => [
       matchLogKey(String(row.source_log_id), String(row.player_id)),
-      JSON.parse(String(row.next_rating_json)) as { singles: number; doubles: number },
+      parseRatingJson(row.next_rating_json),
     ]),
   );
   let matchLogMissing = 0;
@@ -437,7 +423,7 @@ const verify = async (client: DbClient, tables: DumpTables, plan: ImportPlan) =>
       matchLogMissing += 1;
       continue;
     }
-    const original = JSON.parse(String(row.next_rating_json)) as { singles: number; doubles: number };
+    const original = parseRatingJson(row.next_rating_json);
     const diff = Math.max(
       Math.abs(original.singles - recalculated.singles),
       Math.abs(original.doubles - recalculated.doubles),
@@ -445,9 +431,8 @@ const verify = async (client: DbClient, tables: DumpTables, plan: ImportPlan) =>
     matchLogMaxDiff = Math.max(matchLogMaxDiff, diff);
     if (diff >= 0.0005) matchLogDiffCount += 1;
   }
-  log(
-    `\n[검증] 경기별 평점 로그: 덤프 ${dumpMatchCompletedLogs.length}건 중 재계산에 없음 ${matchLogMissing}, 0.001 이상 다름 ${matchLogDiffCount}, 최대 차이 ${matchLogMaxDiff.toFixed(3)}`,
-  );
+  const matchLogSummary = `덤프 ${dumpMatchCompletedLogs.length}건 중 재계산에 없음 ${matchLogMissing}, 0.001 이상 다름 ${matchLogDiffCount}, 최대 차이 ${matchLogMaxDiff.toFixed(3)}`;
+  log(`\n[검증] 경기별 평점 로그: ${matchLogSummary}`);
 
   // 회원 평점: 덤프 players.dupr_rating과 재계산 뒤 값
   const { rows: playerRows } = await client.execute(
@@ -462,6 +447,12 @@ const verify = async (client: DbClient, tables: DumpTables, plan: ImportPlan) =>
   ];
   const activeDiffs: string[] = [];
   let maxActiveDiff = 0;
+  const fmt = (value: number | undefined) => (value === undefined ? "NR" : value.toFixed(3));
+  const fmtDiff = (value: number) => {
+    if (Number.isNaN(value)) return "?";
+    if (Math.abs(value) < 0.0005) return "0";
+    return `${value > 0 ? "+" : ""}${value.toFixed(3)}`;
+  };
   for (const row of playerRows) {
     const before = dumpRatingById.get(String(row.id)) ?? null;
     const after = parseRating(row.dupr_rating);
@@ -474,16 +465,12 @@ const verify = async (client: DbClient, tables: DumpTables, plan: ImportPlan) =>
       if (Number.isFinite(diff)) maxActiveDiff = Math.max(maxActiveDiff, diff);
       if (diff >= RATING_DIFF_THRESHOLD) activeDiffs.push(String(row.username));
     }
-    const fmt = (value: number | undefined) => (value === undefined ? "NR" : value.toFixed(3));
-    const fmtDiff = (value: number) =>
-      Number.isNaN(value) ? "?" : Math.abs(value) < 0.0005 ? "0" : (value > 0 ? "+" : "") + value.toFixed(3);
     ratingLines.push(
       `| ${row.username} | ${row.status} | ${fmt(before?.doubles)} | ${fmt(after?.doubles)} | ${fmtDiff(doublesDiff)} | ${fmt(before?.singles)} | ${fmt(after?.singles)} | ${fmtDiff(singlesDiff)} |`,
     );
   }
-  log(
-    `[검증] 회원 평점: 활성 회원 최대 차이 ${maxActiveDiff.toFixed(3)}, 기준(${RATING_DIFF_THRESHOLD}) 이상 ${activeDiffs.length}명${activeDiffs.length ? ` (${activeDiffs.join(", ")})` : ""}`,
-  );
+  const ratingSummary = `활성 회원 최대 차이 ${maxActiveDiff.toFixed(3)}, 기준(${RATING_DIFF_THRESHOLD}) 이상 ${activeDiffs.length}명${activeDiffs.length ? ` (${activeDiffs.join(", ")})` : ""}`;
+  log(`[검증] 회원 평점: ${ratingSummary}`);
 
   const active = playerRows.filter((row) => row.status === "active");
   const linked = active.filter((row) => row.auth_user_id);
@@ -492,11 +479,9 @@ const verify = async (client: DbClient, tables: DumpTables, plan: ImportPlan) =>
   const inactive = playerRows
     .filter((row) => row.status !== "active")
     .map((row) => String(row.username));
-  log(
-    `[검증] 계정: active ${active.length}명 중 연결 ${linked.length}명(첫 로그인 비밀번호 변경 ${firstLogin.length}명)` +
-      (unlinked.length ? `, 미연결 ${unlinked.join(", ")}` : "") +
-      `\n  발급하지 않은 inactive ${inactive.length}명: ${inactive.join(", ") || "없음"}`,
-  );
+  const accountSummary = `active ${active.length}명 중 연결 ${linked.length}명(첫 로그인 비밀번호 변경 ${firstLogin.length}명), 미연결 ${unlinked.join(", ") || "없음"}`;
+  const inactiveSummary = `발급하지 않은 inactive ${inactive.length}명: ${inactive.join(", ") || "없음"}`;
+  log(`[검증] 계정: ${accountSummary}\n  ${inactiveSummary}`);
 
   writeOutput(
     "verify.md",
@@ -507,19 +492,19 @@ const verify = async (client: DbClient, tables: DumpTables, plan: ImportPlan) =>
       "",
       "## 경기별 평점 로그",
       "",
-      `덤프 ${dumpMatchCompletedLogs.length}건 중 재계산에 없음 ${matchLogMissing}, 0.001 이상 다름 ${matchLogDiffCount}, 최대 차이 ${matchLogMaxDiff.toFixed(3)}`,
+      matchLogSummary,
       "",
       "## 회원 평점 (덤프 players.dupr_rating → 재계산)",
       "",
-      `활성 회원 최대 차이 ${maxActiveDiff.toFixed(3)}, 기준 ${RATING_DIFF_THRESHOLD} 이상 ${activeDiffs.length}명`,
+      ratingSummary,
       "",
       ...ratingLines,
       "",
       "## 계정",
       "",
-      `active ${active.length}명 중 연결 ${linked.length}명, 첫 로그인 비밀번호 변경 ${firstLogin.length}명, 미연결 ${unlinked.join(", ") || "없음"}`,
+      accountSummary,
       "",
-      `발급하지 않은 inactive ${inactive.length}명: ${inactive.join(", ") || "없음"}`,
+      inactiveSummary,
       "",
     ].join("\n"),
   );
@@ -529,20 +514,21 @@ const verify = async (client: DbClient, tables: DumpTables, plan: ImportPlan) =>
 // ───────────────────────── 실행 ─────────────────────────
 
 const main = async () => {
-  const tables = loadDump();
-  const plan = buildImportPlan(tables, {
-    adminUsernames: args.admin ?? [],
-    nowSeconds: Math.floor(Date.now() / 1000),
-  });
   const target = getDatabaseTarget();
   log(`대상 DB: ${target ?? "(DATABASE_URL 없음)"}\n`);
 
   if (args["issue-accounts"]) {
     requireConfirmedTarget();
     log("[계정 발급]");
-    await issueAccounts(getDbClient(), createAuthAdminClient());
+    await issueAccounts(getDbClient(), createAuthAdmin());
     return;
   }
+
+  const tables = loadDump();
+  const plan = buildImportPlan(tables, {
+    adminUsernames: args.admin,
+    nowSeconds: Math.floor(Date.now() / 1000),
+  });
 
   if (args.verify) {
     await verify(getDbClient(), tables, plan);
@@ -566,11 +552,11 @@ const main = async () => {
   }
 
   requireConfirmedTarget();
-  if ((args.admin ?? []).length === 0) {
+  if (args.admin.length === 0) {
     fail("--admin <아이디>가 필요합니다. 비운 뒤 admin-web에 들어갈 관리자가 없어집니다.");
   }
   requireInitialPassword();
-  const authAdmin = createAuthAdminClient();
+  const authAdmin = createAuthAdmin();
   const client = getDbClient();
 
   log("\n[1/5] 비우기·이관 (한 트랜잭션)");

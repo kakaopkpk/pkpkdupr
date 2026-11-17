@@ -60,12 +60,16 @@ export const canOpenRegularSession = (now: Date): boolean => {
   );
 };
 
+/** KST 날짜 키(YYYY-MM-DD)의 요일. 0=일요일 */
+export const getKstWeekday = (dateKey: string): number =>
+  toKstShifted(kstDateKeyToDate(dateKey)).getUTCDay();
+
 /** KST 요일 한 글자. 0=일요일 */
 export const WEEKDAY_LABELS = ["일", "월", "화", "수", "목", "금", "토"];
 
 /** 정기 세션 이름. 날짜 키의 KST 요일로 "월요 정기운동" | "목요 정기운동" */
 export const getRegularSessionName = (dateKey: string): string =>
-  `${WEEKDAY_LABELS[toKstShifted(kstDateKeyToDate(dateKey)).getUTCDay()]}요 정기운동`;
+  `${WEEKDAY_LABELS[getKstWeekday(dateKey)]}요 정기운동`;
 
 /** 정기 세션을 미리 만드는 기간(일). 오늘(KST)을 포함해 이 일수 안의 정기 회차를 만든다 */
 export const REGULAR_SESSION_LOOKAHEAD_DAYS = 28;
@@ -82,8 +86,7 @@ export const getRegularSessionDateKeys = (now: Date, days: number): string[] => 
   const dateKeys: string[] = [];
   for (let offset = 0; offset < days; offset += 1) {
     const dateKey = addKstDays(todayKey, offset);
-    const weekday = toKstShifted(kstDateKeyToDate(dateKey)).getUTCDay();
-    if (!REGULAR_SESSION_WEEKDAYS.includes(weekday)) continue;
+    if (!REGULAR_SESSION_WEEKDAYS.includes(getKstWeekday(dateKey))) continue;
     if (offset === 0 && !canOpenRegularSession(now)) continue;
     dateKeys.push(dateKey);
   }

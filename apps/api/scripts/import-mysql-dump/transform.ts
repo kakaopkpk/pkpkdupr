@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { isEntityId } from "@pkpkdupr/shared/entityId";
 import {
+  getKstWeekday,
   getRegularSessionName,
   isRegularSessionTime,
   kstDateKeyToDate,
@@ -198,13 +199,11 @@ export const buildImportPlan = (
     string,
     { sessionId: string; legacySessionName: string | null; createdAt: number; updatedAt: number }
   >();
-  const legacyRegularSessionIds = new Set<string>();
   for (const session of dumpSessions) {
     const name = str(session, "name");
     if (!LEGACY_REGULAR_SESSION_NAME.test(name)) continue;
     const dateKey = toKstDateKey(new Date(num(session, "date") * 1000));
-    const weekday = new Date(`${dateKey}T00:00:00Z`).getUTCDay();
-    if (!REGULAR_SESSION_WEEKDAYS.includes(weekday)) {
+    if (!REGULAR_SESSION_WEEKDAYS.includes(getKstWeekday(dateKey))) {
       throw new Error(`${name}(${dateKey})은 정기 요일이 아니라 정기 세션으로 바꿀 수 없습니다.`);
     }
     if (regularByDateKey.has(dateKey)) {
@@ -216,8 +215,10 @@ export const buildImportPlan = (
       createdAt: num(session, "created_at"),
       updatedAt: num(session, "updated_at"),
     });
-    legacyRegularSessionIds.add(str(session, "id"));
   }
+  const legacyRegularSessionIds = new Set(
+    [...regularByDateKey.values()].map((session) => session.sessionId),
+  );
 
   const dumpSessionIds = new Set(dumpSessions.map((session) => str(session, "id")));
   const backfillDateKeyByMatchId = new Map<string, string>();
@@ -245,39 +246,30 @@ export const buildImportPlan = (
       existing.updatedAt = createdAt;
     }
   }
+  const sortedRegular = [...regularByDateKey].sort(([a], [b]) => a.localeCompare(b));
 
-  const matchSessions: TargetRow[] = [];
-  const sessionNameById = new Map<string, string>();
-  const sessionDateById = new Map<string, number>();
-  for (const session of dumpSessions) {
-    const id = str(session, "id");
-    if (legacyRegularSessionIds.has(id)) continue;
-    matchSessions.push({
-      ...pick(session, ["id", "name", "date", "location", "created_at", "updated_at"]),
-      regular_date_key: null,
-      start_time: null,
-      end_time: null,
-    });
-    sessionNameById.set(id, str(session, "name"));
-    sessionDateById.set(id, num(session, "date"));
-  }
-  for (const [dateKey, session] of [...regularByDateKey].sort(([a], [b]) => a.localeCompare(b))) {
-    const name = getRegularSessionName(dateKey);
-    const date = regularSessionDateSeconds(dateKey);
-    matchSessions.push({
+  const matchSessions: TargetRow[] = [
+    ...dumpSessions
+      .filter((session) => !legacyRegularSessionIds.has(str(session, "id")))
+      .map((session) => ({
+        ...pick(session, ["id", "name", "date", "location", "created_at", "updated_at"]),
+        regular_date_key: null,
+        start_time: null,
+        end_time: null,
+      })),
+    ...sortedRegular.map(([dateKey, session]) => ({
       id: session.sessionId,
-      name,
-      date,
+      name: getRegularSessionName(dateKey),
+      date: regularSessionDateSeconds(dateKey),
       location: REGULAR_SESSION_LOCATION,
       created_at: session.createdAt,
       updated_at: session.updatedAt,
       regular_date_key: dateKey,
       start_time: null,
       end_time: null,
-    });
-    sessionNameById.set(session.sessionId, name);
-    sessionDateById.set(session.sessionId, date);
-  }
+    })),
+  ];
+  const sessionById = new Map(matchSessions.map((session) => [String(session.id), session]));
 
   const matches = dumpMatches.map((row): TargetRow => {
     const id = str(row, "id");
@@ -289,7 +281,8 @@ export const buildImportPlan = (
     const sessionId = backfillDateKey
       ? regularByDateKey.get(backfillDateKey)!.sessionId
       : (row.session_id as string | null);
-    if (sessionId !== null && !sessionNameById.has(sessionId)) {
+    const session = sessionId === null ? null : sessionById.get(sessionId);
+    if (session === undefined) {
       throw new Error(`${id}: 없는 세션 ${sessionId}를 참조합니다.`);
     }
     return {
@@ -310,16 +303,20 @@ export const buildImportPlan = (
         "updated_at",
       ]),
       session_id: sessionId,
-      session_name: sessionId === null ? null : sessionNameById.get(sessionId)!,
-      session_date: sessionId === null ? null : sessionDateById.get(sessionId)!,
+      session_name: session?.name ?? null,
+      session_date: session?.date ?? null,
       // 덤프에는 게스트가 없다
       rating_excluded: false,
     };
   });
+  const matchById = new Map(matches.map((match) => [String(match.id), match]));
 
   const matchParticipants = dumpParticipants.map((row): TargetRow => {
     if (!playerIds.has(str(row, "player_id"))) {
       throw new Error(`${str(row, "id")}: 없는 회원 ${str(row, "player_id")}를 참조합니다.`);
+    }
+    if (!matchById.has(str(row, "match_id"))) {
+      throw new Error(`${str(row, "id")}: 없는 경기를 참조합니다.`);
     }
     return {
       ...pick(row, ["id", "match_id", "team_index", "player_id"]),
@@ -329,25 +326,25 @@ export const buildImportPlan = (
   });
 
   // 세션 참여자: 덤프 참여자 + 세션 경기의 모든 선수(지금 api는 세션 경기 선수를 항상 참여자로 넣는다)
-  const sessionParticipants = new Map<string, TargetRow>();
-  for (const row of requireTable(tables, "match_session_participants")) {
-    sessionParticipants.set(`${str(row, "session_id")}:${str(row, "player_id")}`, {
-      ...pick(row, ["id", "session_id", "player_id", "created_at"]),
-    });
-  }
+  const sessionParticipants = new Map<string, TargetRow>(
+    requireTable(tables, "match_session_participants").map((row) => [
+      `${str(row, "session_id")}:${str(row, "player_id")}`,
+      row,
+    ]),
+  );
   const dumpParticipantCount = sessionParticipants.size;
-  const matchById = new Map(matches.map((match) => [String(match.id), match]));
-  for (const participant of matchParticipants) {
-    if (!matchById.has(String(participant.match_id))) {
-      throw new Error(`${String(participant.id)}: 없는 경기를 참조합니다.`);
-    }
+  const matchCountBySessionId = new Map<string, number>();
+  for (const match of matches) {
+    if (match.session_id === null) continue;
+    const sessionId = String(match.session_id);
+    matchCountBySessionId.set(sessionId, (matchCountBySessionId.get(sessionId) ?? 0) + 1);
   }
-  const sortedParticipants = [...matchParticipants].sort(
+  const participantsByMatchCreatedAt = [...matchParticipants].sort(
     (a, b) =>
       Number(matchById.get(String(a.match_id))!.created_at) -
       Number(matchById.get(String(b.match_id))!.created_at),
   );
-  for (const participant of sortedParticipants) {
+  for (const participant of participantsByMatchCreatedAt) {
     const match = matchById.get(String(participant.match_id))!;
     if (match.session_id === null) continue;
     const sessionId = String(match.session_id);
@@ -361,54 +358,42 @@ export const buildImportPlan = (
       created_at: Number(match.created_at),
     });
   }
+  const participantCountBySessionId = new Map<string, number>();
+  for (const participant of sessionParticipants.values()) {
+    const sessionId = String(participant.session_id);
+    participantCountBySessionId.set(sessionId, (participantCountBySessionId.get(sessionId) ?? 0) + 1);
+  }
 
-  const dumpRatingLogs = requireTable(tables, "player_rating_change_logs");
+  const copiedRatingLogs: TargetRow[] = [];
   const skippedRatingLogCounts: Record<string, number> = {};
-  for (const log of dumpRatingLogs) {
+  for (const log of requireTable(tables, "player_rating_change_logs")) {
     const source = str(log, "source");
-    if (!COPIED_RATING_LOG_SOURCES.has(source)) {
+    if (COPIED_RATING_LOG_SOURCES.has(source)) {
+      copiedRatingLogs.push(log);
+    } else {
       skippedRatingLogCounts[source] = (skippedRatingLogCounts[source] ?? 0) + 1;
     }
   }
 
+  const matchScores = requireTable(tables, "match_scores");
   const scoreCountByMatchId = new Map<string, number>();
-  for (const score of requireTable(tables, "match_scores")) {
+  for (const score of matchScores) {
     const matchId = str(score, "match_id");
     scoreCountByMatchId.set(matchId, (scoreCountByMatchId.get(matchId) ?? 0) + 1);
   }
 
-  const regularSessions: RegularSessionPlan[] = [...regularByDateKey]
-    .sort(([a], [b]) => a.localeCompare(b))
-    .map(([dateKey, session]) => ({
-      dateKey,
-      sessionId: session.sessionId,
-      name: getRegularSessionName(dateKey),
-      legacySessionName: session.legacySessionName,
-      matchCount: matches.filter((match) => match.session_id === session.sessionId).length,
-      participantCount: [...sessionParticipants.values()].filter(
-        (participant) => participant.session_id === session.sessionId,
-      ).length,
-    }));
-
   return {
     rows: {
       players,
-      player_creation_logs: requireTable(tables, "player_creation_logs").map((row) => ({
-        ...row,
-      })),
-      player_status_change_logs: requireTable(tables, "player_status_change_logs").map(
-        (row) => ({ ...row }),
-      ),
-      official_dupr_adjustment_logs: requireTable(tables, "official_dupr_adjustment_logs").map(
-        (row) => ({ ...row }),
-      ),
-      player_rating_change_logs: dumpRatingLogs
-        .filter((log) => COPIED_RATING_LOG_SOURCES.has(str(log, "source")))
-        .map((row) => ({ ...row })),
+      // 컬럼이 지금 스키마와 같은 테이블은 덤프 행을 그대로 넣는다
+      player_creation_logs: dumpCreationLogs,
+      player_status_change_logs: requireTable(tables, "player_status_change_logs"),
+      official_dupr_adjustment_logs: requireTable(tables, "official_dupr_adjustment_logs"),
+      player_rating_change_logs: copiedRatingLogs,
       match_sessions: matchSessions,
       match_session_participants: [...sessionParticipants.values()],
       matches,
-      match_scores: requireTable(tables, "match_scores").map((row) => ({ ...row })),
+      match_scores: matchScores,
       match_participants: matchParticipants,
       player_admins: adminPlayerIds.map((playerId) => ({
         player_id: playerId,
@@ -422,7 +407,14 @@ export const buildImportPlan = (
       bootstrapUsernames: dumpPlayers
         .filter((row) => bootstrapPlayerIds.has(str(row, "id")))
         .map((row) => str(row, "username")),
-      regularSessions,
+      regularSessions: sortedRegular.map(([dateKey, session]) => ({
+        dateKey,
+        sessionId: session.sessionId,
+        name: String(sessionById.get(session.sessionId)!.name),
+        legacySessionName: session.legacySessionName,
+        matchCount: matchCountBySessionId.get(session.sessionId) ?? 0,
+        participantCount: participantCountBySessionId.get(session.sessionId) ?? 0,
+      })),
       customSessionNames: dumpSessions
         .filter((session) => !legacyRegularSessionIds.has(str(session, "id")))
         .map((session) => str(session, "name")),
