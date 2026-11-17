@@ -93,7 +93,7 @@ const compute = (matches: AchievementMatch[]) =>
   computeAchievements(ME, matches);
 
 describe("ACHIEVEMENTS", () => {
-  it("업적 41개를 표 순서로 정의한다", () => {
+  it("업적 42개를 표 순서로 정의한다", () => {
     expect(ACHIEVEMENTS.map((definition) => definition.id)).toEqual([
       "matches-1",
       "matches-10",
@@ -129,6 +129,7 @@ describe("ACHIEVEMENTS", () => {
       "rival-20",
       "dojo-15",
       "revenge",
+      "revenge-5",
       "attendance-10",
       "attendance-30",
       "attendance-100",
@@ -137,7 +138,7 @@ describe("ACHIEVEMENTS", () => {
       "dominator-1",
       "dominator-10",
     ]);
-    expect(new Set(ACHIEVEMENTS.map((item) => item.id)).size).toBe(41);
+    expect(new Set(ACHIEVEMENTS.map((item) => item.id)).size).toBe(42);
   });
 
   it("분류 이름은 경기 수·승리·연승·평점·특별·세션이다", () => {
@@ -163,9 +164,9 @@ describe("isBestStreakAchievement", () => {
 });
 
 describe("computeAchievements", () => {
-  it("경기가 없으면 41개 모두 진행도 0으로 받지 않은 상태다", () => {
+  it("경기가 없으면 42개 모두 진행도 0으로 받지 않은 상태다", () => {
     const progress = compute([]);
-    expect(progress).toHaveLength(41);
+    expect(progress).toHaveLength(42);
     expect(progress.map((item) => item.id)).toEqual(
       ACHIEVEMENTS.map((definition) => definition.id),
     );
@@ -694,6 +695,30 @@ describe("computeAchievements", () => {
       expect(revengeOf(matches)).toMatchObject({
         earned: true,
         earnedMatchId: matches[1].id,
+      });
+    });
+
+    it("리벤지 5회는 다섯 번째 리벤지 경기로 받는다", () => {
+      const revenges = (count: number) =>
+        Array.from({ length: count }, (_, index) => {
+          const day = `2026-12-${String(3 + index).padStart(2, "0")}`;
+          return [
+            lineup(false, kst("19:00", day)),
+            lineup(true, kst("19:20", day)),
+          ];
+        }).flat();
+      const four = compute(revenges(4));
+      expect(progressOf(four, "revenge-5")).toMatchObject({
+        earned: false,
+        current: 4,
+        target: 5,
+      });
+
+      const five = revenges(5);
+      expect(progressOf(compute(five), "revenge-5")).toMatchObject({
+        earned: true,
+        earnedMatchId: five[9].id,
+        current: 5,
       });
     });
   });

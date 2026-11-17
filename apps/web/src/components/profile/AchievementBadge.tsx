@@ -197,6 +197,7 @@ const BADGE_ICON_BY_ID: Partial<Record<string, BadgeIconKind>> = {
   "rival-20": "versus",
   "dojo-15": "target",
   revenge: "fist",
+  "revenge-5": "fist",
   "iron-8": "dumbbell",
   "unbeaten-session": "star",
   "dominator-1": "crown",

@@ -430,9 +430,20 @@ const ACHIEVEMENT_TABLE: readonly {
       id: "revenge",
       category: "special",
       name: "리벤지",
-      condition: "같은 날 진 파트너·상대 조합 그대로 바로 다음 경기에서 승리",
+      condition: "같은 날 진 조합에 바로 설욕",
       badgeNumber: null,
       target: 1,
+    },
+  },
+  {
+    metric: "revenges",
+    definition: {
+      id: "revenge-5",
+      category: "special",
+      name: "리벤지 5회",
+      condition: "리벤지 5번",
+      badgeNumber: "5",
+      target: 5,
     },
   },
   {
@@ -801,7 +812,7 @@ const markReachedAchievements = (
 };
 
 /**
- * 한 회원의 업적 41개 진행 상태(ACHIEVEMENTS 순서).
+ * 한 회원의 업적 42개 진행 상태(ACHIEVEMENTS 순서).
  * 완료 경기만(진행 중·취소 제외) 완료 시각 순으로 훑어, 진행도가 목표에 처음 닿은
  * 경기를 받게 된 경기로, 그 경기 완료 시각을 받은 날로 정한다.
  * 승패가 갈리지 않은 경기는 승리에는 세지 않고 연승·콤비 연승·무패 세션·리벤지는 끊는다.
