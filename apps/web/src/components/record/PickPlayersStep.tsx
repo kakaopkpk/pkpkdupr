@@ -375,7 +375,7 @@ export default function PickPlayersStep({
         {footerMode === "new" ? (
           <div className="grid grid-cols-[auto_minmax(0,1fr)] gap-2">
             <PkButton
-              variant="secondary"
+              variant="soft"
               size="lg"
               disabled={!isTeamReady || isBusy}
               onClick={onStartMatch}
@@ -393,7 +393,7 @@ export default function PickPlayersStep({
           </div>
         ) : (
           <div className="grid grid-cols-[auto_minmax(0,1fr)] gap-2">
-            <PkButton variant="secondary" size="lg" onClick={onCancel}>
+            <PkButton variant="soft" size="lg" onClick={onCancel}>
               취소
             </PkButton>
             <PkButton
