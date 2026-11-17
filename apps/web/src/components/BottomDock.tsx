@@ -228,6 +228,8 @@ const DockBar: React.FC<{
   isActionDisabled?: boolean;
   isExiting?: boolean;
   onAction: () => void;
+  /** 주면 점·제목·설명 부분을 눌러 연다 */
+  onPressContent?: () => void;
   role?: string;
 }> = ({
   title,
@@ -236,35 +238,54 @@ const DockBar: React.FC<{
   isActionDisabled,
   isExiting = false,
   onAction,
+  onPressContent,
   role,
-}) => (
-  <div
-    role={role}
-    inert={isExiting}
-    className={`app-glass flex h-[60px] items-center gap-2.5 rounded-full pr-[7px] pl-4 ${
-      isExiting
-        ? `pointer-events-none ${PRESENCE_EXIT_CLASS}`
-        : PRESENCE_ENTER_CLASS
-    }`}
-  >
-    <span aria-hidden="true" className="relative size-2.5 shrink-0">
-      <span className="absolute inset-0 animate-pk-ping rounded-full bg-pk-hl motion-reduce:hidden" />
-      <span className="absolute inset-0 rounded-full bg-pk-hl" />
-    </span>
-    <div className="flex min-w-0 flex-col">
-      <span className="truncate text-pk-15 font-bold text-pk-ink">{title}</span>
-      <span className="truncate text-pk-12 text-pk-sub">{description}</span>
-    </div>
-    <button
-      type="button"
-      disabled={isActionDisabled}
-      onClick={onAction}
-      className="ml-auto flex h-[46px] shrink-0 items-center rounded-full bg-pk-primary px-[18px] text-pk-15 font-extrabold text-white disabled:bg-pk-neutral disabled:text-pk-muted"
+}) => {
+  const content = (
+    <>
+      <span aria-hidden="true" className="relative size-2.5 shrink-0">
+        <span className="absolute inset-0 animate-pk-ping rounded-full bg-pk-hl motion-reduce:hidden" />
+        <span className="absolute inset-0 rounded-full bg-pk-hl" />
+      </span>
+      <span className="flex min-w-0 flex-col">
+        <span className="truncate text-pk-15 font-bold text-pk-ink">{title}</span>
+        <span className="truncate text-pk-12 text-pk-sub">{description}</span>
+      </span>
+    </>
+  );
+
+  return (
+    <div
+      role={role}
+      inert={isExiting}
+      className={`app-glass flex h-[60px] items-center gap-2.5 rounded-full pr-[7px] pl-4 ${
+        isExiting
+          ? `pointer-events-none ${PRESENCE_EXIT_CLASS}`
+          : PRESENCE_ENTER_CLASS
+      }`}
     >
-      {actionLabel}
-    </button>
-  </div>
-);
+      {onPressContent ? (
+        <button
+          type="button"
+          onClick={onPressContent}
+          className="flex h-full min-w-0 flex-1 items-center gap-2.5 text-left active:opacity-80"
+        >
+          {content}
+        </button>
+      ) : (
+        content
+      )}
+      <button
+        type="button"
+        disabled={isActionDisabled}
+        onClick={onAction}
+        className="ml-auto flex h-[46px] shrink-0 items-center rounded-full bg-pk-primary px-[18px] text-pk-15 font-extrabold text-white disabled:bg-pk-neutral disabled:text-pk-muted"
+      >
+        {actionLabel}
+      </button>
+    </div>
+  );
+};
 
 const joinNames = (players: { username: string }[]) =>
   players.map((teamPlayer) => teamPlayer.username).join(" · ");
@@ -276,7 +297,15 @@ export const MyMatchBar: React.FC<{
   isActionDisabled: boolean;
   isExiting?: boolean;
   onEnterScore: (matchId: string) => void;
-}> = ({ match, playerId, isActionDisabled, isExiting, onEnterScore }) => {
+  onOpenDetail: (matchId: string) => void;
+}> = ({
+  match,
+  playerId,
+  isActionDisabled,
+  isExiting,
+  onEnterScore,
+  onOpenDetail,
+}) => {
   const now = useMinuteClock();
   const myTeamIndex = match.teams[1].players.some(
     (teamPlayer) => teamPlayer.id === playerId,
@@ -300,6 +329,7 @@ export const MyMatchBar: React.FC<{
       isActionDisabled={isActionDisabled}
       isExiting={isExiting}
       onAction={() => onEnterScore(match.id)}
+      onPressContent={() => onOpenDetail(match.id)}
     />
   );
 };

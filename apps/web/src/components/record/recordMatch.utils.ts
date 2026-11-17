@@ -121,7 +121,7 @@ const compareNumbers = (a: number, b: number) => (a < b ? -1 : a > b ? 1 : 0);
 
 /**
  * 플레이어 선택 목록. 활성 회원을 아이디 부분 일치로 거른 뒤
- * 세션 참여자(경기 중 아님) → 경기 중인 사람 → 나머지(최근 경기 순) 한 목록으로 세운다.
+ * 나 → 세션 참여자(경기 중 아님) → 경기 중인 사람 → 나머지(최근 경기 순) 한 목록으로 세운다.
  */
 export const buildPickList = <T extends PickListPlayer>(
   players: readonly T[],
@@ -129,11 +129,14 @@ export const buildPickList = <T extends PickListPlayer>(
     query,
     participantIds,
     busyIds,
+    currentPlayerId = null,
   }: {
     query: string;
     /** 진행 중 세션 참여자 id(세션 순서). 세션이 없으면 빈 배열 */
     participantIds: readonly string[];
     busyIds: ReadonlySet<string>;
+    /** 나. 경기 중이어도 맨 위에 둔다 */
+    currentPlayerId?: string | null;
   },
 ): T[] => {
   const normalizedQuery = query.trim().toLocaleLowerCase();
@@ -141,6 +144,7 @@ export const buildPickList = <T extends PickListPlayer>(
     participantIds.map((id, index) => [id, index]),
   );
   const getGroup = (player: T) => {
+    if (player.id === currentPlayerId) return -1;
     if (busyIds.has(player.id)) return 1;
     return participantOrder.has(player.id) ? 0 : 2;
   };

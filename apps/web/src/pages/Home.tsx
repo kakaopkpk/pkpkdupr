@@ -352,6 +352,7 @@ const Home: React.FC = () => {
           <MyLiveMatchCard
             match={myInProgressMatch}
             now={now}
+            onOpenDetail={() => openMatchDetail(myInProgressMatch.id)}
             onEnterScore={() =>
               openRecordMatch({ kind: "score", matchId: myInProgressMatch.id })
             }

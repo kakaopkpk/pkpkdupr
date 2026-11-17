@@ -9,6 +9,7 @@ import {
   GLOBAL_LAYER,
   type RecordMatchSheetRequest,
 } from "@/context/AppNavigationContext";
+import { useAuth } from "@/context/AuthContext";
 import { useLiveSession } from "@/context/LiveSessionContext";
 import {
   type TabKey,
@@ -55,7 +56,7 @@ const buildScoreInitial = (match: MatchInfo): RecordMatchFlowInitial => ({
 });
 
 /**
- * 전역 경기 기록 시트. "new"는 플레이어 선택(presetTeams가 있으면 자리를 채워)부터,
+ * 전역 경기 기록 시트. "new"는 플레이어 선택(presetTeams가 있으면 그 자리로, 없으면 나를 첫 자리에 채워)부터,
  * "score"는 경기를 받아 점수 입력부터 시작한다.
  */
 export default function RecordMatchSheet({
@@ -64,6 +65,7 @@ export default function RecordMatchSheet({
   onClose,
 }: RecordMatchSheetProps): React.ReactElement {
   const { liveSession } = useLiveSession();
+  const { player } = useAuth();
   const { closeDepth, selectedTab } = useTabNavigation();
   // 열 때마다 올려서 입력을 초기 상태로 리마운트한다
   const [sheetKey, setSheetKey] = useState(0);
@@ -169,7 +171,10 @@ export default function RecordMatchSheet({
             slots:
               displayedRequest?.kind === "new" && displayedRequest.presetTeams
                 ? slotsFromTeams(displayedRequest.presetTeams)
-                : EMPTY_SLOTS,
+                : // 새 경기는 나를 첫 자리에 넣어 둔다. 내가 경기 중이면 RecordMatchFlow가 뺀다
+                  player
+                  ? [player.id, null, null, null]
+                  : EMPTY_SLOTS,
             score: EMPTY_SCORE,
             location: liveSession?.location || DEFAULT_MATCH_LOCATION,
             editMatch: null,
