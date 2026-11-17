@@ -38,6 +38,7 @@ const getErrorMessage = (error: unknown) =>
 interface PreviewState {
   request: OfficialDuprRequest;
   playerId: string;
+  username: string;
   result: OfficialDuprAdjustmentPreview;
 }
 
@@ -89,6 +90,13 @@ export const OfficialDuprCard: React.FC<{
     }
   }, [initialPlayerId, players.length, playersById]);
 
+  // 회원 목록을 다시 읽었으면(재계산·반영 뒤) 지금 평점이 바뀌었을 수 있으니 미리보기를 무효로 한다
+  useEffect(() => {
+    previewRequestIdRef.current += 1;
+    setPreview(null);
+    setPreviewing(false);
+  }, [players]);
+
   // 입력을 하나라도 바꾸면 미리보기를 무효로 한다(같은 값으로 되돌려도 다시 미리 봐야 한다)
   const updateForm = (update: (prev: OfficialDuprFormValues) => OfficialDuprFormValues) => {
     previewRequestIdRef.current += 1;
@@ -99,19 +107,21 @@ export const OfficialDuprCard: React.FC<{
   };
 
   const formResult = buildOfficialDuprRequest(form);
-  const canPreview = Boolean(form.playerId) && formResult.ok && !previewing;
+  // 고른 회원이 다시 읽은 목록에서 빠지면 입력칸이 비어 보이므로 미리보기도 막는다
+  const canPreview = Boolean(selectedPlayer) && formResult.ok && !previewing;
 
   const handlePreview = async () => {
-    if (!form.playerId || !formResult.ok) return;
+    if (!selectedPlayer || !formResult.ok) return;
     const requestId = ++previewRequestIdRef.current;
-    const playerId = form.playerId;
+    const playerId = selectedPlayer.id;
+    const username = selectedPlayer.username;
     const request = formResult.request;
     setPreviewing(true);
     setError(null);
     try {
       const result = await previewOfficialDupr(playerId, request);
       if (requestId !== previewRequestIdRef.current) return;
-      setPreview({ request, playerId, result });
+      setPreview({ request, playerId, username, result });
       setCategory(request.ratings.doubles !== undefined ? "doubles" : "singles");
     } catch (err) {
       if (requestId !== previewRequestIdRef.current) return;
@@ -127,7 +137,7 @@ export const OfficialDuprCard: React.FC<{
 
   const handleApply = async () => {
     if (!preview) return;
-    const username = confirmTarget?.username ?? preview.result.player.username;
+    const username = confirmTarget?.username ?? preview.username;
     try {
       const result = await applyOfficialDupr(preview.playerId, preview.request);
       const changedCount = new Set(result.ratingChangeLogs.map((log) => log.playerId)).size;
@@ -142,6 +152,14 @@ export const OfficialDuprCard: React.FC<{
       if (!isClientError(err)) throw err;
       setError(err.message);
     }
+  };
+
+  const openConfirm = () => {
+    if (!preview) return;
+    setConfirmTarget({
+      username: preview.username,
+      impactCount: preview.result.impacts.length,
+    });
   };
 
   const rows = useMemo(
@@ -314,13 +332,7 @@ export const OfficialDuprCard: React.FC<{
         <Button
           variant="outline"
           disabled={!preview || confirmTarget !== null}
-          onClick={() =>
-            preview &&
-            setConfirmTarget({
-              username: playersById.get(preview.playerId)?.username ?? preview.result.player.username,
-              impactCount: preview.result.impacts.length,
-            })
-          }
+          onClick={openConfirm}
         >
           반영하기…
         </Button>

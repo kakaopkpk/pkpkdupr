@@ -5,7 +5,6 @@ import {
   type PlayerDuprCategory,
 } from "@pkpkdupr/shared/player";
 import type { OfficialDuprRequest } from "../../api/ratings";
-import { formatRatingDelta } from "../../lib/format";
 
 export const CATEGORIES: readonly PlayerDuprCategory[] = ["doubles", "singles"];
 
@@ -112,7 +111,8 @@ export const buildImpactRows = (
   currentRatingOf: (playerId: string) => number | null | undefined,
 ): ImpactRow[] =>
   impacts
-    .filter((impact) => formatRatingDelta(impact.delta[category]) !== "0.000")
+    // 표시 자릿수(소수 셋째 자리)로 반올림해 0이면 바뀌지 않은 것으로 본다
+    .filter((impact) => Number(impact.delta[category].toFixed(3)) !== 0)
     .map((impact) => {
       const current = currentRatingOf(impact.playerId);
       return {
