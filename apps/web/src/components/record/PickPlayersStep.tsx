@@ -36,6 +36,8 @@ export interface PickPlayersStepProps {
   playerById: ReadonlyMap<string, SlotPlayer>;
   participantIds: readonly string[];
   busyIds: ReadonlySet<string>;
+  /** 나. 목록 맨 위에 둔다 */
+  currentPlayerId: string | null;
   /**
    * new: 새 경기(세션과 상관없음). "경기 시작"·"점수 입력"
    * edit: 기존 경기의 플레이어 바꾸기. "취소"·"다음"
@@ -86,6 +88,7 @@ export default function PickPlayersStep({
   playerById,
   participantIds,
   busyIds,
+  currentPlayerId,
   footerMode,
   isBusy,
   error,
@@ -114,8 +117,14 @@ export default function PickPlayersStep({
     (id) => playerById.get(id)?.isGuest === true,
   );
   const list = useMemo(
-    () => buildPickList(players, { query, participantIds, busyIds }),
-    [busyIds, participantIds, players, query],
+    () =>
+      buildPickList(players, {
+        query,
+        participantIds,
+        busyIds,
+        currentPlayerId,
+      }),
+    [busyIds, currentPlayerId, participantIds, players, query],
   );
   // 직전 자리 목록에 없던 선수만 아바타 pop. 첫 마운트·자리 바꾸기는 선수 집합이 같아 제외된다
   const [prevSlots, setPrevSlots] = useState(slots);
