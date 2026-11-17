@@ -69,7 +69,10 @@ export const PlayerAvatar: React.FC<{
   );
 };
 
-/** 팀 아바타 쌍. 뒤 아바타는 -6px 겹치고, 둘레의 2px 테로 구분한다 */
+/** 팀 아바타 쌍에서 뒤 아바타가 앞 아바타와 겹치는 폭(px) */
+export const TEAM_AVATAR_OVERLAP = 6;
+
+/** 팀 아바타 쌍. 뒤 아바타는 TEAM_AVATAR_OVERLAP만큼 겹치고, 둘레의 2px 테로 구분한다 */
 export const TeamAvatars: React.FC<{
   players: readonly AvatarPlayer[];
   size: number;
@@ -80,8 +83,11 @@ export const TeamAvatars: React.FC<{
     {players.map((player, index) => (
       <span
         key={player.id}
-        className={cx("inline-flex rounded-full", index > 0 && "-ml-1.5")}
-        style={{ boxShadow: `0 0 0 2px ${ringColor}` }}
+        className="inline-flex rounded-full"
+        style={{
+          boxShadow: `0 0 0 2px ${ringColor}`,
+          marginLeft: index > 0 ? -TEAM_AVATAR_OVERLAP : undefined,
+        }}
       >
         <PlayerAvatar player={player} size={size} />
       </span>
