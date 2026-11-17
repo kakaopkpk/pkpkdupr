@@ -22,6 +22,11 @@ import {
   type AuthenticatedSession,
 } from "../services/AuthService";
 
+// 이 파일의 고정 데이터는 업적 기준 시각(2026-11-17 KST) 전 경기라, 업적은 기준 시각 없이 센다.
+vi.mock("@pkpkdupr/shared/achievementCountStart", () => ({
+  ACHIEVEMENT_COUNT_START: new Date(0),
+}));
+
 const now = new Date("2026-11-12T12:00:00.000Z");
 const makePlayer = (id: string, username: string, doubles: number): Player => ({
   isGuest: false,
