@@ -762,37 +762,77 @@ describe("computeAchievements", () => {
     ).toMatchObject({ earned: true, earnedMatchId: fourth.id });
   });
 
-  it("업적 기준 시각(2026-11-17 00:00 KST) 전에 완료된 경기는 업적에 세지 않는다", () => {
+  it("업적 기준 시각(2026-11-17 00:00 KST) 전 경기는 경기 수·승 수·개근에만 센다", () => {
     const startMs = ACHIEVEMENT_COUNT_START.getTime();
     expect(ACHIEVEMENT_COUNT_START.toISOString()).toBe("2026-11-16T15:00:00.000Z");
-    const before = makeMatch({
-      sessionId: "session-old",
-      completedAt: new Date(startMs - 1),
-    });
+    const before = [3, 2, 1].map((offset) =>
+      makeMatch({
+        partnerId: "partner-old",
+        sessionId: "session-old",
+        completedAt: new Date(startMs - offset),
+      }),
+    );
     const atStart = makeMatch({
+      partnerId: "partner-new",
       sessionId: "session-new",
       completedAt: new Date(startMs),
     });
 
     const progress = computeAchievements(
       ME,
-      [before, atStart],
+      [...before, atStart],
       new Set(["session-old", "session-new"]),
     );
+    // 경기 수·승 수·개근은 기준 시각 전 경기도 세고, 받은 경기도 그 경기다
     expect(progressOf(progress, "matches-1")).toMatchObject({
       earned: true,
-      earnedMatchId: atStart.id,
+      earnedMatchId: before[0].id,
+      earnedAt: before[0].completedAt,
+      current: 4,
+    });
+    expect(progressOf(progress, "wins-1")).toMatchObject({
+      earned: true,
+      earnedMatchId: before[0].id,
+      current: 4,
+    });
+    expect(progressOf(progress, "attendance-10")).toMatchObject({ current: 2 });
+    // 나머지 지표는 기준 시각 이후 경기만 센다
+    expect(progressOf(progress, "streak-3")).toMatchObject({
+      earned: false,
       current: 1,
     });
-    // 기준 시각 전 경기만 있는 세션은 출석·세션 지배자에도 세지 않는다
-    expect(progressOf(progress, "attendance-10")).toMatchObject({ current: 1 });
+    expect(progressOf(progress, "partner-20")).toMatchObject({ current: 1 });
+    expect(progressOf(progress, "social-10")).toMatchObject({ current: 1 });
+    expect(progressOf(progress, "rival-20")).toMatchObject({ current: 1 });
+    expect(progressOf(progress, "iron-8")).toMatchObject({ current: 1 });
     expect(progressOf(progress, "dominator-1")).toMatchObject({
       earnedMatchId: atStart.id,
       current: 1,
     });
-    expect(
-      progressOf(computeAchievements(ME, [before]), "matches-1"),
-    ).toMatchObject({ earned: false, current: 0 });
+
+    // 기준 시각 전 경기만 있어도 경기 수·승 수는 받는다
+    const onlyBefore = computeAchievements(ME, before);
+    expect(progressOf(onlyBefore, "matches-1")).toMatchObject({
+      earned: true,
+      earnedMatchId: before[0].id,
+      current: 3,
+    });
+    expect(progressOf(onlyBefore, "streak-3")).toMatchObject({
+      earned: false,
+      current: 0,
+    });
+  });
+
+  it("개근은 기준 시각 전후에 걸친 세션을 한 번만 센다", () => {
+    const startMs = ACHIEVEMENT_COUNT_START.getTime();
+    const matches = [
+      makeMatch({ sessionId: "session-a", completedAt: new Date(startMs - 1) }),
+      makeMatch({ sessionId: "session-a", completedAt: new Date(startMs + 1) }),
+    ];
+    const progress = compute(matches);
+    expect(progressOf(progress, "attendance-10")).toMatchObject({ current: 1 });
+    // 철인은 기준 시각 이후 경기만 센다
+    expect(progressOf(progress, "iron-8")).toMatchObject({ current: 1 });
   });
 
   it("세션 지배자는 지배 세션 수로 세고, 그 세션에서 내 마지막 경기를 받은 경기로 정한다", () => {
@@ -906,6 +946,16 @@ describe("findNewAchievements", () => {
         before,
         after: [...before, makeMatch({ won: false })],
       }),
+    ).toEqual([]);
+  });
+
+  it("업적 기준 시각 전 경기로 받은 업적은 넣지 않는다", () => {
+    // 기준 시각 전 경기를 고쳐 경기 수·승 수 업적을 그 경기로 받게 돼도 새 업적이 아니다
+    const saved = makeMatch({
+      completedAt: new Date(ACHIEVEMENT_COUNT_START.getTime() - 1),
+    });
+    expect(
+      findNewAchievements({ playerIds: [ME], before: [], after: [saved] }),
     ).toEqual([]);
   });
 });
@@ -1127,8 +1177,8 @@ describe("평점 업적", () => {
       earned: false,
       current: 3.8,
     });
-    // 평점 업적 말고는 기준 시각 전 경기를 세지 않는다
-    expect(progressOf(progress, "matches-1")).toMatchObject({
+    // 평점 업적과 경기 수·승 수·개근 말고는 기준 시각 전 경기를 세지 않는다
+    expect(progressOf(progress, "streak-3")).toMatchObject({
       earned: false,
       current: 0,
     });

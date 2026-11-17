@@ -4,6 +4,8 @@ import { describe, expect, it } from "vitest";
 import {
   buildSessionReport,
   createRankingContext,
+  findPlayerEarnedAchievements,
+  toContextAchievementMatches,
   type RankingMatch,
   type RankingSession,
   type RankingSourcePlayer,
@@ -35,7 +37,7 @@ const makeLog = (
 });
 
 describe("세션 리포트 업적과 업적 기준 시각", () => {
-  it("업적 기준 시각 시점 평점으로 받은 평점 업적은 기준 시각 전 세션 리포트에 나오지 않는다", () => {
+  it("기준 시각 전 경기로 받은 경기 수·승 수 업적과 기준 시각 시점 평점으로 받은 평점 업적은 기준 시각 전 세션 리포트에 나오지 않는다", () => {
     const completedAt = new Date(ACHIEVEMENT_COUNT_START.getTime() - 3_600_000);
     const players = ["Palice01", "Pbob0001", "Pcarol01", "Pdave001"].map(
       (id, index) => makePlayer(id, `user${index}`),
@@ -67,16 +69,26 @@ describe("세션 리포트 업적과 업적 기준 시각", () => {
       participantIds: [],
     };
 
+    const context = createRankingContext(
+      players,
+      [makeLog("Palice01", "Mmatch10", completedAt, 3.7)],
+      matches,
+    );
     const report = buildSessionReport({
-      context: createRankingContext(
-        players,
-        [makeLog("Palice01", "Mmatch10", completedAt, 3.7)],
-        matches,
-      ),
+      context,
       session,
       dominations: new Map(),
     });
 
+    // 받은 업적이지만 이 세션에서 받은 것으로 보여 주지 않는다
+    const earnedIds = findPlayerEarnedAchievements(
+      toContextAchievementMatches(context),
+      new Map(),
+      "Palice01",
+    ).map((item) => item.achievementId);
+    expect(earnedIds).toEqual(
+      expect.arrayContaining(["matches-10", "wins-10", "rating-3.5"]),
+    );
     expect(report?.achievements).toEqual([]);
   });
 });
