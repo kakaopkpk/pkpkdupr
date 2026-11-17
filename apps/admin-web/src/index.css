@@ -59,26 +59,11 @@
   }
 }
 
-/* 라우트에 연결되지 않은 옛 대시보드 화면이 쓰는 입력 바탕·삭제 누름 진행 표시. 옛 파일이 지워지면 함께 지운다.
-   입력 바탕은 base 층에 두어 새 컴포넌트의 bg-* 유틸리티가 이긴다. */
+/* 폼 컨트롤 기본 바탕은 흰색이다. base 층에 두어 컴포넌트의 bg-* 유틸리티가 이긴다. */
 @layer base {
   input,
   select,
   textarea {
     background-color: #fff;
   }
-}
-
-@keyframes delete-hold-progress {
-  from {
-    transform: scaleX(0);
-  }
-
-  to {
-    transform: scaleX(1);
-  }
-}
-
-.delete-hold-progress {
-  animation: delete-hold-progress 800ms linear forwards;
 }
