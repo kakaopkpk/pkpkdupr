@@ -235,7 +235,8 @@ export const getCelebrationPointSteps = (
   const steps: { before: number; after: number }[] = [];
   let after = totalPoints;
   for (let index = achievements.length - 1; index >= 0; index -= 1) {
-    const before = after - achievements[index].points;
+    // 합계와 장 목록이 어긋나도(다른 회원 업적을 거른 경우 등) 0 아래로 내려가지 않게 한다
+    const before = Math.max(after - achievements[index].points, 0);
     steps.unshift({ before, after });
     after = before;
   }

@@ -64,7 +64,9 @@ const AchievementRow: React.FC<{
             <span className="text-pk-13 font-extrabold text-pk-primary">
               +{definition.points}
             </span>
-          ) : null}
+          ) : (
+            <span className="text-pk-13 font-bold text-pk-muted">점수 없음</span>
+          )}
           <span className="text-pk-13 text-pk-sub">
             {formatKstShortDate(progress.earnedAt)}
           </span>
