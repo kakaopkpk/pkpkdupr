@@ -128,7 +128,7 @@ export default function ScoreStep({
         />
         <div className="grid grid-cols-[auto_minmax(0,1fr)] gap-2">
           <PkButton
-            variant="ghost"
+            variant="secondary"
             size="lg"
             disabled={isSaving}
             onClick={onBack}
