@@ -1,5 +1,6 @@
 // 모든 날짜·시각 표시는 KST(UTC+9, 서머타임 없음) 기준이다.
 const KST_OFFSET_MS = 9 * 60 * 60 * 1000;
+const DAY_MS = 24 * 60 * 60 * 1000;
 const WEEKDAY_LABELS = ["일", "월", "화", "수", "목", "금", "토"];
 
 const toDate = (date: Date | string) =>
@@ -22,8 +23,9 @@ export const formatRating = (value: number | null | undefined): string =>
     ? "–"
     : value.toFixed(3);
 
-/** "+0.084", "−0.047"(U+2212), 0이면 "0.000" */
+/** "+0.084", "−0.047"(U+2212), 0이면 "0.000", 유한한 수가 아니면 "–" */
 export const formatRatingDelta = (value: number): string => {
+  if (!Number.isFinite(value)) return "–";
   const rounded = Number(value.toFixed(3));
   if (rounded === 0) return "0.000";
   const magnitude = Math.abs(rounded).toFixed(3);
@@ -57,7 +59,7 @@ export const formatRelativeDay = (
   date: Date | string,
   now: Date = new Date(),
 ): string => {
-  const dayDiff = Math.round((kstDayKey(now) - kstDayKey(date)) / 86_400_000);
+  const dayDiff = Math.round((kstDayKey(now) - kstDayKey(date)) / DAY_MS);
   if (dayDiff === 0) return "오늘";
   if (dayDiff === 1) return "어제";
   return formatKstMonthDay(date);

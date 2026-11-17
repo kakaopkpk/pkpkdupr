@@ -1,6 +1,5 @@
 import React, { useEffect, useId, useRef } from "react";
 import { createPortal } from "react-dom";
-import { cx } from "./cx";
 
 const FOCUSABLE_SELECTOR = [
   "a[href]",
@@ -117,7 +116,7 @@ export const Dialog: React.FC<DialogProps> = ({
           {children}
         </div>
         {footer && (
-          <div className={cx("flex justify-end gap-2 px-6 pb-6")}>{footer}</div>
+          <div className="flex justify-end gap-2 px-6 pb-6">{footer}</div>
         )}
       </div>
     </div>,

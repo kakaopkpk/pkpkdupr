@@ -16,7 +16,8 @@
 
 - PC 전용(폭 1280px 이상)이다. 폰 레이아웃을 만들지 않는다.
 - 색·둥글기·글자 크기는 `src/index.css`의 `pk-*` 토큰만 쓴다(값은 `apps/web/src/index.css`와 같다). raw Tailwind 팔레트 색(`gray-*`·`slate-*`·`blue-*` 등)과 하드코딩 색을 쓰지 않는다. 토큰을 추가하면 `components/ui/cx.ts` 목록도 고친다. 새 코드는 HeroUI를 쓰지 않는다.
-- 둥글기는 12(`rounded-pk-sm`) / 20(`rounded-pk-lg`) / 999(`rounded-full`)만, 글자 크기는 `text-pk-12/13/15/17/22/26`만 쓴다.
+- 둥글기는 12(`rounded-pk-sm`) / 20(`rounded-pk-lg`) / 999(`rounded-full`)만 쓴다. 예외로 둥근 틀 안쪽에 여백을 두고 끼운 칸(`SegmentedControl` 선택 칸 9px)은 바깥 둥글기에서 여백을 뺀 값을 쓴다.
+- 글자 크기는 `text-pk-12/13/15/17/22/26`만 쓴다.
 - 글꼴은 본문 Pretendard, 숫자 Barlow Condensed(`font-num`)다. `font-num`은 28px 이상 큰 숫자(홈 요약 숫자, 평점 타일 등)에만 쓰고, 표 숫자는 15px `tabular-nums`다.
 - 화면은 목록 + 오른쪽 상세 패널(`ListWithPanel`·`DetailPanel`) 구조다. 표 안에 입력창을 두지 않는다. 아무것도 고르지 않으면 패널을 닫고 목록이 전체 폭이 된다. 고른 줄은 `pk-primary-soft` 바탕이다.
 - 버튼(`Button`)은 블루만 쓴다. 높이 40px, 12px 둥글기, 13px 굵은 글자.

@@ -7,7 +7,7 @@ export const ListWithPanel: React.FC<{
 }> = ({ list, panel }) => (
   <div className="flex items-start gap-5">
     <div className="min-w-0 flex-1">{list}</div>
-    {panel !== null && panel !== undefined && (
+    {panel != null && (
       <div className="sticky top-7 w-[400px] shrink-0">{panel}</div>
     )}
   </div>

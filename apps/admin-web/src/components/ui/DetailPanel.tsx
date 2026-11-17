@@ -8,6 +8,7 @@ export const DetailPanel: React.FC<{
   onClose: () => void;
   children: React.ReactNode;
 }> = ({ title, subtitle, leading, onClose, children }) => (
+  // 최대 높이 = 화면 높이 − 위아래 여백(ListWithPanel sticky top-7 28px × 2)
   <section className="flex max-h-[calc(100vh-56px)] flex-col rounded-pk-lg bg-white">
     <header className="flex items-start gap-3 px-5 pt-5">
       {leading && <div className="shrink-0">{leading}</div>}
