@@ -584,19 +584,43 @@ const compareCountedMatches = (left: CountedMatch, right: CountedMatch) =>
   left.completedAt.getTime() - right.completedAt.getTime() ||
   (left.id < right.id ? -1 : left.id > right.id ? 1 : 0);
 
-/** 업적에 세는 경기: 완료 + 업적 기준 시각(ACHIEVEMENT_COUNT_START) 이후 완료 + 평점 반영 경기. compareCountedMatches 순 */
+/** 업적 기준 시각(ACHIEVEMENT_COUNT_START) 이후인 시각 */
+const isOnOrAfterCountStart = (at: Date) =>
+  at.getTime() >= ACHIEVEMENT_COUNT_START.getTime();
+
+/** 완료 시각이 있는 평점 반영 완료 경기 */
+const isRatedCompletedMatch = (
+  match: AchievementMatch,
+): match is CountedMatch =>
+  match.status === "completed" &&
+  !match.ratingExcluded &&
+  match.completedAt != null;
+
+/** 업적에 세는 경기: 업적 기준 시각 이후 완료된 평점 반영 완료 경기. compareCountedMatches 순 */
 const getCountedMatches = (
   matches: readonly AchievementMatch[],
 ): CountedMatch[] =>
   matches
     .filter(
       (match): match is CountedMatch =>
-        match.status === "completed" &&
-        !match.ratingExcluded &&
-        match.completedAt != null &&
-        match.completedAt.getTime() >= ACHIEVEMENT_COUNT_START.getTime(),
+        isRatedCompletedMatch(match) && isOnOrAfterCountStart(match.completedAt),
     )
     .sort(compareCountedMatches);
+
+/**
+ * 받은 업적이 업적에 세는 경기(업적 기준 시각 이후 완료)로 받은 것인지.
+ * 아니면 업적 기준 시각 시점 평점으로 받은 평점 업적이라, 받은 경기에서 받은 업적으로 보여 주지 않는다.
+ */
+export const isEarnedByCountedMatch = (achievement: EarnedAchievement) =>
+  isOnOrAfterCountStart(achievement.earnedAt);
+
+/** 복식 경기 직후 이 회원의 복식 평점(평점 업적 입력). 단식이거나 평점이 없으면 null */
+const getDoublesRatingAfter = (match: AchievementMatch, playerId: string) => {
+  const rating = match.doublesRatingAfter?.[playerId];
+  return isDoublesMatchType(match.type) && rating != null
+    ? roundDuprRating(rating)
+    : null;
+};
 
 const findTeamIndex = (
   match: AchievementMatch,
@@ -681,32 +705,23 @@ const isSessionEventMetric = (
 const NO_SESSIONS: ReadonlySet<string> = new Set();
 
 /**
- * 업적 기준 시각 시점 복식 평점: 기준 시각 전에 완료된 마지막 평점 반영 복식 경기의 경기 직후 복식 평점.
- * 평점 업적의 시작 값이며, 그 전 최고치는 보지 않는다.
+ * 업적 기준 시각 시점 복식 평점을 낸 경기: 기준 시각 전에 완료된 마지막 평점 반영 복식 경기.
+ * 그 경기 직후 복식 평점이 평점 업적의 시작 값이며, 그 전 최고치는 보지 않는다.
  */
-const findCountStartDoublesRating = (
+const findCountStartRatingMatch = (
   playerId: string,
   matches: readonly AchievementMatch[],
-): { match: CountedMatch; rating: number } | null => {
-  let last: CountedMatch | null = null;
-  for (const match of matches) {
-    if (
-      match.status !== "completed" ||
-      match.ratingExcluded ||
-      match.completedAt == null ||
-      match.completedAt.getTime() >= ACHIEVEMENT_COUNT_START.getTime() ||
-      !isDoublesMatchType(match.type) ||
-      match.doublesRatingAfter?.[playerId] == null ||
-      findTeamIndex(match, playerId) === null
-    ) {
-      continue;
-    }
-    const counted = match as CountedMatch;
-    if (!last || compareCountedMatches(last, counted) < 0) last = counted;
-  }
-  return last
-    ? { match: last, rating: roundDuprRating(last.doublesRatingAfter![playerId]) }
-    : null;
+): CountedMatch | undefined => {
+  const candidates = matches
+    .filter(
+      (match): match is CountedMatch =>
+        isRatedCompletedMatch(match) &&
+        !isOnOrAfterCountStart(match.completedAt) &&
+        getDoublesRatingAfter(match, playerId) != null &&
+        findTeamIndex(match, playerId) !== null,
+    )
+    .sort(compareCountedMatches);
+  return candidates[candidates.length - 1];
 };
 
 /** 아직 받지 않은 경기 단위 업적 중 진행도가 목표에 닿은 것을 이 경기로 받은 것으로 정한다 */
@@ -737,7 +752,7 @@ const markReachedAchievements = (
  * 세션 지배자는 경기만으로 알 수 없어 서버가 정한 dominatedSessionIds(이 회원이 지배자로 확정된
  * 끝난 세션)로 세고, 그 세션에서 이 회원의 마지막 경기를 받은 경기로 정한다.
  * 평점 업적은 복식 경기 직후 복식 평점(doublesRatingAfter)의 최고치로 세므로, 받은 뒤 평점이 내려가도 유지된다.
- * 평점 업적만은 업적 기준 시각 시점 평점(findCountStartDoublesRating)에서 시작해, 그때 이미 기준 이상이면
+ * 평점 업적만은 업적 기준 시각 시점 평점(findCountStartRatingMatch)에서 시작해, 그때 이미 기준 이상이면
  * 그 평점을 낸 기준 시각 전 경기로 받는다. 그 전 최고치는 세지 않는다.
  */
 export function computeAchievements(
@@ -783,10 +798,13 @@ export function computeAchievements(
   const lostLineups = new Set<string>();
   const sessions = new Map<string, SessionRecord>();
 
-  const countStartRating = findCountStartDoublesRating(playerId, matches);
-  if (countStartRating) {
-    metrics.peakDoublesRating = countStartRating.rating;
-    markReachedAchievements(progress, metrics, countStartRating.match);
+  const countStartRatingMatch = findCountStartRatingMatch(playerId, matches);
+  if (countStartRatingMatch) {
+    metrics.peakDoublesRating = getDoublesRatingAfter(
+      countStartRatingMatch,
+      playerId,
+    )!;
+    markReachedAchievements(progress, metrics, countStartRatingMatch);
   }
 
   for (const match of getCountedMatches(matches)) {
@@ -874,11 +892,11 @@ export function computeAchievements(
       );
     }
 
-    const doublesRatingAfter = match.doublesRatingAfter?.[playerId];
-    if (isDoublesMatchType(match.type) && doublesRatingAfter != null) {
+    const doublesRatingAfter = getDoublesRatingAfter(match, playerId);
+    if (doublesRatingAfter != null) {
       metrics.peakDoublesRating = Math.max(
         metrics.peakDoublesRating,
-        roundDuprRating(doublesRatingAfter),
+        doublesRatingAfter,
       );
     }
 

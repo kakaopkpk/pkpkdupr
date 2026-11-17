@@ -2,11 +2,11 @@ import {
   ACHIEVEMENTS,
   compareEarnedAchievements,
   computeAchievements,
+  isEarnedByCountedMatch,
   toEarnedAchievements,
   type AchievementMatch,
   type EarnedAchievement,
 } from "@pkpkdupr/shared/achievements";
-import { ACHIEVEMENT_COUNT_START } from "@pkpkdupr/shared/achievementCountStart";
 import { isEntityId } from "@pkpkdupr/shared/entityId";
 import {
   getMatchTopLevelType,
@@ -770,7 +770,7 @@ export const findPlayerEarnedAchievements = (
 /**
  * 세션 경기로 받은 업적. 각 참가자의 전체 완료 경기로 계산해, 받게 된 경기가
  * 이 세션 경기인 업적만 고른다. 받은 시각 → 업적 정의 순서 → 회원 id 순이다.
- * 업적 기준 시각 시점 평점으로 받은 평점 업적(받은 경기가 기준 시각 전 경기)은 그 세션에서 받은 것이 아니므로 뺀다.
+ * 업적 기준 시각 시점 평점으로 받은 평점 업적은 그 세션에서 받은 것이 아니므로 뺀다.
  */
 const buildSessionAchievements = (
   context: RankingContext,
@@ -786,8 +786,7 @@ const buildSessionAchievements = (
     )
     .filter(
       (item) =>
-        sessionMatchIds.has(item.earnedMatchId) &&
-        item.earnedAt.getTime() >= ACHIEVEMENT_COUNT_START.getTime(),
+        sessionMatchIds.has(item.earnedMatchId) && isEarnedByCountedMatch(item),
     )
     .sort(
       (left, right) =>

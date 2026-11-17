@@ -917,11 +917,14 @@ describe("평점 업적", () => {
     }
   });
 
+  const beforeStart = (ms: number) =>
+    new Date(ACHIEVEMENT_COUNT_START.getTime() - ms);
+
   /** 업적 기준 시각 전에 완료된 복식 경기에 경기 직후 내 복식 평점을 붙인다 */
   const ratedDoublesBeforeStart = (msBeforeStart: number, rating: number) => ({
     ...makeMatch({
       partnerId: "partner-1",
-      completedAt: new Date(ACHIEVEMENT_COUNT_START.getTime() - msBeforeStart),
+      completedAt: beforeStart(msBeforeStart),
     }),
     doublesRatingAfter: { [ME]: rating },
   });
@@ -976,14 +979,12 @@ describe("평점 업적", () => {
       ratingExcluded: true,
     };
     const singles = {
-      ...makeMatch({
-        completedAt: new Date(ACHIEVEMENT_COUNT_START.getTime() - 2_000),
-      }),
+      ...makeMatch({ completedAt: beforeStart(2_000) }),
       doublesRatingAfter: { [ME]: 3.2 },
     };
     const unrated = makeMatch({
       partnerId: "partner-1",
-      completedAt: new Date(ACHIEVEMENT_COUNT_START.getTime() - 1_000),
+      completedAt: beforeStart(1_000),
     });
     expect(
       progressOf(compute([counted, excluded, singles, unrated]), "rating-3.5"),
