@@ -1,6 +1,9 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { RecommendedCourt } from "@pkpkdupr/shared/matchmaking";
-import { formatSessionTimeRange } from "@pkpkdupr/shared/session";
+import {
+  formatSessionTimeRange,
+  toKstDateKey,
+} from "@pkpkdupr/shared/session";
 import type { MatchInfo } from "@/types/match";
 import HomeSkeleton from "@/components/home/HomeSkeleton";
 import LastSessionFeed from "@/components/home/LastSessionFeed";
@@ -109,6 +112,7 @@ const Home: React.FC = () => {
   const { registerPullToRefresh } = useTabNavigation();
   const { showSaveFailure } = useSystemNotice();
   const now = useMinuteClock();
+  const todayKey = toKstDateKey(now);
   // 비동기 요청이 끝난 시점에 최신 dataVersion을 읽기 위한 ref
   const dataVersionRef = useRef(dataVersion);
   dataVersionRef.current = dataVersion;
@@ -121,6 +125,7 @@ const Home: React.FC = () => {
   const preSession = usePreSessionData({
     enabled: isPreSession,
     dataVersion,
+    todayKey,
   });
   const liveTopRiser = useSessionTopRiser(liveSession?.id ?? null, dataVersion);
   const recommendations = useSessionRecommendations(
@@ -442,7 +447,7 @@ const Home: React.FC = () => {
       return <HomeSkeleton />;
     }
 
-    const { upcoming, lastSessionReport } = data;
+    const { lastSessionReport } = data;
 
     return (
       <>
@@ -455,7 +460,7 @@ const Home: React.FC = () => {
         {nextSession ? (
           <NextSessionCard
             session={nextSession}
-            todayKey={upcoming.dateKey}
+            todayKey={todayKey}
             now={now}
             isJoined={isJoinedNext}
             pendingAction={participation?.action ?? null}
