@@ -32,7 +32,7 @@ export interface AchievementDefinition {
   /** 배지 아래 숫자 꼬리표 문구("10", "4.0"). 없으면 null */
   badgeNumber: string | null;
   target: number;
-  /** 업적 점수. 난이도에 따라 10·25·50·100점이고, 낮은 평점 업적은 0점이다 */
+  /** 업적 점수. 난이도에 따라 10·25·50·100점이다 */
   points: number;
 }
 
@@ -336,7 +336,7 @@ const ACHIEVEMENT_TABLE: readonly {
       condition: "복식 10경기 이상, 복식 평점 2.5 이하",
       badgeNumber: "2.5",
       target: 2.5,
-      points: 0,
+      points: 50,
     },
   },
   {
@@ -348,7 +348,7 @@ const ACHIEVEMENT_TABLE: readonly {
       condition: "복식 10경기 이상, 복식 평점 2.0 이하",
       badgeNumber: "2.0",
       target: 2,
-      points: 0,
+      points: 100,
     },
   },
   {
@@ -360,7 +360,7 @@ const ACHIEVEMENT_TABLE: readonly {
       condition: "1점도 주지 않고 승리",
       badgeNumber: null,
       target: 1,
-      points: 50,
+      points: 25,
     },
   },
   {
@@ -372,7 +372,7 @@ const ACHIEVEMENT_TABLE: readonly {
       condition: "듀스 끝에 15:14로 승리",
       badgeNumber: null,
       target: 1,
-      points: 25,
+      points: 50,
     },
   },
   {
@@ -396,7 +396,7 @@ const ACHIEVEMENT_TABLE: readonly {
       condition: "같은 파트너와 복식 20경기",
       badgeNumber: "20",
       target: 20,
-      points: 10,
+      points: 25,
     },
   },
   {
@@ -408,7 +408,7 @@ const ACHIEVEMENT_TABLE: readonly {
       condition: "같은 파트너와 복식 50경기",
       badgeNumber: "50",
       target: 50,
-      points: 25,
+      points: 50,
     },
   },
   {
@@ -420,7 +420,7 @@ const ACHIEVEMENT_TABLE: readonly {
       condition: "같은 파트너와 복식 5연승",
       badgeNumber: null,
       target: 5,
-      points: 25,
+      points: 50,
     },
   },
   {
@@ -432,7 +432,7 @@ const ACHIEVEMENT_TABLE: readonly {
       condition: "서로 다른 파트너 10명과 복식",
       badgeNumber: null,
       target: 10,
-      points: 10,
+      points: 25,
     },
   },
   {
@@ -444,7 +444,7 @@ const ACHIEVEMENT_TABLE: readonly {
       condition: "같은 상대와 맞대결 20번",
       badgeNumber: null,
       target: 20,
-      points: 25,
+      points: 50,
     },
   },
   {
