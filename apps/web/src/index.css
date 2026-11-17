@@ -579,12 +579,18 @@
     animation: pk-rally-lunge 2.2s infinite;
   }
 
+  .pk-rally-late,
+  .pk-rally-lunge-reverse {
+    animation-delay: -1.1s;
+  }
+
   .pk-rally-lunge-reverse {
     --pk-rally-lunge: -3px;
   }
 
-  .pk-rally-late {
-    animation-delay: -1.1s;
+  /* 화면이 가려졌거나 다른 탭에 있으면 멈춘다(지금 위치 그대로) */
+  .pk-rally-paused :is(.pk-rally-x, .pk-rally-y, .pk-rally-paddle, .pk-rally-burst, .pk-rally-lunge) {
+    animation-play-state: paused;
   }
 
   @media (prefers-reduced-motion: reduce) {
@@ -661,7 +667,8 @@
 /* 칠 때마다 20px 위로 떠올랐다 내려오는 포물선 */
 @keyframes pk-rally-y {
   0%,
-  50% {
+  50%,
+  100% {
     transform: translateY(0);
     animation-timing-function: ease-out;
   }
@@ -669,9 +676,6 @@
   75% {
     transform: translateY(-20px);
     animation-timing-function: ease-in;
-  }
-  100% {
-    transform: translateY(0);
   }
 }
 

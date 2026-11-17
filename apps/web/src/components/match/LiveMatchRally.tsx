@@ -1,16 +1,18 @@
 import React from "react";
 import { cx } from "@/components/ui/cx";
+import { TEAM_AVATAR_OVERLAP } from "@/components/ui/PlayerAvatar";
 
 /*
  * 진행 중 경기 상세 팀 줄 위에 겹쳐 그리는 랠리 연출. 장식이라 스크린 리더에서는 숨긴다.
- * 팀 줄은 grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] gap-2(8px)이고 가운데 칸 폭이 RALLY_NET_COLUMN_WIDTH,
- * 아바타(32px, 겹침 6px)는 팀 칸 가운데 위에 있다는 전제로 공 경로를 계산한다.
+ * 팀 줄은 grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]에 칸 간격 TEAM_ROW_GAP, 가운데 칸 폭 RALLY_NET_COLUMN_WIDTH이고
+ * 아바타 쌍(TEAM_ROW_AVATAR_SIZE)은 같은 높이의 두 팀 칸 맨 위 가운데에 있다는 전제로 공 경로를 계산한다.
  * 공은 왼쪽 팀 아바타 바깥 가장자리에서 오른쪽 팀 아바타 바깥 가장자리까지 오간다.
  */
 
-const AVATAR_SIZE = 32;
-const AVATAR_OVERLAP = 6;
-const GRID_GAP = 8;
+/** 경기 상세 팀 줄의 아바타 크기·칸 간격(px). 팀 줄 마크업과 공 경로 계산이 같이 쓴다 */
+export const TEAM_ROW_AVATAR_SIZE = 32;
+export const TEAM_ROW_GAP = 8;
+const AVATAR_SIZE = TEAM_ROW_AVATAR_SIZE;
 /** 가운데 네트 칸 폭(px). 팀 줄의 가운데 칸에 같은 폭을 준다 */
 export const RALLY_NET_COLUMN_WIDTH = 28;
 /** 아바타 테두리와 공 사이 여백 */
@@ -24,12 +26,12 @@ const NET_HEIGHT = 24;
 const NET_TOP = RALLY_TOP_SPACE + AVATAR_SIZE + 1 - NET_HEIGHT;
 
 const halfAvatarGroupWidth = (playerCount: number) =>
-  (AVATAR_SIZE * playerCount - AVATAR_OVERLAP * Math.max(0, playerCount - 1)) / 2;
+  (AVATAR_SIZE * playerCount - TEAM_AVATAR_OVERLAP * Math.max(0, playerCount - 1)) / 2;
 
 /** 공이 오가는 구간. 팀 칸 가운데는 각각 25% - 칸 보정, 75% + 칸 보정에 있다 */
 export const getRallyTrack = (leftCount: number, rightCount: number) => {
   // 팀 칸 폭 = (100% - 가운데 칸 - 간격 2개) / 2 이므로 가운데는 25%에서 그 절반 보정만큼 안쪽이다
-  const columnOffset = (RALLY_NET_COLUMN_WIDTH + GRID_GAP * 2) / 4;
+  const columnOffset = (RALLY_NET_COLUMN_WIDTH + TEAM_ROW_GAP * 2) / 4;
   const start = -columnOffset + halfAvatarGroupWidth(leftCount) + BALL_GAP;
   const end = columnOffset - halfAvatarGroupWidth(rightCount) - BALL_GAP;
   const offset = (base: string, px: number) =>
@@ -79,6 +81,12 @@ const BURST_PATH = [30, 90, 150, 210, 270, 330]
 // 피클볼 구멍과 테두리 색. 공 연두를 잉크 쪽으로 어둡게 섞는다
 const BALL_EDGE = "color-mix(in srgb, var(--color-pk-hl) 70%, var(--color-pk-ink))";
 
+const BALL_HOLES = [
+  [-1.8, -1.5],
+  [1.8, -0.5],
+  [-0.2, 2],
+] as const;
+
 const Ball: React.FC = () => (
   <svg
     viewBox="-7 -7 14 14"
@@ -87,9 +95,9 @@ const Ball: React.FC = () => (
     {/* 아바타와 겹쳐도 공이 따로 보이도록 바탕색 테두리를 두른다 */}
     <circle r={7} className="fill-pk-bg" />
     <circle r={5} className="fill-pk-hl" style={{ stroke: BALL_EDGE }} strokeWidth={1} />
-    <circle cx={-1.8} cy={-1.5} r={0.9} style={{ fill: BALL_EDGE }} />
-    <circle cx={1.8} cy={-0.5} r={0.9} style={{ fill: BALL_EDGE }} />
-    <circle cx={-0.2} cy={2} r={0.9} style={{ fill: BALL_EDGE }} />
+    {BALL_HOLES.map(([cx, cy]) => (
+      <circle key={`${cx},${cy}`} cx={cx} cy={cy} r={0.9} style={{ fill: BALL_EDGE }} />
+    ))}
   </svg>
 );
 
