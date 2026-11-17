@@ -1,7 +1,12 @@
 import React from "react";
 import { cx } from "./cx";
 
-export type PkButtonVariant = "primary" | "soft" | "outline" | "secondary" | "ghost";
+export type PkButtonVariant =
+  | "primary"
+  | "soft"
+  | "outline"
+  | "secondary"
+  | "ghost";
 
 export interface PkButtonProps
   extends React.ButtonHTMLAttributes<HTMLButtonElement> {
