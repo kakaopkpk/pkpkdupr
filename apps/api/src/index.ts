@@ -7,7 +7,6 @@ import {
   isMatchInProgress,
   isSinglesMatchType,
   isMatchRecordDeletable,
-  isMultiGameMatchRecord,
   isWithinMatchEditWindow,
   matchTypeLabels,
   matchTopLevelTypeValues,
@@ -2464,9 +2463,6 @@ const getMatchDeleteForbiddenReason = (
   if (match.status === "cancelled") {
     return "취소된 경기는 지울 수 없습니다.";
   }
-  if (isMultiGameMatchRecord(match)) {
-    return "여러 게임으로 기록된 경기는 지울 수 없습니다. 관리자에게 요청해 주세요.";
-  }
   if (!isWithinMatchEditWindow(match.matchStartsAt, now)) {
     return "경기 시작 후 24시간이 지나 지울 수 없습니다. 관리자에게 요청해 주세요.";
   }
@@ -2569,12 +2565,6 @@ app.put("/api/matches/:matchId", async (req, res) => {
       return res
         .status(409)
         .json({ error: "취소된 경기는 기록을 수정할 수 없습니다." });
-    }
-    if (isMultiGameMatchRecord(existing)) {
-      return res.status(409).json({
-        error:
-          "여러 게임으로 기록된 경기는 수정할 수 없습니다. 관리자에게 요청해 주세요.",
-      });
     }
 
     const prepared = await prepareRecordedMatch(body, decoded.playerId);

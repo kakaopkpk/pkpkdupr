@@ -416,12 +416,6 @@ const mockMatchScores = [
     scoreB: 8,
   },
   {
-    id: "dev-match-score-open-play-001-game-2",
-    matchId: "dev-match-open-play-001",
-    scoreA: 11,
-    scoreB: 6,
-  },
-  {
     id: "dev-session-open-play-001-game-1",
     matchId: "dev-session-open-play-001",
     scoreA: 11,

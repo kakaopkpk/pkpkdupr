@@ -158,39 +158,31 @@ export interface MatchSessionSummary {
   latestCreatedAt: Date;
 }
 
-/**
- * 새로 저장하는 점수 목록을 검증한다. 점수는 정확히 MATCH_SCORE_COUNT개여야 한다.
- * 점수가 여러 개인 과거 2선승 기록은 조회·평점 재계산에만 쓰고 이 검증을 거치지 않는다.
- */
+/** 새로 저장하는 점수 목록을 검증한다. 점수는 정확히 MATCH_SCORE_COUNT개여야 한다. */
 export const validateMatchScores = (scores: MatchScore[]) => {
   if (scores.length !== MATCH_SCORE_COUNT) {
     throw new Error(`스코어는 ${MATCH_SCORE_COUNT}개만 입력할 수 있습니다.`);
   }
 };
 
-/** 점수가 여러 개인 과거 2선승 기록이면 true. 점수를 1개로 바꾸면 승패가 달라질 수 있어 회원 수정을 막는다 */
-export const isMultiGameMatchRecord = (match: Pick<Match, "scores">): boolean =>
-  (match.scores?.length ?? 0) > MATCH_SCORE_COUNT;
-
 /**
  * 점수를 넣거나 고칠 수 있는 경기면 true. 회원 누구나 가능하며
- * 취소 아님 · 과거 다중 점수 기록 아님 · 시작 후 24시간 이내(isWithinMatchEditWindow)일 때
+ * 취소 아님 · 시작 후 24시간 이내(isWithinMatchEditWindow)일 때
  */
 export const isMatchRecordEditable = (
-  match: Pick<Match, "status" | "scores" | "matchStartsAt">,
+  match: Pick<Match, "status" | "matchStartsAt">,
   now: Date = new Date(),
 ): boolean =>
   match.status !== "cancelled" &&
-  !isMultiGameMatchRecord(match) &&
   isWithinMatchEditWindow(match.matchStartsAt, now);
 
 /**
  * 회원이 지울 수 있는 경기면 true. 회원 누구나 가능하며
- * 수정 가능 조건(취소 아님 · 과거 다중 점수 기록 아님 · 시작 후 24시간 이내)에 더해
+ * 수정 가능 조건(취소 아님 · 시작 후 24시간 이내)에 더해
  * 이미 시작했고(시작 시각 ≤ now) 완료되지 않은 관리자 예정 경기가 아닐 때
  */
 export const isMatchRecordDeletable = (
-  match: Pick<Match, "status" | "scores" | "matchStartsAt" | "source">,
+  match: Pick<Match, "status" | "matchStartsAt" | "source">,
   now: Date = new Date(),
 ): boolean =>
   isMatchRecordEditable(match, now) &&
