@@ -33,9 +33,13 @@ export const isValidUsername = (username: string): boolean => {
   );
 };
 
-/** 앞뒤 공백을 떼고 소문자로 바꾼 아이디의 내부 이메일. 예: " Dev_Alice " → "dev_alice@<INTERNAL_EMAIL_DOMAIN>" */
+/** 아이디 비교 기준: 앞뒤 공백을 떼고 소문자로 바꾼다. 같으면 같은 아이디로 본다 */
+export const normalizeUsername = (username: string): string =>
+  username.trim().toLowerCase();
+
+/** 정규화한 아이디의 내부 이메일. 예: " Dev_Alice " → "dev_alice@<INTERNAL_EMAIL_DOMAIN>" */
 export const toInternalEmail = (username: string): string =>
-  `${username.trim().toLowerCase()}@${INTERNAL_EMAIL_DOMAIN}`;
+  `${normalizeUsername(username)}@${INTERNAL_EMAIL_DOMAIN}`;
 
 /** GET /api/me, POST /api/me/password-changed 응답. isFirstLogin이 true면 web이 비밀번호 변경을 강제한다 */
 export type MeResponse = Player & { isAdmin: boolean; isFirstLogin: boolean };

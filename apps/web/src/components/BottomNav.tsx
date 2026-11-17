@@ -101,7 +101,11 @@ const initiallyVisitedTabs = (): Record<TabKey, boolean> => ({
 });
 
 /** 탭 루트의 당겨서 새로고침과 터치를 막는 깊이 */
-const BLOCKING_DEPTH_KINDS: TabDepthKind[] = ["bottom-sheet", "dropdown"];
+const BLOCKING_DEPTH_KINDS: TabDepthKind[] = [
+  "bottom-sheet",
+  "dropdown",
+  "dialog",
+];
 const GLOBAL_MENU_DEPTH_ID = "global-menu";
 
 /** 하단 바 높이·미니바 높이·둘 사이 간격·화면 아래(safe-area 위) 여백(px) */

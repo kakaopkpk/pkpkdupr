@@ -6,7 +6,9 @@ export type TabDepthKind =
   /** 하단 바까지 덮는 화면 이동(PushScreen) */
   | "push-screen"
   | "bottom-sheet"
-  | "dropdown";
+  | "dropdown"
+  /** 시트 위 가운데 확인 창(ConfirmDialog) */
+  | "dialog";
 
 export interface TabDepthEntry {
   id: string;
