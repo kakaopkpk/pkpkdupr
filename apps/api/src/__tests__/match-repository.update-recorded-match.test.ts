@@ -90,17 +90,17 @@ describe("MatchRepository.updateRecordedMatch 관리자 정정", () => {
 
   it("세션을 옮기면 세션 행의 이름·날짜를 같은 UPDATE로 복사한다", async () => {
     const { repository, updateStatement } = createRepository([
-      { id: "Ssession2", name: "목요 정기운동", date: String(SESSION_DATE_SECONDS) },
+      { id: "Ssess002", name: "목요 정기운동", date: String(SESSION_DATE_SECONDS) },
     ]);
 
     await repository.updateRecordedMatch("Mfix1", {
       ...baseInput,
-      sessionId: "Ssession2",
+      sessionId: "Ssess002",
       expectedUpdatedAt: new Date(SESSION_DATE_SECONDS * 1000),
     });
 
     const update = updateStatement()!;
-    expect(assignedArg(update, "session_id")).toBe("Ssession2");
+    expect(assignedArg(update, "session_id")).toBe("Ssess002");
     expect(assignedArg(update, "session_name")).toBe("목요 정기운동");
     expect(assignedArg(update, "session_date")).toBe(SESSION_DATE_SECONDS);
     // 낙관적 잠금 조건은 그대로 같은 UPDATE에 걸린다
