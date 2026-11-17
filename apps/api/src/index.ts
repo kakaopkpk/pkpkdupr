@@ -906,7 +906,7 @@ const getTeamPlayerIds = (teams: Team[]) =>
 /**
  * 경기 저장으로 참가자 전원이 새로 받은 업적. 저장 후 완료 경기 전체와, 그중 이 경기만
  * 저장 전 상태(previous, 완료 경기가 아니었으면 뺌)로 되돌린 목록의 계산 차이로 구한다.
- * 평점 업적 입력은 참가자들의 지금 평점 변경 로그로 붙이고, 저장 전 상태의 이 경기에는 붙이지 않는다.
+ * 평점 업적 입력은 참가자들의 지금 평점 변경 로그로 붙인다.
  * 저장은 이미 끝났으므로 업적 계산이 실패하면 빈 배열로 응답한다.
  */
 const findNewAchievementsForSavedMatch = async (
@@ -929,9 +929,13 @@ const findNewAchievementsForSavedMatch = async (
     const after = outcomes.map((outcome) =>
       toAchievementMatch(outcome, ratingsByMatchId.get(outcome.id)),
     );
+    // 수정 전 평점 로그는 재계산으로 덮어써져 없으므로, 이미 완료였던 경기는 지금 평점을 그대로 붙인다.
+    // 그래서 완료 경기 수정으로는 평점 업적이 새 업적으로 나오지 않는다(미확인 업적 조회로 축하한다).
     const before = [
       ...after.filter((candidate) => candidate.id !== match.id),
-      ...(previous?.status === "completed" ? [previous] : []),
+      ...(previous?.status === "completed"
+        ? [{ ...previous, doublesRatingAfter: ratingsByMatchId.get(match.id) }]
+        : []),
     ];
     return findNewAchievements({
       playerIds,
