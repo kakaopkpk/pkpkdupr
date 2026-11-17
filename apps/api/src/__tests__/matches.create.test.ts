@@ -168,6 +168,16 @@ describe("POST /api/matches", () => {
       MatchRepository.prototype,
       "getPlayerRatingChangeLogs",
     ).mockResolvedValue([]);
+    // 새 업적을 받은 참가자의 업적 점수 합은 랭킹 원천(회원·평점 로그·세션)으로 계산한다
+    vi.spyOn(AuthService.prototype, "getAllPlayers").mockResolvedValue([]);
+    vi.spyOn(
+      MatchRepository.prototype,
+      "getAllRatingChangeLogs",
+    ).mockResolvedValue([]);
+    vi.spyOn(
+      MatchRepository.prototype,
+      "findSessionsWithParticipantIds",
+    ).mockResolvedValue([]);
     findOrCreateRegularSession = vi
       .spyOn(MatchRepository.prototype, "findOrCreateRegularSession")
       .mockResolvedValue(buildManagedSession());
