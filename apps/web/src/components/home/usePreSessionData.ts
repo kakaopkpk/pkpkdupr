@@ -47,14 +47,17 @@ export interface PreSessionState {
 
 /**
  * 진행 중 세션이 없을 때의 홈 데이터(다음 세션·지난 세션).
- * enabled일 때만 받고, dataVersion이 바뀌면 보이는 내용을 둔 채 다시 받는다.
+ * enabled일 때만 받고, dataVersion이나 오늘 날짜 키(KST)가 바뀌면 보이는 내용을 둔 채 다시 받는다.
+ * 날짜 키가 바뀌면 서버가 고르는 다음 세션·지난 세션도 달라지므로 앱을 켜 둔 채 자정을 넘기면 한 번 다시 받는다.
  */
 export const usePreSessionData = ({
   enabled,
   dataVersion,
+  todayKey,
 }: {
   enabled: boolean;
   dataVersion: number;
+  todayKey: string;
 }): PreSessionState => {
   const [data, setData] = useState<PreSessionData | null>(null);
   const [status, setStatus] = useState<PreSessionState["status"]>("loading");
@@ -85,7 +88,7 @@ export const usePreSessionData = ({
   useEffect(() => {
     if (!enabled) return;
     void load();
-  }, [dataVersion, enabled, load]);
+  }, [dataVersion, enabled, load, todayKey]);
 
   return { data, status, error, loadedVersion, reload: load };
 };

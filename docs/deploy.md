@@ -331,13 +331,13 @@ web과 admin-web은 한 GitHub Pages 사이트에 같이 배포합니다. Pages�
 | `VITE_API_BASE_URL` | 예 | `https://<project-ref>.supabase.co/functions/v1` |
 | `VITE_SUPABASE_URL` | 예 | `https://<project-ref>.supabase.co` |
 | `VITE_SUPABASE_ANON_KEY` | 예 | 프로젝트 anon(publishable) key |
-| `VITE_FUNCTION_REGION` | 아니오 | Supabase 프로젝트(DB) 리전 코드. 현재 운영값 `ap-southeast-1` |
+| `VITE_FUNCTION_REGION` | 아니오 | Supabase 프로젝트(DB) 리전 코드. 현재 운영값은 비움(설정하지 않음)이며, 프로젝트를 다른 리전으로 옮길 때만 쓰는 선택 값입니다 |
 
 ```bash
 gh variable set VITE_API_BASE_URL --body 'https://<project-ref>.supabase.co/functions/v1'
 gh variable set VITE_SUPABASE_URL --body 'https://<project-ref>.supabase.co'
 gh variable set VITE_SUPABASE_ANON_KEY --body '<anon key>'
-gh variable set VITE_FUNCTION_REGION --body 'ap-southeast-1'   # 선택
+gh variable set VITE_FUNCTION_REGION --body '<리전 코드>'   # 선택, 운영에서는 설정하지 않음
 ```
 
 - 필수 variable이 비어 있으면 workflow가 빌드 전에 실패합니다. web 운영 번들은 `VITE_API_BASE_URL`이 없으면 API 주소를 추측하지 않고 시작할 때 오류를 냅니다.

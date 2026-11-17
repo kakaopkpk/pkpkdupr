@@ -90,7 +90,7 @@ const NextSessionCard: React.FC<{
       <article className="flex flex-col gap-3.5 rounded-pk-lg bg-pk-primary p-5 text-white">
         <div className="flex items-center gap-2">
           <span className="rounded-full bg-white/[0.18] px-2.5 py-[3px] text-pk-12 font-bold">
-            {getSessionChipLabel(session)}
+            {getSessionChipLabel(session, todayKey)}
           </span>
           <span className="text-pk-13 text-white/85 tabular-nums">
             {getSessionTimeLabel(session, todayKey, now)}
