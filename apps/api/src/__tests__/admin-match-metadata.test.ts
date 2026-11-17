@@ -59,7 +59,10 @@ describe("admin match metadata", () => {
     vi.restoreAllMocks();
   });
 
-  it("선택한 매치를 하나의 세션 ID로 일괄 연결한다", async () => {
+  it("선택한 매치를 하나의 세션 ID로 일괄 연결하고 선수를 세션 참여자로 넣는다", async () => {
+    const addSessionParticipants = vi
+      .spyOn(MatchRepository.prototype, "addSessionParticipants")
+      .mockResolvedValue(undefined);
     const updateMetadata = vi
       .spyOn(MatchRepository.prototype, "updateMetadata")
       .mockImplementation(async (matchId, input) => ({
@@ -90,6 +93,28 @@ describe("admin match metadata", () => {
     expect(updateMetadata).toHaveBeenNthCalledWith(2, "match-002", {
       sessionId: "Ssession",
     });
+    expect(addSessionParticipants).toHaveBeenCalledTimes(2);
+    expect(addSessionParticipants).toHaveBeenNthCalledWith(1, "Ssession", [
+      admin.id,
+      admin.id,
+    ]);
+  });
+
+  it("일괄 세션 연결 해제(sessionId null)는 참여자를 건드리지 않는다", async () => {
+    const addSessionParticipants = vi
+      .spyOn(MatchRepository.prototype, "addSessionParticipants")
+      .mockResolvedValue(undefined);
+    vi.spyOn(MatchRepository.prototype, "updateMetadata").mockImplementation(
+      async (matchId) => buildMatch(matchId),
+    );
+
+    const response = await request(app)
+      .patch("/api/admin/matches/bulk-metadata")
+      .set("Authorization", "Bearer admin-token")
+      .send({ matchIds: ["match-001"], sessionId: null });
+
+    expect(response.status).toBe(200);
+    expect(addSessionParticipants).not.toHaveBeenCalled();
   });
 
   it("선택한 매치의 장소를 중복 없이 일괄 수정한다", async () => {
