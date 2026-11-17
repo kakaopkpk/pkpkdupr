@@ -1,6 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { RecommendedCourt } from "@pkpkdupr/shared/matchmaking";
-import { formatSessionTimeRange } from "@pkpkdupr/shared/session";
 import type { MatchInfo } from "@/types/match";
 import HomeSkeleton from "@/components/home/HomeSkeleton";
 import LastSessionFeed from "@/components/home/LastSessionFeed";
@@ -15,6 +14,7 @@ import {
   byLatestStart,
   usePreSessionData,
 } from "@/components/home/usePreSessionData";
+import { formatSessionTimePlace } from "@/components/home/sessionTimeLabel";
 import { useSessionRecommendations } from "@/components/home/useSessionRecommendations";
 import { useSessionTopRiser } from "@/components/home/useSessionTopRiser";
 import { TopRiserCard } from "@/components/records/SessionReportParts";
@@ -227,13 +227,6 @@ const Home: React.FC = () => {
         : [],
     [inProgressMatches, liveSession],
   );
-  // 세션 머리의 진행 수. 세션 밖 내 경기도 진행 중 목록에 함께 보이므로 센다
-  const liveInProgressCount =
-    sessionInProgressMatches.length +
-    (myInProgressMatch &&
-    !sessionInProgressMatches.some((match) => match.id === myInProgressMatch.id)
-      ? 1
-      : 0);
   const busyPlayerIds = useMemo(
     () => inProgressMatches.flatMap(getMatchPlayerIds),
     [inProgressMatches],
@@ -488,25 +481,18 @@ const Home: React.FC = () => {
         <LivePill />
       </div>
       <p className="flex min-w-0 items-center text-pk-13 text-pk-sub tabular-nums">
+        {/* 터치 영역 44px을 음수 세로 마진으로 상쇄해 줄 높이를 유지한다 */}
         <button
           type="button"
           onClick={() => openParticipants(liveSession, busyPlayerIds)}
-          className="inline-flex shrink-0 items-center gap-0.5 font-bold text-pk-primary"
+          className="-my-3.5 inline-flex min-h-11 shrink-0 items-center gap-0.5 font-bold text-pk-primary"
         >
           {liveSession.participants.length}명 참여
           <LinkChevron />
         </button>
         {/* flex 항목의 앞 공백은 사라지므로 버튼과의 간격은 pl로 둔다 */}
-        <span className="min-w-0 truncate pl-1">
-          {[
-            liveSession.location,
-            formatSessionTimeRange(liveSession),
-            `${completedMatches.length}경기`,
-            `진행 ${liveInProgressCount}`,
-          ]
-            .filter(Boolean)
-            .map((part) => `· ${part}`)
-            .join(" ")}
+        <span className="min-w-0 truncate pl-2">
+          {formatSessionTimePlace(liveSession)}
         </span>
       </p>
     </header>
