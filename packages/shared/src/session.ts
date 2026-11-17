@@ -1,4 +1,5 @@
 import type {
+  ManagedMatchSession,
   MatchSessionParticipant,
   MatchType,
   RecordMatchTeamRequest,
@@ -346,4 +347,36 @@ export interface StartSessionMatchRequest {
   location?: string;
   /** 예: "코트 1" */
   courtName?: string;
+}
+
+/** PATCH /api/admin/match-sessions/:sessionId 요청. 회원 세션만 고칠 수 있다. 생략한 필드는 그대로. 응답은 ManagedMatchSession */
+export interface AdminUpdateMatchSessionRequest {
+  name?: string;
+  location?: string;
+  /** KST 날짜 키(YYYY-MM-DD). 오늘 이후만 */
+  dateKey?: string;
+  /** "HH:MM" KST. 둘 다 보내거나 둘 다 생략한다. 둘 다 null이면 시각 없는 세션 */
+  startTime?: string | null;
+  endTime?: string | null;
+}
+
+/** 정기 세션을 만들지 않는 날 */
+export interface AdminRegularSessionSkip {
+  dateKey: string;
+  reason: RegularSessionSkipReason;
+}
+
+/** GET /api/admin/regular-session-skips 응답. 날짜 내림차순 */
+export interface AdminRegularSessionSkipsResponse {
+  skips: AdminRegularSessionSkip[];
+}
+
+/** POST /api/admin/regular-session-skips 요청. 응답은 201 AdminRegularSessionSkip(reason "canceled") */
+export interface AdminAddRegularSessionSkipRequest {
+  dateKey: string;
+}
+
+/** DELETE /api/admin/regular-session-skips/:dateKey 응답. 다시 만든 정기 세션(만들 수 없는 시각이면 null) */
+export interface AdminRevertRegularSessionSkipResponse {
+  session: ManagedMatchSession | null;
 }
