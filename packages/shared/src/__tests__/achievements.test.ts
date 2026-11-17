@@ -14,6 +14,7 @@ import {
   type EarnedAchievement,
 } from "../achievements";
 import { ACHIEVEMENT_COUNT_START } from "../achievementCountStart";
+import { kstDateKeyTimeToDate } from "../session";
 import type { MatchStatus, MatchType } from "../match";
 
 const ME = "player-me";
@@ -578,7 +579,7 @@ describe("computeAchievements", () => {
   describe("리벤지", () => {
     /** KST 2026-12-03 hh:mm 완료 시각 */
     const kst = (time: string, day = "2026-12-03") =>
-      new Date(`${day}T${time}:00+09:00`);
+      kstDateKeyTimeToDate(day, time);
     const lineup = (
       won: boolean,
       completedAt: Date,

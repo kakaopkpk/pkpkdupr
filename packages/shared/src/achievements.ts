@@ -856,8 +856,8 @@ export function computeAchievements(
   const partnerStreaks = new Map<string, number>();
   const opponentMatches = new Map<string, number>();
   const beatenOpponents = new Set<string>();
-  /** 이 회원의 직전 경기가 패배면 그 조합과 KST 날짜, 아니면 null */
-  let previousLoss = null as { lineupKey: string; dateKey: string } | null;
+  /** 이 회원의 직전 경기가 패배면 그 경기의 "KST 날짜|조합" 키, 아니면 null */
+  let previousLossKey: string | null = null;
   const sessions = new Map<string, SessionRecord>();
 
   const preCountStartDoublesMatches = getPreCountStartDoublesMatches(
@@ -901,17 +901,9 @@ export function computeAchievements(
     }
 
     // 리벤지는 같은 날 진 조합 그대로 이 회원의 바로 다음 경기에서 이길 때만 센다.
-    const lineupKey = getLineupKey(match, teamIndex);
-    const dateKey = toKstDateKey(match.completedAt);
-    if (
-      won &&
-      previousLoss?.lineupKey === lineupKey &&
-      previousLoss.dateKey === dateKey
-    ) {
-      metrics.revenges += 1;
-    }
-    previousLoss =
-      !won && winningTeamIndex !== null ? { lineupKey, dateKey } : null;
+    const revengeKey = `${toKstDateKey(match.completedAt)}|${getLineupKey(match, teamIndex)}`;
+    if (won && previousLossKey === revengeKey) metrics.revenges += 1;
+    previousLossKey = !won && winningTeamIndex !== null ? revengeKey : null;
 
     const opponentIds = new Set(
       match.teams[teamIndex === 0 ? 1 : 0].players.map((player) => player.id),
