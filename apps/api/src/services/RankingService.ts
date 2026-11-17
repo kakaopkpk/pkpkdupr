@@ -168,6 +168,36 @@ export const getRatingAt = ({
 };
 
 /**
+ * 경기 로그 중 그 분류 첫 평점 반영인 참가자 id. 판정은 `getRatingAt`과 같다:
+ * 선수의 그 분류 첫 평점 이벤트가 이 경기 로그이고 시작값이 기본 평점이면 경기 전 NR이다.
+ */
+export const findUnratedBeforePlayerIds = ({
+  matchLogs,
+  category,
+  logsByPlayerId,
+  categoryByMatchId,
+}: {
+  matchLogs: PlayerRatingChangeLog[];
+  category: MatchTopLevelType;
+  logsByPlayerId: Map<string, PlayerRatingChangeLog[]>;
+  categoryByMatchId: Map<string, MatchTopLevelType>;
+}): string[] => {
+  const playerIds = new Set<string>();
+  for (const log of matchLogs) {
+    if (log.previousRating[category] !== DUPR_DEFAULT_RATING) continue;
+    const firstTouch = [...(logsByPlayerId.get(log.playerId) ?? [])]
+      .sort(byCreatedAtAsc)
+      .find((candidate) =>
+        touchesCategory(candidate, category, categoryByMatchId),
+      );
+    if (firstTouch?.sourceLogId === log.sourceLogId) {
+      playerIds.add(log.playerId);
+    }
+  }
+  return [...playerIds];
+};
+
+/**
  * 세션 리포트용 세션 전 복식 평점. 세션 전에 NR이던 회원(첫 복식 평점 이벤트가 세션 중)은
  * 그 첫 경기 완료 로그의 시작값(기본 3.0)을 세션 전 평점으로 본다.
  * 세션 후에도 NR(첫 복식 이벤트가 세션 이후)이거나 첫 복식 이벤트가 경기 완료가 아니면 null이다.

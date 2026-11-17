@@ -70,6 +70,7 @@ import {
   type RecommendedTeam,
 } from "@pkpkdupr/shared/matchmaking";
 import {
+  DUPR_DEFAULT_RATING,
   PLAYER_AFFILIATION_MAX_COUNT,
   PLAYER_AFFILIATION_NAME_MAX_LENGTH,
   PLAYER_STATUS_MESSAGE_MAX_LENGTH,
@@ -131,6 +132,7 @@ import {
   createRankingContext,
   findPlayerEarnedAchievements,
   findSessionDominations,
+  findUnratedBeforePlayerIds,
   parseRecordsCursor,
   toAchievementMatch,
 } from "./services/RankingService";
@@ -928,6 +930,53 @@ const findNewAchievementsForSavedMatch = async (
   }
 };
 
+/**
+ * 경기 응답의 `unratedBeforePlayerIds`. 평점 미반영 경기·로그 없는 경기는 빈 배열이고,
+ * 시작값이 기본 평점인 로그의 선수만 평점 이력을 읽어 판정한다. 계산이 실패해도 응답은 막지 않는다.
+ */
+const findMatchUnratedBeforePlayerIds = async (
+  match: Match,
+  matchLogs: PlayerRatingChangeLog[],
+): Promise<string[]> => {
+  const category = getMatchTopLevelType(match.type);
+  const candidateIds = [
+    ...new Set(
+      matchLogs
+        .filter((log) => log.previousRating[category] === DUPR_DEFAULT_RATING)
+        .map((log) => log.playerId),
+    ),
+  ];
+  if (match.ratingExcluded || candidateIds.length === 0) {
+    return [];
+  }
+  try {
+    const [outcomes, ...playerLogs] = await Promise.all([
+      matchRepository.findCompletedMatchOutcomes(),
+      ...candidateIds.map((playerId) =>
+        matchRepository.getPlayerRatingChangeLogs(playerId),
+      ),
+    ]);
+    const categoryByMatchId = new Map(
+      outcomes.map((outcome) => [
+        outcome.id,
+        getMatchTopLevelType(outcome.type),
+      ]),
+    );
+    categoryByMatchId.set(match.id, category);
+    return findUnratedBeforePlayerIds({
+      matchLogs,
+      category,
+      logsByPlayerId: new Map(
+        candidateIds.map((playerId, index) => [playerId, playerLogs[index]!]),
+      ),
+      categoryByMatchId,
+    });
+  } catch (err) {
+    console.error("[MATCH] 이전 평점 없음 판정 실패", match.id, err);
+    return [];
+  }
+};
+
 /** 검증·저장소 오류는 지정된 상태로, 그 밖의 검증 예외는 400으로 응답한다. */
 const sendMatchRecordFailure = (res: express.Response, error: unknown) => {
   const status =
@@ -1565,13 +1614,22 @@ app.get("/api/match-sessions/:sessionId/recommendations", async (req, res) => {
       ]),
     );
     const playerOf = (id: string) => playersById.get(id)!;
-    const toTeam = (
-      [first, second]: [string, string],
-      averageRating: number,
-    ): RecommendedTeam => ({
-      players: [playerOf(first), playerOf(second)],
-      averageRating,
-    });
+    // 표시용 팀 평균은 팀 나누기의 NR 대체값(teamAverages) 대신 NR을 기본 평점으로 친다.
+    const toTeam = ([first, second]: [string, string]): RecommendedTeam => {
+      const players: [RecommendationPlayer, RecommendationPlayer] = [
+        playerOf(first),
+        playerOf(second),
+      ];
+      return {
+        players,
+        averageRating:
+          players.reduce(
+            (sum, player) =>
+              sum + (player.doublesRating ?? DUPR_DEFAULT_RATING),
+            0,
+          ) / players.length,
+      };
+    };
 
     const response: MatchSessionRecommendationResponse = {
       sessionId,
@@ -1579,8 +1637,8 @@ app.get("/api/match-sessions/:sessionId/recommendations", async (req, res) => {
       seed,
       courts: plan.courts.map((court) => ({
         teams: [
-          toTeam(court.teams[0], court.teamAverages[0]),
-          toTeam(court.teams[1], court.teamAverages[1]),
+          toTeam(court.teams[0]),
+          toTeam(court.teams[1]),
         ],
         repeatedPartnerPairs: court.repeatedPartnerPairs,
         repeatedOpponentPairs: court.repeatedOpponentPairs,
@@ -1835,6 +1893,10 @@ app.post("/api/matches", async (req, res) => {
     const response: RecordedMatchResponse = {
       ...match,
       ratingChanges: ratingChangeLogs,
+      unratedBeforePlayerIds: await findMatchUnratedBeforePlayerIds(
+        match,
+        ratingChangeLogs,
+      ),
       newAchievements: await findNewAchievementsForSavedMatch(match, null),
     };
     res.status(201).json(response);
@@ -2268,7 +2330,14 @@ app.get("/api/matches/:matchId", async (req, res) => {
       return res.status(404).json({ error: "매치를 찾을 수 없습니다." });
     }
 
-    res.json({ ...result.match, ratingChanges: result.ratingChanges });
+    res.json({
+      ...result.match,
+      ratingChanges: result.ratingChanges,
+      unratedBeforePlayerIds: await findMatchUnratedBeforePlayerIds(
+        result.match,
+        result.ratingChanges,
+      ),
+    });
   } catch (err) {
     res.status(500).json({ error: (err as Error).message });
   }
@@ -2586,6 +2655,10 @@ app.put("/api/matches/:matchId", async (req, res) => {
     const response: RecordedMatchResponse = {
       ...match,
       ratingChanges,
+      unratedBeforePlayerIds: await findMatchUnratedBeforePlayerIds(
+        match,
+        ratingChanges,
+      ),
       newAchievements: await findNewAchievementsForSavedMatch(match, previous),
     };
     res.json(response);
