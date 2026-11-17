@@ -4,6 +4,7 @@ import { randomUUID } from "crypto";
 import {
   getMatchTopLevelType,
   hasGuestPlayer,
+  resolveRatingExcludedAfterEdit,
   isMatchInProgress,
   isSinglesMatchType,
   isMatchRecordDeletable,
@@ -2449,26 +2450,6 @@ const parseExpectedUpdatedAt = (value: unknown): Date | undefined => {
 const isSameUpdatedAt = (expected: Date, actual: Date) =>
   Math.floor(expected.getTime() / 1000) === Math.floor(actual.getTime() / 1000);
 
-/**
- * 기록 저장 후 경기의 평점 미반영 여부. 처음 completed가 되거나 참가자가 바뀌면 지금 게스트 여부로 다시 정하고,
- * 같은 참가자로 점수만 고치면 기존 값을 둔다(그사이 게스트가 정회원이 돼도 과거 경기는 계속 빠진다).
- * 값이 바뀐 completed 경기는 PUT이 전체 재계산하므로 평점도 따라 바뀐다.
- */
-const resolveRatingExcludedOnUpdate = (
-  existing: Match,
-  nextTeams: Team[],
-): boolean => {
-  if (existing.status !== "completed") {
-    return hasGuestPlayer(nextTeams);
-  }
-  const previousIds = new Set(getTeamPlayerIds(existing.teams));
-  const nextIds = getTeamPlayerIds(nextTeams);
-  const sameParticipants =
-    previousIds.size === new Set(nextIds).size &&
-    nextIds.every((playerId) => previousIds.has(playerId));
-  return sameParticipants ? existing.ratingExcluded : hasGuestPlayer(nextTeams);
-};
-
 /** 평점 재계산이 읽는 경기 수 상한 */
 const MAX_RECALCULATION_MATCHES = 10000;
 
@@ -2632,7 +2613,10 @@ app.put("/api/matches/:matchId", async (req, res) => {
       ...prepared,
       resultSubmittedByPlayerId: decoded.playerId,
       resultSubmittedAt: now,
-      ratingExcluded: resolveRatingExcludedOnUpdate(existing, prepared.teams),
+      ratingExcluded: resolveRatingExcludedAfterEdit(
+        existing,
+        prepared.teams,
+      ),
       expectedUpdatedAt: expectedUpdatedAt ?? existing.updatedAt,
     });
   } catch (err) {

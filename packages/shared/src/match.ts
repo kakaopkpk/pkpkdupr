@@ -236,7 +236,8 @@ export interface Match {
   updatedAt: Date;
   /**
    * 완료 시점에 게스트가 낀 경기면 true. 평점·평점 이력·업적·랭킹 경기 수·프로필 통계·lastPlayedAt에서 빠지고,
-   * 경기 목록·피드·기록 탭·세션 경기 목록에는 그대로 나온다. 게스트가 나중에 정회원이 돼도 바뀌지 않는다.
+   * 경기 목록·피드·기록 탭·세션 경기 목록에는 그대로 나온다. 한 번 true가 되면 게스트가 나중에 정회원이 돼도,
+   * 수정(회원·관리자)으로 참가자가 바뀌어도 유지되고, 수정으로 게스트가 새로 들어오면 true가 된다.
    */
   ratingExcluded: boolean;
 }
@@ -246,6 +247,21 @@ export const hasGuestPlayer = (
   teams: readonly { players: readonly Pick<Player, "isGuest">[] }[],
 ): boolean =>
   teams.some((team) => team.players.some((player) => player.isGuest));
+
+/**
+ * 경기 기록 수정(PUT /api/matches/:matchId) 뒤의 평점 미반영 여부.
+ * 처음 completed가 되면 수정 후 팀 구성(nextTeams)의 게스트 여부로 정하고,
+ * 이미 completed면 기존 true를 유지하며 수정 후 팀 구성에 게스트가 있으면 true다.
+ */
+export const resolveRatingExcludedAfterEdit = (
+  existing: Pick<Match, "status" | "ratingExcluded">,
+  nextTeams: readonly { players: readonly Pick<Player, "isGuest">[] }[],
+): boolean => {
+  if (existing.status !== "completed") {
+    return hasGuestPlayer(nextTeams);
+  }
+  return existing.ratingExcluded || hasGuestPlayer(nextTeams);
+};
 
 /** 경기 기록(POST /api/matches)·수정(PUT /api/matches/:matchId) 요청의 한 팀 */
 export interface RecordMatchTeamRequest {
