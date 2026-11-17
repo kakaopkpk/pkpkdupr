@@ -123,6 +123,20 @@ describe("parseMysqlDump", () => {
     ]);
   });
 
+  it("CRLF 줄바꿈과 값 안의 U+2028을 읽고, 형식이 다른 INSERT는 건너뛰지 않고 멈춘다", () => {
+    const dump = [
+      "CREATE TABLE `t` (",
+      "  `id` text,",
+      "  `memo` text",
+      ") ENGINE=InnoDB;",
+      "INSERT INTO `t` VALUES ('a','x y');",
+    ].join("\r\n");
+    expect(parseMysqlDump(dump).t).toEqual([{ id: "a", memo: "x y" }]);
+    expect(() =>
+      parseMysqlDump(`${dump}\nINSERT IGNORE INTO \`t\` VALUES ('b','z');`),
+    ).toThrow("해석할 수 없는 INSERT");
+  });
+
   it("CREATE TABLE의 컬럼 이름으로 행을 만든다", () => {
     const tables = parseMysqlDump(buildDump());
     expect(tables.players.find((row) => row.id === "Pbbbbbb2")?.username).toBe("o'neil");

@@ -337,16 +337,18 @@ export const buildImportPlan = (
   }
   const dumpParticipantCount = sessionParticipants.size;
   const matchById = new Map(matches.map((match) => [String(match.id), match]));
+  for (const participant of matchParticipants) {
+    if (!matchById.has(String(participant.match_id))) {
+      throw new Error(`${String(participant.id)}: 없는 경기를 참조합니다.`);
+    }
+  }
   const sortedParticipants = [...matchParticipants].sort(
     (a, b) =>
       Number(matchById.get(String(a.match_id))!.created_at) -
       Number(matchById.get(String(b.match_id))!.created_at),
   );
   for (const participant of sortedParticipants) {
-    const match = matchById.get(String(participant.match_id));
-    if (!match) {
-      throw new Error(`${String(participant.id)}: 없는 경기를 참조합니다.`);
-    }
+    const match = matchById.get(String(participant.match_id))!;
     if (match.session_id === null) continue;
     const sessionId = String(match.session_id);
     const playerId = String(participant.player_id);

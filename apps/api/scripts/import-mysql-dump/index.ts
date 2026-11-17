@@ -77,7 +77,13 @@ const { values: args } = parseArgs({
 const getDatabaseTarget = (): string | null => {
   const raw = process.env.DATABASE_URL?.trim();
   if (!raw) return null;
-  const url = new URL(raw);
+  let url: URL;
+  try {
+    url = new URL(raw);
+  } catch {
+    // 원래 오류 객체에는 비밀번호가 든 접속 문자열이 들어 있으므로 고정 문구로 바꾼다
+    return fail("DATABASE_URL 형식이 올바르지 않습니다. 비밀번호의 특수문자는 URL 인코딩합니다.");
+  }
   const directRef = /^db\.([a-z0-9]+)\.supabase\.co$/.exec(url.hostname)?.[1];
   const poolerRef = /^postgres\.([a-z0-9]+)$/.exec(decodeURIComponent(url.username))?.[1];
   return directRef ?? poolerRef ?? url.hostname;
@@ -216,7 +222,13 @@ const recalculateRatings = async () => {
   );
 };
 
-const deleteWipedCalendarEvents = async (sessionIds: string[]) => {
+/**
+ * 지운 세션의 캘린더 일정을 지운다. 덤프에서 같은 id로 다시 들어온 세션은 일정이 그대로 맞으므로 남긴다.
+ * 이미 DB·계정을 바꾼 뒤라 실패해도 멈추지 않고 검증으로 넘어간다.
+ */
+const deleteWipedCalendarEvents = async (wipedSessionIds: string[], plan: ImportPlan) => {
+  const importedSessionIds = new Set(plan.rows.match_sessions.map((session) => String(session.id)));
+  const sessionIds = wipedSessionIds.filter((sessionId) => !importedSessionIds.has(sessionId));
   const [{ readGoogleCalendarConfig, createGoogleCalendarClient }, { toCalendarEventId }] =
     await Promise.all([
       import("../../src/services/GoogleCalendarClient"),
@@ -230,13 +242,20 @@ const deleteWipedCalendarEvents = async (sessionIds: string[]) => {
     return;
   }
   const calendar = createGoogleCalendarClient(config);
-  let deleted = 0;
+  const failed: string[] = [];
   for (const sessionId of sessionIds) {
-    // 없는 일정(404·410)은 클라이언트가 성공으로 처리한다
-    await calendar.deleteEvent(toCalendarEventId(sessionId));
-    deleted += 1;
+    try {
+      // 없는 일정(404·410)은 클라이언트가 성공으로 처리한다
+      await calendar.deleteEvent(toCalendarEventId(sessionId));
+    } catch (error) {
+      failed.push(sessionId);
+      console.error(`  ${sessionId} 일정 삭제 실패`, error instanceof Error ? error.message : error);
+    }
   }
-  log(`  지운 세션 ${deleted}개의 캘린더 일정을 정리했습니다.`);
+  log(
+    `  지운 세션 ${sessionIds.length - failed.length}개의 캘린더 일정을 정리했습니다.` +
+      (failed.length ? ` 실패 ${failed.length}개(${failed.join(", ")})는 wiped-sessions.json을 보고 직접 지우세요.` : ""),
+  );
 };
 
 // ───────────────────────── 계정 ─────────────────────────
@@ -470,9 +489,13 @@ const verify = async (client: DbClient, tables: DumpTables, plan: ImportPlan) =>
   const linked = active.filter((row) => row.auth_user_id);
   const firstLogin = linked.filter((row) => row.is_first_login === true);
   const unlinked = active.filter((row) => !row.auth_user_id).map((row) => String(row.username));
+  const inactive = playerRows
+    .filter((row) => row.status !== "active")
+    .map((row) => String(row.username));
   log(
     `[검증] 계정: active ${active.length}명 중 연결 ${linked.length}명(첫 로그인 비밀번호 변경 ${firstLogin.length}명)` +
-      (unlinked.length ? `, 미연결 ${unlinked.join(", ")}` : ""),
+      (unlinked.length ? `, 미연결 ${unlinked.join(", ")}` : "") +
+      `\n  발급하지 않은 inactive ${inactive.length}명: ${inactive.join(", ") || "없음"}`,
   );
 
   writeOutput(
@@ -495,6 +518,8 @@ const verify = async (client: DbClient, tables: DumpTables, plan: ImportPlan) =>
       "## 계정",
       "",
       `active ${active.length}명 중 연결 ${linked.length}명, 첫 로그인 비밀번호 변경 ${firstLogin.length}명, 미연결 ${unlinked.join(", ") || "없음"}`,
+      "",
+      `발급하지 않은 inactive ${inactive.length}명: ${inactive.join(", ") || "없음"}`,
       "",
     ].join("\n"),
   );
@@ -560,12 +585,16 @@ const main = async () => {
   await issueAccounts(client, authAdmin);
 
   log("\n[4/5] 지운 세션의 캘린더 일정 정리");
-  await deleteWipedCalendarEvents(wipedSessionIds);
+  await deleteWipedCalendarEvents(wipedSessionIds, plan);
 
   log("\n[5/5] 검증");
   const result = await verify(client, tables, plan);
   if (result.countMismatch || result.matchLogMissing) {
     process.exitCode = 1;
+  }
+  if (result.activeRatingDiffCount > 0) {
+    // 증분 반영과 전체 재계산의 차이로 생길 수 있어 실패로 끝내지 않는다. verify.md의 차이표를 확인한다
+    log(`\n주의: 활성 회원 ${result.activeRatingDiffCount}명의 평점이 덤프와 ${RATING_DIFF_THRESHOLD} 이상 다릅니다.`);
   }
 };
 
@@ -575,7 +604,10 @@ main()
     process.exitCode = 1;
   })
   .finally(async () => {
-    if (getDatabaseTarget()) {
-      await getDbClient().close().catch(() => undefined);
+    if (!process.env.DATABASE_URL?.trim()) return;
+    try {
+      await getDbClient().close();
+    } catch {
+      // 연결을 만들지 못한 경우다. 원래 오류는 위에서 이미 출력했다
     }
   });

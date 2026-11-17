@@ -111,9 +111,15 @@ export const parseMysqlDump = (text: string): DumpTables => {
     tables[table] = [];
   }
 
-  for (const line of text.split("\n")) {
-    const insert = /^INSERT INTO `(\w+)` VALUES (.*);$/.exec(line);
-    if (!insert) continue;
+  // mysqldump는 테이블 데이터를 한 줄짜리 INSERT로 쓴다. 문자열 안의 줄바꿈은 \n으로 이스케이프되지만
+  // U+2028 같은 문자는 그대로 나오므로 s 플래그로 줄 전체를 받는다
+  for (const line of text.split(/\r?\n/)) {
+    if (!line.startsWith("INSERT")) continue;
+    const insert = /^INSERT INTO `(\w+)` VALUES (.*);$/s.exec(line);
+    if (!insert) {
+      // 형식이 다른 INSERT(INSERT IGNORE, --complete-insert 등)를 건너뛰면 행이 조용히 빠진다
+      throw new Error(`해석할 수 없는 INSERT 줄입니다: ${line.slice(0, 60)}`);
+    }
     const [, table, valuesList] = insert;
     const columns = columnsByTable.get(table);
     if (!columns) {
