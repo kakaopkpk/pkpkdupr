@@ -405,9 +405,12 @@ const ParticipantsForm: React.FC<ParticipantsFormProps> = ({
                 ‘{guestAddOption.username}’ 게스트로 추가
               </span>
               <span className="text-pk-12 text-pk-sub">
-                {guestAddOption.isValid
-                  ? "이 아이디로 게스트를 만들고 이 세션에 넣어요"
-                  : GUEST_USERNAME_FORMAT_HINT}
+                {/* 추가 중 뒤로가기로 확인 창이 먼저 닫혀도 진행 상태가 보이게 줄에도 표시한다 */}
+                {isAddingGuest
+                  ? "추가하는 중…"
+                  : guestAddOption.isValid
+                    ? "이 아이디로 게스트를 만들고 이 세션에 넣어요"
+                    : GUEST_USERNAME_FORMAT_HINT}
               </span>
             </span>
           </button>
