@@ -812,10 +812,10 @@ describe("POST /api/admin/players/:playerId/promote", () => {
       gender: "F",
     });
     expect(response.body.player).not.toHaveProperty("authUserId");
-    expect(response.body.initialPassword).toMatch(/^[A-Za-z0-9]{10}$/);
+    expect(response.body.initialPassword).toBe("123qwe");
     expect(createAuthUser).toHaveBeenCalledWith({
       email: expect.stringMatching(/^guest_kim@/),
-      password: response.body.initialPassword,
+      password: "123qwe",
     });
     expect(rows.get(guest.id)).toMatchObject({
       isGuest: false,
