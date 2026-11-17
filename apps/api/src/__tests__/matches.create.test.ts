@@ -164,6 +164,10 @@ describe("POST /api/matches", () => {
     findCompletedMatchOutcomes = vi
       .spyOn(MatchRepository.prototype, "findCompletedMatchOutcomes")
       .mockResolvedValue([]);
+    vi.spyOn(
+      MatchRepository.prototype,
+      "getPlayerRatingChangeLogs",
+    ).mockResolvedValue([]);
     findOrCreateRegularSession = vi
       .spyOn(MatchRepository.prototype, "findOrCreateRegularSession")
       .mockResolvedValue(buildManagedSession());
@@ -479,6 +483,76 @@ describe("POST /api/matches", () => {
           achievementId: "streak-3",
           earnedMatchId: "match-test-001",
         }),
+      ]);
+    });
+
+    it("참가자의 평점 로그로 이번 경기에서 처음 넘긴 평점 업적만 새 업적으로 응답한다", async () => {
+      const priorAt = new Date("2026-01-01T00:00:00.000Z");
+      findCompletedMatchOutcomes.mockImplementation(async () => [
+        priorWin("match-prior-1", priorAt),
+        priorWin("match-test-001", capturedCreatePayload?.completedAt ?? new Date()),
+      ]);
+      const doublesLog = (
+        playerId: string,
+        matchId: string,
+        nextDoubles: number,
+        createdAt: Date,
+      ): PlayerRatingChangeLog => ({
+        id: `log-${playerId}-${matchId}`,
+        playerId,
+        source: "match_completed",
+        sourceLogId: `match-completed-${matchId}-${createdAt.getTime()}`,
+        previousRating: { singles: 3, doubles: 3 },
+        nextRating: { singles: 3, doubles: nextDoubles },
+        delta: { singles: 0, doubles: nextDoubles - 3 },
+        createdAt,
+      });
+      const savedAt = new Date("2026-01-02T00:00:00.000Z");
+      // 생성자는 이전 경기에서 이미 3.5를 넘겼고, player-f-1은 이번 경기로 처음 넘긴다
+      const logsByPlayerId: Record<string, PlayerRatingChangeLog[]> = {
+        [creator.id]: [
+          doublesLog(creator.id, "match-prior-1", 3.6, priorAt),
+          doublesLog(creator.id, "match-test-001", 3.7, savedAt),
+        ],
+        "player-f-1": [
+          doublesLog("player-f-1", "match-prior-1", 3.4, priorAt),
+          doublesLog("player-f-1", "match-test-001", 3.55, savedAt),
+        ],
+      };
+      vi.mocked(MatchRepository.prototype.getPlayerRatingChangeLogs).mockImplementation(
+        async (playerId) => logsByPlayerId[playerId] ?? [],
+      );
+
+      const response = await request(app)
+        .post("/api/matches")
+        .set("Authorization", "Bearer test-token")
+        .send({
+          teams: validDoublesTeams,
+          location: "PKELO Court A",
+          scores: [{ scoreA: 11, scoreB: 5 }],
+        });
+
+      expect(response.status).toBe(201);
+      expect(
+        (
+          response.body.newAchievements as {
+            playerId: string;
+            achievementId: string;
+            earnedMatchId: string;
+          }[]
+        )
+          .filter((item) => item.achievementId.startsWith("rating-"))
+          .map(({ playerId, achievementId, earnedMatchId }) => ({
+            playerId,
+            achievementId,
+            earnedMatchId,
+          })),
+      ).toEqual([
+        {
+          playerId: "player-f-1",
+          achievementId: "rating-3.5",
+          earnedMatchId: "match-test-001",
+        },
       ]);
     });
 

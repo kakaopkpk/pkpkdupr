@@ -8,8 +8,11 @@ import {
   type SeenAchievementRef,
   type UnseenAchievementsResponse,
   isBestStreakAchievement,
+  isRatingAchievement,
 } from "@pkpkdupr/shared/achievements";
+import { DUPR_DEFAULT_RATING } from "@pkpkdupr/shared/player";
 import { apiFetch } from "@/lib/api";
+import { formatRating } from "@/utils/dupr";
 
 /** JSON 응답 형태(날짜는 문자열) */
 export type AchievementProgressInfo = Omit<AchievementProgress, "earnedAt"> & {
@@ -56,15 +59,35 @@ export const getEarnedAchievementsByRecent = (
           (ACHIEVEMENT_ORDER.get(left.definition.id) ?? 0),
     );
 
-/** 못 받은 업적의 진행 문구. 연승·환상의 콤비는 최고 기록으로 보여 준다 */
+/**
+ * 못 받은 업적의 진행 문구. 연승·환상의 콤비는 최고 기록으로,
+ * 평점 업적은 최고 복식 평점(평점이 없으면 "–")으로 보여 준다
+ */
 export const formatAchievementProgress = (
   definition: AchievementDefinition,
   progress: AchievementProgressInfo | null | undefined,
 ) => {
   const current = progress?.current ?? 0;
+  if (isRatingAchievement(definition.id)) {
+    return `최고 ${formatRating(current > 0 ? current : null)}`;
+  }
   return isBestStreakAchievement(definition.id)
     ? `최고 ${current}`
     : `${Math.min(current, definition.target)}/${definition.target}`;
+};
+
+/** 진행 막대 비율(0~1). 평점 업적은 기본 평점(3.0)에서 목표까지 오른 비율이다 */
+export const getAchievementProgressRatio = (
+  definition: AchievementDefinition,
+  progress: AchievementProgressInfo | null | undefined,
+) => {
+  const current = progress?.current ?? 0;
+  const [start, end] =
+    isRatingAchievement(definition.id)
+      ? [DUPR_DEFAULT_RATING, definition.target]
+      : [0, definition.target];
+  if (end <= start) return 0;
+  return Math.min(Math.max((current - start) / (end - start), 0), 1);
 };
 
 export const fetchAchievementHolders =

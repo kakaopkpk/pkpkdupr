@@ -1,5 +1,6 @@
 import {
   computeAchievements,
+  type AchievementMatch,
   type AchievementProgress,
 } from "@pkpkdupr/shared/achievements";
 import {
@@ -21,6 +22,7 @@ import {
   type PartnerStat,
   type StatPlayer,
 } from "@pkpkdupr/shared/profileStats";
+import { buildDoublesRatingAfterByMatchId } from "./RankingService";
 
 export type PlayerProfileMatchStats = Record<
   MatchTopLevelType,
@@ -282,6 +284,23 @@ export const buildPlayerProfileSummary = (
     partners,
     rivals,
     headToHead,
-    achievements: computeAchievements(playerId, matches, dominatedSessionIds),
+    achievements: computeAchievements(
+      playerId,
+      withDoublesRatingAfter(matches),
+      dominatedSessionIds,
+    ),
   };
+};
+
+/** 경기에 붙은 평점 변경 로그로 경기 직후 선수별 복식 평점(평점 업적 입력)을 붙인다 */
+const withDoublesRatingAfter = (
+  matches: readonly MatchWithRatingChanges[],
+): AchievementMatch[] => {
+  const ratingsByMatchId = buildDoublesRatingAfterByMatchId(
+    matches.flatMap((match) => match.ratingChanges ?? []),
+  );
+  return matches.map((match) => ({
+    ...match,
+    doublesRatingAfter: ratingsByMatchId.get(match.id),
+  }));
 };

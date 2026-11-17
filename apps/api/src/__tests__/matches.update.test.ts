@@ -125,6 +125,10 @@ describe("PUT /api/matches/:matchId", () => {
     findCompletedMatchOutcomes = vi
       .spyOn(MatchRepository.prototype, "findCompletedMatchOutcomes")
       .mockResolvedValue([]);
+    vi.spyOn(
+      MatchRepository.prototype,
+      "getPlayerRatingChangeLogs",
+    ).mockResolvedValue([]);
     cleanupExpired = vi
       .spyOn(MatchRepository.prototype, "cleanupExpired")
       .mockResolvedValue(undefined);
@@ -259,6 +263,48 @@ describe("PUT /api/matches/:matchId", () => {
         earnedMatchId: existing.id,
       }),
     ]);
+  });
+
+  it("이미 완료된 경기를 수정하면 이 경기로 받은 평점 업적을 다시 새 업적으로 응답하지 않는다", async () => {
+    findCompletedMatchOutcomes.mockResolvedValue([
+      {
+        ratingExcluded: false,
+        id: existing.id,
+        type: "mixed-doubles",
+        sessionId: null,
+        matchStartsAt: existing.matchStartsAt,
+        completedAt: existing.completedAt ?? new Date(),
+        teamPlayerIds: [
+          [requester.id, partner.id],
+          [opponentM.id, opponentF.id],
+        ],
+        scores: [{ scoreA: 9, scoreB: 11 }],
+      },
+    ]);
+    const createdAt = new Date();
+    vi.mocked(MatchRepository.prototype.getPlayerRatingChangeLogs).mockImplementation(
+      async (playerId) => [
+        {
+          id: `log-${playerId}`,
+          playerId,
+          source: "match_completed",
+          sourceLogId: `match-completed-${existing.id}-${createdAt.getTime()}`,
+          previousRating: { singles: 3, doubles: 3.45 },
+          nextRating: { singles: 3, doubles: 3.6 },
+          delta: { singles: 0, doubles: 0.15 },
+          createdAt,
+        },
+      ],
+    );
+
+    const response = await putMatch();
+
+    expect(response.status).toBe(200);
+    expect(
+      (response.body.newAchievements as { achievementId: string }[]).filter(
+        (item) => item.achievementId.startsWith("rating-"),
+      ),
+    ).toEqual([]);
   });
 
   it("새로 받은 업적이 없으면 newAchievements는 빈 배열이다", async () => {
