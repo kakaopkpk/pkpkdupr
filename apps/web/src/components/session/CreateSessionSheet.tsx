@@ -302,7 +302,7 @@ const CreateSessionForm: React.FC<CreateSessionFormProps> = ({
         ) : null}
         <div className="flex items-center gap-2">
           <PkButton
-            variant="ghost"
+            variant="secondary"
             size="lg"
             disabled={isSaving}
             onClick={onCancel}

@@ -71,7 +71,7 @@ export interface RecommendationPlayer {
 
 export interface RecommendedTeam {
   players: [RecommendationPlayer, RecommendationPlayer];
-  /** NR 대체값을 반영한 팀 평균 평점 */
+  /** 표시용 팀 평균 평점. NR(게스트 포함)은 기본 평점 3.0으로 치며, 팀 나누기의 NR 대체값과 다르다 */
   averageRating: number;
 }
 

@@ -27,6 +27,8 @@ export type MatchInfo = Omit<
     date: string;
   };
   ratingChanges?: PlayerRatingChangeLog[];
+  /** 경기 상세·기록·수정 응답에만 있다. 이 경기가 그 분류 첫 평점 반영인 참가자 id. 없으면 빈 배열로 본다 */
+  unratedBeforePlayerIds?: string[];
   /** 기록·수정 응답에만 있다. 이 저장으로 참가자들이 새로 받은 업적 */
   newAchievements?: EarnedAchievementInfo[];
 };

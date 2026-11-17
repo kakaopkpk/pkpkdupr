@@ -221,6 +221,10 @@ const RatingChangeCard: React.FC<{
         return change ? [{ player, change }] : [];
       });
   }, [match.ratingChanges, match.teams]);
+  const unratedBeforeIds = useMemo(
+    () => new Set(match.unratedBeforePlayerIds ?? []),
+    [match.unratedBeforePlayerIds],
+  );
 
   // 게스트가 낀 경기는 평점 변화가 없으므로 개수 없는 제목 아래 미반영 안내 한 줄만 보인다
   if (match.ratingExcluded) {
@@ -261,6 +265,7 @@ const RatingChangeCard: React.FC<{
               previousRating={change.previousRating[ratingCategory]}
               nextRating={change.nextRating[ratingCategory]}
               delta={change.delta[ratingCategory]}
+              isUnratedBefore={unratedBeforeIds.has(player.id)}
             />
           </button>
         ))}

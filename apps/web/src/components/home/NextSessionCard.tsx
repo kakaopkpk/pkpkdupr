@@ -3,7 +3,11 @@ import { buttonPressClassName } from "@/components/ui/Button";
 import { PlayerAvatar } from "@/components/ui/PlayerAvatar";
 import { cx } from "@/components/ui/cx";
 import type { MatchSessionDetailInfo } from "@/lib/matchSessions";
-import { getSessionChipLabel, getSessionTimeLabel } from "./sessionTimeLabel";
+import {
+  getSessionChipLabel,
+  getSessionMetaLabel,
+  getSessionTimeUntilLabel,
+} from "./sessionTimeLabel";
 
 const MAX_VISIBLE_AVATARS = 4;
 const AVATAR_SIZE = 28;
@@ -84,6 +88,7 @@ const NextSessionCard: React.FC<{
   onOpenParticipants,
 }) => {
   const isPending = pendingAction !== null;
+  const timeUntil = getSessionTimeUntilLabel(session, todayKey, now);
 
   return (
     <div className="flex flex-col gap-2">
@@ -92,16 +97,18 @@ const NextSessionCard: React.FC<{
           <span className="rounded-full bg-white/[0.18] px-2.5 py-[3px] text-pk-12 font-bold">
             {getSessionChipLabel(session, todayKey)}
           </span>
-          <span className="text-pk-13 text-white/85 tabular-nums">
-            {getSessionTimeLabel(session, todayKey, now)}
-          </span>
+          {timeUntil ? (
+            <span className="text-pk-13 font-bold tabular-nums">
+              {timeUntil}
+            </span>
+          ) : null}
         </div>
         <div className="flex min-w-0 flex-col gap-0.5">
           <h2 className="truncate text-pk-22 font-extrabold tracking-[-0.02em]">
             {session.name}
           </h2>
-          <span className="truncate text-pk-13 text-white/85">
-            {session.location}
+          <span className="truncate text-pk-13 text-white/85 tabular-nums">
+            {getSessionMetaLabel(session, todayKey)}
           </span>
         </div>
         <button

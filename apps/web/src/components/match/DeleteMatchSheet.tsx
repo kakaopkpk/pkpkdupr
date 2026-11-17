@@ -66,7 +66,7 @@ export default function DeleteMatchSheet({
         <FooterError message={error} />
         <div className="grid grid-cols-[auto_minmax(0,1fr)] gap-2">
           <PkButton
-            variant="ghost"
+            variant="secondary"
             size="lg"
             disabled={isDeleting}
             onClick={onCancel}

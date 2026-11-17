@@ -39,7 +39,7 @@ export interface PickPlayersStepProps {
   /** 나. 목록 맨 위에 둔다 */
   currentPlayerId: string | null;
   /**
-   * new: 새 경기(세션과 상관없음). "경기 시작"·"점수 입력"
+   * new: 새 경기(세션과 상관없음). "경기 시작"·"다음"
    * edit: 기존 경기의 플레이어 바꾸기. "취소"·"다음"
    */
   footerMode: "new" | "edit";
@@ -373,11 +373,10 @@ export default function PickPlayersStep({
         ) : null}
         <FooterError message={error} />
         {footerMode === "new" ? (
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-[auto_minmax(0,1fr)] gap-2">
             <PkButton
-              variant="soft"
+              variant="secondary"
               size="lg"
-              fullWidth
               disabled={!isTeamReady || isBusy}
               onClick={onStartMatch}
             >
@@ -389,12 +388,12 @@ export default function PickPlayersStep({
               disabled={!isTeamReady || isBusy}
               onClick={onNext}
             >
-              점수 입력
+              다음
             </PkButton>
           </div>
         ) : (
           <div className="grid grid-cols-[auto_minmax(0,1fr)] gap-2">
-            <PkButton variant="ghost" size="lg" onClick={onCancel}>
+            <PkButton variant="secondary" size="lg" onClick={onCancel}>
               취소
             </PkButton>
             <PkButton
