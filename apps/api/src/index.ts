@@ -1614,7 +1614,7 @@ app.get("/api/match-sessions/:sessionId/recommendations", async (req, res) => {
       ]),
     );
     const playerOf = (id: string) => playersById.get(id)!;
-    // 표시용 팀 평균은 팀 나누기의 NR 대체값(teamAverages) 대신 NR을 기본 평점으로 친다.
+    // 표시용 팀 평균은 NR을 기본 평점(3.0)으로 친다. 팀 나누기에 쓰는 NR 대체값(참여자 중앙값)과는 다르다.
     const toTeam = ([first, second]: [string, string]): RecommendedTeam => {
       const players: [RecommendationPlayer, RecommendationPlayer] = [
         playerOf(first),
