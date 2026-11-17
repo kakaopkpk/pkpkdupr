@@ -4,6 +4,7 @@ export * from "./db/schema";
 export {
   PlayerRepository,
   type CreateStoredPlayerInput,
+  type DeletePlayerWithoutMatchesResult,
   type StoredPlayerRecord,
 } from "./repositories/PlayerRepository";
 export { PlayerAdminRepository } from "./repositories/PlayerAdminRepository";
@@ -29,12 +30,13 @@ export {
 } from "./repositories/OfficialDuprAdjustmentLogRepository";
 export {
   MatchRepository,
-  CompletedMatchResultEditError,
   MatchRecordUpdateConflictError,
   MatchNotFoundError,
   MatchStaleUpdateError,
   MATCH_STALE_UPDATE_ERROR_MESSAGE,
   SessionHasMatchesError,
+  RegularSessionSkipExistsError,
+  type UpdateSessionInput,
   type CreateMatchInput,
   type DeleteRecordedMatchInput,
   type DeletedMatchResult,

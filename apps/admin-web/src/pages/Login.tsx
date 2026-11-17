@@ -1,4 +1,7 @@
 import React, { useState } from "react";
+import { Button } from "../components/ui/Button";
+import { InlineError } from "../components/ui/InlineError";
+import { TextInput } from "../components/ui/TextInput";
 import { useAuth } from "../context/AuthContext";
 import { signInWithUsername } from "../lib/supabase";
 
@@ -28,55 +31,54 @@ const Login: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-100">
-      <div className="w-full max-w-[400px] bg-white rounded-xl shadow-lg p-8 m-4 space-y-6">
-        <div className="text-center">
-          <h1 className="text-2xl font-bold text-blue-600">pkpkdupr</h1>
-          <p className="text-gray-500 mt-2">관리자 페이지</p>
+    <div className="flex min-h-screen items-center justify-center bg-pk-bg p-6">
+      <div className="w-full max-w-[400px] space-y-6 rounded-pk-lg bg-white p-8">
+        <div className="flex flex-col items-center gap-3 text-center">
+          <span className="flex size-12 items-center justify-center rounded-pk-sm bg-pk-primary text-pk-17 font-bold text-white">
+            PK
+          </span>
+          <div>
+            <h1 className="text-pk-22 font-bold text-pk-ink">pkpkdupr</h1>
+            <p className="mt-1 text-pk-13 font-semibold text-pk-muted">관리자</p>
+          </div>
         </div>
 
         {notice && !error && (
-          <div className="bg-amber-50 border border-amber-200 text-amber-800 px-4 py-2 rounded text-sm">
+          <div
+            role="status"
+            className="rounded-pk-sm bg-pk-primary-soft px-4 py-3 text-pk-13 font-semibold text-pk-primary"
+          >
             {notice}
           </div>
         )}
 
-        {error && (
-          <div className="bg-error/10 border border-error/20 text-error px-4 py-2 rounded text-sm">
-            {error}
-          </div>
-        )}
-
         <form onSubmit={handleSubmit} className="space-y-3">
-          <input
+          <TextInput
             type="text"
             name="username"
             placeholder="아이디"
+            aria-label="아이디"
             autoComplete="username"
             autoCapitalize="none"
             spellCheck={false}
             value={username}
             onChange={(e) => setUsername(e.target.value)}
             required
-            className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
-          <input
+          <TextInput
             type="password"
             name="password"
             placeholder="비밀번호"
+            aria-label="비밀번호"
             autoComplete="current-password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             required
-            className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
-          <button
-            type="submit"
-            disabled={isSubmitting}
-            className="w-full py-3 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 transition-colors disabled:opacity-60"
-          >
-            {isSubmitting ? "로그인 중..." : "로그인"}
-          </button>
+          <InlineError message={error} />
+          <Button type="submit" disabled={isSubmitting} className="w-full">
+            {isSubmitting ? "로그인 중…" : "로그인"}
+          </Button>
         </form>
       </div>
     </div>

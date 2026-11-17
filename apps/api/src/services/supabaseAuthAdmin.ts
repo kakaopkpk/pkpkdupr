@@ -1,4 +1,3 @@
-import { randomInt } from "crypto";
 import {
   createClient,
   isAuthApiError,
@@ -120,29 +119,6 @@ export class SupabaseAuthAdmin {
   }
 }
 
-const INITIAL_PASSWORD_LENGTH = 10;
-/** 0/O/o, 1/I/l처럼 옮겨 적을 때 헷갈리는 문자를 뺀 영문 대소문자. */
-const PASSWORD_LETTERS =
-  "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz";
-const PASSWORD_DIGITS = "23456789";
-const PASSWORD_ALPHABET = PASSWORD_LETTERS + PASSWORD_DIGITS;
-
 /** Auth 비밀번호 요구(최소 6자, `letters_digits`)를 통과하는지. 초기 비밀번호를 사람이 정할 때 확인한다 */
 export const isValidInitialPassword = (password: string): boolean =>
   password.length >= 6 && /[A-Za-z]/.test(password) && /\d/.test(password);
-
-/**
- * 관리자가 회원에게 전달할 초기·임시 비밀번호. 영문과 숫자를 각각 1자 이상 넣어
- * Auth 최소 길이(6)와 `letters_digits` 요구를 모두 통과한다.
- */
-export const generateInitialPassword = (): string => {
-  for (;;) {
-    const password = Array.from(
-      { length: INITIAL_PASSWORD_LENGTH },
-      () => PASSWORD_ALPHABET[randomInt(PASSWORD_ALPHABET.length)],
-    ).join("");
-    if (isValidInitialPassword(password)) {
-      return password;
-    }
-  }
-};

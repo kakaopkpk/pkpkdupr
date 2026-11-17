@@ -4,6 +4,7 @@ import { randomUUID } from "crypto";
 import {
   getMatchTopLevelType,
   hasGuestPlayer,
+  resolveRatingExcludedAfterEdit,
   isMatchInProgress,
   isSinglesMatchType,
   isMatchRecordDeletable,
@@ -23,12 +24,16 @@ import {
   type ManagedMatchSession,
   type MatchType,
   validateMatchScores,
+  type AdminBatchMatchRequest,
+  type AdminBatchMatchResponse,
+  type AdminMatchDeletionLogsResponse,
 } from "@pkpkdupr/shared/match";
 import {
   addKstDays,
   canOpenRegularSession,
   DEFAULT_MATCH_LOCATION,
   getEmptySessionExpiresAt,
+  getKstWeekday,
   getRegularSessionDateKeys,
   isInProgressMatchExpired,
   isPastSessionStart,
@@ -40,8 +45,14 @@ import {
   MATCH_SESSION_LOCATION_MAX_LENGTH,
   MATCH_SESSION_NAME_MAX_LENGTH,
   REGULAR_SESSION_LOOKAHEAD_DAYS,
+  REGULAR_SESSION_WEEKDAYS,
   toKstDateKey,
   type AddMatchSessionGuestRequest,
+  type AdminAddRegularSessionSkipRequest,
+  type AdminRegularSessionSkip,
+  type AdminRegularSessionSkipsResponse,
+  type AdminRevertRegularSessionSkipResponse,
+  type AdminUpdateMatchSessionRequest,
   type AddMatchSessionParticipantRequest,
   type CreateMatchSessionRequest,
   type StartSessionMatchRequest,
@@ -50,7 +61,7 @@ import {
   type TodayMatchSessionsResponse,
   type UpcomingMatchSessionsResponse,
 } from "@pkpkdupr/shared/session";
-import { generateEntityId, isEntityId } from "@pkpkdupr/shared/entityId";
+import { isEntityId } from "@pkpkdupr/shared/entityId";
 import {
   ACHIEVEMENTS,
   findNewAchievements,
@@ -220,35 +231,9 @@ const playerGenders: MemberGender[] = ["M", "F"];
 
 type MatchTeamRequest = { name?: string; playerIds?: string[] };
 
-type MatchSessionRequest = {
-  name?: string;
-  date?: string;
-  location?: string;
-};
-
-type AdminBatchMatchRequest = {
-  session?: MatchSessionRequest;
-  matches?: Array<{
-    name?: string;
-    type?: MatchType;
-    teams?: [MatchTeamRequest, MatchTeamRequest];
-    location?: string;
-    courtName?: string;
-    matchStartsAt?: string;
-    scores?: MatchScore[];
-  }>;
-};
-
-type AdminScheduledMatchRequest = {
-  name?: string;
-  type?: MatchType;
-  teams?: [MatchTeamRequest, MatchTeamRequest];
-  courtName?: string;
-  matchStartsAt?: string;
-};
-
-type SubmitMatchResultRequest = {
-  scores?: MatchScore[];
+/** 관리자 일괄 등록 요청 본문. 계약(AdminBatchMatchRequest) 밖의 `session` 입력은 400으로 막으려고 받아 둔다 */
+type AdminBatchMatchPayload = Partial<AdminBatchMatchRequest> & {
+  session?: unknown;
 };
 
 type AdminMatchMetadataUpdateRequest = {
@@ -286,41 +271,6 @@ const normalizeMatchStartsAt = (value: unknown) => {
     throw new Error("유효한 경기 예정 일시가 필요합니다.");
   }
   return matchStartsAt.toISOString();
-};
-
-const normalizeMatchSession = (
-  session: MatchSessionRequest | undefined,
-): Session | undefined => {
-  if (!session) {
-    return undefined;
-  }
-
-  const name = normalizeOptionalName(session.name);
-  const dateValue = typeof session.date === "string" ? session.date : undefined;
-  const location = normalizeOptionalName(session.location);
-
-  if (!name && !dateValue && !location) {
-    return undefined;
-  }
-
-  if (!name) {
-    throw new Error("세션명이 필요합니다.");
-  }
-
-  if (!dateValue) {
-    throw new Error("세션 날짜를 입력해주세요.");
-  }
-
-  if (!location) {
-    throw new Error("세션 장소를 입력해주세요.");
-  }
-
-  const date = new Date(dateValue);
-  if (Number.isNaN(date.getTime())) {
-    throw new Error("유효한 세션 날짜가 필요합니다.");
-  }
-
-  return { id: generateEntityId("session"), name, date, location };
 };
 
 const parseAdminMatchMetadataUpdate = (
@@ -540,10 +490,12 @@ class MatchRecordRequestError extends Error {
 /**
  * 경기 기록·수정 요청(RecordMatchRequest)을 검증해 저장할 값으로 바꾼다.
  * 요청자는 active여야 한다. 팀 구성에 본인이 없어도 된다.
+ * keptPlayers는 active가 아니어도 팀에 둘 수 있는 선수다(관리자 정정에서 경기에 이미 있던 선수).
  */
 const prepareRecordedMatch = async (
   body: Partial<RecordMatchRequest> | undefined,
   requesterPlayerId: string,
+  keptPlayers: Player[] = [],
 ) => {
   const { name, type, teams, location, scores } = body ?? {};
   if (type != null && !isMatchType(type)) {
@@ -564,6 +516,7 @@ const prepareRecordedMatch = async (
     type,
     teams as [MatchTeamRequest, MatchTeamRequest],
     requesterPlayerId,
+    keptPlayers,
   );
 
   return {
@@ -577,12 +530,13 @@ const prepareRecordedMatch = async (
 
 /**
  * 경기 기록·시작 요청의 팀 구성을 검증한다. 요청자는 active여야 하고 팀에 없어도 된다.
- * 선수는 active 회원이어야 하며, type을 생략하면 팀 구성으로 추론한다.
+ * 선수는 active 회원(게스트 포함)이거나 keptPlayers여야 하며, type을 생략하면 팀 구성으로 추론한다.
  */
 const prepareMatchLineup = async (
   type: MatchType | undefined,
   requestedTeams: [MatchTeamRequest, MatchTeamRequest],
   requesterPlayerId: string,
+  keptPlayers: Player[] = [],
 ) => {
   const requester = await authService.getPlayerById(requesterPlayerId);
   if (!requester || requester.status !== "active") {
@@ -591,7 +545,10 @@ const prepareMatchLineup = async (
 
   const publicPlayers = await authService.getPublicPlayers();
   const playersById = new Map<string, Player>(
-    [requester, ...publicPlayers].map((player) => [player.id, player]),
+    [...keptPlayers, requester, ...publicPlayers].map((player) => [
+      player.id,
+      player,
+    ]),
   );
   normalizeRequestedTeamPlayerIds(requestedTeams);
   const matchTeams = buildMatchTeamsFromRequests(requestedTeams, playersById);
@@ -622,6 +579,53 @@ const parseRequestedSessionId = (value: unknown): string | undefined => {
     throw new MatchRecordRequestError("유효한 세션 ID가 필요합니다.", 400);
   }
   return value.trim() || undefined;
+};
+
+const ADMIN_ONLY_MATCH_EDIT_FIELDS_MESSAGE =
+  "세션·경기 시각은 관리자만 바꿀 수 있어요.";
+const MATCH_SESSION_NOT_FOUND_MESSAGE = "세션을 찾을 수 없어요.";
+
+/**
+ * 경기 수정(PUT /api/matches/:matchId) 본문의 관리자 전용 필드(sessionId·matchStartsAt)를 읽는다.
+ * 관리자가 아닌 회원이 둘 중 하나라도 넣으면 값이 null이어도 403이다. 생략한 필드는 결과에 키가 없다.
+ */
+const parseAdminMatchEditFields = (
+  body: Partial<RecordMatchRequest> | undefined,
+  isAdmin: boolean,
+): { sessionId?: string | null; matchStartsAt?: Date } => {
+  if (!body || typeof body !== "object") {
+    return {};
+  }
+  const hasSessionId = Object.prototype.hasOwnProperty.call(body, "sessionId");
+  const hasMatchStartsAt = Object.prototype.hasOwnProperty.call(
+    body,
+    "matchStartsAt",
+  );
+  if (!hasSessionId && !hasMatchStartsAt) {
+    return {};
+  }
+  if (!isAdmin) {
+    throw new MatchRecordRequestError(ADMIN_ONLY_MATCH_EDIT_FIELDS_MESSAGE, 403);
+  }
+
+  const fields: { sessionId?: string | null; matchStartsAt?: Date } = {};
+  if (hasSessionId) {
+    if (body.sessionId !== null && typeof body.sessionId !== "string") {
+      throw new MatchRecordRequestError("유효한 세션 ID가 필요합니다.", 400);
+    }
+    fields.sessionId = body.sessionId;
+  }
+  if (hasMatchStartsAt) {
+    const matchStartsAt =
+      typeof body.matchStartsAt === "string" && body.matchStartsAt.trim()
+        ? new Date(body.matchStartsAt)
+        : null;
+    if (!matchStartsAt || Number.isNaN(matchStartsAt.getTime())) {
+      throw new MatchRecordRequestError("유효한 경기 시각이 필요해요.", 400);
+    }
+    fields.matchStartsAt = matchStartsAt;
+  }
+  return fields;
 };
 
 /**
@@ -782,6 +786,29 @@ const sendMatchSessionFailure = (res: express.Response, error: unknown) => {
       ? error.status
       : 500;
   res.status(status).json({ error: (error as Error).message });
+};
+
+/** 세션 이름·장소를 다듬어 돌려준다. 비었거나 maxLength자를 넘으면 400 */
+const requireMatchSessionText = (
+  value: unknown,
+  label: "이름" | "장소",
+  maxLength: number,
+): string => {
+  const isName = label === "이름";
+  const text = normalizeOptionalName(value);
+  if (!text) {
+    throw new MatchSessionRequestError(
+      `세션 ${label}${isName ? "이" : "가"} 필요합니다.`,
+      400,
+    );
+  }
+  if (Array.from(text).length > maxLength) {
+    throw new MatchSessionRequestError(
+      `세션 ${label}${isName ? "은" : "는"} ${maxLength}자 이하여야 합니다.`,
+      400,
+    );
+  }
+  return text;
 };
 
 const loadActivePlayersById = async () =>
@@ -1452,26 +1479,16 @@ app.post("/api/match-sessions", async (req, res) => {
     }
 
     const body = req.body as Partial<CreateMatchSessionRequest> | undefined;
-    const name = normalizeOptionalName(body?.name);
-    const location = normalizeOptionalName(body?.location);
-    if (!name) {
-      throw new MatchSessionRequestError("세션 이름이 필요합니다.", 400);
-    }
-    if (!location) {
-      throw new MatchSessionRequestError("세션 장소가 필요합니다.", 400);
-    }
-    if (Array.from(name).length > MATCH_SESSION_NAME_MAX_LENGTH) {
-      throw new MatchSessionRequestError(
-        `세션 이름은 ${MATCH_SESSION_NAME_MAX_LENGTH}자 이하여야 합니다.`,
-        400,
-      );
-    }
-    if (Array.from(location).length > MATCH_SESSION_LOCATION_MAX_LENGTH) {
-      throw new MatchSessionRequestError(
-        `세션 장소는 ${MATCH_SESSION_LOCATION_MAX_LENGTH}자 이하여야 합니다.`,
-        400,
-      );
-    }
+    const name = requireMatchSessionText(
+      body?.name,
+      "이름",
+      MATCH_SESSION_NAME_MAX_LENGTH,
+    );
+    const location = requireMatchSessionText(
+      body?.location,
+      "장소",
+      MATCH_SESSION_LOCATION_MAX_LENGTH,
+    );
 
     const now = new Date();
     const todayKey = toKstDateKey(now);
@@ -1929,19 +1946,6 @@ app.post("/api/matches", async (req, res) => {
   }
 });
 
-app.post("/api/admin/match-sessions", requireAdmin, async (req, res) => {
-  try {
-    const session = normalizeMatchSession(req.body as MatchSessionRequest);
-    if (!session) {
-      return res.status(400).json({ error: "세션 정보가 필요합니다." });
-    }
-
-    res.status(201).json(await matchRepository.createSession(session));
-  } catch (err) {
-    res.status(400).json({ error: (err as Error).message });
-  }
-});
-
 app.get("/api/admin/match-sessions", requireAdmin, async (_req, res) => {
   try {
     res.json(await matchRepository.findSessions());
@@ -1969,6 +1973,232 @@ app.delete(
         return res.status(409).json({ error: err.message });
       }
       res.status(400).json({ error: (err as Error).message });
+    }
+  },
+);
+
+/**
+ * 회원 세션의 이름·장소·날짜·시각을 고친다. 생략한 필드는 그대로 둔다.
+ * 정기 세션·지난 세션은 409, 경기가 있는 세션은 날짜만 바꿀 수 없다(경기 시각과 세션 날짜가 어긋나므로)
+ */
+app.patch(
+  "/api/admin/match-sessions/:sessionId",
+  requireAdmin,
+  async (req, res) => {
+    try {
+      const { sessionId } = req.params;
+      if (!isEntityId(sessionId, "session")) {
+        throw new MatchSessionRequestError("유효한 세션 ID가 필요합니다.", 400);
+      }
+      const body = (req.body ?? {}) as AdminUpdateMatchSessionRequest;
+      const name =
+        body.name === undefined
+          ? undefined
+          : requireMatchSessionText(
+              body.name,
+              "이름",
+              MATCH_SESSION_NAME_MAX_LENGTH,
+            );
+      const location =
+        body.location === undefined
+          ? undefined
+          : requireMatchSessionText(
+              body.location,
+              "장소",
+              MATCH_SESSION_LOCATION_MAX_LENGTH,
+            );
+
+      const now = new Date();
+      const todayKey = toKstDateKey(now);
+      let dateKey: string | undefined;
+      if (body.dateKey !== undefined) {
+        dateKey = typeof body.dateKey === "string" ? body.dateKey.trim() : "";
+        if (!isValidKstDateKey(dateKey)) {
+          throw new MatchSessionRequestError(
+            "세션 날짜는 YYYY-MM-DD 형식의 실제 날짜여야 합니다.",
+            400,
+          );
+        }
+        // YYYY-MM-DD 날짜 키는 문자열 비교가 날짜 순서와 같다
+        if (dateKey < todayKey) {
+          throw new MatchSessionRequestError(
+            "오늘이나 이후 날짜로만 바꿀 수 있습니다.",
+            400,
+          );
+        }
+      }
+
+      const timeProvided =
+        body.startTime !== undefined || body.endTime !== undefined;
+      const clearsTime = body.startTime === null && body.endTime === null;
+      if (
+        timeProvided &&
+        !clearsTime &&
+        !isValidSessionTimeRange(body.startTime, body.endTime)
+      ) {
+        throw new MatchSessionRequestError(
+          "세션 시작·종료 시각은 HH:MM 형식으로 함께 보내고, 서로 달라야 합니다.",
+          400,
+        );
+      }
+
+      const session = await matchRepository.findSessionById(sessionId);
+      if (!session) {
+        throw new MatchSessionRequestError("세션을 찾을 수 없습니다.", 404);
+      }
+      if (session.kind === "regular") {
+        throw new MatchSessionRequestError(
+          "정기 세션 이름과 시간은 바꿀 수 없어요.",
+          409,
+        );
+      }
+      const currentDateKey = toKstDateKey(session.date);
+      if (currentDateKey < todayKey) {
+        throw new MatchSessionRequestError("지난 세션은 고칠 수 없어요.", 409);
+      }
+      const dateChanged = dateKey !== undefined && dateKey !== currentDateKey;
+      if (dateChanged && session.matchCount > 0) {
+        throw new MatchSessionRequestError(
+          "경기가 있는 세션은 날짜를 바꿀 수 없어요.",
+          409,
+        );
+      }
+
+      const startTime = timeProvided
+        ? (body.startTime ?? null)
+        : session.startTime;
+      const endTime = timeProvided ? (body.endTime ?? null) : session.endTime;
+      const nextDateKey = dateKey ?? currentDateKey;
+      // 이미 시작한 오늘 세션의 이름만 고치는 경우는 막지 않도록, 날짜나 시작 시각이 바뀔 때만 검사한다
+      if (
+        (dateChanged || startTime !== session.startTime) &&
+        startTime != null &&
+        isPastSessionStart(nextDateKey, startTime, now)
+      ) {
+        throw new MatchSessionRequestError(
+          "이미 지난 시각으로는 세션을 바꿀 수 없습니다.",
+          400,
+        );
+      }
+
+      // 회원 세션 시각(date)은 생성 때처럼 고른 날 00:00 KST다
+      const updated = await matchRepository.updateSession(sessionId, {
+        name,
+        location,
+        date: dateChanged ? kstDateKeyToDate(nextDateKey) : undefined,
+        ...(timeProvided ? { startTime, endTime } : {}),
+      });
+      res.json(updated);
+    } catch (err) {
+      sendMatchSessionFailure(res, err);
+    }
+  },
+);
+
+app.get(
+  "/api/admin/regular-session-skips",
+  requireAdmin,
+  async (_req, res) => {
+    try {
+      const response: AdminRegularSessionSkipsResponse = {
+        skips: await matchRepository.findAllRegularSessionSkips(),
+      };
+      res.json(response);
+    } catch (err) {
+      sendMatchSessionFailure(res, err);
+    }
+  },
+);
+
+/** 오늘 이후 정기 요일을 취소 쉬는 날로 남긴다. 그날 정기 세션이 있으면 참여자와 함께 지운다(경기가 있으면 409) */
+app.post(
+  "/api/admin/regular-session-skips",
+  requireAdmin,
+  async (req, res) => {
+    try {
+      const body = req.body as
+        | Partial<AdminAddRegularSessionSkipRequest>
+        | undefined;
+      const dateKey =
+        typeof body?.dateKey === "string" ? body.dateKey.trim() : "";
+      if (!isValidKstDateKey(dateKey)) {
+        throw new MatchSessionRequestError(
+          "날짜는 YYYY-MM-DD 형식의 실제 날짜여야 합니다.",
+          400,
+        );
+      }
+      if (dateKey < toKstDateKey(new Date())) {
+        throw new MatchSessionRequestError(
+          "오늘이나 이후 날짜만 쉬는 날로 정할 수 있어요.",
+          400,
+        );
+      }
+      if (!REGULAR_SESSION_WEEKDAYS.includes(getKstWeekday(dateKey))) {
+        throw new MatchSessionRequestError(
+          "정기 세션 요일(월·목)만 쉬는 날로 정할 수 있어요.",
+          400,
+        );
+      }
+
+      await matchRepository.addRegularSessionCancellation(dateKey);
+      const skip: AdminRegularSessionSkip = { dateKey, reason: "canceled" };
+      res.status(201).json(skip);
+    } catch (err) {
+      sendMatchSessionFailure(res, err);
+    }
+  },
+);
+
+/**
+ * 취소 쉬는 날을 되돌리고 그 날짜의 정기 세션을 바로 다시 만든다(28일 범위와 상관없음).
+ * 오늘이고 정기 세션을 열 수 없는 시각(22시 이후)이면 만들지 않는다. 지워졌던 참여 신청은 되살리지 않는다
+ */
+app.delete(
+  "/api/admin/regular-session-skips/:dateKey",
+  requireAdmin,
+  async (req, res) => {
+    try {
+      const { dateKey } = req.params;
+      if (!isValidKstDateKey(dateKey)) {
+        throw new MatchSessionRequestError(
+          "날짜는 YYYY-MM-DD 형식의 실제 날짜여야 합니다.",
+          400,
+        );
+      }
+      const notFound = () =>
+        new MatchSessionRequestError("쉬는 날을 찾을 수 없습니다.", 404);
+      const [skip] = await matchRepository.findRegularSessionSkips(
+        dateKey,
+        addKstDays(dateKey, 1),
+      );
+      if (!skip) {
+        throw notFound();
+      }
+      if (skip.reason === "holiday") {
+        throw new MatchSessionRequestError("공휴일은 되돌릴 수 없어요.", 409);
+      }
+      const now = new Date();
+      const todayKey = toKstDateKey(now);
+      if (dateKey < todayKey) {
+        throw new MatchSessionRequestError(
+          "지난 날짜는 되돌릴 수 없어요.",
+          409,
+        );
+      }
+      if (!(await matchRepository.deleteRegularSessionCancellation(dateKey))) {
+        throw notFound();
+      }
+
+      const canCreate = dateKey !== todayKey || canOpenRegularSession(now);
+      const response: AdminRevertRegularSessionSkipResponse = {
+        session: canCreate
+          ? ((await matchRepository.findOrCreateRegularSession(dateKey)) ??
+            null)
+          : null,
+      };
+      res.json(response);
+    } catch (err) {
+      sendMatchSessionFailure(res, err);
     }
   },
 );
@@ -2005,149 +2235,6 @@ app.post("/api/cron/regular-sessions", async (req, res) => {
   }
 });
 
-app.put(
-  "/api/admin/match-sessions/:sessionId/participants",
-  requireAdmin,
-  async (req, res) => {
-    try {
-      const requestedPlayerIds = Array.isArray(req.body?.playerIds)
-        ? req.body.playerIds
-        : null;
-      if (
-        !requestedPlayerIds ||
-        requestedPlayerIds.some(
-          (playerId: unknown) => typeof playerId !== "string",
-        )
-      ) {
-        return res.status(400).json({ error: "참여자 목록이 필요합니다." });
-      }
-
-      const availablePlayerIds = new Set(
-        (await authService.getAllPlayers())
-          .filter((player) => player.status === "active")
-          .map((player) => player.id),
-      );
-      if (
-        requestedPlayerIds.some(
-          (playerId: string) => !availablePlayerIds.has(playerId),
-        )
-      ) {
-        return res
-          .status(400)
-          .json({ error: "유효한 활성 회원만 참여자로 등록할 수 있습니다." });
-      }
-
-      res.json(
-        await matchRepository.replaceSessionParticipants(
-          req.params.sessionId,
-          requestedPlayerIds,
-        ),
-      );
-    } catch (err) {
-      const status =
-        err instanceof MatchRepositoryError && err.status === 404 ? 404 : 400;
-      res.status(status).json({ error: (err as Error).message });
-    }
-  },
-);
-
-app.post(
-  "/api/admin/match-sessions/:sessionId/matches",
-  requireAdmin,
-  async (req, res) => {
-    try {
-      const decoded = await getAuthPayload(req, res);
-      if (!decoded) {
-        return;
-      }
-      const session = await matchRepository.findSessionById(
-        req.params.sessionId,
-      );
-      if (!session) {
-        return res.status(404).json({ error: "세션을 찾을 수 없습니다." });
-      }
-
-      const { name, type, teams, courtName, matchStartsAt } =
-        req.body as AdminScheduledMatchRequest;
-      if (!isMatchType(type)) {
-        return res
-          .status(400)
-          .json({ error: "유효한 매치 타입이 필요합니다." });
-      }
-      if (!teams || teams.length !== 2) {
-        return res.status(400).json({ error: "두 팀 구성이 필요합니다." });
-      }
-
-      const matchStartsAtDate = new Date(matchStartsAt ?? "");
-      if (Number.isNaN(matchStartsAtDate.getTime())) {
-        return res.status(400).json({ error: "경기 예정 일시가 필요합니다." });
-      }
-
-      const registeredPlayerIds = new Set(session.participantIds);
-      const requestedPlayerIds = normalizeRequestedTeamPlayerIds(teams);
-      if (
-        requestedPlayerIds.length === 0 ||
-        requestedPlayerIds.some(
-          (playerId) => !registeredPlayerIds.has(playerId),
-        )
-      ) {
-        return res.status(400).json({
-          error: "세션에 등록된 참여자만 경기에 배정할 수 있습니다.",
-        });
-      }
-
-      const allPlayers = await authService.getAllPlayers();
-      const playersById = new Map<string, Player>(
-        allPlayers
-          .filter(
-            (player) =>
-              player.status === "active" &&
-              registeredPlayerIds.has(player.id),
-          )
-          .map((player) => [player.id, player]),
-      );
-      const matchTeams = buildMatchTeamsFromRequests(teams, playersById);
-      if (
-        !validateCreateMatchTeams(type, [
-          matchTeams[0].players,
-          matchTeams[1].players,
-        ])
-      ) {
-        return res.status(400).json({
-          error: `${matchTypeLabels[type]}에 맞는 팀 구성이 필요합니다.`,
-        });
-      }
-
-      const match = await matchRepository.create({
-        name: normalizeOptionalName(name),
-        session: {
-          id: session.id,
-          name: session.name,
-          date: session.date,
-          location: session.location,
-        },
-        type,
-        source: "admin_created",
-        creatorPlayerId: decoded.playerId,
-        status: "created",
-        teams: matchTeams,
-        scores: [],
-        resultSubmittedByPlayerId: null,
-        resultSubmittedAt: null,
-        location: session.location,
-        courtName: normalizeNullableCourtName(courtName) ?? undefined,
-        matchStartsAt: matchStartsAtDate,
-        completedAt: null,
-        // 결과 입력(recordAdminResult)으로 completed가 될 때 정한다.
-        ratingExcluded: false,
-      });
-      res.status(201).json(match);
-    } catch (err) {
-      res.status(400).json({ error: (err as Error).message });
-    }
-  },
-);
-
 app.post("/api/admin/matches/batch", requireAdmin, async (req, res) => {
   try {
     const decoded = await getAuthPayload(req, res);
@@ -2155,13 +2242,37 @@ app.post("/api/admin/matches/batch", requireAdmin, async (req, res) => {
       return;
     }
 
-    const { matches: payloadMatches, session: requestedSession } =
-      req.body as AdminBatchMatchRequest;
+    const {
+      matches: payloadMatches,
+      sessionId: requestedSessionId,
+      session: requestedSession,
+    } = (req.body ?? {}) as AdminBatchMatchPayload;
     if (!Array.isArray(payloadMatches) || payloadMatches.length === 0) {
       return res.status(400).json({ error: "한 개 이상의 경기가 필요합니다." });
     }
 
-    const commonSession = normalizeMatchSession(requestedSession);
+    if (requestedSession !== undefined) {
+      return res
+        .status(400)
+        .json({ error: "세션은 sessionId로 지정해 주세요." });
+    }
+
+    let commonSession: Session | undefined;
+    if (requestedSessionId != null) {
+      const existingSession =
+        typeof requestedSessionId === "string"
+          ? await matchRepository.findSessionById(requestedSessionId)
+          : undefined;
+      if (!existingSession) {
+        return res.status(400).json({ error: MATCH_SESSION_NOT_FOUND_MESSAGE });
+      }
+      commonSession = {
+        id: existingSession.id,
+        name: existingSession.name,
+        date: existingSession.date,
+        location: existingSession.location,
+      };
+    }
 
     const createdBy = await authService.getPlayerById(decoded.playerId);
     if (!createdBy || createdBy.status !== "active") {
@@ -2248,19 +2359,27 @@ app.post("/api/admin/matches/batch", requireAdmin, async (req, res) => {
       };
     });
 
+    if (commonSession) {
+      // 경기 저장 전에 참여자를 넣어, 저장된 세션 경기의 선수는 항상 참여자이게 한다.
+      await matchRepository.addSessionParticipants(
+        commonSession.id,
+        matchesToCreate.flatMap((match) => getTeamPlayerIds(match.teams)),
+      );
+    }
     const createdMatches = commonSession
       ? await matchRepository.createCompletedBatch(matchesToCreate)
       : await Promise.all(matchesToCreate.map((match) => matchRepository.create(match)));
     const ratingResult = await authService.applyMatchResultsToRatings(createdMatches);
     const { ratingChangeLogs, changedPlayerCount } = ratingResult;
 
-    res.status(201).json({
+    const response: AdminBatchMatchResponse = {
       matches: createdMatches,
       createdCount: createdMatches.length,
       completedMatchCount: createdMatches.length,
       changedPlayerCount,
       ratingChangeLogs,
-    });
+    };
+    res.status(201).json(response);
   } catch (err) {
     res.status(400).json({ error: (err as Error).message });
   }
@@ -2274,6 +2393,31 @@ app.get("/api/admin/matches", requireAdmin, async (_req, res) => {
     res.status(500).json({ error: (err as Error).message });
   }
 });
+
+app.get(
+  "/api/admin/match-deletion-logs",
+  requireAdmin,
+  async (_req, res) => {
+    try {
+      const [logs, allPlayers] = await Promise.all([
+        matchRepository.findDeletionLogs(),
+        authService.getAllPlayers(),
+      ]);
+      const usernameById = new Map(
+        allPlayers.map((player) => [player.id, player.username]),
+      );
+      const response: AdminMatchDeletionLogsResponse = {
+        logs: logs.map((log) => ({
+          ...log,
+          deletedByUsername: usernameById.get(log.deletedByPlayerId) ?? null,
+        })),
+      };
+      res.json(response);
+    } catch (err) {
+      res.status(500).json({ error: (err as Error).message });
+    }
+  },
+);
 
 app.get(
   "/api/admin/diagnostics/timestamp-units",
@@ -2306,6 +2450,13 @@ app.patch("/api/admin/matches/bulk-metadata", requireAdmin, async (req, res) => 
       if (!match) {
         return res.status(404).json({ error: `매치를 찾을 수 없습니다: ${matchId}` });
       }
+      if (typeof update.sessionId === "string") {
+        // 세션 경기의 선수는 세션 참여자다. 연결 해제(null)는 참여자를 그대로 둔다.
+        await matchRepository.addSessionParticipants(
+          update.sessionId,
+          getTeamPlayerIds(match.teams),
+        );
+      }
       matches.push(match);
     }
 
@@ -2317,27 +2468,6 @@ app.patch("/api/admin/matches/bulk-metadata", requireAdmin, async (req, res) => 
     res.status(400).json({ error: (err as Error).message });
   }
 });
-
-app.patch(
-  "/api/admin/matches/:matchId/metadata",
-  requireAdmin,
-  async (req, res) => {
-    try {
-      const body = req.body as AdminMatchMetadataUpdateRequest;
-      const match = await matchRepository.updateMetadata(
-        req.params.matchId,
-        parseAdminMatchMetadataUpdate(body),
-      );
-
-      res.json(match);
-    } catch (err) {
-      if (err instanceof MatchRepositoryError && err.status === 404) {
-        return res.status(404).json({ error: err.message });
-      }
-      res.status(400).json({ error: (err as Error).message });
-    }
-  },
-);
 
 app.get("/api/matches/:matchId", async (req, res) => {
   try {
@@ -2358,36 +2488,6 @@ app.get("/api/matches/:matchId", async (req, res) => {
     res.status(500).json({ error: (err as Error).message });
   }
 });
-
-app.post(
-  "/api/admin/matches/:matchId/result",
-  requireAdmin,
-  async (req, res) => {
-    try {
-      const decoded = await getAuthPayload(req, res);
-      if (!decoded) {
-        return;
-      }
-
-      const scores = normalizeMatchScores(
-        (req.body as SubmitMatchResultRequest).scores,
-      );
-      const match = await matchRepository.recordAdminResult(
-        req.params.matchId,
-        decoded.playerId,
-        scores,
-      );
-      const ratingResult = await authService.applyMatchResultToRatings(match);
-
-      res.json({ match, ...ratingResult });
-    } catch (err) {
-      if (err instanceof MatchRepositoryError && err.status === 409) {
-        return res.status(409).json({ error: err.message });
-      }
-      res.status(400).json({ error: (err as Error).message });
-    }
-  },
-);
 
 app.delete(
   "/api/admin/matches/:matchId",
@@ -2448,26 +2548,6 @@ const parseExpectedUpdatedAt = (value: unknown): Date | undefined => {
 /** updated_at은 초 단위로 저장되므로 같은 초면 같은 값으로 본다 */
 const isSameUpdatedAt = (expected: Date, actual: Date) =>
   Math.floor(expected.getTime() / 1000) === Math.floor(actual.getTime() / 1000);
-
-/**
- * 기록 저장 후 경기의 평점 미반영 여부. 처음 completed가 되거나 참가자가 바뀌면 지금 게스트 여부로 다시 정하고,
- * 같은 참가자로 점수만 고치면 기존 값을 둔다(그사이 게스트가 정회원이 돼도 과거 경기는 계속 빠진다).
- * 값이 바뀐 completed 경기는 PUT이 전체 재계산하므로 평점도 따라 바뀐다.
- */
-const resolveRatingExcludedOnUpdate = (
-  existing: Match,
-  nextTeams: Team[],
-): boolean => {
-  if (existing.status !== "completed") {
-    return hasGuestPlayer(nextTeams);
-  }
-  const previousIds = new Set(getTeamPlayerIds(existing.teams));
-  const nextIds = getTeamPlayerIds(nextTeams);
-  const sameParticipants =
-    previousIds.size === new Set(nextIds).size &&
-    nextIds.every((playerId) => previousIds.has(playerId));
-  return sameParticipants ? existing.ratingExcluded : hasGuestPlayer(nextTeams);
-};
 
 /** 평점 재계산이 읽는 경기 수 상한 */
 const MAX_RECALCULATION_MATCHES = 10000;
@@ -2590,6 +2670,7 @@ app.put("/api/matches/:matchId", async (req, res) => {
   try {
     const body = req.body as Partial<RecordMatchRequest> | undefined;
     const expectedUpdatedAt = parseExpectedUpdatedAt(body?.expectedUpdatedAt);
+    const adminEdit = parseAdminMatchEditFields(body, decoded.isAdmin);
     const now = new Date();
     await matchRepository.cleanupExpired(now);
     const existing = await matchRepository.findById(matchId);
@@ -2603,8 +2684,12 @@ app.put("/api/matches/:matchId", async (req, res) => {
     ) {
       return res.status(409).json({ error: MATCH_STALE_UPDATE_ERROR_MESSAGE });
     }
-    // 참가자·생성자·관리자 여부와 무관하게 활성 회원이면 누구나 고칠 수 있다(세션 경기 포함).
-    if (!isWithinMatchEditWindow(existing.matchStartsAt, now)) {
+    // 참가자·생성자 여부와 무관하게 활성 회원이면 누구나 고칠 수 있다(세션 경기 포함).
+    // 관리자는 24시간이 지난 경기도 정정할 수 있다.
+    if (
+      !decoded.isAdmin &&
+      !isWithinMatchEditWindow(existing.matchStartsAt, now)
+    ) {
       return res.status(403).json({
         error:
           "경기 시작 후 24시간이 지나 수정할 수 없습니다. 관리자에게 요청해 주세요.",
@@ -2616,11 +2701,30 @@ app.put("/api/matches/:matchId", async (req, res) => {
         .json({ error: "취소된 경기는 기록을 수정할 수 없습니다." });
     }
 
-    const prepared = await prepareRecordedMatch(body, decoded.playerId);
-    if (existing.session) {
-      // 바뀐 팀의 새 선수도 세션 참여자로 넣는다. 빠진 선수는 참여자에서 지우지 않는다.
+    const prepared = await prepareRecordedMatch(
+      body,
+      decoded.playerId,
+      // 관리자 정정은 이 경기에 이미 있던 선수를 지금 비활성이어도 그대로 둘 수 있다
+      decoded.isAdmin ? existing.teams.flatMap((team) => team.players) : [],
+    );
+    let targetSessionId = existing.session?.id;
+    if (adminEdit.sessionId === null) {
+      targetSessionId = undefined;
+    } else if (adminEdit.sessionId !== undefined) {
+      const targetSession = await matchRepository.findSessionById(
+        adminEdit.sessionId,
+      );
+      if (!targetSession) {
+        return res.status(400).json({ error: MATCH_SESSION_NOT_FOUND_MESSAGE });
+      }
+      targetSessionId = targetSession.id;
+    }
+    if (targetSessionId) {
+      // 바뀐 팀의 새 선수(세션을 옮기면 팀 전원)도 세션 참여자로 넣는다. 빠진 선수는 참여자에서 지우지 않는다.
+      // 참여자 추가는 경기 UPDATE와 따로 먼저 커밋된다. 그래서 아래 저장이 409로 막혀도 참여자는 남지만,
+      // 저장된 세션 경기의 선수가 참여자에서 빠지는 일은 없다.
       await matchRepository.addSessionParticipants(
-        existing.session.id,
+        targetSessionId,
         getTeamPlayerIds(prepared.teams),
       );
     }
@@ -2628,11 +2732,16 @@ app.put("/api/matches/:matchId", async (req, res) => {
     previous = existing;
     // 요청에 없어도 미리 읽은 updatedAt을 조건으로 저장해, 그사이 다른 회원이 고쳤으면 409로 막는다.
     // 그래서 아래 재계산 여부(wasCompleted)는 실제로 고친 행의 이전 상태와 같다.
+    // 관리자의 세션·시각 컬럼 변경도 같은 UPDATE로 저장돼 점수·팀과 함께 반영되거나 함께 막힌다.
     match = await matchRepository.updateRecordedMatch(matchId, {
       ...prepared,
+      ...adminEdit,
       resultSubmittedByPlayerId: decoded.playerId,
       resultSubmittedAt: now,
-      ratingExcluded: resolveRatingExcludedOnUpdate(existing, prepared.teams),
+      ratingExcluded: resolveRatingExcludedAfterEdit(
+        existing,
+        prepared.teams,
+      ),
       expectedUpdatedAt: expectedUpdatedAt ?? existing.updatedAt,
     });
   } catch (err) {
@@ -3145,6 +3254,20 @@ app.get("/api/admin/players", requireAdmin, async (_req, res) => {
     res.json(players);
   } catch (err) {
     res.status(500).json({ error: (err as Error).message });
+  }
+});
+
+app.delete("/api/admin/players/:playerId", requireAdmin, async (req, res) => {
+  const session = res.locals.authSession as AuthenticatedSession;
+  try {
+    const { sessionIds } = await authService.deletePlayer(
+      req.params.playerId,
+      session.payload.playerId,
+    );
+    matchRepository.notifySessionsChanged(sessionIds);
+    res.status(204).send();
+  } catch (err) {
+    sendAccountRequestFailure(res, err);
   }
 });
 

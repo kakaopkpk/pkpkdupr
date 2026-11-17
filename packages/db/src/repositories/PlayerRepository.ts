@@ -11,7 +11,7 @@ import {
 import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import { isEntityId } from "@pkpkdupr/shared/entityId";
 import { playerAdmins, players } from "../db/schema";
-import { firstRow } from "../db/client";
+import { firstRow, placeholders, type DbClient } from "../db/client";
 
 export interface StoredPlayerRecord extends Player {
   /** 연결된 Supabase Auth 사용자 ID. API 응답에는 내보내지 않는다. */
@@ -44,8 +44,34 @@ export interface CreateStoredPlayerInput {
   duprState?: StoredPlayerDupr;
 }
 
+export type DeletePlayerWithoutMatchesResult =
+  | {
+      status: "deleted";
+      /** 지운 회원에 연결돼 있던 Supabase Auth 사용자. DB 삭제 뒤 호출부가 지운다 */
+      authUserId: string | null;
+      /** 참여 신청을 지운 세션 */
+      sessionIds: string[];
+    }
+  | { status: "not_found" }
+  | { status: "admin" }
+  | { status: "has_matches" };
+
+/** 회원 삭제 때 player_id로 함께 지우는 회원별 행. player_admins·player_seen_achievements는 FK CASCADE로 지워진다 */
+const PLAYER_OWNED_TABLES = [
+  "player_creation_logs",
+  "player_status_change_logs",
+  "player_rating_change_logs",
+  "player_rating_chart_projections",
+  "player_rating_chart_points",
+  "official_dupr_adjustment_logs",
+] as const;
+
 export class PlayerRepository {
-  constructor(private db: any) {}
+  /** client는 트랜잭션이 필요한 쓰기(deletePlayerWithoutMatches)에만 쓴다 */
+  constructor(
+    private db: any,
+    private client?: DbClient,
+  ) {}
 
   async findById(id: string): Promise<StoredPlayerRecord | undefined> {
     const player = await this.db
@@ -336,5 +362,89 @@ export class PlayerRepository {
       })
       .where(eq(players.id, id));
     return await this.findById(id);
+  }
+
+  /**
+   * 경기 행(match_participants)이 하나도 없는 회원을 회원별 행·세션 참여 신청과 함께 지운다.
+   * 확인과 삭제를 한 트랜잭션에서 하고 match_participants를 SHARE 잠금해, 확인 뒤 커밋 전까지 그 회원의 경기가 새로 들어오지 못한다.
+   * Auth 사용자는 지우지 않고 id만 돌려준다.
+   */
+  async deletePlayerWithoutMatches(
+    id: string,
+  ): Promise<DeletePlayerWithoutMatchesResult> {
+    if (!this.client) {
+      throw new Error("회원 삭제에는 DB client가 필요합니다.");
+    }
+    const transaction = await this.client.transaction("write");
+    let committed = false;
+    const finish = async <T>(result: T): Promise<T> => {
+      await transaction.commit();
+      committed = true;
+      return result;
+    };
+    try {
+      const player = await transaction.execute({
+        sql: "SELECT id, auth_user_id FROM players WHERE id = $1 FOR UPDATE",
+        args: [id],
+      });
+      if (!player.rows.length) {
+        return await finish({ status: "not_found" });
+      }
+      const admin = await transaction.execute({
+        sql: "SELECT 1 FROM player_admins WHERE player_id = $1",
+        args: [id],
+      });
+      if (admin.rows.length) {
+        return await finish({ status: "admin" });
+      }
+
+      await transaction.execute("LOCK TABLE match_participants IN SHARE MODE");
+      const match = await transaction.execute({
+        sql: "SELECT 1 FROM match_participants WHERE player_id = $1 LIMIT 1",
+        args: [id],
+      });
+      if (match.rows.length) {
+        return await finish({ status: "has_matches" });
+      }
+
+      const sessions = await transaction.execute({
+        sql: `
+          DELETE FROM match_session_participants
+          WHERE player_id = $1
+          RETURNING session_id
+        `,
+        args: [id],
+      });
+      const sessionIds = [
+        ...new Set(sessions.rows.map((row) => String(row.session_id))),
+      ];
+      if (sessionIds.length) {
+        await transaction.execute({
+          sql: `UPDATE match_sessions SET updated_at = $1 WHERE id IN (${placeholders(sessionIds.length, 2)})`,
+          args: [Math.floor(Date.now() / 1000), ...sessionIds],
+        });
+      }
+      for (const table of PLAYER_OWNED_TABLES) {
+        await transaction.execute({
+          sql: `DELETE FROM ${table} WHERE player_id = $1`,
+          args: [id],
+        });
+      }
+      await transaction.execute({
+        sql: "DELETE FROM players WHERE id = $1",
+        args: [id],
+      });
+
+      const authUserId = player.rows[0]?.auth_user_id;
+      return await finish({
+        status: "deleted",
+        authUserId: typeof authUserId === "string" ? authUserId : null,
+        sessionIds,
+      });
+    } finally {
+      if (!committed) {
+        transaction.close();
+      }
+    }
   }
 }

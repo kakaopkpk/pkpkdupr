@@ -1,4 +1,5 @@
 import type {
+  AdminMatchDeletionLog,
   Match,
   MatchFeedItem,
   MatchScore,
@@ -15,10 +16,10 @@ import type {
   PlayerRatingHistory,
 } from "@pkpkdupr/shared/player";
 import {
-  CompletedMatchResultEditError,
   MatchNotFoundError,
   MatchRecordUpdateConflictError,
   MatchStaleUpdateError,
+  RegularSessionSkipExistsError,
   SessionHasMatchesError,
   type CompletedMatchOutcome,
   type CreateMatchInput,
@@ -26,6 +27,7 @@ import {
   type SessionWithParticipantIds,
   type UpdateMatchMetadataInput,
   type UpdateRecordedMatchInput,
+  type UpdateSessionInput,
 } from "@pkpkdupr/db";
 import { db } from "../db";
 
@@ -467,6 +469,60 @@ export class MatchRepository {
     return deleted.map((session) => session.dateKey);
   }
 
+  /** 세션을 고친다. 없으면 404, 같은 날 같은 이름이 있으면 409 */
+  async updateSession(
+    sessionId: string,
+    input: UpdateSessionInput,
+  ): Promise<ManagedMatchSession> {
+    let updated;
+    try {
+      updated = await this.run(
+        () => db.matches.updateSession(sessionId, input),
+        400,
+      );
+    } catch (error) {
+      if (isUniqueViolation(error)) {
+        throw new MatchRepositoryError("같은 이름의 세션이 이미 있습니다.", 409);
+      }
+      throw error;
+    }
+    if (!updated) {
+      throw new MatchRepositoryError("세션을 찾을 수 없습니다.", 404);
+    }
+    this.notifySessionsChanged([sessionId]);
+    return hydrateManagedSession(updated);
+  }
+
+  /** 모든 정기 회차 제외 날짜(날짜 내림차순) */
+  async findAllRegularSessionSkips(): Promise<RegularSessionSkip[]> {
+    return await this.run(() => db.matches.findAllRegularSessionSkips(), 500);
+  }
+
+  /**
+   * 그 날짜를 취소 쉬는 날로 남기고 그날 정기 세션을 참여자와 함께 지운다.
+   * 이미 쉬는 날이거나 정기 세션에 경기가 있으면 409
+   */
+  async addRegularSessionCancellation(dateKey: string): Promise<void> {
+    const { deletedSessionId } = await this.run(
+      () => db.matches.addRegularSessionCancellation(dateKey),
+      500,
+      (error) =>
+        error instanceof RegularSessionSkipExistsError ||
+        error instanceof SessionHasMatchesError
+          ? 409
+          : undefined,
+    );
+    this.notifySessionsChanged([deletedSessionId ?? undefined]);
+  }
+
+  /** 취소 쉬는 날을 지운다(공휴일은 지우지 않음). 지웠으면 true */
+  async deleteRegularSessionCancellation(dateKey: string): Promise<boolean> {
+    return await this.run(
+      () => db.matches.deleteRegularSessionCancellation(dateKey),
+      500,
+    );
+  }
+
   /** 참여자를 추가한다. 이미 있으면 무시한다(동시 호출에도 덮어쓰지 않음) */
   async addSessionParticipants(
     sessionId: string,
@@ -614,51 +670,9 @@ export class MatchRepository {
     this.notifySessionsChanged([sessionId]);
   }
 
-  async replaceSessionParticipants(
-    sessionId: string,
-    playerIds: string[],
-  ): Promise<ManagedMatchSession> {
-    const validPlayerIds = Array.isArray(playerIds)
-      ? playerIds.filter(
-          (playerId: unknown): playerId is string =>
-            typeof playerId === "string",
-        )
-      : [];
-    const updated = await this.run(
-      () => db.matches.replaceSessionParticipants(sessionId, validPlayerIds),
-      400,
-    );
-    if (!updated) {
-      throw new MatchRepositoryError("세션을 찾을 수 없습니다.", 404);
-    }
-    this.notifySessionsChanged([sessionId]);
-    return hydrateManagedSession(updated);
-  }
-
-  async recordAdminResult(
-    matchId: string,
-    submittedByPlayerId: string,
-    scores: MatchScore[],
-  ): Promise<Match> {
-    const updated = await this.run(
-      () =>
-        db.matches.recordAdminResult(
-          matchId,
-          submittedByPlayerId,
-          scores,
-          new Date(),
-        ),
-      400,
-      (error) =>
-        error instanceof CompletedMatchResultEditError ? 409 : undefined,
-    );
-
-    return hydrateMatch(updated);
-  }
-
   /**
-   * 참가자의 경기 기록 수정. 그사이 지워졌으면 404, expectedUpdatedAt이 저장된 값과 다르거나
-   * cancelled 등 수정할 수 없는 상태로 바뀌었으면 409로 응답한다.
+   * 경기 기록 수정(관리자의 세션·시작 시각 정정 포함). 그사이 지워졌으면 404, expectedUpdatedAt이 저장된 값과 다르거나
+   * cancelled 등 수정할 수 없는 상태로 바뀌었으면 409, 옮길 세션이 없으면 400으로 응답한다.
    */
   async updateRecordedMatch(
     matchId: string,
@@ -677,6 +691,21 @@ export class MatchRepository {
     );
 
     return hydrateMatch(updated);
+  }
+
+  /** 경기 삭제 감사 로그. 지운 시각 내림차순이고 match는 지운 시점의 경기 스냅샷이다 */
+  async findDeletionLogs(): Promise<
+    Array<Omit<AdminMatchDeletionLog, "deletedByUsername">>
+  > {
+    const logs = await this.run(() => db.matchDeletionLogs.findAll(), 500);
+    return logs.map((log) => ({
+      id: log.id,
+      matchId: log.matchId,
+      deletedAt: new Date(log.deletedAt),
+      deletedByPlayerId: log.deletedByPlayerId,
+      deletedByAdmin: log.deletedByAdmin,
+      match: hydrateMatch(log.matchSnapshot),
+    }));
   }
 
   /**

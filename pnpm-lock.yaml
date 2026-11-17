@@ -17,12 +17,6 @@ importers:
 
   apps/admin-web:
     dependencies:
-      '@heroui/react':
-        specifier: ^3.0.0
-        version: 3.2.1(@react-spectrum/provider@3.11.1(react-dom@19.2.7(react@19.2.7))(react@19.2.7))(@types/react-dom@19.2.3(@types/react@19.2.17))(@types/react@19.2.17)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(tailwindcss@4.3.1)
-      '@heroui/styles':
-        specifier: ^3.0.0
-        version: 3.2.1(tailwind-merge@3.4.0)(tailwindcss@4.3.1)
       '@supabase/supabase-js':
         specifier: ^2.119.0
         version: 2.119.0
@@ -35,6 +29,9 @@ importers:
       react-router-dom:
         specifier: ^6.21.1
         version: 6.30.4(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
+      tailwind-merge:
+        specifier: ^3.4.0
+        version: 3.4.0
     devDependencies:
       '@tailwindcss/cli':
         specifier: ^4.3.1

@@ -479,6 +479,23 @@ export interface GuestAddedInfo {
   sessionDate: Date | null;
 }
 
+/** GET /api/admin/players 항목 */
+export interface AdminPlayer extends Player {
+  duprMetrics: PlayerDuprMetrics;
+  /** 게스트를 추가한 회원·세션. 정회원은 null */
+  guestAddedInfo: GuestAddedInfo | null;
+  /** 참가한 평점 미반영(게스트가 낀) 완료 경기 수 */
+  ratingExcludedMatchCount: number;
+  /** 관리자가 발급한 비밀번호를 아직 안 바꿨으면 true(첫 로그인 비밀번호 변경 전) */
+  isFirstLogin: boolean;
+  /** Supabase Auth 로그인 계정이 연결돼 있으면 true. 게스트는 false */
+  hasLoginAccount: boolean;
+  /** 팀에 든 경기 행 수(상태·평점 미반영 무관). 0이어야 회원 삭제가 된다 */
+  matchCount: number;
+  /** 그 경기 중 가장 늦은 경기 시각. 경기가 없으면 null */
+  lastMatchStartsAt: Date | null;
+}
+
 /** POST /api/admin/players/:playerId/promote 요청. 응답은 AdminPromoteGuestResponse(관리자 회원 추가 응답과 같은 형태)다 */
 export interface AdminPromoteGuestRequest {
   gender: "M" | "F";

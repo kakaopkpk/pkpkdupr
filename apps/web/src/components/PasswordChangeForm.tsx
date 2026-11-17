@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { ADMIN_ISSUED_PASSWORD } from "@pkpkdupr/shared/auth";
 import { PASSWORD_MIN_LENGTH } from "@/lib/authMessages";
 import { useOnlineStatus } from "@/hooks/useOnlineStatus";
 import { PkButton } from "@/components/ui/Button";
@@ -23,10 +24,13 @@ const PasswordChangeForm: React.FC<PasswordChangeFormProps> = ({
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // 관리자가 발급·초기화한 공개 임시 비밀번호는 새 비밀번호로 다시 쓸 수 없다.
   const newPasswordError =
     newPassword.length > 0 && newPassword.length < PASSWORD_MIN_LENGTH
       ? `새 비밀번호는 ${PASSWORD_MIN_LENGTH}자 이상이어야 합니다.`
-      : null;
+      : newPassword === ADMIN_ISSUED_PASSWORD
+        ? "임시 비밀번호와 다른 비밀번호를 입력해 주세요."
+        : null;
   const confirmPasswordError =
     confirmPassword.length > 0 && newPassword !== confirmPassword
       ? "새 비밀번호 확인이 일치하지 않습니다."

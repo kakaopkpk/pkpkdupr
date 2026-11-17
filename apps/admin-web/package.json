@@ -9,12 +9,11 @@
         "preview": "vite preview"
     },
     "dependencies": {
-        "@heroui/react": "^3.0.0",
-        "@heroui/styles": "^3.0.0",
         "@supabase/supabase-js": "^2.119.0",
         "react": "^19.1.0",
         "react-dom": "^19.1.0",
-        "react-router-dom": "^6.21.1"
+        "react-router-dom": "^6.21.1",
+        "tailwind-merge": "^3.4.0"
     },
     "devDependencies": {
         "@tailwindcss/cli": "^4.3.1",

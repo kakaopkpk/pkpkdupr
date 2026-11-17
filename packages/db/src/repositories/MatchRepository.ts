@@ -12,7 +12,6 @@ import type {
 } from "@pkpkdupr/shared/match";
 import {
   getMatchSessionStatus,
-  hasGuestPlayer,
   validateMatchScores,
 } from "@pkpkdupr/shared/match";
 import {
@@ -68,16 +67,6 @@ type StoredMatchScore = typeof matchScores.$inferSelect;
 type StoredMatchSession = typeof matchSessions.$inferSelect;
 type StoredPlayer = typeof players.$inferSelect;
 
-export const COMPLETED_MATCH_RESULT_EDIT_ERROR_MESSAGE =
-  "이미 완료된 매치 결과는 수정할 수 없습니다.";
-
-export class CompletedMatchResultEditError extends Error {
-  constructor() {
-    super(COMPLETED_MATCH_RESULT_EDIT_ERROR_MESSAGE);
-    this.name = "CompletedMatchResultEditError";
-  }
-}
-
 export class MatchRecordUpdateConflictError extends Error {
   constructor() {
     super("기록을 수정할 수 없는 매치 상태입니다.");
@@ -108,6 +97,22 @@ export class SessionHasMatchesError extends Error {
     super("연결된 경기가 있는 세션은 삭제할 수 없습니다.");
     this.name = "SessionHasMatchesError";
   }
+}
+
+export class RegularSessionSkipExistsError extends Error {
+  constructor() {
+    super("이미 쉬는 날로 정해진 날짜입니다.");
+    this.name = "RegularSessionSkipExistsError";
+  }
+}
+
+/** 회원 세션 수정 값. 키가 없는 필드는 그대로 둔다 */
+export interface UpdateSessionInput {
+  name?: string;
+  location?: string;
+  date?: Date;
+  startTime?: string | null;
+  endTime?: string | null;
 }
 
 /** 랭킹·세션 리포트 계산에 필요한 완료 경기 요약 */
@@ -156,8 +161,12 @@ export interface CreateMatchInput {
   ratingExcluded?: boolean;
 }
 
-/** 참가자의 경기 기록 수정 입력. 시작 시각·세션·코트·생성자는 바꾸지 않는다. */
+/** 경기 기록 수정 입력. 코트·생성자는 바꾸지 않고, 세션·시작 시각은 주었을 때만 바꾼다. */
 export interface UpdateRecordedMatchInput {
+  /** 문자열이면 그 세션으로 옮기고(세션 이름·날짜 비정규화 컬럼도 맞춤) null이면 세션에서 뺀다. 생략하면 그대로 */
+  sessionId?: string | null;
+  /** 주면 시작 시각을 바꾸고, 이미 completed인 경기면 completed_at도 같은 만큼 옮긴다 */
+  matchStartsAt?: Date;
   type: MatchType;
   name?: string;
   location: string;
@@ -430,77 +439,6 @@ export class MatchRepository {
       .limit(1)
       .then(firstRow);
     return stored ? await this.toManagedSession(stored) : undefined;
-  }
-
-  async replaceSessionParticipants(
-    sessionId: string,
-    playerIds: string[],
-  ): Promise<ManagedMatchSession | undefined> {
-    const session = await this.findSessionById(sessionId);
-    if (!session) {
-      return undefined;
-    }
-
-    const uniquePlayerIds = [...new Set(playerIds)];
-    const playerRecords = await Promise.all(
-      uniquePlayerIds.map((playerId) =>
-        this.db
-          .select()
-          .from(players)
-          .where(eq(players.id, playerId))
-          .limit(1)
-          .then(firstRow),
-      ),
-    );
-    if (
-      playerRecords.some(
-        (player: StoredPlayer | undefined) =>
-          !player || player.status !== "active",
-      )
-    ) {
-      throw new Error("유효한 활성 참여자만 등록할 수 있습니다.");
-    }
-
-    const transaction = await this.client.transaction("write");
-    let committed = false;
-    const now = new Date();
-    try {
-      await transaction.execute({
-        sql: "DELETE FROM match_session_participants WHERE session_id = $1",
-        args: [sessionId],
-      });
-      for (const playerId of uniquePlayerIds) {
-        await transaction.execute({
-          sql: `
-            INSERT INTO match_session_participants (
-              id,
-              session_id,
-              player_id,
-              created_at
-            )
-            VALUES ($1, $2, $3, $4)
-          `,
-          args: [
-            `${sessionId}-${playerId}`,
-            sessionId,
-            playerId,
-            toUnixTimestampSeconds(now),
-          ],
-        });
-      }
-      await transaction.execute({
-        sql: "UPDATE match_sessions SET updated_at = $1 WHERE id = $2",
-        args: [toUnixTimestampSeconds(now), sessionId],
-      });
-      await transaction.commit();
-      committed = true;
-    } finally {
-      if (!committed) {
-        transaction.close();
-      }
-    }
-
-    return await this.findSessionById(sessionId);
   }
 
   /**
@@ -969,6 +907,36 @@ export class MatchRepository {
         playerId: string;
         matchCount: number | string;
       }) => [playerId, Number(matchCount)]),
+    );
+  }
+
+  /** 선수별로 팀에 든 경기 행 수와 가장 늦은 경기 시각. 상태·평점 미반영 여부를 가리지 않는다. 경기가 없는 선수는 빠진다 */
+  async findMatchStatsByPlayerId(): Promise<
+    Record<string, { matchCount: number; lastMatchStartsAt: Date | null }>
+  > {
+    const rows = await this.db
+      .select({
+        playerId: matchParticipants.playerId,
+        matchCount: count(),
+        lastMatchStartsAt: max(matches.matchStartsAt),
+      })
+      .from(matchParticipants)
+      .innerJoin(matches, eq(matchParticipants.matchId, matches.id))
+      .groupBy(matchParticipants.playerId);
+
+    return Object.fromEntries(
+      rows.map(({ playerId, matchCount, lastMatchStartsAt }: {
+        playerId: string;
+        matchCount: number | string;
+        lastMatchStartsAt: Date | string | number | null;
+      }) => [
+        playerId,
+        {
+          matchCount: Number(matchCount),
+          lastMatchStartsAt:
+            lastMatchStartsAt == null ? null : toDate(lastMatchStartsAt),
+        },
+      ]),
     );
   }
 
@@ -1742,97 +1710,11 @@ export class MatchRepository {
     };
   }
 
-  async recordAdminResult(
-    matchId: string,
-    submittedByPlayerId: string,
-    scores: MatchScore[],
-    completedAt: Date = new Date(),
-  ): Promise<Match> {
-    const existing = await this.findById(matchId);
-    if (!existing) {
-      throw new Error("매치를 찾을 수 없습니다.");
-    }
-
-    if (existing.status === "completed") {
-      throw new CompletedMatchResultEditError();
-    }
-
-    if (existing.status !== "created") {
-      throw new Error("결과를 입력할 수 없는 매치 상태입니다.");
-    }
-
-    validateMatchScores(scores);
-    // 완료되는 시점에 게스트가 낀 경기는 평점에 반영하지 않는다(참가자의 현재 게스트 여부로 정한다).
-    const ratingExcluded = hasGuestPlayer(existing.teams);
-
-    const scoreColumns = await this.getMatchScoreColumns();
-    const transaction = await this.client.transaction("write");
-    let committed = false;
-
-    try {
-      const completedAtSeconds = toUnixTimestampSeconds(completedAt);
-      const updateResult = await transaction.execute({
-        sql: `
-          UPDATE matches
-          SET
-            status = $1,
-            result_submitted_by_player_id = $2,
-            result_submitted_at = $3,
-            completed_at = $4,
-            updated_at = $5,
-            rating_excluded = $7
-          WHERE id = $6
-            AND status = 'created'
-        `,
-        args: [
-          "completed",
-          submittedByPlayerId,
-          completedAtSeconds,
-          completedAtSeconds,
-          completedAtSeconds,
-          matchId,
-          ratingExcluded,
-        ],
-      });
-      if (!updateResult.rowsAffected) {
-        throw new Error("RESULT_SUBMIT_STATE_CONFLICT");
-      }
-
-      await this.replaceScoresWithExecutor(
-        matchId,
-        scores,
-        scoreColumns,
-        transaction,
-      );
-
-      await transaction.commit();
-      committed = true;
-    } catch (error) {
-      transaction.close();
-      const current = await this.findById(matchId);
-      if (
-        (error as Error).message === "RESULT_SUBMIT_STATE_CONFLICT" &&
-        current?.status === "completed"
-      ) {
-        throw new CompletedMatchResultEditError();
-      }
-      throw error;
-    } finally {
-      if (!committed) {
-        transaction.close();
-      }
-    }
-
-    const updated = await this.findById(matchId);
-    if (!updated) {
-      throw new Error("매치 결과 저장에 실패했습니다.");
-    }
-    return updated;
-  }
-
   /**
    * created·completed 경기의 기록(종류·이름·장소·참가자·점수)을 한 트랜잭션으로 교체하고
    * completed로 만든다. completed_at은 기존 값을 유지하고 없을 때만 resultSubmittedAt으로 채운다.
+   * 세션·시작 시각(관리자 정정)도 주면 같은 UPDATE·같은 updated_at 조건으로 바꾼다.
+   * 옮길 세션이 없으면 아무것도 바꾸지 않고 예외를 던진다.
    * 남는 참가자는 기존 평점 스냅샷을 유지하고, 새 참가자는 비워 두어 평점 반영 때 채워지게 한다.
    */
   async updateRecordedMatch(
@@ -1851,6 +1733,64 @@ export class MatchRepository {
 
     try {
       const submittedAtSeconds = toUnixTimestampSeconds(data.resultSubmittedAt);
+      const args: unknown[] = [
+        data.type,
+        data.name?.trim() || null,
+        location,
+        data.resultSubmittedByPlayerId,
+        submittedAtSeconds,
+        matchId,
+        toExpectedUpdatedAtSeconds(data.expectedUpdatedAt),
+        data.ratingExcluded,
+      ];
+      const addArg = (value: unknown) => {
+        args.push(value);
+        return `$${args.length}`;
+      };
+      const optionalAssignments: string[] = [];
+      let completedAtExpression = "COALESCE(completed_at, $5)";
+
+      if (data.sessionId === null) {
+        optionalAssignments.push(
+          "session_id = NULL",
+          "session_name = NULL",
+          "session_date = NULL",
+        );
+      } else if (data.sessionId !== undefined) {
+        // 세션 비정규화 컬럼은 updateMetadata의 세션 연결과 같이 세션 행에서 복사한다
+        const session = isEntityId(data.sessionId, "session")
+          ? (
+              await transaction.execute({
+                sql: `SELECT id, name, "date" FROM match_sessions WHERE id = $1`,
+                args: [data.sessionId],
+              })
+            ).rows[0]
+          : undefined;
+        if (!session) {
+          throw new Error("세션을 찾을 수 없어요.");
+        }
+        optionalAssignments.push(
+          `session_id = ${addArg(String(session.id))}`,
+          `session_name = ${addArg(String(session.name))}`,
+          `session_date = ${addArg(Number(session.date))}`,
+        );
+      }
+
+      if (data.matchStartsAt !== undefined) {
+        const matchStartsAtParam = addArg(
+          toUnixTimestampSeconds(data.matchStartsAt),
+        );
+        optionalAssignments.push(`match_starts_at = ${matchStartsAtParam}`);
+        // SET의 식은 고치기 전 행 값을 읽으므로, 이미 완료된 경기는 completed_at을 시작 시각이 옮겨 간 만큼 옮긴다.
+        // 평점 재계산이 completed_at 순서로 경기를 다시 돌리기 때문이다.
+        completedAtExpression = `
+          CASE
+            WHEN status = 'completed' AND completed_at IS NOT NULL
+              THEN completed_at + (${matchStartsAtParam}::bigint - match_starts_at)
+            ELSE COALESCE(completed_at, $5)
+          END`;
+      }
+
       const updateResult = await transaction.execute({
         sql: `
           UPDATE matches
@@ -1861,23 +1801,16 @@ export class MatchRepository {
             status = 'completed',
             result_submitted_by_player_id = $4,
             result_submitted_at = $5,
-            completed_at = COALESCE(completed_at, $5),
+            completed_at = ${completedAtExpression},
             updated_at = GREATEST($5, updated_at + 1),
-            rating_excluded = $8
+            rating_excluded = $8${optionalAssignments
+              .map((assignment) => `,\n            ${assignment}`)
+              .join("")}
           WHERE id = $6
             AND status IN ('created', 'completed')
             AND ($7::bigint IS NULL OR updated_at = $7)
         `,
-        args: [
-          data.type,
-          data.name?.trim() || null,
-          location,
-          data.resultSubmittedByPlayerId,
-          submittedAtSeconds,
-          matchId,
-          toExpectedUpdatedAtSeconds(data.expectedUpdatedAt),
-          data.ratingExcluded,
-        ],
+        args,
       });
       if (!updateResult.rowsAffected) {
         const current = await transaction.execute({
@@ -2173,6 +2106,112 @@ export class MatchRepository {
         dateKey: String(row.regular_date_key),
       }))
       .sort((a, b) => a.dateKey.localeCompare(b.dateKey));
+  }
+
+  /** 세션 행의 이름·장소·시각·시작/종료 시각을 고친다. 없으면 undefined. (name, date) 유니크 위반은 그대로 던진다 */
+  async updateSession(
+    sessionId: string,
+    data: UpdateSessionInput,
+  ): Promise<ManagedMatchSession | undefined> {
+    if (!isEntityId(sessionId, "session")) {
+      return undefined;
+    }
+    const payload = Object.fromEntries(
+      Object.entries(data).filter(([, value]) => value !== undefined),
+    );
+    await this.db
+      .update(matchSessions)
+      .set({ ...payload, updatedAt: new Date() })
+      .where(eq(matchSessions.id, sessionId));
+    return await this.findSessionById(sessionId);
+  }
+
+  /** 모든 정기 회차 제외 날짜(날짜 내림차순) */
+  async findAllRegularSessionSkips(): Promise<RegularSessionSkip[]> {
+    const rows: Array<{ dateKey: string; reason: string }> = await this.db
+      .select({
+        dateKey: regularSessionSkips.dateKey,
+        reason: regularSessionSkips.reason,
+      })
+      .from(regularSessionSkips)
+      .orderBy(desc(regularSessionSkips.dateKey));
+    return rows.map((row) => ({
+      dateKey: row.dateKey,
+      reason: row.reason as RegularSessionSkipReason,
+    }));
+  }
+
+  /**
+   * 그 날짜를 취소(canceled) 쉬는 날로 남기고, 그날 정기 세션이 있으면 참여자와 함께 지운다(트랜잭션 하나).
+   * 이미 쉬는 날이면 RegularSessionSkipExistsError, 정기 세션에 경기가 있으면 SessionHasMatchesError를 던지고 아무것도 남기지 않는다.
+   * 지운 정기 세션 id를 돌려준다(없었으면 null).
+   */
+  async addRegularSessionCancellation(
+    dateKey: string,
+  ): Promise<{ deletedSessionId: string | null }> {
+    if (!REGULAR_DATE_KEY_PATTERN.test(dateKey)) {
+      throw new Error("유효한 날짜가 필요합니다.");
+    }
+
+    const transaction = await this.client.transaction("write");
+    let committed = false;
+    try {
+      const inserted = await transaction.execute({
+        sql: `
+          INSERT INTO regular_session_skips (date_key, reason, created_at)
+          VALUES ($1, 'canceled', $2)
+          ON CONFLICT (date_key) DO NOTHING
+          RETURNING date_key
+        `,
+        args: [dateKey, toUnixTimestampSeconds(new Date())],
+      });
+      if (!inserted.rows.length) {
+        throw new RegularSessionSkipExistsError();
+      }
+
+      const session = await transaction.execute({
+        sql: "SELECT id FROM match_sessions WHERE regular_date_key = $1",
+        args: [dateKey],
+      });
+      const sessionId = session.rows[0]?.id;
+      if (sessionId != null) {
+        const matchCount = await transaction.execute({
+          sql: "SELECT COUNT(*) AS count FROM matches WHERE session_id = $1",
+          args: [sessionId],
+        });
+        if (Number(matchCount.rows[0]?.count ?? 0) > 0) {
+          throw new SessionHasMatchesError();
+        }
+        await transaction.execute({
+          sql: "DELETE FROM match_session_participants WHERE session_id = $1",
+          args: [sessionId],
+        });
+        await transaction.execute({
+          sql: "DELETE FROM match_sessions WHERE id = $1",
+          args: [sessionId],
+        });
+      }
+      await transaction.commit();
+      committed = true;
+      return { deletedSessionId: sessionId == null ? null : String(sessionId) };
+    } finally {
+      if (!committed) {
+        transaction.close();
+      }
+    }
+  }
+
+  /** 취소(canceled) 쉬는 날을 지운다. 공휴일은 지우지 않는다. 지웠으면 true */
+  async deleteRegularSessionCancellation(dateKey: string): Promise<boolean> {
+    const result: RawQueryResult = await this.client.execute({
+      sql: `
+        DELETE FROM regular_session_skips
+        WHERE date_key = $1 AND reason = 'canceled'
+        RETURNING date_key
+      `,
+      args: [dateKey],
+    });
+    return result.rows.length > 0;
   }
 
   async updateMetadata(

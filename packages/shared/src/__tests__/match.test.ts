@@ -5,6 +5,7 @@ import {
   isMatchRecordEditable,
   isWithinMatchEditWindow,
   MATCH_EDIT_WINDOW_MS,
+  resolveRatingExcludedAfterEdit,
   type Match,
 } from "../match";
 
@@ -136,5 +137,32 @@ describe("isMatchRecordDeletable", () => {
         new Date(startsAt.getTime() + MATCH_EDIT_WINDOW_MS + 1),
       ),
     ).toBe(false);
+  });
+});
+
+describe("resolveRatingExcludedAfterEdit", () => {
+  const teamsOf = (...guestFlags: boolean[][]) =>
+    guestFlags.map((flags) => ({
+      players: flags.map((isGuest) => ({ isGuest })),
+    }));
+  const members = teamsOf([false, false], [false, false]);
+  const withGuest = teamsOf([false, false], [false, true]);
+
+  it("진행 중 경기에 처음 점수를 넣으면 다음 팀의 게스트 여부로 정한다", () => {
+    const created = { status: "created", ratingExcluded: false } as const;
+    expect(resolveRatingExcludedAfterEdit(created, withGuest)).toBe(true);
+    expect(resolveRatingExcludedAfterEdit(created, members)).toBe(false);
+  });
+
+  it("이미 completed이고 미반영이면 게스트가 모두 정회원이 돼도 true를 유지한다", () => {
+    const excluded = { status: "completed", ratingExcluded: true } as const;
+    expect(resolveRatingExcludedAfterEdit(excluded, members)).toBe(true);
+    expect(resolveRatingExcludedAfterEdit(excluded, withGuest)).toBe(true);
+  });
+
+  it("이미 completed이고 반영이면 게스트가 새로 들어올 때만 true다", () => {
+    const included = { status: "completed", ratingExcluded: false } as const;
+    expect(resolveRatingExcludedAfterEdit(included, members)).toBe(false);
+    expect(resolveRatingExcludedAfterEdit(included, withGuest)).toBe(true);
   });
 });

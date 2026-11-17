@@ -1,17 +1,36 @@
+@import url("https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/variable/pretendardvariable-dynamic-subset.css");
+@import url("https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&display=swap");
 @import "tailwindcss";
 
+/* 값은 apps/web/src/index.css의 @theme과 같다. 토큰을 바꾸면 components/ui/cx.ts 목록도 함께 고친다. */
 @theme {
-  --color-error: #f8626c;
-  --color-border: #e6e6e6;
-  --color-divider: #e6e6e6;
-
-  --color-pkpk-primary: #3b52cc;
-  --color-pkpk-secondary: #8b1e77;
-  --color-pkpk-bg: #e3f8ff;
-  --color-pkpk-surface: #ffffff;
-  --color-pkpk-dark: #0d0b1a;
-  --color-pkpk-muted: #5c6880;
-  --color-pkpk-accent: #eaff19;
+  --color-error: #c2253d;
+  --color-border: #eef1f6;
+  --color-divider: #eef1f6;
+  --color-pk-bg: #f3f5f9;
+  --color-pk-ink: #0f1726;
+  --color-pk-sub: #4f5a70;
+  --color-pk-muted: #8a93a6;
+  --color-pk-divider: #eef1f6;
+  --color-pk-quiet: #b4bccb;
+  --color-pk-line: #d3d9e6;
+  --color-pk-neutral: #e3e7f0;
+  --color-pk-up: #0a7a52;
+  --color-pk-down: #c2253d;
+  --color-pk-primary: #2346a8;
+  --color-pk-primary-soft: #e6ebf8;
+  --color-pk-primary-line: #bccaf0;
+  --color-pk-deep: #152a5e;
+  --color-pk-primary-mid: #5a7bd6;
+  --font-num: "Barlow Condensed", sans-serif;
+  --radius-pk-sm: 12px;
+  --radius-pk-lg: 20px;
+  --text-pk-12: 12px;
+  --text-pk-13: 13px;
+  --text-pk-15: 15px;
+  --text-pk-17: 17px;
+  --text-pk-22: 22px;
+  --text-pk-26: 26px;
 }
 
 @layer base {
@@ -31,30 +50,20 @@
 
   body {
     font-family:
-      -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", "Oxygen",
-      "Ubuntu", "Cantarell", "Fira Sans", "Droid Sans", "Helvetica Neue",
-      sans-serif;
+      "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont,
+      system-ui, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+    background-color: var(--color-pk-bg);
+    color: var(--color-pk-ink);
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
   }
 }
 
-input,
-select,
-textarea {
-  background-color: #fff;
-}
-
-@keyframes delete-hold-progress {
-  from {
-    transform: scaleX(0);
+/* 폼 컨트롤 기본 바탕은 흰색이다. base 층에 두어 컴포넌트의 bg-* 유틸리티가 이긴다. */
+@layer base {
+  input,
+  select,
+  textarea {
+    background-color: #fff;
   }
-
-  to {
-    transform: scaleX(1);
-  }
-}
-
-.delete-hold-progress {
-  animation: delete-hold-progress 800ms linear forwards;
 }

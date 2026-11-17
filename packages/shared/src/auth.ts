@@ -44,6 +44,9 @@ export const toInternalEmail = (username: string): string =>
 /** GET /api/me, POST /api/me/password-changed 응답. isFirstLogin이 true면 web이 비밀번호 변경을 강제한다 */
 export type MeResponse = Player & { isAdmin: boolean; isFirstLogin: boolean };
 
+/** 관리자가 회원 추가·게스트 정회원 승급·비밀번호 초기화로 발급하는 임시 비밀번호. 첫 로그인에서 바꾸게 한다 */
+export const ADMIN_ISSUED_PASSWORD = "123qwe";
+
 /** POST /api/admin/register 요청 */
 export interface AdminRegisterPlayerRequest {
   username: string;

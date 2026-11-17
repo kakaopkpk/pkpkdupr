@@ -1,3 +1,4 @@
+import { ADMIN_ISSUED_PASSWORD } from "@pkpkdupr/shared/auth";
 import type { ManagedMatchSession, Match } from "@pkpkdupr/shared/match";
 import type {
   Player,
@@ -417,20 +418,20 @@ describe("게스트가 낀 경기 기록·수정의 ratingExcluded", () => {
           scores: [{ scoreA: 11, scoreB: 9 }],
         });
 
-    it("수정으로 게스트가 빠지면 반영으로 바뀌고 전체 재계산한다", async () => {
+    it("미반영 완료 경기의 게스트를 정회원으로 바꿔도 미반영을 유지하고 전체 재계산한다", async () => {
       existing = buildMatch({ ratingExcluded: true });
 
       const response = await update([opponentM.id, opponentF.id]);
 
       expect(response.status).toBe(200);
       expect(updateRecordedMatch.mock.calls[0]![1]).toMatchObject({
-        ratingExcluded: false,
+        ratingExcluded: true,
       });
-      expect(response.body.ratingExcluded).toBe(false);
+      expect(response.body.ratingExcluded).toBe(true);
       expect(recalculate).toHaveBeenCalledTimes(1);
     });
 
-    it("수정으로 게스트가 들어오면 미반영으로 바뀐다", async () => {
+    it("반영 경기에 수정으로 게스트가 들어오면 미반영으로 바뀐다", async () => {
       existing = buildMatch({
         ratingExcluded: false,
         teams: [
@@ -812,10 +813,10 @@ describe("POST /api/admin/players/:playerId/promote", () => {
       gender: "F",
     });
     expect(response.body.player).not.toHaveProperty("authUserId");
-    expect(response.body.initialPassword).toMatch(/^[A-Za-z0-9]{10}$/);
+    expect(response.body.initialPassword).toBe(ADMIN_ISSUED_PASSWORD);
     expect(createAuthUser).toHaveBeenCalledWith({
       email: expect.stringMatching(/^guest_kim@/),
-      password: response.body.initialPassword,
+      password: ADMIN_ISSUED_PASSWORD,
     });
     expect(rows.get(guest.id)).toMatchObject({
       isGuest: false,

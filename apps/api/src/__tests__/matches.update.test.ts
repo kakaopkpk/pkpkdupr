@@ -1,5 +1,12 @@
-import type { CompletedMatchOutcome } from "@pkpkdupr/db";
-import { MATCH_EDIT_WINDOW_MS, type Match } from "@pkpkdupr/shared/match";
+import {
+  MATCH_STALE_UPDATE_ERROR_MESSAGE,
+  type CompletedMatchOutcome,
+} from "@pkpkdupr/db";
+import {
+  MATCH_EDIT_WINDOW_MS,
+  type ManagedMatchSession,
+  type Match,
+} from "@pkpkdupr/shared/match";
 import type { Player, PlayerRatingChangeLog } from "@pkpkdupr/shared/player";
 import request from "supertest";
 import {
@@ -12,7 +19,10 @@ import {
   type MockInstance,
 } from "vitest";
 import { app } from "../index";
-import { MatchRepository } from "../repositories/MatchRepository";
+import {
+  MatchRepository,
+  MatchRepositoryError,
+} from "../repositories/MatchRepository";
 import {
   AuthService,
   type AuthenticatedSession,
@@ -680,6 +690,216 @@ describe("PUT /api/matches/:matchId", () => {
     expect(response.body).toEqual({
       error:
         "경기는 저장됐지만 평점 반영에 실패했습니다. 관리자에게 평점 재계산을 요청해 주세요.",
+    });
+  });
+
+  describe("관리자 정정", () => {
+    const admin = buildPlayer("player-admin", "M");
+    const movedSession: ManagedMatchSession = {
+      id: "Ssession2",
+      name: "목요 정기운동",
+      date: now,
+      location: "야탑초등학교",
+      participantIds: [],
+      matchCount: 0,
+      kind: "regular",
+      startTime: "18:00",
+      endTime: "22:00",
+      createdAt: now,
+      updatedAt: now,
+    };
+    let findSessionById: MockInstance<MatchRepository["findSessionById"]>;
+
+    beforeEach(() => {
+      vi.spyOn(
+        AuthService.prototype,
+        "authenticateAccessToken",
+      ).mockResolvedValue({
+        ...buildSession(admin),
+        payload: { playerId: admin.id, isAdmin: true },
+      });
+      vi.spyOn(AuthService.prototype, "getPlayerById").mockResolvedValue(
+        admin,
+      );
+      findSessionById = vi
+        .spyOn(MatchRepository.prototype, "findSessionById")
+        .mockImplementation(async (sessionId) =>
+          sessionId === movedSession.id ? movedSession : undefined,
+        );
+    });
+
+    it("24시간이 지난 경기도 고치고 전체 재계산한다", async () => {
+      existing = buildExistingMatch({
+        matchStartsAt: new Date(Date.now() - MATCH_EDIT_WINDOW_MS - 60_000),
+      });
+
+      const response = await putMatch();
+
+      expect(response.status).toBe(200);
+      expect(updateRecordedMatch).toHaveBeenCalledTimes(1);
+      const [, input] = updateRecordedMatch.mock.calls[0]!;
+      expect(input.resultSubmittedByPlayerId).toBe(admin.id);
+      expect(input).not.toHaveProperty("sessionId");
+      expect(input).not.toHaveProperty("matchStartsAt");
+      expect(recalculate).toHaveBeenCalledTimes(1);
+    });
+
+    it("세션을 옮기고 경기 시각을 바꾸면 같은 저장 호출로 넘기고 새 세션에 선수를 넣는다", async () => {
+      existing = buildExistingMatch({
+        session: {
+          id: "Ssession1",
+          name: "월요 정기운동",
+          date: now,
+          location: "야탑초등학교",
+        },
+        matchStartsAt: new Date(Date.now() - 3 * MATCH_EDIT_WINDOW_MS),
+      });
+      const matchStartsAt = "2026-07-13T09:30:00.000Z";
+
+      const response = await putMatch({
+        ...validBody,
+        sessionId: movedSession.id,
+        matchStartsAt,
+        expectedUpdatedAt: existing.updatedAt.toISOString(),
+      });
+
+      expect(response.status).toBe(200);
+      expect(findSessionById).toHaveBeenCalledWith(movedSession.id);
+      expect(addSessionParticipants).toHaveBeenCalledTimes(1);
+      expect(addSessionParticipants).toHaveBeenCalledWith(movedSession.id, [
+        requester.id,
+        partner.id,
+        opponentM.id,
+        opponentF.id,
+      ]);
+      expect(updateRecordedMatch).toHaveBeenCalledTimes(1);
+      const [, input] = updateRecordedMatch.mock.calls[0]!;
+      expect(input.sessionId).toBe(movedSession.id);
+      expect(input.matchStartsAt).toEqual(new Date(matchStartsAt));
+      expect(input.expectedUpdatedAt).toEqual(existing.updatedAt);
+      expect(recalculate).toHaveBeenCalledTimes(1);
+    });
+
+    it("sessionId null이면 세션에서 빼고 참여자는 건드리지 않는다", async () => {
+      existing = buildExistingMatch({
+        session: {
+          id: "Ssession1",
+          name: "월요 정기운동",
+          date: now,
+          location: "야탑초등학교",
+        },
+      });
+
+      const response = await putMatch({ ...validBody, sessionId: null });
+
+      expect(response.status).toBe(200);
+      const [, input] = updateRecordedMatch.mock.calls[0]!;
+      expect(input.sessionId).toBeNull();
+      expect(addSessionParticipants).not.toHaveBeenCalled();
+      expect(findSessionById).not.toHaveBeenCalled();
+    });
+
+    it("없는 세션으로 옮기면 400이고 저장하지 않는다", async () => {
+      const response = await putMatch({ ...validBody, sessionId: "Smissing" });
+
+      expect(response.status).toBe(400);
+      expect(response.body).toEqual({ error: "세션을 찾을 수 없어요." });
+      expect(addSessionParticipants).not.toHaveBeenCalled();
+      expect(updateRecordedMatch).not.toHaveBeenCalled();
+    });
+
+    it("경기 시각 형식이 틀리면 400이다", async () => {
+      const response = await putMatch({
+        ...validBody,
+        matchStartsAt: "not-a-date",
+      });
+
+      expect(response.status).toBe(400);
+      expect(updateRecordedMatch).not.toHaveBeenCalled();
+    });
+
+    it("경기에 이미 있던 비활성 선수는 그대로 둘 수 있지만 새로 넣을 수는 없다", async () => {
+      const inactive: Player = {
+        ...buildPlayer("player-inactive", "F"),
+        status: "inactive",
+      };
+      existing = buildExistingMatch({
+        matchStartsAt: new Date(Date.now() - 3 * MATCH_EDIT_WINDOW_MS),
+        teams: [
+          { id: "team-a", name: "Team A", players: [requester, inactive] },
+          { id: "team-b", name: "Team B", players: [opponentM, opponentF] },
+        ],
+      });
+      const keptBody = {
+        ...validBody,
+        teams: [
+          { playerIds: [requester.id, inactive.id] },
+          { playerIds: [opponentM.id, opponentF.id] },
+        ],
+      };
+
+      const kept = await putMatch(keptBody);
+
+      expect(kept.status).toBe(200);
+      const [, input] = updateRecordedMatch.mock.calls[0]!;
+      expect(input.teams[0].players.map((player) => player.id)).toEqual([
+        requester.id,
+        inactive.id,
+      ]);
+
+      existing = buildExistingMatch({
+        matchStartsAt: new Date(Date.now() - 3 * MATCH_EDIT_WINDOW_MS),
+      });
+      const added = await putMatch(keptBody);
+
+      expect(added.status).toBe(400);
+      expect(updateRecordedMatch).toHaveBeenCalledTimes(1);
+    });
+
+    it("expectedUpdatedAt이 서버 값과 다르면 409다", async () => {
+      existing = buildExistingMatch({
+        matchStartsAt: new Date(Date.now() - 3 * MATCH_EDIT_WINDOW_MS),
+      });
+
+      const response = await putMatch({
+        ...validBody,
+        matchStartsAt: "2026-07-13T09:30:00.000Z",
+        expectedUpdatedAt: new Date(now.getTime() - 60_000).toISOString(),
+      });
+
+      expect(response.status).toBe(409);
+      expect(updateRecordedMatch).not.toHaveBeenCalled();
+    });
+
+    it("그사이 다른 수정이 저장돼 저장소가 409를 내면 409다", async () => {
+      updateRecordedMatch.mockRejectedValue(
+        new MatchRepositoryError(MATCH_STALE_UPDATE_ERROR_MESSAGE, 409),
+      );
+
+      const response = await putMatch({
+        ...validBody,
+        sessionId: movedSession.id,
+      });
+
+      expect(response.status).toBe(409);
+      expect(recalculate).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("회원이 관리자 전용 필드를 보내면", () => {
+    it.each([
+      ["sessionId 문자열", { sessionId: "Ssession2" }],
+      ["sessionId null", { sessionId: null }],
+      ["matchStartsAt", { matchStartsAt: "2026-07-13T09:30:00.000Z" }],
+    ])("%s도 403이고 저장하지 않는다", async (_label, extra) => {
+      const response = await putMatch({ ...validBody, ...extra });
+
+      expect(response.status).toBe(403);
+      expect(response.body).toEqual({
+        error: "세션·경기 시각은 관리자만 바꿀 수 있어요.",
+      });
+      expect(updateRecordedMatch).not.toHaveBeenCalled();
+      expect(addSessionParticipants).not.toHaveBeenCalled();
     });
   });
 });

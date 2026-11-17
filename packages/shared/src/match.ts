@@ -236,7 +236,8 @@ export interface Match {
   updatedAt: Date;
   /**
    * 완료 시점에 게스트가 낀 경기면 true. 평점·평점 이력·업적·랭킹 경기 수·프로필 통계·lastPlayedAt에서 빠지고,
-   * 경기 목록·피드·기록 탭·세션 경기 목록에는 그대로 나온다. 게스트가 나중에 정회원이 돼도 바뀌지 않는다.
+   * 경기 목록·피드·기록 탭·세션 경기 목록에는 그대로 나온다. 한 번 true가 되면 게스트가 나중에 정회원이 돼도,
+   * 수정(회원·관리자)으로 참가자가 바뀌어도 유지되고, 수정으로 게스트가 새로 들어오면 true가 된다.
    */
   ratingExcluded: boolean;
 }
@@ -246,6 +247,21 @@ export const hasGuestPlayer = (
   teams: readonly { players: readonly Pick<Player, "isGuest">[] }[],
 ): boolean =>
   teams.some((team) => team.players.some((player) => player.isGuest));
+
+/**
+ * 경기 기록 수정(PUT /api/matches/:matchId) 뒤의 평점 미반영 여부.
+ * 처음 completed가 되면 수정 후 팀 구성(nextTeams)의 게스트 여부로 정하고,
+ * 이미 completed면 기존 true를 유지하며 수정 후 팀 구성에 게스트가 있으면 true다.
+ */
+export const resolveRatingExcludedAfterEdit = (
+  existing: Pick<Match, "status" | "ratingExcluded">,
+  nextTeams: readonly { players: readonly Pick<Player, "isGuest">[] }[],
+): boolean => {
+  if (existing.status !== "completed") {
+    return hasGuestPlayer(nextTeams);
+  }
+  return existing.ratingExcluded || hasGuestPlayer(nextTeams);
+};
 
 /** 경기 기록(POST /api/matches)·수정(PUT /api/matches/:matchId) 요청의 한 팀 */
 export interface RecordMatchTeamRequest {
@@ -264,10 +280,61 @@ export interface RecordMatchRequest {
   location: string;
   /** 단판 점수 1개. 동점 불가 */
   scores: MatchScore[];
-  /** POST /api/matches 전용. 회원 세션(오늘) 안에서 기록할 때 지정. 정기 세션은 시작 시각 규칙으로 자동 지정되므로 무시된다 */
-  sessionId?: string;
+  /**
+   * POST: 회원 세션(오늘) 안에서 기록할 때 지정(null은 생략과 같음). 정기 세션은 시작 시각 규칙으로 자동 지정되므로 무시된다.
+   * PUT: 관리자 전용. 문자열이면 그 세션으로 옮기고 null이면 세션에서 뺀다. 생략하면 그대로. 회원이 보내면 403
+   */
+  sessionId?: string | null;
+  /** PUT 관리자 전용. 경기 시각(ISO). 생략하면 그대로. 완료 경기면 completedAt도 같은 만큼 옮긴다. 회원이 보내면 403 */
+  matchStartsAt?: string;
   /** PUT /api/matches/:matchId 전용. 마지막으로 본 updatedAt(ISO). 서버 값과 다르면 409 */
   expectedUpdatedAt?: string;
+}
+
+/** GET /api/admin/match-deletion-logs 항목 */
+export interface AdminMatchDeletionLog {
+  id: string;
+  matchId: string;
+  deletedAt: Date;
+  deletedByPlayerId: string;
+  /** 지운 회원의 지금 아이디. 회원이 없어졌으면 null */
+  deletedByUsername: string | null;
+  deletedByAdmin: boolean;
+  /** 지운 시점의 경기 전체(스냅샷) */
+  match: Match;
+}
+
+/** GET /api/admin/match-deletion-logs 응답. 지운 시각 내림차순 */
+export interface AdminMatchDeletionLogsResponse {
+  logs: AdminMatchDeletionLog[];
+}
+
+/** POST /api/admin/matches/batch의 경기 한 개 */
+export interface AdminBatchMatchItemRequest {
+  name?: string;
+  type: MatchType;
+  teams: [RecordMatchTeamRequest, RecordMatchTeamRequest];
+  location: string;
+  courtName?: string;
+  /** 생략하면 지금 */
+  matchStartsAt?: string;
+  scores: MatchScore[];
+}
+
+/** POST /api/admin/matches/batch 요청 */
+export interface AdminBatchMatchRequest {
+  /** 기존 세션에 넣을 때. 선수들은 그 세션 참여자로 들어간다 */
+  sessionId?: string;
+  matches: AdminBatchMatchItemRequest[];
+}
+
+/** POST /api/admin/matches/batch 응답(201) */
+export interface AdminBatchMatchResponse {
+  matches: Match[];
+  createdCount: number;
+  completedMatchCount: number;
+  changedPlayerCount: number;
+  ratingChangeLogs: PlayerRatingChangeLog[];
 }
 
 /** POST /api/matches/start 요청. 세션과 상관없이 점수 없는 진행 중 경기를 시작한다 */
