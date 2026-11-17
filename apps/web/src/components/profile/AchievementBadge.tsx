@@ -1,8 +1,13 @@
 import React from "react";
-import type { AchievementDefinition } from "@pkpkdupr/shared/achievements";
+import {
+  isLowRatingAchievement,
+  type AchievementDefinition,
+} from "@pkpkdupr/shared/achievements";
 import { cx } from "@/components/ui/cx";
 
 const EARNED_COLOR = "var(--color-pk-primary)";
+// 낮은 평점 업적(심해 탐사·마리아나 해구)은 받은 배지를 짙은 남색으로 구분한다
+const EARNED_DEEP_COLOR = "var(--color-pk-deep)";
 const EARNED_ICON = "var(--color-white)";
 const UNEARNED_FILL = "var(--color-pk-neutral)";
 const UNEARNED_ICON = "var(--color-pk-quiet)";
@@ -28,7 +33,12 @@ type BadgeIconKind =
   | "fist"
   | "star"
   | "crown"
-  | "rising";
+  | "sunrise"
+  | "cloud"
+  | "balloon"
+  | "rocket"
+  | "submarine"
+  | "trench";
 
 /** 24 viewBox 선 아이콘. 글자는 아이콘 색(currentColor)으로 채운다 */
 const BADGE_ICON_PATHS: Record<BadgeIconKind, React.ReactNode> = {
@@ -136,16 +146,46 @@ const BADGE_ICON_PATHS: Record<BadgeIconKind, React.ReactNode> = {
       <path d="M5.5 20h13" />
     </>
   ),
-  // 오르는 꺾은선 그래프
-  rising: (
+  // 수평선 위 해돋이(물결 위 반쪽 해와 햇살)
+  sunrise: (
     <>
-      <path d="M4 17l5-5 3.5 3.5L20 8" />
-      <path d="M14.5 8H20v5.5" />
+      <path d="M3 18.5c1.5 0 1.5-1.2 3-1.2s1.5 1.2 3 1.2 1.5-1.2 3-1.2 1.5 1.2 3 1.2 1.5-1.2 3-1.2 1.5 1.2 3 1.2" />
+      <path d="M7 14a5 5 0 0 1 10 0" />
+      <path d="M12 4.5v2M5.6 7.6L7 9M18.4 7.6L17 9M3.5 14H5M19 14h1.5" />
     </>
   ),
+  cloud: (
+    <path d="M7.5 18.5h9a4 4 0 0 0 .6-7.95A5.5 5.5 0 0 0 6.6 10.6 4 4 0 0 0 7.5 18.5z" />
+  ),
+  // 열기구
+  balloon: (
+    <>
+      <path d="M12 3a6.5 6.5 0 0 0-6.5 6.5c0 3.4 3.3 5.6 4.5 7.5h4c1.2-1.9 4.5-4.1 4.5-7.5A6.5 6.5 0 0 0 12 3z" />
+      <path d="M12 3c-1.8 1.6-2.6 4-2.6 6.5S10.4 15 10 17M12 3c1.8 1.6 2.6 4 2.6 6.5S13.6 15 14 17" />
+      <path d="M10 17v2M14 17v2M9.8 19h4.4v2.2H9.8z" />
+    </>
+  ),
+  rocket: (
+    <>
+      <path d="M12 2.5c2.8 1.8 4.3 5 4.3 8.8L14.2 15H9.8l-2.1-3.7C7.7 7.5 9.2 4.3 12 2.5z" />
+      <circle cx="12" cy="9" r="1.6" />
+      <path d="M9.8 13.5l-3 3 .2 2.5 3-1.5M14.2 13.5l3 3-.2 2.5-3-1.5" />
+      <path d="M10.8 17.5L12 21l1.2-3.5" />
+    </>
+  ),
+  submarine: (
+    <>
+      <path d="M3.5 14a5 3.5 0 0 0 5 3.5h7a3.5 3.5 0 0 0 0-7h-7a5 3.5 0 0 0-5 3.5z" />
+      <path d="M9 10.5V8h4v2.5M11 8V5.5h2M20.5 12v4" />
+      <circle cx="9.5" cy="14" r="1" />
+      <circle cx="13.5" cy="14" r="1" />
+    </>
+  ),
+  // 해구 단면: 평평한 해저 가운데가 좁고 깊게 꺼진 선
+  trench: <path d="M2.5 6.5h3.5l1.5 2.5 3 11.5h3l3-11.5 1.5-2.5h3.5" />,
 };
 
-/** 특별·세션 분류는 업적마다 아이콘이 다르다 */
+/** 특별·세션·평점 분류는 업적마다 아이콘이 다르다 */
 const BADGE_ICON_BY_ID: Partial<Record<string, BadgeIconKind>> = {
   "perfect-win": "shield",
   "hard-won": "bandage",
@@ -161,6 +201,12 @@ const BADGE_ICON_BY_ID: Partial<Record<string, BadgeIconKind>> = {
   "unbeaten-session": "star",
   "dominator-1": "crown",
   "dominator-10": "crown",
+  "rating-3.0": "sunrise",
+  "rating-3.5": "cloud",
+  "rating-4.0": "balloon",
+  "rating-4.5": "rocket",
+  "rating-low-2.5": "submarine",
+  "rating-low-2.0": "trench",
 };
 
 const BADGE_ICON_BY_CATEGORY: Record<
@@ -170,7 +216,7 @@ const BADGE_ICON_BY_CATEGORY: Record<
   matches: "ball",
   wins: "trophy",
   streak: "flame",
-  rating: "rising",
+  rating: "sunrise",
   special: "shield",
   session: "calendar",
 };
@@ -190,13 +236,16 @@ export const AchievementBadge: React.FC<AchievementBadgeProps> = ({
   size = 48,
   className,
 }) => {
-  const hexColor = earned ? EARNED_COLOR : UNEARNED_FILL;
+  const isDeep = isLowRatingAchievement(achievement.id);
+  const earnedColor = isDeep ? EARNED_DEEP_COLOR : EARNED_COLOR;
+  const earnedTextClass = isDeep ? "text-pk-deep" : "text-pk-primary";
+  const hexColor = earned ? earnedColor : UNEARNED_FILL;
   const iconSize = Math.round(size * 0.46);
   const iconKind =
     BADGE_ICON_BY_ID[achievement.id] ??
     BADGE_ICON_BY_CATEGORY[achievement.category];
   const isLarge = size >= LARGE_BADGE_MIN_SIZE;
-  const tagBorder = earned ? EARNED_COLOR : UNEARNED_TAG_BORDER;
+  const tagBorder = earned ? earnedColor : UNEARNED_TAG_BORDER;
 
   return (
     <span
@@ -234,7 +283,7 @@ export const AchievementBadge: React.FC<AchievementBadgeProps> = ({
             isLarge
               ? "-bottom-[9px] h-7 min-w-9 px-[9px] text-pk-17"
               : "-bottom-[5px] h-[17px] min-w-5 px-[5px] text-pk-12",
-            earned ? "text-pk-primary" : "text-pk-muted",
+            earned ? earnedTextClass : "text-pk-muted",
           )}
           style={{
             boxShadow: `inset 0 0 0 ${isLarge ? 2.5 : 1.5}px ${tagBorder}`,

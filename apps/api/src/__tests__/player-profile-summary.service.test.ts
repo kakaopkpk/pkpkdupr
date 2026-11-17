@@ -84,7 +84,7 @@ describe("buildPlayerProfileSummary", () => {
     ]);
   });
 
-  it("업적 38개 진행 상태를 정의 순서로 넣고 진행 중 경기는 세지 않는다", () => {
+  it("업적 41개 진행 상태를 정의 순서로 넣고 진행 중 경기는 세지 않는다", () => {
     const completed = makeMatch({ id: "Mcomplet" });
     const inProgress = makeMatch({
       id: "Minprogr",
@@ -101,7 +101,7 @@ describe("buildPlayerProfileSummary", () => {
       now,
     );
 
-    expect(achievements).toHaveLength(38);
+    expect(achievements).toHaveLength(41);
     expect(achievements[0]).toEqual({
       id: "matches-1",
       earned: true,
@@ -146,8 +146,18 @@ describe("buildPlayerProfileSummary", () => {
       ],
     };
 
+    // 평점 업적은 복식 10경기부터 센다. 앞선 9경기는 평점 로그가 없다
+    const earlierDoubles = Array.from({ length: 9 }, (_, index) =>
+      makeMatch({
+        id: `Mearly0${index + 1}`,
+        type: "mixed-doubles",
+        teams: doublesMatch.teams,
+        completedAt: new Date(now.getTime() - (9 - index) * 60_000),
+      }),
+    );
+
     const { achievements } = buildPlayerProfileSummary(
-      [doublesMatch],
+      [...earlierDoubles, doublesMatch],
       me.id,
       emptyHistory,
       me.id,
@@ -161,6 +171,7 @@ describe("buildPlayerProfileSummary", () => {
       earnedMatchId: "Mdouble1",
       current: 3.51,
       target: 3.5,
+      ratedDoublesMatches: 10,
     });
     expect(achievements.find((item) => item.id === "rating-4.0")).toMatchObject(
       { earned: false, current: 3.51 },

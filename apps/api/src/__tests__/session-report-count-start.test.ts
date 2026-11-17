@@ -40,18 +40,22 @@ describe("세션 리포트 업적과 업적 기준 시각", () => {
     const players = ["Palice01", "Pbob0001", "Pcarol01", "Pdave001"].map(
       (id, index) => makePlayer(id, `user${index}`),
     );
-    const match: RankingMatch = {
-      id: "Mmatch01",
-      type: "unrestricted-doubles",
-      sessionId: "Ssession1",
-      matchStartsAt: completedAt,
-      completedAt,
-      teamPlayerIds: [
-        ["Palice01", "Pbob0001"],
-        ["Pcarol01", "Pdave001"],
-      ],
-      scores: [{ scoreA: 11, scoreB: 5 }],
-    };
+    // 평점 업적은 복식 10경기부터 센다. 마지막(10번째) 경기 직후 평점이 기준 이상이다
+    const matches: RankingMatch[] = Array.from({ length: 10 }, (_, index) => {
+      const at = new Date(completedAt.getTime() - (9 - index) * 60_000);
+      return {
+        id: `Mmatch${String(index + 1).padStart(2, "0")}`,
+        type: "unrestricted-doubles",
+        sessionId: "Ssession1",
+        matchStartsAt: at,
+        completedAt: at,
+        teamPlayerIds: [
+          ["Palice01", "Pbob0001"],
+          ["Pcarol01", "Pdave001"],
+        ],
+        scores: [{ scoreA: 11, scoreB: 5 }],
+      };
+    });
     const session: RankingSession = {
       id: "Ssession1",
       name: "목요 정기운동",
@@ -66,8 +70,8 @@ describe("세션 리포트 업적과 업적 기준 시각", () => {
     const report = buildSessionReport({
       context: createRankingContext(
         players,
-        [makeLog("Palice01", "Mmatch01", completedAt, 3.7)],
-        [match],
+        [makeLog("Palice01", "Mmatch10", completedAt, 3.7)],
+        matches,
       ),
       session,
       dominations: new Map(),
