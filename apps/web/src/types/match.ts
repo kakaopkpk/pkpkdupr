@@ -29,6 +29,8 @@ export type MatchInfo = Omit<
   ratingChanges?: PlayerRatingChangeLog[];
   /** 기록·수정 응답에만 있다. 이 저장으로 참가자들이 새로 받은 업적 */
   newAchievements?: EarnedAchievementInfo[];
+  /** 기록·수정 응답에만 있다. 새 업적을 받은 참가자별 지금 업적 점수 합 */
+  achievementPoints?: Record<string, number>;
 };
 
 /** 게스트가 낀 경기(ratingExcluded)의 평점 변화 자리에 보이는 한 줄 */

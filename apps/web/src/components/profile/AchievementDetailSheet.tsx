@@ -19,7 +19,10 @@ import {
   formatAchievementProgress,
   getAchievementDefinition,
 } from "@/lib/achievements";
-import { formatKstLongDate } from "@/lib/format";
+import {
+  formatAchievementPointsLabel,
+  formatKstLongDate,
+} from "@/lib/format";
 import { fetchPlayerProfileSummary } from "@/lib/playerProfile";
 
 const DEPTH_ID = "global-achievement-detail";
@@ -175,11 +178,15 @@ export default function AchievementDetailSheet({
             </DetailRow>
           ) : null}
           <DetailRow label="점수">
-            {definition.points > 0 ? (
-              <span className="text-pk-primary">{definition.points}점</span>
-            ) : (
-              <span className="font-medium text-pk-muted">점수 없음</span>
-            )}
+            <span
+              className={
+                definition.points > 0
+                  ? "text-pk-primary"
+                  : "font-medium text-pk-muted"
+              }
+            >
+              {formatAchievementPointsLabel(definition.points)}
+            </span>
           </DetailRow>
           <DetailRow label="받은 회원">
             {isLoading ? (

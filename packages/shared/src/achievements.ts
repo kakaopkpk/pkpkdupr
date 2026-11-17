@@ -586,7 +586,7 @@ export const ACHIEVEMENT_MAX_POINTS = ACHIEVEMENTS.reduce(
 export const getAchievementPoints = (achievementId: string) =>
   ACHIEVEMENT_POINTS_BY_ID.get(achievementId) ?? 0;
 
-/** 받은 업적 점수 합. 저장하지 않고 받은 업적으로 계산하므로, 업적을 잃으면 점수도 빠진다 */
+/** 받은 업적 점수 합(진행 상태 목록). 저장하지 않고 받은 업적으로 계산하므로, 업적을 잃으면 점수도 빠진다 */
 export const sumAchievementPoints = (
   achievements: readonly { id: string; earned: boolean }[],
 ) =>
@@ -594,6 +594,12 @@ export const sumAchievementPoints = (
     (sum, item) => (item.earned ? sum + getAchievementPoints(item.id) : sum),
     0,
   );
+
+/** 받은 업적 점수 합(받은 업적 목록) */
+export const sumEarnedAchievementPoints = (
+  earned: readonly { achievementId: string }[],
+) =>
+  earned.reduce((sum, item) => sum + getAchievementPoints(item.achievementId), 0);
 
 const ACHIEVEMENT_METRIC_BY_ID = new Map<string, AchievementMetric>(
   ACHIEVEMENT_TABLE.map((row) => [row.definition.id, row.metric]),

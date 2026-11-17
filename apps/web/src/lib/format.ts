@@ -72,3 +72,11 @@ export const formatElapsed = (startsAt: Date | string, now: Date) => {
   );
   return elapsedMinutes <= 0 ? "방금 시작" : `${elapsedMinutes}분째`;
 };
+
+/** 업적 점수(천 단위 쉼표) */
+export const formatAchievementPoints = (value: number) =>
+  Math.round(value).toLocaleString("ko-KR");
+
+/** 업적 하나의 점수 문구. 0점(낮은 평점 업적)은 "점수 없음" */
+export const formatAchievementPointsLabel = (points: number) =>
+  points > 0 ? `${points}점` : "점수 없음";

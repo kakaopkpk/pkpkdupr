@@ -4,6 +4,7 @@ import {
   computeAchievements,
   getAchievementPoints,
   isEarnedByCountedMatch,
+  sumEarnedAchievementPoints,
   toEarnedAchievements,
   type AchievementMatch,
   type EarnedAchievement,
@@ -832,19 +833,19 @@ export const buildAchievementRankingResponse = (
   const scored = [...context.playersById.values()]
     .filter(isRankablePlayer)
     .map((player) => {
-      let points = 0;
-      let reachedAtMs: number | null = null;
-      for (const item of findPlayerEarnedAchievements(
+      const earned = findPlayerEarnedAchievements(
         matches,
         dominations,
         player.id,
-      )) {
-        const itemPoints = getAchievementPoints(item.achievementId);
-        if (itemPoints === 0) continue;
-        points += itemPoints;
-        reachedAtMs = Math.max(reachedAtMs ?? 0, item.earnedAt.getTime());
-      }
-      return { player, points, reachedAtMs };
+      ).filter((item) => getAchievementPoints(item.achievementId) > 0);
+      return {
+        player,
+        points: sumEarnedAchievementPoints(earned),
+        reachedAtMs:
+          earned.length > 0
+            ? Math.max(...earned.map((item) => item.earnedAt.getTime()))
+            : null,
+      };
     })
     .sort(
       (left, right) =>

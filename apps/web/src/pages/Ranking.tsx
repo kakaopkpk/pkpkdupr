@@ -32,6 +32,7 @@ import { cx } from "@/components/ui/cx";
 import { useAppNavigation } from "@/context/AppNavigationContext";
 import { useTabNavigation } from "@/context/TabNavigationContext";
 import { getUserErrorMessage } from "@/lib/errors";
+import { formatAchievementPoints } from "@/lib/format";
 import { fetchRankings } from "@/lib/rankings";
 import { formatRating } from "@/utils/dupr";
 
@@ -126,7 +127,12 @@ const AchievementRankingRow: React.FC<{
     <PlayerAvatar player={entry.player} size={32} />
     <PlayerNameCell player={entry.player} />
     <span className="text-pk-15 leading-none font-extrabold tabular-nums">
-      <CountUpNumber value={entry.points} {...getRowCountUp(index)} />점
+      <CountUpNumber
+        value={entry.points}
+        format={formatAchievementPoints}
+        {...getRowCountUp(index)}
+      />
+      점
     </span>
   </button>
 );

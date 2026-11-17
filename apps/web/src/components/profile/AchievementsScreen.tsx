@@ -8,7 +8,6 @@ import {
 } from "@pkpkdupr/shared/achievements";
 import PushScreen from "@/components/PushScreen";
 import { AchievementBadge } from "@/components/profile/AchievementBadge";
-import { formatAchievementPoints } from "@/components/profile/AchievementPointsSummary";
 import { Card } from "@/components/ui/Card";
 import { COUNT_UP, CountUpNumber } from "@/components/ui/CountUpNumber";
 import { SectionLabel } from "@/components/ui/Section";
@@ -24,11 +23,28 @@ import {
   formatAchievementProgress,
   getAchievementProgressRatio,
 } from "@/lib/achievements";
-import { formatKstShortDate } from "@/lib/format";
+import {
+  formatAchievementPoints,
+  formatAchievementPointsLabel,
+  formatKstShortDate,
+} from "@/lib/format";
 
-const CATEGORY_ORDER = Object.keys(
-  ACHIEVEMENT_CATEGORY_LABEL,
-) as AchievementCategory[];
+/** 분류별 업적 정의와 분류 만점(ACHIEVEMENT_CATEGORY_LABEL 순서) */
+const CATEGORY_SECTIONS = (
+  Object.keys(ACHIEVEMENT_CATEGORY_LABEL) as AchievementCategory[]
+).map((category) => {
+  const definitions = ACHIEVEMENTS.filter(
+    (definition) => definition.category === category,
+  );
+  return {
+    category,
+    definitions,
+    maxPoints: definitions.reduce(
+      (sum, definition) => sum + definition.points,
+      0,
+    ),
+  };
+});
 
 const AchievementRow: React.FC<{
   definition: AchievementDefinition;
@@ -65,7 +81,9 @@ const AchievementRow: React.FC<{
               +{definition.points}
             </span>
           ) : (
-            <span className="text-pk-13 font-bold text-pk-muted">점수 없음</span>
+            <span className="text-pk-13 font-bold text-pk-muted">
+              {formatAchievementPointsLabel(0)}
+            </span>
           )}
           <span className="text-pk-13 text-pk-sub">
             {formatKstShortDate(progress.earnedAt)}
@@ -74,7 +92,7 @@ const AchievementRow: React.FC<{
       ) : (
         <span className="flex shrink-0 flex-col items-end gap-1">
           <span className="text-pk-13 font-bold text-pk-muted tabular-nums">
-            {definition.points > 0 ? `${definition.points}점` : "점수 없음"}
+            {formatAchievementPointsLabel(definition.points)}
           </span>
           <span className="flex items-center gap-1.5">
             <span className="text-pk-12 text-pk-sub tabular-nums">
@@ -179,27 +197,20 @@ export default function AchievementsScreen({
             받음
           </p>
         </Card>
-        {CATEGORY_ORDER.map((category) => {
-          const definitions = ACHIEVEMENTS.filter(
-            (definition) => definition.category === category,
-          );
-          const categoryMaxPoints = definitions.reduce(
-            (sum, definition) => sum + definition.points,
-            0,
-          );
-          const categoryPoints = definitions.reduce(
-            (sum, definition) =>
-              progressById.get(definition.id)?.earned
-                ? sum + definition.points
-                : sum,
-            0,
+        {CATEGORY_SECTIONS.map(({ category, definitions, maxPoints }) => {
+          const categoryPoints = sumAchievementPoints(
+            definitions.map((definition) => ({
+              id: definition.id,
+              earned: !!progressById.get(definition.id)?.earned,
+            })),
           );
           return (
             <section key={category} className="flex flex-col gap-1.5">
               <SectionLabel
                 right={
                   <span className="text-pk-13 font-semibold text-pk-muted tabular-nums">
-                    {categoryPoints} / {categoryMaxPoints}점
+                    {formatAchievementPoints(categoryPoints)} /{" "}
+                    {formatAchievementPoints(maxPoints)}점
                   </span>
                 }
               >

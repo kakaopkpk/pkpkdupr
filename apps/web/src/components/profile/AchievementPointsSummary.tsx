@@ -2,19 +2,14 @@ import React from "react";
 import { ACHIEVEMENT_MAX_POINTS } from "@pkpkdupr/shared/achievements";
 import { COUNT_UP, CountUpNumber } from "@/components/ui/CountUpNumber";
 import { cx } from "@/components/ui/cx";
-
-export const formatAchievementPoints = (value: number) =>
-  Math.round(value).toLocaleString("ko-KR");
+import { formatAchievementPoints } from "@/lib/format";
 
 /** 업적 카드 맨 위 "업적 점수" 줄: 점수(0부터 셈) / 만점점과 만점 대비 막대 */
 export const AchievementPointsSummary: React.FC<{
   points: number;
   className?: string;
 }> = ({ points, className }) => {
-  const ratio =
-    ACHIEVEMENT_MAX_POINTS > 0
-      ? Math.min(Math.max(points / ACHIEVEMENT_MAX_POINTS, 0), 1)
-      : 0;
+  const ratio = Math.min(points / ACHIEVEMENT_MAX_POINTS, 1);
   return (
     <div className={cx("flex flex-col gap-2", className)}>
       <div className="flex items-baseline justify-between gap-2">

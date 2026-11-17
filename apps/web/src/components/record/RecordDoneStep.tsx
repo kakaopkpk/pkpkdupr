@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useMemo, useState } from "react";
 import {
   getMatchTopLevelType,
   type MatchTopLevelType,
@@ -23,7 +23,6 @@ import { useCountUp } from "@/hooks/useCountUp";
 import { usePlayOnShow } from "@/hooks/usePlayOnShow";
 import { prefersReducedMotion } from "@/hooks/useSheetDrag";
 import {
-  fetchUnseenAchievements,
   markAchievementsSeen,
   pickPlayerEarnedAchievements,
 } from "@/lib/achievements";
@@ -95,22 +94,7 @@ export default function RecordDoneStep({
     () => myNewAchievementItems.map(({ definition }) => definition),
     [myNewAchievementItems],
   );
-  const [celebrationTotalPoints, setCelebrationTotalPoints] = useState<
-    number | null
-  >(null);
-  // 기록 응답에는 업적 점수 합이 없어, 저장 뒤 합계를 미확인 업적 조회로 받는다. 실패하면 "+N점"만 보인다
-  useEffect(() => {
-    if (myNewAchievements.length === 0) return undefined;
-    let isCancelled = false;
-    fetchUnseenAchievements()
-      .then(({ points }) => {
-        if (!isCancelled) setCelebrationTotalPoints(points);
-      })
-      .catch(() => {});
-    return () => {
-      isCancelled = true;
-    };
-  }, [myNewAchievements]);
+
 
   return (
     <>
@@ -254,7 +238,7 @@ export default function RecordDoneStep({
       {viewer && myNewAchievements.length > 0 && isCelebrationOpen ? (
         <AchievementCelebration
           achievements={myNewAchievements}
-          totalPoints={celebrationTotalPoints}
+          totalPoints={viewer ? match.achievementPoints?.[viewer.id] : null}
           // 움직임 줄이기면 평점 세기가 없으므로 바로 띄운다
           delayMs={prefersReducedMotion() ? 0 : CELEBRATION_DELAY_MS}
           onClose={() => {

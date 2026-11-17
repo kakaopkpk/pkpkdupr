@@ -2,12 +2,12 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type { AchievementDefinition } from "@pkpkdupr/shared/achievements";
 import { AchievementBadge } from "@/components/profile/AchievementBadge";
-import { formatAchievementPoints } from "@/components/profile/AchievementPointsSummary";
 import { PkButton } from "@/components/ui/Button";
 import { CountUpNumber } from "@/components/ui/CountUpNumber";
 import { cx } from "@/components/ui/cx";
 import { GLOBAL_LAYER } from "@/context/AppNavigationContext";
 import { getCelebrationPointSteps } from "@/lib/achievements";
+import { formatAchievementPoints } from "@/lib/format";
 import { prefersReducedMotion } from "@/hooks/useSheetDrag";
 import { createConfettiEngine, type ConfettiEngine } from "./confettiEngine";
 

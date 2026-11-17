@@ -7,6 +7,12 @@ import {
   type PlayerEarnedAchievement,
 } from "@/lib/achievements";
 
+interface UnseenState {
+  items: PlayerEarnedAchievement[];
+  /** 지금 업적 점수 합. 응답에 없으면 null */
+  points: number | null;
+}
+
 export interface UnseenAchievementCelebrationProps {
   playerId: string | null;
   /** 전역 화면·바텀시트·메뉴가 하나도 열려 있지 않을 때만 true. 그동안만 조회하고 띄운다 */
@@ -26,8 +32,7 @@ export default function UnseenAchievementCelebration({
   isActive,
   dataVersion,
 }: UnseenAchievementCelebrationProps): React.ReactElement | null {
-  const [unseen, setUnseen] = useState<PlayerEarnedAchievement[] | null>(null);
-  const [totalPoints, setTotalPoints] = useState<number | null>(null);
+  const [unseen, setUnseen] = useState<UnseenState | null>(null);
   const [resumeCount, setResumeCount] = useState(0);
   const isShowing = unseen !== null;
 
@@ -55,10 +60,7 @@ export default function UnseenAchievementCelebration({
       .then(({ achievements, points }) => {
         if (isCancelled) return;
         const picked = pickPlayerEarnedAchievements(achievements, playerId);
-        if (picked.length > 0) {
-          setUnseen(picked);
-          setTotalPoints(points);
-        }
+        if (picked.length > 0) setUnseen({ items: picked, points });
       })
       // 조회 실패는 알리지 않는다. 다음 조회 때 다시 시도한다
       .catch(() => {});
@@ -71,14 +73,14 @@ export default function UnseenAchievementCelebration({
 
   return (
     <AchievementCelebration
-      achievements={unseen.map(({ definition }) => definition)}
-      totalPoints={totalPoints}
+      achievements={unseen.items.map(({ definition }) => definition)}
+      totalPoints={unseen.points}
       delayMs={0}
       onClose={() => {
         // 확인 처리가 실패하면 다음 조회 때 다시 뜬다
-        void markAchievementsSeen(unseen.map(({ item }) => item)).catch(
-          () => {},
-        );
+        void markAchievementsSeen(
+          unseen.items.map(({ item }) => item),
+        ).catch(() => {});
         setUnseen(null);
       }}
     />

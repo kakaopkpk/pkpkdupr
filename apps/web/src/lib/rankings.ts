@@ -48,9 +48,6 @@ export function fetchRankings(
   category: MatchTopLevelType,
 ): Promise<RankingResponse>;
 export function fetchRankings(
-  category: "achievements",
-): Promise<AchievementRankingResponse>;
-export function fetchRankings(
   category: RankingCategory,
 ): Promise<RankingResponse | AchievementRankingResponse>;
 export function fetchRankings(category: RankingCategory) {
