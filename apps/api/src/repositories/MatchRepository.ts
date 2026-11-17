@@ -1,4 +1,5 @@
 import type {
+  AdminMatchDeletionLog,
   Match,
   MatchFeedItem,
   MatchScore,
@@ -657,8 +658,8 @@ export class MatchRepository {
   }
 
   /**
-   * 참가자의 경기 기록 수정. 그사이 지워졌으면 404, expectedUpdatedAt이 저장된 값과 다르거나
-   * cancelled 등 수정할 수 없는 상태로 바뀌었으면 409로 응답한다.
+   * 경기 기록 수정(관리자의 세션·시작 시각 정정 포함). 그사이 지워졌으면 404, expectedUpdatedAt이 저장된 값과 다르거나
+   * cancelled 등 수정할 수 없는 상태로 바뀌었으면 409, 옮길 세션이 없으면 400으로 응답한다.
    */
   async updateRecordedMatch(
     matchId: string,
@@ -677,6 +678,21 @@ export class MatchRepository {
     );
 
     return hydrateMatch(updated);
+  }
+
+  /** 경기 삭제 감사 로그. 지운 시각 내림차순이고 match는 지운 시점의 경기 스냅샷이다 */
+  async findDeletionLogs(): Promise<
+    Array<Omit<AdminMatchDeletionLog, "deletedByUsername">>
+  > {
+    const logs = await this.run(() => db.matchDeletionLogs.findAll(), 500);
+    return logs.map((log) => ({
+      id: log.id,
+      matchId: log.matchId,
+      deletedAt: new Date(log.deletedAt),
+      deletedByPlayerId: log.deletedByPlayerId,
+      deletedByAdmin: log.deletedByAdmin,
+      match: hydrateMatch(log.matchSnapshot),
+    }));
   }
 
   /**

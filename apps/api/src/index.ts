@@ -24,6 +24,9 @@ import {
   type ManagedMatchSession,
   type MatchType,
   validateMatchScores,
+  type AdminBatchMatchRequest,
+  type AdminBatchMatchResponse,
+  type AdminMatchDeletionLogsResponse,
 } from "@pkpkdupr/shared/match";
 import {
   addKstDays,
@@ -227,17 +230,9 @@ type MatchSessionRequest = {
   location?: string;
 };
 
-type AdminBatchMatchRequest = {
+/** 관리자 일괄 등록 요청 본문. 계약(AdminBatchMatchRequest) 밖의 옛 `session`(새 세션 이름·날짜·장소) 입력도 계속 받는다 */
+type AdminBatchMatchPayload = Partial<AdminBatchMatchRequest> & {
   session?: MatchSessionRequest;
-  matches?: Array<{
-    name?: string;
-    type?: MatchType;
-    teams?: [MatchTeamRequest, MatchTeamRequest];
-    location?: string;
-    courtName?: string;
-    matchStartsAt?: string;
-    scores?: MatchScore[];
-  }>;
 };
 
 type AdminScheduledMatchRequest = {
@@ -541,10 +536,12 @@ class MatchRecordRequestError extends Error {
 /**
  * 경기 기록·수정 요청(RecordMatchRequest)을 검증해 저장할 값으로 바꾼다.
  * 요청자는 active여야 한다. 팀 구성에 본인이 없어도 된다.
+ * keptPlayers는 active가 아니어도 팀에 둘 수 있는 선수다(관리자 정정에서 경기에 이미 있던 선수).
  */
 const prepareRecordedMatch = async (
   body: Partial<RecordMatchRequest> | undefined,
   requesterPlayerId: string,
+  keptPlayers: Player[] = [],
 ) => {
   const { name, type, teams, location, scores } = body ?? {};
   if (type != null && !isMatchType(type)) {
@@ -565,6 +562,7 @@ const prepareRecordedMatch = async (
     type,
     teams as [MatchTeamRequest, MatchTeamRequest],
     requesterPlayerId,
+    keptPlayers,
   );
 
   return {
@@ -578,12 +576,13 @@ const prepareRecordedMatch = async (
 
 /**
  * 경기 기록·시작 요청의 팀 구성을 검증한다. 요청자는 active여야 하고 팀에 없어도 된다.
- * 선수는 active 회원이어야 하며, type을 생략하면 팀 구성으로 추론한다.
+ * 선수는 active 회원(게스트 포함)이거나 keptPlayers여야 하며, type을 생략하면 팀 구성으로 추론한다.
  */
 const prepareMatchLineup = async (
   type: MatchType | undefined,
   requestedTeams: [MatchTeamRequest, MatchTeamRequest],
   requesterPlayerId: string,
+  keptPlayers: Player[] = [],
 ) => {
   const requester = await authService.getPlayerById(requesterPlayerId);
   if (!requester || requester.status !== "active") {
@@ -592,7 +591,10 @@ const prepareMatchLineup = async (
 
   const publicPlayers = await authService.getPublicPlayers();
   const playersById = new Map<string, Player>(
-    [requester, ...publicPlayers].map((player) => [player.id, player]),
+    [...keptPlayers, requester, ...publicPlayers].map((player) => [
+      player.id,
+      player,
+    ]),
   );
   normalizeRequestedTeamPlayerIds(requestedTeams);
   const matchTeams = buildMatchTeamsFromRequests(requestedTeams, playersById);
@@ -623,6 +625,53 @@ const parseRequestedSessionId = (value: unknown): string | undefined => {
     throw new MatchRecordRequestError("유효한 세션 ID가 필요합니다.", 400);
   }
   return value.trim() || undefined;
+};
+
+const ADMIN_ONLY_MATCH_EDIT_FIELDS_MESSAGE =
+  "세션·경기 시각은 관리자만 바꿀 수 있어요.";
+const MATCH_SESSION_NOT_FOUND_MESSAGE = "세션을 찾을 수 없어요.";
+
+/**
+ * 경기 수정(PUT /api/matches/:matchId) 본문의 관리자 전용 필드(sessionId·matchStartsAt)를 읽는다.
+ * 관리자가 아닌 회원이 둘 중 하나라도 넣으면 값이 null이어도 403이다. 생략한 필드는 결과에 키가 없다.
+ */
+const parseAdminMatchEditFields = (
+  body: Partial<RecordMatchRequest> | undefined,
+  isAdmin: boolean,
+): { sessionId?: string | null; matchStartsAt?: Date } => {
+  if (!body || typeof body !== "object") {
+    return {};
+  }
+  const hasSessionId = Object.prototype.hasOwnProperty.call(body, "sessionId");
+  const hasMatchStartsAt = Object.prototype.hasOwnProperty.call(
+    body,
+    "matchStartsAt",
+  );
+  if (!hasSessionId && !hasMatchStartsAt) {
+    return {};
+  }
+  if (!isAdmin) {
+    throw new MatchRecordRequestError(ADMIN_ONLY_MATCH_EDIT_FIELDS_MESSAGE, 403);
+  }
+
+  const fields: { sessionId?: string | null; matchStartsAt?: Date } = {};
+  if (hasSessionId) {
+    if (body.sessionId !== null && typeof body.sessionId !== "string") {
+      throw new MatchRecordRequestError("유효한 세션 ID가 필요합니다.", 400);
+    }
+    fields.sessionId = body.sessionId;
+  }
+  if (hasMatchStartsAt) {
+    const matchStartsAt =
+      typeof body.matchStartsAt === "string" && body.matchStartsAt.trim()
+        ? new Date(body.matchStartsAt)
+        : null;
+    if (!matchStartsAt || Number.isNaN(matchStartsAt.getTime())) {
+      throw new MatchRecordRequestError("유효한 경기 시각이 필요해요.", 400);
+    }
+    fields.matchStartsAt = matchStartsAt;
+  }
+  return fields;
 };
 
 /**
@@ -2156,13 +2205,38 @@ app.post("/api/admin/matches/batch", requireAdmin, async (req, res) => {
       return;
     }
 
-    const { matches: payloadMatches, session: requestedSession } =
-      req.body as AdminBatchMatchRequest;
+    const {
+      matches: payloadMatches,
+      sessionId: requestedSessionId,
+      session: requestedSession,
+    } = (req.body ?? {}) as AdminBatchMatchPayload;
     if (!Array.isArray(payloadMatches) || payloadMatches.length === 0) {
       return res.status(400).json({ error: "한 개 이상의 경기가 필요합니다." });
     }
 
-    const commonSession = normalizeMatchSession(requestedSession);
+    let commonSession: Session | undefined;
+    if (requestedSessionId != null) {
+      if (requestedSession != null) {
+        return res.status(400).json({
+          error: "기존 세션(sessionId)과 새 세션 정보(session)를 함께 보낼 수 없어요.",
+        });
+      }
+      const existingSession =
+        typeof requestedSessionId === "string"
+          ? await matchRepository.findSessionById(requestedSessionId)
+          : undefined;
+      if (!existingSession) {
+        return res.status(400).json({ error: MATCH_SESSION_NOT_FOUND_MESSAGE });
+      }
+      commonSession = {
+        id: existingSession.id,
+        name: existingSession.name,
+        date: existingSession.date,
+        location: existingSession.location,
+      };
+    } else {
+      commonSession = normalizeMatchSession(requestedSession);
+    }
 
     const createdBy = await authService.getPlayerById(decoded.playerId);
     if (!createdBy || createdBy.status !== "active") {
@@ -2249,19 +2323,27 @@ app.post("/api/admin/matches/batch", requireAdmin, async (req, res) => {
       };
     });
 
+    if (requestedSessionId != null && commonSession) {
+      // 경기 저장 전에 참여자를 넣어, 저장된 세션 경기의 선수는 항상 참여자이게 한다.
+      await matchRepository.addSessionParticipants(
+        commonSession.id,
+        matchesToCreate.flatMap((match) => getTeamPlayerIds(match.teams)),
+      );
+    }
     const createdMatches = commonSession
       ? await matchRepository.createCompletedBatch(matchesToCreate)
       : await Promise.all(matchesToCreate.map((match) => matchRepository.create(match)));
     const ratingResult = await authService.applyMatchResultsToRatings(createdMatches);
     const { ratingChangeLogs, changedPlayerCount } = ratingResult;
 
-    res.status(201).json({
+    const response: AdminBatchMatchResponse = {
       matches: createdMatches,
       createdCount: createdMatches.length,
       completedMatchCount: createdMatches.length,
       changedPlayerCount,
       ratingChangeLogs,
-    });
+    };
+    res.status(201).json(response);
   } catch (err) {
     res.status(400).json({ error: (err as Error).message });
   }
@@ -2275,6 +2357,31 @@ app.get("/api/admin/matches", requireAdmin, async (_req, res) => {
     res.status(500).json({ error: (err as Error).message });
   }
 });
+
+app.get(
+  "/api/admin/match-deletion-logs",
+  requireAdmin,
+  async (_req, res) => {
+    try {
+      const [logs, allPlayers] = await Promise.all([
+        matchRepository.findDeletionLogs(),
+        authService.getAllPlayers(),
+      ]);
+      const usernameById = new Map(
+        allPlayers.map((player) => [player.id, player.username]),
+      );
+      const response: AdminMatchDeletionLogsResponse = {
+        logs: logs.map((log) => ({
+          ...log,
+          deletedByUsername: usernameById.get(log.deletedByPlayerId) ?? null,
+        })),
+      };
+      res.json(response);
+    } catch (err) {
+      res.status(500).json({ error: (err as Error).message });
+    }
+  },
+);
 
 app.get(
   "/api/admin/diagnostics/timestamp-units",
@@ -2306,6 +2413,13 @@ app.patch("/api/admin/matches/bulk-metadata", requireAdmin, async (req, res) => 
       const match = await matchRepository.updateMetadata(matchId, update);
       if (!match) {
         return res.status(404).json({ error: `매치를 찾을 수 없습니다: ${matchId}` });
+      }
+      if (typeof update.sessionId === "string") {
+        // 세션 경기의 선수는 세션 참여자다. 연결 해제(null)는 참여자를 그대로 둔다.
+        await matchRepository.addSessionParticipants(
+          update.sessionId,
+          getTeamPlayerIds(match.teams),
+        );
       }
       matches.push(match);
     }
@@ -2571,6 +2685,7 @@ app.put("/api/matches/:matchId", async (req, res) => {
   try {
     const body = req.body as Partial<RecordMatchRequest> | undefined;
     const expectedUpdatedAt = parseExpectedUpdatedAt(body?.expectedUpdatedAt);
+    const adminEdit = parseAdminMatchEditFields(body, decoded.isAdmin);
     const now = new Date();
     await matchRepository.cleanupExpired(now);
     const existing = await matchRepository.findById(matchId);
@@ -2584,8 +2699,12 @@ app.put("/api/matches/:matchId", async (req, res) => {
     ) {
       return res.status(409).json({ error: MATCH_STALE_UPDATE_ERROR_MESSAGE });
     }
-    // 참가자·생성자·관리자 여부와 무관하게 활성 회원이면 누구나 고칠 수 있다(세션 경기 포함).
-    if (!isWithinMatchEditWindow(existing.matchStartsAt, now)) {
+    // 참가자·생성자 여부와 무관하게 활성 회원이면 누구나 고칠 수 있다(세션 경기 포함).
+    // 관리자는 24시간이 지난 경기도 정정할 수 있다.
+    if (
+      !decoded.isAdmin &&
+      !isWithinMatchEditWindow(existing.matchStartsAt, now)
+    ) {
       return res.status(403).json({
         error:
           "경기 시작 후 24시간이 지나 수정할 수 없습니다. 관리자에게 요청해 주세요.",
@@ -2597,11 +2716,28 @@ app.put("/api/matches/:matchId", async (req, res) => {
         .json({ error: "취소된 경기는 기록을 수정할 수 없습니다." });
     }
 
-    const prepared = await prepareRecordedMatch(body, decoded.playerId);
-    if (existing.session) {
-      // 바뀐 팀의 새 선수도 세션 참여자로 넣는다. 빠진 선수는 참여자에서 지우지 않는다.
+    const prepared = await prepareRecordedMatch(
+      body,
+      decoded.playerId,
+      // 관리자 정정은 이 경기에 이미 있던 선수를 지금 비활성이어도 그대로 둘 수 있다
+      decoded.isAdmin ? existing.teams.flatMap((team) => team.players) : [],
+    );
+    let targetSessionId = existing.session?.id;
+    if (adminEdit.sessionId === null) {
+      targetSessionId = undefined;
+    } else if (adminEdit.sessionId !== undefined) {
+      const targetSession = await matchRepository.findSessionById(
+        adminEdit.sessionId,
+      );
+      if (!targetSession) {
+        return res.status(400).json({ error: MATCH_SESSION_NOT_FOUND_MESSAGE });
+      }
+      targetSessionId = targetSession.id;
+    }
+    if (targetSessionId) {
+      // 바뀐 팀의 새 선수(세션을 옮기면 팀 전원)도 세션 참여자로 넣는다. 빠진 선수는 참여자에서 지우지 않는다.
       await matchRepository.addSessionParticipants(
-        existing.session.id,
+        targetSessionId,
         getTeamPlayerIds(prepared.teams),
       );
     }
@@ -2609,8 +2745,10 @@ app.put("/api/matches/:matchId", async (req, res) => {
     previous = existing;
     // 요청에 없어도 미리 읽은 updatedAt을 조건으로 저장해, 그사이 다른 회원이 고쳤으면 409로 막는다.
     // 그래서 아래 재계산 여부(wasCompleted)는 실제로 고친 행의 이전 상태와 같다.
+    // 관리자의 세션·시각 변경도 같은 UPDATE로 저장돼 점수·팀과 함께 반영되거나 함께 막힌다.
     match = await matchRepository.updateRecordedMatch(matchId, {
       ...prepared,
+      ...adminEdit,
       resultSubmittedByPlayerId: decoded.playerId,
       resultSubmittedAt: now,
       ratingExcluded: resolveRatingExcludedAfterEdit(

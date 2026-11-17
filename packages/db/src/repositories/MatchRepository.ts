@@ -156,8 +156,12 @@ export interface CreateMatchInput {
   ratingExcluded?: boolean;
 }
 
-/** 참가자의 경기 기록 수정 입력. 시작 시각·세션·코트·생성자는 바꾸지 않는다. */
+/** 경기 기록 수정 입력. 코트·생성자는 바꾸지 않고, 세션·시작 시각은 주었을 때만 바꾼다. */
 export interface UpdateRecordedMatchInput {
+  /** 문자열이면 그 세션으로 옮기고(세션 이름·날짜 비정규화 컬럼도 맞춤) null이면 세션에서 뺀다. 생략하면 그대로 */
+  sessionId?: string | null;
+  /** 주면 시작 시각을 바꾸고, 이미 completed인 경기면 completed_at도 같은 만큼 옮긴다 */
+  matchStartsAt?: Date;
   type: MatchType;
   name?: string;
   location: string;
@@ -1833,6 +1837,8 @@ export class MatchRepository {
   /**
    * created·completed 경기의 기록(종류·이름·장소·참가자·점수)을 한 트랜잭션으로 교체하고
    * completed로 만든다. completed_at은 기존 값을 유지하고 없을 때만 resultSubmittedAt으로 채운다.
+   * 세션·시작 시각(관리자 정정)도 주면 같은 UPDATE·같은 updated_at 조건으로 바꾼다.
+   * 옮길 세션이 없으면 아무것도 바꾸지 않고 예외를 던진다.
    * 남는 참가자는 기존 평점 스냅샷을 유지하고, 새 참가자는 비워 두어 평점 반영 때 채워지게 한다.
    */
   async updateRecordedMatch(
@@ -1851,6 +1857,64 @@ export class MatchRepository {
 
     try {
       const submittedAtSeconds = toUnixTimestampSeconds(data.resultSubmittedAt);
+      const args: unknown[] = [
+        data.type,
+        data.name?.trim() || null,
+        location,
+        data.resultSubmittedByPlayerId,
+        submittedAtSeconds,
+        matchId,
+        toExpectedUpdatedAtSeconds(data.expectedUpdatedAt),
+        data.ratingExcluded,
+      ];
+      const addArg = (value: unknown) => {
+        args.push(value);
+        return `$${args.length}`;
+      };
+      const optionalAssignments: string[] = [];
+      let completedAtExpression = "COALESCE(completed_at, $5)";
+
+      if (data.sessionId === null) {
+        optionalAssignments.push(
+          "session_id = NULL",
+          "session_name = NULL",
+          "session_date = NULL",
+        );
+      } else if (data.sessionId !== undefined) {
+        // 세션 비정규화 컬럼은 updateMetadata의 세션 연결과 같이 세션 행에서 복사한다
+        const session = isEntityId(data.sessionId, "session")
+          ? (
+              await transaction.execute({
+                sql: `SELECT id, name, "date" FROM match_sessions WHERE id = $1`,
+                args: [data.sessionId],
+              })
+            ).rows[0]
+          : undefined;
+        if (!session) {
+          throw new Error("세션을 찾을 수 없어요.");
+        }
+        optionalAssignments.push(
+          `session_id = ${addArg(String(session.id))}`,
+          `session_name = ${addArg(String(session.name))}`,
+          `session_date = ${addArg(Number(session.date))}`,
+        );
+      }
+
+      if (data.matchStartsAt !== undefined) {
+        const matchStartsAtParam = addArg(
+          toUnixTimestampSeconds(data.matchStartsAt),
+        );
+        optionalAssignments.push(`match_starts_at = ${matchStartsAtParam}`);
+        // SET의 식은 고치기 전 행 값을 읽으므로, 이미 완료된 경기는 completed_at을 시작 시각이 옮겨 간 만큼 옮긴다.
+        // 평점 재계산이 completed_at 순서로 경기를 다시 돌리기 때문이다.
+        completedAtExpression = `
+          CASE
+            WHEN status = 'completed' AND completed_at IS NOT NULL
+              THEN completed_at + (${matchStartsAtParam}::bigint - match_starts_at)
+            ELSE COALESCE(completed_at, $5)
+          END`;
+      }
+
       const updateResult = await transaction.execute({
         sql: `
           UPDATE matches
@@ -1861,23 +1925,16 @@ export class MatchRepository {
             status = 'completed',
             result_submitted_by_player_id = $4,
             result_submitted_at = $5,
-            completed_at = COALESCE(completed_at, $5),
+            completed_at = ${completedAtExpression},
             updated_at = GREATEST($5, updated_at + 1),
-            rating_excluded = $8
+            rating_excluded = $8${optionalAssignments
+              .map((assignment) => `,\n            ${assignment}`)
+              .join("")}
           WHERE id = $6
             AND status IN ('created', 'completed')
             AND ($7::bigint IS NULL OR updated_at = $7)
         `,
-        args: [
-          data.type,
-          data.name?.trim() || null,
-          location,
-          data.resultSubmittedByPlayerId,
-          submittedAtSeconds,
-          matchId,
-          toExpectedUpdatedAtSeconds(data.expectedUpdatedAt),
-          data.ratingExcluded,
-        ],
+        args,
       });
       if (!updateResult.rowsAffected) {
         const current = await transaction.execute({
