@@ -558,6 +558,7 @@ const METRIC_COUNT_START: Record<AchievementMetric, Date | null> = {
   bestPartnerStreak: ACHIEVEMENT_COUNT_START,
   unbeatenSessions: ACHIEVEMENT_COUNT_START,
   dominatedSessions: ACHIEVEMENT_COUNT_START,
+  // 두 평점 지표는 같은 시작 시각을 쓴다(applyDoublesRating이 함께 갱신한다)
   peakDoublesRating: ACHIEVEMENT_COUNT_START,
   lowestDoublesRating: ACHIEVEMENT_COUNT_START,
 };
@@ -690,11 +691,20 @@ const isRatedCompletedMatch = (
   !match.ratingExcluded &&
   match.completedAt != null;
 
-/** 업적 계산에 넣는 경기: 평점 반영 완료 경기 전부. 지표마다 집계 시작 시각으로 다시 거른다. compareCountedMatches 순 */
-const getCountedMatches = (
+/**
+ * 업적 계산에 넣는 경기: 이 회원이 뛴 평점 반영 완료 경기 전부(compareCountedMatches 순).
+ * 지표마다 집계 시작 시각으로 다시 거른다.
+ */
+const getPlayerCountedMatches = (
+  playerId: string,
   matches: readonly AchievementMatch[],
 ): CountedMatch[] =>
-  matches.filter(isRatedCompletedMatch).sort(compareCountedMatches);
+  matches
+    .filter(
+      (match): match is CountedMatch =>
+        isRatedCompletedMatch(match) && findTeamIndex(match, playerId) !== null,
+    )
+    .sort(compareCountedMatches);
 
 /**
  * 받은 업적을 업적 기준 시각 이후 완료 경기로 받았는지.
@@ -792,21 +802,6 @@ const isSessionEventMetric = (
   (SESSION_EVENT_METRICS as readonly AchievementMetric[]).includes(metric);
 
 const NO_SESSIONS: ReadonlySet<string> = new Set();
-
-/** 업적 기준 시각 전에 완료된 이 회원의 평점 반영 복식 경기(compareCountedMatches 순) */
-const getPreCountStartDoublesMatches = (
-  playerId: string,
-  matches: readonly AchievementMatch[],
-): CountedMatch[] =>
-  matches
-    .filter(
-      (match): match is CountedMatch =>
-        isRatedCompletedMatch(match) &&
-        !isOnOrAfterCountStart(match.completedAt) &&
-        isDoublesMatchType(match.type) &&
-        findTeamIndex(match, playerId) !== null,
-    )
-    .sort(compareCountedMatches);
 
 /** 평점 진행도에 경기 직후 복식 평점을 반영한다 */
 const applyDoublesRating = (
@@ -910,9 +905,12 @@ export function computeAchievements(
   const lastSessionMatches = new Map<string, CountedMatch>();
   let ratedDoublesMatches = 0;
 
-  const preCountStartDoublesMatches = getPreCountStartDoublesMatches(
-    playerId,
-    matches,
+  const playerMatches = getPlayerCountedMatches(playerId, matches);
+  // 평점 지표 시작 시각 전 복식 경기. 평점은 그 마지막 평점에서 시작한다
+  const preCountStartDoublesMatches = playerMatches.filter(
+    (match) =>
+      isDoublesMatchType(match.type) &&
+      !isCountedForMetric("peakDoublesRating", match.completedAt),
   );
   // 경기 수는 평점 로그 유무와 상관없이 세고, 시작 평점은 평점 로그가 있는 마지막 경기에서 찾는다
   let countStart: { match: CountedMatch; rating: number } | null = null;
@@ -928,9 +926,8 @@ export function computeAchievements(
     markReachedAchievements(progress, metrics, countStart.match);
   }
 
-  for (const match of getCountedMatches(matches)) {
-    const teamIndex = findTeamIndex(match, playerId);
-    if (teamIndex === null) continue;
+  for (const match of playerMatches) {
+    const teamIndex = findTeamIndex(match, playerId)!;
     const counts = (metric: AchievementMetric) =>
       isCountedForMetric(metric, match.completedAt);
 
@@ -1040,20 +1037,10 @@ export function computeAchievements(
     const doublesRatingAfter = getDoublesRatingAfter(match, playerId);
     if (
       doublesRatingAfter != null &&
-      ratedDoublesMatches >= RATING_ACHIEVEMENT_MIN_DOUBLES_MATCHES
+      ratedDoublesMatches >= RATING_ACHIEVEMENT_MIN_DOUBLES_MATCHES &&
+      counts("peakDoublesRating")
     ) {
-      if (counts("peakDoublesRating")) {
-        metrics.peakDoublesRating = Math.max(
-          metrics.peakDoublesRating,
-          doublesRatingAfter,
-        );
-      }
-      if (counts("lowestDoublesRating")) {
-        metrics.lowestDoublesRating = Math.min(
-          metrics.lowestDoublesRating,
-          doublesRatingAfter,
-        );
-      }
+      applyDoublesRating(metrics, doublesRatingAfter);
     }
 
     markReachedAchievements(progress, metrics, match);
