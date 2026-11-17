@@ -39,6 +39,7 @@ pnpm db:migration:new <이름>     # 새 마이그레이션 파일 생성
 pnpm supabase:link / db:push     # 원격 프로젝트 연결 / 원격 DB에 마이그레이션 적용
 pnpm build:edge                  # api를 Edge Function 번들로 빌드 (supabase/functions/api/dist/)
 pnpm functions:serve             # build:edge 후 로컬 Edge Function api 실행 (Docker 필요)
+pnpm db:import-mysql --dump <파일>  # 옛 MySQL 덤프로 DB를 비우고 다시 채움 (기본 dry-run, docs/data-migration.md)
 
 pnpm build
 pnpm build:web
