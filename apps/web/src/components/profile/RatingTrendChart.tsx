@@ -22,7 +22,7 @@ const Y_LABEL_X = PLOT_LEFT - 6;
 const Y_LABEL_MIN_GAP = 12;
 const EMPTY_TEXT_Y = 58;
 // 작은 변동이 차트 높이 전체로 과장되지 않게 하는 최소 세로 범위
-const MIN_RATING_SPAN = 0.3;
+const MIN_RATING_SPAN = 0.1;
 
 // 화면이 보일 때의 그리기 모션(ms). 선은 숫자 카운트업(COUNT_UP)과 같은 박자로 그린다.
 // 끝점 pop의 onAnimationEnd가 재생 종료를 알리므로 END_DOT_DELAY_MS + END_DOT_POP_MS가
@@ -92,7 +92,7 @@ const RatingTrendChart: React.FC<{
 
   const maxLabel = maxRating.toFixed(2);
   const minLabel = minRating.toFixed(2);
-  // 세로 범위가 0.3 이상이라 간격이 넉넉하면 두 라벨 값도 서로 다르다
+  // 세로 범위가 0.1 이상이라 간격 12px 이상이면 평점 차도 0.015 이상이고, 소수 둘째 자리 라벨 값도 서로 다르다
   const showMinLabel = toY(minRating) - toY(maxRating) >= Y_LABEL_MIN_GAP;
 
   const todayKey = toKstDateKey(now);
