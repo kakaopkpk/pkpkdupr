@@ -19,6 +19,7 @@ import {
   MatchNotFoundError,
   MatchRecordUpdateConflictError,
   MatchStaleUpdateError,
+  RegularSessionSkipExistsError,
   SessionHasMatchesError,
   type CompletedMatchOutcome,
   type CreateMatchInput,
@@ -26,6 +27,7 @@ import {
   type SessionWithParticipantIds,
   type UpdateMatchMetadataInput,
   type UpdateRecordedMatchInput,
+  type UpdateSessionInput,
 } from "@pkpkdupr/db";
 import { db } from "../db";
 
@@ -465,6 +467,60 @@ export class MatchRepository {
     );
     this.notifySessionsChanged(deleted.map((session) => session.id));
     return deleted.map((session) => session.dateKey);
+  }
+
+  /** 세션을 고친다. 없으면 404, 같은 날 같은 이름이 있으면 409 */
+  async updateSession(
+    sessionId: string,
+    input: UpdateSessionInput,
+  ): Promise<ManagedMatchSession> {
+    let updated;
+    try {
+      updated = await this.run(
+        () => db.matches.updateSession(sessionId, input),
+        400,
+      );
+    } catch (error) {
+      if (isUniqueViolation(error)) {
+        throw new MatchRepositoryError("같은 이름의 세션이 이미 있습니다.", 409);
+      }
+      throw error;
+    }
+    if (!updated) {
+      throw new MatchRepositoryError("세션을 찾을 수 없습니다.", 404);
+    }
+    this.notifySessionsChanged([sessionId]);
+    return hydrateManagedSession(updated);
+  }
+
+  /** 모든 정기 회차 제외 날짜(날짜 내림차순) */
+  async findAllRegularSessionSkips(): Promise<RegularSessionSkip[]> {
+    return await this.run(() => db.matches.findAllRegularSessionSkips(), 500);
+  }
+
+  /**
+   * 그 날짜를 취소 쉬는 날로 남기고 그날 정기 세션을 참여자와 함께 지운다.
+   * 이미 쉬는 날이거나 정기 세션에 경기가 있으면 409
+   */
+  async addRegularSessionCancellation(dateKey: string): Promise<void> {
+    const { deletedSessionId } = await this.run(
+      () => db.matches.addRegularSessionCancellation(dateKey),
+      500,
+      (error) =>
+        error instanceof RegularSessionSkipExistsError ||
+        error instanceof SessionHasMatchesError
+          ? 409
+          : undefined,
+    );
+    this.notifySessionsChanged([deletedSessionId ?? undefined]);
+  }
+
+  /** 취소 쉬는 날을 지운다(공휴일은 지우지 않음). 지웠으면 true */
+  async deleteRegularSessionCancellation(dateKey: string): Promise<boolean> {
+    return await this.run(
+      () => db.matches.deleteRegularSessionCancellation(dateKey),
+      500,
+    );
   }
 
   /** 참여자를 추가한다. 이미 있으면 무시한다(동시 호출에도 덮어쓰지 않음) */

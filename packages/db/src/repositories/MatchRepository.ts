@@ -110,6 +110,22 @@ export class SessionHasMatchesError extends Error {
   }
 }
 
+export class RegularSessionSkipExistsError extends Error {
+  constructor() {
+    super("이미 쉬는 날로 정해진 날짜입니다.");
+    this.name = "RegularSessionSkipExistsError";
+  }
+}
+
+/** 회원 세션 수정 값. 키가 없는 필드는 그대로 둔다 */
+export interface UpdateSessionInput {
+  name?: string;
+  location?: string;
+  date?: Date;
+  startTime?: string | null;
+  endTime?: string | null;
+}
+
 /** 랭킹·세션 리포트 계산에 필요한 완료 경기 요약 */
 export interface CompletedMatchOutcome {
   id: string;
@@ -2203,6 +2219,112 @@ export class MatchRepository {
         dateKey: String(row.regular_date_key),
       }))
       .sort((a, b) => a.dateKey.localeCompare(b.dateKey));
+  }
+
+  /** 세션 행의 이름·장소·시각·시작/종료 시각을 고친다. 없으면 undefined. (name, date) 유니크 위반은 그대로 던진다 */
+  async updateSession(
+    sessionId: string,
+    data: UpdateSessionInput,
+  ): Promise<ManagedMatchSession | undefined> {
+    if (!isEntityId(sessionId, "session")) {
+      return undefined;
+    }
+    const payload = Object.fromEntries(
+      Object.entries(data).filter(([, value]) => value !== undefined),
+    );
+    await this.db
+      .update(matchSessions)
+      .set({ ...payload, updatedAt: new Date() })
+      .where(eq(matchSessions.id, sessionId));
+    return await this.findSessionById(sessionId);
+  }
+
+  /** 모든 정기 회차 제외 날짜(날짜 내림차순) */
+  async findAllRegularSessionSkips(): Promise<RegularSessionSkip[]> {
+    const rows: Array<{ dateKey: string; reason: string }> = await this.db
+      .select({
+        dateKey: regularSessionSkips.dateKey,
+        reason: regularSessionSkips.reason,
+      })
+      .from(regularSessionSkips)
+      .orderBy(desc(regularSessionSkips.dateKey));
+    return rows.map((row) => ({
+      dateKey: row.dateKey,
+      reason: row.reason as RegularSessionSkipReason,
+    }));
+  }
+
+  /**
+   * 그 날짜를 취소(canceled) 쉬는 날로 남기고, 그날 정기 세션이 있으면 참여자와 함께 지운다(트랜잭션 하나).
+   * 이미 쉬는 날이면 RegularSessionSkipExistsError, 정기 세션에 경기가 있으면 SessionHasMatchesError를 던지고 아무것도 남기지 않는다.
+   * 지운 정기 세션 id를 돌려준다(없었으면 null).
+   */
+  async addRegularSessionCancellation(
+    dateKey: string,
+  ): Promise<{ deletedSessionId: string | null }> {
+    if (!REGULAR_DATE_KEY_PATTERN.test(dateKey)) {
+      throw new Error("유효한 날짜가 필요합니다.");
+    }
+
+    const transaction = await this.client.transaction("write");
+    let committed = false;
+    try {
+      const inserted = await transaction.execute({
+        sql: `
+          INSERT INTO regular_session_skips (date_key, reason, created_at)
+          VALUES ($1, 'canceled', $2)
+          ON CONFLICT (date_key) DO NOTHING
+          RETURNING date_key
+        `,
+        args: [dateKey, toUnixTimestampSeconds(new Date())],
+      });
+      if (!inserted.rows.length) {
+        throw new RegularSessionSkipExistsError();
+      }
+
+      const session = await transaction.execute({
+        sql: "SELECT id FROM match_sessions WHERE regular_date_key = $1",
+        args: [dateKey],
+      });
+      const sessionId = session.rows[0]?.id;
+      if (sessionId != null) {
+        const matchCount = await transaction.execute({
+          sql: "SELECT COUNT(*) AS count FROM matches WHERE session_id = $1",
+          args: [sessionId],
+        });
+        if (Number(matchCount.rows[0]?.count ?? 0) > 0) {
+          throw new SessionHasMatchesError();
+        }
+        await transaction.execute({
+          sql: "DELETE FROM match_session_participants WHERE session_id = $1",
+          args: [sessionId],
+        });
+        await transaction.execute({
+          sql: "DELETE FROM match_sessions WHERE id = $1",
+          args: [sessionId],
+        });
+      }
+      await transaction.commit();
+      committed = true;
+      return { deletedSessionId: sessionId == null ? null : String(sessionId) };
+    } finally {
+      if (!committed) {
+        transaction.close();
+      }
+    }
+  }
+
+  /** 취소(canceled) 쉬는 날을 지운다. 공휴일은 지우지 않는다. 지웠으면 true */
+  async deleteRegularSessionCancellation(dateKey: string): Promise<boolean> {
+    const result: RawQueryResult = await this.client.execute({
+      sql: `
+        DELETE FROM regular_session_skips
+        WHERE date_key = $1 AND reason = 'canceled'
+        RETURNING date_key
+      `,
+      args: [dateKey],
+    });
+    return result.rows.length > 0;
   }
 
   async updateMetadata(

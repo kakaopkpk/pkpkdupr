@@ -30,6 +30,7 @@ import {
   canOpenRegularSession,
   DEFAULT_MATCH_LOCATION,
   getEmptySessionExpiresAt,
+  getKstWeekday,
   getRegularSessionDateKeys,
   isInProgressMatchExpired,
   isPastSessionStart,
@@ -41,8 +42,14 @@ import {
   MATCH_SESSION_LOCATION_MAX_LENGTH,
   MATCH_SESSION_NAME_MAX_LENGTH,
   REGULAR_SESSION_LOOKAHEAD_DAYS,
+  REGULAR_SESSION_WEEKDAYS,
   toKstDateKey,
   type AddMatchSessionGuestRequest,
+  type AdminAddRegularSessionSkipRequest,
+  type AdminRegularSessionSkip,
+  type AdminRegularSessionSkipsResponse,
+  type AdminRevertRegularSessionSkipResponse,
+  type AdminUpdateMatchSessionRequest,
   type AddMatchSessionParticipantRequest,
   type CreateMatchSessionRequest,
   type StartSessionMatchRequest,
@@ -785,6 +792,29 @@ const sendMatchSessionFailure = (res: express.Response, error: unknown) => {
   res.status(status).json({ error: (error as Error).message });
 };
 
+/** 세션 이름·장소를 다듬어 돌려준다. 비었거나 maxLength자를 넘으면 400 */
+const requireMatchSessionText = (
+  value: unknown,
+  label: "이름" | "장소",
+  maxLength: number,
+): string => {
+  const isName = label === "이름";
+  const text = normalizeOptionalName(value);
+  if (!text) {
+    throw new MatchSessionRequestError(
+      `세션 ${label}${isName ? "이" : "가"} 필요합니다.`,
+      400,
+    );
+  }
+  if (Array.from(text).length > maxLength) {
+    throw new MatchSessionRequestError(
+      `세션 ${label}${isName ? "은" : "는"} ${maxLength}자 이하여야 합니다.`,
+      400,
+    );
+  }
+  return text;
+};
+
 const loadActivePlayersById = async () =>
   new Map<string, Player>(
     (await authService.getPublicPlayers()).map((player) => [player.id, player]),
@@ -1453,26 +1483,16 @@ app.post("/api/match-sessions", async (req, res) => {
     }
 
     const body = req.body as Partial<CreateMatchSessionRequest> | undefined;
-    const name = normalizeOptionalName(body?.name);
-    const location = normalizeOptionalName(body?.location);
-    if (!name) {
-      throw new MatchSessionRequestError("세션 이름이 필요합니다.", 400);
-    }
-    if (!location) {
-      throw new MatchSessionRequestError("세션 장소가 필요합니다.", 400);
-    }
-    if (Array.from(name).length > MATCH_SESSION_NAME_MAX_LENGTH) {
-      throw new MatchSessionRequestError(
-        `세션 이름은 ${MATCH_SESSION_NAME_MAX_LENGTH}자 이하여야 합니다.`,
-        400,
-      );
-    }
-    if (Array.from(location).length > MATCH_SESSION_LOCATION_MAX_LENGTH) {
-      throw new MatchSessionRequestError(
-        `세션 장소는 ${MATCH_SESSION_LOCATION_MAX_LENGTH}자 이하여야 합니다.`,
-        400,
-      );
-    }
+    const name = requireMatchSessionText(
+      body?.name,
+      "이름",
+      MATCH_SESSION_NAME_MAX_LENGTH,
+    );
+    const location = requireMatchSessionText(
+      body?.location,
+      "장소",
+      MATCH_SESSION_LOCATION_MAX_LENGTH,
+    );
 
     const now = new Date();
     const todayKey = toKstDateKey(now);
@@ -1970,6 +1990,232 @@ app.delete(
         return res.status(409).json({ error: err.message });
       }
       res.status(400).json({ error: (err as Error).message });
+    }
+  },
+);
+
+/**
+ * 회원 세션의 이름·장소·날짜·시각을 고친다. 생략한 필드는 그대로 둔다.
+ * 정기 세션·지난 세션은 409, 경기가 있는 세션은 날짜만 바꿀 수 없다(경기 시각과 세션 날짜가 어긋나므로)
+ */
+app.patch(
+  "/api/admin/match-sessions/:sessionId",
+  requireAdmin,
+  async (req, res) => {
+    try {
+      const { sessionId } = req.params;
+      if (!isEntityId(sessionId, "session")) {
+        throw new MatchSessionRequestError("유효한 세션 ID가 필요합니다.", 400);
+      }
+      const body = (req.body ?? {}) as AdminUpdateMatchSessionRequest;
+      const name =
+        body.name === undefined
+          ? undefined
+          : requireMatchSessionText(
+              body.name,
+              "이름",
+              MATCH_SESSION_NAME_MAX_LENGTH,
+            );
+      const location =
+        body.location === undefined
+          ? undefined
+          : requireMatchSessionText(
+              body.location,
+              "장소",
+              MATCH_SESSION_LOCATION_MAX_LENGTH,
+            );
+
+      const now = new Date();
+      const todayKey = toKstDateKey(now);
+      let dateKey: string | undefined;
+      if (body.dateKey !== undefined) {
+        dateKey = typeof body.dateKey === "string" ? body.dateKey.trim() : "";
+        if (!isValidKstDateKey(dateKey)) {
+          throw new MatchSessionRequestError(
+            "세션 날짜는 YYYY-MM-DD 형식의 실제 날짜여야 합니다.",
+            400,
+          );
+        }
+        // YYYY-MM-DD 날짜 키는 문자열 비교가 날짜 순서와 같다
+        if (dateKey < todayKey) {
+          throw new MatchSessionRequestError(
+            "오늘이나 이후 날짜로만 바꿀 수 있습니다.",
+            400,
+          );
+        }
+      }
+
+      const timeProvided =
+        body.startTime !== undefined || body.endTime !== undefined;
+      const clearsTime = body.startTime === null && body.endTime === null;
+      if (
+        timeProvided &&
+        !clearsTime &&
+        !isValidSessionTimeRange(body.startTime, body.endTime)
+      ) {
+        throw new MatchSessionRequestError(
+          "세션 시작·종료 시각은 HH:MM 형식으로 함께 보내고, 서로 달라야 합니다.",
+          400,
+        );
+      }
+
+      const session = await matchRepository.findSessionById(sessionId);
+      if (!session) {
+        throw new MatchSessionRequestError("세션을 찾을 수 없습니다.", 404);
+      }
+      if (session.kind === "regular") {
+        throw new MatchSessionRequestError(
+          "정기 세션 이름과 시간은 바꿀 수 없어요.",
+          409,
+        );
+      }
+      const currentDateKey = toKstDateKey(session.date);
+      if (currentDateKey < todayKey) {
+        throw new MatchSessionRequestError("지난 세션은 고칠 수 없어요.", 409);
+      }
+      const dateChanged = dateKey !== undefined && dateKey !== currentDateKey;
+      if (dateChanged && session.matchCount > 0) {
+        throw new MatchSessionRequestError(
+          "경기가 있는 세션은 날짜를 바꿀 수 없어요.",
+          409,
+        );
+      }
+
+      const startTime = timeProvided
+        ? (body.startTime ?? null)
+        : session.startTime;
+      const endTime = timeProvided ? (body.endTime ?? null) : session.endTime;
+      const nextDateKey = dateKey ?? currentDateKey;
+      // 이미 시작한 오늘 세션의 이름만 고치는 경우는 막지 않도록, 날짜나 시작 시각이 바뀔 때만 검사한다
+      if (
+        (dateChanged || startTime !== session.startTime) &&
+        startTime != null &&
+        isPastSessionStart(nextDateKey, startTime, now)
+      ) {
+        throw new MatchSessionRequestError(
+          "이미 지난 시각으로는 세션을 바꿀 수 없습니다.",
+          400,
+        );
+      }
+
+      // 회원 세션 시각(date)은 생성 때처럼 고른 날 00:00 KST다
+      const updated = await matchRepository.updateSession(sessionId, {
+        name,
+        location,
+        date: dateChanged ? kstDateKeyToDate(nextDateKey) : undefined,
+        ...(timeProvided ? { startTime, endTime } : {}),
+      });
+      res.json(updated);
+    } catch (err) {
+      sendMatchSessionFailure(res, err);
+    }
+  },
+);
+
+app.get(
+  "/api/admin/regular-session-skips",
+  requireAdmin,
+  async (_req, res) => {
+    try {
+      const response: AdminRegularSessionSkipsResponse = {
+        skips: await matchRepository.findAllRegularSessionSkips(),
+      };
+      res.json(response);
+    } catch (err) {
+      sendMatchSessionFailure(res, err);
+    }
+  },
+);
+
+/** 오늘 이후 정기 요일을 취소 쉬는 날로 남긴다. 그날 정기 세션이 있으면 참여자와 함께 지운다(경기가 있으면 409) */
+app.post(
+  "/api/admin/regular-session-skips",
+  requireAdmin,
+  async (req, res) => {
+    try {
+      const body = req.body as
+        | Partial<AdminAddRegularSessionSkipRequest>
+        | undefined;
+      const dateKey =
+        typeof body?.dateKey === "string" ? body.dateKey.trim() : "";
+      if (!isValidKstDateKey(dateKey)) {
+        throw new MatchSessionRequestError(
+          "날짜는 YYYY-MM-DD 형식의 실제 날짜여야 합니다.",
+          400,
+        );
+      }
+      if (dateKey < toKstDateKey(new Date())) {
+        throw new MatchSessionRequestError(
+          "오늘이나 이후 날짜만 쉬는 날로 정할 수 있어요.",
+          400,
+        );
+      }
+      if (!REGULAR_SESSION_WEEKDAYS.includes(getKstWeekday(dateKey))) {
+        throw new MatchSessionRequestError(
+          "정기 세션 요일(월·목)만 쉬는 날로 정할 수 있어요.",
+          400,
+        );
+      }
+
+      await matchRepository.addRegularSessionCancellation(dateKey);
+      const skip: AdminRegularSessionSkip = { dateKey, reason: "canceled" };
+      res.status(201).json(skip);
+    } catch (err) {
+      sendMatchSessionFailure(res, err);
+    }
+  },
+);
+
+/**
+ * 취소 쉬는 날을 되돌리고 그 날짜의 정기 세션을 바로 다시 만든다(28일 범위와 상관없음).
+ * 오늘이고 정기 세션을 열 수 없는 시각(22시 이후)이면 만들지 않는다. 지워졌던 참여 신청은 되살리지 않는다
+ */
+app.delete(
+  "/api/admin/regular-session-skips/:dateKey",
+  requireAdmin,
+  async (req, res) => {
+    try {
+      const { dateKey } = req.params;
+      if (!isValidKstDateKey(dateKey)) {
+        throw new MatchSessionRequestError(
+          "날짜는 YYYY-MM-DD 형식의 실제 날짜여야 합니다.",
+          400,
+        );
+      }
+      const notFound = () =>
+        new MatchSessionRequestError("쉬는 날을 찾을 수 없습니다.", 404);
+      const [skip] = await matchRepository.findRegularSessionSkips(
+        dateKey,
+        addKstDays(dateKey, 1),
+      );
+      if (!skip) {
+        throw notFound();
+      }
+      if (skip.reason === "holiday") {
+        throw new MatchSessionRequestError("공휴일은 되돌릴 수 없어요.", 409);
+      }
+      const now = new Date();
+      const todayKey = toKstDateKey(now);
+      if (dateKey < todayKey) {
+        throw new MatchSessionRequestError(
+          "지난 날짜는 되돌릴 수 없어요.",
+          409,
+        );
+      }
+      if (!(await matchRepository.deleteRegularSessionCancellation(dateKey))) {
+        throw notFound();
+      }
+
+      const canCreate = dateKey !== todayKey || canOpenRegularSession(now);
+      const response: AdminRevertRegularSessionSkipResponse = {
+        session: canCreate
+          ? ((await matchRepository.findOrCreateRegularSession(dateKey)) ??
+            null)
+          : null,
+      };
+      res.json(response);
+    } catch (err) {
+      sendMatchSessionFailure(res, err);
     }
   },
 );
