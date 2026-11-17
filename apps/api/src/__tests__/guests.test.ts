@@ -1,3 +1,4 @@
+import { ADMIN_ISSUED_PASSWORD } from "@pkpkdupr/shared/auth";
 import type { ManagedMatchSession, Match } from "@pkpkdupr/shared/match";
 import type {
   Player,
@@ -812,10 +813,10 @@ describe("POST /api/admin/players/:playerId/promote", () => {
       gender: "F",
     });
     expect(response.body.player).not.toHaveProperty("authUserId");
-    expect(response.body.initialPassword).toBe("123qwe");
+    expect(response.body.initialPassword).toBe(ADMIN_ISSUED_PASSWORD);
     expect(createAuthUser).toHaveBeenCalledWith({
       email: expect.stringMatching(/^guest_kim@/),
-      password: "123qwe",
+      password: ADMIN_ISSUED_PASSWORD,
     });
     expect(rows.get(guest.id)).toMatchObject({
       isGuest: false,

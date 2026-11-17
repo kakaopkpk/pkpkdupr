@@ -11,6 +11,7 @@ import { app } from "../index";
 import { AuthService } from "../services/AuthService";
 import {
   AuthEmailExistsError,
+  isValidInitialPassword,
   SupabaseAuthAdmin,
 } from "../services/supabaseAuthAdmin";
 import { SupabaseAuthUserVerifier } from "../services/supabaseAuthUser";
@@ -541,6 +542,11 @@ describe("Supabase Auth 기반 인증", () => {
       fixture.admins.add("Padmin01");
     });
 
+    it("관리자 발급 비밀번호는 123qwe이고 Auth 비밀번호 요구를 통과한다", () => {
+      expect(ADMIN_ISSUED_PASSWORD).toBe("123qwe");
+      expect(isValidInitialPassword(ADMIN_ISSUED_PASSWORD)).toBe(true);
+    });
+
     describe("POST /api/admin/register", () => {
       it("Auth 사용자를 만들어 연결하고 초기 비밀번호를 응답으로만 준다", async () => {
         const response = await request(app)
@@ -554,7 +560,6 @@ describe("Supabase Auth 기반 인증", () => {
         expect(player).toMatchObject({ username: "New_Member", gender: "M" });
         expect(player).not.toHaveProperty("authUserId");
         expect(player).not.toHaveProperty("isFirstLogin");
-        expect(initialPassword).toBe("123qwe");
         expect(initialPassword).toBe(ADMIN_ISSUED_PASSWORD);
 
         expect(fixture.createAuthUser).toHaveBeenCalledWith({
@@ -644,7 +649,7 @@ describe("Supabase Auth 기반 인증", () => {
         expect(response.status).toBe(200);
         expect(response.headers["cache-control"]).toBe("no-store");
         const { temporaryPassword } = response.body;
-        expect(temporaryPassword).toBe("123qwe");
+        expect(temporaryPassword).toBe(ADMIN_ISSUED_PASSWORD);
         expect(fixture.updateAuthUser).toHaveBeenCalledWith(memberUser.id, {
           email: `member@${INTERNAL_EMAIL_DOMAIN}`,
           password: temporaryPassword,
@@ -662,7 +667,7 @@ describe("Supabase Auth 기반 인증", () => {
 
         expect(response.status).toBe(200);
         const { temporaryPassword } = response.body;
-        expect(temporaryPassword).toBe("123qwe");
+        expect(temporaryPassword).toBe(ADMIN_ISSUED_PASSWORD);
         expect(fixture.createAuthUser).toHaveBeenCalledWith({
           email: `member@${INTERNAL_EMAIL_DOMAIN}`,
           password: temporaryPassword,
