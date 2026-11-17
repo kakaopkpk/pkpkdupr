@@ -1,5 +1,4 @@
 import type { Match as SharedMatch } from "@pkpkdupr/shared/match";
-import { isMultiGameMatchRecord } from "@pkpkdupr/shared/match";
 import type {
   PlayerRatingChangeLog,
   PlayerRatingHistory,
@@ -45,19 +44,10 @@ export interface MatchListResponse {
   ratingHistory?: PlayerRatingHistory;
 }
 
-/**
- * 카드에 크게 보여 줄 두 팀의 결과. 단판은 점수, 점수가 여러 개인 과거 2선승 기록은 이긴 게임 수다.
- */
+/** 카드에 크게 보여 줄 두 팀의 점수. 점수가 없으면 0:0이다. */
 export const getTeamResultScores = (
   match: Pick<MatchInfo, "scores">,
 ): [number, number] => {
-  const scores = match.scores ?? [];
-  if (!isMultiGameMatchRecord(match)) {
-    return [scores[0]?.scoreA ?? 0, scores[0]?.scoreB ?? 0];
-  }
-
-  return [
-    scores.filter((score) => score.scoreA > score.scoreB).length,
-    scores.filter((score) => score.scoreB > score.scoreA).length,
-  ];
+  const [score] = match.scores ?? [];
+  return [score?.scoreA ?? 0, score?.scoreB ?? 0];
 };

@@ -266,18 +266,6 @@ describe("DELETE /api/matches/:matchId", () => {
     it("취소된 경기는 403", async () => {
       await expectForbidden(buildExistingMatch({ status: "cancelled" }));
     });
-
-    it("점수가 여러 개인 과거 2선승 기록은 403", async () => {
-      await expectForbidden(
-        buildExistingMatch({
-          scores: [
-            { scoreA: 9, scoreB: 11 },
-            { scoreA: 11, scoreB: 8 },
-            { scoreA: 11, scoreB: 6 },
-          ],
-        }),
-      );
-    });
   });
 
   describe("동시 삭제·수정", () => {
