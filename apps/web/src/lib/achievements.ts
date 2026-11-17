@@ -8,7 +8,9 @@ import {
   type SeenAchievementRef,
   type UnseenAchievementsResponse,
   isBestStreakAchievement,
+  isLowRatingAchievement,
   isRatingAchievement,
+  RATING_ACHIEVEMENT_MIN_DOUBLES_MATCHES,
 } from "@pkpkdupr/shared/achievements";
 import { DUPR_DEFAULT_RATING } from "@pkpkdupr/shared/player";
 import { apiFetch } from "@/lib/api";
@@ -59,35 +61,71 @@ export const getEarnedAchievementsByRecent = (
           (ACHIEVEMENT_ORDER.get(left.definition.id) ?? 0),
     );
 
+/** 평점 업적인데 아직 복식 경기 수를 채우지 못했으면 그 경기 수, 아니면 null */
+const getUnfilledRatedDoublesMatches = (
+  definition: AchievementDefinition,
+  progress: AchievementProgressInfo | null | undefined,
+) => {
+  const matches = progress?.ratedDoublesMatches ?? 0;
+  return isRatingAchievement(definition.id) &&
+    matches < RATING_ACHIEVEMENT_MIN_DOUBLES_MATCHES
+    ? matches
+    : null;
+};
+
 /**
- * 못 받은 업적의 진행 문구. 연승·환상의 콤비는 최고 기록으로,
- * 평점 업적은 최고 복식 평점(평점이 없으면 "–")으로 보여 준다
+ * 못 받은 업적의 진행 문구. 연승·환상의 콤비는 최고 기록으로 보여 준다.
+ * 평점 업적은 복식 경기 수를 채우기 전이면 "복식 7/10경기", 채운 뒤에는 최고(낮은 평점 업적은 최저)
+ * 복식 평점(평점이 없으면 "–")으로 보여 준다
  */
 export const formatAchievementProgress = (
   definition: AchievementDefinition,
   progress: AchievementProgressInfo | null | undefined,
 ) => {
   const current = progress?.current ?? 0;
+  const unfilledMatches = getUnfilledRatedDoublesMatches(definition, progress);
+  if (unfilledMatches != null) {
+    return `복식 ${unfilledMatches}/${RATING_ACHIEVEMENT_MIN_DOUBLES_MATCHES}경기`;
+  }
   if (isRatingAchievement(definition.id)) {
-    return `최고 ${formatRating(current > 0 ? current : null)}`;
+    const label = isLowRatingAchievement(definition.id) ? "최저" : "최고";
+    return `${label} ${formatRating(current > 0 ? current : null)}`;
   }
   return isBestStreakAchievement(definition.id)
     ? `최고 ${current}`
     : `${Math.min(current, definition.target)}/${definition.target}`;
 };
 
-/** 진행 막대 비율(0~1). 평점 업적은 기본 평점(3.0)에서 목표까지 오른 비율이다 */
+/** 평점 업적 막대의 출발 평점과 목표 사이 최소 폭 */
+const RATING_PROGRESS_MIN_SPAN = 0.5;
+
+const clampRatio = (ratio: number) => Math.min(Math.max(ratio, 0), 1);
+
+/**
+ * 진행 막대 비율(0~1). 평점 업적은 복식 경기 수를 채우기 전이면 경기 수 비율이고,
+ * 채운 뒤에는 기본 평점(3.0)에서 목표까지 간 비율이다(목표가 기본 평점에 가까우면 0.5 앞에서 출발).
+ * 낮은 평점 업적은 최저 평점이 출발점에서 목표까지 내려간 비율이다.
+ */
 export const getAchievementProgressRatio = (
   definition: AchievementDefinition,
   progress: AchievementProgressInfo | null | undefined,
 ) => {
   const current = progress?.current ?? 0;
-  const [start, end] =
-    isRatingAchievement(definition.id)
-      ? [DUPR_DEFAULT_RATING, definition.target]
-      : [0, definition.target];
-  if (end <= start) return 0;
-  return Math.min(Math.max((current - start) / (end - start), 0), 1);
+  const { target } = definition;
+  const unfilledMatches = getUnfilledRatedDoublesMatches(definition, progress);
+  if (unfilledMatches != null) {
+    return unfilledMatches / RATING_ACHIEVEMENT_MIN_DOUBLES_MATCHES;
+  }
+  if (isLowRatingAchievement(definition.id)) {
+    if (current <= 0) return 0;
+    const start = Math.max(DUPR_DEFAULT_RATING, target + RATING_PROGRESS_MIN_SPAN);
+    return clampRatio((start - current) / (start - target));
+  }
+  if (isRatingAchievement(definition.id)) {
+    const start = Math.min(DUPR_DEFAULT_RATING, target - RATING_PROGRESS_MIN_SPAN);
+    return clampRatio((current - start) / (target - start));
+  }
+  return target > 0 ? clampRatio(current / target) : 0;
 };
 
 export const fetchAchievementHolders =
