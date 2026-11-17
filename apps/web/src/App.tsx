@@ -7,6 +7,10 @@ import PwaUpdatePrompt from "./components/PwaUpdatePrompt";
 import { AppUpdateProvider } from "./context/AppUpdateContext";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import { SystemNoticeProvider } from "./context/SystemNoticeContext";
+import {
+  INITIAL_KEYBOARD_VIEWPORT_STATE,
+  measureKeyboardViewport,
+} from "./lib/keyboardViewport";
 import ForceChangePassword from "./pages/ForceChangePassword";
 import Login from "./pages/Login";
 
@@ -174,28 +178,37 @@ function App() {
     }
 
     let isKeyboardInputFocused = isKeyboardInputElement(document.activeElement);
+    let keyboardViewportState = INITIAL_KEYBOARD_VIEWPORT_STATE;
+    let appliedOffset: number | null = null;
+    let appliedOpen: boolean | null = null;
 
     const updateViewportMetrics = () => {
       const visualViewport = window.visualViewport;
-      const keyboardOffset = isKeyboardInputFocused
-        ? Math.max(
-            0,
-            window.innerHeight -
-              (visualViewport?.height ?? window.innerHeight) -
-              (visualViewport?.offsetTop ?? 0),
-          )
-        : 0;
+      const { state, open, offset } = measureKeyboardViewport(
+        keyboardViewportState,
+        {
+          inputFocused: isKeyboardInputFocused,
+          width: window.innerWidth,
+          innerHeight: window.innerHeight,
+          visualHeight: visualViewport?.height ?? window.innerHeight,
+          visualOffsetTop: visualViewport?.offsetTop ?? 0,
+        },
+      );
+      keyboardViewportState = state;
 
-      const roundedOffset = Math.round(keyboardOffset);
-      document.documentElement.style.setProperty(
-        "--app-keyboard-offset",
-        `${roundedOffset}px`,
-      );
-      // 키보드가 열려 있는 동안 바텀시트 Footer를 숨기는 CSS 기준
-      document.documentElement.toggleAttribute(
-        "data-keyboard-open",
-        roundedOffset > 0,
-      );
+      // resize·scroll마다 불리므로 값이 바뀔 때만 DOM에 쓴다
+      if (offset !== appliedOffset) {
+        appliedOffset = offset;
+        document.documentElement.style.setProperty(
+          "--app-keyboard-offset",
+          `${offset}px`,
+        );
+      }
+      if (open !== appliedOpen) {
+        appliedOpen = open;
+        // 키보드가 열려 있는 동안 하단 버튼(index.css `html[data-keyboard-open]`)을 숨기는 기준
+        document.documentElement.toggleAttribute("data-keyboard-open", open);
+      }
     };
 
     const syncKeyboardFocusState = () => {
