@@ -85,8 +85,8 @@ const AchievementRow: React.FC<{
   onPress: () => void;
 }> = ({ definition, progress, rowIndex, onPress }) => {
   const earned = !!progress?.earned;
-  const count = useCountUp(1, getRowCountUp(rowIndex));
-  // 받은 업적은 움직이지 않는다
+  // 받은 업적 줄은 움직이지 않아 세지 않는다
+  const count = useCountUp(1, { ...getRowCountUp(rowIndex), isReady: !earned });
   const t = earned ? 1 : count.value;
   const ratio = getAchievementProgressRatio(definition, progress) * t;
 
@@ -112,10 +112,12 @@ const AchievementRow: React.FC<{
         <span className="line-clamp-2 text-pk-13 text-pk-muted">
           {definition.condition}
         </span>
-        {earned && progress?.earnedAt ? (
-          <span className="mt-0.5 text-pk-12 text-pk-sub tabular-nums">
-            {formatKstNumericDate(progress.earnedAt)}
-          </span>
+        {earned ? (
+          progress?.earnedAt ? (
+            <span className="mt-0.5 text-pk-12 text-pk-sub tabular-nums">
+              {formatKstNumericDate(progress.earnedAt)}
+            </span>
+          ) : null
         ) : (
           <span className="mt-1.5 flex items-center gap-2">
             <span
