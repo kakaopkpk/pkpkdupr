@@ -15,7 +15,6 @@ import type {
 } from "@pkpkdupr/shared/player";
 import {
   PARTNER_STAT_MIN_MATCHES,
-  RIVAL_MAX_COUNT,
   RIVAL_MIN_MATCHES,
   type HeadToHeadStat,
   type OpponentStat,
@@ -53,7 +52,7 @@ export interface PlayerProfileSummary {
   ratingHistory: PlayerRatingHistory;
   recentMatches: MatchWithRatingChanges[];
   partners: PartnerStat[];
-  /** 자주 진 상대(상성) */
+  /** 자주 진 상대(천적). 조건에 맞는 상대 전부 */
   rivals: OpponentStat[];
   /** 요청자 기준 분류별 맞대결. 본인 프로필이면 null */
   headToHead: Record<MatchTopLevelType, HeadToHeadStat> | null;
@@ -171,7 +170,7 @@ export const buildPlayerProfileSummary = (
       ratingDelta[category].last7DaysMatchCount += 1;
     }
 
-    // 승패·파트너 궁합·상성·상대 전적은 승패가 갈린 경기만 센다.
+    // 승패·파트너 궁합·천적·상대 전적은 승패가 갈린 경기만 센다.
     if (playerTeamIndex !== null && winningTeamIndex !== null) {
       const won = playerTeamIndex === winningTeamIndex;
 
@@ -268,8 +267,7 @@ export const buildPlayerProfileSummary = (
         // 진 비율 50% 이상. 나눗셈 대신 정수 비교로 쓴다.
         stat.losses * 2 >= stat.matchCount,
     )
-    .sort(sortRivalStats)
-    .slice(0, RIVAL_MAX_COUNT);
+    .sort(sortRivalStats);
 
   const recentMatches = matches
     .filter((match) => match.status === "completed")
