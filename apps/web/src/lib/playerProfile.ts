@@ -8,9 +8,12 @@ import type {
 import type { MatchInfo, MatchListResponse } from "@/types/match";
 import type { AchievementProgressInfo } from "@/lib/achievements";
 import { apiFetch } from "@/lib/api";
+import type { PlayerInfo } from "@/hooks/usePlayers";
 
 /** `GET /api/players/:playerId/profile-summary` JSON 응답(날짜는 문자열) */
 export interface PlayerProfileSummaryInfo {
+  /** 대상 회원. 회원 목록(active만)에 없는 비활성 회원도 들어 있다 */
+  player: PlayerInfo;
   matchStats: Record<
     MatchTopLevelType,
     { matchWins: number; matchLosses: number; setWins: number; setLosses: number }

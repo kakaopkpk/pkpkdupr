@@ -1,8 +1,14 @@
 import { useCallback, useEffect, useSyncExternalStore } from "react";
-import type { MemberListPlayer } from "@pkpkdupr/shared/player";
+import type { MemberListPlayer, Player } from "@pkpkdupr/shared/player";
 import { useAuth } from "@/context/AuthContext";
 import { apiFetch } from "@/lib/api";
 import { CACHED_MEMBERS_KEY } from "@/lib/userCache";
+
+/** JSON 응답 형태의 회원(날짜는 문자열) */
+export type PlayerInfo = Omit<Player, "createdAt" | "updatedAt"> & {
+  createdAt: string;
+  updatedAt: string;
+};
 
 export type MemberListPlayerInfo = Omit<
   MemberListPlayer,

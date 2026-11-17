@@ -24,6 +24,8 @@ import {
   CountUpNumber,
   CountUpRatingDelta,
 } from "@/components/ui/CountUpNumber";
+import { cx } from "@/components/ui/cx";
+import { MoonIcon } from "@/components/ui/Icons";
 import { useAuth } from "@/context/AuthContext";
 import {
   type TabKey,
@@ -94,6 +96,14 @@ const HeadToHeadRatingTile: React.FC<{ stat: HeadToHeadStat | null }> = ({
   );
 };
 
+/** 비활성 회원 프로필 본문. 기록 없이 남은 화면 가운데에 안내만 둔다 */
+const InactiveMemberNotice: React.FC = () => (
+  <div className="flex flex-1 flex-col items-center justify-center gap-2.5 pb-24 text-center text-pk-muted">
+    <MoonIcon />
+    <p className="text-pk-15 font-bold text-pk-sub">비활성된 회원이에요</p>
+  </div>
+);
+
 /** 전역 회원 프로필 화면. 평점 카드·통계 4칸(승률·최근 7일·맞대결 승패·상대가 바꾼 내 평점)·받은 업적·최근 경기 */
 export default function MemberProfileDrawer({
   playerId,
@@ -146,12 +156,11 @@ export default function MemberProfileDrawer({
     () => players.find((candidate) => candidate.id === playerId) ?? null,
     [playerId, players],
   );
-  const username =
-    member?.username ??
-    overview?.rankings[category]?.entries.find(
-      (entry) => entry.player.id === playerId,
-    )?.player.username ??
-    "";
+  // 회원 목록은 active만 담으므로 비활성 회원은 요약에 실린 회원 정보로 채운다
+  const summaryPlayer = overview?.summary.player;
+  const shownPlayer = member ?? summaryPlayer;
+  const isInactive = summaryPlayer?.status === "inactive";
+  const username = shownPlayer?.username ?? "";
 
   const headToHead = overview?.summary.headToHead?.[category] ?? null;
 
@@ -166,17 +175,24 @@ export default function MemberProfileDrawer({
         onExited={handleProfileExited}
         onPullToRefresh={refreshProfile}
       >
-        <div className="flex flex-col gap-2.5 px-4 pb-8">
+        <div
+          className={cx(
+            "flex flex-col gap-2.5 px-4 pb-8",
+            isInactive && "min-h-full",
+          )}
+        >
           <ProfileHeader
             className="px-1 pb-1.5"
             headingAs="h2"
-            player={{ id: playerId, username, avatarUrl: member?.avatarUrl }}
+            player={{ id: playerId, username, avatarUrl: shownPlayer?.avatarUrl }}
             statusMessage={member?.statusMessage}
             statusMessageBackgroundColor={member?.statusMessageBackgroundColor}
-            matchStats={overview?.summary.matchStats}
-            statsError={hasError}
+            matchStats={isInactive ? null : overview?.summary.matchStats}
+            hideStats={hasError || isInactive}
           />
-          {overview ? (
+          {isInactive ? (
+            <InactiveMemberNotice />
+          ) : overview ? (
             <>
               <ProfileRatingSection
                 overview={overview}

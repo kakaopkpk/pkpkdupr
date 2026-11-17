@@ -331,6 +331,74 @@ describe("GET /api/players/:playerId/profile-summary", () => {
       AuthService.prototype,
       "authenticateAccessToken",
     ).mockResolvedValue(session);
+    vi.spyOn(AuthService.prototype, "getPlayerById").mockImplementation(
+      async (playerId: string) => ({ ...player, id: playerId }),
+    );
+  });
+
+  /** 경기·평점 기록이 없는 회원의 요약 원천 */
+  const mockEmptySummarySource = () => {
+    vi.spyOn(MatchRepository.prototype, "findByPlayerId").mockResolvedValue({
+      matches: [],
+      total: 0,
+    });
+    vi.spyOn(
+      MatchRepository.prototype,
+      "getPlayerRatingChangeLogs",
+    ).mockResolvedValue([]);
+    vi.spyOn(AuthService.prototype, "getAllPlayers").mockResolvedValue([]);
+    vi.spyOn(
+      MatchRepository.prototype,
+      "getAllRatingChangeLogs",
+    ).mockResolvedValue([]);
+    vi.spyOn(
+      MatchRepository.prototype,
+      "findCompletedMatchOutcomes",
+    ).mockResolvedValue([]);
+    vi.spyOn(
+      MatchRepository.prototype,
+      "findSessionsWithParticipantIds",
+    ).mockResolvedValue([]);
+    vi.spyOn(
+      PlayerRatingChartProjectionService.prototype,
+      "getOrRebuild",
+    ).mockResolvedValue({
+      history: { singles: [], doubles: [] },
+      generatedAt: now,
+    });
+  };
+
+  it("비활성 회원이면 status가 inactive인 회원 정보를 함께 돌려준다", async () => {
+    const inactive: Player = {
+      ...player,
+      id: "player-inactive",
+      username: "judy.do",
+      status: "inactive",
+    };
+    vi.mocked(AuthService.prototype.getPlayerById).mockResolvedValue(inactive);
+    mockEmptySummarySource();
+
+    const response = await request(app)
+      .get(`/api/players/${inactive.id}/profile-summary`)
+      .set("Authorization", "Bearer test-token");
+
+    expect(response.status).toBe(200);
+    expect(response.body.player).toMatchObject({
+      id: inactive.id,
+      username: "judy.do",
+      status: "inactive",
+    });
+  });
+
+  it("없는 회원이면 404다", async () => {
+    vi.mocked(AuthService.prototype.getPlayerById).mockResolvedValue(undefined);
+    mockEmptySummarySource();
+
+    const response = await request(app)
+      .get("/api/players/unknown/profile-summary")
+      .set("Authorization", "Bearer test-token");
+
+    expect(response.status).toBe(404);
   });
 
   afterEach(() => {
@@ -396,6 +464,7 @@ describe("GET /api/players/:playerId/profile-summary", () => {
 
     expect(response.status).toBe(200);
     expect(response.body).toMatchObject({
+      player: { id: player.id, username: player.username, status: "active" },
       matchStats: {
         singles: { matchWins: 1, matchLosses: 0, setWins: 1, setLosses: 0 },
       },

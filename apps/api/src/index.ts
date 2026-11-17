@@ -1113,6 +1113,12 @@ app.get("/api/players/:playerId/profile-summary", async (req, res) => {
 
     const playerId = req.params.playerId;
     const viewerPlayerId = decoded.playerId;
+    // 회원 목록(active만)에 없는 비활성 회원도 이름·상태를 보이도록 요약에 함께 싣는다.
+    // 없는 회원이면 평점 차트 projection을 만들기 전에 끝낸다
+    const player = await authService.getPlayerById(playerId);
+    if (!player) {
+      return res.status(404).json({ error: "사용자를 찾을 수 없습니다." });
+    }
     const now = new Date();
     const [result, ratingChangeLogs, viewerRatingChangeLogs, projection, rankingSource] =
       await Promise.all([
@@ -1138,8 +1144,9 @@ app.get("/api/players/:playerId/profile-summary", async (req, res) => {
           now,
         )
       : null;
-    res.json(
-      buildPlayerProfileSummary(
+    res.json({
+      player,
+      ...buildPlayerProfileSummary(
         matches,
         playerId,
         selectRatingTrendWindow(
@@ -1151,7 +1158,7 @@ app.get("/api/players/:playerId/profile-summary", async (req, res) => {
         dominations?.get(playerId),
         groupRatingChangeLogsByMatchId(viewerRatingChangeLogs),
       ),
-    );
+    });
   } catch (err) {
     res.status(500).json({ error: (err as Error).message });
   }
