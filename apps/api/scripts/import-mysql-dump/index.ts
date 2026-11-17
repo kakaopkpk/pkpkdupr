@@ -393,7 +393,7 @@ const printPlan = (plan: ImportPlan) => {
   for (const [source, count] of Object.entries(report.skippedRatingLogCounts)) log(`  ${source}: ${count}`);
   log(`\n부트스트랩 계정(inactive로 옮김): ${report.bootstrapUsernames.join(", ") || "없음"}`);
   log(`관리자(player_admins): ${report.adminPlayerIds.join(", ") || "없음"}`);
-  log(`게임마다 쪼갠 옛 2선승 경기: ${report.multiScoreMatchCount}`);
+  log(`게임마다 쪼갠 옛 2선승 경기: ${report.splitMatchCount}`);
   log(`세션 경기 선수라서 추가한 세션 참여자: ${report.addedSessionParticipantCount}`);
   log(`\n일반 세션(이름 유지): ${report.customSessionNames.join(", ")}`);
   log(`정기 세션 ${report.regularSessions.length}개`);

@@ -77,7 +77,7 @@ export interface ImportPlan {
     addedSessionParticipantCount: number;
     skippedRatingLogCounts: Record<string, number>;
     /** 게임마다 단판 경기로 쪼갠 옛 2선승 경기 수 */
-    multiScoreMatchCount: number;
+    splitMatchCount: number;
     adminPlayerIds: string[];
   };
 }
@@ -129,6 +129,21 @@ const addSeconds = (value: DumpValue | boolean, seconds: number): DumpValue | bo
 const compareScoreIds = (a: string, b: string) =>
   a.length - b.length || (a < b ? -1 : a > b ? 1 : 0);
 
+/** 쪼갠 옛 2선승 경기의 k번째 게임(k >= 2) id. 마이그레이션의 'M' || md5('<id>:game:<k>') 7자와 같다 */
+export const buildSplitMatchId = (matchId: string, gameNo: number) =>
+  `M${createHash("md5").update(`${matchId}:game:${gameNo}`).digest("hex").slice(0, 7)}`;
+
+const groupByMatchId = (rows: TargetRow[]) => {
+  const grouped = new Map<string, TargetRow[]>();
+  for (const row of rows) {
+    const matchId = String(row.match_id);
+    const group = grouped.get(matchId);
+    if (group) group.push(row);
+    else grouped.set(matchId, [row]);
+  }
+  return grouped;
+};
+
 /**
  * 점수가 여러 개인 옛 2선승 경기를 게임마다 단판 경기 하나로 쪼갠다.
  * 규칙은 마이그레이션 20261117120000_split_multi_score_matches.sql과 같다(같은 덤프면 같은 id·시각이 나온다).
@@ -143,19 +158,8 @@ export const splitMultiScoreMatches = (
   scores: TargetRow[];
   splitMatchCount: number;
 } => {
-  const scoresByMatchId = new Map<string, TargetRow[]>();
-  for (const score of scores) {
-    const matchId = String(score.match_id);
-    scoresByMatchId.set(matchId, [...(scoresByMatchId.get(matchId) ?? []), score]);
-  }
-  const participantsByMatchId = new Map<string, TargetRow[]>();
-  for (const participant of participants) {
-    const matchId = String(participant.match_id);
-    participantsByMatchId.set(matchId, [
-      ...(participantsByMatchId.get(matchId) ?? []),
-      participant,
-    ]);
-  }
+  const scoresByMatchId = groupByMatchId(scores);
+  const participantsByMatchId = groupByMatchId(participants);
   const existingIds = new Set(matches.map((match) => String(match.id)));
 
   const nextMatches: TargetRow[] = [...matches];
@@ -164,16 +168,15 @@ export const splitMultiScoreMatches = (
   let splitMatchCount = 0;
   for (const match of matches) {
     const matchId = String(match.id);
-    const games = [...(scoresByMatchId.get(matchId) ?? [])].sort((a, b) =>
-      compareScoreIds(String(a.id), String(b.id)),
-    );
+    const games = scoresByMatchId.get(matchId) ?? [];
     if (games.length <= 1) continue;
+    games.sort((a, b) => compareScoreIds(String(a.id), String(b.id)));
     splitMatchCount += 1;
     games.slice(1).forEach((score, index) => {
       const offset = index + 1;
-      const newMatchId = `M${createHash("md5").update(`${matchId}:game:${offset + 1}`).digest("hex").slice(0, 7)}`;
-      if (existingIds.has(newMatchId)) {
-        throw new Error(`${matchId}: 쪼갠 경기의 새 id ${newMatchId}가 다른 경기와 겹칩니다.`);
+      const newMatchId = buildSplitMatchId(matchId, offset + 1);
+      if (!isEntityId(newMatchId, "match") || existingIds.has(newMatchId)) {
+        throw new Error(`${matchId}: 쪼갠 경기의 새 id ${newMatchId}가 경기 id 형식이 아니거나 다른 경기와 겹칩니다.`);
       }
       existingIds.add(newMatchId);
       nextMatches.push({
@@ -392,13 +395,13 @@ export const buildImportPlan = (
       rating_excluded: false,
     };
   });
-  const dumpMatchById = new Map(dumpMatchRows.map((match) => [String(match.id), match]));
+  const dumpMatchIds = new Set(dumpMatchRows.map((match) => String(match.id)));
 
   const dumpMatchParticipants = dumpParticipants.map((row): TargetRow => {
     if (!playerIds.has(str(row, "player_id"))) {
       throw new Error(`${str(row, "id")}: 없는 회원 ${str(row, "player_id")}를 참조합니다.`);
     }
-    if (!dumpMatchById.has(str(row, "match_id"))) {
+    if (!dumpMatchIds.has(str(row, "match_id"))) {
       throw new Error(`${str(row, "id")}: 없는 경기를 참조합니다.`);
     }
     return {
@@ -509,7 +512,7 @@ export const buildImportPlan = (
         .map((session) => str(session, "name")),
       addedSessionParticipantCount: sessionParticipants.size - dumpParticipantCount,
       skippedRatingLogCounts,
-      multiScoreMatchCount: splitMatchCount,
+      splitMatchCount,
       adminPlayerIds,
     },
   };

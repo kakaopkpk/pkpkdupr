@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { parseMysqlDump, parseValuesList } from "./parseDump";
-import { buildImportPlan, buildRegularSessionId } from "./transform";
+import { buildImportPlan, buildRegularSessionId, buildSplitMatchId } from "./transform";
 
 const KST = 9 * 3600;
 /** KST 벽시계 시각의 epoch 초 */
@@ -216,7 +216,7 @@ describe("buildImportPlan", () => {
     expect(rows.player_rating_change_logs.map((row) => row.id)).toEqual(["r3"]);
     expect(report.skippedRatingLogCounts).toEqual({ match_completed: 1, manual_recalculation: 1 });
     expect(rows.matches.every((row) => !("mode" in row) && row.rating_excluded === false)).toBe(true);
-    expect(report.multiScoreMatchCount).toBe(1);
+    expect(report.splitMatchCount).toBe(1);
   });
 
   it("옛 2선승 경기는 마이그레이션과 같은 규칙으로 게임마다 단판 경기로 쪼갠다", () => {
@@ -224,6 +224,7 @@ describe("buildImportPlan", () => {
     const startsAt = kst("2026-09-14T19:10:00");
     // SQL 'M' || substr(md5('M2222222:game:2'), 1, 7)과 같은 값
     const secondGameId = "M2e5b2d9";
+    expect(buildSplitMatchId("M2222222", 2)).toBe(secondGameId);
     expect(rows.matches.find((m) => m.id === secondGameId)).toMatchObject({
       session_id: "Slegacy1",
       creator_player_id: "Pboot001",
