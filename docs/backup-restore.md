@@ -71,12 +71,19 @@ ls pkpkdupr-backup/backups/
 ### 2. 대상 준비
 
 - 새 Supabase 프로젝트: 마이그레이션을 적용하지 않은 상태로 둡니다. `public` 스키마가 비어 있어야 합니다.
-- 기존 프로젝트를 되돌릴 때: 먼저 그 시점 백업을 하나 더 받아 둔 뒤, `public` 스키마를 비우고 `auth.users`를 비웁니다. 되돌릴 수 없는 작업이므로 대상을 두 번 확인합니다.
+- 기존 프로젝트를 되돌릴 때(마이그레이션이 적용된 로컬 Supabase 스택 포함): 먼저 그 시점 백업을 하나 더 받아 둔 뒤, 로그인 계정과 `public`의 테이블을 지웁니다. 되돌릴 수 없는 작업이므로 대상을 두 번 확인합니다. `public` 스키마 자체는 지우지 않습니다. Supabase가 스키마에 걸어 둔 역할별 권한(`anon`·`authenticated`·`service_role`)이 함께 사라지고, 덤프는 `--no-privileges`라서 복원해도 돌아오지 않기 때문입니다.
 
   ```sql
+  -- players 등 auth.users를 가리키는 public 테이블도 함께 비워진다
   TRUNCATE auth.users CASCADE;
-  DROP SCHEMA public CASCADE;
-  CREATE SCHEMA public;
+  DO $$
+  DECLARE t record;
+  BEGIN
+    FOR t IN SELECT tablename FROM pg_tables WHERE schemaname = 'public' LOOP
+      EXECUTE format('DROP TABLE public.%I CASCADE', t.tablename);
+    END LOOP;
+  END
+  $$;
   ```
 
 ### 3. 복호화 후 복원 (Auth → public 순서)
@@ -111,7 +118,7 @@ psql "$TARGET_DB_URL" -c "\dt"   # supabase/migrations/의 테이블이 모두 �
 
 ### 복원 시험
 
-로컬 Supabase 스택(`pnpm db:start`, Docker 필요)을 대상으로 위 2~4단계를 그대로 합니다. 접속 문자열은 `postgresql://postgres:postgres@127.0.0.1:54322/postgres`입니다. 시험 뒤 `pnpm db:reset`으로 로컬 DB를 되돌립니다.
+로컬 Supabase 스택(`pnpm db:start`, Docker 필요)을 대상으로 합니다. 로컬 DB에는 마이그레이션이 이미 적용돼 있으므로 2단계는 "기존 프로젝트를 되돌릴 때"를 따르고, 이어서 3~4단계를 합니다. 접속 문자열은 `postgresql://postgres:postgres@127.0.0.1:54322/postgres`입니다. 시험 뒤 `pnpm db:reset`으로 로컬 DB를 되돌립니다.
 
 ## 주의
 
