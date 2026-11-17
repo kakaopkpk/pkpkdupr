@@ -43,7 +43,7 @@ export const AvatarConfirmSheetBody: React.FC<AvatarConfirmSheetBodyProps> = ({
       ) : null}
       <div className="flex items-center gap-2">
         <PkButton
-          variant="secondary"
+          variant="soft"
           size="lg"
           disabled={isSaving}
           onClick={onPickAgain}
