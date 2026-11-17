@@ -13,7 +13,7 @@ import {
 } from "@pkpkdupr/shared/session";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
-const RECENT_DELETION_DAYS = 7;
+export const RECENT_DELETION_DAYS = 7;
 
 /** JSON 응답의 날짜는 문자열로 오므로 Date로 바꿔 쓴다 */
 const toTime = (value: Date | string) => new Date(value).getTime();
@@ -72,9 +72,11 @@ export const summarizeMatches = (
     weekRatingExcludedCount: weekCompleted.filter(
       (match) => match.ratingExcluded,
     ).length,
+    // 서버 진행 중 조건과 같게 시작 시각이 아직 오지 않은 관리자 예정 경기는 뺀다
     inProgressCount: matches.filter(
       (match) =>
         match.status === "created" &&
+        toTime(match.matchStartsAt) <= nowTime &&
         !isInProgressMatchExpired(new Date(match.matchStartsAt), now),
     ).length,
   };
@@ -85,7 +87,7 @@ export interface DeletionSummary {
   hasCompleted: boolean;
 }
 
-/** 최근 7일 회원이 지운 경기. 관리자가 지운 것은 세지 않는다 */
+/** 최근 RECENT_DELETION_DAYS일 회원이 지운 경기. 관리자가 지운 것은 세지 않는다 */
 export const summarizeMemberDeletions = (
   logs: AdminMatchDeletionLog[],
   now: Date = new Date(),

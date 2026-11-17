@@ -1,7 +1,12 @@
 import React from "react";
 import { Link, useNavigate } from "react-router-dom";
+import type { AdminMatchDeletionLog } from "@pkpkdupr/shared/match";
 import type { AdminPlayer } from "@pkpkdupr/shared/player";
-import type { MatchSessionDetail } from "@pkpkdupr/shared/session";
+import {
+  IN_PROGRESS_MATCH_TIMEOUT_MS,
+  type AdminRegularSessionSkip,
+  type MatchSessionDetail,
+} from "@pkpkdupr/shared/session";
 import { fetchAdminMatches, fetchMatchDeletionLogs } from "../../api/matches";
 import { fetchAdminPlayers } from "../../api/players";
 import {
@@ -21,6 +26,7 @@ import {
 } from "../../lib/adminRoutes";
 import { formatKstDateWithWeekday } from "../../lib/format";
 import {
+  RECENT_DELETION_DAYS,
   dateKeyBlock,
   formatDateKeyShort,
   formatSessionTimePlace,
@@ -34,8 +40,11 @@ import {
 import { useLoader, type LoadState } from "./useLoader";
 
 const UPCOMING_SESSION_LIMIT = 3;
+const IN_PROGRESS_TIMEOUT_HOURS = IN_PROGRESS_MATCH_TIMEOUT_MS / (60 * 60 * 1000);
 
-const loadNotices = () =>
+type NoticeData = [AdminMatchDeletionLog[], AdminRegularSessionSkip[]];
+
+const loadNotices = (): Promise<NoticeData> =>
   Promise.all([fetchMatchDeletionLogs(), fetchRegularSessionSkips()]);
 
 const Placeholder: React.FC<{ className?: string }> = ({ className }) => (
@@ -188,22 +197,20 @@ const HomePage: React.FC = () => {
 
   const todayLabel = (() => {
     if (today.state.status !== "success") return null;
-    const first = today.state.data.sessions[0];
+    const [first, ...rest] = today.state.data.sessions;
     if (!first) return "오늘 세션 없음";
-    return first.startTime
+    const label = first.startTime
       ? `오늘 ${first.name} ${first.startTime}`
       : `오늘 ${first.name}`;
+    return rest.length > 0 ? `${label} 외 ${rest.length}개` : label;
   })();
+  const dateLabel = formatKstDateWithWeekday(new Date());
 
   return (
     <>
       <PageHeader
         title="홈"
-        subtitle={
-          todayLabel
-            ? `${formatKstDateWithWeekday(new Date())} · ${todayLabel}`
-            : formatKstDateWithWeekday(new Date())
-        }
+        subtitle={todayLabel ? `${dateLabel} · ${todayLabel}` : dateLabel}
         actions={
           <Button onClick={() => navigate(membersPath({ add: true }))}>
             + 회원 추가
@@ -246,7 +253,7 @@ const HomePage: React.FC = () => {
             onRetry={matches.reload}
             render={(data) => ({
               value: String(summarizeMatches(data).inProgressCount),
-              note: "점수 없이 2시간 지나면 자동 정리",
+              note: `점수 없이 ${IN_PROGRESS_TIMEOUT_HOURS}시간 지나면 자동 정리`,
             })}
           />
           <StatTile
@@ -423,7 +430,7 @@ const UpcomingSessionsCard: React.FC<{
 );
 
 const NoticeCard: React.FC<{
-  state: LoadState<Awaited<ReturnType<typeof loadNotices>>>;
+  state: LoadState<NoticeData>;
   onRetry: () => void;
 }> = ({ state, onRetry }) => (
   <Card>
@@ -441,7 +448,7 @@ const NoticeCard: React.FC<{
               <Row>
                 <Chip>경기 삭제</Chip>
                 <p className="min-w-0 flex-1 text-pk-13 text-pk-ink">
-                  최근 7일 회원이 지운 경기 {deletions.count}건
+                  최근 {RECENT_DELETION_DAYS}일 회원이 지운 경기 {deletions.count}건
                   {deletions.hasCompleted &&
                     " · 완료 경기라 평점이 다시 계산됐어요"}
                 </p>
