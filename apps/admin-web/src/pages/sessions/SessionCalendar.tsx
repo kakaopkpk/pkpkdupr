@@ -178,8 +178,7 @@ export const SessionCalendar: React.FC<{
               {daySessions.length > 0 && (
                 <div className="mt-1 flex w-full flex-col gap-1">
                   {daySessions.map((session) => {
-                    const past = isPastDay;
-                    const label = past
+                    const label = isPastDay
                       ? `${session.matchCount}경기`
                       : `${session.participantIds.length}명`;
                     return (
@@ -193,7 +192,7 @@ export const SessionCalendar: React.FC<{
                         className={cx(
                           "h-6 w-full truncate rounded-full px-2 text-pk-12 font-bold tabular-nums",
                           "focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-pk-primary",
-                          past
+                          isPastDay
                             ? "bg-pk-divider text-pk-sub hover:bg-pk-neutral"
                             : session.kind === "regular"
                               ? "bg-pk-primary text-white hover:bg-pk-deep"

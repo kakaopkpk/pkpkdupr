@@ -67,14 +67,17 @@ export const isPastSession = (
   todayKey: string,
 ): boolean => getSessionDateKey(session) < todayKey;
 
+/** 시각 없는 세션을 같은 날 맨 뒤로 보내는 정렬 키. "HH:MM"보다 항상 크다 */
+const NO_START_TIME_SORT_KEY = "99:99";
+
 /** 같은 날 안에서는 정기 세션 먼저, 그다음 시작 시각(시각 없으면 뒤) → 이름 순 */
 export const compareSessionsInDay = (
   a: ManagedMatchSession,
   b: ManagedMatchSession,
 ): number => {
   if (a.kind !== b.kind) return a.kind === "regular" ? -1 : 1;
-  const aTime = a.startTime ?? "99:99";
-  const bTime = b.startTime ?? "99:99";
+  const aTime = a.startTime ?? NO_START_TIME_SORT_KEY;
+  const bTime = b.startTime ?? NO_START_TIME_SORT_KEY;
   if (aTime !== bTime) return aTime < bTime ? -1 : 1;
   return a.name.localeCompare(b.name);
 };

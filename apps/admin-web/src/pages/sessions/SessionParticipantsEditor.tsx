@@ -32,7 +32,9 @@ export const SessionParticipantsEditor: React.FC<{
     [detail.participants],
   );
 
+  // 요청이 겹치면 늦게 온 응답이 최신 참여자 목록을 덮으므로 한 번에 하나만 보낸다
   const run = async (action: () => Promise<MatchSessionDetail>) => {
+    if (pending) return;
     setPending(true);
     setError(null);
     try {

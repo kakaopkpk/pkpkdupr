@@ -215,7 +215,7 @@ export const SessionFormDialog: React.FC<{
               경기가 있어 날짜는 바꿀 수 없어요
             </p>
           )}
-          {dateError && values.dateKey && (
+          {dateError && (
             <p className="mt-1.5 text-pk-13 font-semibold text-pk-down">{dateError}</p>
           )}
         </div>

@@ -8,6 +8,7 @@ import { DetailPanel, PanelSection } from "../../components/ui/DetailPanel";
 import { PlayerAvatar } from "../../components/ui/PlayerAvatar";
 import { RatingDelta } from "../../components/ui/RatingDelta";
 import { matchesPath } from "../../lib/adminRoutes";
+import { formatRatingDelta } from "../../lib/format";
 import { getLoadErrorMessage } from "./sessionErrors";
 import { formatSessionSubtitle, PanelStatus, SessionPanelTitle } from "./SessionPanelParts";
 
@@ -18,7 +19,7 @@ const getTopMovers = (report: MatchSessionReport): SessionPlayerReport[] =>
   report.players
     .filter(
       (row) =>
-        Number(row.ratingDelta.toFixed(3)) !== 0 &&
+        formatRatingDelta(row.ratingDelta) !== "0.000" &&
         row.player.id !== report.topRiser?.player.id,
     )
     .sort(
