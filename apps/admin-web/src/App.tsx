@@ -1,16 +1,22 @@
 import React from "react";
-import { Navigate, Routes, Route } from "react-router-dom";
+import { Navigate, Route, Routes } from "react-router-dom";
+import { AdminLayout } from "./components/layout/AdminLayout";
+import { ToastProvider } from "./components/ui/Toast";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import Login from "./pages/Login";
-import AdminDashboard from "./pages/AdminDashboard";
+import HomePage from "./pages/home/HomePage";
+import MatchesPage from "./pages/matches/MatchesPage";
+import MembersPage from "./pages/members/MembersPage";
+import RatingsPage from "./pages/ratings/RatingsPage";
+import SessionsPage from "./pages/sessions/SessionsPage";
 
 function AppRoutes() {
   const { status } = useAuth();
 
   if (status === "loading") {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-100 text-sm text-gray-500">
-        로그인 상태를 확인하는 중...
+      <div className="flex min-h-screen items-center justify-center bg-pk-bg text-pk-15 text-pk-sub">
+        로그인 상태를 확인하는 중…
       </div>
     );
   }
@@ -26,7 +32,13 @@ function AppRoutes() {
 
   return (
     <Routes>
-      <Route path="/" element={<AdminDashboard />} />
+      <Route element={<AdminLayout />}>
+        <Route index element={<HomePage />} />
+        <Route path="members" element={<MembersPage />} />
+        <Route path="matches" element={<MatchesPage />} />
+        <Route path="sessions" element={<SessionsPage />} />
+        <Route path="ratings" element={<RatingsPage />} />
+      </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
@@ -35,7 +47,9 @@ function AppRoutes() {
 function App() {
   return (
     <AuthProvider>
-      <AppRoutes />
+      <ToastProvider>
+        <AppRoutes />
+      </ToastProvider>
     </AuthProvider>
   );
 }

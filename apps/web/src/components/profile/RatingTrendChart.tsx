@@ -128,7 +128,7 @@ const RatingTrendChart: React.FC<{
   const todayKey = toKstDateKey(now);
   const isToday = (time: Date) => toKstDateKey(time) === todayKey;
   const firstTime = samples[0]?.time;
-  const lastTime = samples.at(-1)?.time;
+  const lastTime = samples[samples.length - 1]?.time;
   // 점이 하나면 그 평점이 오늘까지 이어지는 선이라 오른쪽은 "오늘"이고,
   // 그 점이 오늘이면 왼쪽 날짜 라벨은 겹치므로 숨긴다
   const startLabel =
