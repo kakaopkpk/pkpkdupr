@@ -1,0 +1,69 @@
+import type { Match } from "@pkpkdupr/shared/match";
+import type { AdminPlayer } from "@pkpkdupr/shared/player";
+import { toKstDateKey } from "@pkpkdupr/shared/session";
+
+export const DELETED_PLAYER_LABEL = "(지운 회원)";
+
+const KST_OFFSET_MS = 9 * 60 * 60 * 1000;
+
+// API JSON의 날짜는 문자열로 오므로 표시·비교 전에 Date로 바꾼다
+export const toDate = (value: Date | string): Date =>
+  value instanceof Date ? value : new Date(value);
+
+const toNullableDate = (value: Date | string | null): Date | null =>
+  value === null ? null : toDate(value);
+
+/** 경기 응답의 날짜 필드를 Date로 바꾼다 */
+export const normalizeMatch = (match: Match): Match => ({
+  ...match,
+  matchStartsAt: toDate(match.matchStartsAt),
+  createdAt: toDate(match.createdAt),
+  updatedAt: toDate(match.updatedAt),
+  completedAt: toNullableDate(match.completedAt),
+  resultSubmittedAt: toNullableDate(match.resultSubmittedAt),
+  session: match.session
+    ? { ...match.session, date: toDate(match.session.date) }
+    : undefined,
+});
+
+/** 경기 시각 내림차순, 같으면 id 내림차순 */
+export const compareMatchesLatestFirst = (a: Match, b: Match): number =>
+  toDate(b.matchStartsAt).getTime() - toDate(a.matchStartsAt).getTime() ||
+  b.id.localeCompare(a.id);
+
+export type PlayerLookup = ReadonlyMap<string, { username: string }>;
+
+/** 회원 목록과 경기 팀 선수로 id → 아이디를 찾는 표 */
+export const buildPlayerLookup = (
+  players: readonly AdminPlayer[],
+  matches: readonly Match[] = [],
+): PlayerLookup => {
+  const lookup = new Map<string, { username: string }>();
+  for (const match of matches) {
+    for (const team of match.teams) {
+      for (const player of team.players) lookup.set(player.id, player);
+    }
+  }
+  for (const player of players) lookup.set(player.id, player);
+  return lookup;
+};
+
+export const lookupUsername = (
+  lookup: PlayerLookup,
+  playerId: string | null | undefined,
+): string =>
+  (playerId && lookup.get(playerId)?.username) || DELETED_PLAYER_LABEL;
+
+/** datetime-local 입력값 "YYYY-MM-DDTHH:mm"(KST) */
+export const toKstDateTimeInputValue = (date: Date | string): string =>
+  new Date(toDate(date).getTime() + KST_OFFSET_MS).toISOString().slice(0, 16);
+
+/** datetime-local 입력값(KST)을 Date로. 형식이 틀리면 null */
+export const parseKstDateTimeInputValue = (value: string): Date | null => {
+  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(value)) return null;
+  const date = new Date(`${value}:00+09:00`);
+  return Number.isNaN(date.getTime()) ? null : date;
+};
+
+export const matchKstDateKey = (match: Match): string =>
+  toKstDateKey(toDate(match.matchStartsAt));
