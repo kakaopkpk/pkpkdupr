@@ -1,5 +1,5 @@
 import type { PlayerRatingChangeLog } from "@pkpkdupr/shared/player";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   buildRankingResponse,
   buildSessionHistory,
@@ -13,6 +13,11 @@ import {
   type RankingSession,
   type RankingSourcePlayer,
 } from "../services/RankingService";
+
+// 이 파일의 고정 데이터는 업적 기준 시각(2026-11-17 KST) 전 경기라, 업적은 기준 시각 없이 센다.
+vi.mock("@pkpkdupr/shared/achievementCountStart", () => ({
+  ACHIEVEMENT_COUNT_START: new Date(0),
+}));
 
 const at = (iso: string) => new Date(iso);
 const now = at("2026-11-12T12:00:00.000Z");

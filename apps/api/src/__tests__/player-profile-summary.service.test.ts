@@ -1,7 +1,12 @@
 import type { Match } from "@pkpkdupr/shared/match";
 import type { Player, PlayerRatingChangeLog } from "@pkpkdupr/shared/player";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { buildPlayerProfileSummary } from "../services/PlayerProfileSummaryService";
+
+// 이 파일의 고정 데이터는 업적 기준 시각(2026-11-17 KST) 전 경기라, 업적은 기준 시각 없이 센다.
+vi.mock("@pkpkdupr/shared/achievementCountStart", () => ({
+  ACHIEVEMENT_COUNT_START: new Date(0),
+}));
 
 const now = new Date("2026-11-12T12:00:00.000Z");
 

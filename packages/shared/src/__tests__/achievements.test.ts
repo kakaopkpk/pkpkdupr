@@ -10,10 +10,11 @@ import {
   type AchievementProgress,
   type EarnedAchievement,
 } from "../achievements";
+import { ACHIEVEMENT_COUNT_START } from "../achievementCountStart";
 import type { MatchStatus, MatchType } from "../match";
 
 const ME = "player-me";
-const BASE_MS = Date.parse("2026-01-01T00:00:00.000Z");
+const BASE_MS = Date.parse("2026-12-01T00:00:00.000Z");
 
 let sequence = 0;
 
@@ -645,6 +646,39 @@ describe("computeAchievements", () => {
         "unbeaten-session",
       ),
     ).toMatchObject({ earned: true, earnedMatchId: fourth.id });
+  });
+
+  it("업적 기준 시각(2026-11-17 00:00 KST) 전에 완료된 경기는 업적에 세지 않는다", () => {
+    const startMs = ACHIEVEMENT_COUNT_START.getTime();
+    expect(ACHIEVEMENT_COUNT_START.toISOString()).toBe("2026-11-16T15:00:00.000Z");
+    const before = makeMatch({
+      sessionId: "session-old",
+      completedAt: new Date(startMs - 1),
+    });
+    const atStart = makeMatch({
+      sessionId: "session-new",
+      completedAt: new Date(startMs),
+    });
+
+    const progress = computeAchievements(
+      ME,
+      [before, atStart],
+      new Set(["session-old", "session-new"]),
+    );
+    expect(progressOf(progress, "matches-1")).toMatchObject({
+      earned: true,
+      earnedMatchId: atStart.id,
+      current: 1,
+    });
+    // 기준 시각 전 경기만 있는 세션은 출석·세션 지배자에도 세지 않는다
+    expect(progressOf(progress, "attendance-10")).toMatchObject({ current: 1 });
+    expect(progressOf(progress, "dominator-1")).toMatchObject({
+      earnedMatchId: atStart.id,
+      current: 1,
+    });
+    expect(
+      progressOf(computeAchievements(ME, [before]), "matches-1"),
+    ).toMatchObject({ earned: false, current: 0 });
   });
 
   it("세션 지배자는 지배 세션 수로 세고, 그 세션에서 내 마지막 경기를 받은 경기로 정한다", () => {
