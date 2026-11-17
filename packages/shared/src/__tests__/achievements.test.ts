@@ -1,14 +1,17 @@
 import { describe, expect, it } from "vitest";
 import {
   ACHIEVEMENT_CATEGORY_LABEL,
+  ACHIEVEMENT_MAX_POINTS,
   ACHIEVEMENTS,
   computeAchievements,
   findNewAchievements,
   findUnseenAchievements,
+  getAchievementPoints,
   isBestStreakAchievement,
   isLowRatingAchievement,
   isRatingAchievement,
   RATING_ACHIEVEMENT_MIN_DOUBLES_MATCHES,
+  sumAchievementPoints,
   type AchievementMatch,
   type AchievementProgress,
   type EarnedAchievement,
@@ -1289,5 +1292,30 @@ describe("평점 업적", () => {
         .filter((item) => isRatingAchievement(item.achievementId))
         .map((item) => [item.achievementId, item.earnedMatchId]),
     ).toEqual([["rating-3.5", saved.id]]);
+  });
+});
+
+describe("업적 점수", () => {
+  it("업적마다 10·25·50·100점이고 낮은 평점 업적만 0점이다", () => {
+    for (const definition of ACHIEVEMENTS) {
+      if (isLowRatingAchievement(definition.id)) {
+        expect(definition.points).toBe(0);
+      } else {
+        expect([10, 25, 50, 100]).toContain(definition.points);
+      }
+    }
+    expect(ACHIEVEMENT_MAX_POINTS).toBe(1460);
+  });
+
+  it("받은 업적 점수만 더하고 모르는 업적은 0점이다", () => {
+    expect(getAchievementPoints("unknown")).toBe(0);
+    expect(
+      sumAchievementPoints([
+        { id: "matches-1", earned: true },
+        { id: "perfect-win", earned: true },
+        { id: "streak-20", earned: false },
+        { id: "rating-low-2.5", earned: true },
+      ]),
+    ).toBe(60);
   });
 });

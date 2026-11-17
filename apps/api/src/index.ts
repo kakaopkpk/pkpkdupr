@@ -56,6 +56,7 @@ import {
   ACHIEVEMENTS,
   findNewAchievements,
   findUnseenAchievements,
+  getAchievementPoints,
   type AchievementHoldersResponse,
   type EarnedAchievement,
   type SeenAchievementRef,
@@ -84,7 +85,9 @@ import type {
   PlayerStatus,
 } from "@pkpkdupr/shared/player";
 import type {
+  AchievementRankingResponse,
   MatchSessionHistoryResponse,
+  RankingCategory,
   RankingResponse,
   RecordItem,
   RecordsResponse,
@@ -124,6 +127,7 @@ import { buildPlayerProfileSummary } from "./services/PlayerProfileSummaryServic
 import {
   SESSION_HISTORY_DEFAULT_LIMIT,
   SESSION_HISTORY_MAX_LIMIT,
+  buildAchievementRankingResponse,
   buildRankingResponse,
   buildRecordsPage,
   buildSessionHistory,
@@ -2846,15 +2850,15 @@ const loadRankingSource = async () => {
   return { context: createRankingContext(players, logs, matches), sessions };
 };
 
-const parseRankingCategory = (value: unknown): MatchTopLevelType => {
+const parseRankingCategory = (value: unknown): RankingCategory => {
   if (value === undefined) {
     return "doubles";
   }
-  if (value === "doubles" || value === "singles") {
+  if (value === "doubles" || value === "singles" || value === "achievements") {
     return value;
   }
   throw new RankingRequestError(
-    "category는 doubles 또는 singles여야 합니다.",
+    "category는 doubles, singles, achievements 중 하나여야 합니다.",
     400,
   );
 };
@@ -2883,12 +2887,13 @@ app.get("/api/rankings", async (req, res) => {
     const category = parseRankingCategory(req.query.category);
     const now = new Date();
     const { context, sessions } = await loadRankingSource();
-    const response: RankingResponse = buildRankingResponse({
-      context,
-      category,
-      sessions,
-      now,
-    });
+    const response: RankingResponse | AchievementRankingResponse =
+      category === "achievements"
+        ? buildAchievementRankingResponse(
+            context,
+            findSessionDominations(context, sessions, now),
+          )
+        : buildRankingResponse({ context, category, sessions, now });
     res.json(response);
   } catch (err) {
     sendRankingFailure(res, err);
@@ -3066,6 +3071,10 @@ app.get("/api/me/achievements/unseen", async (req, res) => {
     );
     const response: UnseenAchievementsResponse = {
       achievements: findUnseenAchievements(earned, seen),
+      points: earned.reduce(
+        (sum, item) => sum + getAchievementPoints(item.achievementId),
+        0,
+      ),
     };
     res.json(response);
   } catch (err) {

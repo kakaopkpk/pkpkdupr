@@ -31,6 +31,27 @@ export interface UnratedRankingEntry {
   matchCount: number;
 }
 
+/** 랭킹 분류. achievements는 업적 점수 순위다 */
+export type RankingCategory = MatchTopLevelType | "achievements";
+
+export interface AchievementRankingEntry {
+  /** 1부터 연속 */
+  rank: number;
+  player: RankingEntryPlayer;
+  /** 받은 업적 점수 합 */
+  points: number;
+}
+
+/**
+ * GET /api/rankings?category=achievements 응답. 활성 정회원 전원을 점수 내림차순 →
+ * 그 점수에 먼저 도달한 순(마지막으로 점수를 얻은 업적의 받은 시각 오름차순)으로 세운다.
+ * 0점 회원은 맨 아래이고, 순위 변동은 없다
+ */
+export interface AchievementRankingResponse {
+  category: "achievements";
+  entries: AchievementRankingEntry[];
+}
+
 /** GET /api/rankings?category= 응답 */
 export interface RankingResponse {
   category: MatchTopLevelType;

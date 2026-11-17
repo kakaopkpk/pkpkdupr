@@ -2,6 +2,7 @@ import {
   ACHIEVEMENTS,
   compareEarnedAchievements,
   computeAchievements,
+  getAchievementPoints,
   isEarnedByCountedMatch,
   toEarnedAchievements,
   type AchievementMatch,
@@ -22,6 +23,8 @@ import {
   type PlayerRatingChangeLog,
 } from "@pkpkdupr/shared/player";
 import type {
+  AchievementRankingEntry,
+  AchievementRankingResponse,
   MatchSessionHistoryItem,
   MatchSessionReport,
   RankingEntry,
@@ -814,6 +817,51 @@ export const countAchievementHolders = (
     }
   }
   return counts;
+};
+
+/**
+ * 업적 점수 순위. 활성 정회원 전원을 점수 내림차순 → 그 점수에 먼저 도달한 순(점수가 있는 받은 업적 중
+ * 가장 늦게 받은 시각 오름차순) → 아이디(username) 오름차순으로 세우고 1부터 연속 번호를 붙인다.
+ * 0점 회원은 도달 시각이 없어 맨 아래에 아이디 순으로 둔다.
+ */
+export const buildAchievementRankingResponse = (
+  context: RankingContext,
+  dominations: SessionDominations,
+): AchievementRankingResponse => {
+  const matches = toContextAchievementMatches(context);
+  const scored = [...context.playersById.values()]
+    .filter(isRankablePlayer)
+    .map((player) => {
+      let points = 0;
+      let reachedAtMs: number | null = null;
+      for (const item of findPlayerEarnedAchievements(
+        matches,
+        dominations,
+        player.id,
+      )) {
+        const itemPoints = getAchievementPoints(item.achievementId);
+        if (itemPoints === 0) continue;
+        points += itemPoints;
+        reachedAtMs = Math.max(reachedAtMs ?? 0, item.earnedAt.getTime());
+      }
+      return { player, points, reachedAtMs };
+    })
+    .sort(
+      (left, right) =>
+        right.points - left.points ||
+        // 점수가 같으면 도달 시각은 둘 다 있거나(0점 초과) 둘 다 없다(0점)
+        (left.reachedAtMs ?? 0) - (right.reachedAtMs ?? 0) ||
+        compareText(left.player.username, right.player.username) ||
+        compareText(left.player.id, right.player.id),
+    );
+  const entries: AchievementRankingEntry[] = scored.map(
+    ({ player, points }, index) => ({
+      rank: index + 1,
+      player: toRankingEntryPlayer(player),
+      points,
+    }),
+  );
+  return { category: "achievements", entries };
 };
 
 /** 기록 탭 줄의 정렬 키. 세션은 date, 경기는 matchStartsAt */

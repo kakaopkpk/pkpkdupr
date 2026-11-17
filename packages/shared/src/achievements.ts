@@ -32,6 +32,8 @@ export interface AchievementDefinition {
   /** 배지 아래 숫자 꼬리표 문구("10", "4.0"). 없으면 null */
   badgeNumber: string | null;
   target: number;
+  /** 업적 점수. 난이도에 따라 10·25·50·100점이고, 낮은 평점 업적은 0점이다 */
+  points: number;
 }
 
 /** 진행도를 세는 지표. 업적마다 하나를 쓴다 */
@@ -70,6 +72,7 @@ const ACHIEVEMENT_TABLE: readonly {
       condition: "경기 1개 완료",
       badgeNumber: null,
       target: 1,
+      points: 10,
     },
   },
   {
@@ -81,6 +84,7 @@ const ACHIEVEMENT_TABLE: readonly {
       condition: "경기 10개 완료",
       badgeNumber: "10",
       target: 10,
+      points: 10,
     },
   },
   {
@@ -92,6 +96,7 @@ const ACHIEVEMENT_TABLE: readonly {
       condition: "경기 50개 완료",
       badgeNumber: "50",
       target: 50,
+      points: 25,
     },
   },
   {
@@ -103,6 +108,7 @@ const ACHIEVEMENT_TABLE: readonly {
       condition: "경기 100개 완료",
       badgeNumber: "100",
       target: 100,
+      points: 25,
     },
   },
   {
@@ -114,6 +120,7 @@ const ACHIEVEMENT_TABLE: readonly {
       condition: "경기 300개 완료",
       badgeNumber: "300",
       target: 300,
+      points: 50,
     },
   },
   {
@@ -125,6 +132,7 @@ const ACHIEVEMENT_TABLE: readonly {
       condition: "경기 1000개 완료",
       badgeNumber: "1000",
       target: 1000,
+      points: 100,
     },
   },
   {
@@ -136,6 +144,7 @@ const ACHIEVEMENT_TABLE: readonly {
       condition: "처음 이긴 경기",
       badgeNumber: null,
       target: 1,
+      points: 10,
     },
   },
   {
@@ -147,6 +156,7 @@ const ACHIEVEMENT_TABLE: readonly {
       condition: "이긴 경기 10개",
       badgeNumber: "10",
       target: 10,
+      points: 10,
     },
   },
   {
@@ -158,6 +168,7 @@ const ACHIEVEMENT_TABLE: readonly {
       condition: "이긴 경기 50개",
       badgeNumber: "50",
       target: 50,
+      points: 25,
     },
   },
   {
@@ -169,6 +180,7 @@ const ACHIEVEMENT_TABLE: readonly {
       condition: "이긴 경기 100개",
       badgeNumber: "100",
       target: 100,
+      points: 50,
     },
   },
   {
@@ -180,6 +192,7 @@ const ACHIEVEMENT_TABLE: readonly {
       condition: "이긴 경기 500개",
       badgeNumber: "500",
       target: 500,
+      points: 100,
     },
   },
   {
@@ -191,6 +204,7 @@ const ACHIEVEMENT_TABLE: readonly {
       condition: "이긴 경기 1000개",
       badgeNumber: "1000",
       target: 1000,
+      points: 100,
     },
   },
   {
@@ -202,6 +216,7 @@ const ACHIEVEMENT_TABLE: readonly {
       condition: "단식에서 처음 이긴 경기",
       badgeNumber: null,
       target: 1,
+      points: 10,
     },
   },
   {
@@ -213,6 +228,7 @@ const ACHIEVEMENT_TABLE: readonly {
       condition: "단식에서 이긴 경기 10개",
       badgeNumber: "10",
       target: 10,
+      points: 25,
     },
   },
   {
@@ -224,6 +240,7 @@ const ACHIEVEMENT_TABLE: readonly {
       condition: "세 경기 연달아 승리",
       badgeNumber: "3",
       target: 3,
+      points: 10,
     },
   },
   {
@@ -235,6 +252,7 @@ const ACHIEVEMENT_TABLE: readonly {
       condition: "다섯 경기 연달아 승리",
       badgeNumber: "5",
       target: 5,
+      points: 25,
     },
   },
   {
@@ -246,6 +264,7 @@ const ACHIEVEMENT_TABLE: readonly {
       condition: "열 경기 연달아 승리",
       badgeNumber: "10",
       target: 10,
+      points: 50,
     },
   },
   {
@@ -257,6 +276,7 @@ const ACHIEVEMENT_TABLE: readonly {
       condition: "스무 경기 연달아 승리",
       badgeNumber: "20",
       target: 20,
+      points: 100,
     },
   },
   {
@@ -268,6 +288,7 @@ const ACHIEVEMENT_TABLE: readonly {
       condition: "복식 10경기 이상, 복식 평점 3.0 달성",
       badgeNumber: "3.0",
       target: 3,
+      points: 10,
     },
   },
   {
@@ -279,6 +300,7 @@ const ACHIEVEMENT_TABLE: readonly {
       condition: "복식 10경기 이상, 복식 평점 3.5 달성",
       badgeNumber: "3.5",
       target: 3.5,
+      points: 25,
     },
   },
   {
@@ -290,6 +312,7 @@ const ACHIEVEMENT_TABLE: readonly {
       condition: "복식 10경기 이상, 복식 평점 4.0 달성",
       badgeNumber: "4.0",
       target: 4,
+      points: 50,
     },
   },
   {
@@ -301,6 +324,7 @@ const ACHIEVEMENT_TABLE: readonly {
       condition: "복식 10경기 이상, 복식 평점 4.5 달성",
       badgeNumber: "4.5",
       target: 4.5,
+      points: 100,
     },
   },
   {
@@ -312,6 +336,7 @@ const ACHIEVEMENT_TABLE: readonly {
       condition: "복식 10경기 이상, 복식 평점 2.5 이하",
       badgeNumber: "2.5",
       target: 2.5,
+      points: 0,
     },
   },
   {
@@ -323,6 +348,7 @@ const ACHIEVEMENT_TABLE: readonly {
       condition: "복식 10경기 이상, 복식 평점 2.0 이하",
       badgeNumber: "2.0",
       target: 2,
+      points: 0,
     },
   },
   {
@@ -334,6 +360,7 @@ const ACHIEVEMENT_TABLE: readonly {
       condition: "1점도 주지 않고 승리",
       badgeNumber: null,
       target: 1,
+      points: 50,
     },
   },
   {
@@ -345,6 +372,7 @@ const ACHIEVEMENT_TABLE: readonly {
       condition: "듀스 끝에 15:14로 승리",
       badgeNumber: null,
       target: 1,
+      points: 25,
     },
   },
   {
@@ -356,6 +384,7 @@ const ACHIEVEMENT_TABLE: readonly {
       condition: "양 팀 10점 이상 경기에서 10번 승리",
       badgeNumber: null,
       target: 10,
+      points: 50,
     },
   },
   {
@@ -367,6 +396,7 @@ const ACHIEVEMENT_TABLE: readonly {
       condition: "같은 파트너와 복식 20경기",
       badgeNumber: "20",
       target: 20,
+      points: 10,
     },
   },
   {
@@ -378,6 +408,7 @@ const ACHIEVEMENT_TABLE: readonly {
       condition: "같은 파트너와 복식 50경기",
       badgeNumber: "50",
       target: 50,
+      points: 25,
     },
   },
   {
@@ -389,6 +420,7 @@ const ACHIEVEMENT_TABLE: readonly {
       condition: "같은 파트너와 복식 5연승",
       badgeNumber: null,
       target: 5,
+      points: 25,
     },
   },
   {
@@ -400,6 +432,7 @@ const ACHIEVEMENT_TABLE: readonly {
       condition: "서로 다른 파트너 10명과 복식",
       badgeNumber: null,
       target: 10,
+      points: 10,
     },
   },
   {
@@ -411,6 +444,7 @@ const ACHIEVEMENT_TABLE: readonly {
       condition: "같은 상대와 맞대결 20번",
       badgeNumber: null,
       target: 20,
+      points: 25,
     },
   },
   {
@@ -422,6 +456,7 @@ const ACHIEVEMENT_TABLE: readonly {
       condition: "서로 다른 상대 15명에게 승리",
       badgeNumber: null,
       target: 15,
+      points: 25,
     },
   },
   {
@@ -433,6 +468,7 @@ const ACHIEVEMENT_TABLE: readonly {
       condition: "패배한 조합 그대로 바로 다음 경기에서 승리",
       badgeNumber: null,
       target: 1,
+      points: 10,
     },
   },
   {
@@ -444,6 +480,7 @@ const ACHIEVEMENT_TABLE: readonly {
       condition: "리벤지 5번",
       badgeNumber: "5",
       target: 5,
+      points: 25,
     },
   },
   {
@@ -455,6 +492,7 @@ const ACHIEVEMENT_TABLE: readonly {
       condition: "경기를 한 세션 10번",
       badgeNumber: "10",
       target: 10,
+      points: 10,
     },
   },
   {
@@ -466,6 +504,7 @@ const ACHIEVEMENT_TABLE: readonly {
       condition: "경기를 한 세션 30번",
       badgeNumber: "30",
       target: 30,
+      points: 25,
     },
   },
   {
@@ -477,6 +516,7 @@ const ACHIEVEMENT_TABLE: readonly {
       condition: "경기를 한 세션 100번",
       badgeNumber: "100",
       target: 100,
+      points: 50,
     },
   },
   {
@@ -488,6 +528,7 @@ const ACHIEVEMENT_TABLE: readonly {
       condition: "한 세션에서 8경기",
       badgeNumber: null,
       target: 8,
+      points: 25,
     },
   },
   {
@@ -499,6 +540,7 @@ const ACHIEVEMENT_TABLE: readonly {
       condition: "한 세션에서 4경기 이상 하고 전부 승리",
       badgeNumber: null,
       target: 1,
+      points: 25,
     },
   },
   {
@@ -510,6 +552,7 @@ const ACHIEVEMENT_TABLE: readonly {
       condition: "끝난 세션에서 복식 평점이 가장 많이 오름",
       badgeNumber: null,
       target: 1,
+      points: 25,
     },
   },
   {
@@ -521,12 +564,36 @@ const ACHIEVEMENT_TABLE: readonly {
       condition: "세션 지배자 10번",
       badgeNumber: "10",
       target: 10,
+      points: 100,
     },
   },
 ];
 
 export const ACHIEVEMENTS: readonly AchievementDefinition[] =
   ACHIEVEMENT_TABLE.map((row) => row.definition);
+
+const ACHIEVEMENT_POINTS_BY_ID = new Map(
+  ACHIEVEMENTS.map((definition) => [definition.id, definition.points]),
+);
+
+/** 업적 점수 만점(모든 업적 점수 합) */
+export const ACHIEVEMENT_MAX_POINTS = ACHIEVEMENTS.reduce(
+  (sum, definition) => sum + definition.points,
+  0,
+);
+
+/** 업적 id의 점수. 모르는 업적은 0점이다 */
+export const getAchievementPoints = (achievementId: string) =>
+  ACHIEVEMENT_POINTS_BY_ID.get(achievementId) ?? 0;
+
+/** 받은 업적 점수 합. 저장하지 않고 받은 업적으로 계산하므로, 업적을 잃으면 점수도 빠진다 */
+export const sumAchievementPoints = (
+  achievements: readonly { id: string; earned: boolean }[],
+) =>
+  achievements.reduce(
+    (sum, item) => (item.earned ? sum + getAchievementPoints(item.id) : sum),
+    0,
+  );
 
 const ACHIEVEMENT_METRIC_BY_ID = new Map<string, AchievementMetric>(
   ACHIEVEMENT_TABLE.map((row) => [row.definition.id, row.metric]),
@@ -629,6 +696,8 @@ export interface SeenAchievementRef {
 /** GET /api/me/achievements/unseen 응답. 받은 업적 중 확인하지 않은 것(받은 시각 → 업적 정의 순서) */
 export interface UnseenAchievementsResponse {
   achievements: EarnedAchievement[];
+  /** 요청자의 지금 업적 점수 합(이 미확인 업적 점수 포함) */
+  points: number;
 }
 
 /** POST /api/me/achievements/seen 요청. 업적마다 지금 보고 있는 획득 경기를 넘긴다 */
