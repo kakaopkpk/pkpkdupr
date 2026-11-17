@@ -57,6 +57,10 @@ export function fetchRankings(category: RankingCategory) {
   );
 }
 
+/** 업적 점수 순위 */
+export const fetchAchievementRanking = () =>
+  fetchRankings("achievements") as Promise<AchievementRankingResponse>;
+
 export const fetchSessionHistory = async (
   options: { limit?: number; playerId?: string } = {},
 ): Promise<MatchSessionHistoryInfo[]> => {

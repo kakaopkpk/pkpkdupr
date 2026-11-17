@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ACHIEVEMENTS,
   ACHIEVEMENT_CATEGORY_LABEL,
@@ -28,6 +28,7 @@ import {
   formatAchievementPointsLabel,
   formatKstShortDate,
 } from "@/lib/format";
+import { fetchAchievementRanking } from "@/lib/rankings";
 
 /** 분류별 업적 정의와 분류 만점(ACHIEVEMENT_CATEGORY_LABEL 순서) */
 const CATEGORY_SECTIONS = (
@@ -127,8 +128,9 @@ export interface AchievementsScreenProps {
 }
 
 /**
- * 업적 전체 보기. 맨 위에 업적 점수와 받은 개수를 두고, 분류별로 받은 점수 / 분류 만점,
- * 받은 업적은 얻은 점수와 받은 날, 못 받은 업적은 걸린 점수와 진행도를 보인다
+ * 업적 전체 보기. 맨 위에 업적 점수·받은 개수·업적 랭킹 순위를 두고,
+ * 분류별로 받은 점수 / 분류 만점, 받은 업적은 얻은 점수와 받은 날,
+ * 못 받은 업적은 걸린 점수와 진행도를 보인다
  */
 export default function AchievementsScreen({
   isOpen,
@@ -139,8 +141,12 @@ export default function AchievementsScreen({
   title = "업적",
   onClose,
 }: AchievementsScreenProps): React.ReactElement {
-  const { openAchievementDetail } = useAppNavigation();
+  const { openAchievementDetail, dataVersion } = useAppNavigation();
   const { closeDepth, restoreScrollTop, selectedTab } = useTabNavigation();
+  const [achievementRank, setAchievementRank] = useState<{
+    playerId: string;
+    rank: number;
+  } | null>(null);
 
   const isLayerOpen = useLayerDepth({
     isOpen: isOpen && !!playerId,
@@ -150,6 +156,27 @@ export default function AchievementsScreen({
     onClose,
     saveScroll: true,
   });
+
+  // 업적 점수 순위. 순위표에 없거나(게스트·비활성) 불러오지 못하면 순위 줄을 보이지 않는다
+  useEffect(() => {
+    if (!isLayerOpen || !playerId) return undefined;
+    let isCancelled = false;
+    fetchAchievementRanking()
+      .then(({ entries }) => {
+        if (isCancelled) return;
+        const entry = entries.find((item) => item.player.id === playerId);
+        setAchievementRank(entry ? { playerId, rank: entry.rank } : null);
+      })
+      .catch(() => {
+        if (!isCancelled) setAchievementRank(null);
+      });
+    return () => {
+      isCancelled = true;
+    };
+  }, [dataVersion, isLayerOpen, playerId]);
+  // 다른 회원의 화면으로 바뀐 직후 이전 회원 순위를 보이지 않는다
+  const rank =
+    achievementRank?.playerId === playerId ? achievementRank.rank : null;
 
   const progressById = useMemo(
     () => new Map(progress.map((item) => [item.id, item])),
@@ -191,11 +218,21 @@ export default function AchievementsScreen({
               <span className="text-pk-15 font-bold text-pk-ink">점</span>
             </span>
           </span>
-          <p className="text-pk-13 text-pk-sub">
-            {ACHIEVEMENTS.length}개 중{" "}
-            <strong className="font-bold text-pk-ink">{earnedCount}개</strong>{" "}
-            받음
-          </p>
+          <span className="flex flex-col items-end gap-0.5 text-pk-13 text-pk-sub">
+            <span>
+              {ACHIEVEMENTS.length}개 중{" "}
+              <strong className="font-bold text-pk-ink">{earnedCount}개</strong>{" "}
+              받음
+            </span>
+            {rank != null ? (
+              <span>
+                업적 랭킹{" "}
+                <strong className="font-bold text-pk-ink tabular-nums">
+                  {rank}위
+                </strong>
+              </span>
+            ) : null}
+          </span>
         </Card>
         {CATEGORY_SECTIONS.map(({ category, definitions, maxPoints }) => {
           const categoryPoints = sumAchievementPoints(
