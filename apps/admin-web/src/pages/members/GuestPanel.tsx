@@ -65,11 +65,11 @@ export const GuestPanel: React.FC<{
 
       <div className="rounded-pk-sm bg-pk-bg p-3.5">
         <p className="text-pk-13 font-bold text-pk-ink">
-          {player.matchCount}경기 · 모두 평점 미반영
+          {player.ratingExcludedMatchCount}경기 · 모두 평점 미반영
         </p>
         <p className="mt-1 text-pk-12 text-pk-sub">
           게스트가 낀 경기는 같은 경기 정회원 평점도 바꾸지 않아요. 승급해도 이{" "}
-          {player.matchCount}경기는 계속 미반영이에요.
+          {player.ratingExcludedMatchCount}경기는 계속 미반영이에요.
         </p>
       </div>
 

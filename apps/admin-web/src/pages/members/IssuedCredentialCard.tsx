@@ -2,15 +2,15 @@ import React from "react";
 import { ADMIN_ISSUED_PASSWORD } from "@pkpkdupr/shared/auth";
 import { Button } from "../../components/ui/Button";
 import { useToast } from "../../components/ui/Toast";
-import type { IssuedCredential } from "./memberModel";
+import type { IssuedKind } from "./memberModel";
 
 // 임시 비밀번호는 늘 ADMIN_ISSUED_PASSWORD라 응답 값 대신 상수를 보이고, 다시 볼 수 없다는 재확인도 두지 않는다
 export const IssuedCredentialCard: React.FC<{
-  credential: IssuedCredential;
+  username: string;
+  kind: IssuedKind;
   onDismiss: () => void;
-}> = ({ credential, onDismiss }) => {
+}> = ({ username, kind, onDismiss }) => {
   const { showToast } = useToast();
-  const { username, kind } = credential;
 
   const handleCopy = async () => {
     try {

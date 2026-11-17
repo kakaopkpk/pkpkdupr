@@ -89,21 +89,29 @@ const sortValue = (player: AdminPlayer, key: SortKey): number | null => {
   }
 };
 
-/** 값이 없는 회원("–")은 방향과 상관없이 맨 아래, 같으면 아이디 순이다 */
+/** null(값 없음 "–")은 방향과 상관없이 뒤로 보낸다 */
+const compareNullable = (
+  a: number | null,
+  b: number | null,
+  direction: SortDirection,
+): number => {
+  if (a === null || b === null) {
+    if (a === b) return 0;
+    return a === null ? 1 : -1;
+  }
+  return direction === "asc" ? a - b : b - a;
+};
+
+/** 값이 없는 회원은 맨 아래, 같으면 아이디 순이다 */
 export const sortMembers = (
   players: AdminPlayer[],
   { key, direction }: SortState,
 ): AdminPlayer[] =>
-  [...players].sort((a, b) => {
-    const aValue = sortValue(a, key);
-    const bValue = sortValue(b, key);
-    if (aValue === null || bValue === null) {
-      if (aValue !== bValue) return aValue === null ? 1 : -1;
-    } else if (aValue !== bValue) {
-      return direction === "asc" ? aValue - bValue : bValue - aValue;
-    }
-    return a.username.localeCompare(b.username);
-  });
+  [...players].sort(
+    (a, b) =>
+      compareNullable(sortValue(a, key), sortValue(b, key), direction) ||
+      a.username.localeCompare(b.username),
+  );
 
 /** 같은 머리를 누르면 방향을 뒤집고, 다른 머리면 내림차순부터 */
 export const toggleSort = (current: SortState, key: SortKey): SortState =>
@@ -182,12 +190,15 @@ export const buildHistoryLines = (
 export const formatGuestAddedSummary = (player: AdminPlayer): string | null => {
   const info = player.guestAddedInfo;
   if (!info) return null;
-  const sessionPart = info.sessionName
-    ? `${info.sessionDate ? `${formatKstMonthDay(info.sessionDate)} ` : ""}${info.sessionName}에서`
-    : null;
-  const addedByPart = info.addedByUsername ? `${info.addedByUsername}가 추가` : null;
-  if (!sessionPart && !addedByPart) return null;
-  return [sessionPart, addedByPart ?? "추가"].filter(Boolean).join(" ");
+  if (!info.sessionName && !info.addedByUsername) return null;
+
+  const parts: string[] = [];
+  if (info.sessionName) {
+    if (info.sessionDate) parts.push(formatKstMonthDay(info.sessionDate));
+    parts.push(`${info.sessionName}에서`);
+  }
+  parts.push(info.addedByUsername ? `${info.addedByUsername}가 추가` : "추가");
+  return parts.join(" ");
 };
 
 const FALLBACK_ERROR_MESSAGE = "처리하지 못했어요. 다시 시도해 주세요.";
@@ -220,8 +231,10 @@ export const runConfirmedAction = async (
   }
 };
 
+export type IssuedKind = "created" | "reset";
+
+/** 아이디는 담지 않는다. 발급 뒤 아이디를 바꿔도 카드가 지금 아이디를 보이게 렌더 시점 값을 쓴다 */
 export interface IssuedCredential {
   playerId: string;
-  username: string;
-  kind: "created" | "reset";
+  kind: IssuedKind;
 }

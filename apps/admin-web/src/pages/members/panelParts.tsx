@@ -8,12 +8,18 @@ import { InlineError } from "../../components/ui/InlineError";
 import { SegmentedControl } from "../../components/ui/SegmentedControl";
 import { TextInput } from "../../components/ui/TextInput";
 import { useToast } from "../../components/ui/Toast";
-import { GENDER_LABEL, reportActionError, runConfirmedAction, type Gender } from "./memberModel";
+import {
+  GENDER_LABEL,
+  reportActionError,
+  runConfirmedAction,
+  type Gender,
+  type IssuedKind,
+} from "./memberModel";
 
 export interface PanelCallbacks {
   /** 회원 목록·기록을 다시 읽는다. 실패해도 throw하지 않는다 */
   reload: () => Promise<void>;
-  onIssued: (kind: "created" | "reset") => void;
+  onIssued: (kind: IssuedKind) => void;
   onDeleted: (username: string) => void;
 }
 

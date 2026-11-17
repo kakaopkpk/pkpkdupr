@@ -154,7 +154,7 @@ const MembersPage: React.FC = () => {
   const handleAdded = async (player: Player) => {
     showToast(`${player.username}를 추가했어요`);
     await reload();
-    setCredential({ playerId: player.id, username: player.username, kind: "created" });
+    setCredential({ playerId: player.id, kind: "created" });
     updateParams({ playerId: player.id, add: undefined });
   };
 
@@ -162,12 +162,7 @@ const MembersPage: React.FC = () => {
     if (!selectedPlayer || !data) return null;
     const callbacks: PanelCallbacks = {
       reload,
-      onIssued: (issuedKind) =>
-        setCredential({
-          playerId: selectedPlayer.id,
-          username: selectedPlayer.username,
-          kind: issuedKind,
-        }),
+      onIssued: (issuedKind) => setCredential({ playerId: selectedPlayer.id, kind: issuedKind }),
       onDeleted: (username) => {
         setCredential(null);
         updateParams({ playerId: undefined });
@@ -177,7 +172,11 @@ const MembersPage: React.FC = () => {
     };
     const topSlot =
       credential?.playerId === selectedPlayer.id ? (
-        <IssuedCredentialCard credential={credential} onDismiss={() => setCredential(null)} />
+        <IssuedCredentialCard
+          username={selectedPlayer.username}
+          kind={credential.kind}
+          onDismiss={() => setCredential(null)}
+        />
       ) : null;
     const isSelf = me?.id === selectedPlayer.id;
     const onClose = () => selectPlayer(undefined);
