@@ -869,16 +869,20 @@ export function computeAchievements(
     matches,
   );
   let ratedDoublesMatches = preCountStartDoublesMatches.length;
+  // 경기 수는 평점 로그 유무와 상관없이 세고, 시작 평점은 평점 로그가 있는 마지막 경기에서 찾는다
+  const ratedCountStartMatches = preCountStartDoublesMatches.filter(
+    (match) => getDoublesRatingAfter(match, playerId) != null,
+  );
   const countStartRatingMatch =
-    preCountStartDoublesMatches[preCountStartDoublesMatches.length - 1];
-  const countStartRating = countStartRatingMatch
-    ? getDoublesRatingAfter(countStartRatingMatch, playerId)
-    : null;
+    ratedCountStartMatches[ratedCountStartMatches.length - 1];
   if (
-    countStartRating != null &&
+    countStartRatingMatch &&
     ratedDoublesMatches >= RATING_ACHIEVEMENT_MIN_DOUBLES_MATCHES
   ) {
-    applyDoublesRating(metrics, countStartRating);
+    applyDoublesRating(
+      metrics,
+      getDoublesRatingAfter(countStartRatingMatch, playerId)!,
+    );
     markReachedAchievements(progress, metrics, countStartRatingMatch);
   }
 

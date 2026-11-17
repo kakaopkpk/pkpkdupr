@@ -1081,7 +1081,7 @@ describe("평점 업적", () => {
     });
   });
 
-  it("업적 기준 시각 시점 평점은 평점 미반영·단식 경기를 건너뛴다", () => {
+  it("업적 기준 시각 시점 평점은 평점 미반영·단식·평점이 없는 경기를 건너뛴다", () => {
     const counted = ratedDoubles(3.55, { completedAt: beforeStart(4_000) });
     const excluded = {
       ...ratedDoubles(3.2, { completedAt: beforeStart(3_000) }),
@@ -1091,12 +1091,25 @@ describe("평점 업적", () => {
       ...makeMatch({ completedAt: beforeStart(2_000) }),
       doublesRatingAfter: { [ME]: 3.2 },
     };
+    const unrated = ratedDoubles(null, { completedAt: beforeStart(1_000) });
     expect(
       progressOf(
-        compute([...warmUpBeforeStart(MIN - 1), counted, excluded, singles]),
+        compute([
+          ...warmUpBeforeStart(MIN - 2),
+          counted,
+          excluded,
+          singles,
+          unrated,
+        ]),
         "rating-3.5",
       ),
-    ).toMatchObject({ earned: true, earnedMatchId: counted.id, current: 3.55 });
+    ).toMatchObject({
+      earned: true,
+      earnedMatchId: counted.id,
+      current: 3.55,
+      // 평점이 없는 복식 경기도 경기 수에는 든다
+      ratedDoublesMatches: MIN,
+    });
   });
 
   it("업적 기준 시각 시점 평점으로 받은 업적은 새 경기를 저장해도 새 업적으로 나오지 않는다", () => {
