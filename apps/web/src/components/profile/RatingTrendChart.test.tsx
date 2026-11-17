@@ -1,6 +1,7 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import RatingTrendChart, {
+  pickRatingTicks,
   type RatingTrendPoint,
 } from "@/components/profile/RatingTrendChart";
 
@@ -17,6 +18,20 @@ const getLineXs = (markup: string) => {
   return [...d.matchAll(/[ML]\s*(-?[\d.]+)/g)].map((match) => Number(match[1]));
 };
 
+// 선 path의 y 좌표들
+const getLineYs = (markup: string) => {
+  const d = /<path d="([^"]+)"[^>]*fill="none"/.exec(markup)?.[1] ?? "";
+  return [...d.matchAll(/[ML]\s*-?[\d.]+ (-?[\d.]+)/g)].map((match) =>
+    Number(match[1]),
+  );
+};
+
+// 왼쪽 눈금 라벨(위 → 아래)과 그 y 좌표
+const getTickLabels = (markup: string) =>
+  [...markup.matchAll(/<text y="([\d.]+)" x="28"[^>]*>([\d.]+)<\/text>/g)].map(
+    (match) => ({ y: Number(match[1]), label: match[2] }),
+  );
+
 describe("RatingTrendChart", () => {
   it("이틀 연속 경기한 날도 시간 간격과 상관없이 폭 전체에 펼친다", () => {
     const markup = render([
@@ -27,8 +42,12 @@ describe("RatingTrendChart", () => {
     expect(getLineXs(markup)).toEqual([34, 318]);
     expect(markup).toContain("11월 12일");
     expect(markup).toContain("오늘");
-    expect(markup).toContain("3.50");
-    expect(markup).toContain("3.20");
+    // 3.20~3.50은 0.2 간격 눈금 3.20~3.60 안에 든다
+    expect(getTickLabels(markup)).toEqual([
+      { y: 14, label: "3.60" },
+      { y: 54, label: "3.40" },
+      { y: 94, label: "3.20" },
+    ]);
   });
 
   it("경기일은 같은 간격이고 점은 끝점 하나만 찍는다", () => {
@@ -75,26 +94,33 @@ describe("RatingTrendChart", () => {
     expect(markup).not.toContain("11월 13일");
   });
 
-  it("최고·최저가 너무 가까우면 최고 라벨만 보인다", () => {
-    const markup = render([
-      { rating: 3.3, createdAt: "2026-11-10T11:00:00.000Z" },
-      { rating: 3.31, createdAt: "2026-11-12T11:00:00.000Z" },
-    ]);
-
-    expect(markup).toContain("3.31");
-    expect(markup).not.toContain(">3.30<");
-  });
-
-  it("0.1보다 작은 변동은 세로 범위 0.1로 펼쳐 최고·최저 라벨이 함께 보인다", () => {
+  it("작은 변동은 0.025 간격 눈금으로 세로 범위 0.05에 펼치고 소수 셋째 자리로 쓴다", () => {
     const markup = render([
       { rating: 3.3, createdAt: "2026-11-10T11:00:00.000Z" },
       { rating: 3.32, createdAt: "2026-11-12T11:00:00.000Z" },
     ]);
 
-    // 범위 3.26~3.36이 y 94~14에 놓인다
-    const labelY = (label: string) =>
-      Number(new RegExp(`y="([\\d.]+)"[^>]*>${label}<`).exec(markup)?.[1]);
-    expect(labelY("3.30")).toBeCloseTo(62);
-    expect(labelY("3.32")).toBeCloseTo(46);
+    expect(getTickLabels(markup)).toEqual([
+      { y: 14, label: "3.325" },
+      { y: 54, label: "3.300" },
+      { y: 94, label: "3.275" },
+    ]);
+    const [startY, endY] = getLineYs(markup);
+    expect(startY).toBeCloseTo(54);
+    expect(endY).toBeCloseTo(22);
+  });
+});
+
+describe("pickRatingTicks", () => {
+  it.each([
+    { min: 3.2, max: 3.5, low: 3.2, step: 0.2 },
+    { min: 3.21, max: 3.29, low: 3.2, step: 0.05 },
+    { min: 3.3, max: 3.305, low: 3.275, step: 0.025 },
+    // 점 하나면 그 평점이 가운데 줄에 온다
+    { min: 3, max: 3, low: 2.975, step: 0.025 },
+  ])("$min~$max → 맨 아래 $low, 간격 $step", ({ min, max, low, step }) => {
+    const ticks = pickRatingTicks(min, max);
+    expect(ticks.step).toBe(step);
+    expect(ticks.low).toBeCloseTo(low);
   });
 });
