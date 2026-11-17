@@ -175,7 +175,7 @@ export default function RecordMatchFlow({
       ),
     [editingMatchId, inProgressMatches],
   );
-  // 진행 중 경기 목록을 받기 전에 열려 경기 중인 나를 미리 넣었으면 그 자리를 비운다
+  // 새 경기에 미리 넣은 내가 경기 중이면(진행 중 경기 목록이 늦게 와도) 그 자리를 비운다. 경기 중인 사람은 고를 수 없다
   const currentPlayerId = currentPlayer?.id ?? null;
   if (
     step === "pick" &&

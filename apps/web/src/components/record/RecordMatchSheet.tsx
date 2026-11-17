@@ -64,7 +64,7 @@ export default function RecordMatchSheet({
   tabKey,
   onClose,
 }: RecordMatchSheetProps): React.ReactElement {
-  const { liveSession, myInProgressMatch } = useLiveSession();
+  const { liveSession } = useLiveSession();
   const { player } = useAuth();
   const { closeDepth, selectedTab } = useTabNavigation();
   // 열 때마다 올려서 입력을 초기 상태로 리마운트한다
@@ -171,8 +171,8 @@ export default function RecordMatchSheet({
             slots:
               displayedRequest?.kind === "new" && displayedRequest.presetTeams
                 ? slotsFromTeams(displayedRequest.presetTeams)
-                : // 새 경기는 나를 첫 자리에 넣어 둔다. 경기 중이면 고를 수 없으므로 비워 둔다
-                  player && !myInProgressMatch
+                : // 새 경기는 나를 첫 자리에 넣어 둔다. 내가 경기 중이면 RecordMatchFlow가 뺀다
+                  player
                   ? [player.id, null, null, null]
                   : EMPTY_SLOTS,
             score: EMPTY_SCORE,
