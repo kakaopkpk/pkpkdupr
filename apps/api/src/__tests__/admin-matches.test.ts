@@ -285,26 +285,12 @@ describe("관리자 경기 API", () => {
       expect(createCompletedBatch).not.toHaveBeenCalled();
     });
 
-    it("sessionId와 옛 session을 함께 보내면 400이다", async () => {
+    it.each([
+      ["sessionId와 함께", batchBody],
+      ["sessionId 없이", { matches: batchBody.matches }],
+    ])("session 입력을 %s 보내면 400이고 아무것도 만들지 않는다", async (_label, body) => {
       const response = await postBatch({
-        ...batchBody,
-        session: {
-          name: "새 세션",
-          date: now.toISOString(),
-          location: "야탑초등학교",
-        },
-      });
-
-      expect(response.status).toBe(400);
-      expect(addSessionParticipants).not.toHaveBeenCalled();
-      expect(createCompletedBatch).not.toHaveBeenCalled();
-    });
-
-    it("옛 session 입력은 그대로 새 세션 정보로 저장하고 참여자는 넣지 않는다", async () => {
-      const { sessionId: _sessionId, ...withoutSessionId } = batchBody;
-
-      const response = await postBatch({
-        ...withoutSessionId,
+        ...body,
         session: {
           name: "번개 세션",
           date: now.toISOString(),
@@ -312,10 +298,12 @@ describe("관리자 경기 API", () => {
         },
       });
 
-      expect(response.status).toBe(201);
-      const [created] = createCompletedBatch.mock.calls[0]!;
-      expect(created[0]?.session).toMatchObject({ name: "번개 세션" });
+      expect(response.status).toBe(400);
+      expect(response.body).toEqual({
+        error: "세션은 sessionId로 지정해 주세요.",
+      });
       expect(addSessionParticipants).not.toHaveBeenCalled();
+      expect(createCompletedBatch).not.toHaveBeenCalled();
     });
   });
 });

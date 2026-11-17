@@ -175,32 +175,6 @@ describe("세션 변경의 구글 캘린더 반영", () => {
     expect(fake.calendarCalls[0]!.body).not.toHaveProperty("attendees");
   });
 
-  it("관리자가 세션을 만들어도 일정을 만든다", async () => {
-    useCalendar();
-    vi.spyOn(db.matches, "createSession").mockResolvedValue({
-      id: "Scustom1",
-      name: "번개",
-      date: new Date("2026-11-12T00:00:00+09:00"),
-      location: "탄천",
-    });
-
-    const response = await request(app)
-      .post("/api/admin/match-sessions")
-      .set("Authorization", "Bearer token")
-      .send({
-        name: "번개",
-        date: "2026-11-11T15:00:00.000Z",
-        location: "탄천",
-      });
-
-    expect(response.status).toBe(201);
-    await vi.waitFor(() => expect(fake.calendarCalls).toHaveLength(1));
-    expect(fake.calendarCalls[0]).toMatchObject({
-      method: "POST",
-      body: { id: toCalendarEventId("Scustom1") },
-    });
-  });
-
   it("다가오는 세션 조회는 정기 세션을 새로 만들었을 때만 일정을 쓴다", async () => {
     useCalendar();
     currentSession = regularSession;
@@ -325,25 +299,6 @@ describe("세션 변경의 구글 캘린더 반영", () => {
     expect(response.status).toBe(200);
     await vi.waitFor(() => expect(fake.calendarCalls).toHaveLength(1));
     expect(fake.calendarCalls[0]!.body).toMatchObject({ summary: "번개 (0명)" });
-  });
-
-  it("관리자가 참여자를 교체하면 일정을 고친다", async () => {
-    useCalendar();
-    vi.spyOn(db.matches, "replaceSessionParticipants").mockImplementation(
-      async () => {
-        currentSession = makeSession({ participantIds: [member.id] });
-        return currentSession;
-      },
-    );
-
-    const response = await request(app)
-      .put("/api/admin/match-sessions/Scustom1/participants")
-      .set("Authorization", "Bearer token")
-      .send({ playerIds: [member.id] });
-
-    expect(response.status).toBe(200);
-    await vi.waitFor(() => expect(fake.calendarCalls).toHaveLength(1));
-    expect(fake.calendarCalls[0]!.body).toMatchObject({ summary: "번개 (1명)" });
   });
 
   it("관리자가 세션을 지우면 일정을 지운다", async () => {

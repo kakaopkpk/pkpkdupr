@@ -12,7 +12,6 @@ import type {
 } from "@pkpkdupr/shared/match";
 import {
   getMatchSessionStatus,
-  hasGuestPlayer,
   validateMatchScores,
 } from "@pkpkdupr/shared/match";
 import {
@@ -67,16 +66,6 @@ type StoredMatchParticipant = typeof matchParticipants.$inferSelect;
 type StoredMatchScore = typeof matchScores.$inferSelect;
 type StoredMatchSession = typeof matchSessions.$inferSelect;
 type StoredPlayer = typeof players.$inferSelect;
-
-export const COMPLETED_MATCH_RESULT_EDIT_ERROR_MESSAGE =
-  "이미 완료된 매치 결과는 수정할 수 없습니다.";
-
-export class CompletedMatchResultEditError extends Error {
-  constructor() {
-    super(COMPLETED_MATCH_RESULT_EDIT_ERROR_MESSAGE);
-    this.name = "CompletedMatchResultEditError";
-  }
-}
 
 export class MatchRecordUpdateConflictError extends Error {
   constructor() {
@@ -450,77 +439,6 @@ export class MatchRepository {
       .limit(1)
       .then(firstRow);
     return stored ? await this.toManagedSession(stored) : undefined;
-  }
-
-  async replaceSessionParticipants(
-    sessionId: string,
-    playerIds: string[],
-  ): Promise<ManagedMatchSession | undefined> {
-    const session = await this.findSessionById(sessionId);
-    if (!session) {
-      return undefined;
-    }
-
-    const uniquePlayerIds = [...new Set(playerIds)];
-    const playerRecords = await Promise.all(
-      uniquePlayerIds.map((playerId) =>
-        this.db
-          .select()
-          .from(players)
-          .where(eq(players.id, playerId))
-          .limit(1)
-          .then(firstRow),
-      ),
-    );
-    if (
-      playerRecords.some(
-        (player: StoredPlayer | undefined) =>
-          !player || player.status !== "active",
-      )
-    ) {
-      throw new Error("유효한 활성 참여자만 등록할 수 있습니다.");
-    }
-
-    const transaction = await this.client.transaction("write");
-    let committed = false;
-    const now = new Date();
-    try {
-      await transaction.execute({
-        sql: "DELETE FROM match_session_participants WHERE session_id = $1",
-        args: [sessionId],
-      });
-      for (const playerId of uniquePlayerIds) {
-        await transaction.execute({
-          sql: `
-            INSERT INTO match_session_participants (
-              id,
-              session_id,
-              player_id,
-              created_at
-            )
-            VALUES ($1, $2, $3, $4)
-          `,
-          args: [
-            `${sessionId}-${playerId}`,
-            sessionId,
-            playerId,
-            toUnixTimestampSeconds(now),
-          ],
-        });
-      }
-      await transaction.execute({
-        sql: "UPDATE match_sessions SET updated_at = $1 WHERE id = $2",
-        args: [toUnixTimestampSeconds(now), sessionId],
-      });
-      await transaction.commit();
-      committed = true;
-    } finally {
-      if (!committed) {
-        transaction.close();
-      }
-    }
-
-    return await this.findSessionById(sessionId);
   }
 
   /**
@@ -1790,94 +1708,6 @@ export class MatchRepository {
       updatedParticipantCount,
       updatedMatchCount: updatedMatchIds.size,
     };
-  }
-
-  async recordAdminResult(
-    matchId: string,
-    submittedByPlayerId: string,
-    scores: MatchScore[],
-    completedAt: Date = new Date(),
-  ): Promise<Match> {
-    const existing = await this.findById(matchId);
-    if (!existing) {
-      throw new Error("매치를 찾을 수 없습니다.");
-    }
-
-    if (existing.status === "completed") {
-      throw new CompletedMatchResultEditError();
-    }
-
-    if (existing.status !== "created") {
-      throw new Error("결과를 입력할 수 없는 매치 상태입니다.");
-    }
-
-    validateMatchScores(scores);
-    // 완료되는 시점에 게스트가 낀 경기는 평점에 반영하지 않는다(참가자의 현재 게스트 여부로 정한다).
-    const ratingExcluded = hasGuestPlayer(existing.teams);
-
-    const scoreColumns = await this.getMatchScoreColumns();
-    const transaction = await this.client.transaction("write");
-    let committed = false;
-
-    try {
-      const completedAtSeconds = toUnixTimestampSeconds(completedAt);
-      const updateResult = await transaction.execute({
-        sql: `
-          UPDATE matches
-          SET
-            status = $1,
-            result_submitted_by_player_id = $2,
-            result_submitted_at = $3,
-            completed_at = $4,
-            updated_at = $5,
-            rating_excluded = $7
-          WHERE id = $6
-            AND status = 'created'
-        `,
-        args: [
-          "completed",
-          submittedByPlayerId,
-          completedAtSeconds,
-          completedAtSeconds,
-          completedAtSeconds,
-          matchId,
-          ratingExcluded,
-        ],
-      });
-      if (!updateResult.rowsAffected) {
-        throw new Error("RESULT_SUBMIT_STATE_CONFLICT");
-      }
-
-      await this.replaceScoresWithExecutor(
-        matchId,
-        scores,
-        scoreColumns,
-        transaction,
-      );
-
-      await transaction.commit();
-      committed = true;
-    } catch (error) {
-      transaction.close();
-      const current = await this.findById(matchId);
-      if (
-        (error as Error).message === "RESULT_SUBMIT_STATE_CONFLICT" &&
-        current?.status === "completed"
-      ) {
-        throw new CompletedMatchResultEditError();
-      }
-      throw error;
-    } finally {
-      if (!committed) {
-        transaction.close();
-      }
-    }
-
-    const updated = await this.findById(matchId);
-    if (!updated) {
-      throw new Error("매치 결과 저장에 실패했습니다.");
-    }
-    return updated;
   }
 
   /**
