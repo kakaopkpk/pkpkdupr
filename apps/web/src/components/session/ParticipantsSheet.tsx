@@ -79,6 +79,31 @@ const CheckMark: React.FC<{ isChecked: boolean; isLocked: boolean }> = ({
     />
   );
 
+const compareUsername = (a: { username: string }, b: { username: string }) =>
+  a.username.localeCompare(b.username, "ko");
+
+/** 보기·수정 모드가 같이 쓰는 줄 내용: 아바타·아이디·게스트 라벨·"경기 중" */
+const ParticipantRowContent: React.FC<{
+  player: MatchSessionParticipant;
+  isGuest: boolean;
+  isLocked: boolean;
+}> = ({ player, isGuest, isLocked }) => (
+  <>
+    <PlayerAvatar player={player} size={32} />
+    <span className="flex min-w-0 flex-1 flex-col">
+      <span className="flex min-w-0 items-baseline gap-1">
+        <span className="truncate text-pk-15 font-bold text-pk-ink">
+          {player.username}
+        </span>
+        {isGuest ? <GuestLabel /> : null}
+      </span>
+      {isLocked ? (
+        <span className="text-pk-12 text-pk-muted">경기 중</span>
+      ) : null}
+    </span>
+  </>
+);
+
 type ParticipantRow = Pick<
   MemberListPlayerInfo,
   "id" | "username" | "avatarUrl" | "status" | "isGuest"
@@ -93,14 +118,17 @@ interface ParticipantChange {
 interface ParticipantsEditFormProps {
   tabKey: TabKey;
   session: MatchSessionDetailInfo;
-  /** 수정을 시작할 때의 참여자 */
+  /** 서버에 반영된 참여자. 저장·게스트 추가 뒤 `onSavedParticipantsChange`로 올린 값이 다시 내려온다 */
   participants: readonly MatchSessionParticipant[];
   lockedPlayerIds: readonly string[];
   /** 완료로 저장을 마쳤을 때 호출. 시트는 보기 모드로 돌아간다 */
   onDone: (didChange: boolean) => void;
   onCancel: () => void;
   onChanged: () => void;
-  /** 서버에 반영된 참여자가 바뀔 때마다 호출. 보기 모드가 다시 불러오기 전에도 최신 참여자를 보인다 */
+  /**
+   * 서버에 반영된 참여자가 바뀔 때마다 호출. 저장 중 뒤로가기로 이 폼이 사라져도 보기 모드가
+   * 다시 불러오기 전에 최신 참여자를 보이도록, 저장·게스트 추가가 끝난 자리에서 바로 부른다
+   */
   onSavedParticipantsChange: (participants: MatchSessionParticipant[]) => void;
 }
 
@@ -122,9 +150,9 @@ const ParticipantsEditForm: React.FC<ParticipantsEditFormProps> = ({
   const { showSaveFailure } = useSystemNotice();
   const { selectedTab } = useTabNavigation();
   const [query, setQuery] = useState("");
-  // 수정을 시작할 때의 참여자. 저장에 성공한 변경만큼 따라 바뀐다
-  const [savedIds, setSavedIds] = useState(
+  const savedIds = useMemo(
     () => new Set(participants.map((member) => member.id)),
+    [participants],
   );
   const [selectedIds, setSelectedIds] = useState(() => new Set(savedIds));
   const [isSaving, setIsSaving] = useState(false);
@@ -156,30 +184,18 @@ const ParticipantsEditForm: React.FC<ParticipantsEditFormProps> = ({
     ];
   }, [addedGuests, players]);
 
-  /**
-   * 서버에 반영된 참여자 id를 보기 모드 목록으로 바꿔 올린다. 저장 중 뒤로가기로 이 폼이 사라져도
-   * 반영 결과가 보기 모드에 남도록 저장·게스트 추가가 끝난 자리에서 바로 부른다
-   */
+  /** 서버에 반영된 참여자 id를 보기 모드 목록으로 바꿔 올린다 */
   const reportSavedParticipants = useCallback(
     (ids: ReadonlySet<string>, extraRows: readonly ParticipantRow[] = []) => {
-      // 회원 목록을 아직 못 받았어도 시작할 때의 참여자로 이름·사진을 채운다
+      // 회원 목록을 아직 못 받았어도 지금 참여자로 이름·사진을 채운다
       const byId = new Map<string, MatchSessionParticipant>(
         participants.map((member) => [member.id, member]),
       );
       for (const row of [...allRows, ...extraRows]) byId.set(row.id, row);
       onSavedParticipantsChange(
-        [...ids].flatMap((id) => {
-          const member = byId.get(id);
-          return member
-            ? [
-                {
-                  id: member.id,
-                  username: member.username,
-                  avatarUrl: member.avatarUrl,
-                },
-              ]
-            : [];
-        }),
+        [...ids]
+          .map((id) => byId.get(id))
+          .filter((member) => member !== undefined),
       );
     },
     [allRows, onSavedParticipantsChange, participants],
@@ -197,7 +213,7 @@ const ParticipantsEditForm: React.FC<ParticipantsEditFormProps> = ({
       .sort((a, b) => {
         const rankA = sortAnchorIds.has(a.id) ? 0 : 1;
         const rankB = sortAnchorIds.has(b.id) ? 0 : 1;
-        return rankA - rankB || a.username.localeCompare(b.username, "ko");
+        return rankA - rankB || compareUsername(a, b);
       });
   }, [allRows, query, sortAnchorIds]);
 
@@ -261,20 +277,17 @@ const ParticipantsEditForm: React.FC<ParticipantsEditFormProps> = ({
       }
     }
 
-    const applyChanges = (ids: ReadonlySet<string>) => {
-      const next = new Set(ids);
+    setIsSaving(false);
+    const didApplyAny = applied.length > 0;
+    if (didApplyAny) {
+      // 저장 중에는 게스트 추가가 막혀 있어 시작 시점 savedIds에 반영분만 더하면 서버 상태와 같다
+      const next = new Set(savedIds);
       for (const change of applied) {
         if (change.action === "add") next.add(change.playerId);
         else next.delete(change.playerId);
       }
-      return next;
-    };
-    // 저장 중에 게스트 추가로 늘어난 savedIds를 덮지 않도록 반영한 변경만 합친다
-    setSavedIds(applyChanges);
-    setIsSaving(false);
-    const didApplyAny = applied.length > 0;
-    // 저장 중에는 게스트 추가가 막혀 있어 시작 시점 savedIds에 반영분만 더하면 서버 상태와 같다
-    if (didApplyAny) reportSavedParticipants(applyChanges(savedIds));
+      reportSavedParticipants(next);
+    }
 
     if (!networkError && !serverError) {
       onDone(true);
@@ -310,7 +323,6 @@ const ParticipantsEditForm: React.FC<ParticipantsEditFormProps> = ({
         setQuery("");
         setAddedGuests((current) => [...current, guest]);
         setSortAnchorIds((current) => new Set(current).add(guest.id));
-        setSavedIds((current) => new Set(current).add(guest.id));
         setSelectedIds((current) => new Set(current).add(guest.id));
         reportSavedParticipants(new Set(savedIds).add(guest.id), [guest]);
         void reloadPlayers();
@@ -381,18 +393,11 @@ const ParticipantsEditForm: React.FC<ParticipantsEditFormProps> = ({
               const isChecked = isLocked || selectedIds.has(player.id);
               const content = (
                 <>
-                  <PlayerAvatar player={player} size={32} />
-                  <span className="flex min-w-0 flex-1 flex-col">
-                    <span className="flex min-w-0 items-baseline gap-1">
-                      <span className="truncate text-pk-15 font-bold text-pk-ink">
-                        {player.username}
-                      </span>
-                      {player.isGuest ? <GuestLabel /> : null}
-                    </span>
-                    {isLocked ? (
-                      <span className="text-pk-12 text-pk-muted">경기 중</span>
-                    ) : null}
-                  </span>
+                  <ParticipantRowContent
+                    player={player}
+                    isGuest={player.isGuest}
+                    isLocked={isLocked}
+                  />
                   <CheckMark isChecked={isChecked} isLocked={isLocked} />
                 </>
               );
@@ -557,10 +562,7 @@ const ParticipantsView: React.FC<ParticipantsViewProps> = ({
     [players],
   );
   const rows = useMemo(
-    () =>
-      [...participants].sort((a, b) =>
-        a.username.localeCompare(b.username, "ko"),
-      ),
+    () => [...participants].sort(compareUsername),
     [participants],
   );
 
@@ -591,18 +593,11 @@ const ParticipantsView: React.FC<ParticipantsViewProps> = ({
                 key={member.id}
                 className="flex min-h-14 items-center gap-3 px-1 not-last:border-b not-last:border-pk-divider"
               >
-                <PlayerAvatar player={member} size={32} />
-                <span className="flex min-w-0 flex-1 flex-col">
-                  <span className="flex min-w-0 items-baseline gap-1">
-                    <span className="truncate text-pk-15 font-bold text-pk-ink">
-                      {member.username}
-                    </span>
-                    {guestIds.has(member.id) ? <GuestLabel /> : null}
-                  </span>
-                  {lockedIds.has(member.id) ? (
-                    <span className="text-pk-12 text-pk-muted">경기 중</span>
-                  ) : null}
-                </span>
+                <ParticipantRowContent
+                  player={member}
+                  isGuest={guestIds.has(member.id)}
+                  isLocked={lockedIds.has(member.id)}
+                />
               </li>
             ))}
           </ul>
@@ -626,8 +621,6 @@ export default function ParticipantsSheet({
 }: ParticipantsSheetProps): React.ReactElement {
   const { closeDepth, selectedTab } = useTabNavigation();
   const [isEditing, setIsEditing] = useState(false);
-  // 수정을 시작할 때마다 올려서 선택을 그때의 참여자로 초기화한다
-  const [editKey, setEditKey] = useState(0);
   // 이 시트에서 저장한 참여자. 셸이 넘기는 세션은 연 시점 값이라 저장 뒤에는 이 값을 보인다
   const [savedParticipants, setSavedParticipants] = useState<
     MatchSessionParticipant[] | null
@@ -662,9 +655,6 @@ export default function ParticipantsSheet({
       setSavedParticipants(null);
     }
   }
-  useEffect(() => {
-    if (isOpen) isClosingRef.current = false;
-  }, [isOpen]);
 
   const participants = savedParticipants ?? session.participants;
 
@@ -674,16 +664,16 @@ export default function ParticipantsSheet({
 
   /** 배경 탭·끌어내리기. 수정 모드면 히스토리가 남지 않게 수정 깊이부터 닫는다 */
   const close = useCallback(() => {
-    if (!isEditing) {
+    if (isEditing) {
+      isClosingRef.current = true;
+      if (!closeDepth(tabKey, EDIT_DEPTH_ID, closeSheet)) closeSheet();
+    } else {
       closeSheet();
-      return;
     }
-    isClosingRef.current = true;
-    if (!closeDepth(tabKey, EDIT_DEPTH_ID, closeSheet)) closeSheet();
   }, [closeDepth, closeSheet, isEditing, tabKey]);
 
   const startEditing = () => {
-    setEditKey((key) => key + 1);
+    isClosingRef.current = false;
     setIsEditing(true);
   };
 
@@ -711,7 +701,7 @@ export default function ParticipantsSheet({
     >
       {isEditing ? (
         <ParticipantsEditForm
-          key={`${session.id}:${editKey}`}
+          key={session.id}
           tabKey={tabKey}
           session={session}
           participants={participants}
