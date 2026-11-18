@@ -1,4 +1,4 @@
-import React, { useCallback, useId, useRef, useState } from "react";
+import React, { useCallback, useEffect, useId, useRef, useState } from "react";
 import SkeletonBlock from "@/components/SkeletonBlock";
 import AvatarZoomViewer from "@/components/profile/AvatarZoomViewer";
 import { WinLossCount } from "@/components/profile/ProfileStatTile";
@@ -69,6 +69,7 @@ const ProfileHeader: React.FC<ProfileHeaderProps> = ({
   const [isZoomRequested, setIsZoomRequested] = useState(false);
   /** 확대 보기가 화면에 있는 동안(닫힘 전환 포함) 원래 아바타를 숨긴다 */
   const [isZoomVisible, setIsZoomVisible] = useState(false);
+  const shouldRestoreFocusRef = useRef(false);
 
   const avatarUrl = resolveAssetUrl(player?.avatarUrl);
   const canZoom = !!player && !!avatarUrl && loadedAvatarUrl === avatarUrl;
@@ -93,9 +94,16 @@ const ProfileHeader: React.FC<ProfileHeaderProps> = ({
   }, [closeDepth, closeZoom, tabKey, zoomDepthId]);
 
   const handleZoomExited = useCallback(() => {
+    shouldRestoreFocusRef.current = true;
     setIsZoomVisible(false);
-    avatarButtonRef.current?.focus({ preventScroll: true });
   }, []);
+
+  // 숨겨 둔(invisible) 아바타는 포커스를 받지 못하므로 다시 보인 뒤에 포커스를 돌려준다
+  useEffect(() => {
+    if (isZoomVisible || !shouldRestoreFocusRef.current) return;
+    shouldRestoreFocusRef.current = false;
+    avatarButtonRef.current?.focus({ preventScroll: true });
+  }, [isZoomVisible]);
 
   return (
     <header className={cx("flex items-center gap-3", className)}>
