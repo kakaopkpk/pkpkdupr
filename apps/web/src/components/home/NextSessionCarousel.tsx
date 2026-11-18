@@ -1,15 +1,16 @@
-import React, { useRef } from "react";
+import React, { useEffect, useRef } from "react";
 import {
   ParticipationError,
   type ParticipationAction,
 } from "@/components/session/SessionBlueCard";
 import { cx } from "@/components/ui/cx";
+import { useTabNavigation } from "@/context/TabNavigationContext";
 import {
   isSessionParticipant,
   type MatchSessionDetailInfo,
 } from "@/lib/matchSessions";
 import NextSessionCard from "./NextSessionCard";
-import { useCarouselSwipe } from "./useCarouselSwipe";
+import { scrollCarouselToStart, useCarouselSwipe } from "./useCarouselSwipe";
 
 /** 이 개수까지는 위치를 점으로, 넘으면 "n / N" 글자로 보인다 */
 const MAX_POSITION_DOTS = 10;
@@ -69,6 +70,17 @@ const NextSessionCarousel: React.FC<NextSessionCarouselProps> = ({
   const trackRef = useRef<HTMLDivElement>(null);
   const count = sessions.length;
   const activeIndex = useCarouselSwipe(trackRef, count);
+
+  const { registerTabReset } = useTabNavigation();
+
+  // 홈 탭을 다시 누르면 첫 카드로 되돌린다
+  useEffect(
+    () =>
+      registerTabReset("home", () => {
+        if (trackRef.current) scrollCarouselToStart(trackRef.current);
+      }),
+    [registerTabReset],
+  );
 
   const renderCard = (session: MatchSessionDetailInfo, className?: string) => (
     <NextSessionCard

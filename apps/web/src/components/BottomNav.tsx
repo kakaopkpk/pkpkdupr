@@ -56,6 +56,7 @@ import {
   type TabDepthStacks,
   type TabKey,
   type PullToRefreshHandler,
+  type TabResetHandler,
 } from "@/context/TabNavigationContext";
 import { useOnlineStatus } from "@/hooks/useOnlineStatus";
 import { usePresence } from "@/hooks/usePresence";
@@ -239,6 +240,9 @@ const BottomNav: React.FC = () => {
   const pullToRefreshHandlersRef = useRef<
     Partial<Record<TabKey, PullToRefreshHandler>>
   >({});
+  const tabResetHandlersRef = useRef<Partial<Record<TabKey, TabResetHandler>>>(
+    {},
+  );
   const pullStartRef = useRef<{
     identifier: number;
     startX: number;
@@ -325,6 +329,19 @@ const BottomNav: React.FC = () => {
       return () => {
         if (pullToRefreshHandlersRef.current[tabKey] === handler) {
           delete pullToRefreshHandlersRef.current[tabKey];
+        }
+      };
+    },
+    [],
+  );
+
+  const registerTabReset = useCallback(
+    (tabKey: TabKey, handler: TabResetHandler) => {
+      tabResetHandlersRef.current[tabKey] = handler;
+
+      return () => {
+        if (tabResetHandlersRef.current[tabKey] === handler) {
+          delete tabResetHandlersRef.current[tabKey];
         }
       };
     },
@@ -510,13 +527,16 @@ const BottomNav: React.FC = () => {
         return;
       }
 
-      // 활성 탭을 다시 누르면 맨 위로, 이미 맨 위면 가장 위 깊이를 닫는다
-      if (getScrollTop() > 0) {
-        scrollToTop("smooth");
+      // 활성 탭을 다시 누르면 맨 위로 올린다. 열린 깊이가 있으면 이미 맨 위일 때 가장 위 깊이를 닫고,
+      // 없으면 탭 선택 상태도 기본값으로 되돌린다
+      const hasDepth = depthEntriesRef.current[tabKey].length > 0;
+      if (hasDepth && getScrollTop() === 0) {
+        requestCloseTopDepth(tabKey);
         return;
       }
 
-      requestCloseTopDepth(tabKey);
+      scrollToTop("smooth");
+      if (!hasDepth) tabResetHandlersRef.current[tabKey]?.();
     },
     [getScrollTop, requestCloseTopDepth, scrollToTop, selectTab],
   );
@@ -1104,6 +1124,7 @@ const BottomNav: React.FC = () => {
       scrollToTop,
       getScrollTop,
       registerPullToRefresh,
+      registerTabReset,
     }),
     [
       closeDepth,
@@ -1112,6 +1133,7 @@ const BottomNav: React.FC = () => {
       pushDepth,
       requestCloseTopDepth,
       registerPullToRefresh,
+      registerTabReset,
       restoreScrollTop,
       saveScrollPosition,
       scrollToTop,

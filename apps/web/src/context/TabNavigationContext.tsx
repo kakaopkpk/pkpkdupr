@@ -18,6 +18,8 @@ export interface TabDepthEntry {
 
 export type TabDepthStacks = Record<TabKey, string[]>;
 export type PullToRefreshHandler = () => Promise<void>;
+/** 선택된 탭을 다시 눌렀을 때 탭 선택 상태를 기본값으로 되돌린다 */
+export type TabResetHandler = () => void;
 
 export interface TabNavigationContextValue {
   selectedTab: TabKey;
@@ -37,6 +39,7 @@ export interface TabNavigationContextValue {
     tabKey: TabKey,
     handler: PullToRefreshHandler,
   ) => () => void;
+  registerTabReset: (tabKey: TabKey, handler: TabResetHandler) => () => void;
 }
 
 const TabNavigationContext = createContext<TabNavigationContextValue | null>(

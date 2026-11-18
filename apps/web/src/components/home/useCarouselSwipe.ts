@@ -53,6 +53,11 @@ const scrollToSlide = (track: HTMLElement, index: number, animate: boolean) => {
   });
 };
 
+/** 첫 카드로 부드럽게 되돌린다 */
+export const scrollCarouselToStart = (track: HTMLElement) => {
+  scrollToSlide(track, 0, true);
+};
+
 /**
  * 가로 스크롤 트랙(touch-action: pan-y)의 카드 넘기기. 손가락 가로 끌기는 브라우저 스크롤 대신 직접
  * 처리해, 놓을 때 거리·속도로 멈출 카드를 하나만 고른다(살짝 튕기기로 넘어가거나 관성으로 여러 장
