@@ -211,13 +211,13 @@ export default function MemberProfileDrawer({
               <AchievementsSection
                 playerId={playerId}
                 progress={overview.summary.achievements}
-                variant="member"
                 badgeSize={44}
                 onViewAll={() => setIsAchievementsRequested(true)}
               />
               <RecentMatchesSection
                 title="최근 경기"
                 matches={overview.summary.recentMatches}
+                totalCount={overview.summary.completedMatchCount}
                 viewerPlayerId={viewer?.id}
                 onViewAll={() => setIsMatchHistoryRequested(true)}
               />

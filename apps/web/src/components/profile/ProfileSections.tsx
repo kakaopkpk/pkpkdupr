@@ -109,14 +109,16 @@ export const Last7DaysTile: React.FC<{
   );
 };
 
-/** 최근 완료 경기 3개와 "전체 보기" */
+/** 최근 완료 경기 3개와 "전체 보기". 제목에 전체 완료 경기 수를 붙인다(" · N") */
 export const RecentMatchesSection: React.FC<{
   title: string;
   matches: readonly MatchInfo[];
+  /** 전체 보기 뒤 완료 경기 수 */
+  totalCount: number;
   /** 보는 사람 id. 주면 그 사람이 뛴 경기에 "내 경기"를 붙인다 */
   viewerPlayerId?: string;
   onViewAll: () => void;
-}> = ({ title, matches, viewerPlayerId, onViewAll }) => {
+}> = ({ title, matches, totalCount, viewerPlayerId, onViewAll }) => {
   const { openMatchDetail } = useAppNavigation();
   // 진행 중 경기는 빼고 보인다
   const recentMatches = matches
@@ -132,7 +134,7 @@ export const RecentMatchesSection: React.FC<{
           </TextLink>
         }
       >
-        {title}
+        {title} · {totalCount}
       </SectionLabel>
       <Card>
         {recentMatches.length > 0 ? (

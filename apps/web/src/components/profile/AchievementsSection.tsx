@@ -21,8 +21,6 @@ export interface AchievementsSectionProps {
   /** 업적 주인 */
   playerId: string;
   progress: readonly AchievementProgressInfo[];
-  /** 제목 형식. "me": "업적 · N/전체 수", "member": "받은 업적 · N" */
-  variant: "me" | "member";
   /** 기본 48 */
   badgeSize?: number;
   onViewAll?: () => void;
@@ -35,16 +33,12 @@ export interface AchievementsSectionProps {
 export const AchievementsSection: React.FC<AchievementsSectionProps> = ({
   playerId,
   progress,
-  variant,
   badgeSize = 48,
   onViewAll,
 }) => {
   const { openAchievementDetail } = useAppNavigation();
   const earned = getEarnedAchievementsByRecent(progress);
-  const title =
-    variant === "me"
-      ? `업적 · ${earned.length}/${ACHIEVEMENTS.length}`
-      : `받은 업적 · ${earned.length}`;
+  const title = `업적 · ${earned.length}/${ACHIEVEMENTS.length}`;
 
   return (
     <section className="flex flex-col gap-2.5 pt-1">

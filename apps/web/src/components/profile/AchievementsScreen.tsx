@@ -8,15 +8,12 @@ import {
 } from "@pkpkdupr/shared/achievements";
 import PushScreen from "@/components/PushScreen";
 import { AchievementBadge } from "@/components/profile/AchievementBadge";
+import { AchievementPointsSummary } from "@/components/profile/AchievementPointsSummary";
 import { Card } from "@/components/ui/Card";
 import { CountUpText } from "@/components/ui/CountUpText";
 import { CheckIcon } from "@/components/ui/Icons";
 import { ProgressBar } from "@/components/ui/ProgressBar";
-import {
-  COUNT_UP,
-  CountUpNumber,
-  getRowCountUp,
-} from "@/components/ui/CountUpNumber";
+import { getRowCountUp } from "@/components/ui/CountUpNumber";
 import { SectionLabel } from "@/components/ui/Section";
 import { cx } from "@/components/ui/cx";
 import { useAppNavigation } from "@/context/AppNavigationContext";
@@ -151,7 +148,7 @@ export interface AchievementsScreenProps {
 }
 
 /**
- * 업적 전체 보기. 맨 위에 업적 점수·받은 개수·업적 랭킹 순위를 두고,
+ * 업적 전체 보기. 맨 위에 프로필 업적 카드와 같은 점수 줄·게이지 바와 받은 개수·업적 랭킹 순위를 두고,
  * 분류별로 받은 점수 / 분류 만점, 받은 업적은 얻은 점수와 받은 날,
  * 못 받은 업적은 걸린 점수와 진행도를 보인다
  */
@@ -239,21 +236,9 @@ export default function AchievementsScreen({
       onExited={handleExited}
     >
       <div className="flex flex-col gap-4 px-4 pt-1 pb-4">
-        <Card className="flex items-end justify-between gap-3 p-4">
-          <span className="flex flex-col gap-0.5">
-            <span className="text-pk-13 text-pk-sub">업적 점수</span>
-            <span className="flex items-baseline gap-0.5">
-              <span className="font-num text-[40px] leading-none font-bold tabular-nums text-pk-ink">
-                <CountUpNumber
-                  value={points}
-                  format={formatAchievementPoints}
-                  {...COUNT_UP}
-                />
-              </span>
-              <span className="text-pk-15 font-bold text-pk-ink">점</span>
-            </span>
-          </span>
-          <span className="flex flex-col items-end gap-0.5 text-pk-13 text-pk-sub">
+        <Card className="flex flex-col gap-2.5 p-4">
+          <AchievementPointsSummary points={points} />
+          <div className="flex items-baseline justify-between gap-3 text-pk-13 text-pk-sub">
             <span>
               {ACHIEVEMENTS.length}개 중{" "}
               <strong className="font-bold text-pk-ink">{earnedCount}개</strong>{" "}
@@ -267,7 +252,7 @@ export default function AchievementsScreen({
                 </strong>
               </span>
             ) : null}
-          </span>
+          </div>
         </Card>
         {CATEGORY_SECTIONS.map(({ category, definitions, maxPoints }) => {
           const categoryPoints = sumAchievementPoints(

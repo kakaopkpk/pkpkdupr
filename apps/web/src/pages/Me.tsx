@@ -138,13 +138,13 @@ const Me: React.FC = () => {
               <AchievementsSection
                 playerId={playerId}
                 progress={achievements}
-                variant="me"
                 onViewAll={() => setIsAchievementsRequested(true)}
               />
             ) : null}
             <RecentMatchesSection
               title="최근 경기"
               matches={overview.summary.recentMatches}
+              totalCount={overview.summary.completedMatchCount}
               onViewAll={() => setIsMatchHistoryRequested(true)}
             />
           </>
