@@ -129,16 +129,26 @@ const PlusIcon: React.FC = () => (
   </svg>
 );
 
-/** 세션도 기록도 없는 날. 지난 날은 세션을 만들 수 없으므로 문구만 보인다 */
+/** 빈 날에서 세션을 만들 수 있는지: 만들 수 있음 / 지난 날 / 세션 만들기 달력 범위(오늘부터 3주) 밖 */
+export type EmptyDayKind = "creatable" | "past" | "out-of-range";
+
+/** 세션도 기록도 없는 날. 만들 수 있는 날만 그 날짜로 세션 만들기를 연다 */
 export const EmptyDayCard: React.FC<{
-  isPast: boolean;
+  kind: EmptyDayKind;
   onCreateSession: () => void;
-}> = ({ isPast, onCreateSession }) => (
+}> = ({ kind, onCreateSession }) => (
   <div className="flex flex-col items-center gap-1 rounded-pk-lg bg-white px-4 pt-5 pb-4 text-center">
     <b className="text-pk-15 font-bold text-pk-ink">
-      {isPast ? "세션도 경기 기록도 없어요" : "아직 세션도 경기 기록도 없어요"}
+      {kind === "past"
+        ? "세션도 경기 기록도 없어요"
+        : "아직 세션도 경기 기록도 없어요"}
     </b>
-    {isPast ? null : (
+    {kind === "out-of-range" ? (
+      <span className="text-pk-13 text-pk-sub">
+        세션은 오늘부터 3주 안의 날에 만들 수 있어요
+      </span>
+    ) : null}
+    {kind === "creatable" ? (
       <>
         <span className="text-pk-13 text-pk-sub">
           세션을 만들면 다른 회원도 참여할 수 있어요
@@ -153,6 +163,6 @@ export const EmptyDayCard: React.FC<{
           세션 만들기
         </PkButton>
       </>
-    )}
+    ) : null}
   </div>
 );

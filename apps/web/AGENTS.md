@@ -20,7 +20,7 @@
 ## 구조 가이드
 
 - `src/pages/`
-  - 탭 페이지: `Home.tsx`(홈)·`Schedule.tsx`(일정: 탭 머리 없이 월 달력 `schedule/MonthCalendar`(이전 달·"2026년 11월"(누르면 이번 달·오늘)·다음 달, 오늘은 `pk-hl` 바탕·고른 날은 블루 원, 세션 날은 블루 점+참여 인원·기록만 있는 날은 회색 점, 내 것이면 속 찬 점)과 고른 날 카드. `GET /api/schedule` 한 달 응답으로 `lib/schedule.ts`의 `buildScheduleDayMarks`·`getScheduleDayEntries`가 표시·카드를 정한다. 카드는 세션 먼저(진행 중 세션 `LiveSessionCard`(진행 화면 보기 → 홈 탭), 끝나지 않은 세션 `UpcomingSessionCard`(참여하기·참여 취소), 끝난 세션 `RecordSessionCard`(`openSessionReport`)), 그 뒤 세션 없는 경기 `RecordMatchCard`(경기 상세), 아무것도 없으면 `EmptyDayCard`(오늘·미래면 그 날짜로 `openCreateSession`, 지난 날은 문구만))·`Ranking.tsx`(랭킹)·`Me.tsx`(나). props 없이 컨텍스트로 데이터를 받습니다.
+  - 탭 페이지: `Home.tsx`(홈)·`Schedule.tsx`(일정: 탭 머리 없이 월 달력 `schedule/MonthCalendar`(이전 달·"2026년 11월"(누르면 이번 달·오늘)·다음 달, 오늘은 `pk-hl` 바탕·고른 날은 블루 원, 세션 날은 블루 점+참여 인원·기록만 있는 날은 회색 점, 내 것이면 속 찬 점)과 고른 날 카드. `GET /api/schedule` 한 달 응답으로 `lib/schedule.ts`의 `buildScheduleDayMarks`·`getScheduleDayEntries`가 표시·카드를 정한다. 카드는 세션 먼저(진행 중 세션 `LiveSessionCard`(진행 화면 보기 → 홈 탭), 끝나지 않은 세션 `UpcomingSessionCard`(참여하기·참여 취소), 끝난 세션 `RecordSessionCard`(`openSessionReport`)), 그 뒤 세션 없는 경기 `RecordMatchCard`(경기 상세), 아무것도 없으면 `EmptyDayCard`(세션 만들기 달력 범위(오늘부터 3주) 안이면 그 날짜로 `openCreateSession`, 지난 날·범위 밖은 문구만))·`Ranking.tsx`(랭킹)·`Me.tsx`(나). props 없이 컨텍스트로 데이터를 받습니다.
   - 그 밖의 전역 라우트: `Login.tsx`, `ForceChangePassword.tsx`
 - `src/components/`
   - `BottomNav.tsx`: 4탭 keep-alive 셸, 하단 바(`BottomDock.tsx`)와 + 메뉴, 전역 화면 래퍼 렌더, 진행 중 경기 미니바·참여 알림 바

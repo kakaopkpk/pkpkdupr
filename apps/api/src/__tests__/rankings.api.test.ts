@@ -551,7 +551,7 @@ describe("랭킹·세션 리포트 API", () => {
       createdAt: now,
       updatedAt: now,
     });
-    // 11-12 21:00 KST 기준: 11-09 세션은 경기가 있고 끝남, 11-10 빈 세션은 끝남(정리 대기), 11-16 세션은 다가옴
+    // 11-12 21:00 KST 기준: 11-09 세션은 완료 경기가 있고 끝남, 11-10 세션은 완료 경기 없이 끝남, 11-16 세션은 다가옴
     const upcomingSession: SessionWithParticipantIds = {
       ...session,
       id: "Supcomi1",
@@ -588,7 +588,8 @@ describe("랭킹·세션 리포트 API", () => {
         .spyOn(MatchRepository.prototype, "findSessionsInDateKeyRange")
         .mockResolvedValue([
           toManaged(session, 1),
-          toManaged(emptySession, 0),
+          // 취소·진행 중 경기만 있어 matchCount가 있어도 완료 경기가 없으면 뺀다
+          toManaged(emptySession, 1),
           toManaged(upcomingSession, 0),
         ]);
       vi.spyOn(
@@ -614,7 +615,7 @@ describe("랭킹·세션 리포트 API", () => {
       vi.useRealTimers();
     });
 
-    it("그 달 세션(끝난 빈 세션 제외)과 그 달 기록 줄을 돌려준다", async () => {
+    it("그 달 세션(완료 경기 없이 끝난 세션 제외)과 그 달 기록 줄을 돌려준다", async () => {
       const response = await authorized("/api/schedule?month=2026-11");
 
       expect(response.status).toBe(200);

@@ -3158,7 +3158,20 @@ app.get("/api/schedule", async (req, res) => {
         loadRankingSource(),
       ]);
 
-    // 정리가 best-effort라 끝났는데 경기가 없는 세션이 남아 있을 수 있어 뺀다
+    const entries = buildRecordsInRange({
+      context,
+      sessions,
+      from: kstDateKeyToDate(fromDateKey),
+      to: kstDateKeyToDate(toDateKey),
+      requesterId: auth.playerId,
+    });
+    // 끝난 세션은 완료 경기가 있는(기록 줄이 있는) 세션만 남긴다.
+    // 정리가 best-effort라 남은 빈 세션, 취소·진행 중 경기만 있던 세션은 일정에 보일 내용이 없다
+    const recordedSessionIds = new Set(
+      entries.flatMap((entry) =>
+        entry.kind === "session" ? [entry.session.id] : [],
+      ),
+    );
     const scheduleSessions = monthSessions
       .map((session): ScheduleSession => {
         const isEnded =
@@ -3168,7 +3181,9 @@ app.get("/api/schedule", async (req, res) => {
           isEnded,
         };
       })
-      .filter((session) => !session.isEnded || session.matchCount > 0);
+      .filter(
+        (session) => !session.isEnded || recordedSessionIds.has(session.id),
+      );
     // 저장소가 시각 오름차순으로 주므로 날짜 키·정기 여부로만 다시 정렬한다(정렬은 안정적이다)
     scheduleSessions.sort(
       (a, b) =>
@@ -3176,13 +3191,6 @@ app.get("/api/schedule", async (req, res) => {
         Number(b.kind === "regular") - Number(a.kind === "regular"),
     );
 
-    const entries = buildRecordsInRange({
-      context,
-      sessions,
-      from: kstDateKeyToDate(fromDateKey),
-      to: kstDateKeyToDate(toDateKey),
-      requesterId: auth.playerId,
-    });
     const response: ScheduleMonthResponse = {
       month,
       dateKey: toKstDateKey(now),

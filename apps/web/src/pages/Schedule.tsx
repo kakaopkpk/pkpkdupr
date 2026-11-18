@@ -12,11 +12,13 @@ import {
 import MonthCalendar from "@/components/schedule/MonthCalendar";
 import {
   EmptyDayCard,
+  type EmptyDayKind,
   LiveSessionCard,
   UpcomingSessionCard,
 } from "@/components/schedule/ScheduleCards";
 import ParticipantsSheet from "@/components/session/ParticipantsSheet";
 import type { ParticipationAction } from "@/components/session/SessionBlueCard";
+import { isSessionDateSelectable } from "@/components/session/SessionSchedulePicker";
 import { getErrorMessage } from "@/components/session/saveError";
 import { SectionLabel } from "@/components/ui/Section";
 import { StateMessage } from "@/components/ui/StateMessage";
@@ -69,6 +71,11 @@ const getDefaultDateKey = (monthKey: string, todayKey: string) =>
   toMonthKey(todayKey) === monthKey
     ? todayKey
     : getScheduleMonthDateKeyRange(monthKey).fromDateKey;
+
+const getEmptyDayKind = (dateKey: string, todayKey: string): EmptyDayKind => {
+  if (dateKey < todayKey) return "past";
+  return isSessionDateSelectable(dateKey, todayKey) ? "creatable" : "out-of-range";
+};
 
 const getMatchPlayerIds = (match: { teams: { players: { id: string }[] }[] }) =>
   match.teams.flatMap((team) => team.players.map((player) => player.id));
@@ -351,7 +358,7 @@ const Schedule: React.FC = () => {
           entries.map(renderEntry)
         ) : (
           <EmptyDayCard
-            isPast={selectedDateKey < todayKey}
+            kind={getEmptyDayKind(selectedDateKey, todayKey)}
             onCreateSession={handleCreateSession}
           />
         )}

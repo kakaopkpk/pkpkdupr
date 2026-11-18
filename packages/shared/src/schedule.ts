@@ -17,7 +17,7 @@ export interface ScheduleMonthResponse {
   /** 오늘 KST 날짜 키 */
   dateKey: string;
   /**
-   * 세션 날짜 키가 그 달인 세션. 끝났는데 경기가 없는 세션(정리 대기)은 뺀다.
+   * 세션 날짜 키가 그 달인 세션. 끝난 세션은 완료 경기가 있는(records에 세션 줄이 있는) 세션만 남긴다.
    * 날짜 키 오름차순, 같은 날은 정기 세션 먼저
    */
   sessions: ScheduleSession[];
