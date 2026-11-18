@@ -7,7 +7,7 @@ import BottomSheet from "@/components/BottomSheet";
 import SkeletonBlock from "@/components/SkeletonBlock";
 import { AchievementBadge } from "@/components/profile/AchievementBadge";
 import { PkButton } from "@/components/ui/Button";
-import { cx } from "@/components/ui/cx";
+import { LockIcon } from "@/components/ui/Icons";
 import { ProgressBar } from "@/components/ui/ProgressBar";
 import {
   GLOBAL_LAYER,
@@ -76,15 +76,8 @@ const loadDetail = async (
 const DetailRow: React.FC<{
   label: React.ReactNode;
   children: React.ReactNode;
-  /** 줄 사이 구분선을 긋는다. 진행 막대와 묶인 줄은 막대 아래에 긋는다 */
-  hasDivider?: boolean;
-}> = ({ label, children, hasDivider = true }) => (
-  <div
-    className={cx(
-      "flex min-h-12 items-center justify-between gap-3",
-      hasDivider && "not-last:border-b not-last:border-pk-divider",
-    )}
-  >
+}> = ({ label, children }) => (
+  <div className="flex min-h-12 items-center justify-between gap-3">
     <span className="shrink-0 text-pk-15 text-pk-sub">{label}</span>
     <span className="flex min-w-0 items-center justify-end text-pk-15 font-bold text-pk-ink tabular-nums">
       {children}
@@ -134,31 +127,14 @@ const EarnedBadge: React.FC<{
   </>
 );
 
-/** 못 받은 업적 배지: 회색 배지 오른쪽 아래에 자물쇠 */
-const LockedBadge: React.FC<{
-  definition: AchievementDefinition;
-}> = ({ definition }) => (
-  <>
-    <AchievementBadge achievement={definition} earned={false} size={BADGE_SIZE} />
-    <span
-      aria-hidden="true"
-      className="absolute -right-0.5 bottom-1.5 flex size-7 items-center justify-center rounded-full bg-white text-pk-muted shadow-[inset_0_0_0_1.5px_var(--color-pk-line)]"
-    >
-      <svg
-        width="14"
-        height="14"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth={2.4}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      >
-        <rect x="5" y="11" width="14" height="10" rx="2" />
-        <path d="M8 11V8a4 4 0 0 1 8 0v3" />
-      </svg>
-    </span>
-  </>
+/** 못 받은 업적 배지 오른쪽 아래에 겹치는 자물쇠 */
+const LockMark: React.FC = () => (
+  <span
+    aria-hidden="true"
+    className="absolute -right-0.5 bottom-1.5 flex size-7 items-center justify-center rounded-full bg-white text-pk-muted shadow-[inset_0_0_0_1.5px_var(--color-pk-line)]"
+  >
+    <LockIcon />
+  </span>
 );
 
 export interface AchievementDetailSheetProps {
@@ -244,16 +220,24 @@ export default function AchievementDetailSheet({
     content = (
       <>
         <BottomSheet.Header className="flex flex-col items-center gap-1 px-1 pt-1 text-center">
-          <div className="relative size-24">
+          <div
+            className="relative"
+            style={{ width: BADGE_SIZE, height: BADGE_SIZE }}
+          >
             {isLoading ? (
-              <SkeletonBlock className="size-24 rounded-full" />
+              <SkeletonBlock className="size-full rounded-full" />
             ) : earned ? (
               <EarnedBadge definition={definition} />
-            ) : ready ? (
-              <LockedBadge definition={definition} />
             ) : (
-              // 불러오지 못하면 받았는지 모르므로 자물쇠 없이 회색 배지만 둔다
-              <AchievementBadge achievement={definition} earned={false} size={BADGE_SIZE} />
+              <>
+                <AchievementBadge
+                  achievement={definition}
+                  earned={false}
+                  size={BADGE_SIZE}
+                />
+                {/* 불러오지 못하면 받았는지 모르므로 자물쇠를 달지 않는다 */}
+                {ready ? <LockMark /> : null}
+              </>
             )}
           </div>
           {/* 받은 업적의 빛줄기가 글자를 덮지 않게 위로 올린다 */}
@@ -268,39 +252,41 @@ export default function AchievementDetailSheet({
               업적 정보를 불러오지 못했어요.
             </p>
           ) : null}
-          {isLoading ? (
-            <DetailRow label={<SkeletonBlock className="h-4 w-12" />}>
-              <ValueSkeleton />
-            </DetailRow>
-          ) : null}
-          {ready && earned ? (
-            <DetailRow label="받은 날">
-              {progress?.earnedAt ? formatKstLongDate(progress.earnedAt) : "–"}
-            </DetailRow>
-          ) : null}
-          {ready && !earned ? (
-            <div className="flex flex-col pb-4 not-last:border-b not-last:border-pk-divider">
-              <DetailRow label="진행" hasDivider={false}>
-                {formatAchievementProgress(definition, progress)}
+          <div className="divide-y divide-pk-divider">
+            {isLoading ? (
+              <DetailRow label={<SkeletonBlock className="h-4 w-12" />}>
+                <ValueSkeleton />
               </DetailRow>
-              <ProgressBar
-                ratio={getAchievementProgressRatio(definition, progress)}
-                className="h-1.5"
-              />
-            </div>
-          ) : null}
-          <DetailRow label="점수">
-            <span
-              className={
-                definition.points > 0
-                  ? "text-pk-primary"
-                  : "font-medium text-pk-muted"
-              }
-            >
-              {formatAchievementPointsLabel(definition.points)}
-            </span>
-          </DetailRow>
-          <DetailRow label="받은 회원">{holderCount}</DetailRow>
+            ) : null}
+            {ready && earned ? (
+              <DetailRow label="받은 날">
+                {progress?.earnedAt ? formatKstLongDate(progress.earnedAt) : "–"}
+              </DetailRow>
+            ) : null}
+            {ready && !earned ? (
+              <div className="flex flex-col pb-4">
+                <DetailRow label="진행">
+                  {formatAchievementProgress(definition, progress)}
+                </DetailRow>
+                <ProgressBar
+                  ratio={getAchievementProgressRatio(definition, progress)}
+                  className="h-1.5"
+                />
+              </div>
+            ) : null}
+            <DetailRow label="점수">
+              <span
+                className={
+                  definition.points > 0
+                    ? "text-pk-primary"
+                    : "font-medium text-pk-muted"
+                }
+              >
+                {formatAchievementPointsLabel(definition.points)}
+              </span>
+            </DetailRow>
+            <DetailRow label="받은 회원">{holderCount}</DetailRow>
+          </div>
         </BottomSheet.Body>
         <BottomSheet.Footer>
           <PkButton size="lg" fullWidth onClick={() => close()}>
