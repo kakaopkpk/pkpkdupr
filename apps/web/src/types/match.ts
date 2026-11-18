@@ -37,6 +37,10 @@ export const getMatchPlayerIds = (match: Pick<MatchInfo, "teams">): string[] =>
   match.teams.flatMap((team) => team.players.map((player) => player.id));
 
 /** 게스트가 낀 경기(ratingExcluded)의 평점 변화 자리에 보이는 한 줄 */
+/** 관리자 예정 경기처럼 시작 시각 전의 경기는 진행 중이 아니라 예정으로 본다 */
+export const isMatchScheduled = (match: Pick<MatchInfo, "matchStartsAt">, now: Date): boolean =>
+  new Date(match.matchStartsAt).getTime() > now.getTime();
+
 export const RATING_EXCLUDED_NOTICE = "평점 미반영 · 게스트 참여 경기";
 
 export interface MatchListResponse {

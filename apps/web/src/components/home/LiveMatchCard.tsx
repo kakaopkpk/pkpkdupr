@@ -1,34 +1,31 @@
 import React from "react";
-import type { MatchInfo } from "@/types/match";
+import { isMatchScheduled, type MatchInfo } from "@/types/match";
+import { RallyTeamRow } from "@/components/match/LiveMatchRally";
 import { PkButton, rowPressClassName } from "@/components/ui/Button";
 import { ChevronRightIcon } from "@/components/ui/Icons";
 import { cx } from "@/components/ui/cx";
 import { formatElapsed } from "@/lib/format";
 import { TeamsVersus } from "./TeamBlock";
 
-/** 카드 머리 줄(앞 칩·경과 시간·꺾쇠)과 가로 vs 두 팀 */
-const LiveMatchBody: React.FC<{
+/** 카드 머리 줄. 앞 칩·경과 시간·꺾쇠 */
+const LiveMatchHeader: React.FC<{
   match: MatchInfo;
   now: Date;
   chip?: React.ReactNode;
-  avatarSize?: 24 | 28;
-}> = ({ match, now, chip, avatarSize }) => (
-  <>
-    <span className="flex w-full items-center gap-2">
-      {chip}
-      <span className="text-pk-13 text-pk-sub tabular-nums">
-        {formatElapsed(match.matchStartsAt, now)}
-      </span>
-      <ChevronRightIcon className="ml-auto shrink-0 text-pk-quiet" />
+}> = ({ match, now, chip }) => (
+  <span className="flex w-full items-center gap-2">
+    {chip}
+    <span className="text-pk-13 text-pk-sub tabular-nums">
+      {formatElapsed(match.matchStartsAt, now)}
     </span>
-    <TeamsVersus
-      teams={[match.teams[0].players, match.teams[1].players]}
-      size={avatarSize}
-    />
-  </>
+    <ChevronRightIcon className="ml-auto shrink-0 text-pk-quiet" />
+  </span>
 );
 
-/** 진행 중인 내 경기. 2px 연한 블루 테두리와 "점수 입력" 버튼. 버튼 위 본문을 누르면 경기 상세를 연다 */
+/**
+ * 진행 중인 내 경기. 2px 연한 블루 테두리와 "점수 입력" 버튼. 버튼 위 본문을 누르면 경기 상세를 연다.
+ * 팀 줄은 경기 상세처럼 두 팀 사이로 공이 오가는 랠리를 그리고, 시작 전 예정 경기면 vs 글자만 둔다.
+ */
 export const MyLiveMatchCard: React.FC<{
   match: MatchInfo;
   now: Date;
@@ -39,17 +36,31 @@ export const MyLiveMatchCard: React.FC<{
     <button
       type="button"
       onClick={onOpenDetail}
-      className="flex flex-col gap-3 text-left active:opacity-80"
+      className="flex flex-col gap-1 text-left active:opacity-80"
     >
-      <LiveMatchBody
+      <LiveMatchHeader
         match={match}
         now={now}
-        avatarSize={28}
         chip={
           <span className="rounded-full bg-pk-primary px-[9px] py-[3px] text-pk-12 font-extrabold text-white">
             내 경기
           </span>
         }
+      />
+      <RallyTeamRow
+        teams={match.teams}
+        isScheduled={isMatchScheduled(match, now)}
+        ringColor="#ffffff"
+        vsClassName="text-pk-12 font-bold text-pk-muted"
+        renderNames={(team) => (
+          <span className="flex max-w-full min-w-0 flex-col items-center text-pk-15 font-bold leading-[1.35] text-pk-ink">
+            {team.players.map((player) => (
+              <span key={player.id} className="max-w-full truncate">
+                {player.username}
+              </span>
+            ))}
+          </span>
+        )}
       />
     </button>
     <PkButton size="md" fullWidth className="h-12" onClick={onEnterScore}>
@@ -72,6 +83,7 @@ export const LiveMatchCard: React.FC<{
       rowPressClassName,
     )}
   >
-    <LiveMatchBody match={match} now={now} />
+    <LiveMatchHeader match={match} now={now} />
+    <TeamsVersus teams={[match.teams[0].players, match.teams[1].players]} />
   </button>
 );
