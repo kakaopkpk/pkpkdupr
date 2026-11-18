@@ -1,4 +1,5 @@
 import React from "react";
+import { LivePill } from "@/components/ui/Badges";
 import { buttonPressClassName } from "@/components/ui/Button";
 import { CheckIcon, ChevronRightIcon } from "@/components/ui/Icons";
 import { PlayerAvatar } from "@/components/ui/PlayerAvatar";
@@ -8,6 +9,7 @@ import {
   type MatchSessionDetailInfo,
 } from "@/lib/matchSessions";
 import PickleballIllustration from "./PickleballIllustration";
+import { formatSessionTimePlace } from "./sessionTimeLabel";
 
 const MAX_VISIBLE_AVATARS = 4;
 const AVATAR_SIZE = 28;
@@ -47,8 +49,8 @@ const ParticipantAvatars: React.FC<{
 
 /**
  * 세션 블루 카드 틀: 첫 줄(종류 칩 "정기"/"회원" → 남은 날 → 오른쪽 끝 trailing) → 이름·메타
- * → 참여자 줄(누르면 참여자 시트) → children(버튼). 오른쪽 위에 피클볼 장식이 걸친다.
- * 홈 다음 세션 카드와 일정 탭 세션 카드가 같이 쓴다
+ * → 참여자 줄(누르면 참여자 시트) → children(버튼, 없으면 참여자 줄로 끝난다). 오른쪽 위에 피클볼 장식이 걸친다.
+ * 홈 다음 세션·진행 중 세션 카드와 일정 탭 세션 카드가 같이 쓴다
  */
 export const SessionBlueCard: React.FC<{
   session: MatchSessionDetailInfo;
@@ -60,7 +62,7 @@ export const SessionBlueCard: React.FC<{
   /** "9명 참여 예정" | "9명 참여" */
   participantsLabel: string;
   onOpenParticipants: () => void;
-  children: React.ReactNode;
+  children?: React.ReactNode;
   className?: string;
 }> = ({
   session,
@@ -139,6 +141,31 @@ export const BlueCardSolidButton: React.FC<{
   >
     {children}
   </button>
+);
+
+/**
+ * 오늘 진행 중 세션 블루 카드. 칩 줄 오른쪽 끝에 LIVE가 붙고, 참여·참여 취소는 진행 화면(홈 탭)에서 한다.
+ * 일정 탭은 onOpenLive를 넘겨 "진행 화면 보기" 버튼을 두고, 진행 화면인 홈은 넘기지 않아 버튼 없이 그린다
+ */
+export const LiveSessionCard: React.FC<{
+  session: MatchSessionDetailInfo;
+  onOpenParticipants: () => void;
+  onOpenLive?: () => void;
+}> = ({ session, onOpenParticipants, onOpenLive }) => (
+  <SessionBlueCard
+    session={session}
+    trailing={<LivePill />}
+    meta={formatSessionTimePlace(session)}
+    participantsLabel={`${session.participants.length}명 참여`}
+    onOpenParticipants={onOpenParticipants}
+  >
+    {onOpenLive ? (
+      <BlueCardSolidButton onPress={onOpenLive}>
+        진행 화면 보기
+        <ChevronRightIcon className="size-4 shrink-0" />
+      </BlueCardSolidButton>
+    ) : null}
+  </SessionBlueCard>
 );
 
 /**

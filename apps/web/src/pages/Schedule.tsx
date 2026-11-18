@@ -13,10 +13,10 @@ import MonthCalendar from "@/components/schedule/MonthCalendar";
 import {
   EmptyDayCard,
   type EmptyDayKind,
-  LiveSessionCard,
   UpcomingSessionCard,
 } from "@/components/schedule/ScheduleCards";
 import ParticipantsSheet from "@/components/session/ParticipantsSheet";
+import { LiveSessionCard } from "@/components/session/SessionBlueCard";
 import { isSessionDateSelectable } from "@/components/session/SessionSchedulePicker";
 import { useSessionParticipation } from "@/components/session/useSessionParticipation";
 import { SectionLabel } from "@/components/ui/Section";
