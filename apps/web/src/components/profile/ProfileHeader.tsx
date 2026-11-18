@@ -26,6 +26,10 @@ export const getTotalMatchStats = (
     { wins: 0, losses: 0 },
   );
 
+/** 아바타(또는 그 스켈레톤)는 왼쪽 열에서 세 줄을 차지한다 */
+const AVATAR_CELL = "col-start-1 row-span-3 row-start-1 self-center";
+const STATS_CELL = "col-start-2 row-start-2 mt-0.5";
+
 export interface ProfileHeaderProps {
   /** 아직 모르면 null(아바타 자리를 깜빡이는 원으로 둔다) */
   player: { id: string; username: string; avatarUrl?: string | null } | null;
@@ -128,7 +132,8 @@ const ProfileHeader: React.FC<ProfileHeaderProps> = ({
           tabIndex={canZoom ? undefined : -1}
           onClick={openZoom}
           className={cx(
-            "col-start-1 row-span-3 row-start-1 flex self-center rounded-full transition-transform duration-150 ease-pk-move enabled:active:scale-[0.92] motion-reduce:transition-none",
+            AVATAR_CELL,
+            "flex rounded-full transition-transform duration-150 ease-pk-move enabled:active:scale-[0.92] motion-reduce:transition-none",
             isZoomVisible && "invisible",
           )}
         >
@@ -139,13 +144,13 @@ const ProfileHeader: React.FC<ProfileHeaderProps> = ({
           />
         </button>
       ) : (
-        <span className="col-start-1 row-span-3 row-start-1 size-[72px] self-center animate-pulse rounded-full bg-pk-neutral" />
+        <SkeletonBlock className={cx(AVATAR_CELL, "size-[72px] rounded-full")} />
       )}
       <Heading className="col-start-2 row-start-1 truncate text-pk-22 leading-[1.25] font-extrabold tracking-[-0.02em] text-pk-ink">
         {player?.username ?? ""}
       </Heading>
       {totalStats ? (
-        <span className="col-start-2 row-start-2 mt-0.5 text-pk-13 text-pk-sub tabular-nums">
+        <span className={cx(STATS_CELL, "text-pk-13 text-pk-sub tabular-nums")}>
           <CountUpNumber
             value={totalStats.wins + totalStats.losses}
             {...COUNT_UP}
@@ -154,7 +159,7 @@ const ProfileHeader: React.FC<ProfileHeaderProps> = ({
           <WinLossCount wins={totalStats.wins} losses={totalStats.losses} />
         </span>
       ) : (
-        <span className="col-start-2 row-start-2 mt-0.5 flex h-[19.5px] items-center">
+        <span className={cx(STATS_CELL, "flex h-lh items-center text-pk-13")}>
           {hideStats ? null : <SkeletonBlock className="h-4 w-32" />}
         </span>
       )}
