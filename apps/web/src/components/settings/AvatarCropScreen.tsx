@@ -207,7 +207,7 @@ const AvatarCropScreen: React.FC<AvatarCropScreenProps> = ({
       setView((current) =>
         current.scale < DOUBLE_TAP_SCALE - 0.05
           ? zoomAvatarCropViewAt(current, DOUBLE_TAP_SCALE, point, imageSize)
-          : clampAvatarCropView(INITIAL_AVATAR_CROP_VIEW, imageSize),
+          : INITIAL_AVATAR_CROP_VIEW,
       );
       return;
     }
@@ -298,10 +298,7 @@ const AvatarCropScreen: React.FC<AvatarCropScreenProps> = ({
           <button
             type="button"
             disabled={isSaving || !imageSize || isInitialAvatarCropView(view)}
-            onClick={() =>
-              imageSize &&
-              setView(clampAvatarCropView(INITIAL_AVATAR_CROP_VIEW, imageSize))
-            }
+            onClick={() => setView(INITIAL_AVATAR_CROP_VIEW)}
             className="justify-self-end px-3 py-2 text-pk-15 font-bold text-pk-primary-line disabled:opacity-40"
           >
             원래대로
