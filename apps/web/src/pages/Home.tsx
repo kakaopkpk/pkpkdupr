@@ -13,7 +13,7 @@ import {
   byLatestStart,
   usePreSessionData,
 } from "@/components/home/usePreSessionData";
-import { formatSessionTimePlace } from "@/components/home/sessionTimeLabel";
+import { formatSessionTimePlace } from "@/components/session/sessionTimeLabel";
 import { useSessionRecommendations } from "@/components/home/useSessionRecommendations";
 import { useSessionTopRiser } from "@/components/home/useSessionTopRiser";
 import { TopRiserCard } from "@/components/records/SessionReportParts";
@@ -385,7 +385,6 @@ const Home: React.FC = () => {
             sessions={upcomingSessions}
             playerId={playerId}
             todayKey={todayKey}
-            now={now}
             getPendingAction={participation.getPendingAction}
             getError={participation.getError}
             onJoin={(sessionId) => void participation.change(sessionId, "join")}

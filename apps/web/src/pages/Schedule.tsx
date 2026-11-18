@@ -210,6 +210,7 @@ const Schedule: React.FC = () => {
     pendingAction: participation.getPendingAction(session.id),
     error: participation.getError(session.id),
     onJoin: () => void participation.change(session.id, "join"),
+    onLeave: () => void participation.change(session.id, "leave"),
   });
 
   const handleCreateSession = () =>
@@ -225,7 +226,7 @@ const Schedule: React.FC = () => {
         return (
           <LiveSessionCard
             key={`live:${entry.session.id}`}
-            {...getParticipationProps(entry.session)}
+            session={entry.session}
             onOpenParticipants={() =>
               openParticipants(entry.session, busyPlayerIds)
             }
@@ -237,7 +238,7 @@ const Schedule: React.FC = () => {
           <UpcomingSessionCard
             key={`upcoming:${entry.session.id}`}
             {...getParticipationProps(entry.session)}
-            onLeave={() => void participation.change(entry.session.id, "leave")}
+            todayKey={todayKey}
             onOpenParticipants={() => openParticipants(entry.session, EMPTY_IDS)}
           />
         );

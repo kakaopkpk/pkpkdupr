@@ -1,17 +1,12 @@
-import {
-  formatSessionTimeRange,
-  kstDateKeyTimeToDate,
-} from "@pkpkdupr/shared/session";
+import { formatSessionTimeRange } from "@pkpkdupr/shared/session";
 import { formatKstShortDate } from "@/lib/format";
 import type { MatchSessionDetailInfo } from "@/lib/matchSessions";
 
-const MINUTE_MS = 60_000;
-const HOUR_MINUTES = 60;
-const DAY_MS = 24 * HOUR_MINUTES * MINUTE_MS;
+const DAY_MS = 24 * 60 * 60_000;
 
 type SessionTimeSource = Pick<
   MatchSessionDetailInfo,
-  "kind" | "date" | "dateKey" | "startTime" | "endTime"
+  "date" | "dateKey" | "startTime" | "endTime"
 >;
 
 /** "2026-11-17" → UTC 자정 시각(날짜 차 계산용) */
@@ -23,27 +18,17 @@ const dateKeyToUtc = (dateKey: string) => {
 const getDayDiff = (dateKey: string, todayKey: string) =>
   Math.round((dateKeyToUtc(dateKey) - dateKeyToUtc(todayKey)) / DAY_MS);
 
-const formatDaysLater = (days: number) => (days === 1 ? "내일" : `${days}일 뒤`);
-
-/** 시작까지 남은 시간. 1시간 미만은 분, 그 이상은 시간 단위다. 이미 지났으면 null */
-const formatTimeUntil = (startsAt: Date, now: Date) => {
-  const minutes = Math.ceil((startsAt.getTime() - now.getTime()) / MINUTE_MS);
-  if (minutes <= 0) return null;
-  if (minutes < HOUR_MINUTES) return `${minutes}분 뒤`;
-  return `${Math.floor(minutes / HOUR_MINUTES)}시간 뒤`;
-};
-
 /**
- * 다음 세션 카드의 칩. 오늘 정기 세션은 "정기", 오늘 회원 세션은 "오늘", 미래는 "다음 세션".
+ * 세션 블루 카드 칩 옆의 남은 날. 미래 세션은 "D-1"·"D-2", 오늘 세션은 시작 전후 모두 "D-Day".
  * 오늘 여부는 서버 isToday가 아니라 클라이언트의 오늘 날짜 키로 판단한다(앱을 켜 둔 채 자정을 넘겨도 갱신).
  * 다가오는 세션은 만료 전 세션뿐이라 날짜가 오늘 이전이면 자정을 넘겨 진행 중인 오늘 세션이다.
  */
-export const getSessionChipLabel = (
-  session: SessionTimeSource,
+export const getSessionDDayLabel = (
+  session: Pick<MatchSessionDetailInfo, "dateKey">,
   todayKey: string,
 ) => {
-  if (getDayDiff(session.dateKey, todayKey) > 0) return "다음 세션";
-  return session.kind === "regular" ? "정기" : "오늘";
+  const days = getDayDiff(session.dateKey, todayKey);
+  return days > 0 ? `D-${days}` : "D-Day";
 };
 
 /** 비어 있지 않은 메타 조각을 " · "로 잇는다 */
@@ -60,24 +45,6 @@ type SessionMetaSource = SessionTimeSource &
 export const formatSessionTimePlace = (
   session: Pick<SessionMetaSource, "startTime" | "endTime" | "location">,
 ) => joinMetaParts([formatSessionTimeRange(session), session.location]);
-
-/**
- * 다음 세션 카드 칩 옆의 남은 시간.
- * - 미래: "내일" | "4일 뒤"
- * - 오늘 시작 전: "40분 뒤" | "2시간 뒤"
- * - 오늘 시작 후·시각 없는 오늘 세션: null(칩만 보인다)
- */
-export const getSessionTimeUntilLabel = (
-  session: SessionTimeSource,
-  todayKey: string,
-  now: Date,
-) => {
-  const days = getDayDiff(session.dateKey, todayKey);
-  if (days > 0) return formatDaysLater(days);
-  if (!session.startTime) return null;
-  const startsAt = kstDateKeyTimeToDate(session.dateKey, session.startTime);
-  return formatTimeUntil(startsAt, now);
-};
 
 /**
  * 다음 세션 카드 이름 아래 메타 줄. 세션 상세 머리와 같은 "날짜 시각 · 장소" 형식이다.

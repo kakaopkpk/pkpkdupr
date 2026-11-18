@@ -45,7 +45,6 @@ interface NextSessionCarouselProps {
   sessions: readonly MatchSessionDetailInfo[];
   playerId: string | undefined;
   todayKey: string;
-  now: Date;
   getPendingAction: (sessionId: string) => ParticipationAction | null;
   getError: (sessionId: string) => string | null;
   onJoin: (sessionId: string) => void;
@@ -61,7 +60,6 @@ const NextSessionCarousel: React.FC<NextSessionCarouselProps> = ({
   sessions,
   playerId,
   todayKey,
-  now,
   getPendingAction,
   getError,
   onJoin,
@@ -76,7 +74,6 @@ const NextSessionCarousel: React.FC<NextSessionCarouselProps> = ({
     <NextSessionCard
       session={session}
       todayKey={todayKey}
-      now={now}
       isJoined={isSessionParticipant(session, playerId)}
       pendingAction={getPendingAction(session.id)}
       onJoin={() => onJoin(session.id)}
