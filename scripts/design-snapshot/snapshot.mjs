@@ -24,19 +24,19 @@ const LOGIN = { username: "dev_alice", password: "devpass1234" };
 const SETTLE_MS = 1500;
 const ONE_YEAR_SECONDS = 365 * 24 * 60 * 60;
 
-// 시안 예시 데이터가 실제 아이디 형식이 되도록 API 응답의 dev mock 아이디를 바꾼다.
+// 시안에 실제 회원이 보이도록 dev mock 회원 아이디를 실제 회원 아이디로 바꿔 녹화한다. 로그인 회원(dev_alice)은 brad.ley.
 const NAME_MAP = {
-  dev_chris_inactive: "chris.b",
-  dev_alice: "minsu.kim",
-  dev_bob: "jay.21",
-  dev_cara: "hana.lee",
-  dev_dana: "sora.park",
-  dev_ella: "jun.oh",
-  dev_finn: "yuna.k",
-  dev_gabe: "tae.92",
-  dev_hugo: "eun.s",
-  test1: "dami.c",
-  test2: "hoon.lee",
+  dev_chris_inactive: "joy.zero",
+  dev_alice: "brad.ley",
+  dev_bob: "colin.34",
+  dev_cara: "joel.choi",
+  dev_dana: "martin.bok",
+  dev_ella: "scarlett.yoon",
+  dev_finn: "sean.oh",
+  dev_gabe: "ed.park",
+  dev_hugo: "jackie.hur",
+  test1: "wes.lee",
+  test2: "andrew.y",
 };
 const NAME_PATTERN = new RegExp(`\\b(${Object.keys(NAME_MAP).join("|")})\\b`, "g");
 
@@ -275,9 +275,74 @@ async function recordRoute(route, fixtures) {
     await route.fulfill({ response, body, headers });
     return;
   }
-  const text = contentType.includes("json") ? (await response.text()).replace(NAME_PATTERN, (name) => NAME_MAP[name]) : await response.text();
+  const text = contentType.includes("json") ? toRealNames(await response.text()) : await response.text();
   fixtures.responses[requestKey(request)] = { status: response.status(), contentType, text };
   await route.fulfill({ response, body: text, headers });
+}
+
+// dev mock 아이디를 실제 회원 아이디로 바꾸고, 그 때문에 한 응답 안에 같은 아이디의 다른 회원이 생기면 하나만 남긴다.
+function toRealNames(text) {
+  const replaced = text.replace(NAME_PATTERN, (name) => NAME_MAP[name]);
+  let data;
+  try {
+    data = JSON.parse(replaced);
+  } catch {
+    return replaced;
+  }
+  return JSON.stringify(dedupeByUsername(data, chooseKeptIds(data)));
+}
+
+const DEV_PLAYER_ID = /^P(dev|test)\d+$/;
+
+// 회원 객체(항목 자체 또는 항목의 player). id와 username이 있어야 회원으로 본다.
+function playerOf(item) {
+  const player = item?.player ?? item;
+  return typeof player?.id === "string" && typeof player?.username === "string" ? player : null;
+}
+
+// 아이디마다 남길 회원 id. 세션·경기 데이터와 이어지는 dev mock 회원(id Pdev…·Ptest…)을 고른다.
+function chooseKeptIds(data) {
+  const kept = new Map();
+  const visit = (value) => {
+    if (Array.isArray(value)) {
+      for (const item of value) {
+        const player = playerOf(item);
+        if (player && (!kept.has(player.username) || DEV_PLAYER_ID.test(player.id))) {
+          kept.set(player.username, player.id);
+        }
+        visit(item);
+      }
+    } else if (value && typeof value === "object") {
+      Object.values(value).forEach(visit);
+    }
+  };
+  visit(data);
+  return kept;
+}
+
+// 배열에서 남기지 않을 회원 항목을 빼고, 순위(rank)가 있는 목록은 순위를 다시 매긴다(같은 순위는 유지).
+function dedupeByUsername(value, kept) {
+  if (Array.isArray(value)) {
+    const out = value
+      .filter((item) => {
+        const player = playerOf(item);
+        return !player || kept.get(player.username) === player.id;
+      })
+      .map((item) => dedupeByUsername(item, kept));
+    let previousRank = null;
+    let rank = 0;
+    out.forEach((item, index) => {
+      if (typeof item?.rank !== "number") return;
+      if (item.rank !== previousRank) rank = index + 1;
+      previousRank = item.rank;
+      item.rank = rank;
+    });
+    return out;
+  }
+  if (value && typeof value === "object") {
+    return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, dedupeByUsername(item, kept)]));
+  }
+  return value;
 }
 
 async function replayRoute(route, fixtures, missing) {
