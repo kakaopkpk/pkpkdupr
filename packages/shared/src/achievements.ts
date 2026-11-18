@@ -461,7 +461,7 @@ const ACHIEVEMENT_TABLE: readonly {
       id: "welcome",
       category: "special",
       name: "환영 인사",
-      condition: "회원의 첫 경기에 같은 팀으로 함께 출전",
+      condition: "신입 회원의 첫 경기에 같은 팀으로 출전",
       badgeNumber: null,
       target: 1,
       points: 10,
