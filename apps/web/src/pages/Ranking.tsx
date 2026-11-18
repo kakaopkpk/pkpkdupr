@@ -110,7 +110,10 @@ const RankingRow: React.FC<{
   );
 };
 
-/** 업적 점수 순위 줄. 점수는 0부터 줄 순서만큼 늦게 세고, 순위 변동은 없다 */
+/**
+ * 업적 점수 순위 줄. 점수는 0부터 줄 순서만큼 늦게 세고, 순위 변동은 없다.
+ * 변동 칸은 비워 두어 점수가 복식·단식 줄의 평점과 같은 우측 여백에 놓인다
+ */
 const AchievementRankingRow: React.FC<{
   entry: AchievementRankingEntry;
   index: number;
@@ -126,13 +129,16 @@ const AchievementRankingRow: React.FC<{
     </span>
     <PlayerAvatar player={entry.player} size={32} />
     <PlayerNameCell player={entry.player} />
-    <span className="text-pk-15 leading-none font-extrabold tabular-nums">
-      <CountUpNumber
-        value={entry.points}
-        format={formatAchievementPoints}
-        {...getRowCountUp(index)}
-      />
-      점
+    <span className={ratingCellClassName}>
+      <span className="text-pk-15 leading-none font-extrabold tabular-nums">
+        <CountUpNumber
+          value={entry.points}
+          format={formatAchievementPoints}
+          {...getRowCountUp(index)}
+        />
+        점
+      </span>
+      <span className={changeSlotClassName} />
     </span>
   </button>
 );
