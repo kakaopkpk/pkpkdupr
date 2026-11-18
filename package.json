@@ -27,9 +27,11 @@
         "supabase:link": "supabase link",
         "db:push": "supabase db push",
         "db:import-mysql": "pnpm --filter @pkpkdupr/api exec tsx scripts/import-mysql-dump/index.ts",
-        "functions:serve": "pnpm build:edge && supabase functions serve api"
+        "functions:serve": "pnpm build:edge && supabase functions serve api",
+        "design:snapshot": "node scripts/design-snapshot.mjs"
     },
     "devDependencies": {
+        "playwright": "^1.65.1",
         "supabase": "^2.122.1",
         "typescript": "^5.3.3"
     },

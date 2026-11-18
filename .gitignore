@@ -45,3 +45,4 @@ npm-debug.log*
 .claude/settings.local.json
 .claude/orchestrate-runs
 .claude/orchestrate-units
+.design-snapshots/

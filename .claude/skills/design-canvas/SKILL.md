@@ -1,6 +1,6 @@
 ---
 name: design-canvas
-description: pkpkdupr web·admin 화면의 디자인 시안·캔버스·목업을 만든다. 지금 앱과 같은 토큰·컴포넌트 모양으로 "지금"과 안 여러 개를 나란히 그린다. 예) "홈 카드 개선 시안 만들어줘", "일정 탭 디자인 캔버스", "이 화면 안 3개 비교"
+description: pkpkdupr web·admin 화면의 디자인 시안·캔버스·목업을 만든다. 실제 앱을 렌더링한 스냅샷(pnpm design:snapshot)에서 "지금" 보드를 만들고 안 여러 개를 나란히 그린다. 예) "홈 카드 개선 시안 만들어줘", "일정 탭 디자인 캔버스", "이 화면 안 3개 비교"
 ---
 
 # 디자인 캔버스 시안
@@ -11,31 +11,39 @@ description: pkpkdupr web·admin 화면의 디자인 시안·캔버스·목업�
 
 - `docs/design.md`: 확정된 결정, 다시 제안하지 않는 것, 미결 항목
 - `apps/web/AGENTS.md`의 "스타일링 규칙"·"디자인 규칙"
-- admin 화면이면 `apps/admin-web/AGENTS.md`도 읽는다(PC 전용이라 폰 시안은 만들지 않는다).
+- admin 화면이면 `apps/admin-web/AGENTS.md`도 읽는다(PC 전용이라 폰 시안은 만들지 않는다). 스냅샷 스크립트는 web만 다루므로, admin은 `pnpm dev`로 띄운 :3100을 PC 폭으로 열어 직접 보고(스크린샷) 해당 화면 코드에서 그린다.
 
-## 2. 지금 화면의 재료 모으기
+## 2. 지금 화면 스냅샷 뜨기
 
-- `apps/web/src/index.css`의 `@theme` 블록 전체(색·둥글기·글자 크기·글꼴·애니메이션)를 그대로 옮겨 쓴다. 값을 기억이나 추측으로 채우지 않는다.
-- 바꿀 화면의 컴포넌트와 그것이 쓰는 `apps/web/src/components/ui/` 컴포넌트를 읽고 마크업 구조와 `className`을 옮긴다.
-- 캔버스 HTML에서는 `@tailwindcss/browser`(버전은 `apps/web/package.json`의 `tailwindcss`와 같게 고정)와 `<style type="text/tailwindcss">@theme { … }</style>`를 쓰면 컴포넌트의 클래스를 그대로 붙여 넣을 수 있다.
-- 글꼴은 본문 Pretendard, 화면당 주인공 큰 숫자 하나만 Barlow Condensed(600·700)다.
+시안의 "지금" 보드는 손으로 그리지 않고 실제 앱을 렌더링한 결과에서 시작한다. 코드만 읽고 그리면 HeroUI 기본값·상속 글꼴·배치·장식(불꽃 후광, 랠리, 유리 탭바)이 실제와 달라진다.
 
-## 3. 지금 화면 보기
+1. `pnpm dev`(Docker 필요, web :8080)로 앱을 띄운다. 처음이면 `pnpm exec playwright install chromium`도 한 번 실행한다.
+2. `pnpm design:snapshot`을 실행한다. 인자 없이 실행하면 폴더를 비우고 전부 다시 찍고, 화면 이름을 주면(`pnpm design:snapshot home ranking`) 그 화면만 덮어쓴다. dev 계정으로 로그인해 390px 폭으로 화면을 돌며 `.design-snapshots/`에 쓴다(커밋하지 않는다).
+   - `<화면>.png`: 실제 모습. 시안과 비교하는 기준이다.
+   - `<화면>.html`: 실제 DOM(앱의 Tailwind 클래스 그대로). 같은 폴더의 `app.css`(앱 CSS 전체)를 붙이면 앱과 똑같이 렌더링된다.
+   - `index.html`: 찍은 화면을 한눈에 보는 페이지
+   - dev mock 아이디는 실제 형식 아이디(`minsu.kim`, `jay.21` …)로 바뀌어 나온다.
+3. 필요한 화면이 목록에 없으면 `scripts/design-snapshot.mjs`의 `SCREENS`에 단계를 추가한다(지금: home, schedule, ranking, me, plus-menu, record-sheet, match-detail, profile, settings). dev mock에 없는 상태(빈 날, 세션 없는 날 등)는 해당 화면 HTML을 복사해 내용만 고친다.
 
-- 앱을 띄워 지금 화면을 직접 본다. `pnpm dev`(Docker 필요, web :8080) 후 dev 계정(`dev_alice` / `devpass1234`, `docs/dev-environment.md`)으로 로그인하고, 폰 폭(390px)으로 해당 화면을 연다. Playwright 같은 브라우저 도구가 있으면 스크린샷을 찍어 비교 기준으로 쓴다.
-- 예외: Docker가 없는 등 띄울 수 없으면 2단계의 코드만으로 그리고, 그 사실을 사용자에게 알린다.
+앱을 띄울 수 없을 때만 예외로 해당 화면 컴포넌트와 `apps/web/src/components/ui/`, `apps/web/src/index.css`의 `@theme`를 읽어 그리고, 실제 화면과 대조하지 못했다는 사실을 사용자에게 알린다. 예전 디자인 캔버스(아티팩트)는 그 시점의 시안이라 지금 앱과 다를 수 있으므로 모양의 기준으로 쓰지 않는다.
+
+## 3. 안 그리기
+
+- 안 A·B는 "지금" HTML을 복사해 바뀌는 부분만 고친다. 고칠 때는 앱 코드와 같은 Tailwind 클래스(`bg-pk-primary`, `rounded-pk-lg`, `text-pk-15` 등)를 쓴다. `app.css`에 없는 클래스(앱 어디서도 안 쓰는 클래스)는 적용되지 않으므로, 새로 필요한 스타일은 `style=""`에 `index.css` `@theme`의 실제 값으로 쓴다.
+- 새 화면이나 새 부품도 가까운 화면 HTML에서 비슷한 부분(카드, 경기 줄, 시트 틀)을 떼어 와 조립한다.
+- 고친 보드는 브라우저(Playwright 등)로 렌더링해 "지금" PNG와 나란히 보고, 바꾸지 않은 부분이 그대로인지 확인한다.
 
 ## 4. 캔버스 구성
 
-- 디자인 캔버스는 Artifact 도구로 만든다. 계정에 연결된 디자인 시스템이 있어도 이 저장소의 토큰·컴포넌트가 우선이다. 디자인 시스템을 고르라는 단계가 나오면 쓰지 않는 쪽(`design_systems: false`)을 택한다.
+- 디자인 캔버스는 Artifact 도구의 Design 타입으로 만들고, 폰 화면 하나가 보드 하나다. 보드에서 `app.css`를 공용 파일로 불러올 수 있으면 그렇게 하고, 안 되면 보드마다 `<style>`로 넣는다. 계정에 연결된 디자인 시스템이 있어도 이 저장소의 화면이 우선이다. 디자인 시스템을 고르라는 단계가 나오면 쓰지 않는 쪽(`design_systems: false`)을 택한다.
 - 첫 보드는 항상 "지금"(현재 화면 그대로)이고, 그 옆에 "안 A", "안 B" …를 같은 크기·같은 데이터로 나란히 둔다. 추천안이 있으면 이름에 "(추천)"을 붙인다.
-- 폰 화면 보드는 390 × 844 기준이고, 하단 탭바·상태 표시줄 등 둘레도 지금 앱처럼 그린다.
+- 폰 화면 보드는 390 × 844 기준이다. 스크롤이 긴 화면은 스냅샷 높이(파일 맨 위 주석)를 그대로 쓴다.
 - 상태가 여러 개인 화면(참여 전/후, 진행 중/끝남, 빈 상태)은 상태별 보드를 따로 둔다.
 - 보드마다 무엇이 바뀌었는지 한두 줄 메모를 붙인다.
 
 ## 5. 예시 데이터
 
-- 아이디는 실제 앱 아이디 형식(메일 주소 @ 앞부분, 예: `minsu.kim`, `jay.21`, `hana.lee`)으로 쓴다. `dev_alice` 같은 개발용 이름이나 Player 1 같은 자리 채우기 이름을 쓰지 않는다.
+- 아이디는 실제 앱 아이디 형식(메일 주소 @ 앞부분, 예: `minsu.kim`, `jay.21`, `hana.lee`)으로 쓴다. 스냅샷이 바꿔 준 이름을 그대로 쓰고, `dev_alice` 같은 개발용 이름이나 Player 1 같은 자리 채우기 이름을 쓰지 않는다.
 - 평점은 2.5~4.5 사이 소수 셋째 자리(예: 3.214), 점수는 11점제(듀스는 15:14까지)로 쓴다. 평점 없음은 "–"다.
 
 ## 6. 마무리
