@@ -5,7 +5,7 @@ import { getMatchPlayerIds, type MatchInfo } from "@/types/match";
 import HomeSkeleton from "@/components/home/HomeSkeleton";
 import LastSessionFeed from "@/components/home/LastSessionFeed";
 import MyLiveMatchCard from "@/components/home/MyLiveMatchCard";
-import NextSessionCard from "@/components/home/NextSessionCard";
+import NextSessionCarousel from "@/components/home/NextSessionCarousel";
 import RecommendationSection, {
   getCourtKey,
 } from "@/components/home/RecommendationSection";
@@ -34,7 +34,6 @@ import { useSystemNotice } from "@/context/SystemNoticeContext";
 import { useTabNavigation } from "@/context/TabNavigationContext";
 import { useMinuteClock } from "@/hooks/useMinuteClock";
 import {
-  isSessionParticipant,
   type MatchSessionDetailInfo,
   startSessionMatch,
 } from "@/lib/matchSessions";
@@ -89,7 +88,7 @@ const INITIAL_START_STATE: StartState = {
 
 /**
  * 홈 탭. 셸의 진행 중 세션이 있으면 진행 화면(참여자 Main / 미참여자 MainGuest),
- * 없으면 다가오는 첫 세션 카드, 세션 밖 진행 중 경기, 지난 세션 피드를 보인다.
+ * 없으면 다가오는 세션 카드(가로로 넘김), 세션 밖 진행 중 경기, 지난 세션 피드를 보인다.
  */
 const Home: React.FC = () => {
   const { player } = useAuth();
@@ -136,9 +135,8 @@ const Home: React.FC = () => {
   };
   const closeParticipants = useCallback(() => setIsParticipantsOpen(false), []);
 
-  // ── 다음 세션 참여·취소 ─────────────────────────────
-  const nextSession = preSession.data?.upcoming.sessions[0] ?? null;
-  const isJoinedNext = !!nextSession && isSessionParticipant(nextSession, playerId);
+  // ── 다가오는 세션 참여·취소 ─────────────────────────
+  const upcomingSessions = preSession.data?.upcoming.sessions ?? [];
   const participation = useSessionParticipation({
     playerId,
     loadedVersion: preSession.loadedVersion,
@@ -146,15 +144,16 @@ const Home: React.FC = () => {
   const { reset: resetParticipation, clearError: clearParticipationError } =
     participation;
 
-  // 진행 중 화면으로 바뀌면 다음 세션 카드가 사라지므로 기다리지 않는다
+  // 진행 중 화면으로 바뀌면 다가오는 세션 카드가 사라지므로 기다리지 않는다
   useEffect(() => {
     if (!isPreSession) resetParticipation();
   }, [isPreSession, resetParticipation]);
 
-  // 다른 세션으로 바뀌면 이전 세션의 오류 문구를 지운다
+  // 다음 세션이 바뀌면(앞 세션이 끝나 빠짐) 이전 오류 문구를 지운다
+  const nextSessionId = upcomingSessions[0]?.id;
   useEffect(() => {
     clearParticipationError();
-  }, [clearParticipationError, nextSession?.id]);
+  }, [clearParticipationError, nextSessionId]);
 
   // ── 진행 중 세션 ────────────────────────────────────
   // 세션 밖 경기까지 포함한 진행 중 경기. 경기 중인 선수 판단(대기 인원·참여 취소 잠금)에 쓴다
@@ -388,17 +387,17 @@ const Home: React.FC = () => {
             {error ?? "다가오는 세션을 불러오지 못했어요"}
           </p>
         ) : null}
-        {nextSession ? (
-          <NextSessionCard
-            session={nextSession}
+        {upcomingSessions.length > 0 ? (
+          <NextSessionCarousel
+            sessions={upcomingSessions}
+            playerId={playerId}
             todayKey={todayKey}
             now={now}
-            isJoined={isJoinedNext}
-            pendingAction={participation.getPendingAction(nextSession.id)}
-            error={participation.getError(nextSession.id)}
-            onJoin={() => void participation.change(nextSession.id, "join")}
-            onLeave={() => void participation.change(nextSession.id, "leave")}
-            onOpenParticipants={() => openParticipants(nextSession, EMPTY_IDS)}
+            getPendingAction={participation.getPendingAction}
+            getError={participation.getError}
+            onJoin={(sessionId) => void participation.change(sessionId, "join")}
+            onLeave={(sessionId) => void participation.change(sessionId, "leave")}
+            onOpenParticipants={(session) => openParticipants(session, EMPTY_IDS)}
           />
         ) : (
           <EmptyCard message="다가오는 세션이 없어요" />
