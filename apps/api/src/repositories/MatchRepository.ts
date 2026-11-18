@@ -564,6 +564,22 @@ export class MatchRepository {
     return records.map(hydrateManagedSession);
   }
 
+  /** 날짜 키가 [fromDateKey, toDateKey)인 세션을 시각 오름차순으로 돌려준다 */
+  async findSessionsInDateKeyRange(
+    fromDateKey: string,
+    toDateKey: string,
+  ): Promise<ManagedMatchSession[]> {
+    const records = await this.run(
+      () =>
+        db.matches.findSessionsInRange(
+          kstDateKeyToDate(fromDateKey),
+          kstDateKeyToDate(toDateKey),
+        ),
+      500,
+    );
+    return records.map(hydrateManagedSession);
+  }
+
   /** 그 KST 날짜 0시 이후의 세션을 시각 오름차순으로 돌려준다 */
   async findSessionsFromDateKey(
     dateKey: string,
