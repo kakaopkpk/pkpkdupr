@@ -5,7 +5,9 @@ import { getMatchPlayerIds, type MatchInfo } from "@/types/match";
 import HomeSkeleton from "@/components/home/HomeSkeleton";
 import LastSessionFeed from "@/components/home/LastSessionFeed";
 import MyLiveMatchCard from "@/components/home/MyLiveMatchCard";
-import NextSessionCarousel from "@/components/home/NextSessionCarousel";
+import NextSessionCarousel, {
+  type NextSessionCarouselHandle,
+} from "@/components/home/NextSessionCarousel";
 import RecommendationSection, {
   getCourtKey,
 } from "@/components/home/RecommendationSection";
@@ -100,7 +102,7 @@ const Home: React.FC = () => {
     notifyDataChanged,
     dataVersion,
   } = useAppNavigation();
-  const { registerPullToRefresh } = useTabNavigation();
+  const { registerPullToRefresh, registerTabReset } = useTabNavigation();
   const { showSaveFailure } = useSystemNotice();
   const now = useMinuteClock();
   const todayKey = toKstDateKey(now);
@@ -262,6 +264,13 @@ const Home: React.FC = () => {
     [registerPullToRefresh],
   );
 
+  // 홈 탭을 다시 누르면 다음 세션 카드를 첫 카드로 되돌린다
+  const carouselRef = useRef<NextSessionCarouselHandle>(null);
+  useEffect(
+    () => registerTabReset("home", () => carouselRef.current?.scrollToStart()),
+    [registerTabReset],
+  );
+
   // ── 그리기 ─────────────────────────────────────────
   /** 진행 중 머리·내 경기 카드·남의 진행 중 경기 줄. 내 경기는 세션 밖 경기여도 맨 위에 온다 */
   const renderInProgress = (otherMatches: MatchInfo[]) => {
@@ -382,6 +391,7 @@ const Home: React.FC = () => {
         ) : null}
         {upcomingSessions.length > 0 ? (
           <NextSessionCarousel
+            ref={carouselRef}
             sessions={upcomingSessions}
             playerId={playerId}
             todayKey={todayKey}
