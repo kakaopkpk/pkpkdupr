@@ -241,7 +241,7 @@ export interface ExpiredCleanupResult {
   deletedSessionIds: string[];
 }
 
-const REGULAR_SESSION_EXISTS_MESSAGE = "그 날짜에는 이미 정기 세션이 있어요.";
+export const REGULAR_SESSION_EXISTS_MESSAGE = "그 날짜에는 이미 정기 세션이 있어요.";
 const REGULAR_SESSION_SKIPPED_MESSAGE = "쉬는 날에는 정기 세션을 둘 수 없어요.";
 
 const toDateOrNull = (value: Date | string | number | null | undefined) =>

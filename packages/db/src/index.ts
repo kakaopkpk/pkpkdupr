@@ -37,6 +37,7 @@ export {
   SessionHasMatchesError,
   RegularSessionSkipExistsError,
   RegularSessionConflictError,
+  REGULAR_SESSION_EXISTS_MESSAGE,
   type NonRegularSessionKind,
   type UpdateSessionInput,
   type CreateMatchInput,

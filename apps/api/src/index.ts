@@ -2054,23 +2054,23 @@ app.post("/api/admin/match-sessions", requireAdmin, async (req, res) => {
     if (kind === "regular") assertRegularSessionWeekday(dateKey);
 
     await matchRepository.cleanupExpired(now);
-    const sessionId =
+    const created =
       kind === "regular"
-        ? (await matchRepository.createRegularSession(dateKey, { name, location }))
-            .id
-        : (
-            await matchRepository.createSession(
-              {
-                name,
-                date: kstDateKeyToDate(dateKey),
-                location,
-                startTime,
-                endTime,
-              },
-              { conflictOnDuplicate: true, kind },
-            )
-          ).id;
-    const created = await matchRepository.findSessionById(sessionId);
+        ? await matchRepository.createRegularSession(dateKey, { name, location })
+        : await matchRepository.findSessionById(
+            (
+              await matchRepository.createSession(
+                {
+                  name,
+                  date: kstDateKeyToDate(dateKey),
+                  location,
+                  startTime,
+                  endTime,
+                },
+                { conflictOnDuplicate: true, kind },
+              )
+            ).id,
+          );
     if (!created) {
       throw new MatchSessionRequestError("세션을 찾을 수 없습니다.", 404);
     }
