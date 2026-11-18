@@ -71,7 +71,7 @@ pnpm lint
 주요 공개 API:
 
 - 상태: `GET /api/health`, `GET /api/ping`
-- 예약 작업: `POST /api/cron/regular-sessions`(헤더 `x-cron-secret`을 함수 secret `CRON_SECRET`과 비교, 없거나 틀리면 401·`CRON_SECRET` 미설정 503, 응답 `RegularSessionsCronResponse`). GitHub Actions `regular-sessions-cron.yml`이 매일 KST 04:00에 부른다
+- 예약 작업: `POST /api/cron/regular-sessions`(헤더 `x-cron-secret`을 함수 secret `CRON_SECRET`과 비교, 없거나 틀리면 401·`CRON_SECRET` 미설정 503, 응답 `RegularSessionsCronResponse`, 응답 전에 다가오는 세션 전부의 구글 캘린더 일정을 다시 쓴다). GitHub Actions `regular-sessions-cron.yml`이 매일 KST 04:00에 부른다
 - 인증/프로필: `GET /api/me`, `POST /api/me/password-changed`(첫 로그인 비밀번호 변경 완료), `PATCH /api/me/profile`, avatar API. 로그인과 비밀번호 변경은 클라이언트가 Supabase Auth로 직접 합니다.
 - 플레이어: `GET /api/players`(active만), 프로필 요약 `GET /api/players/:playerId/profile-summary`(회원 정보 `player`(비활성 회원 포함, 없는 회원 404)·승패·평점 변화·최근 7일 경기 수·파트너 궁합(같은 팀 3경기 이상)·천적(맞대결 3경기 이상·진 비율 50% 이상, 둘 다 조건에 맞는 회원 전부)·요청자 기준 분류별 상대 전적과 그 경기들에서 바뀐 요청자 평점 합 `headToHead[분류].ratingDelta`)
 - 경기: `GET /api/matches`(`playerId`와 함께 `category=singles|doubles`로 분류 필터), 경기 기록 `POST /api/matches`·수정 `PUT /api/matches/:matchId`(관리자는 24시간 검사 없이 고치고, 관리자 전용 `sessionId`(문자열이면 그 세션으로 옮기고 null이면 세션에서 뺌)·`matchStartsAt`(완료 경기면 `completedAt`도 같은 만큼 옮김)으로 세션·경기 시각을 바꾸며, 회원이 이 둘을 보내면 403)·삭제 `DELETE /api/matches/:matchId`(`isMatchRecordDeletable`, 이미 지워졌으면 404, 둘 다 선택적 `expectedUpdatedAt`이 서버 `updatedAt`과 다르면 409), 경기 상세 `GET /api/matches/:matchId`, 세션과 상관없는 진행 중 경기 시작 `POST /api/matches/start`(요청 `sessionId`가 오늘 회원 세션이면 그 세션, 아니면 기록과 같은 시간 규칙, 선수가 이미 진행 중 경기에 있으면 409 "<아이디>님이 다른 경기 중이에요", 확인·생성은 advisory 잠금으로 직렬화)·진행 중 경기 전부 `GET /api/matches/in-progress`(`/api/matches/:matchId`보다 먼저 등록), `GET /api/match-feed`, 세션 조회 API
@@ -108,7 +108,7 @@ pnpm lint
 - GitHub Actions `ci.yml`은 PR과 main push에서 설치·빌드·api/shared/web 테스트를 실행합니다.
 - api는 Supabase Edge Function `api`로 배포합니다(base URL `https://<project-ref>.supabase.co/functions/v1`, 경로 `/api/...`). 운영 배포는 GitHub Release 발행 때만 하며, 발행하면 `supabase-deploy.yml`(`supabase db push`와 함수 배포)과 `pages.yml`(web·admin)이 릴리즈 태그 커밋으로 함께 실행됩니다. main 머지만으로는 배포되지 않습니다. web·admin 앱 버전은 릴리즈 태그 이름입니다. Supabase 프로젝트 준비, GitHub secrets·variables, 함수 secrets는 `docs/deploy.md`가 기준이며, 새 함수 secret·설정이 생기면 이 문서에 추가합니다.
 - api의 CORS 허용 origin은 env `CORS_ALLOWED_ORIGINS`(쉼표 구분)와 localhost 개발 origin(8080, 3100)입니다.
-- 세션 일정·참석 현황은 동호회 구글 캘린더에 서버가 단방향으로 씁니다(`apps/api/src/services/SessionCalendarSync.ts`). 세션 생성·참여자 변경·삭제를 api `MatchRepository`의 `onSessionsChanged`로 받아 응답과 분리해 반영하고(Edge는 `EdgeRuntime.waitUntil`), 일정 id는 세션 id에서 만들어 DB 매핑이 없습니다. env `GOOGLE_CALENDAR_SERVICE_ACCOUNT_JSON`·`GOOGLE_CALENDAR_ID`가 없으면 꺼지며 준비 절차는 `docs/deploy.md`를 따릅니다.
+- 세션 일정·참석 현황은 동호회 구글 캘린더에 서버가 단방향으로 씁니다(`apps/api/src/services/SessionCalendarSync.ts`). 세션 생성·참여자 변경·삭제를 api `MatchRepository`의 `onSessionsChanged`로 받아 응답과 분리해 반영하고(Edge는 `EdgeRuntime.waitUntil`), 반영이 빠진 일정은 매일 예약 작업이 다가오는 세션을 다시 써서 맞춥니다. 일정 id는 세션 id에서 만들어 DB 매핑이 없습니다. env `GOOGLE_CALENDAR_SERVICE_ACCOUNT_JSON`·`GOOGLE_CALENDAR_ID`가 없으면 꺼지며 준비 절차는 `docs/deploy.md`를 따릅니다.
 
 ## 작업 및 커밋 규칙
 

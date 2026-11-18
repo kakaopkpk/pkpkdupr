@@ -126,6 +126,11 @@ export interface SessionCalendarSync {
    * 실패는 로그만 남기고, 다음 변경 때 그 세션의 최신 상태로 다시 쓴다.
    */
   syncSessions(sessionIds: string[]): void;
+  /**
+   * syncSessions와 같은 작업을 걸고 그 세션들의 반영이 끝날 때까지 기다린다(예약 작업의 일괄 다시 쓰기용).
+   * 반영 실패는 syncSessions처럼 로그만 남기고 throw 하지 않는다.
+   */
+  resyncSessions(sessionIds: string[]): Promise<void>;
   /** 걸린 작업이 모두 끝날 때까지 기다린다(테스트용) */
   whenIdle(): Promise<void>;
 }
@@ -160,36 +165,47 @@ export const createSessionCalendarSync = (
     }
   };
 
+  /** 세션 반영 작업을 걸고 그 작업을 돌려준다. 시작 전 작업이 이미 있으면 그 작업이 최신 상태를 읽으므로 그것을 돌려준다 */
+  const enqueue = (client: GoogleCalendarClient, sessionId: string) => {
+    const queuedTask = queued.has(sessionId) ? chains.get(sessionId) : undefined;
+    if (queuedTask) {
+      return queuedTask;
+    }
+    queued.add(sessionId);
+    const previous = chains.get(sessionId) ?? deferToNextTask();
+    const task = previous.then(async () => {
+      queued.delete(sessionId);
+      await syncOne(client, sessionId);
+    });
+    chains.set(sessionId, task);
+    pending.add(task);
+    void task.finally(() => {
+      pending.delete(task);
+      if (chains.get(sessionId) === task) {
+        chains.delete(sessionId);
+      }
+    });
+    try {
+      deps.waitUntil?.(task);
+    } catch (error) {
+      console.error("[CALENDAR] waitUntil 등록 실패", error);
+    }
+    return task;
+  };
+
+  const enqueueAll = (sessionIds: string[]) => {
+    const client = deps.getClient();
+    return client
+      ? [...new Set(sessionIds)].map((sessionId) => enqueue(client, sessionId))
+      : [];
+  };
+
   return {
     syncSessions(sessionIds) {
-      const client = deps.getClient();
-      if (!client) {
-        return;
-      }
-      for (const sessionId of new Set(sessionIds)) {
-        if (queued.has(sessionId)) {
-          continue;
-        }
-        queued.add(sessionId);
-        const previous = chains.get(sessionId) ?? deferToNextTask();
-        const task = previous.then(async () => {
-          queued.delete(sessionId);
-          await syncOne(client, sessionId);
-        });
-        chains.set(sessionId, task);
-        pending.add(task);
-        void task.finally(() => {
-          pending.delete(task);
-          if (chains.get(sessionId) === task) {
-            chains.delete(sessionId);
-          }
-        });
-        try {
-          deps.waitUntil?.(task);
-        } catch (error) {
-          console.error("[CALENDAR] waitUntil 등록 실패", error);
-        }
-      }
+      enqueueAll(sessionIds);
+    },
+    async resyncSessions(sessionIds) {
+      await Promise.all(enqueueAll(sessionIds));
     },
     async whenIdle() {
       while (pending.size > 0) {

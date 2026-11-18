@@ -58,6 +58,7 @@ import {
   type StartSessionMatchRequest,
   type MatchSessionDetail,
   type MatchSessionMember,
+  type RegularSessionsCronResponse,
   type TodayMatchSessionsResponse,
   type UpcomingMatchSessionsResponse,
 } from "@pkpkdupr/shared/session";
@@ -886,6 +887,21 @@ const loadMatchSessionDetail = async (
 };
 
 /**
+ * 다가오는 세션(만료 전 오늘·미래 세션)을 시각 오름차순으로 돌려준다.
+ * 전날 시작해 자정을 넘긴 회원 세션도 끝나기 전까지 들어가도록 전날부터 읽고 만료로 거른다.
+ * 정리가 best-effort라 만료됐지만 아직 남은 빈 세션도 빼고, 경기가 있어 만료 후에도 남은 세션도 넣지 않는다.
+ */
+const findUpcomingSessions = async (now: Date) =>
+  (
+    await matchRepository.findSessionsFromDateKey(
+      addKstDays(toKstDateKey(now), -1),
+    )
+  ).filter(
+    (session) =>
+      getEmptySessionExpiresAt(session.kind, session.date, session) > now,
+  );
+
+/**
  * 세션 일정을 동호회 구글 캘린더에 반영한다. 세션 쓰기는 matchRepository의 onSessionsChanged로 들어온다.
  * GOOGLE_CALENDAR_SERVICE_ACCOUNT_JSON·GOOGLE_CALENDAR_ID가 없으면 아무것도 하지 않는다.
  */
@@ -1431,18 +1447,12 @@ app.get("/api/match-sessions/upcoming", async (req, res) => {
     }
     const dateKey = toKstDateKey(now);
     const [sessions, activePlayersById] = await Promise.all([
-      // 전날 시작해 자정을 넘긴 회원 세션도 끝나기 전까지 보이도록 전날부터 읽고 만료로 거른다
-      matchRepository.findSessionsFromDateKey(addKstDays(dateKey, -1)),
+      findUpcomingSessions(now),
       loadActivePlayersById(),
     ]);
-    // 정리가 best-effort라 만료됐지만 아직 남은 빈 세션도 응답에서 뺀다.
-    // 경기가 있는 세션은 만료 후에도 남지만, 다가오는 세션 목록에는 넣지 않는다.
-    const details = sessions
-      .filter(
-        (session) =>
-          getEmptySessionExpiresAt(session.kind, session.date, session) > now,
-      )
-      .map((session) => toMatchSessionDetail(session, activePlayersById, now));
+    const details = sessions.map((session) =>
+      toMatchSessionDetail(session, activePlayersById, now),
+    );
     // 저장소가 시각 오름차순으로 주므로 날짜 키·정기 여부로만 다시 정렬한다(정렬은 안정적이다).
     details.sort(compareSessionDetailsByDay);
     const response: UpcomingMatchSessionsResponse = {
@@ -2216,7 +2226,8 @@ app.delete(
 );
 
 /**
- * 매일 예약 작업(GitHub Actions)이 부른다. 오늘부터 4주 안의 정기 회차를 공휴일·취소 날짜를 빼고 미리 만든다.
+ * 매일 예약 작업(GitHub Actions)이 부른다. 오늘부터 4주 안의 정기 회차를 공휴일·취소 날짜를 빼고 미리 만들고,
+ * 다가오는 세션의 구글 캘린더 일정을 현재 상태로 다시 쓴다(변경 때 반영이 빠진 일정을 하루 안에 맞춘다).
  * 헤더 x-cron-secret을 함수 secret CRON_SECRET과 비교한다.
  */
 app.post("/api/cron/regular-sessions", async (req, res) => {
@@ -2230,21 +2241,37 @@ app.post("/api/cron/regular-sessions", async (req, res) => {
     return res.status(401).json({ error: "인증이 필요합니다." });
   }
 
+  const now = new Date();
+  let result: RegularSessionsCronResponse | undefined;
+  let cronError: unknown;
   try {
-    const result = await runRegularSessionCron({
-      now: new Date(),
+    result = await runRegularSessionCron({
+      now,
       calendarClient: getEnvGoogleCalendarClient(),
       repository: matchRepository,
     });
     console.log("[CRON] 정기 세션 예약 작업 완료", JSON.stringify(result));
-    res.json(result);
   } catch (err) {
     console.error("[CRON] 정기 세션 예약 작업 실패", err);
-    if (err instanceof RegularSessionCronError) {
-      return res.status(err.status).json({ error: err.message });
-    }
-    res.status(500).json({ error: "정기 세션을 만들지 못했습니다." });
+    cronError = err;
   }
+
+  // 정기 세션 생성 결과와 상관없이 하고, 실패해도 응답은 바꾸지 않는다.
+  // Edge가 응답 뒤 작업을 끊지 않도록 응답 전에 마친다.
+  try {
+    const sessions = await findUpcomingSessions(now);
+    await sessionCalendarSync.resyncSessions(sessions.map((session) => session.id));
+  } catch (err) {
+    console.error("[CRON] 세션 캘린더 일정 다시 쓰기 실패", err);
+  }
+
+  if (result) {
+    return res.json(result);
+  }
+  if (cronError instanceof RegularSessionCronError) {
+    return res.status(cronError.status).json({ error: cronError.message });
+  }
+  res.status(500).json({ error: "정기 세션을 만들지 못했습니다." });
 });
 
 app.post("/api/admin/matches/batch", requireAdmin, async (req, res) => {
