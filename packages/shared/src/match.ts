@@ -353,7 +353,17 @@ export interface InProgressMatchesResponse {
   matches: Match[];
 }
 
-/** 기록·수정 응답. GET /api/matches/:matchId 응답과 같은 형태다 */
+/** GET /api/matches/:matchId 응답 */
+export type MatchDetailResponse = Match & {
+  ratingChanges: PlayerRatingChangeLog[];
+  /**
+   * 이 경기로 참가자 전원이 받은 업적(지금 계산 기준, 세션 리포트 achievements와 같은 규칙).
+   * 완료 경기가 아니거나 없으면 빈 배열
+   */
+  achievements: EarnedAchievement[];
+};
+
+/** 기록·수정 응답. 경기와 평점 변화는 GET /api/matches/:matchId 응답과 같다 */
 export type RecordedMatchResponse = Match & {
   ratingChanges: PlayerRatingChangeLog[];
   /** 이 저장으로 참가자 전원이 새로 받은 업적. 없으면 빈 배열 */

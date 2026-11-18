@@ -695,11 +695,11 @@ export const buildSessionReport = ({
     ),
     players,
     topRiser: pickTopRiser(players),
-    achievements: buildSessionAchievements(
+    achievements: findAchievementsEarnedByMatches(
       context,
-      sessionMatches,
-      players.map((report) => report.player.id),
       dominations,
+      new Set(sessionMatches.map((match) => match.id)),
+      players.map((report) => report.player.id),
     ),
   };
 };
@@ -776,13 +776,17 @@ export const findPlayerEarnedAchievements = (
  * 이 세션 경기인 업적만 고른다. 받은 시각 → 업적 정의 순서 → 회원 id 순이다.
  * 업적 기준 시각 시점 평점으로 받은 평점 업적은 그 세션에서 받은 것이 아니므로 뺀다.
  */
-const buildSessionAchievements = (
+/**
+ * 주어진 경기들로 참가자들이 받은 업적(세션 리포트·경기 상세 achievements 공통 규칙).
+ * 지금 계산에서 받은 경기가 이 경기들인 업적만 남기고, 업적 기준 시각 전 경기로 받은 업적은 뺀다.
+ * 받은 시각 → 업적 정의 순서 → 회원 id 순
+ */
+export const findAchievementsEarnedByMatches = (
   context: RankingContext,
-  sessionMatches: RankingMatch[],
-  playerIds: string[],
   dominations: SessionDominations,
+  matchIds: ReadonlySet<string>,
+  playerIds: readonly string[],
 ): EarnedAchievement[] => {
-  const sessionMatchIds = new Set(sessionMatches.map((match) => match.id));
   const matches = toContextAchievementMatches(context);
   return playerIds
     .flatMap((playerId) =>
@@ -790,7 +794,7 @@ const buildSessionAchievements = (
     )
     .filter(
       (item) =>
-        sessionMatchIds.has(item.earnedMatchId) && isEarnedByCountedMatch(item),
+        matchIds.has(item.earnedMatchId) && isEarnedByCountedMatch(item),
     )
     .sort(
       (left, right) =>

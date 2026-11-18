@@ -78,6 +78,7 @@ export default function MatchDetailDrawer({
 }: MatchDetailDrawerProps): React.ReactElement {
   const { isAuthenticated } = useAuth();
   const {
+    openAchievementDetail,
     openMemberProfile,
     openRecordMatch,
     openSessionReport,
@@ -377,6 +378,9 @@ export default function MatchDetailDrawer({
           )}
           onOpenSession={openSessionReport}
           onOpenPlayer={openMemberProfile}
+          onOpenAchievement={(playerId, achievementId) =>
+            openAchievementDetail({ playerId, achievementId })
+          }
         />
       );
       // 수정할 수 없으면 버튼만 빠진다(안내 문구 없음)

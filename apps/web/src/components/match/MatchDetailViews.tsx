@@ -13,6 +13,7 @@ import {
   RallyTeamRow,
   TEAM_ROW_AVATAR_SIZE,
 } from "@/components/match/LiveMatchRally";
+import { MatchAchievementRow } from "@/components/match/MatchAchievementRow";
 import { MatchRatingChangeCount } from "@/components/match/MatchRatingChangeCount";
 import { Card } from "@/components/ui/Card";
 import {
@@ -24,6 +25,7 @@ import { PlayerAvatar, TeamAvatars } from "@/components/ui/PlayerAvatar";
 import { LinkChevron, Section } from "@/components/ui/Section";
 import { cx } from "@/components/ui/cx";
 import { useMinuteClock } from "@/hooks/useMinuteClock";
+import { pickMatchEarnedAchievements } from "@/lib/achievements";
 import {
   formatElapsed,
   formatKstShortDate,
@@ -277,11 +279,46 @@ const RatingChangeCard: React.FC<{
   );
 };
 
+/** 이 경기로 참가자들이 받은 업적. 없으면(게스트가 낀 경기 포함) 섹션을 숨긴다 */
+const MatchAchievementsCard: React.FC<{
+  match: MatchInfo;
+  onOpenAchievement: (playerId: string, achievementId: string) => void;
+}> = ({ match, onOpenAchievement }) => {
+  const achievements = useMemo(
+    () => pickMatchEarnedAchievements(match.achievements ?? [], match),
+    [match],
+  );
+
+  if (achievements.length === 0) return null;
+
+  return (
+    <Section title="이 경기로 받은 업적">
+      <Card>
+        {achievements.map((achievement) => (
+          <MatchAchievementRow
+            key={`${achievement.player.id}:${achievement.definition.id}`}
+            achievement={achievement}
+            onPress={() =>
+              onOpenAchievement(achievement.player.id, achievement.definition.id)
+            }
+            className={cx(
+              "py-3 active:opacity-70",
+              rowDividerClassName,
+              rowPressClassName,
+            )}
+          />
+        ))}
+      </Card>
+    </Section>
+  );
+};
+
 export interface CompletedMatchDetailProps {
   match: MatchInfo;
   recorderUsername: string | null;
   onOpenSession: (sessionId: string) => void;
   onOpenPlayer: (playerId: string) => void;
+  onOpenAchievement: (playerId: string, achievementId: string) => void;
 }
 
 /** 완료 경기 본문. 수정·한 판 더 버튼은 CompletedMatchActions로 하단 고정 바에 둔다 */
@@ -290,6 +327,7 @@ export const CompletedMatchDetail: React.FC<CompletedMatchDetailProps> = ({
   recorderUsername,
   onOpenSession,
   onOpenPlayer,
+  onOpenAchievement,
 }) => (
   // 제목 없는 요소 사이는 16px(gap 10 + 6)이고, 평점 변화 섹션은 Section 규칙(위 20px)을 따른다
   <div className="flex flex-col gap-2.5 px-4 pt-1">
@@ -305,6 +343,7 @@ export const CompletedMatchDetail: React.FC<CompletedMatchDetailProps> = ({
     </p>
     <ScoreBlock match={match} onOpenPlayer={onOpenPlayer} />
     <RatingChangeCard match={match} onOpenPlayer={onOpenPlayer} />
+    <MatchAchievementsCard match={match} onOpenAchievement={onOpenAchievement} />
     <Card className="mt-1.5">
       <InfoRow label="장소">{match.location || "–"}</InfoRow>
       <InfoRow label="기록한 사람">{recorderUsername ?? "–"}</InfoRow>

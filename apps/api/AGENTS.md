@@ -44,7 +44,7 @@
 - 삭제 `DELETE /api/matches/:matchId`
   - `isMatchRecordDeletable`, 이미 지워졌으면 404.
   - 선택적 `expectedUpdatedAt`이 서버 `updatedAt`과 다르면 409.
-- 경기 상세 `GET /api/matches/:matchId`
+- 경기 상세 `GET /api/matches/:matchId`: 응답 `MatchDetailResponse`(경기·`ratingChanges`·이 경기로 받은 업적 `achievements`, 아래 "업적")
 - 세션과 상관없는 진행 중 경기 시작 `POST /api/matches/start`
   - 요청 `sessionId`가 오늘 회원 세션이면 그 세션, 아니면 기록과 같은 시간 규칙을 따른다.
   - 선수가 이미 진행 중 경기에 있으면 409 "<아이디>님이 다른 경기 중이에요".
@@ -122,11 +122,12 @@
   - 새 지표를 쓰는 업적을 추가하면 그 지표는 추가 배포일 00:00 KST부터 센다.
   - 기존 지표에 단계만 늘리는 업적(예: 1000경기 다음 5000경기)은 그 지표의 시작 시각을 따른다.
   - 기존 업적의 조건 수정은 원래 시작 시각부터 다시 계산한다.
-  - 업적 기준 시각 전 경기로 받은 업적은 받은 업적으로 치지만 세션 리포트 `achievements`와 `newAchievements`에는 나오지 않는다(`isEarnedByCountedMatch`).
+  - 업적 기준 시각 전 경기로 받은 업적은 받은 업적으로 치지만 세션 리포트·경기 상세 `achievements`와 `newAchievements`에는 나오지 않는다(`isEarnedByCountedMatch`).
 - 응답에 나오는 곳
   - 프로필 요약의 `achievements`: 42개 진행 상태, 평점 업적은 평점 반영 복식 경기 수 `ratedDoublesMatches` 포함.
   - 경기 기록·수정 응답의 `newAchievements`(이 저장으로 참가자 전원이 새로 받은 업적)와 `achievementPoints`(새 업적을 받은 참가자별 지금 업적 점수 합).
   - 세션 리포트의 `achievements`: 그 세션 경기로 받은 업적.
+  - 경기 상세의 `achievements`: 그 경기로 참가자 전원이 받은 업적(세션 리포트와 같은 규칙, 세션 없는 경기 포함). 완료 경기가 아니면 빈 배열이고, 계산이 실패해도 빈 배열로 응답한다.
 - 업적별 받은 활성 회원 수 `GET /api/achievements/holders`
 - 축하 연출 확인
   - 확인 여부만 `player_seen_achievements`에 업적별 확인 당시 획득 경기로 저장한다.

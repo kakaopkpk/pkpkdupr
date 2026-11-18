@@ -8,6 +8,7 @@ import {
   buildSessionReport,
   countAchievementHolders,
   createRankingContext,
+  findAchievementsEarnedByMatches,
   findSessionDominations,
   getRatingAt,
   rankPlayersAt,
@@ -791,5 +792,54 @@ describe("buildAchievementRankingResponse", () => {
       [4, "dave", 10],
       [5, "zed", 0],
     ]);
+  });
+});
+
+describe("findAchievementsEarnedByMatches", () => {
+  const players = [
+    makePlayer("Pa", "a", 3),
+    makePlayer("Pb", "b", 3),
+    makePlayer("Pc", "c", 3),
+    makePlayer("Pd", "d", 3),
+  ];
+  const first = at("2026-11-01T10:00:00Z");
+  const second = at("2026-11-02T10:00:00Z");
+  const matches = [
+    makeMatch("M1", first, [["Pa", "Pb"], ["Pc", "Pd"]]),
+    makeMatch("M2", second, [["Pa", "Pb"], ["Pc", "Pd"]]),
+  ];
+  const context = createRankingContext(players, [], matches);
+  const allPlayerIds = ["Pa", "Pb", "Pc", "Pd"];
+
+  it("그 경기로 받은 업적만 받은 시각 → 업적 정의 → 회원 id 순으로 돌려준다", () => {
+    expect(
+      findAchievementsEarnedByMatches(context, new Map(), new Set(["M1"]), allPlayerIds).map(
+        (item) => [item.playerId, item.achievementId, item.earnedMatchId],
+      ),
+    ).toEqual([
+      ["Pa", "matches-1", "M1"],
+      ["Pb", "matches-1", "M1"],
+      ["Pc", "matches-1", "M1"],
+      ["Pd", "matches-1", "M1"],
+      ["Pa", "wins-1", "M1"],
+      ["Pb", "wins-1", "M1"],
+    ]);
+  });
+
+  it("앞 경기에서 이미 받은 업적은 다음 경기에 나오지 않는다", () => {
+    expect(
+      findAchievementsEarnedByMatches(context, new Map(), new Set(["M2"]), allPlayerIds).filter(
+        (item) =>
+          item.achievementId === "matches-1" || item.achievementId === "wins-1",
+      ),
+    ).toEqual([]);
+  });
+
+  it("넘긴 회원의 업적만 센다", () => {
+    expect(
+      findAchievementsEarnedByMatches(context, new Map(), new Set(["M1"]), ["Pc"]).map(
+        (item) => item.achievementId,
+      ),
+    ).toEqual(["matches-1"]);
   });
 });
