@@ -47,7 +47,7 @@ export const fetchScheduleMonth = async (
 
 /** 달력 날짜 아래 표시 */
 export type ScheduleDayMark =
-  /** 세션이 있는 날: 참여 인원(그날 세션 참여자 합, 중복 제외), 내가 참여했는지 */
+  /** 세션이 있는 날: 참여 인원(그날 세션 참여자 합, 중복 제외), 내가 참여자이거나 그 세션 경기를 뛰었는지 */
   | { kind: "session"; participantCount: number; isMine: boolean }
   /** 세션 없이 경기 기록만 있는 날: 내가 뛴 경기가 있는지 */
   | { kind: "match"; isMine: boolean };
@@ -70,11 +70,19 @@ export const buildScheduleDayMarks = (
     session.participants.forEach((participant) => ids.add(participant.id));
     participantsByDate.set(session.dateKey, ids);
   }
+  // 참여자 목록에 없어도 경기를 뛴 지난 세션은 내 세션이다
+  const playedDateKeys = new Set(
+    data.records.flatMap((item) =>
+      item.kind === "session" && item.mine
+        ? [toKstDateKey(new Date(item.session.date))]
+        : [],
+    ),
+  );
   for (const [dateKey, ids] of participantsByDate) {
     marks.set(dateKey, {
       kind: "session",
       participantCount: ids.size,
-      isMine: !!playerId && ids.has(playerId),
+      isMine: (!!playerId && ids.has(playerId)) || playedDateKeys.has(dateKey),
     });
   }
   for (const item of data.records) {

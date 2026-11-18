@@ -128,6 +128,17 @@ describe("getScheduleDayEntries", () => {
     ).toEqual([ended.id, "Mlate001", "Mearly01"]);
   });
 
+  it("참여자가 아니어도 경기를 뛴 지난 세션 날은 내 세션이다", () => {
+    const marks = buildScheduleDayMarks(
+      {
+        sessions: [ended],
+        records: [{ ...makeSessionItem(ended), mine: {} as RecordSessionItemInfo["mine"] }],
+      },
+      ME,
+    );
+    expect(marks.get("2026-11-16")).toEqual({ kind: "session", participantCount: 0, isMine: true });
+  });
+
   it("아무것도 없는 날은 빈 목록", () => {
     expect(getScheduleDayEntries(data, "2026-11-20", null)).toEqual([]);
   });
