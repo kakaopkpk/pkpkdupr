@@ -5,15 +5,13 @@ import {
 } from "@/components/session/sessionTimeLabel";
 import { SESSION_DATE_OPTION_DAYS } from "@/components/session/SessionSchedulePicker";
 import {
-  BlueCardSolidButton,
   ParticipationControls,
   ParticipationError,
   type ParticipationAction,
   SessionBlueCard,
 } from "@/components/session/SessionBlueCard";
-import { LivePill } from "@/components/ui/Badges";
 import { PkButton } from "@/components/ui/Button";
-import { ChevronRightIcon, PlusIcon } from "@/components/ui/Icons";
+import { PlusIcon } from "@/components/ui/Icons";
 import type { MatchSessionDetailInfo } from "@/lib/matchSessions";
 
 /**
@@ -58,28 +56,6 @@ export const UpcomingSessionCard: React.FC<{
   </div>
 );
 
-/**
- * 오늘 진행 중 세션 블루 카드. 칩 줄 오른쪽 끝에 LIVE가 붙고 버튼은 "진행 화면 보기"뿐이다.
- * 참여·참여 취소는 진행 화면(홈 탭)에서 한다
- */
-export const LiveSessionCard: React.FC<{
-  session: MatchSessionDetailInfo;
-  onOpenParticipants: () => void;
-  onOpenLive: () => void;
-}> = ({ session, onOpenParticipants, onOpenLive }) => (
-  <SessionBlueCard
-    session={session}
-    trailing={<LivePill />}
-    meta={formatSessionTimePlace(session)}
-    participantsLabel={`${session.participants.length}명 참여`}
-    onOpenParticipants={onOpenParticipants}
-  >
-    <BlueCardSolidButton onPress={onOpenLive}>
-      진행 화면 보기
-      <ChevronRightIcon className="size-4 shrink-0" />
-    </BlueCardSolidButton>
-  </SessionBlueCard>
-);
 
 const DAYS_PER_WEEK = 7;
 

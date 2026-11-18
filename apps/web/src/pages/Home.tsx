@@ -13,16 +13,14 @@ import {
   byLatestStart,
   usePreSessionData,
 } from "@/components/home/usePreSessionData";
-import { formatSessionTimePlace } from "@/components/session/sessionTimeLabel";
 import { useSessionRecommendations } from "@/components/home/useSessionRecommendations";
 import { useSessionTopRiser } from "@/components/home/useSessionTopRiser";
 import { TopRiserCard } from "@/components/records/SessionReportParts";
 import ParticipantsSheet from "@/components/session/ParticipantsSheet";
-import { SessionBlueCard } from "@/components/session/SessionBlueCard";
+import { LiveSessionCard } from "@/components/session/SessionBlueCard";
 import { useSessionParticipation } from "@/components/session/useSessionParticipation";
 import { getErrorMessage } from "@/components/session/saveError";
 import { isNetworkError } from "@/lib/errors";
-import { LivePill } from "@/components/ui/Badges";
 import { Card } from "@/components/ui/Card";
 import { StateMessage } from "@/components/ui/StateMessage";
 import { MatchRow } from "@/components/ui/MatchRow";
@@ -294,12 +292,9 @@ const Home: React.FC = () => {
 
   const renderLive = (session: MatchSessionDetailInfo) => (
     <>
-      {/* 다음 세션 카드와 같은 블루 카드. 이 화면이 곧 진행 화면이라 버튼은 없다 */}
-      <SessionBlueCard
+      {/* 이 화면이 곧 진행 화면이라 "진행 화면 보기" 버튼 없이 그린다 */}
+      <LiveSessionCard
         session={session}
-        trailing={<LivePill />}
-        meta={formatSessionTimePlace(session)}
-        participantsLabel={`${session.participants.length}명 참여`}
         onOpenParticipants={() => openParticipants(session, busyPlayerIds)}
       />
       {liveTopRiser ? (

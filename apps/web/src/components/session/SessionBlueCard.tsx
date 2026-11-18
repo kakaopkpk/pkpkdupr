@@ -1,4 +1,5 @@
 import React from "react";
+import { LivePill } from "@/components/ui/Badges";
 import { buttonPressClassName } from "@/components/ui/Button";
 import { CheckIcon, ChevronRightIcon } from "@/components/ui/Icons";
 import { PlayerAvatar } from "@/components/ui/PlayerAvatar";
@@ -8,6 +9,7 @@ import {
   type MatchSessionDetailInfo,
 } from "@/lib/matchSessions";
 import PickleballIllustration from "./PickleballIllustration";
+import { formatSessionTimePlace } from "./sessionTimeLabel";
 
 const MAX_VISIBLE_AVATARS = 4;
 const AVATAR_SIZE = 28;
@@ -139,6 +141,31 @@ export const BlueCardSolidButton: React.FC<{
   >
     {children}
   </button>
+);
+
+/**
+ * 오늘 진행 중 세션 블루 카드. 칩 줄 오른쪽 끝에 LIVE가 붙고, 참여·참여 취소는 진행 화면(홈 탭)에서 한다.
+ * 일정 탭은 onOpenLive를 넘겨 "진행 화면 보기" 버튼을 두고, 진행 화면인 홈은 넘기지 않아 버튼 없이 그린다
+ */
+export const LiveSessionCard: React.FC<{
+  session: MatchSessionDetailInfo;
+  onOpenParticipants: () => void;
+  onOpenLive?: () => void;
+}> = ({ session, onOpenParticipants, onOpenLive }) => (
+  <SessionBlueCard
+    session={session}
+    trailing={<LivePill />}
+    meta={formatSessionTimePlace(session)}
+    participantsLabel={`${session.participants.length}명 참여`}
+    onOpenParticipants={onOpenParticipants}
+  >
+    {onOpenLive ? (
+      <BlueCardSolidButton onPress={onOpenLive}>
+        진행 화면 보기
+        <ChevronRightIcon className="size-4 shrink-0" />
+      </BlueCardSolidButton>
+    ) : null}
+  </SessionBlueCard>
 );
 
 /**
