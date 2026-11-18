@@ -192,7 +192,7 @@ const MonthCalendar: React.FC<{
                   isSelected
                     ? "bg-pk-primary font-extrabold text-white"
                     : isToday &&
-                        "bg-pk-hl font-extrabold text-pk-ink inset-ring inset-ring-pk-ink/25",
+                        "bg-pk-hl font-extrabold text-pk-ink",
                 )}
               >
                 {day}

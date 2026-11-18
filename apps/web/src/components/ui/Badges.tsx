@@ -5,7 +5,7 @@ import { cx } from "./cx";
 
 // 간격(gap)은 칩마다 달라 여기 넣지 않는다
 const highlightClassName =
-  "inline-flex shrink-0 items-center rounded-full bg-pk-hl px-2.5 py-[5px] text-pk-12 font-extrabold leading-none text-pk-ink inset-ring inset-ring-pk-ink/25";
+  "inline-flex shrink-0 items-center rounded-full bg-pk-hl px-2.5 py-[5px] text-pk-12 font-extrabold leading-none text-pk-ink";
 
 /** "● LIVE" 하이라이트 알약 */
 export const LivePill: React.FC = () => (
