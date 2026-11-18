@@ -4,7 +4,7 @@
 //
 // 사용: pnpm dev가 떠 있는 상태에서 pnpm design:snapshot [화면 이름...]
 // 환경 변수: DESIGN_SNAPSHOT_URL(기본 http://localhost:8080), DESIGN_SNAPSHOT_OUT(기본 .design-snapshots)
-import { mkdir, rm, writeFile } from "node:fs/promises";
+import { mkdir, readdir, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { chromium } from "playwright";
 
@@ -31,6 +31,7 @@ const NAME_MAP = {
 const NAME_PATTERN = new RegExp(`\\b(${Object.keys(NAME_MAP).join("|")})\\b`, "g");
 
 const MATCH_ROW_NAME = /^\d{1,2}:\d{2}/;
+const MEMBER_NAME = new RegExp(Object.values(NAME_MAP).map((n) => n.replace(".", "\\.")).join("|"));
 
 // expand: 스크롤 영역 전체가 보이도록 뷰포트 높이를 늘려서 찍는다(시트·메뉴는 화면 높이에 맞춰 열리므로 끈다).
 const SCREENS = [
@@ -62,7 +63,7 @@ const SCREENS = [
     expand: true,
     run: async (page) => {
       await openTab(page, "랭킹");
-      await page.getByRole("tabpanel", { name: "랭킹" }).getByRole("button", { name: /\./ }).first().click();
+      await page.getByRole("tabpanel", { name: "랭킹" }).getByRole("button", { name: MEMBER_NAME }).first().click();
     },
   },
   {
@@ -81,8 +82,10 @@ async function main() {
   if (!screens.length) {
     throw new Error(`알 수 없는 화면: ${only.join(", ")} (가능: ${SCREENS.map((s) => s.name).join(", ")})`);
   }
+  assertLocalUrl();
   await assertAppRunning();
-  await rm(OUT_DIR, { recursive: true, force: true });
+  // 전체를 찍을 때만 폴더를 비운다. 일부만 찍으면 그 화면 파일만 덮어쓴다.
+  if (!only.length) await rm(OUT_DIR, { recursive: true, force: true });
   await mkdir(OUT_DIR, { recursive: true });
 
   const browser = await chromium.launch();
@@ -126,10 +129,18 @@ async function main() {
     }
   }
   await browser.close();
-  await writeFile(path.join(OUT_DIR, "index.html"), indexPage(results));
+  await writeFile(path.join(OUT_DIR, "index.html"), await indexPage());
   console.log(`\n${results.length}/${screens.length}개 화면 → ${OUT_DIR}`);
   if (results.length < screens.length) {
     process.exitCode = 1;
+  }
+}
+
+// dev 계정으로 로그인해 화면 데이터를 파일로 남기므로 로컬 앱만 대상으로 한다.
+function assertLocalUrl() {
+  const { hostname } = new URL(BASE_URL);
+  if (!["localhost", "127.0.0.1", "[::1]"].includes(hostname)) {
+    throw new Error(`DESIGN_SNAPSHOT_URL은 로컬 주소만 쓸 수 있습니다: ${BASE_URL}`);
   }
 }
 
@@ -281,11 +292,13 @@ ${body.innerHTML}
   return { css, html };
 }
 
-function indexPage(results) {
-  const cards = results
+// 폴더에 있는 화면 전부(이번에 찍지 않은 화면 포함)를 SCREENS 순서로 모아 보인다.
+async function indexPage() {
+  const files = new Set(await readdir(OUT_DIR));
+  const cards = SCREENS.filter((s) => files.has(`${s.name}.png`))
     .map(
-      (r) =>
-        `<figure><figcaption>${r.name} · 390×${r.height}</figcaption><a href="./${r.name}.html"><img src="./${r.name}.png" width="390" alt="${r.name}"></a></figure>`,
+      (s) =>
+        `<figure><figcaption>${s.name}</figcaption><a href="./${s.name}.html"><img src="./${s.name}.png" width="390" alt="${s.name}"></a></figure>`,
     )
     .join("\n");
   return `<!doctype html>

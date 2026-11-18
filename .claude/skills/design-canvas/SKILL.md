@@ -1,6 +1,6 @@
 ---
 name: design-canvas
-description: pkpkdupr web 화면의 디자인 시안·캔버스·목업을 만든다. 실제 앱을 렌더링한 스냅샷(pnpm design:snapshot)에서 "지금" 보드를 만들고 안 여러 개를 나란히 그린다. 예) "홈 카드 개선 시안 만들어줘", "일정 탭 디자인 캔버스", "이 화면 안 3개 비교"
+description: pkpkdupr web·admin 화면의 디자인 시안·캔버스·목업을 만든다. 실제 앱을 렌더링한 스냅샷(pnpm design:snapshot)에서 "지금" 보드를 만들고 안 여러 개를 나란히 그린다. 예) "홈 카드 개선 시안 만들어줘", "일정 탭 디자인 캔버스", "이 화면 안 3개 비교"
 ---
 
 # 디자인 캔버스 시안
@@ -11,14 +11,14 @@ description: pkpkdupr web 화면의 디자인 시안·캔버스·목업을 만�
 
 - `docs/design.md`: 확정된 결정, 다시 제안하지 않는 것, 미결 항목
 - `apps/web/AGENTS.md`의 "스타일링 규칙"·"디자인 규칙"
-- admin 화면이면 `apps/admin-web/AGENTS.md`도 읽는다(PC 전용이라 폰 시안은 만들지 않는다).
+- admin 화면이면 `apps/admin-web/AGENTS.md`도 읽는다(PC 전용이라 폰 시안은 만들지 않는다). 스냅샷 스크립트는 web만 다루므로, admin은 `pnpm dev`로 띄운 :3100을 PC 폭으로 열어 직접 보고(스크린샷) 해당 화면 코드에서 그린다.
 
 ## 2. 지금 화면 스냅샷 뜨기
 
 시안의 "지금" 보드는 손으로 그리지 않고 실제 앱을 렌더링한 결과에서 시작한다. 코드만 읽고 그리면 HeroUI 기본값·상속 글꼴·배치·장식(불꽃 후광, 랠리, 유리 탭바)이 실제와 달라진다.
 
 1. `pnpm dev`(Docker 필요, web :8080)로 앱을 띄운다. 처음이면 `pnpm exec playwright install chromium`도 한 번 실행한다.
-2. `pnpm design:snapshot`을 실행한다(화면 일부만이면 `pnpm design:snapshot home ranking`). dev 계정으로 로그인해 390px 폭으로 화면을 돌며 `.design-snapshots/`에 쓴다(커밋하지 않는다).
+2. `pnpm design:snapshot`을 실행한다. 인자 없이 실행하면 폴더를 비우고 전부 다시 찍고, 화면 이름을 주면(`pnpm design:snapshot home ranking`) 그 화면만 덮어쓴다. dev 계정으로 로그인해 390px 폭으로 화면을 돌며 `.design-snapshots/`에 쓴다(커밋하지 않는다).
    - `<화면>.png`: 실제 모습. 시안과 비교하는 기준이다.
    - `<화면>.html`: 실제 DOM(앱의 Tailwind 클래스 그대로). 같은 폴더의 `app.css`(앱 CSS 전체)를 붙이면 앱과 똑같이 렌더링된다.
    - `index.html`: 찍은 화면을 한눈에 보는 페이지
