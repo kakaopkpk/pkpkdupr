@@ -184,6 +184,7 @@ export default function MemberProfileDrawer({
           <ProfileHeader
             className="px-1 pb-1.5"
             headingAs="h2"
+            tabKey={tabKey}
             player={{ id: playerId, username, avatarUrl: shownPlayer?.avatarUrl }}
             statusMessage={member?.statusMessage}
             statusMessageBackgroundColor={member?.statusMessageBackgroundColor}

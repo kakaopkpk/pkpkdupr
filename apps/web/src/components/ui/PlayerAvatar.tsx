@@ -35,7 +35,9 @@ export const PlayerAvatar: React.FC<{
   player: AvatarPlayer;
   size: number;
   className?: string;
-}> = ({ player, size, className }) => {
+  /** 사진을 다 불러왔을 때 그 URL로 부른다 */
+  onImageLoad?: (url: string) => void;
+}> = ({ player, size, className, onImageLoad }) => {
   const avatarUrl = resolveAssetUrl(player.avatarUrl);
   const [failedUrl, setFailedUrl] = useState<string | null>(null);
   const showImage = !!avatarUrl && failedUrl !== avatarUrl;
@@ -60,6 +62,7 @@ export const PlayerAvatar: React.FC<{
           alt=""
           className="h-full w-full object-cover"
           draggable={false}
+          onLoad={() => onImageLoad?.(avatarUrl)}
           onError={() => setFailedUrl(avatarUrl)}
         />
       ) : (
