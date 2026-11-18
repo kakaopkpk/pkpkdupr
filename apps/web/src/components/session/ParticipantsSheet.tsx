@@ -156,35 +156,34 @@ const ParticipantsEditForm: React.FC<ParticipantsEditFormProps> = ({
     ];
   }, [addedGuests, players]);
 
-  const initialParticipantsRef = useRef(participants);
-  const onSavedParticipantsChangeRef = useRef(onSavedParticipantsChange);
-  useEffect(() => {
-    onSavedParticipantsChangeRef.current = onSavedParticipantsChange;
-  }, [onSavedParticipantsChange]);
-  const savedIdsReportedRef = useRef(savedIds);
-  useEffect(() => {
-    if (savedIdsReportedRef.current === savedIds) return;
-    savedIdsReportedRef.current = savedIds;
-    // 회원 목록을 아직 못 받았어도 시작할 때의 참여자로 이름·사진을 채운다
-    const byId = new Map<string, MatchSessionParticipant>(
-      initialParticipantsRef.current.map((member) => [member.id, member]),
-    );
-    for (const row of allRows) byId.set(row.id, row);
-    onSavedParticipantsChangeRef.current(
-      [...savedIds].flatMap((id) => {
-        const member = byId.get(id);
-        return member
-          ? [
-              {
-                id: member.id,
-                username: member.username,
-                avatarUrl: member.avatarUrl,
-              },
-            ]
-          : [];
-      }),
-    );
-  }, [allRows, savedIds]);
+  /**
+   * 서버에 반영된 참여자 id를 보기 모드 목록으로 바꿔 올린다. 저장 중 뒤로가기로 이 폼이 사라져도
+   * 반영 결과가 보기 모드에 남도록 저장·게스트 추가가 끝난 자리에서 바로 부른다
+   */
+  const reportSavedParticipants = useCallback(
+    (ids: ReadonlySet<string>, extraRows: readonly ParticipantRow[] = []) => {
+      // 회원 목록을 아직 못 받았어도 시작할 때의 참여자로 이름·사진을 채운다
+      const byId = new Map<string, MatchSessionParticipant>(
+        participants.map((member) => [member.id, member]),
+      );
+      for (const row of [...allRows, ...extraRows]) byId.set(row.id, row);
+      onSavedParticipantsChange(
+        [...ids].flatMap((id) => {
+          const member = byId.get(id);
+          return member
+            ? [
+                {
+                  id: member.id,
+                  username: member.username,
+                  avatarUrl: member.avatarUrl,
+                },
+              ]
+            : [];
+        }),
+      );
+    },
+    [allRows, onSavedParticipantsChange, participants],
+  );
 
   const rows = useMemo(() => {
     const normalizedQuery = query.trim().toLocaleLowerCase();
@@ -262,17 +261,20 @@ const ParticipantsEditForm: React.FC<ParticipantsEditFormProps> = ({
       }
     }
 
-    // 저장 중에 게스트 추가로 늘어난 savedIds를 덮지 않도록 반영한 변경만 합친다
-    setSavedIds((current) => {
-      const next = new Set(current);
+    const applyChanges = (ids: ReadonlySet<string>) => {
+      const next = new Set(ids);
       for (const change of applied) {
         if (change.action === "add") next.add(change.playerId);
         else next.delete(change.playerId);
       }
       return next;
-    });
+    };
+    // 저장 중에 게스트 추가로 늘어난 savedIds를 덮지 않도록 반영한 변경만 합친다
+    setSavedIds(applyChanges);
     setIsSaving(false);
     const didApplyAny = applied.length > 0;
+    // 저장 중에는 게스트 추가가 막혀 있어 시작 시점 savedIds에 반영분만 더하면 서버 상태와 같다
+    if (didApplyAny) reportSavedParticipants(applyChanges(savedIds));
 
     if (!networkError && !serverError) {
       onDone(true);
@@ -282,7 +284,15 @@ const ParticipantsEditForm: React.FC<ParticipantsEditFormProps> = ({
     if (didApplyAny) onChanged();
     if (serverError) setError(serverError);
     if (networkError) throw networkError;
-  }, [lockedIds, onChanged, onDone, savedIds, selectedIds, session.id]);
+  }, [
+    lockedIds,
+    onChanged,
+    onDone,
+    reportSavedParticipants,
+    savedIds,
+    selectedIds,
+    session.id,
+  ]);
 
   // 토스트의 "다시 시도"는 그 시점의 선택으로 남은 변경을 다시 저장한다
   const saveRef = useRef(save);
@@ -302,6 +312,7 @@ const ParticipantsEditForm: React.FC<ParticipantsEditFormProps> = ({
         setSortAnchorIds((current) => new Set(current).add(guest.id));
         setSavedIds((current) => new Set(current).add(guest.id));
         setSelectedIds((current) => new Set(current).add(guest.id));
+        reportSavedParticipants(new Set(savedIds).add(guest.id), [guest]);
         void reloadPlayers();
         onChanged();
       } catch (err) {
@@ -311,7 +322,7 @@ const ParticipantsEditForm: React.FC<ParticipantsEditFormProps> = ({
         setIsAddingGuest(false);
       }
     },
-    [onChanged, reloadPlayers, session.id],
+    [onChanged, reloadPlayers, reportSavedParticipants, savedIds, session.id],
   );
 
   const handleAddGuest = async (username: string) => {
@@ -615,7 +626,7 @@ export default function ParticipantsSheet({
 }: ParticipantsSheetProps): React.ReactElement {
   const { closeDepth, selectedTab } = useTabNavigation();
   const [isEditing, setIsEditing] = useState(false);
-  // 열 때마다 올려서 수정 모드 선택을 그때의 참여자로 초기화한다
+  // 수정을 시작할 때마다 올려서 선택을 그때의 참여자로 초기화한다
   const [editKey, setEditKey] = useState(0);
   // 이 시트에서 저장한 참여자. 셸이 넘기는 세션은 연 시점 값이라 저장 뒤에는 이 값을 보인다
   const [savedParticipants, setSavedParticipants] = useState<
@@ -628,7 +639,11 @@ export default function ParticipantsSheet({
     kind: "bottom-sheet",
     onClose,
   });
-  const backToView = useCallback(() => setIsEditing(false), []);
+  // 수정 모드에서 시트 전체를 닫는 중이면 닫히는 동안 보기 모드로 바뀌지 않게 한다
+  const isClosingRef = useRef(false);
+  const backToView = useCallback(() => {
+    if (!isClosingRef.current) setIsEditing(false);
+  }, []);
   useLayerDepth({
     isOpen: isOpen && isEditing,
     tabKey,
@@ -637,23 +652,35 @@ export default function ParticipantsSheet({
     onClose: backToView,
   });
 
+  // 열 때마다 보기 모드로 시작한다. 수정 깊이가 지난 상태로 쌓이지 않도록 effect 전에 렌더 중 초기화한다
+  const openedSessionId = isOpen ? session.id : null;
+  const [lastOpenedSessionId, setLastOpenedSessionId] = useState(openedSessionId);
+  if (openedSessionId !== lastOpenedSessionId) {
+    setLastOpenedSessionId(openedSessionId);
+    if (openedSessionId !== null) {
+      setIsEditing(false);
+      setSavedParticipants(null);
+    }
+  }
   useEffect(() => {
-    if (!isOpen) return;
-    setIsEditing(false);
-    setSavedParticipants(null);
-  }, [isOpen, session.id]);
+    if (isOpen) isClosingRef.current = false;
+  }, [isOpen]);
 
   const participants = savedParticipants ?? session.participants;
 
-  const close = useCallback(
-    (afterClose?: () => void) => {
-      if (!closeDepth(tabKey, DEPTH_ID, afterClose)) {
-        onClose();
-        afterClose?.();
-      }
-    },
-    [closeDepth, onClose, tabKey],
-  );
+  const closeSheet = useCallback(() => {
+    if (!closeDepth(tabKey, DEPTH_ID)) onClose();
+  }, [closeDepth, onClose, tabKey]);
+
+  /** 배경 탭·끌어내리기. 수정 모드면 히스토리가 남지 않게 수정 깊이부터 닫는다 */
+  const close = useCallback(() => {
+    if (!isEditing) {
+      closeSheet();
+      return;
+    }
+    isClosingRef.current = true;
+    if (!closeDepth(tabKey, EDIT_DEPTH_ID, closeSheet)) closeSheet();
+  }, [closeDepth, closeSheet, isEditing, tabKey]);
 
   const startEditing = () => {
     setEditKey((key) => key + 1);
