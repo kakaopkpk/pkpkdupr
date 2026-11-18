@@ -141,19 +141,12 @@ const Home: React.FC = () => {
     playerId,
     loadedVersion: preSession.loadedVersion,
   });
-  const { reset: resetParticipation, clearError: clearParticipationError } =
-    participation;
+  const { reset: resetParticipation } = participation;
 
   // 진행 중 화면으로 바뀌면 다가오는 세션 카드가 사라지므로 기다리지 않는다
   useEffect(() => {
     if (!isPreSession) resetParticipation();
   }, [isPreSession, resetParticipation]);
-
-  // 다음 세션이 바뀌면(앞 세션이 끝나 빠짐) 이전 오류 문구를 지운다
-  const nextSessionId = upcomingSessions[0]?.id;
-  useEffect(() => {
-    clearParticipationError();
-  }, [clearParticipationError, nextSessionId]);
 
   // ── 진행 중 세션 ────────────────────────────────────
   // 세션 밖 경기까지 포함한 진행 중 경기. 경기 중인 선수 판단(대기 인원·참여 취소 잠금)에 쓴다
