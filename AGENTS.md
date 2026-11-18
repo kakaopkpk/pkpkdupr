@@ -5,6 +5,7 @@
 - 제품명과 저장소/패키지 식별자는 모두 `pkpkdupr`입니다.
 - 피클볼 플레이어, 경기 기록, DUPR 유사 평점과 관리자 운영 도구를 관리하는 pnpm 모노레포입니다.
 - 변경은 공유 계약(`packages/shared`)부터 API, `packages/db`, web/admin 소비처까지 한 흐름으로 확인합니다.
+- 동호회 배경·운영 원칙·거절한 안은 `docs/product.md`, 화면 디자인 결정은 `docs/design.md`에 있습니다. 새 기능·인프라·UI를 제안하기 전에 확인합니다.
 
 ## 아키텍처
 
