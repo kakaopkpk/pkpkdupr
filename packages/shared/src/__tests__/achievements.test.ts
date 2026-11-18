@@ -814,7 +814,7 @@ describe("computeAchievements", () => {
     ).toMatchObject({ earned: true, earnedMatchId: fourth.id });
   });
 
-  it("업적 기준 시각(2026-11-17 00:00 KST) 전 경기는 경기 수·승 수·개근에만 센다", () => {
+  it("업적 기준 시각(2026-11-17 00:00 KST) 전 경기는 경기 수·승 수·출석에만 센다", () => {
     const startMs = ACHIEVEMENT_COUNT_START.getTime();
     expect(ACHIEVEMENT_COUNT_START.toISOString()).toBe("2026-11-16T15:00:00.000Z");
     const before = [3, 2, 1].map((offset) =>
@@ -835,7 +835,7 @@ describe("computeAchievements", () => {
       [...before, atStart],
       new Set(["session-old", "session-new"]),
     );
-    // 경기 수·승 수·개근은 기준 시각 전 경기도 세고, 받은 경기도 그 경기다
+    // 경기 수·승 수·출석은 기준 시각 전 경기도 세고, 받은 경기도 그 경기다
     expect(progressOf(progress, "matches-1")).toMatchObject({
       earned: true,
       earnedMatchId: before[0].id,
@@ -1229,7 +1229,7 @@ describe("평점 업적", () => {
       earned: false,
       current: 3.8,
     });
-    // 평점 업적과 경기 수·승 수·개근 말고는 기준 시각 전 경기를 세지 않는다
+    // 평점 업적과 경기 수·승 수·출석 말고는 기준 시각 전 경기를 세지 않는다
     expect(progressOf(progress, "streak-3")).toMatchObject({
       earned: false,
       current: 0,

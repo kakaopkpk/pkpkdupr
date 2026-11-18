@@ -1058,16 +1058,27 @@ const findNewAchievementsForSavedMatch = async (
     ]);
     const after = toAchievementMatches(outcomes, logsByPlayer.flat());
     // 수정 전 평점 로그는 재계산으로 덮어써져 없으므로, 이미 완료였던 경기는 지금 평점을 그대로 붙인다.
-    // 그래서 완료 경기 수정으로는 평점 업적이 새 업적으로 나오지 않는다(미확인 업적 조회로 축하한다).
+    // 그래서 완료 경기 수정으로는 평점 업적·언더독이 새 업적으로 나오지 않는다(미확인 업적 조회로 축하한다).
+    const saved = after.find((candidate) => candidate.id === match.id);
+    const regularSessionIds = new Set(
+      after.flatMap((candidate) =>
+        candidate.session?.regular ? [candidate.session.id] : [],
+      ),
+    );
     const before = [
       ...after.filter((candidate) => candidate.id !== match.id),
       ...(previous?.status === "completed"
         ? [
             {
               ...previous,
-              doublesRatingAfter: after.find(
-                (candidate) => candidate.id === match.id,
-              )?.doublesRatingAfter,
+              session: previous.session
+                ? {
+                    id: previous.session.id,
+                    regular: regularSessionIds.has(previous.session.id),
+                  }
+                : null,
+              doublesRatingAfter: saved?.doublesRatingAfter,
+              ratingBefore: saved?.ratingBefore,
             },
           ]
         : []),
@@ -1263,8 +1274,8 @@ app.get("/api/players/:playerId/profile-summary", async (req, res) => {
           ? Promise.resolve([])
           : matchRepository.getPlayerRatingChangeLogs(viewerPlayerId),
         playerRatingChartProjectionService.getOrRebuild(playerId),
-        // 세션 지배자 업적은 세션마다 전원의 평점 변화를 비교해야 해서 전체 원천을 읽는다.
-        // 실패해도 요약은 돌려주고 세션 지배자만 빠진다.
+        // 세션 지배자·연승 저지·환영 인사·개근상 업적은 다른 회원 기록이 필요해 전체 원천을 읽는다.
+        // 실패해도 요약은 돌려주고 업적은 이 회원 경기로만 계산한다.
         loadRankingSource().catch((err) => {
           console.error("[PROFILE] 세션 지배자 원천 조회 실패", playerId, err);
           return null;
@@ -1291,6 +1302,9 @@ app.get("/api/players/:playerId/profile-summary", async (req, res) => {
         now,
         dominations?.get(playerId),
         groupRatingChangeLogsByMatchId(viewerRatingChangeLogs),
+        rankingSource
+          ? toContextAchievementMatches(rankingSource.context)
+          : undefined,
       ),
     });
   } catch (err) {

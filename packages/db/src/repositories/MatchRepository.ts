@@ -140,6 +140,8 @@ export interface CompletedMatchOutcome {
   scores: MatchScore[];
   /** 게스트가 낀 경기. 랭킹 경기 수·업적·세션 지배자에서 뺀다 */
   ratingExcluded: boolean;
+  /** 정기 세션 경기인지(개근상 업적). 테스트 데이터처럼 없으면 정기 세션이 아니다 */
+  regularSession?: boolean;
 }
 
 export interface SessionWithParticipantIds {
@@ -982,8 +984,11 @@ export class MatchRepository {
           matchStartsAt: matches.matchStartsAt,
           completedAt: matches.completedAt,
           ratingExcluded: matches.ratingExcluded,
+          sessionKind: matchSessions.kind,
+          regularDateKey: matchSessions.regularDateKey,
         })
         .from(matches)
+        .leftJoin(matchSessions, eq(matches.sessionId, matchSessions.id))
         .where(completedFilter),
       this.db
         .select({
@@ -1040,6 +1045,8 @@ export class MatchRepository {
         matchStartsAt: Date | string | number;
         completedAt: Date | string | number;
         ratingExcluded: boolean | null;
+        sessionKind: string | null;
+        regularDateKey: string | null;
       }>
     ).map((row): CompletedMatchOutcome => ({
       id: row.id,
@@ -1050,6 +1057,13 @@ export class MatchRepository {
       teamPlayerIds: teamsByMatchId.get(row.id) ?? [[], []],
       scores: scoresByMatchId.get(row.id) ?? [],
       ratingExcluded: row.ratingExcluded === true,
+      regularSession:
+        row.sessionId != null &&
+        row.sessionKind != null &&
+        toSessionKind({
+          kind: row.sessionKind,
+          regularDateKey: row.regularDateKey,
+        }) === "regular",
     }));
   }
 

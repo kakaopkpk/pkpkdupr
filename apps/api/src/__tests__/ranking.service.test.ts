@@ -13,6 +13,7 @@ import {
   getRatingAt,
   rankPlayersAt,
   selectBaselineSession,
+  toAchievementMatches,
   type RankingMatch,
   type RankingSession,
   type RankingSourcePlayer,
@@ -21,6 +22,8 @@ import {
 // 이 파일의 고정 데이터는 업적 기준 시각(2026-11-17 KST) 전 경기라, 업적은 기준 시각 없이 센다.
 vi.mock("@pkpkdupr/shared/achievementCountStart", () => ({
   ACHIEVEMENT_COUNT_START: new Date(0),
+  // 언더독·연승 저지 등 새 업적 지표는 이 파일에서 검증하지 않으므로 세지 않는다.
+  SECOND_ACHIEVEMENT_SET_COUNT_START: new Date("2100-01-01T00:00:00.000Z"),
 }));
 
 const at = (iso: string) => new Date(iso);
@@ -694,6 +697,44 @@ describe("buildSessionHistory", () => {
         (item) => item.id,
       ),
     ).toEqual(["Snew0001"]);
+  });
+});
+
+describe("언더독·개근상 업적 입력", () => {
+  const first = at("2026-11-10T10:00:00Z");
+
+  it("경기 직전 평점은 그 경기 분류 평점이고, 정기 세션 경기는 regular로 표시한다", () => {
+    const singlesLog: PlayerRatingChangeLog = {
+      ...makeLog("Palice01", "Msingle1", first, 3.1, 3.2),
+      previousRating: { singles: 2.8, doubles: 3.1 },
+    };
+    const [doubles, singles, custom] = toAchievementMatches(
+      [
+        makeMatch(
+          "Mdouble1",
+          first,
+          [
+            ["Palice01", "Pbob0001"],
+            ["Pcarol01", "Pdave001"],
+          ],
+          { sessionId: "Sregular1", regularSession: true },
+        ),
+        makeMatch("Msingle1", first, [["Palice01"], ["Pbob0001"]], {
+          type: "singles",
+          sessionId: "Scustom01",
+        }),
+        makeMatch("Mcustom1", first, [["Palice01"], ["Pbob0001"]], {
+          sessionId: "Scustom01",
+          regularSession: false,
+        }),
+      ],
+      [makeLog("Palice01", "Mdouble1", first, 3.3, 3.35), singlesLog],
+    );
+    expect(doubles.ratingBefore).toEqual({ Palice01: 3.3 });
+    expect(doubles.session).toEqual({ id: "Sregular1", regular: true });
+    expect(singles.ratingBefore).toEqual({ Palice01: 2.8 });
+    expect(singles.session).toEqual({ id: "Scustom01", regular: false });
+    expect(custom.ratingBefore).toBeUndefined();
   });
 });
 

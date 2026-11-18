@@ -62,6 +62,8 @@ export interface RankingMatch {
   scores: MatchScore[];
   /** 게스트가 낀 경기. 랭킹 경기 수·순위 변동 기준 세션·세션 지배자·업적에서 뺀다 */
   ratingExcluded?: boolean;
+  /** 정기 세션 경기인지(개근상 업적) */
+  regularSession?: boolean;
 }
 
 export interface RankingSession {
@@ -727,10 +729,31 @@ export const buildDoublesRatingAfterByMatchId = (
   return ratingsByMatchId;
 };
 
+/**
+ * 경기 id별 그 경기 직전 선수별 평점(그 경기 분류, 언더독 업적 입력).
+ * 같은 경기·선수의 로그가 여럿이면 가장 늦게 쓴 로그를 쓴다.
+ */
+export const buildRatingBeforeByMatchId = (
+  logs: readonly PlayerRatingChangeLog[],
+  categoryByMatchId: ReadonlyMap<string, MatchTopLevelType>,
+): Map<string, Record<string, number>> => {
+  const ratingsByMatchId = new Map<string, Record<string, number>>();
+  for (const log of [...logs].sort(byCreatedAtAsc)) {
+    const matchId = getLogMatchId(log);
+    const category = matchId ? categoryByMatchId.get(matchId) : undefined;
+    if (!matchId || !category) continue;
+    const ratings = ratingsByMatchId.get(matchId) ?? {};
+    ratings[log.playerId] = log.previousRating[category];
+    ratingsByMatchId.set(matchId, ratings);
+  }
+  return ratingsByMatchId;
+};
+
 /** 완료 경기 요약을 업적 계산 입력으로 바꾼다 */
 export const toAchievementMatch = (
   match: RankingMatch,
   doublesRatingAfter?: Readonly<Record<string, number>>,
+  ratingBefore?: Readonly<Record<string, number>>,
 ): AchievementMatch => ({
   id: match.id,
   type: match.type,
@@ -741,19 +764,32 @@ export const toAchievementMatch = (
     { players: match.teamPlayerIds[1].map((id) => ({ id })) },
   ],
   scores: match.scores,
-  session: match.sessionId ? { id: match.sessionId } : null,
+  session: match.sessionId
+    ? { id: match.sessionId, regular: match.regularSession === true }
+    : null,
   ratingExcluded: match.ratingExcluded ?? false,
   doublesRatingAfter,
+  ratingBefore,
 });
 
-/** 완료 경기 요약에 평점 변경 로그로 평점 업적 입력까지 붙여 업적 계산 입력으로 바꾼다 */
+/** 완료 경기 요약에 평점 변경 로그로 평점 업적·언더독 입력까지 붙여 업적 계산 입력으로 바꾼다 */
 export const toAchievementMatches = (
   matches: readonly RankingMatch[],
   logs: readonly PlayerRatingChangeLog[],
 ): AchievementMatch[] => {
-  const ratingsByMatchId = buildDoublesRatingAfterByMatchId(logs);
+  const ratingsAfterByMatchId = buildDoublesRatingAfterByMatchId(logs);
+  const ratingsBeforeByMatchId = buildRatingBeforeByMatchId(
+    logs,
+    new Map(
+      matches.map((match) => [match.id, getMatchTopLevelType(match.type)]),
+    ),
+  );
   return matches.map((match) =>
-    toAchievementMatch(match, ratingsByMatchId.get(match.id)),
+    toAchievementMatch(
+      match,
+      ratingsAfterByMatchId.get(match.id),
+      ratingsBeforeByMatchId.get(match.id),
+    ),
   );
 };
 
