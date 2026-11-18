@@ -1,9 +1,13 @@
 import React from "react";
 import { buttonPressClassName } from "@/components/ui/Button";
-import { CheckIcon } from "@/components/ui/Icons";
+import { CheckIcon, ChevronRightIcon } from "@/components/ui/Icons";
 import { PlayerAvatar } from "@/components/ui/PlayerAvatar";
 import { cx } from "@/components/ui/cx";
-import type { MatchSessionDetailInfo } from "@/lib/matchSessions";
+import {
+  getSessionKindShortLabel,
+  type MatchSessionDetailInfo,
+} from "@/lib/matchSessions";
+import PickleballIllustration from "./PickleballIllustration";
 
 const MAX_VISIBLE_AVATARS = 4;
 const AVATAR_SIZE = 28;
@@ -41,18 +45,28 @@ const ParticipantAvatars: React.FC<{
   );
 };
 
-/** 블루 카드 첫 줄의 세션 종류 칩 */
-export const SessionChip: React.FC<{ children: React.ReactNode }> = ({
-  children,
-}) => (
-  <span className="rounded-full bg-white/[0.18] px-2.5 py-[3px] text-pk-12 font-bold">
-    {children}
-  </span>
+/**
+ * 블루 카드 첫 줄: 세션 종류 칩("정기"/"회원") → 남은 날("D-1"·"D-Day"), 오른쪽 끝에 trailing(LIVE 등)
+ */
+export const SessionCardTop: React.FC<{
+  kind: MatchSessionDetailInfo["kind"];
+  dDayLabel?: string;
+  trailing?: React.ReactNode;
+}> = ({ kind, dDayLabel, trailing }) => (
+  <div className="flex items-center gap-2">
+    <span className="rounded-full bg-white/[0.18] px-2.5 py-[3px] text-pk-12 font-bold">
+      {getSessionKindShortLabel(kind)}
+    </span>
+    {dDayLabel ? (
+      <span className="text-pk-13 font-extrabold tabular-nums">{dDayLabel}</span>
+    ) : null}
+    {trailing ? <span className="ml-auto flex">{trailing}</span> : null}
+  </div>
 );
 
 /**
- * 세션 블루 카드 틀: 첫 줄(top) → 이름·메타 → 참여자 줄(누르면 참여자 시트) → children(참여 줄·버튼).
- * 홈 다음 세션 카드와 일정 탭 세션 카드가 같이 쓴다
+ * 세션 블루 카드 틀: 첫 줄(top) → 이름·메타 → 참여자 줄(누르면 참여자 시트) → children(버튼).
+ * 오른쪽 위에 피클볼 장식이 걸친다. 홈 다음 세션 카드와 일정 탭 세션 카드가 같이 쓴다
  */
 export const SessionBlueCard: React.FC<{
   session: MatchSessionDetailInfo;
@@ -74,58 +88,36 @@ export const SessionBlueCard: React.FC<{
 }) => (
   <article
     className={cx(
-      "flex flex-col gap-3.5 rounded-pk-lg bg-pk-primary p-5 text-white",
+      "relative overflow-hidden rounded-pk-lg bg-pk-primary text-white",
       className,
     )}
   >
-    {top}
-    <div className="flex min-w-0 flex-col gap-0.5">
-      <h2 className="truncate text-pk-22 font-extrabold tracking-[-0.02em]">
-        {session.name}
-      </h2>
-      <span className="truncate text-pk-13 text-white/85 tabular-nums">
-        {meta}
-      </span>
+    <PickleballIllustration className="pointer-events-none absolute -top-[62px] -right-[54px]" />
+    {/* 장식 위에 그려지도록 내용은 relative로 쌓는다 */}
+    <div className="relative flex flex-col gap-4 px-5 pt-[22px] pb-5">
+      {top}
+      <div className="flex min-w-0 flex-col gap-1">
+        <h2 className="truncate text-pk-26 font-extrabold tracking-[-0.02em]">
+          {session.name}
+        </h2>
+        <span className="truncate text-pk-13 text-white/85 tabular-nums">
+          {meta}
+        </span>
+      </div>
+      <button
+        type="button"
+        onClick={onOpenParticipants}
+        className="-my-1.5 flex min-h-11 items-center gap-2.5 text-left active:opacity-80"
+      >
+        <ParticipantAvatars participants={session.participants} />
+        <span className="inline-flex items-center gap-0.5 text-pk-13 font-bold text-white/90 tabular-nums">
+          {participantsLabel}
+          <ChevronRightIcon className="size-3.5 shrink-0" />
+        </span>
+      </button>
+      {children}
     </div>
-    <button
-      type="button"
-      onClick={onOpenParticipants}
-      className="-my-1.5 flex min-h-11 items-center justify-between gap-3 text-left active:opacity-80"
-    >
-      <ParticipantAvatars participants={session.participants} />
-      <span className="text-pk-15 font-bold tabular-nums">
-        {participantsLabel}
-      </span>
-    </button>
-    {children}
   </article>
-);
-
-/** "✓ 참여 중" 글자 */
-export const JoinedLabel: React.FC = () => (
-  <span className="inline-flex items-center gap-1.5 text-pk-15 font-bold">
-    <CheckIcon />
-    참여 중
-  </span>
-);
-
-/** 블루 카드 위 흰 테두리 버튼(참여 취소 등) */
-export const BlueCardOutlineButton: React.FC<{
-  onPress: () => void;
-  disabled?: boolean;
-  children: React.ReactNode;
-}> = ({ onPress, disabled, children }) => (
-  <button
-    type="button"
-    onClick={onPress}
-    disabled={disabled}
-    className={cx(
-      "inline-flex h-11 items-center rounded-pk-sm border-[1.5px] border-white/50 px-4 text-pk-15 font-bold text-white disabled:opacity-60",
-      buttonPressClassName,
-    )}
-  >
-    {children}
-  </button>
 );
 
 /** 블루 카드 위 흰 바탕·블루 글자 큰 버튼(참여하기·진행 화면 보기) */
@@ -147,11 +139,10 @@ export const BlueCardSolidButton: React.FC<{
   </button>
 );
 
-/** 참여하기 버튼 문구. 참여 요청 중이면 "참여하는 중…" */
-export const getJoinButtonLabel = (pendingAction: ParticipationAction | null) =>
-  pendingAction === "join" ? "참여하는 중…" : "참여하기";
-
-/** 참여 중이면 "✓ 참여 중" + 참여 취소, 아니면 참여하기. 요청 중에는 버튼을 막는다 */
+/**
+ * 참여 중이면 "✓ 참여 중 … 취소" 버튼 하나(누르면 참여 취소), 아니면 참여하기.
+ * 요청 중에는 버튼을 막고 진행 문구를 보인다
+ */
 export const ParticipationControls: React.FC<{
   isJoined: boolean;
   pendingAction: ParticipationAction | null;
@@ -159,17 +150,33 @@ export const ParticipationControls: React.FC<{
   onLeave: () => void;
 }> = ({ isJoined, pendingAction, onJoin, onLeave }) => {
   const isPending = pendingAction !== null;
-  return isJoined ? (
-    <div className="flex items-center justify-between gap-2">
-      <JoinedLabel />
-      <BlueCardOutlineButton onPress={onLeave} disabled={isPending}>
-        {pendingAction === "leave" ? "취소하는 중…" : "참여 취소"}
-      </BlueCardOutlineButton>
-    </div>
-  ) : (
-    <BlueCardSolidButton onPress={onJoin} disabled={isPending}>
-      {getJoinButtonLabel(pendingAction)}
-    </BlueCardSolidButton>
+  if (!isJoined) {
+    return (
+      <BlueCardSolidButton onPress={onJoin} disabled={isPending}>
+        {pendingAction === "join" ? "참여하는 중…" : "참여하기"}
+      </BlueCardSolidButton>
+    );
+  }
+  const isLeaving = pendingAction === "leave";
+  return (
+    <button
+      type="button"
+      onClick={onLeave}
+      disabled={isPending}
+      aria-label={isLeaving ? undefined : "참여 중, 누르면 참여 취소"}
+      className={cx(
+        "flex h-[52px] items-center justify-between gap-2 rounded-pk-sm bg-white/[0.14] px-4 text-white disabled:opacity-60",
+        buttonPressClassName,
+      )}
+    >
+      <span className="inline-flex items-center gap-1.5 text-pk-15 font-extrabold">
+        <CheckIcon />
+        참여 중
+      </span>
+      <span className="text-pk-13 font-bold text-white/80">
+        {isLeaving ? "취소하는 중…" : "취소"}
+      </span>
+    </button>
   );
 };
 

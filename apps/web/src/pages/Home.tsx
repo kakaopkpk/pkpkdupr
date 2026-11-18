@@ -385,7 +385,6 @@ const Home: React.FC = () => {
             sessions={upcomingSessions}
             playerId={playerId}
             todayKey={todayKey}
-            now={now}
             getPendingAction={participation.getPendingAction}
             getError={participation.getError}
             onJoin={(sessionId) => void participation.change(sessionId, "join")}

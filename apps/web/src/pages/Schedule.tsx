@@ -225,7 +225,7 @@ const Schedule: React.FC = () => {
         return (
           <LiveSessionCard
             key={`live:${entry.session.id}`}
-            {...getParticipationProps(entry.session)}
+            session={entry.session}
             onOpenParticipants={() =>
               openParticipants(entry.session, busyPlayerIds)
             }
@@ -237,6 +237,7 @@ const Schedule: React.FC = () => {
           <UpcomingSessionCard
             key={`upcoming:${entry.session.id}`}
             {...getParticipationProps(entry.session)}
+            todayKey={todayKey}
             onLeave={() => void participation.change(entry.session.id, "leave")}
             onOpenParticipants={() => openParticipants(entry.session, EMPTY_IDS)}
           />
