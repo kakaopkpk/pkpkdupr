@@ -269,7 +269,7 @@ const Home: React.FC = () => {
 
     return (
       <>
-        <SectionLabel>진행 중 {count}</SectionLabel>
+        <SectionLabel>진행 중</SectionLabel>
         {myInProgressMatch ? (
           <MyLiveMatchCard
             match={myInProgressMatch}
@@ -324,7 +324,7 @@ const Home: React.FC = () => {
         </>
       ) : null}
       <Spacer />
-      <SectionLabel>오늘 기록 {completedMatches.length}</SectionLabel>
+      <SectionLabel>오늘 기록</SectionLabel>
       {completedMatches.length > 0 ? (
         <MatchListCard
           matches={completedMatches}
