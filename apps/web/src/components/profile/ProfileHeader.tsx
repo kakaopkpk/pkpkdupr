@@ -33,7 +33,7 @@ export interface ProfileHeaderProps {
   statusMessageBackgroundColor?: string | null;
   /** 프로필 요약의 matchStats. 없으면 불러오는 중(스켈레톤)이거나 숨김(hideStats)이다 */
   matchStats: PlayerProfileSummaryInfo["matchStats"] | null | undefined;
-  /** matchStats가 없을 때 스켈레톤 대신 승패 줄 자리를 비운다. 요약을 불러오지 못했거나 비활성 회원일 때 */
+  /** matchStats가 없을 때 스켈레톤 대신 승패 줄을 빈칸으로 둔다. 요약을 불러오지 못했거나 비활성 회원일 때 */
   hideStats?: boolean;
   /** 이름 제목 태그. 화면 머리에 다른 h1이 있으면 h2를 쓴다 */
   headingAs?: "h1" | "h2";
@@ -46,9 +46,10 @@ export interface ProfileHeaderProps {
 }
 
 /**
- * 나 탭·회원 프로필 공용 머리. 흰 카드 없이 바탕 위에 아바타 56 · 이름 22/800 ·
- * "N경기 · N승 N패"(복식+단식 합) 줄과 오른쪽 슬롯을 한 행에 두고,
- * 상태메시지는 그 행 아래 작은 칩으로 둔다. 상태메시지 유무와 상관없이 행 높이가 같다.
+ * 나 탭·회원 프로필 공용 머리. 흰 카드 없이 바탕 위에 아바타 72와 오른쪽 텍스트 열,
+ * 오른쪽 슬롯을 한 행에 둔다. 텍스트 열은 이름 22/800 · "N경기 · N승 N패"(복식+단식 합) ·
+ * 상태메시지 칩 줄(20px 고정)이고 합이 아바타 높이와 같다. 승패 줄과 상태메시지 줄은
+ * 내용이 없어도 자리를 지켜, 사진·상태메시지 유무와 상관없이 머리 높이가 같다.
  * 사진을 불러온 아바타는 누르면 사진 확대 보기(AvatarZoomViewer)를 연다.
  */
 const ProfileHeader: React.FC<ProfileHeaderProps> = ({
@@ -107,58 +108,59 @@ const ProfileHeader: React.FC<ProfileHeaderProps> = ({
   }, [isZoomVisible]);
 
   return (
-    <header className={cx("flex flex-col gap-1.5", className)}>
-      <div className="flex items-center gap-3">
-        {player ? (
-          <button
-            ref={avatarButtonRef}
-            type="button"
-            disabled={!canZoom}
-            aria-label={canZoom ? `${player.username} 프로필 사진 크게 보기` : undefined}
-            aria-hidden={canZoom ? undefined : true}
-            tabIndex={canZoom ? undefined : -1}
-            onClick={openZoom}
-            className={cx(
-              "shrink-0 rounded-full transition-transform duration-150 ease-pk-move enabled:active:scale-[0.92] motion-reduce:transition-none",
-              isZoomVisible && "invisible",
-            )}
-          >
-            <PlayerAvatar
-              player={player}
-              size={56}
-              onImageLoad={setLoadedAvatarUrl}
-            />
-          </button>
-        ) : (
-          <span className="size-14 shrink-0 animate-pulse rounded-full bg-pk-neutral" />
-        )}
-        <div className="flex min-w-0 flex-1 flex-col items-start gap-0.5">
-          <Heading className="max-w-full truncate text-pk-22 leading-[1.25] font-extrabold tracking-[-0.02em] text-pk-ink">
-            {player?.username ?? ""}
-          </Heading>
-          {totalStats ? (
-            <span className="text-pk-13 text-pk-sub tabular-nums">
-              <CountUpNumber
-                value={totalStats.wins + totalStats.losses}
-                {...COUNT_UP}
-              />
-              경기 ·{" "}
-              <WinLossCount wins={totalStats.wins} losses={totalStats.losses} />
-            </span>
-          ) : hideStats ? null : (
-            <SkeletonBlock className="h-4 w-32" />
+    <header className={cx("flex items-center gap-3", className)}>
+      {player ? (
+        <button
+          ref={avatarButtonRef}
+          type="button"
+          disabled={!canZoom}
+          aria-label={canZoom ? `${player.username} 프로필 사진 크게 보기` : undefined}
+          aria-hidden={canZoom ? undefined : true}
+          tabIndex={canZoom ? undefined : -1}
+          onClick={openZoom}
+          className={cx(
+            "flex shrink-0 rounded-full transition-transform duration-150 ease-pk-move enabled:active:scale-[0.92] motion-reduce:transition-none",
+            isZoomVisible && "invisible",
           )}
-        </div>
-        {right}
-      </div>
-      {statusMessage ? (
-        <div>
-          <StatusMessageChip
-            message={statusMessage}
-            color={statusMessageBackgroundColor}
+        >
+          <PlayerAvatar
+            player={player}
+            size={72}
+            onImageLoad={setLoadedAvatarUrl}
           />
+        </button>
+      ) : (
+        <span className="size-[72px] shrink-0 animate-pulse rounded-full bg-pk-neutral" />
+      )}
+      <div className="flex min-w-0 flex-1 flex-col items-start gap-0.5">
+        <Heading className="max-w-full truncate text-pk-22 leading-[1.25] font-extrabold tracking-[-0.02em] text-pk-ink">
+          {player?.username ?? ""}
+        </Heading>
+        {totalStats ? (
+          <span className="text-pk-13 text-pk-sub tabular-nums">
+            <CountUpNumber
+              value={totalStats.wins + totalStats.losses}
+              {...COUNT_UP}
+            />
+            경기 ·{" "}
+            <WinLossCount wins={totalStats.wins} losses={totalStats.losses} />
+          </span>
+        ) : (
+          <span className="flex h-[19.5px] items-center">
+            {hideStats ? null : <SkeletonBlock className="h-4 w-32" />}
+          </span>
+        )}
+        {/* 열의 gap 2px와 합쳐 전적과 칩 사이가 3px */}
+        <div className="mt-px flex h-5 max-w-full">
+          {statusMessage ? (
+            <StatusMessageChip
+              message={statusMessage}
+              color={statusMessageBackgroundColor}
+            />
+          ) : null}
         </div>
-      ) : null}
+      </div>
+      {right}
       {player && avatarUrl && isZoomVisible ? (
         <AvatarZoomViewer
           isOpen={isZoomOpen && isZoomRequested}
