@@ -249,8 +249,11 @@ export default function AchievementDetailSheet({
               <SkeletonBlock className="size-24 rounded-full" />
             ) : earned ? (
               <EarnedBadge definition={definition} />
-            ) : (
+            ) : ready ? (
               <LockedBadge definition={definition} />
+            ) : (
+              // 불러오지 못하면 받았는지 모르므로 자물쇠 없이 회색 배지만 둔다
+              <AchievementBadge achievement={definition} earned={false} size={BADGE_SIZE} />
             )}
           </div>
           {/* 받은 업적의 빛줄기가 글자를 덮지 않게 위로 올린다 */}
