@@ -40,7 +40,7 @@ type SessionMetaSource = SessionTimeSource &
 
 /**
  * 시각 → 장소 메타. "18:00~22:00 · 야탑초등학교", 시각 없으면 장소만.
- * 홈 진행 중 세션 머리와 오늘 세션의 다음 세션 카드가 쓴다
+ * 진행 중 세션 카드(홈·일정 탭)와 오늘 세션의 다음 세션 카드가 쓴다
  */
 export const formatSessionTimePlace = (
   session: Pick<SessionMetaSource, "startTime" | "endTime" | "location">,

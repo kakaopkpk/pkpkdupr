@@ -47,8 +47,8 @@ const ParticipantAvatars: React.FC<{
 
 /**
  * 세션 블루 카드 틀: 첫 줄(종류 칩 "정기"/"회원" → 남은 날 → 오른쪽 끝 trailing) → 이름·메타
- * → 참여자 줄(누르면 참여자 시트) → children(버튼). 오른쪽 위에 피클볼 장식이 걸친다.
- * 홈 다음 세션 카드와 일정 탭 세션 카드가 같이 쓴다
+ * → 참여자 줄(누르면 참여자 시트) → children(버튼, 없으면 참여자 줄로 끝난다). 오른쪽 위에 피클볼 장식이 걸친다.
+ * 홈 다음 세션·진행 중 세션 카드와 일정 탭 세션 카드가 같이 쓴다
  */
 export const SessionBlueCard: React.FC<{
   session: MatchSessionDetailInfo;
@@ -60,7 +60,7 @@ export const SessionBlueCard: React.FC<{
   /** "9명 참여 예정" | "9명 참여" */
   participantsLabel: string;
   onOpenParticipants: () => void;
-  children: React.ReactNode;
+  children?: React.ReactNode;
   className?: string;
 }> = ({
   session,

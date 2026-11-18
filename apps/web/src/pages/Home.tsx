@@ -18,6 +18,7 @@ import { useSessionRecommendations } from "@/components/home/useSessionRecommend
 import { useSessionTopRiser } from "@/components/home/useSessionTopRiser";
 import { TopRiserCard } from "@/components/records/SessionReportParts";
 import ParticipantsSheet from "@/components/session/ParticipantsSheet";
+import { SessionBlueCard } from "@/components/session/SessionBlueCard";
 import { useSessionParticipation } from "@/components/session/useSessionParticipation";
 import { getErrorMessage } from "@/components/session/saveError";
 import { isNetworkError } from "@/lib/errors";
@@ -25,8 +26,7 @@ import { LivePill } from "@/components/ui/Badges";
 import { Card } from "@/components/ui/Card";
 import { StateMessage } from "@/components/ui/StateMessage";
 import { MatchRow } from "@/components/ui/MatchRow";
-import { LinkChevron, SectionLabel } from "@/components/ui/Section";
-import { cx } from "@/components/ui/cx";
+import { SectionLabel } from "@/components/ui/Section";
 import { useAppNavigation } from "@/context/AppNavigationContext";
 import { useAuth } from "@/context/AuthContext";
 import { useLiveSession } from "@/context/LiveSessionContext";
@@ -292,8 +292,16 @@ const Home: React.FC = () => {
     </>
   );
 
-  const renderLive = () => (
+  const renderLive = (session: MatchSessionDetailInfo) => (
     <>
+      {/* 다음 세션 카드와 같은 블루 카드. 이 화면이 곧 진행 화면이라 버튼은 없다 */}
+      <SessionBlueCard
+        session={session}
+        trailing={<LivePill />}
+        meta={formatSessionTimePlace(session)}
+        participantsLabel={`${session.participants.length}명 참여`}
+        onOpenParticipants={() => openParticipants(session, busyPlayerIds)}
+      />
       {liveTopRiser ? (
         <>
           <TopRiserCard report={liveTopRiser} />
@@ -399,38 +407,11 @@ const Home: React.FC = () => {
     );
   };
 
-  // 세션 중에만 세션 머리를 둔다. 세션 없는 날·세션 전에는 탭 제목 없이 첫 카드부터 보인다
-  const header = liveSession ? (
-    <header className="flex flex-col gap-1 px-5 pt-4 pb-4">
-      <div className="flex items-center justify-between gap-3">
-        <h1 className="min-w-0 truncate text-pk-17 font-extrabold text-pk-ink">
-          {liveSession.name}
-        </h1>
-        <LivePill />
-      </div>
-      <p className="flex min-w-0 items-center text-pk-13 text-pk-sub tabular-nums">
-        {/* 터치 영역 44px을 음수 세로 마진으로 상쇄해 줄 높이를 유지한다 */}
-        <button
-          type="button"
-          onClick={() => openParticipants(liveSession, busyPlayerIds)}
-          className="-my-3.5 inline-flex min-h-11 shrink-0 items-center gap-0.5 font-bold text-pk-primary"
-        >
-          {liveSession.participants.length}명 참여
-          <LinkChevron />
-        </button>
-        {/* flex 항목의 앞 공백은 사라지므로 버튼과의 간격은 pl로 둔다 */}
-        <span className="min-w-0 truncate pl-2">
-          {formatSessionTimePlace(liveSession)}
-        </span>
-      </p>
-    </header>
-  ) : null;
-
   return (
     <>
-      {header}
-      <div className={cx("flex flex-col gap-2.5 px-4 pb-6", !header && "pt-4")}>
-        {liveSession ? renderLive() : null}
+      {/* 홈은 탭 제목 없이 첫 카드부터 보인다. 진행 중 세션이면 첫 카드가 그 세션의 블루 카드다 */}
+      <div className="flex flex-col gap-2.5 px-4 pt-4 pb-6">
+        {liveSession ? renderLive(liveSession) : null}
         {isPreSession ? renderPreSession() : null}
         {!isLiveResolved ? <HomeSkeleton /> : null}
       </div>
