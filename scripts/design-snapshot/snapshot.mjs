@@ -320,7 +320,7 @@ function chooseKeptIds(data) {
   return kept;
 }
 
-// 배열에서 남기지 않을 회원 항목을 빼고, 순위(rank)가 있는 목록은 순위를 다시 매긴다(같은 순위는 유지).
+// 배열에서 남기지 않을 회원 항목을 빼고, 뺀 항목이 있는 순위(rank) 목록만 순위를 다시 매긴다(같은 순위는 유지).
 function dedupeByUsername(value, kept) {
   if (Array.isArray(value)) {
     const out = value
@@ -329,6 +329,7 @@ function dedupeByUsername(value, kept) {
         return !player || kept.get(player.username) === player.id;
       })
       .map((item) => dedupeByUsername(item, kept));
+    if (out.length === value.length) return out;
     let previousRank = null;
     let rank = 0;
     out.forEach((item, index) => {
