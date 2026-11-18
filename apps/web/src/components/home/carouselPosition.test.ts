@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
-  FLICK_MIN_DISTANCE_PX,
-  FLICK_MIN_VELOCITY_PX_PER_MS,
+  CAROUSEL_SWIPE_THRESHOLDS,
   getActiveSlideIndex,
   getSwipeTargetIndex,
 } from "./carouselPosition";
+
+const { flickMinDistancePx: FLICK_MIN_DISTANCE_PX, flickMinVelocityPxPerMs: FLICK_MIN_VELOCITY_PX_PER_MS } =
+  CAROUSEL_SWIPE_THRESHOLDS;
 
 // 카드 330px + 사이 8px
 const OFFSETS = [0, 338, 676, 1014];
