@@ -18,6 +18,10 @@ const SESSION_TIME_STEP_MINUTES = 30;
 /** 길이 1~6시간 */
 const SESSION_DURATION_OPTIONS_MINUTES = [60, 120, 180, 240, 300, 360];
 
+/** 세션 만들기 달력에서 고를 수 있는 날짜인지(오늘부터 3주) */
+export const isSessionDateSelectable = (dateKey: string, todayKey: string) =>
+  dateKey >= todayKey && dateKey <= addKstDays(todayKey, DATE_OPTION_COUNT - 1);
+
 /** "2시간" */
 export const formatDurationHours = (minutes: number) => `${minutes / 60}시간`;
 

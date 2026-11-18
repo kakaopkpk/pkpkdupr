@@ -1,11 +1,19 @@
 import React, { createContext, useContext } from "react";
 import type { TabKey } from "@/context/TabNavigationContext";
+import type { MatchSessionDetailInfo } from "@/lib/matchSessions";
 
 export type RecordMatchSheetRequest =
   /** 새 경기. presetTeams(선수 id)를 주면 선수 고르기 자리를 채운 채 연다 */
   | { kind: "new"; presetTeams?: [string[], string[]] }
   /** 진행 중 경기 점수 입력 또는 완료 경기 수정(같은 화면) */
   | { kind: "score"; matchId: string };
+
+export interface CreateSessionRequest {
+  /** 처음 골라 둘 날짜(KST 날짜 키) */
+  dateKey?: string;
+  /** 만든 뒤 부른다. 주면 홈 탭으로 옮기지 않는다 */
+  onCreated?: (session: MatchSessionDetailInfo) => void;
+}
 
 export interface AchievementDetailRequest {
   /** 업적 주인 */
@@ -19,7 +27,8 @@ export interface AppNavigationContextValue {
   /** 내 id면 나 탭으로 전환 */
   openMemberProfile: (playerId: string) => void;
   openRecordMatch: (request: RecordMatchSheetRequest) => void;
-  openCreateSession: () => void;
+  /** 세션 만들기 시트. request 없이 열면 만든 뒤 홈 탭으로 옮긴다 */
+  openCreateSession: (request?: CreateSessionRequest) => void;
   openSettings: () => void;
   /** 업적 상세 바텀시트. 열린 화면·경기 기록 시트 위에 뜬다 */
   openAchievementDetail: (params: AchievementDetailRequest) => void;

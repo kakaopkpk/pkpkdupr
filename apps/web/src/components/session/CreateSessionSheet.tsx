@@ -33,6 +33,7 @@ import { getErrorMessage } from "./saveError";
 import {
   AnimatedHeight,
   formatDurationHours,
+  isSessionDateSelectable,
   SessionCalendar,
   SessionDurationPicker,
   SessionStartTimePicker,
@@ -42,6 +43,8 @@ import {
 export interface CreateSessionSheetProps {
   isOpen: boolean;
   tabKey: TabKey;
+  /** 처음 골라 둘 날짜. 고를 수 없는 날짜(오늘부터 3주 밖)면 무시한다 */
+  initialDateKey?: string | null;
   onClose: () => void;
   onCreated: (session: MatchSessionDetailInfo) => void;
 }
@@ -67,19 +70,25 @@ const getEndTime = (startTime: string, durationMinutes: number) =>
   );
 
 interface CreateSessionFormProps {
+  initialDateKey: string | null;
   onCancel: () => void;
   onCreated: (session: MatchSessionDetailInfo) => void;
 }
 
 const CreateSessionForm: React.FC<CreateSessionFormProps> = ({
+  initialDateKey,
   onCancel,
   onCreated,
 }) => {
   const { showSaveFailure } = useSystemNotice();
   // 시트를 여는 순간의 오늘(KST). 열 때마다 폼이 새로 마운트된다
   const [todayKey] = useState(() => toKstDateKey(new Date()));
-  // 기본값 없이 시작한다. 고른 값만 칸에 칠해진다
-  const [dateKey, setDateKey] = useState<string | null>(null);
+  // 날짜를 정해 연 경우 말고는 기본값 없이 시작한다. 고른 값만 칸에 칠해진다
+  const [dateKey, setDateKey] = useState<string | null>(() =>
+    initialDateKey && isSessionDateSelectable(initialDateKey, todayKey)
+      ? initialDateKey
+      : null,
+  );
   const [startTime, setStartTime] = useState<string | null>(null);
   const [durationMinutes, setDurationMinutes] = useState<number | null>(null);
   // 접힌 줄을 눌러 다시 펼친 단계. 값을 고르면 비운다
@@ -327,6 +336,7 @@ const CreateSessionForm: React.FC<CreateSessionFormProps> = ({
 export default function CreateSessionSheet({
   isOpen,
   tabKey,
+  initialDateKey = null,
   onClose,
   onCreated,
 }: CreateSessionSheetProps): React.ReactElement {
@@ -373,6 +383,7 @@ export default function CreateSessionSheet({
     >
       <CreateSessionForm
         key={sheetKey}
+        initialDateKey={initialDateKey}
         onCancel={() => close()}
         onCreated={handleCreated}
       />

@@ -40,6 +40,7 @@ import {
   type AchievementDetailRequest,
   AppNavigationProvider,
   type AppNavigationContextValue,
+  type CreateSessionRequest,
   type RecordMatchSheetRequest,
 } from "@/context/AppNavigationContext";
 import { useAuth } from "@/context/AuthContext";
@@ -64,38 +65,41 @@ import {
   PULL_TO_REFRESH_THRESHOLD,
 } from "@/hooks/usePullToRefresh";
 import { triggerHapticFeedback } from "@/lib/haptics";
-import { addMatchSessionParticipant } from "@/lib/matchSessions";
+import {
+  addMatchSessionParticipant,
+  type MatchSessionDetailInfo,
+} from "@/lib/matchSessions";
 import { DEFAULT_THEME_COLOR, DIMMED_THEME_COLOR } from "@/lib/themeColor";
 import Home from "@/pages/Home";
 import Me from "@/pages/Me";
 import Ranking from "@/pages/Ranking";
-import Records from "@/pages/Records";
+import Schedule from "@/pages/Schedule";
 
 const TAB_KEYS: TabKey[] = TAB_ITEMS.map((item) => item.key);
 const TAB_PAGES: Record<TabKey, React.FC> = {
   home: Home,
-  records: Records,
+  schedule: Schedule,
   ranking: Ranking,
   me: Me,
 };
 
 const emptyDepthStacks = (): TabDepthStacks => ({
   home: [],
-  records: [],
+  schedule: [],
   ranking: [],
   me: [],
 });
 
 const emptyDepthEntries = (): Record<TabKey, TabDepthEntry[]> => ({
   home: [],
-  records: [],
+  schedule: [],
   ranking: [],
   me: [],
 });
 
 const initiallyVisitedTabs = (): Record<TabKey, boolean> => ({
   home: true,
-  records: false,
+  schedule: false,
   ranking: false,
   me: false,
 });
@@ -208,7 +212,7 @@ const BottomNav: React.FC = () => {
   const [recordMatchLayer, setRecordMatchLayer] =
     useState<GlobalLayerState<RecordMatchSheetRequest>>(closedLayer);
   const [createSessionLayer, setCreateSessionLayer] =
-    useState<GlobalLayerState<true>>(closedLayer);
+    useState<GlobalLayerState<CreateSessionRequest>>(closedLayer);
   const [settingsLayer, setSettingsLayer] =
     useState<GlobalLayerState<true>>(closedLayer);
   const [achievementDetailLayer, setAchievementDetailLayer] =
@@ -259,7 +263,7 @@ const BottomNav: React.FC = () => {
   const syncDepthStacks = useCallback(() => {
     setDepthStacks({
       home: depthEntriesRef.current.home.map((entry) => entry.id),
-      records: depthEntriesRef.current.records.map((entry) => entry.id),
+      schedule: depthEntriesRef.current.schedule.map((entry) => entry.id),
       ranking: depthEntriesRef.current.ranking.map((entry) => entry.id),
       me: depthEntriesRef.current.me.map((entry) => entry.id),
     });
@@ -578,9 +582,11 @@ const BottomNav: React.FC = () => {
     }));
   }, []);
 
-  const openCreateSession = useCallback(() => {
+  const openCreateSession = useCallback((request: CreateSessionRequest = {}) => {
     setCreateSessionLayer((current) =>
-      current.value ? current : { value: true, tabKey: selectedTabRef.current },
+      current.value
+        ? current
+        : { value: request, tabKey: selectedTabRef.current },
     );
   }, []);
 
@@ -639,10 +645,20 @@ const BottomNav: React.FC = () => {
     [],
   );
 
-  const handleSessionCreated = useCallback(() => {
-    notifyDataChanged();
-    selectTab("home");
-  }, [notifyDataChanged, selectTab]);
+  const handleSessionCreated = useCallback(
+    (
+      session: MatchSessionDetailInfo,
+      request: CreateSessionRequest | null,
+    ) => {
+      notifyDataChanged();
+      if (request?.onCreated) {
+        request.onCreated(session);
+      } else {
+        selectTab("home");
+      }
+    },
+    [notifyDataChanged, selectTab],
+  );
 
   // ?matchId= 딥링크는 아래에 matchId 없는 히스토리를 남기고 경기 상세를 연다.
   // 그래서 뒤로가기로 닫으면 주소에서 matchId가 빠지고 드로어가 다시 열리지 않는다
@@ -1310,8 +1326,11 @@ const BottomNav: React.FC = () => {
             <CreateSessionSheet
               isOpen={!!createSessionLayer.value}
               tabKey={createSessionLayer.tabKey}
+              initialDateKey={createSessionLayer.value?.dateKey ?? null}
               onClose={closeCreateSession}
-              onCreated={handleSessionCreated}
+              onCreated={(session) =>
+                handleSessionCreated(session, createSessionLayer.value)
+              }
             />
             <SettingsDrawer
               isOpen={!!settingsLayer.value}
@@ -1359,7 +1378,7 @@ const BottomNav: React.FC = () => {
                             closeGlobalMenu(() => openRecordMatch({ kind: "new" }))
                           }
                           onCreateSession={() =>
-                            closeGlobalMenu(openCreateSession)
+                            closeGlobalMenu(() => openCreateSession())
                           }
                         />
                         <PushScreenCoverDim

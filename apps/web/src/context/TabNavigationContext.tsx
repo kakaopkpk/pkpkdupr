@@ -1,6 +1,6 @@
 import React, { createContext, useContext } from "react";
 
-export type TabKey = "home" | "records" | "ranking" | "me";
+export type TabKey = "home" | "schedule" | "ranking" | "me";
 
 export type TabDepthKind =
   /** 하단 바까지 덮는 화면 이동(PushScreen) */

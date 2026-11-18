@@ -120,11 +120,16 @@ export const SessionRankChangePop: React.FC<{
 /** 세션 평점 변화량. 0부터 세며, 전후 평점 중 하나라도 없으면 "–" */
 export const SessionRatingDeltaCount: React.FC<{
   report: Pick<SessionPlayerReport, "ratingBefore" | "ratingAfter" | "ratingDelta">;
-}> = ({ report }) =>
+  className?: string;
+}> = ({ report, className }) =>
   hasRatingBeforeAndAfter(report) ? (
-    <CountUpRatingDelta value={report.ratingDelta} {...COUNT_UP} />
+    <CountUpRatingDelta
+      value={report.ratingDelta}
+      className={className}
+      {...COUNT_UP}
+    />
   ) : (
-    <RatingDelta value={null} />
+    <RatingDelta value={null} className={className} />
   );
 
 /**
