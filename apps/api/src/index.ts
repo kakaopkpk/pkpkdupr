@@ -72,6 +72,7 @@ import {
   findUnseenAchievements,
   sumEarnedAchievementPoints,
   type AchievementHoldersResponse,
+  type AchievementMatch,
   type EarnedAchievement,
   type SeenAchievementRef,
   type UnseenAchievementsResponse,
@@ -160,7 +161,7 @@ import {
   findSessionDominations,
   parseRecordsCursor,
   type RecordsPageEntry,
-  toAchievementMatches,
+  type SessionDominations,
   toContextAchievementMatches,
 } from "./services/RankingService";
 import {
@@ -968,37 +969,21 @@ const requireOpenSessionForParticipants = async (
 const getTeamPlayerIds = (teams: Team[]) =>
   teams.flatMap((team) => team.players.map((player) => player.id));
 
-/**
- * 경기 저장으로 참가자 전원이 새로 받은 업적. 저장 후 완료 경기 전체와, 그중 이 경기만
- * 저장 전 상태(previous, 완료 경기가 아니었으면 뺌)로 되돌린 목록의 계산 차이로 구한다.
- * 평점 업적 입력은 참가자들의 지금 평점 변경 로그로 붙인다.
- * 저장은 이미 끝났으므로 업적 계산이 실패하면 빈 배열로 응답한다.
- */
-/**
- * 새 업적을 받은 참가자별 지금 업적 점수 합. 세션 지배자 업적까지 세야 해서 랭킹 원천으로 다시 계산하고,
- * 새 업적이 없으면 읽지 않는다. 실패하면 빈 객체(축하 연출이 "+N점"만 보인다)
- */
-const findAchievementPointsForNewAchievements = async (
+/** 새 업적을 받은 참가자별 지금 업적 점수 합(세션 지배자 업적 포함) */
+const findAchievementPointsForNewAchievements = (
   newAchievements: readonly EarnedAchievement[],
-): Promise<Record<string, number>> => {
+  matches: readonly AchievementMatch[],
+  dominations: SessionDominations,
+): Record<string, number> => {
   const playerIds = [...new Set(newAchievements.map((item) => item.playerId))];
-  if (playerIds.length === 0) return {};
-  try {
-    const { context, sessions } = await loadRankingSource();
-    const matches = toContextAchievementMatches(context);
-    const dominations = findSessionDominations(context, sessions, new Date());
-    return Object.fromEntries(
-      playerIds.map((playerId) => [
-        playerId,
-        sumEarnedAchievementPoints(
-          findPlayerEarnedAchievements(matches, dominations, playerId),
-        ),
-      ]),
-    );
-  } catch (err) {
-    console.error("[MATCH] 업적 점수 계산 실패", err);
-    return {};
-  }
+  return Object.fromEntries(
+    playerIds.map((playerId) => [
+      playerId,
+      sumEarnedAchievementPoints(
+        findPlayerEarnedAchievements(matches, dominations, playerId),
+      ),
+    ]),
+  );
 };
 
 /**
@@ -1024,63 +1009,82 @@ const findAchievementsEarnedByMatch = async (
   }
 };
 
-/** 기록·수정 응답의 업적 부분: 새 업적과 그 회원들의 업적 점수 합 */
+/**
+ * 기록·수정 응답의 업적 부분: 새 업적과 그 회원들의 업적 점수 합.
+ * 랭킹 원천(전체 완료 경기·전원의 평점 로그·세션)을 한 번 읽어 둘 다 계산한다.
+ * 저장은 이미 끝났으므로 계산이 실패하면 빈 값으로 응답한다(축하 연출이 "+N점"만 보인다).
+ */
 const findAchievementsForSavedMatch = async (
   match: Match,
   previous: Match | null,
 ): Promise<
   Pick<RecordedMatchResponse, "newAchievements" | "achievementPoints">
 > => {
-  const newAchievements = await findNewAchievementsForSavedMatch(
-    match,
-    previous,
-  );
-  return {
-    newAchievements,
-    achievementPoints:
-      await findAchievementPointsForNewAchievements(newAchievements),
-  };
-};
-
-const findNewAchievementsForSavedMatch = async (
-  match: Match,
-  previous: Match | null,
-): Promise<EarnedAchievement[]> => {
   try {
-    const playerIds = getTeamPlayerIds(match.teams);
-    const [outcomes, logsByPlayer] = await Promise.all([
-      matchRepository.findCompletedMatchOutcomes(),
-      Promise.all(
-        playerIds.map((playerId) =>
-          matchRepository.getPlayerRatingChangeLogs(playerId),
-        ),
-      ),
-    ]);
-    const after = toAchievementMatches(outcomes, logsByPlayer.flat());
-    // 수정 전 평점 로그는 재계산으로 덮어써져 없으므로, 이미 완료였던 경기는 지금 평점을 그대로 붙인다.
-    // 그래서 완료 경기 수정으로는 평점 업적이 새 업적으로 나오지 않는다(미확인 업적 조회로 축하한다).
-    const before = [
-      ...after.filter((candidate) => candidate.id !== match.id),
-      ...(previous?.status === "completed"
-        ? [
-            {
-              ...previous,
-              doublesRatingAfter: after.find(
-                (candidate) => candidate.id === match.id,
-              )?.doublesRatingAfter,
-            },
-          ]
-        : []),
-    ];
-    return findNewAchievements({
-      playerIds,
-      before,
+    const { context, sessions } = await loadRankingSource();
+    const after = toContextAchievementMatches(context);
+    const newAchievements = findNewAchievementsForSavedMatch(
+      match,
+      previous,
       after,
-    });
+    );
+    return {
+      newAchievements,
+      achievementPoints:
+        newAchievements.length > 0
+          ? findAchievementPointsForNewAchievements(
+              newAchievements,
+              after,
+              findSessionDominations(context, sessions, new Date()),
+            )
+          : {},
+    };
   } catch (err) {
     console.error("[MATCH] 새 업적 계산 실패", match.id, err);
-    return [];
+    return { newAchievements: [], achievementPoints: {} };
   }
+};
+
+/**
+ * 경기 저장으로 참가자 전원이 새로 받은 업적. 저장 후 완료 경기 전체(after)와, 그중 이 경기만
+ * 저장 전 상태(previous, 완료 경기가 아니었으면 뺌)로 되돌린 목록의 계산 차이로 구한다.
+ */
+const findNewAchievementsForSavedMatch = (
+  match: Match,
+  previous: Match | null,
+  after: readonly AchievementMatch[],
+): EarnedAchievement[] => {
+  // 수정 전 평점 로그는 재계산으로 덮어써져 없으므로, 이미 완료였던 경기는 지금 평점을 그대로 붙인다.
+  // 그래서 완료 경기 수정으로는 평점 업적·언더독이 새 업적으로 나오지 않는다(미확인 업적 조회로 축하한다).
+  const saved = after.find((candidate) => candidate.id === match.id);
+  const regularSessionIds = new Set(
+    after.flatMap((candidate) =>
+      candidate.session?.regular ? [candidate.session.id] : [],
+    ),
+  );
+  const before = [
+    ...after.filter((candidate) => candidate.id !== match.id),
+    ...(previous?.status === "completed"
+      ? [
+          {
+            ...previous,
+            session: previous.session
+              ? {
+                  id: previous.session.id,
+                  regular: regularSessionIds.has(previous.session.id),
+                }
+              : null,
+            doublesRatingAfter: saved?.doublesRatingAfter,
+            ratingBefore: saved?.ratingBefore,
+          },
+        ]
+      : []),
+  ];
+  return findNewAchievements({
+    playerIds: getTeamPlayerIds(match.teams),
+    before,
+    after,
+  });
 };
 
 /** 검증·저장소 오류는 지정된 상태로, 그 밖의 검증 예외는 400으로 응답한다. */
@@ -1263,8 +1267,8 @@ app.get("/api/players/:playerId/profile-summary", async (req, res) => {
           ? Promise.resolve([])
           : matchRepository.getPlayerRatingChangeLogs(viewerPlayerId),
         playerRatingChartProjectionService.getOrRebuild(playerId),
-        // 세션 지배자 업적은 세션마다 전원의 평점 변화를 비교해야 해서 전체 원천을 읽는다.
-        // 실패해도 요약은 돌려주고 세션 지배자만 빠진다.
+        // 세션 지배자·연승 저지·환영 인사·개근상 업적은 다른 회원 기록이 필요해 전체 원천을 읽는다.
+        // 실패해도 요약은 돌려주고 업적은 이 회원 경기로만 계산한다.
         loadRankingSource().catch((err) => {
           console.error("[PROFILE] 세션 지배자 원천 조회 실패", playerId, err);
           return null;
@@ -1291,6 +1295,9 @@ app.get("/api/players/:playerId/profile-summary", async (req, res) => {
         now,
         dominations?.get(playerId),
         groupRatingChangeLogsByMatchId(viewerRatingChangeLogs),
+        rankingSource
+          ? toContextAchievementMatches(rankingSource.context)
+          : undefined,
       ),
     });
   } catch (err) {

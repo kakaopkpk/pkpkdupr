@@ -59,7 +59,7 @@ export interface PlayerProfileSummary {
   rivals: OpponentStat[];
   /** 요청자 기준 분류별 맞대결. 본인 프로필이면 null */
   headToHead: Record<MatchTopLevelType, HeadToHeadStat> | null;
-  /** 업적 18개 전부의 진행 상태(정의 순서) */
+  /** 업적 전부의 진행 상태(정의 순서) */
   achievements: AchievementProgress[];
   /** 지금 이어지는 연승 수(단식·복식 합, `computeCurrentWinStreak`) */
   winStreak: number;
@@ -143,6 +143,11 @@ export const buildPlayerProfileSummary = (
   dominatedSessionIds?: ReadonlySet<string>,
   /** 요청자 평점 변경 로그(경기 id별). 상대 전적의 요청자 평점 변화 합에 쓴다 */
   viewerRatingChangesByMatchId?: ReadonlyMap<string, PlayerRatingChangeLog[]>,
+  /**
+   * 업적 계산 입력(동호회 전체 완료 경기). 연승 저지·환영 인사·개근상은 다른 회원 기록이 필요하다.
+   * 없으면 이 회원의 경기로만 계산하고, 그 업적들은 잘못 받은 것으로 보이지 않게 받지 않은 상태로 둔다
+   */
+  achievementMatches?: readonly AchievementMatch[],
 ): PlayerProfileSummary => {
   const matchStats = createEmptyMatchStats();
   const ratingDelta = createEmptyRatingDelta();
@@ -291,11 +296,14 @@ export const buildPlayerProfileSummary = (
     partners,
     rivals,
     headToHead,
-    achievements: computeAchievements(
-      playerId,
-      withDoublesRatingAfter(matches),
-      dominatedSessionIds,
-    ),
+    achievements: achievementMatches
+      ? computeAchievements(playerId, achievementMatches, dominatedSessionIds)
+      : computeAchievements(
+          playerId,
+          withDoublesRatingAfter(matches),
+          dominatedSessionIds,
+          { clubMatches: false },
+        ),
     winStreak: computeCurrentWinStreak(
       completedMatches.map((match) => ({
           id: match.id,

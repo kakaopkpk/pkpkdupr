@@ -25,6 +25,8 @@ import {
 // 이 파일의 고정 데이터는 업적 기준 시각(2026-11-17 KST) 전 경기라, 업적은 기준 시각 없이 센다.
 vi.mock("@pkpkdupr/shared/achievementCountStart", () => ({
   ACHIEVEMENT_COUNT_START: new Date(0),
+  // 언더독·연승 저지 등 새 업적 지표는 이 파일에서 검증하지 않으므로 세지 않는다.
+  SECOND_ACHIEVEMENT_SET_COUNT_START: new Date("2100-01-01T00:00:00.000Z"),
 }));
 
 const now = new Date("2026-11-12T12:00:00.000Z");
@@ -307,7 +309,7 @@ describe("랭킹·세션 리포트 API", () => {
     const response = await authorized("/api/achievements/holders");
 
     expect(response.status).toBe(200);
-    expect(Object.keys(response.body.counts)).toHaveLength(42);
+    expect(Object.keys(response.body.counts)).toHaveLength(47);
     expect(response.body.counts).toMatchObject({
       "matches-1": 2,
       "wins-1": 1,

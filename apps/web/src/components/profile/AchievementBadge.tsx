@@ -39,7 +39,12 @@ type BadgeIconKind =
   | "balloon"
   | "rocket"
   | "submarine"
-  | "trench";
+  | "trench"
+  | "dog"
+  | "stopHand"
+  | "handshake"
+  | "rosette"
+  | "shark";
 
 /** 24 viewBox 선 아이콘. 글자는 아이콘 색(currentColor)으로 채운다 */
 const BADGE_ICON_PATHS: Record<BadgeIconKind, React.ReactNode> = {
@@ -184,9 +189,52 @@ const BADGE_ICON_PATHS: Record<BadgeIconKind, React.ReactNode> = {
   ),
   // 해구 단면: 평평한 해저 가운데가 좁고 깊게 꺼진 선
   trench: <path d="M2.5 6.5h3.5l1.5 2.5 3 11.5h3l3-11.5 1.5-2.5h3.5" />,
+  // 오른쪽을 보는 처진 귀 개 얼굴 옆모습
+  dog: (
+    <>
+      <path d="M7 20c-1.8-3.3-2.7-7.6-1.5-11.5C6.5 5 9 3.5 12 3.5c2 0 3.5 1 4 3l3.5 1.5c1 .4 1.4 1.4 1.2 2.4l-.2 1.1c-.2.9-1 1.3-2 1.3H16c-.8 1.7-2 2.7-3.5 3.2L13 20" />
+      <path d="M10 4.5c-1.8 1.5-2.5 4.5-1.8 8.5.8-.2 1.7-.8 2.3-1.8" />
+      <path d="M16 12.8c.8-.2 1.6-.6 2-1.2" />
+      <circle cx="13.5" cy="7.5" r=".7" />
+      <circle cx="20.1" cy="9.3" r=".8" />
+    </>
+  ),
+  // 멈춤 손바닥
+  stopHand: (
+    <>
+      <path d="M18 11V6a2 2 0 0 0-4 0" />
+      <path d="M14 10V4a2 2 0 0 0-4 0v2" />
+      <path d="M10 10.5V6a2 2 0 0 0-4 0v8" />
+      <path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15" />
+    </>
+  ),
+  handshake: (
+    <>
+      <path d="M11 17l2 2a1 1 0 1 0 3-3" />
+      <path d="M14 14l2.5 2.5a1 1 0 1 0 3-3l-3.88-3.88a3 3 0 0 0-4.24 0l-.88.88a1 1 0 1 1-3-3l2.81-2.81a5.79 5.79 0 0 1 7.06-.87l.47.28a2 2 0 0 0 1.42.25L21 4" />
+      <path d="M21 3l1 11h-2" />
+      <path d="M3 3L2 14l6.5 6.5a1 1 0 1 0 3-3" />
+      <path d="M3 4h8" />
+    </>
+  ),
+  // 리본 꼬리가 달린 상장 로제트
+  rosette: (
+    <>
+      <path d="M9 13.5L7.5 21l4.5-2.5 4.5 2.5-1.5-7.5" />
+      <circle cx="12" cy="9" r="5.5" />
+      <circle cx="12" cy="9" r="2" />
+    </>
+  ),
+  // 물결 위 상어 지느러미
+  shark: (
+    <>
+      <path d="M2.5 18c2 0 2-1.5 4-1.5s2 1.5 4 1.5 2-1.5 4-1.5 2 1.5 4 1.5 2-1.5 3-1.5" />
+      <path d="M7 15.5C9 10 12 6 17 4.5c-1 4-1 8 .5 11" />
+    </>
+  ),
 };
 
-/** 특별·세션·평점 분류는 업적마다 아이콘이 다르다 */
+/** 특별·세션·평점 분류와 연승 저지는 업적마다 아이콘이 다르다 */
 const BADGE_ICON_BY_ID: Partial<Record<string, BadgeIconKind>> = {
   "perfect-win": "shield",
   "hard-won": "bandage",
@@ -196,7 +244,12 @@ const BADGE_ICON_BY_ID: Partial<Record<string, BadgeIconKind>> = {
   "combo-5": "heart",
   "social-10": "group",
   "rival-20": "versus",
+  "nemesis-10": "shark",
   "dojo-15": "target",
+  underdog: "dog",
+  welcome: "handshake",
+  "streak-breaker": "stopHand",
+  "regular-streak-8": "rosette",
   revenge: "fist",
   "revenge-5": "fist",
   "iron-8": "dumbbell",

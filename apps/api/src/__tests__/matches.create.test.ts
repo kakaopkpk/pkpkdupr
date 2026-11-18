@@ -21,6 +21,8 @@ import {
 // 이 파일의 고정 데이터는 업적 기준 시각(2026-11-17 KST) 전 경기라, 업적은 기준 시각 없이 센다.
 vi.mock("@pkpkdupr/shared/achievementCountStart", () => ({
   ACHIEVEMENT_COUNT_START: new Date(0),
+  // 언더독·연승 저지 등 새 업적 지표는 이 파일에서 검증하지 않으므로 세지 않는다.
+  SECOND_ACHIEVEMENT_SET_COUNT_START: new Date("2100-01-01T00:00:00.000Z"),
 }));
 
 const now = new Date("2026-07-08T10:00:00.000Z");
@@ -542,8 +544,8 @@ describe("POST /api/matches", () => {
           doublesLog("player-f-1", "match-test-001", 3.55, savedAt),
         ],
       };
-      vi.mocked(MatchRepository.prototype.getPlayerRatingChangeLogs).mockImplementation(
-        async (playerId) => logsByPlayerId[playerId] ?? [],
+      vi.mocked(MatchRepository.prototype.getAllRatingChangeLogs).mockResolvedValue(
+        Object.values(logsByPlayerId).flat(),
       );
 
       const response = await request(app)
