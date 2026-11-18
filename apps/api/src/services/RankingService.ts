@@ -315,10 +315,6 @@ export const rankPlayersAt = (
     .map((entry, index) => ({ ...entry, rank: index + 1 }));
 };
 
-/** 회원별 지금 연승 수. context.matches는 완료 경기라 그대로 넘긴다 */
-const computeContextWinStreaks = (context: RankingContext) =>
-  computeCurrentWinStreaks(context.matches);
-
 const toRankMap = (ranked: RankedPlayer[]) =>
   new Map(ranked.map((entry) => [entry.player.id, entry.rank]));
 
@@ -424,7 +420,7 @@ export const buildRankingResponse = ({
       )
     : null;
 
-  const winStreaks = computeContextWinStreaks(context);
+  const winStreaks = computeCurrentWinStreaks(context.matches);
   const entries: RankingEntry[] = current.map((entry) => {
     const baselineRank = baselineRanks?.get(entry.player.id);
     return {
@@ -863,7 +859,7 @@ export const buildAchievementRankingResponse = (
         compareText(left.player.username, right.player.username) ||
         compareText(left.player.id, right.player.id),
     );
-  const winStreaks = computeContextWinStreaks(context);
+  const winStreaks = computeCurrentWinStreaks(context.matches);
   const entries: AchievementRankingEntry[] = scored.map(
     ({ player, points }, index) => ({
       rank: index + 1,

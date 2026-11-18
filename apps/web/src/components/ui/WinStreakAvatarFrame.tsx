@@ -1,20 +1,7 @@
 import React from "react";
 import { WIN_STREAK_DISPLAY_MIN } from "@pkpkdupr/shared/streak";
+import { FlameIcon } from "./Icons";
 import { cx } from "./cx";
-
-/** 업적 배지 연승 아이콘과 같은 불꽃 모양 */
-const FlameIcon: React.FC<{ size: number }> = ({ size }) => (
-  <svg
-    width={size}
-    height={size}
-    viewBox="0 0 24 24"
-    aria-hidden="true"
-    fill="currentColor"
-    className="shrink-0"
-  >
-    <path d="M12 3c1 3 4.5 4.5 4.5 9.5a4.5 4.5 0 0 1-9 0c0-2.2 1-3.5 2.2-4.5 0 2 .8 3 1.8 3 0-3-1-5.2.5-8z" />
-  </svg>
-);
 
 const TAG_CLASS_NAME = {
   // 랭킹 줄 아바타 32: 숫자만
@@ -23,8 +10,9 @@ const TAG_CLASS_NAME = {
   lg: "-bottom-[9px] h-5 pr-[7px] pl-[5px]",
 } as const;
 
-export const isWinStreakShown = (winStreak: number | null | undefined) =>
-  !!winStreak && winStreak >= WIN_STREAK_DISPLAY_MIN;
+const isWinStreakShown = (
+  winStreak: number | null | undefined,
+): winStreak is number => !!winStreak && winStreak >= WIN_STREAK_DISPLAY_MIN;
 
 /** 연승 단계: 5~9 → 1, 10~19 → 2, 20 이상 → 3. 단계가 오를수록 링이 굵어지고 3단계는 앰버 빛이 붙는다 */
 const getStreakTier = (winStreak: number): 1 | 2 | 3 =>
@@ -45,12 +33,16 @@ export const WinStreakAvatarFrame: React.FC<{
   size: "sm" | "lg";
   children: React.ReactNode;
 }> = ({ winStreak, size, children }) => {
-  if (!winStreak || !isWinStreakShown(winStreak)) return <>{children}</>;
+  if (!isWinStreakShown(winStreak)) return <>{children}</>;
   const tier = getStreakTier(winStreak);
   const { gap, ring } = RING_SIZE[size];
   return (
     <span
-      className="pk-streak-ring shrink-0"
+      className={cx(
+        "pk-streak-ring shrink-0",
+        // 프로필 머리: 링·앰버 빛이 위 스크롤 영역에 잘리지 않고 아래 태그가 상태메시지 칩에 닿지 않게 위아래를 띄운다
+        size === "lg" && "mt-3 mb-2",
+      )}
       data-glow={tier === 3 ? "" : undefined}
       style={
         {

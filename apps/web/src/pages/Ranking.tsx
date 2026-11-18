@@ -78,7 +78,7 @@ const PlayerNameCell: React.FC<{ player: RankingEntryPlayer }> = ({
 
 /** 줄 아바타 32. 연승 중이면 앰버 링과 연승 수 태그를 붙인다 */
 const RankingAvatar: React.FC<{
-  entry: { player: RankingEntryPlayer; winStreak?: number };
+  entry: { player: RankingEntryPlayer; winStreak: number };
 }> = ({ entry }) => (
   <WinStreakAvatarFrame winStreak={entry.winStreak} size="sm">
     <PlayerAvatar player={entry.player} size={32} />

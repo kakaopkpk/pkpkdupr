@@ -743,8 +743,11 @@ export interface AchievementTeam {
 
 type CountedMatch = AchievementMatch & { completedAt: Date };
 
-/** 완료 시각 오름차순(같으면 id 순) */
-const compareCountedMatches = (left: CountedMatch, right: CountedMatch) =>
+/** 완료 시각 오름차순(같으면 id 순). 지금 연승 계산(streak.ts)도 이 순서를 거꾸로 쓴다 */
+export const compareCountedMatches = (
+  left: { id: string; completedAt: Date },
+  right: { id: string; completedAt: Date },
+) =>
   left.completedAt.getTime() - right.completedAt.getTime() ||
   (left.id < right.id ? -1 : left.id > right.id ? 1 : 0);
 

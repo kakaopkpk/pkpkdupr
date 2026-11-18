@@ -5,10 +5,7 @@ import { WinLossCount } from "@/components/profile/ProfileStatTile";
 import { COUNT_UP, CountUpNumber } from "@/components/ui/CountUpNumber";
 import { PlayerAvatar } from "@/components/ui/PlayerAvatar";
 import { StatusMessageChip } from "@/components/ui/StatusMessageChip";
-import {
-  isWinStreakShown,
-  WinStreakAvatarFrame,
-} from "@/components/ui/WinStreakAvatarFrame";
+import { WinStreakAvatarFrame } from "@/components/ui/WinStreakAvatarFrame";
 import { cx } from "@/components/ui/cx";
 import {
   type TabKey,
@@ -127,8 +124,6 @@ const ProfileHeader: React.FC<ProfileHeaderProps> = ({
             onClick={openZoom}
             className={cx(
               "shrink-0 rounded-full transition-transform duration-150 ease-pk-move enabled:active:scale-[0.92] motion-reduce:transition-none",
-              // 연승 링·앰버 빛이 위 스크롤 영역에 잘리지 않고 아래 연승 태그가 상태메시지 칩에 닿지 않게 위아래로 띄운다
-              isWinStreakShown(winStreak) && "mt-3 mb-2",
               isZoomVisible && "invisible",
             )}
           >

@@ -106,8 +106,10 @@ const toStatPlayer = (player: Player): StatPlayer => ({
   avatarUrl: player.avatarUrl,
 });
 
-const getMatchEndedAtMs = (match: Match) =>
-  toTimeMs(match.completedAt ?? match.matchStartsAt);
+/** 경기 끝난 시각. 완료 시각이 없으면 시작 시각으로 본다 */
+const getMatchEndedAt = (match: Match) => match.completedAt ?? match.matchStartsAt;
+
+const getMatchEndedAtMs = (match: Match) => toTimeMs(getMatchEndedAt(match));
 
 /** 승률 내림차순 → 경기 수 내림차순 → 아이디(username) 오름차순 */
 const sortPartnerStats = (left: PartnerStat, right: PartnerStat) => {
@@ -274,8 +276,10 @@ export const buildPlayerProfileSummary = (
     )
     .sort(sortRivalStats);
 
-  const recentMatches = matches
-    .filter((match) => match.status === "completed")
+  const completedMatches = matches.filter(
+    (match) => match.status === "completed",
+  );
+  const recentMatches = [...completedMatches]
     .sort((left, right) => getMatchStartsAtMs(right) - getMatchStartsAtMs(left))
     .slice(0, 5);
 
@@ -293,11 +297,9 @@ export const buildPlayerProfileSummary = (
       dominatedSessionIds,
     ),
     winStreak: computeCurrentWinStreak(
-      matches
-        .filter((match) => match.status === "completed")
-        .map((match) => ({
+      completedMatches.map((match) => ({
           id: match.id,
-          completedAt: match.completedAt ?? match.matchStartsAt,
+          completedAt: getMatchEndedAt(match),
           teamPlayerIds: [
             match.teams[0].players.map((player) => player.id),
             match.teams[1].players.map((player) => player.id),
