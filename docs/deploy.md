@@ -1,6 +1,6 @@
 # pkpkdupr 배포 (Supabase)
 
-api는 Supabase Edge Function `api`로, DB 스키마는 `supabase/migrations/`로 배포합니다. main에 push되면 `.github/workflows/supabase-deploy.yml`이 자동으로 배포합니다.
+api는 Supabase Edge Function `api`로, DB 스키마는 `supabase/migrations/`로 배포합니다. 운영 배포는 GitHub Release를 발행할 때만 합니다. 발행하면 `.github/workflows/supabase-deploy.yml`(api·DB)과 `.github/workflows/pages.yml`(web·admin)이 함께 실행됩니다. main 머지만으로는 배포되지 않습니다(아래 "릴리즈로 배포").
 
 ```text
 브라우저 ── https://<project-ref>.supabase.co/functions/v1/api/... ──> Edge Function `api`
@@ -253,8 +253,22 @@ Google 로그인으로 운영 중인 프로젝트를 아이디·비밀번호 로
 
 ## 6. 배포
 
-- 자동: main push에서 `supabase/**`, `apps/api/**`, `packages/**`가 바뀌면 `supabase-deploy` workflow가 실행됩니다.
-- 수동: Actions → `supabase-deploy` → Run workflow (`gh workflow run supabase-deploy.yml`).
+- 자동: GitHub Release를 발행하면 `supabase-deploy` workflow가 릴리즈 태그 커밋으로 실행됩니다(아래 "릴리즈로 배포").
+- 수동: Actions → `supabase-deploy` → Run workflow (`gh workflow run supabase-deploy.yml`). 고른 브랜치·태그를 배포하므로 릴리즈 없이 급히 고칠 때만 씁니다.
+
+### 릴리즈로 배포
+
+1. 배포할 변경을 main에 머지합니다.
+2. GitHub → Releases → **Draft a new release**에서 새 태그(`v<major>.<minor>.<patch>`, 예: `v1.0.0`)를 만들고 target을 `main`으로 둔 뒤 **Publish release**를 누릅니다. **Generate release notes**로 머지된 PR 목록을 릴리즈 노트로 채울 수 있습니다.
+
+   ```bash
+   gh release create v1.0.0 --target main --generate-notes
+   ```
+
+3. `supabase-deploy`(마이그레이션·api)와 `pages`(web·admin)가 함께 실행됩니다. 두 workflow는 서로 기다리지 않으므로, 옛 web이 새 api·스키마와 잠시 함께 돌아도 깨지지 않게 변경합니다.
+
+- web·admin 설정 화면의 앱 버전은 릴리즈 태그 이름 그대로입니다(`pages` workflow가 `VITE_APP_VERSION`에 넣습니다). 수동 실행이면 그 커밋의 가장 가까운 조상 태그를 씁니다.
+- Draft 릴리즈 저장만으로는 실행되지 않고, Publish(pre-release 포함)할 때 실행됩니다.
 
 workflow는 다음을 순서대로 실행합니다. 로컬에서 직접 배포할 때도 같습니다(`pnpm exec supabase login` 필요).
 
@@ -324,6 +338,12 @@ web과 admin-web은 한 GitHub Pages 사이트에 같이 배포합니다. Pages�
 ### Pages 설정 (최초 1회)
 
 1. 저장소 Settings → Pages → Build and deployment → **Source: GitHub Actions**
+   - Settings → Environments → `github-pages` → Deployment branches and tags에 브랜치 `main`과 태그 `v*`를 둡니다. 태그 규칙이 없으면 릴리즈로 실행한 배포가 거부됩니다.
+
+   ```bash
+   gh api -X POST repos/<owner>/<repo>/environments/github-pages/deployment-branch-policies -f name='v*' -f type=tag
+   ```
+
 2. Settings → Secrets and variables → Actions → **Variables**에 빌드 env를 넣습니다. 모두 브라우저 번들에 들어가는 공개 값입니다(service role key 금지).
 
 | variable | 필수 | 값 |
@@ -356,8 +376,8 @@ api 함수 secret `CORS_ALLOWED_ORIGINS=https://kakaopkpk.github.io`(위 3). ori
 
 ### 배포
 
-- 자동: main push에서 `apps/web/**`, `apps/admin-web/**`, `packages/shared/**`, `scripts/pages/**`, 의존성 파일, workflow가 바뀌면 `pages` workflow가 실행됩니다.
-- 수동: Actions → `pages` → Run workflow (`gh workflow run pages.yml`).
+- 자동: GitHub Release를 발행하면 `pages` workflow가 릴리즈 태그 커밋으로 실행됩니다(위 6의 "릴리즈로 배포").
+- 수동: Actions → `pages` → Run workflow (`gh workflow run pages.yml`). 고른 브랜치·태그를 배포합니다.
 
 workflow는 `scripts/pages/assemble.sh`로 두 앱을 빌드해 산출물 하나로 합친 뒤 `actions/deploy-pages`로 배포합니다.
 

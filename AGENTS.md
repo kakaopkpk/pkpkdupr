@@ -106,7 +106,7 @@ pnpm lint
 - 운영·배포는 Supabase(DB·Auth·Storage·Edge Functions) + GitHub Pages로 이전 중입니다. 범위와 순서는 이슈 #1~#10을 따릅니다.
 - DB는 Supabase Postgres입니다. 모든 테이블은 RLS on·정책 없음(기본 거부)이며, DB 접근은 서버만 합니다. Docker는 로컬 Supabase 스택에만 씁니다.
 - GitHub Actions `ci.yml`은 PR과 main push에서 설치·빌드·api/shared/web 테스트를 실행합니다.
-- api는 Supabase Edge Function `api`로 배포합니다(base URL `https://<project-ref>.supabase.co/functions/v1`, 경로 `/api/...`). main push에서 `supabase-deploy.yml`이 `supabase db push`와 함수 배포를 실행합니다. Supabase 프로젝트 준비, GitHub secrets·variables, 함수 secrets는 `docs/deploy.md`가 기준이며, 새 함수 secret·설정이 생기면 이 문서에 추가합니다.
+- api는 Supabase Edge Function `api`로 배포합니다(base URL `https://<project-ref>.supabase.co/functions/v1`, 경로 `/api/...`). 운영 배포는 GitHub Release 발행 때만 하며, 발행하면 `supabase-deploy.yml`(`supabase db push`와 함수 배포)과 `pages.yml`(web·admin)이 릴리즈 태그 커밋으로 함께 실행됩니다. main 머지만으로는 배포되지 않습니다. web·admin 앱 버전은 릴리즈 태그 이름입니다. Supabase 프로젝트 준비, GitHub secrets·variables, 함수 secrets는 `docs/deploy.md`가 기준이며, 새 함수 secret·설정이 생기면 이 문서에 추가합니다.
 - api의 CORS 허용 origin은 env `CORS_ALLOWED_ORIGINS`(쉼표 구분)와 localhost 개발 origin(8080, 3100)입니다.
 - 세션 일정·참석 현황은 동호회 구글 캘린더에 서버가 단방향으로 씁니다(`apps/api/src/services/SessionCalendarSync.ts`). 세션 생성·참여자 변경·삭제를 api `MatchRepository`의 `onSessionsChanged`로 받아 응답과 분리해 반영하고(Edge는 `EdgeRuntime.waitUntil`), 일정 id는 세션 id에서 만들어 DB 매핑이 없습니다. env `GOOGLE_CALENDAR_SERVICE_ACCOUNT_JSON`·`GOOGLE_CALENDAR_ID`가 없으면 꺼지며 준비 절차는 `docs/deploy.md`를 따릅니다.
 

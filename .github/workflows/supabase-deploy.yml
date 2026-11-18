@@ -2,18 +2,12 @@ name: supabase-deploy
 
 # 원격 Supabase 프로젝트에 마이그레이션을 적용하고 Edge Function `api`를 배포한다.
 # 필요한 GitHub secrets·variables와 함수 secrets는 docs/deploy.md를 따른다.
+# 운영 배포는 GitHub Release를 발행할 때만 한다(pages.yml과 같은 릴리즈에서 함께 돈다).
+# 수동 실행은 고르는 브랜치·태그로 배포한다.
 on:
-  push:
-    branches:
-      - main
-    paths:
-      - "supabase/**"
-      - "apps/api/**"
-      - "packages/**"
-      # 번들이 npm 패키지를 설치 버전으로 고정하므로 의존성 변경도 배포한다.
-      - "package.json"
-      - "pnpm-lock.yaml"
-      - ".github/workflows/supabase-deploy.yml"
+  release:
+    types:
+      - published
   workflow_dispatch:
 
 # 배포가 겹쳐 마이그레이션이 동시에 적용되지 않도록 한 번에 하나만 실행한다.
@@ -31,6 +25,7 @@ jobs:
       SUPABASE_PROJECT_REF: ${{ vars.SUPABASE_PROJECT_REF }}
 
     steps:
+      # release 이벤트면 릴리즈 태그 커밋을 체크아웃한다.
       - name: Checkout
         uses: actions/checkout@v4
 
