@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useRef } from "react";
 import {
   ParticipationError,
   type ParticipationAction,
@@ -9,57 +9,10 @@ import {
   type MatchSessionDetailInfo,
 } from "@/lib/matchSessions";
 import NextSessionCard from "./NextSessionCard";
-import { prefersReducedMotion } from "@/hooks/useSheetDrag";
-import { getActiveSlideIndex, getSwipeTargetIndex } from "./carouselPosition";
+import { useCarouselSwipe } from "./useCarouselSwipe";
 
 /** 이 개수까지는 위치를 점으로, 넘으면 "n / N" 글자로 보인다 */
 const MAX_POSITION_DOTS = 10;
-/** 이만큼 움직인 뒤에 가로/세로 방향을 정한다 */
-const AXIS_LOCK_PX = 8;
-/** 속도는 최근 이 시간 안의 이동으로 잰다 */
-const VELOCITY_WINDOW_MS = 100;
-/** 손가락 밖(트랙패드·키보드 포커스)으로 스크롤이 멈추고 이 시간이 지나면 가까운 카드에 맞춘다 */
-const SCROLL_SETTLE_DELAY_MS = 150;
-/** 첫·마지막 카드 바깥으로 끌면 손가락 이동의 이 비율만 따라온다 */
-const EDGE_RESISTANCE = 0.3;
-const EDGE_SETTLE_DURATION_MS = 180;
-/** 끌어서 넘긴 손가락을 뗀 뒤 이 시간 안의 클릭은 카드 안 버튼에 닿지 않게 막는다 */
-const CLICK_SUPPRESS_MS = 400;
-
-interface SwipeState {
-  mode: "pending" | "drag" | "ignore";
-  startX: number;
-  startY: number;
-  startScrollLeft: number;
-  startIndex: number;
-  samples: { x: number; time: number }[];
-}
-
-/** 각 카드의 맞춤 위치(트랙 기준 왼쪽 끝 - 스크롤 여백) */
-const getSlideOffsets = (track: HTMLElement) => {
-  const scrollPadding = parseFloat(getComputedStyle(track).scrollPaddingLeft) || 0;
-  return Array.from(
-    track.children,
-    (slide) => (slide as HTMLElement).offsetLeft - scrollPadding,
-  );
-};
-
-const getNearestSlideIndex = (track: HTMLElement) =>
-  getActiveSlideIndex({
-    scrollLeft: track.scrollLeft,
-    maxScrollLeft: track.scrollWidth - track.clientWidth,
-    slideOffsets: getSlideOffsets(track),
-  });
-
-/** index번째 카드로 스크롤한다. 마지막 카드는 왼쪽 끝까지 오지 못하므로 끝까지만 간다 */
-const scrollToSlide = (track: HTMLElement, index: number, animate: boolean) => {
-  const offset = getSlideOffsets(track)[index] ?? 0;
-  const maxScrollLeft = Math.max(0, track.scrollWidth - track.clientWidth);
-  track.scrollTo({
-    left: Math.max(0, Math.min(offset, maxScrollLeft)),
-    behavior: animate && !prefersReducedMotion() ? "smooth" : "auto",
-  });
-};
 
 /** 카드 아래 위치 표시. 지금 카드는 블루로 길게, 나머지는 회색 작은 원 */
 const PositionIndicator: React.FC<{ count: number; activeIndex: number }> = ({
@@ -116,207 +69,8 @@ const NextSessionCarousel: React.FC<NextSessionCarouselProps> = ({
   onOpenParticipants,
 }) => {
   const trackRef = useRef<HTMLDivElement>(null);
-  const frameRef = useRef<number | null>(null);
-  const settleTimeoutRef = useRef<number | null>(null);
-  const isDraggingRef = useRef(false);
-  const [activeIndex, setActiveIndex] = useState(0);
   const count = sessions.length;
-
-  const updateActiveIndex = useCallback(() => {
-    frameRef.current = null;
-    const track = trackRef.current;
-    if (!track) return;
-    setActiveIndex(getNearestSlideIndex(track));
-  }, []);
-
-  const clearSettleTimeout = useCallback(() => {
-    if (settleTimeoutRef.current !== null) {
-      window.clearTimeout(settleTimeoutRef.current);
-      settleTimeoutRef.current = null;
-    }
-  }, []);
-
-  const handleScroll = () => {
-    if (frameRef.current === null) {
-      frameRef.current = requestAnimationFrame(updateActiveIndex);
-    }
-    if (isDraggingRef.current) return;
-    // 손가락으로 넘길 때는 놓는 순간 멈출 카드를 정하므로, 그 밖의 스크롤만 멈춘 뒤 가까운 카드에 맞춘다
-    clearSettleTimeout();
-    settleTimeoutRef.current = window.setTimeout(() => {
-      settleTimeoutRef.current = null;
-      const track = trackRef.current;
-      if (track && !isDraggingRef.current) {
-        scrollToSlide(track, getNearestSlideIndex(track), true);
-      }
-    }, SCROLL_SETTLE_DELAY_MS);
-  };
-
-  // 세션 수가 바뀌거나, 숨은 탭이 다시 보이거나 폭이 바뀌면 스크롤 이벤트 없이 위치가 달라질 수 있어
-  // 다시 고르고 그 카드에 맞춘다. observe 직후 콜백이 한 번 불려 세션 수 변경도 함께 처리된다
-  useEffect(() => {
-    const track = trackRef.current;
-    if (!track) return;
-    const observer = new ResizeObserver(() => {
-      // 숨은 탭(크기 0)에서는 위치를 건드리지 않아 다시 보일 때 보던 카드가 남는다
-      if (track.clientWidth > 0 && !isDraggingRef.current) {
-        scrollToSlide(track, getNearestSlideIndex(track), false);
-      }
-      updateActiveIndex();
-    });
-    observer.observe(track);
-    return () => observer.disconnect();
-  }, [count, updateActiveIndex]);
-
-  // 가로 넘기기는 브라우저 스크롤 대신 직접 처리한다(트랙은 touch-action: pan-y). 놓을 때 거리·속도로
-  // 멈출 카드를 하나만 골라, 살짝 튕기기로 넘어가거나 관성으로 여러 장 지나치지 않게 한다
-  useEffect(() => {
-    const track = trackRef.current;
-    if (!track) return;
-
-    let state: SwipeState | null = null;
-    let suppressClickUntil = -Infinity;
-    let edgeSettleTimeout: number | null = null;
-
-    // 가장자리 바깥으로 끈 만큼은 스크롤로 갈 수 없어 카드들을 직접 옮겨 보여 준다
-    const setEdgeOffset = (offset: number, animate: boolean) => {
-      if (edgeSettleTimeout !== null) {
-        window.clearTimeout(edgeSettleTimeout);
-        edgeSettleTimeout = null;
-      }
-      const transition =
-        animate && !prefersReducedMotion() ? `transform ${EDGE_SETTLE_DURATION_MS}ms ease-out` : "";
-      for (const slide of Array.from(track.children) as HTMLElement[]) {
-        slide.style.transition = transition;
-        slide.style.transform = offset === 0 ? "" : `translate3d(${offset}px, 0, 0)`;
-      }
-      if (transition) {
-        edgeSettleTimeout = window.setTimeout(() => {
-          edgeSettleTimeout = null;
-          for (const slide of Array.from(track.children) as HTMLElement[]) {
-            slide.style.transition = "";
-          }
-        }, EDGE_SETTLE_DURATION_MS);
-      }
-    };
-
-    const handleTouchStart = (event: TouchEvent) => {
-      if (event.touches.length !== 1) {
-        state = null;
-        return;
-      }
-      const touch = event.touches[0];
-      state = {
-        mode: "pending",
-        startX: touch.clientX,
-        startY: touch.clientY,
-        startScrollLeft: track.scrollLeft,
-        startIndex: getNearestSlideIndex(track),
-        samples: [{ x: touch.clientX, time: event.timeStamp }],
-      };
-    };
-
-    const handleTouchMove = (event: TouchEvent) => {
-      if (!state || state.mode === "ignore") return;
-      if (event.touches.length !== 1) {
-        // 두 번째 손가락이 닿으면 넘기기를 멈추고 시작 카드로 돌린다
-        handleTouchCancel();
-        return;
-      }
-      const touch = event.touches[0];
-      const deltaX = touch.clientX - state.startX;
-      const deltaY = touch.clientY - state.startY;
-
-      if (state.mode === "pending") {
-        if (Math.max(Math.abs(deltaX), Math.abs(deltaY)) < AXIS_LOCK_PX) return;
-        if (Math.abs(deltaY) >= Math.abs(deltaX)) {
-          state.mode = "ignore";
-          return;
-        }
-        state.mode = "drag";
-        isDraggingRef.current = true;
-        clearSettleTimeout();
-      }
-
-      if (event.cancelable) event.preventDefault();
-      const nextScrollLeft = state.startScrollLeft - deltaX;
-      const maxScrollLeft = Math.max(0, track.scrollWidth - track.clientWidth);
-      const overscroll =
-        nextScrollLeft < 0
-          ? nextScrollLeft
-          : nextScrollLeft > maxScrollLeft
-            ? nextScrollLeft - maxScrollLeft
-            : 0;
-      track.scrollLeft = nextScrollLeft;
-      setEdgeOffset(-overscroll * EDGE_RESISTANCE, false);
-      state.samples.push({ x: touch.clientX, time: event.timeStamp });
-      const cutoff = event.timeStamp - VELOCITY_WINDOW_MS;
-      while (state.samples.length > 2 && state.samples[0].time < cutoff) {
-        state.samples.shift();
-      }
-    };
-
-    const handleTouchEnd = (event: TouchEvent) => {
-      const current = state;
-      state = null;
-      if (!current || current.mode !== "drag") return;
-      isDraggingRef.current = false;
-      suppressClickUntil = event.timeStamp + CLICK_SUPPRESS_MS;
-      setEdgeOffset(0, true);
-
-      const first = current.samples[0];
-      const last = current.samples[current.samples.length - 1];
-      const elapsed = event.timeStamp - first.time;
-      const targetIndex = getSwipeTargetIndex({
-        startIndex: current.startIndex,
-        count: track.children.length,
-        deltaX: last.x - current.startX,
-        velocityX: elapsed > 0 ? (last.x - first.x) / elapsed : 0,
-        slideWidth: (track.children[0] as HTMLElement | undefined)?.offsetWidth ?? 0,
-      });
-      scrollToSlide(track, targetIndex, true);
-    };
-
-    const handleTouchCancel = () => {
-      const current = state;
-      state = null;
-      if (current?.mode !== "drag") return;
-      isDraggingRef.current = false;
-      setEdgeOffset(0, true);
-      scrollToSlide(track, current.startIndex, true);
-    };
-
-    // 끌어서 넘긴 손가락을 뗄 때 카드 안 버튼이 눌리지 않게 한다
-    const handleClickCapture = (event: MouseEvent) => {
-      if (event.timeStamp > suppressClickUntil) return;
-      suppressClickUntil = -Infinity;
-      event.preventDefault();
-      event.stopPropagation();
-    };
-
-    track.addEventListener("touchstart", handleTouchStart, { passive: true });
-    track.addEventListener("touchmove", handleTouchMove, { passive: false });
-    track.addEventListener("touchend", handleTouchEnd);
-    track.addEventListener("touchcancel", handleTouchCancel);
-    track.addEventListener("click", handleClickCapture, true);
-    return () => {
-      isDraggingRef.current = false;
-      setEdgeOffset(0, false);
-      track.removeEventListener("touchstart", handleTouchStart);
-      track.removeEventListener("touchmove", handleTouchMove);
-      track.removeEventListener("touchend", handleTouchEnd);
-      track.removeEventListener("touchcancel", handleTouchCancel);
-      track.removeEventListener("click", handleClickCapture, true);
-    };
-  }, [count, clearSettleTimeout]);
-
-  useEffect(
-    () => () => {
-      if (frameRef.current !== null) cancelAnimationFrame(frameRef.current);
-      clearSettleTimeout();
-    },
-    [clearSettleTimeout],
-  );
+  const activeIndex = useCarouselSwipe(trackRef, count);
 
   const renderCard = (session: MatchSessionDetailInfo, className?: string) => (
     <NextSessionCard
@@ -347,7 +101,6 @@ const NextSessionCarousel: React.FC<NextSessionCarouselProps> = ({
             role="region"
             aria-roledescription="carousel"
             aria-label="다가오는 세션"
-            onScroll={handleScroll}
             className="relative -mx-4 flex touch-pan-y scroll-px-4 gap-2 overflow-x-auto overscroll-x-contain px-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
           >
             {sessions.map((session, index) => (

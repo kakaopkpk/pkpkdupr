@@ -50,17 +50,14 @@ export const getSwipeTargetIndex = ({
   velocityX: number;
   slideWidth: number;
 }) => {
-  if (count <= 0 || deltaX === 0) return Math.max(0, Math.min(startIndex, count - 1));
-  const distance = Math.abs(deltaX);
-  const isFlickedBack =
-    Math.sign(velocityX) === -Math.sign(deltaX) &&
-    Math.abs(velocityX) >= FLICK_MIN_VELOCITY_PX_PER_MS;
-  if (isFlickedBack) return Math.max(0, Math.min(startIndex, count - 1));
-  const isDragged = slideWidth > 0 && distance >= slideWidth * SWIPE_DISTANCE_RATIO;
+  // 끈 방향 기준 속도. 음수면 끈 방향과 반대로 움직이며 놓은 것이다
+  const velocityAlongDrag = velocityX * Math.sign(deltaX);
+  const isFlickedBack = velocityAlongDrag <= -FLICK_MIN_VELOCITY_PX_PER_MS;
+  const isDragged = slideWidth > 0 && Math.abs(deltaX) >= slideWidth * SWIPE_DISTANCE_RATIO;
   const isFlicked =
-    distance >= FLICK_MIN_DISTANCE_PX &&
-    Math.sign(velocityX) === Math.sign(deltaX) &&
-    Math.abs(velocityX) >= FLICK_MIN_VELOCITY_PX_PER_MS;
-  const nextIndex = isDragged || isFlicked ? startIndex + (deltaX < 0 ? 1 : -1) : startIndex;
+    Math.abs(deltaX) >= FLICK_MIN_DISTANCE_PX &&
+    velocityAlongDrag >= FLICK_MIN_VELOCITY_PX_PER_MS;
+  const shouldMove = !isFlickedBack && (isDragged || isFlicked);
+  const nextIndex = shouldMove ? startIndex + (deltaX < 0 ? 1 : -1) : startIndex;
   return Math.max(0, Math.min(nextIndex, count - 1));
 };
