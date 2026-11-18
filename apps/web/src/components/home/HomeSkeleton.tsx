@@ -6,8 +6,8 @@ const HomeSkeleton: React.FC = () => (
   <div role="status" aria-busy="true" className="flex flex-col gap-2.5">
     <span className="sr-only">불러오는 중</span>
     <SkeletonBlock className="h-[230px] w-full rounded-pk-lg" />
-    <div className="h-1.5" />
-    <SkeletonBlock className="h-3.5 w-2/5 rounded-full" />
+    {/* 섹션 제목 자리. 위 여백은 Section과 같은 20px(gap 10 + mt-2.5)이다 */}
+    <SkeletonBlock className="mt-2.5 h-3.5 w-2/5 rounded-full" />
     <div className="flex flex-col gap-3 rounded-pk-lg bg-white p-4">
       <SkeletonBlock className="h-4 w-3/5 rounded-pk-sm" />
       <SkeletonBlock className="h-4 w-[90%] rounded-pk-sm" />

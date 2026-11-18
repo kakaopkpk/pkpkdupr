@@ -5,7 +5,7 @@ import { ChevronRightIcon } from "./Icons";
  * 섹션 제목 13/700 + 오른쪽 슬롯. 오른쪽에 44px 링크가 와도 머리 높이는 28px로 같다
  * (링크가 위아래로 8px씩 겹친다).
  */
-export const SectionLabel: React.FC<{
+const SectionLabel: React.FC<{
   children: React.ReactNode;
   right?: React.ReactNode;
 }> = ({ children, right }) => (
@@ -19,14 +19,23 @@ export const SectionLabel: React.FC<{
  * 섹션 하나(제목 + 내용). 부모는 세로 gap-2.5 목록이어야 한다.
  * 앞 요소 → 제목 줄 20px(부모 gap 10 + pt-2.5), 제목 줄 → 내용·내용 사이 10px이다.
  * 부모의 첫 요소(화면 머리·컨트롤 바로 아래)면 위 여백을 더하지 않는다.
+ * subtitle은 제목 줄 바로 아래 간격 없이 붙고, 그 아래 내용까지는 14px이다.
  */
 export const Section: React.FC<{
   title: React.ReactNode;
   right?: React.ReactNode;
-  children: React.ReactNode;
-}> = ({ title, right, children }) => (
+  subtitle?: React.ReactNode;
+  children?: React.ReactNode;
+}> = ({ title, right, subtitle, children }) => (
   <section className="flex flex-col gap-2.5 pt-2.5 first:pt-0">
-    <SectionLabel right={right}>{title}</SectionLabel>
+    {subtitle ? (
+      <div className="pb-1">
+        <SectionLabel right={right}>{title}</SectionLabel>
+        {subtitle}
+      </div>
+    ) : (
+      <SectionLabel right={right}>{title}</SectionLabel>
+    )}
     {children}
   </section>
 );

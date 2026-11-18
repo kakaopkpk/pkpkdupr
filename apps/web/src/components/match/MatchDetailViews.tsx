@@ -291,21 +291,19 @@ export const CompletedMatchDetail: React.FC<CompletedMatchDetailProps> = ({
   onOpenSession,
   onOpenPlayer,
 }) => (
+  // 제목 없는 요소 사이는 16px(gap 10 + 6)이고, 평점 변화 섹션은 Section 규칙(위 20px)을 따른다
   <div className="flex flex-col gap-2.5 px-4 pt-1">
-    {/* 섹션이 아닌 카드 사이는 16px이다. 평점 변화 섹션은 Section 규칙(위 20px)을 따른다 */}
-    <div className="flex flex-col gap-4">
-      <p className="text-center text-pk-13 text-pk-sub tabular-nums">
-        {formatKstShortDate(match.matchStartsAt)}{" "}
-        {formatKstTime(match.matchStartsAt)}
-        {match.session ? (
-          <>
-            {" · "}
-            <SessionLink session={match.session} onOpen={onOpenSession} />
-          </>
-        ) : null}
-      </p>
-      <ScoreBlock match={match} onOpenPlayer={onOpenPlayer} />
-    </div>
+    <p className="mb-1.5 text-center text-pk-13 text-pk-sub tabular-nums">
+      {formatKstShortDate(match.matchStartsAt)}{" "}
+      {formatKstTime(match.matchStartsAt)}
+      {match.session ? (
+        <>
+          {" · "}
+          <SessionLink session={match.session} onOpen={onOpenSession} />
+        </>
+      ) : null}
+    </p>
+    <ScoreBlock match={match} onOpenPlayer={onOpenPlayer} />
     <RatingChangeCard match={match} onOpenPlayer={onOpenPlayer} />
     <Card className="mt-1.5">
       <InfoRow label="장소">{match.location || "–"}</InfoRow>

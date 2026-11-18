@@ -5,7 +5,7 @@ import AchievementBadge from "@/components/profile/AchievementBadge";
 import { TopRiserCard } from "@/components/records/SessionReportParts";
 import { Card } from "@/components/ui/Card";
 import { ChevronRightIcon } from "@/components/ui/Icons";
-import { Section, SectionLabel, TextLink } from "@/components/ui/Section";
+import { Section, TextLink } from "@/components/ui/Section";
 import { useAppNavigation } from "@/context/AppNavigationContext";
 import { getAchievementDefinition } from "@/lib/achievements";
 import { formatKstShortDate } from "@/lib/format";
@@ -94,18 +94,14 @@ const LastSessionFeed: React.FC<{
   );
 
   return (
-    <>
-      {/* 제목 바로 아래 세션 이름을 붙이는 머리라 Section 대신 같은 위 여백(pt-2.5)을 직접 둔다 */}
-      <div className="flex flex-col pt-2.5 pb-1">
-        <SectionLabel
-          right={
-            <TextLink onPress={() => openSessionReport(session.id)} chevron>
-              리포트
-            </TextLink>
-          }
-        >
-          지난 세션
-        </SectionLabel>
+    <Section
+      title="지난 세션"
+      right={
+        <TextLink onPress={() => openSessionReport(session.id)} chevron>
+          리포트
+        </TextLink>
+      }
+      subtitle={
         <div className="flex flex-col gap-0.5 px-1">
           <h3 className="truncate text-pk-17 font-extrabold text-pk-ink">
             {session.name}
@@ -118,7 +114,8 @@ const LastSessionFeed: React.FC<{
             ].join(" · ")}
           </span>
         </div>
-      </div>
+      }
+    >
       {topRiser ? <TopRiserCard report={topRiser} /> : null}
       {myReport ? <LastSessionMeCard report={myReport} /> : null}
       {playerId && myAchievements.length > 0 ? (
@@ -128,7 +125,7 @@ const LastSessionFeed: React.FC<{
           titlePlacement="section"
         />
       ) : null}
-    </>
+    </Section>
   );
 };
 
