@@ -129,6 +129,14 @@ const AvatarZoomViewer: React.FC<AvatarZoomViewerProps> = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen]);
 
+  // 열려 있는 동안 창 크기·회전이 바뀌어도 원이 가운데에 있게 한다
+  useEffect(() => {
+    if (phase === "hidden") return;
+    const handleResize = () => setCenter(getCenter());
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, [phase]);
+
   useEffect(() => {
     if (phase !== "open") return;
     dialogRef.current?.focus({ preventScroll: true });
@@ -144,6 +152,8 @@ const AvatarZoomViewer: React.FC<AvatarZoomViewerProps> = ({
   const handlePointerDown = (event: React.PointerEvent) => {
     if (phase !== "open") return;
     suppressClickRef.current = false;
+    // 화면 밖에서 손을 떼도 pointerup을 받도록 포인터를 붙잡는다
+    event.currentTarget.setPointerCapture(event.pointerId);
     dragRef.current = { startY: event.clientY, offset: 0, isDragging: false };
   };
 
