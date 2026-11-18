@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useRef } from "react";
 import {
   addKstDays,
   getKstWeekday,
@@ -13,6 +13,7 @@ import { ChevronRightIcon } from "@/components/ui/Icons";
 import { cx } from "@/components/ui/cx";
 import { formatKstLongDate } from "@/lib/format";
 import type { ScheduleDayMark } from "@/lib/schedule";
+import { useMonthSwipe } from "./useMonthSwipe";
 
 const DAYS_PER_WEEK = 7;
 
@@ -100,7 +101,8 @@ const getDayLabel = (
 
 /**
  * 일정 탭 월 달력. 머리는 이전 달 · "2026년 11월"(누르면 이번 달·오늘) · 다음 달.
- * 오늘은 하이라이트 바탕, 고른 날은 블루 원(오늘을 고르면 고른 날 표시만), 지난 날은 muted, 이번 달 밖 날은 더 옅고 누를 수 없다
+ * 오늘은 하이라이트 바탕, 고른 날은 블루 원(오늘을 고르면 고른 날 표시만), 지난 날은 muted, 이번 달 밖 날은 더 옅고 누를 수 없다.
+ * 달력을 왼쪽으로 밀면 다음 달, 오른쪽으로 밀면 이전 달이다
  */
 const MonthCalendar: React.FC<{
   monthKey: string;
@@ -122,11 +124,17 @@ const MonthCalendar: React.FC<{
   onGoToday,
 }) => {
   const cellKeys = getMonthCellKeys(monthKey);
+  const areaRef = useRef<HTMLElement>(null);
+  const daysRef = useRef<HTMLDivElement>(null);
+  useMonthSwipe(areaRef, daysRef, (step) =>
+    step === 1 ? onNextMonth() : onPrevMonth(),
+  );
 
   return (
     <section
+      ref={areaRef}
       aria-label="달력"
-      className="rounded-pk-lg bg-white px-2 pt-1 pb-2"
+      className="touch-pan-y touch-pinch-zoom overflow-hidden rounded-pk-lg bg-white px-2 pt-1 pb-2"
     >
       <div className="flex items-center justify-between">
         <MonthNavButton label="이전 달" direction="prev" onPress={onPrevMonth} />
@@ -140,7 +148,7 @@ const MonthCalendar: React.FC<{
         </button>
         <MonthNavButton label="다음 달" direction="next" onPress={onNextMonth} />
       </div>
-      <div className="grid grid-cols-7">
+      <div ref={daysRef} className="grid grid-cols-7">
         {WEEKDAY_LABELS.map((label) => (
           <span
             key={label}

@@ -28,7 +28,7 @@
 - [docs/deploy.md](docs/deploy.md): Supabase·GitHub 설정값, 첫 관리자 등록, 배포 절차
 - [docs/backup-restore.md](docs/backup-restore.md): 일시정지 방지, 백업과 복구
 - [docs/dev-environment.md](docs/dev-environment.md): 로컬 개발 환경
-- [AGENTS.md](AGENTS.md): 코드 구조와 작업 규칙
+- [AGENTS.md](AGENTS.md): 코드 구조와 작업 규칙 (API 계약은 [apps/api/AGENTS.md](apps/api/AGENTS.md))
 
 ## 관리자 이관
 

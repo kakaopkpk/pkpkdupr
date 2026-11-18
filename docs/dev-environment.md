@@ -4,6 +4,12 @@
 
 > 로컬 스택 명령(`pnpm dev`, `pnpm db:start`, `pnpm db:reset`, `pnpm db:migrate` 등)은 **Docker가 필요**합니다. Docker Desktop(또는 호환 런타임)을 먼저 실행하세요.
 
+## 준비
+
+- Node는 `.nvmrc`(22), pnpm은 `package.json`의 `packageManager`(pnpm 12.4.2) 버전을 씁니다. CI도 같은 기준입니다.
+- `corepack enable`을 한 번 실행하면 이 저장소에서 `pnpm`이 `packageManager` 버전으로 실행됩니다. 다른 pnpm 버전으로 `pnpm install`하면 `pnpm-lock.yaml`이 바뀔 수 있습니다.
+- `pnpm dev`는 한 번에 한 워크트리에서만 띄웁니다. 포트(web 8080·api 4000·admin 3100·Supabase 543xx)와 Supabase `project_id`가 고정이라, 두 번째 워크트리의 web은 다른 포트로 떠도 api가 뜨지 못해 첫 워크트리의 api를 부르고, 마이그레이션은 같은 로컬 DB에 섞입니다. 워크트리를 바꾸면 앞의 `pnpm dev`를 끄고 띄우며, 스키마가 맞지 않으면 `pnpm db:reset`을 합니다.
+
 ## 실행
 
 ```bash

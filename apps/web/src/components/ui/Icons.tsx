@@ -207,3 +207,25 @@ export const PlusIcon: React.FC<{ size?: number; strokeWidth?: number }> = ({
     <path d="M12 5v14M5 12h14" />
   </svg>
 );
+
+/** 자물쇠. 못 받은 업적 배지에 겹쳐 쓴다 */
+export const LockIcon: React.FC<{ size?: number; className?: string }> = ({
+  size = 14,
+  className,
+}) => (
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 24 24"
+    aria-hidden="true"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2.4"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    className={cx("shrink-0", className)}
+  >
+    <rect x="5" y="11" width="14" height="10" rx="2" />
+    <path d="M8 11V8a4 4 0 0 1 8 0v3" />
+  </svg>
+);

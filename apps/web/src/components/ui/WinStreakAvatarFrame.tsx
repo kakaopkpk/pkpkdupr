@@ -6,8 +6,8 @@ import { cx } from "./cx";
 const TAG_CLASS_NAME = {
   // 랭킹 줄 아바타 32: 숫자만
   sm: "-bottom-[7px] h-[15px] pr-1 pl-[3px]",
-  // 프로필 머리 아바타 56: "N연승"
-  lg: "-bottom-[9px] h-5 pr-[7px] pl-[5px]",
+  // 프로필 머리 아바타 72: "N연승". 머리 높이가 아바타와 같아 아래 내용에 닿지 않게 덜 내려 붙인다
+  lg: "-bottom-1 h-5 pr-[7px] pl-[5px]",
 } as const;
 
 const isWinStreakShown = (
@@ -38,11 +38,7 @@ export const WinStreakAvatarFrame: React.FC<{
   const { gap, ring } = RING_SIZE[size];
   return (
     <span
-      className={cx(
-        "pk-streak-ring shrink-0",
-        // 프로필 머리: 링·앰버 빛이 위 스크롤 영역에 잘리지 않고 아래 태그가 상태메시지 칩에 닿지 않게 위아래를 띄운다
-        size === "lg" && "mt-3 mb-2",
-      )}
+      className="pk-streak-ring shrink-0"
       data-glow={tier === 3 ? "" : undefined}
       style={
         {

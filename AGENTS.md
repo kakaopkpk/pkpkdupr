@@ -37,7 +37,7 @@ pnpm db:start / db:stop          # 로컬 Supabase 스택 (Docker 필요, Studio
 pnpm db:migrate                  # 미적용 마이그레이션을 로컬 DB에 적용
 pnpm db:reset                    # 로컬 DB 초기화 후 마이그레이션 재적용
 pnpm db:migration:new <이름>     # 새 마이그레이션 파일 생성
-pnpm supabase:link / db:push     # 원격 프로젝트 연결 / 원격 DB에 마이그레이션 적용
+pnpm supabase:link / db:push     # 원격 프로젝트 연결 / 원격 DB에 마이그레이션 적용 (운영은 릴리즈 워크플로만 실행)
 pnpm build:edge                  # api를 Edge Function 번들로 빌드 (supabase/functions/api/dist/)
 pnpm functions:serve             # build:edge 후 로컬 Edge Function api 실행 (Docker 필요)
 pnpm db:import-mysql --dump <파일>  # 옛 MySQL 덤프로 DB를 비우고 다시 채움 (기본 dry-run, docs/data-migration.md)
@@ -55,62 +55,114 @@ pnpm lint
 - Supabase CLI는 루트 devDependency이므로 전역 설치 없이 `pnpm exec supabase ...`(또는 `pnpm supabase ...`)로 씁니다.
 - web Vite proxy는 `/api`를 API로 연결합니다. 아바타는 Supabase Storage 공개 URL에서 직접 받습니다. DB 조회는 Supabase Studio를 씁니다.
 - `apps/web/dist/`는 빌드 산출물이므로 커밋하지 않습니다.
+- `pnpm dev`는 한 번에 한 워크트리에서만 띄웁니다(이유는 `docs/dev-environment.md`).
+- Node 버전은 `.nvmrc`, pnpm 버전은 `package.json`의 `packageManager`가 기준입니다. corepack(`corepack enable`)으로 그 pnpm을 씁니다.
+
+### 마이그레이션
+
+- 새 마이그레이션은 `pnpm db:migration:new <이름>`으로만 만듭니다. 파일명 버전(UTC 시각)을 손으로 짓지 않습니다.
+- 원격 DB는 마지막으로 적용한 버전보다 작은 새 파일을 거부하므로, 머지 직전 main의 최신 마이그레이션보다 버전이 작으면 지금 시각으로 파일명을 다시 만듭니다.
+- 릴리즈된 마이그레이션 파일은 이름·내용을 바꾸지 않습니다. 고칠 일이 있으면 새 마이그레이션을 추가합니다.
+- 브랜치를 바꾼 뒤 로컬 스키마가 맞지 않으면 `pnpm db:reset`으로 다시 적용합니다.
 
 ## Web 규칙
 
 - 전역 라우트는 `/`, `/login`, `/force-change-password`(첫 로그인·비밀번호 초기화 직후 비밀번호 변경 강제)입니다. 인증 상태(`AuthContext`의 `status`)에 따라 접근 가능한 라우트가 정해집니다.
 - 로그인은 Supabase Auth 아이디·비밀번호(`toInternalEmail(아이디)`로 `signInWithPassword`)이며, API 호출은 `lib/api.ts`의 `apiFetch`로 해서 access token을 붙입니다. 컴포넌트가 `Authorization` 헤더를 직접 만들지 않습니다.
 - 로그인 뒤의 홈 / 일정 / 랭킹 / 나 4탭(`TabKey` `home`·`schedule`·`ranking`·`me`, 시작 탭 홈)은 `BottomNav.tsx`의 keep-alive 탭 셸이 소유합니다. 탭 상태와 URL 라우트를 무분별하게 중복하지 않습니다. 회원 탭은 없고 회원 찾기는 랭킹 목록이 맡습니다.
-- 하단 바는 유리 알약 4탭과 원형 + 버튼이며, + 메뉴는 경기 기록·세션 만들기만 엽니다(설정·로그아웃은 나 탭의 설정에서). 경기 상세·회원 프로필·세션 상세·경기 기록 시트·세션 만들기·설정 같은 전역 화면은 `useAppNavigation()`(`context/AppNavigationContext.tsx`)으로 열고, 진행 중 세션 상태는 `useLiveSession()`(`context/LiveSessionContext.tsx`)으로 읽습니다. 데이터를 바꾼 화면은 `notifyDataChanged()`를 부르고, 탭 페이지는 `dataVersion`을 재조회 의존성으로 씁니다.
+- 하단 바는 유리 알약 4탭과 원형 + 버튼이며, + 메뉴는 경기 기록·세션 만들기만 엽니다(설정·로그아웃은 나 탭의 설정에서).
+- 경기 상세·회원 프로필·세션 상세·경기 기록 시트·세션 만들기·설정 같은 전역 화면은 `useAppNavigation()`(`context/AppNavigationContext.tsx`)으로 열고, 진행 중 세션 상태는 `useLiveSession()`(`context/LiveSessionContext.tsx`)으로 읽습니다.
+- 데이터를 바꾼 화면은 `notifyDataChanged()`를 부르고, 탭 페이지는 `dataVersion`을 재조회 의존성으로 씁니다.
 - 저장 실패(네트워크 오류) 알림은 `useSystemNotice()`(`context/SystemNoticeContext.tsx`)의 `showSaveFailure`로 띄웁니다.
 - 공통 UI는 `apps/web/src/components/ui/`, 색·둥글기·글자 크기는 `index.css`의 `pk-*` 토큰을 씁니다. 하드코딩 색을 쓰지 않습니다.
-- `apps/web/AGENTS.md`의 모바일·PWA·UI 세부 규칙을 함께 따릅니다.(디자인 규칙 포함)
+- `apps/web/AGENTS.md`의 모바일·PWA·UI 세부 규칙(디자인 규칙 포함)을 함께 따릅니다. `apps/web/CLAUDE.md`가 그 문서를 불러오므로 web 파일을 다루면 자동으로 읽힙니다.
 - 모바일 고정 하단 UI는 `env(safe-area-inset-bottom)`과 `--app-keyboard-offset`을 고려합니다. 스크롤 소유자는 `app-tab-panel-scroll-area`입니다.
 - PWA 아이콘은 URL 기반입니다. 아이콘을 변경하면 `apps/web/index.html`의 favicon/Apple touch icon과 `apps/web/vite.config.ts`의 manifest·`includeAssets`를 같이 확인합니다.
 
 ## API와 도메인 계약
 
-주요 공개 API:
+- 공개·관리자 API 목록과 엔드포인트별 규칙은 `apps/api/AGENTS.md`에 있습니다. API 경로·요청·응답·상태 코드를 바꾸면 그 문서의 해당 엔드포인트 항목을 같은 PR에서 고칩니다.
+- 경기 타입·스코어·세션 계약은 `packages/shared/src/match.ts`가 기준입니다.
+- api 저장소 어댑터(`apps/api/src/repositories/MatchRepository.ts`, `AuthService`)는 `@pkpkdupr/db` 결과를 공개 계약 형태로 hydrate 합니다.
+- `packages/shared` 변경 시 web, admin-web, api, db 전체 소비처를 같은 변경 단위에서 점검합니다.
 
-- 상태: `GET /api/health`, `GET /api/ping`
-- 예약 작업: `POST /api/cron/regular-sessions`(헤더 `x-cron-secret`을 함수 secret `CRON_SECRET`과 비교, 없거나 틀리면 401·`CRON_SECRET` 미설정 503, 응답 `RegularSessionsCronResponse`, 응답 전에 다가오는 세션 전부의 구글 캘린더 일정을 다시 쓴다). GitHub Actions `regular-sessions-cron.yml`이 매일 KST 04:00에 부른다
-- 인증/프로필: `GET /api/me`, `POST /api/me/password-changed`(첫 로그인 비밀번호 변경 완료), `PATCH /api/me/profile`, avatar API. 로그인과 비밀번호 변경은 클라이언트가 Supabase Auth로 직접 합니다.
-- 플레이어: `GET /api/players`(active만), 프로필 요약 `GET /api/players/:playerId/profile-summary`(회원 정보 `player`(비활성 회원 포함, 없는 회원 404)·승패·평점 변화·최근 7일 경기 수·파트너 궁합(같은 팀 3경기 이상)·천적(맞대결 3경기 이상·진 비율 50% 이상, 둘 다 조건에 맞는 회원 전부)·요청자 기준 분류별 상대 전적과 그 경기들에서 바뀐 요청자 평점 합 `headToHead[분류].ratingDelta`·지금 연승 수 `winStreak`)
-- 경기: `GET /api/matches`(`playerId`와 함께 `category=singles|doubles`로 분류 필터), 경기 기록 `POST /api/matches`·수정 `PUT /api/matches/:matchId`(관리자는 24시간 검사 없이 고치고, 관리자 전용 `sessionId`(문자열이면 그 세션으로 옮기고 null이면 세션에서 뺌)·`matchStartsAt`(완료 경기면 `completedAt`도 같은 만큼 옮김)으로 세션·경기 시각을 바꾸며, 회원이 이 둘을 보내면 403)·삭제 `DELETE /api/matches/:matchId`(`isMatchRecordDeletable`, 이미 지워졌으면 404, 둘 다 선택적 `expectedUpdatedAt`이 서버 `updatedAt`과 다르면 409), 경기 상세 `GET /api/matches/:matchId`, 세션과 상관없는 진행 중 경기 시작 `POST /api/matches/start`(요청 `sessionId`가 오늘 회원 세션이면 그 세션, 아니면 기록과 같은 시간 규칙, 선수가 이미 진행 중 경기에 있으면 409 "<아이디>님이 다른 경기 중이에요", 확인·생성은 advisory 잠금으로 직렬화)·진행 중 경기 전부 `GET /api/matches/in-progress`(`/api/matches/:matchId`보다 먼저 등록), `GET /api/match-feed`, 세션 조회 API
-- 세션: 오늘 세션 `GET /api/match-sessions/today`(전날 시작해 자정을 넘긴 회원 세션도 끝나기 전까지 오늘 세션이다, `isSessionOnToday`), 다가오는 세션 `GET /api/match-sessions/upcoming`(만료 전 오늘·미래 세션, 날짜 키 오름차순·같은 날은 정기 세션 먼저, 조회 때 공휴일·취소 날짜를 건너뛴 다음 정기 회차를 find-or-create), 오늘 정기 세션 열기 `POST /api/match-sessions/regular/today`(정기 요일 22시 전만, 오늘이 공휴일·취소 날짜면 409), 회원 세션 생성 `POST /api/match-sessions`(`dateKey` 생략 시 오늘·과거 날짜 400, 시작·종료 시각 `startTime`·`endTime`("HH:MM" KST)은 함께 주거나 함께 생략하며 형식 오류·두 시각이 같으면 400, 종료 < 시작이면 다음 날 종료, 오늘 세션의 시작 시각이 지금보다 이르면 400, 세션 날짜는 시작 시각의 날짜이고 세션 시각(`date`)은 시작 시각과 상관없이 그날 00:00 KST라 같은 날 같은 이름은 409). 세션 응답의 `startTime`·`endTime`은 정기 세션이면 18:00~22:00, 시각 없이 만든 회원 세션이면 null, 상세 `GET /api/match-sessions/:sessionId`, 세션 경기 `GET /api/match-sessions/:sessionId/matches`, 점수 없이 진행 중 경기 시작 `POST /api/match-sessions/:sessionId/matches`(`POST /api/matches/start`와 같은 처리, 오늘 세션만, 이미 진행 중인 선수 포함 시 409, 선수 자동 참여), 복식 추천 매칭 `GET /api/match-sessions/:sessionId/recommendations?courts=N&seed=S`(오늘 세션만, courts 기본 3·1~4로 자름, seed 생략 시 서버가 정해 응답에 포함·같은 seed면 같은 결과, 진행 중 경기 선수 제외, 팀 나누기는 NR을 참여자 평점 중앙값으로 대체하고 응답 팀 `averageRating`은 NR(게스트 포함)을 3.0으로 친 표시용 평균), 참여자 한 명씩 추가 `POST /api/match-sessions/:sessionId/participants`·삭제 `DELETE /api/match-sessions/:sessionId/participants/:playerId`(활성 회원 누구나·대리 가능, 오늘·미래 세션만·지난 세션 403, 멱등), 게스트 추가 `POST /api/match-sessions/:sessionId/guests` `{ username }`(그 아이디로 게스트를 만들고 세션 참여자로 넣어 201 `Player`, 세션 규칙은 참여자 추가와 같음, `isValidUsername` 실패 400·대소문자 무시 중복 409, 추가한 회원·세션을 저장)
-- 랭킹·세션 리포트(스냅샷 저장 없이 평점 변경 로그로 조회 시 계산): 랭킹 `GET /api/rankings?category=doubles|singles|achievements`(기본 doubles, achievements면 업적 점수 순위 `AchievementRankingResponse`(활성 정회원 전원, 점수 내림차순 → 그 점수에 먼저 도달한 순 → 아이디 순, 0점은 맨 아래, 순위 변동 없음), 게스트 제외, 순위·완료 경기 수·가장 최근 세션 시작 직전 대비 순위 변동 `rankChange`, 세 분류 모두 줄마다 지금 연승 수 `winStreak`(평점 반영 완료 경기를 단식·복식 합쳐 마지막 경기부터 센다, 승패가 안 갈린 경기는 끊고 게스트 낀 경기는 건너뜀, `packages/shared/src/streak.ts`), NR 회원은 `unrated`, 회원(`player`)에 상태메시지 `statusMessage`·`statusMessageBackgroundColor` 포함), 세션 기록 목록 `GET /api/session-reports?limit=&playerId=`(완료 경기가 있는 세션 최신순, limit 기본 20·최대 100, 홈이 사용), 기록 목록 `GET /api/records?limit=&cursor=&playerId=`(지금 웹은 쓰지 않음, `RecordsResponse` `{ items, nextCursor }`, 완료 경기가 있는 세션 줄 `kind: 'session'`(요청자 줄 `mine`은 세션 리포트 players의 요청자 줄과 같고 안 뛰었으면 null, 업적 제외)과 세션 없는 완료 경기 줄 `kind: 'match'`를 세션 `date`·경기 `matchStartsAt` 내림차순·같으면 id 내림차순으로 섞음, limit 규칙은 세션 기록 목록과 같음, `cursor`는 `nextCursor`를 그대로 넘기며 형식 오류 400·더 없으면 `nextCursor` null, `playerId`는 그 회원이 뛴 세션·경기만, 공개 Match hydrate는 페이지 경기만), 일정 탭 월별 조회 `GET /api/schedule?month=YYYY-MM`(`ScheduleMonthResponse`, 세션 날짜 키가 그 달(KST)인 세션 `sessions`(참여자·끝남 여부 `isEnded`(만료 시각 지남), 끝난 세션은 완료 경기가 있는 세션만, 날짜 키 오름차순·같은 날 정기 먼저)와 정렬 시각이 그 달인 기록 줄 `records`(기록 목록 항목과 같은 형태·순서, 요청자 기준 `mine`), month 형식 오류 400), 세션 리포트 `GET /api/session-reports/:sessionId`(선수별 경기·승패와 복식 평점·순위 전후, 최대 상승자 `topRiser`). 세션 줄(`MatchSessionHistoryItem`)의 `startTime`은 정기 세션 "18:00", 시각 없는 회원 세션 null
-- 업적(저장 없이 완료 경기로 조회 시 계산, 정의·계산은 `packages/shared/src/achievements.ts`, 업적 점수는 정의의 `points`(10·25·50·100점)이고 받은 업적 점수 합(`sumAchievementPoints`, 만점 `ACHIEVEMENT_MAX_POINTS`)이라 업적을 잃으면 점수도 빠진다, 집계 시작 시각은 진행도 지표별 `METRIC_COUNT_START`로, 경기 수·승 수·개근은 이관 경기를 포함한 전체 기록을 세고 나머지 지표는 업적 기준 시각 `ACHIEVEMENT_COUNT_START`(2026-11-17 00:00 KST, `achievementCountStart.ts`) 뒤 완료 경기만 센다. 새 지표를 쓰는 업적을 추가하면 그 지표는 추가 배포일 00:00 KST부터 세고, 기존 지표에 단계만 늘리는 업적(예: 1000경기 다음 5000경기)은 그 지표의 시작 시각을 따르며, 기존 업적의 조건 수정은 원래 시작 시각부터 다시 계산한다. 업적 기준 시각 전 경기로 받은 업적은 받은 업적으로 치지만 세션 리포트 `achievements`와 `newAchievements`에는 나오지 않는다(`isEarnedByCountedMatch`)): 프로필 요약의 `achievements`(42개 진행 상태, 평점 업적은 평점 반영 복식 경기 수 `ratedDoublesMatches` 포함), 경기 기록·수정 응답의 `newAchievements`(이 저장으로 참가자 전원이 새로 받은 업적)와 `achievementPoints`(새 업적을 받은 참가자별 지금 업적 점수 합), 세션 리포트의 `achievements`(그 세션 경기로 받은 업적), 업적별 받은 활성 회원 수 `GET /api/achievements/holders`. 축하 연출 확인 여부만 `player_seen_achievements`에 업적별 확인 당시 획득 경기로 저장하며, 미확인 업적 `GET /api/me/achievements/unseen`(응답에 요청자 업적 점수 합 `points`, 확인 기록이 없거나 기록의 획득 경기가 지금과 다르면 미확인, 받은 시각 → 업적 정의 순서)·확인 처리 `POST /api/me/achievements/seen`(`{ achievements: [{ achievementId, earnedMatchId }] }`, 멱등, 204). 업적을 잃었다가 다른 경기로 다시 받으면 다시 미확인이 된다. 무패 세션만은 세션의 모든 경기로 판정해, 4경기 전승으로 받은 뒤 같은 세션에서 지면 받지 않은 상태로 돌아간다. 세션 지배자 업적은 끝난 세션(만료 시각이 지난 세션)의 `topRiser`로 세며(`findSessionDominations`), 그 회원의 세션 마지막 경기로 받고 `newAchievements`에는 나오지 않는다. 평점 업적은 높은 평점 3.0·3.5·4.0·4.5(수면 위로·구름 위 산책·성층권·궤도 진입)와 낮은 평점 2.5·2.0 이하(심해 탐사·마리아나 해구) 6개다. 평점 반영 복식 경기가 10경기(`RATING_ACHIEVEMENT_MIN_DOUBLES_MATCHES`, 업적 기준 시각 전 경기 포함) 이상이 된 뒤의 복식 경기 직후 복식 평점(그 경기의 평점 변경 로그, 경기 업적 입력의 `doublesRatingAfter`)만 세며, 높은 평점은 처음 기준 이상, 낮은 평점은 처음 기준 이하가 된 경기로 받고 그 뒤 평점이 바뀌어도 유지된다(재계산하면 다시 쓴 로그를 따른다). 평점 업적만은 업적 기준 시각 시점 평점(기준 시각 전 마지막 평점 반영 복식 경기 직후 평점, 그 전 최고치·최저치는 보지 않음)에서 시작해 그때 이미 10경기와 기준을 채웠으면 그 경기로 받으며, 이 업적은 세션 리포트 `achievements`에 나오지 않는다
-- 관리자(전부 관리자 권한 필요):
-  - 회원: 목록 `GET /api/admin/players`(항목 `AdminPlayer`에 게스트 추가 정보 `guestAddedInfo`(정회원 null)·평점 미반영 경기 수 `ratingExcludedMatchCount`·첫 로그인 비밀번호 변경 전 `isFirstLogin`·로그인 계정 여부 `hasLoginAccount`·경기 행 수 `matchCount`·가장 늦은 경기 시각 `lastMatchStartsAt`), 경기 없는 회원 삭제 `DELETE /api/admin/players/:playerId`, 성별·상태 변경 `PATCH /api/admin/players/:playerId/gender|status`, 생성·상태 감사 로그 `GET /api/admin/player-creation-logs`·`player-status-logs`, 회원 추가 `POST /api/admin/register`·비밀번호 초기화 `POST /api/admin/players/:playerId/password-reset`·아이디 변경 `PATCH /api/admin/players/:playerId/username`, 게스트 정회원 승급 `POST /api/admin/players/:playerId/promote`(`{ gender }` 필수, 성별 저장과 로그인 계정 발급을 함께 하고 회원 추가 응답 형태로 돌려주며 첫 로그인 비밀번호 변경 강제, 게스트 아님 409·없는 회원 404·성별 오류 400, 승급 전 `ratingExcluded` 경기는 계속 미반영). 회원 추가·승급·비밀번호 초기화의 임시 비밀번호는 `123qwe`(`ADMIN_ISSUED_PASSWORD`) 고정이다
-  - 경기: 전체 목록 `GET /api/admin/matches`, 일괄 등록 `POST /api/admin/matches/batch`(세션은 `sessionId`로만 지정하고 그 세션 참여자로 선수를 넣는다, `session` 입력을 보내면 400 "세션은 sessionId로 지정해 주세요."), 세션 연결 `PATCH /api/admin/matches/bulk-metadata`(`{ matchIds, sessionId }`, 세션에 연결하면 선수를 참여자로 넣고 null로 빼면 참여자는 그대로), 관리자 삭제 `DELETE /api/admin/matches/:matchId`, 삭제 기록 `GET /api/admin/match-deletion-logs`(지운 시각 내림차순). 경기 정정은 `PUT /api/matches/:matchId`를 같이 쓴다
-  - 세션: 목록 `GET /api/admin/match-sessions`, 회원 세션 수정 `PATCH /api/admin/match-sessions/:sessionId`(이름·장소·오늘 이후 날짜·시각, 지난 세션 409), 삭제 `DELETE /api/admin/match-sessions/:sessionId`(오늘·미래 정기 세션을 지우면 그 날짜가 취소로 남음)
-  - 쉬는 날: 목록 `GET /api/admin/regular-session-skips`, 취소 날짜 추가 `POST /api/admin/regular-session-skips`, 되돌리기 `DELETE /api/admin/regular-session-skips/:dateKey`(공휴일은 409, 응답에 다시 만든 정기 세션)
-  - 평점: 전체 재계산 `POST /api/admin/ratings/recalculate`, 공식 DUPR 미리보기 `POST /api/admin/players/:playerId/official-dupr/preview`·반영 `POST /api/admin/players/:playerId/official-dupr`
-  - 진단: `GET /api/admin/diagnostics/timestamp-units`
-
-도메인 규칙:
+### 회원
 
 - `Player.duprRating`은 단일 숫자가 아니라 singles/doubles 분류와 metric을 포함하는 상태입니다. `null`인 NR 값도 허용합니다.
-- 비활성(inactive) 회원은 로그인만 막히고(Auth 계정 연결은 유지되어 다시 활성화하면 원래 비밀번호로 로그인) 회원 목록·선수 고르는 목록·랭킹에 나오지 않는다. 지난 경기 등에서 프로필을 열면 웹은 이름과 "비활성된 회원이에요" 안내만 보인다.
-- 게스트는 회원이 세션에서 추가한 비회원이며 `PlayerStatus`가 아니라 `Player.isGuest`로 구분합니다. `status`는 active이고 Auth 계정이 없으며(`authUserId` null) 성별이 없을 수 있습니다(`gender` null은 게스트만, 정회원 만들기·수정은 성별 필수). 참여자 추가·삭제·경기 시작·기록·추천 매칭에서는 회원처럼 고를 수 있고 추천 매칭에서는 NR로 다루며, 랭킹에는 나오지 않습니다.
-- 경기가 completed가 되는 순간(회원 기록, 진행 중 경기 첫 점수, 관리자 일괄 등록) 참가자 중 게스트가 있으면 `matches.rating_excluded`(`Match.ratingExcluded`)를 true로 저장합니다. 수정(회원·관리자 모두)에서는 이미 completed인 경기의 true가 참가자가 바뀌어도 유지되고(`resolveRatingExcludedAfterEdit`), 수정으로 게스트가 새로 들어오면 true가 되며, 진행 중 경기에 첫 점수를 넣는 수정은 그 시점 게스트 여부로 정합니다. 바뀐 completed 경기는 전체 재계산합니다. 미반영 경기는 게스트가 끼면 같은 경기 정회원 평점도 바꾸지 않으며, 증분·일괄·전체 재계산 어디서도 평점·평점 이력에 들어가지 않고(정회원 승급 뒤에도 유지), 업적·세션 지배자·랭킹 경기 수·순위 변동 기준 세션·프로필 요약 통계(승패·파트너 궁합·상대 전적·최근 경기 수)·`lastPlayedAt`·비활동 감쇠 기준 직전 경기에서도 빠집니다. 경기 목록·피드·기록 탭·세션 경기 목록·세션 리포트에는 그대로 나옵니다.
-- api 저장소 어댑터(`apps/api/src/repositories/MatchRepository.ts`, `AuthService`)는 `@pkpkdupr/db` 결과를 공개 계약 형태로 hydrate 합니다.
-- 경기 타입·스코어·세션 계약은 `packages/shared/src/match.ts`가 기준입니다.
-- 경기는 기록 즉시 completed가 되어 평점에 반영됩니다. 활성 회원이면 참가자·생성자 여부와 상관없이 누구나 경기 시작 후 24시간 이내(`isWithinMatchEditWindow`)에만 수정할 수 있고(`isMatchRecordEditable`, 취소 경기는 제외, 웹 버튼 노출 기준), 이후 정정은 관리자가 어드민 경기 화면에서 같은 `PUT /api/matches/:matchId`로 합니다(24시간 제한 없음). 마지막으로 입력·수정한 회원은 `resultSubmittedByPlayerId`에 기록됩니다.
-- 회원 삭제는 수정 가능 조건에 더해 이미 시작했고(시작 시각 ≤ 지금) 완료되지 않은 관리자 예정 경기(이미 저장된 `source: "admin_created"` 경기)가 아닐 때만(`isMatchRecordDeletable`) 된다. 실제로 지운 행이 completed였으면 평점을 처음부터 다시 계산하고, 회원·관리자 삭제 모두 경기 전체 스냅샷을 `match_deletion_logs`에 남긴다.
+- 비활성(inactive) 회원
+  - 로그인만 막힙니다. Auth 계정 연결은 유지되어 다시 활성화하면 원래 비밀번호로 로그인합니다.
+  - 회원 목록·선수 고르는 목록·랭킹에 나오지 않습니다.
+  - 지난 경기 등에서 프로필을 열면 웹은 이름과 "비활성된 회원이에요" 안내만 보입니다.
+- 게스트
+  - 회원이 세션에서 추가한 비회원이며 `PlayerStatus`가 아니라 `Player.isGuest`로 구분합니다.
+  - `status`는 active이고 Auth 계정이 없으며(`authUserId` null) 성별이 없을 수 있습니다. `gender` null은 게스트만이고, 정회원 만들기·수정은 성별 필수입니다.
+  - 참여자 추가·삭제·경기 시작·기록·추천 매칭에서는 회원처럼 고를 수 있고, 추천 매칭에서는 NR로 다룹니다.
+  - 랭킹에는 나오지 않습니다.
+
+### 평점 미반영 경기(게스트 참가)
+
+- 경기가 completed가 되는 순간(회원 기록, 진행 중 경기 첫 점수, 관리자 일괄 등록) 참가자 중 게스트가 있으면 `matches.rating_excluded`(`Match.ratingExcluded`)를 true로 저장합니다.
+- 수정(회원·관리자 모두)
+  - 이미 completed인 경기의 true는 참가자가 바뀌어도 유지됩니다(`resolveRatingExcludedAfterEdit`).
+  - 수정으로 게스트가 새로 들어오면 true가 됩니다.
+  - 진행 중 경기에 첫 점수를 넣는 수정은 그 시점 게스트 여부로 정합니다.
+  - 바뀐 completed 경기는 전체 재계산합니다.
+- 미반영 경기는 게스트가 끼면 같은 경기 정회원 평점도 바꾸지 않습니다.
+- 증분·일괄·전체 재계산 어디서도 평점·평점 이력에 들어가지 않습니다(정회원 승급 뒤에도 유지).
+- 업적·세션 지배자·랭킹 경기 수·순위 변동 기준 세션·프로필 요약 통계(승패·파트너 궁합·상대 전적·최근 경기 수)·`lastPlayedAt`·비활동 감쇠 기준 직전 경기에서도 빠집니다.
+- 경기 목록·피드·기록 탭·세션 경기 목록·세션 리포트에는 그대로 나옵니다.
+
+### 경기 기록·수정·삭제
+
+- 경기는 기록 즉시 completed가 되어 평점에 반영됩니다.
+- 수정
+  - 활성 회원이면 참가자·생성자 여부와 상관없이 누구나 경기 시작 후 24시간 이내(`isWithinMatchEditWindow`)에만 수정할 수 있습니다(`isMatchRecordEditable`, 취소 경기는 제외, 웹 버튼 노출 기준).
+  - 이후 정정은 관리자가 어드민 경기 화면에서 같은 `PUT /api/matches/:matchId`로 합니다(24시간 제한 없음).
+  - 마지막으로 입력·수정한 회원은 `resultSubmittedByPlayerId`에 기록됩니다.
+- 회원 삭제
+  - 수정 가능 조건에 더해, 이미 시작했고(시작 시각 ≤ 지금) 완료되지 않은 관리자 예정 경기(이미 저장된 `source: "admin_created"` 경기)가 아닐 때만(`isMatchRecordDeletable`) 된다.
+  - 실제로 지운 행이 completed였으면 평점을 처음부터 다시 계산한다.
+  - 회원·관리자 삭제 모두 경기 전체 스냅샷을 `match_deletion_logs`에 남긴다.
 - 평점을 쓰는 경로(증분 반영·일괄 반영·전체 재계산·공식 DUPR 조정)는 `AuthService` 공개 메서드에서 advisory 잠금 하나(`db.ratingWriteLock`)로 직렬화된다. 재계산 입력은 잠금 안에서 읽도록 로더 함수로 넘기고, 잠금 안에서는 잠금을 다시 잡지 않는다.
-- 예외로 세션에서 시작한 경기는 점수 없는 진행 중 경기(`status: "created"`)입니다. 회원 누구나 `PUT /api/matches/:matchId`로 첫 점수를 넣는 순간 completed(`completedAt`=입력 시각)가 되고 평점에 증분 반영됩니다. 진행 중 경기는 평점·평점 이력·통계·`lastPlayedAt`에서 빠지고, 시작 2시간(`isInProgressMatchExpired`)이 지나도록 점수가 없으면 조회 시점 정리(`cleanupExpired`)에서 빈 세션 정리보다 먼저 삭제됩니다. 이 정리는 관리자 예정 경기를 포함한 점수 없는 created 경기 전부에 적용됩니다.
-- 정기 세션은 월·목 18:00 KST 세션이며 이름은 요일별 `getRegularSessionName`("월요 정기운동"/"목요 정기운동")이다. 정기 회차는 매일 예약 작업이 오늘부터 28일(`REGULAR_SESSION_LOOKAHEAD_DAYS`) 안의 정기 요일(`getRegularSessionDateKeys`, 오늘은 22시 전만)을 미리 만들고, `GET /upcoming` 조회도 다음 회차 1개를 보장한다. 그 밖의 세션 조회는 정기 세션을 만들지 않는다. `regular_session_skips`의 날짜(공휴일 `holiday`, 취소 `canceled`)에는 어떤 경로(예약 작업·upcoming·오늘 정기 세션 열기·경기 기록·시작)로도 정기 세션을 새로 만들지 않는다. 공휴일은 예약 작업이 구글 "대한민국 공휴일" 캘린더에서 설명이 "공휴일"로 시작하는 일정만 골라 저장하고("기념일"은 제외), 이미 만든 그날 정기 세션은 참여자·경기가 모두 없을 때만 지운다. 공휴일을 확인하지 못하면(조회 실패·캘린더 설정 없음) 그날 실행은 아무것도 만들지 않고 5xx다. 관리자가 오늘·미래 정기 세션을 지우면(`DELETE /api/admin/match-sessions/:sessionId`) 그 날짜가 취소로 남는다. 경기가 없는 세션은 그날 만료 시각(정기 22:00, 회원 다음 날 0시, 자정을 넘기는 회원 세션은 다음 날 종료 시각)이 지나면 참여자와 함께 정리되므로, 미래 세션은 그날이 지나기 전에는 지워지지 않는다.
-- `packages/shared` 변경 시 web, admin-web, api, db 전체 소비처를 같은 변경 단위에서 점검합니다.
+
+### 진행 중 경기
+
+- 예외로 세션에서 시작한 경기는 점수 없는 진행 중 경기(`status: "created"`)입니다.
+- 회원 누구나 `PUT /api/matches/:matchId`로 첫 점수를 넣는 순간 completed(`completedAt`=입력 시각)가 되고 평점에 증분 반영됩니다.
+- 진행 중 경기는 평점·평점 이력·통계·`lastPlayedAt`에서 빠집니다.
+- 시작 2시간(`isInProgressMatchExpired`)이 지나도록 점수가 없으면 조회 시점 정리(`cleanupExpired`)에서 빈 세션 정리보다 먼저 삭제됩니다. 이 정리는 관리자 예정 경기를 포함한 점수 없는 created 경기 전부에 적용됩니다.
+
+### 정기 세션·세션 정리
+
+- 정기 세션은 월·목 18:00 KST 세션이며 이름은 요일별 `getRegularSessionName`("월요 정기운동"/"목요 정기운동")이다.
+- 회차 만들기
+  - 매일 예약 작업이 오늘부터 28일(`REGULAR_SESSION_LOOKAHEAD_DAYS`) 안의 정기 요일(`getRegularSessionDateKeys`, 오늘은 22시 전만)을 미리 만든다.
+  - `GET /upcoming` 조회도 다음 회차 1개를 보장한다.
+  - 그 밖의 세션 조회는 정기 세션을 만들지 않는다.
+- 쉬는 날
+  - `regular_session_skips`의 날짜(공휴일 `holiday`, 취소 `canceled`)에는 어떤 경로(예약 작업·upcoming·오늘 정기 세션 열기·경기 기록·시작)로도 정기 세션을 새로 만들지 않는다.
+  - 공휴일은 예약 작업이 구글 "대한민국 공휴일" 캘린더에서 설명이 "공휴일"로 시작하는 일정만 골라 저장하고("기념일"은 제외), 이미 만든 그날 정기 세션은 참여자·경기가 모두 없을 때만 지운다.
+  - 공휴일을 확인하지 못하면(조회 실패·캘린더 설정 없음) 그날 실행은 아무것도 만들지 않고 5xx다.
+  - 관리자가 오늘·미래 정기 세션을 지우면(`DELETE /api/admin/match-sessions/:sessionId`) 그 날짜가 취소로 남는다.
+- 경기가 없는 세션은 그날 만료 시각(정기 22:00, 회원 다음 날 0시, 자정을 넘기는 회원 세션은 다음 날 종료 시각)이 지나면 참여자와 함께 정리되므로, 미래 세션은 그날이 지나기 전에는 지워지지 않는다.
 
 ## 운영과 배포
 
 - 운영은 Supabase(DB·Auth·Storage·Edge Functions)와 GitHub Pages(web·admin)로 합니다.
 - DB는 Supabase Postgres입니다. 모든 테이블은 RLS on·정책 없음(기본 거부)이며, DB 접근은 서버만 합니다. Docker는 로컬 Supabase 스택에만 씁니다.
 - GitHub Actions `ci.yml`은 PR과 main push에서 설치·빌드·api/shared/web 테스트를 실행합니다.
-- api는 Supabase Edge Function `api`로 배포합니다(base URL `https://<project-ref>.supabase.co/functions/v1`, 경로 `/api/...`). 운영 배포는 GitHub Release 발행 때만 하며, 발행하면 `supabase-deploy.yml`(`supabase db push`와 함수 배포)과 `pages.yml`(web·admin)이 릴리즈 태그 커밋으로 함께 실행됩니다. main 머지만으로는 배포되지 않습니다. web·admin 앱 버전은 릴리즈 태그 이름입니다. Supabase 프로젝트 준비, GitHub secrets·variables, 함수 secrets는 `docs/deploy.md`가 기준이며, 새 함수 secret·설정이 생기면 이 문서에 추가합니다.
+- api는 Supabase Edge Function `api`로 배포합니다(base URL `https://<project-ref>.supabase.co/functions/v1`, 경로 `/api/...`).
+- 운영 배포는 GitHub Release 발행 때만 합니다.
+  - 발행하면 `supabase-deploy.yml`(`supabase db push`와 함수 배포)과 `pages.yml`(web·admin)이 릴리즈 태그 커밋으로 함께 실행됩니다. main 머지만으로는 배포되지 않습니다.
+  - web·admin 앱 버전은 릴리즈 태그 이름입니다.
+  - 로컬에서 원격 `pnpm db:push`나 함수 배포를 하지 않습니다.
+- Supabase 프로젝트 준비, GitHub secrets·variables, 함수 secrets는 `docs/deploy.md`가 기준이며, 새 함수 secret·설정이 생기면 이 문서에 추가합니다.
 - api의 CORS 허용 origin은 env `CORS_ALLOWED_ORIGINS`(쉼표 구분)와 localhost 개발 origin(8080, 3100)입니다.
-- 세션 일정·참석 현황은 동호회 구글 캘린더에 서버가 단방향으로 씁니다(`apps/api/src/services/SessionCalendarSync.ts`). 세션 생성·참여자 변경·삭제를 api `MatchRepository`의 `onSessionsChanged`로 받아 응답과 분리해 반영하고(Edge는 `EdgeRuntime.waitUntil`), 반영이 빠진 일정은 매일 예약 작업이 다가오는 세션을 다시 써서 맞춥니다. 일정 id는 세션 id에서 만들어 DB 매핑이 없습니다. env `GOOGLE_CALENDAR_SERVICE_ACCOUNT_JSON`·`GOOGLE_CALENDAR_ID`가 없거나 `ENABLE_DEV_MOCK_DATA=true`(로컬 `pnpm dev`)면 꺼지며 준비 절차는 `docs/deploy.md`를 따릅니다.
+- 세션 일정·참석 현황은 동호회 구글 캘린더에 서버가 단방향으로 씁니다(`apps/api/src/services/SessionCalendarSync.ts`).
+  - 세션 생성·참여자 변경·삭제를 api `MatchRepository`의 `onSessionsChanged`로 받아 응답과 분리해 반영합니다(Edge는 `EdgeRuntime.waitUntil`).
+  - 반영이 빠진 일정은 매일 예약 작업이 다가오는 세션을 다시 써서 맞춥니다.
+  - 일정 id는 세션 id에서 만들어 DB 매핑이 없습니다.
+  - env `GOOGLE_CALENDAR_SERVICE_ACCOUNT_JSON`·`GOOGLE_CALENDAR_ID`가 없거나 `ENABLE_DEV_MOCK_DATA=true`(로컬 `pnpm dev`)면 꺼지며, 준비 절차는 `docs/deploy.md`를 따릅니다.
 
 ## 작업 및 커밋 규칙
 
@@ -118,3 +170,4 @@ pnpm lint
 - `git add .`, `git commit -a`, reset, rebase, force push를 사용하지 않습니다.
 - 커밋 제목은 `feat:`, `fix:`, `refactor:`, `chore:` 중 하나로 시작하며 변경 성격으로 선택합니다.
 - 변경 후에는 영향 범위에 맞는 빌드/테스트를 실행합니다. web 변경은 기본적으로 `pnpm build:web`를 우선합니다.
+- 문서(`AGENTS.md`·`docs/*.md`)는 규칙·엔드포인트 하나를 항목 한 줄로 씁니다. 조건·예외가 붙어 길어지면 하위 항목으로 쪼갭니다. 여러 사람이 같은 줄을 고쳐 충돌하지 않게 하려는 규칙입니다.
