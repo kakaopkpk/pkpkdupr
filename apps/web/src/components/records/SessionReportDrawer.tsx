@@ -22,7 +22,7 @@ import {
 } from "@/components/records/SessionReportParts";
 import { Card } from "@/components/ui/Card";
 import { MatchRow } from "@/components/ui/MatchRow";
-import { PreviewSection, SectionLabel } from "@/components/ui/Section";
+import { PreviewSection, Section } from "@/components/ui/Section";
 import { StateMessage } from "@/components/ui/StateMessage";
 import {
   SegmentedControl,
@@ -263,20 +263,18 @@ export default function SessionReportDrawer({
             onViewAll={() => setIsPlayersRequested(true)}
           />
         ) : null}
-        <section className="flex flex-col gap-2.5 pt-1">
-          <SectionLabel
-            right={
-              <SegmentedControl
-                options={MATCH_FILTER_OPTIONS}
-                value={matchFilter}
-                onChange={changeMatchFilter}
-                ariaLabel="경기 보기"
-                size="sm"
-              />
-            }
-          >
-            경기
-          </SectionLabel>
+        <Section
+          title="경기"
+          right={
+            <SegmentedControl
+              options={MATCH_FILTER_OPTIONS}
+              value={matchFilter}
+              onChange={changeMatchFilter}
+              ariaLabel="경기 보기"
+              size="sm"
+            />
+          }
+        >
           <SegmentSwitchFade
             isPlaying={isListFading}
             onFinish={() => setIsListFading(false)}
@@ -298,7 +296,7 @@ export default function SessionReportDrawer({
               </Card>
             )}
           </SegmentSwitchFade>
-        </section>
+        </Section>
       </>
     );
   };

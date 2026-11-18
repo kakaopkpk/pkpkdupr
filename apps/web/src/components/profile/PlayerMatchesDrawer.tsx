@@ -8,7 +8,7 @@ import SkeletonBlock from "@/components/SkeletonBlock";
 import { PROFILE_CATEGORY_OPTIONS } from "@/components/profile/ProfileRatingCard";
 import { Card } from "@/components/ui/Card";
 import { MatchRow } from "@/components/ui/MatchRow";
-import { SectionLabel, TextLink } from "@/components/ui/Section";
+import { Section, TextLink } from "@/components/ui/Section";
 import { StateMessage } from "@/components/ui/StateMessage";
 import {
   SegmentedControl,
@@ -289,8 +289,7 @@ export default function PlayerMatchesDrawer({
           >
             {groups.length > 0 ? (
               groups.map((group) => (
-                <section key={group.key} className="flex flex-col gap-2.5">
-                  <SectionLabel>{group.label}</SectionLabel>
+                <Section key={group.key} title={group.label}>
                   <Card>
                     {group.matches.map((match) => (
                       <MatchRow
@@ -300,7 +299,7 @@ export default function PlayerMatchesDrawer({
                       />
                     ))}
                   </Card>
-                </section>
+                </Section>
               ))
             ) : (
               <Card>

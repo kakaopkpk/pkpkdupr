@@ -14,7 +14,7 @@ import { CountUpText } from "@/components/ui/CountUpText";
 import { CheckIcon } from "@/components/ui/Icons";
 import { ProgressBar } from "@/components/ui/ProgressBar";
 import { getRowCountUp } from "@/components/ui/CountUpNumber";
-import { SectionLabel } from "@/components/ui/Section";
+import { Section } from "@/components/ui/Section";
 import { cx } from "@/components/ui/cx";
 import { useAppNavigation } from "@/context/AppNavigationContext";
 import {
@@ -235,7 +235,7 @@ export default function AchievementsScreen({
       onBack={close}
       onExited={handleExited}
     >
-      <div className="flex flex-col gap-4 px-4 pt-1 pb-4">
+      <div className="flex flex-col gap-2.5 px-4 pt-1 pb-4">
         <Card className="flex flex-col gap-2.5 p-4">
           <AchievementPointsSummary points={points} />
           <div className="flex items-baseline justify-between gap-3 text-pk-13 text-pk-sub">
@@ -262,17 +262,16 @@ export default function AchievementsScreen({
             })),
           );
           return (
-            <section key={category} className="flex flex-col gap-1.5">
-              <SectionLabel
-                right={
-                  <span className="text-pk-13 font-semibold text-pk-muted tabular-nums">
-                    {formatAchievementPoints(categoryPoints)} /{" "}
-                    {formatAchievementPoints(maxPoints)}점
-                  </span>
-                }
-              >
-                {ACHIEVEMENT_CATEGORY_LABEL[category]}
-              </SectionLabel>
+            <Section
+              key={category}
+              title={ACHIEVEMENT_CATEGORY_LABEL[category]}
+              right={
+                <span className="text-pk-13 font-semibold text-pk-muted tabular-nums">
+                  {formatAchievementPoints(categoryPoints)} /{" "}
+                  {formatAchievementPoints(maxPoints)}점
+                </span>
+              }
+            >
               <Card>
                 {definitions.map((definition) => (
                   <AchievementRow
@@ -291,7 +290,7 @@ export default function AchievementsScreen({
                   />
                 ))}
               </Card>
-            </section>
+            </Section>
           );
         })}
       </div>

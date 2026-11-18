@@ -5,7 +5,7 @@ import AchievementBadge from "@/components/profile/AchievementBadge";
 import { TopRiserCard } from "@/components/records/SessionReportParts";
 import { Card } from "@/components/ui/Card";
 import { ChevronRightIcon } from "@/components/ui/Icons";
-import { SectionLabel, TextLink } from "@/components/ui/Section";
+import { Section, TextLink } from "@/components/ui/Section";
 import { useAppNavigation } from "@/context/AppNavigationContext";
 import { getAchievementDefinition } from "@/lib/achievements";
 import { formatKstShortDate } from "@/lib/format";
@@ -28,7 +28,7 @@ export const getPlayerSessionAchievements = (
 
 /**
  * 그 세션에서 받은 내 새 업적. 누르면 업적 상세 시트를 연다.
- * 제목 "내 새 업적"은 titlePlacement가 "card"(기본)면 카드 안, "section"이면 카드 밖 SectionLabel에 둔다
+ * 제목 "내 새 업적"은 titlePlacement가 "card"(기본)면 카드 안, "section"이면 카드 밖 Section 제목에 둔다
  */
 export const MyNewAchievementsCard: React.FC<{
   playerId: string;
@@ -69,12 +69,7 @@ export const MyNewAchievementsCard: React.FC<{
   );
 
   if (titlePlacement === "card") return card;
-  return (
-    <section className="flex flex-col gap-2.5 pt-1">
-      <SectionLabel>내 새 업적</SectionLabel>
-      {card}
-    </section>
-  );
+  return <Section title="내 새 업적">{card}</Section>;
 };
 
 /**
@@ -99,17 +94,14 @@ const LastSessionFeed: React.FC<{
   );
 
   return (
-    <>
-      <div className="flex flex-col pb-1">
-        <SectionLabel
-          right={
-            <TextLink onPress={() => openSessionReport(session.id)} chevron>
-              리포트
-            </TextLink>
-          }
-        >
-          지난 세션
-        </SectionLabel>
+    <Section
+      title="지난 세션"
+      right={
+        <TextLink onPress={() => openSessionReport(session.id)} chevron>
+          리포트
+        </TextLink>
+      }
+      subtitle={
         <div className="flex flex-col gap-0.5 px-1">
           <h3 className="truncate text-pk-17 font-extrabold text-pk-ink">
             {session.name}
@@ -122,7 +114,8 @@ const LastSessionFeed: React.FC<{
             ].join(" · ")}
           </span>
         </div>
-      </div>
+      }
+    >
       {topRiser ? <TopRiserCard report={topRiser} /> : null}
       {myReport ? <LastSessionMeCard report={myReport} /> : null}
       {playerId && myAchievements.length > 0 ? (
@@ -132,7 +125,7 @@ const LastSessionFeed: React.FC<{
           titlePlacement="section"
         />
       ) : null}
-    </>
+    </Section>
   );
 };
 

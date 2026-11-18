@@ -4,7 +4,7 @@ import { AchievementBadge } from "@/components/profile/AchievementBadge";
 import { AchievementPointsSummary } from "@/components/profile/AchievementPointsSummary";
 import { rowPressClassName } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
-import { SectionLabel, TextLink } from "@/components/ui/Section";
+import { Section, TextLink } from "@/components/ui/Section";
 import { cx } from "@/components/ui/cx";
 import { useAppNavigation } from "@/context/AppNavigationContext";
 import {
@@ -37,18 +37,16 @@ export const AchievementsSection: React.FC<AchievementsSectionProps> = ({
   const earned = getEarnedAchievementsByRecent(progress);
 
   return (
-    <section className="flex flex-col gap-2.5 pt-1">
-      <SectionLabel
-        right={
-          onViewAll ? (
-            <TextLink onPress={onViewAll} chevron>
-              전체 보기
-            </TextLink>
-          ) : undefined
-        }
-      >
-        업적
-      </SectionLabel>
+    <Section
+      title="업적"
+      right={
+        onViewAll ? (
+          <TextLink onPress={onViewAll} chevron>
+            전체 보기
+          </TextLink>
+        ) : undefined
+      }
+    >
       {earned.length > 0 ? (
         <Card className="flex flex-col gap-4 px-2 py-4">
           <AchievementPointsSummary
@@ -91,7 +89,7 @@ export const AchievementsSection: React.FC<AchievementsSectionProps> = ({
           </p>
         </Card>
       )}
-    </section>
+    </Section>
   );
 };
 

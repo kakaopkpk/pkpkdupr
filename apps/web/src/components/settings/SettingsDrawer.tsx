@@ -5,7 +5,7 @@ import { PkButton } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { ListRow } from "@/components/ui/Form";
 import { PlayerAvatar } from "@/components/ui/PlayerAvatar";
-import { SectionLabel } from "@/components/ui/Section";
+import { Section } from "@/components/ui/Section";
 import { GLOBAL_LAYER } from "@/context/AppNavigationContext";
 import { useAppUpdate } from "@/context/AppUpdateContext";
 import { useAuth } from "@/context/AuthContext";
@@ -36,10 +36,9 @@ const SettingsGroup: React.FC<{
   label: string;
   children: React.ReactNode;
 }> = ({ label, children }) => (
-  <section className="flex flex-col gap-1.5">
-    <SectionLabel>{label}</SectionLabel>
+  <Section title={label}>
     <Card>{children}</Card>
-  </section>
+  </Section>
 );
 
 /** 전역 설정: 프로필·계정·앱 그룹과 로그아웃 */
@@ -236,7 +235,7 @@ export default function SettingsDrawer({
         onBack={() => closeLayer(DEPTH_ID, onClose)}
         onExited={() => restoreScrollTop(tabKey)}
       >
-        <div className="flex flex-col gap-4 px-4 pt-1 pb-4">
+        <div className="flex flex-col gap-2.5 px-4 pt-1 pb-4">
           <SettingsGroup label="프로필">
             <ListRow
               label="프로필 사진"
@@ -310,7 +309,7 @@ export default function SettingsDrawer({
             ) : null}
           </SettingsGroup>
 
-          <Card>
+          <Card className="mt-1.5">
             <button
               type="button"
               disabled={isLoggingOut}
