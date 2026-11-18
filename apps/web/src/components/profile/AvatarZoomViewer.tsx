@@ -1,4 +1,10 @@
-import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 import { createPortal } from "react-dom";
 import { GLOBAL_LAYER } from "@/context/AppNavigationContext";
 import { prefersReducedMotion } from "@/hooks/useSheetDrag";
@@ -29,17 +35,30 @@ interface AvatarZoomViewerProps {
 
 type Phase = "hidden" | "opening" | "open" | "closing";
 
-/** 화면 가운데 원을 기준으로, 원을 rect 자리·크기로 옮기는 transform */
-const getTransformTo = (rect: DOMRect | undefined, center: { left: number; top: number }) => {
-  if (!rect) return "translate(0px, 0px) scale(0.2)";
+/** 화면 가운데 원을 rect 자리·크기로 옮기는 transform */
+const getTransformTo = (rect: DOMRect | undefined) => {
+  if (!rect) return "scale(0.2)";
+  const left = (window.innerWidth - AVATAR_ZOOM_SIZE) / 2;
+  const top = (window.innerHeight - AVATAR_ZOOM_SIZE) / 2;
   const scale = rect.width / AVATAR_ZOOM_SIZE;
-  return `translate(${rect.left - center.left}px, ${rect.top - center.top}px) scale(${scale})`;
+  return `translate(${rect.left - left}px, ${rect.top - top}px) scale(${scale})`;
 };
 
-const getCenter = () => ({
-  left: (window.innerWidth - AVATAR_ZOOM_SIZE) / 2,
-  top: (window.innerHeight - AVATAR_ZOOM_SIZE) / 2,
-});
+/** 사진 원의 transform과 딤의 opacity를 함께 바꾼다. animate가 false면 바로 옮긴다 */
+const applyPose = (
+  photo: HTMLElement,
+  dim: HTMLElement,
+  transform: string,
+  opacity: number,
+  animate: boolean,
+) => {
+  photo.style.transition = animate ? TRANSITION : "none";
+  photo.style.transform = transform;
+  dim.style.transition = animate
+    ? `opacity ${TRANSITION_MS}ms var(--ease-pk-move)`
+    : "none";
+  dim.style.opacity = String(opacity);
+};
 
 /**
  * 프로필 사진 확대 보기. 아바타 자리에서 화면 가운데 240px 원으로 커지고, 뒤 화면은 어둡고 흐려진다.
@@ -55,11 +74,14 @@ const AvatarZoomViewer: React.FC<AvatarZoomViewerProps> = ({
   onExited,
 }) => {
   const [phase, setPhase] = useState<Phase>("hidden");
-  const [center, setCenter] = useState(getCenter);
   const dialogRef = useRef<HTMLDivElement>(null);
   const photoRef = useRef<HTMLDivElement>(null);
   const dimRef = useRef<HTMLDivElement>(null);
-  const dragRef = useRef<{ startY: number; offset: number; isDragging: boolean } | null>(null);
+  const dragRef = useRef<{
+    startY: number;
+    offset: number;
+    isDragging: boolean;
+  } | null>(null);
   const suppressClickRef = useRef(false);
   const onRequestCloseRef = useRef(onRequestClose);
   const onExitedRef = useRef(onExited);
@@ -77,7 +99,6 @@ const AvatarZoomViewer: React.FC<AvatarZoomViewerProps> = ({
   // 열림: 아바타 자리에 두고 다음 프레임에 가운데로 옮긴다
   useLayoutEffect(() => {
     if (!isOpen) return;
-    setCenter(getCenter());
     setPhase("opening");
   }, [isOpen]);
 
@@ -86,28 +107,18 @@ const AvatarZoomViewer: React.FC<AvatarZoomViewerProps> = ({
     const dim = dimRef.current;
     if (!photo || !dim) return;
 
-    if (phase === "opening") {
-      if (prefersReducedMotion()) {
-        photo.style.transition = "none";
-        photo.style.transform = "none";
-        dim.style.transition = "none";
-        dim.style.opacity = "1";
-        setPhase("open");
-        return;
-      }
-      photo.style.transition = "none";
-      photo.style.transform = getTransformTo(originRef.current?.getBoundingClientRect(), center);
-      dim.style.transition = "none";
-      dim.style.opacity = "0";
+    if (phase !== "opening") return;
+    if (!prefersReducedMotion()) {
+      const origin = getTransformTo(
+        originRef.current?.getBoundingClientRect(),
+      );
+      applyPose(photo, dim, origin, 0, false);
       // 시작 위치를 그린 뒤 전환을 켜야 커지는 움직임이 보인다
       photo.getBoundingClientRect();
-      photo.style.transition = TRANSITION;
-      photo.style.transform = "none";
-      dim.style.transition = `opacity ${TRANSITION_MS}ms var(--ease-pk-move)`;
-      dim.style.opacity = "1";
-      setPhase("open");
     }
-  }, [center, originRef, phase]);
+    applyPose(photo, dim, "none", 1, !prefersReducedMotion());
+    setPhase("open");
+  }, [originRef, phase]);
 
   // 닫힘: 원래 아바타 자리로 줄어든 뒤 사라진다
   useEffect(() => {
@@ -119,23 +130,13 @@ const AvatarZoomViewer: React.FC<AvatarZoomViewerProps> = ({
       return;
     }
     setPhase("closing");
-    photo.style.transition = TRANSITION;
-    photo.style.transform = getTransformTo(originRef.current?.getBoundingClientRect(), center);
-    dim.style.transition = `opacity ${TRANSITION_MS}ms var(--ease-pk-move)`;
-    dim.style.opacity = "0";
+    const origin = getTransformTo(originRef.current?.getBoundingClientRect());
+    applyPose(photo, dim, origin, 0, true);
     const timer = window.setTimeout(finishClose, TRANSITION_MS);
     return () => window.clearTimeout(timer);
     // phase가 closing으로 바뀌어도 타이머는 유지해야 하므로 phase 변화로 정리하지 않는다
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen]);
-
-  // 열려 있는 동안 창 크기·회전이 바뀌어도 원이 가운데에 있게 한다
-  useEffect(() => {
-    if (phase === "hidden") return;
-    const handleResize = () => setCenter(getCenter());
-    window.addEventListener("resize", handleResize);
-    return () => window.removeEventListener("resize", handleResize);
-  }, [phase]);
 
   useEffect(() => {
     if (phase !== "open") return;
@@ -167,10 +168,13 @@ const AvatarZoomViewer: React.FC<AvatarZoomViewerProps> = ({
     drag.isDragging = true;
     drag.offset = offset;
     const effect = Math.min(offset, DRAG_EFFECT_MAX_PX);
-    photo.style.transition = "none";
-    photo.style.transform = `translateY(${offset}px) scale(${1 - effect / 1000})`;
-    dim.style.transition = "none";
-    dim.style.opacity = String(1 - effect / 300);
+    applyPose(
+      photo,
+      dim,
+      `translateY(${offset}px) scale(${1 - effect / 1000})`,
+      1 - effect / 300,
+      false,
+    );
   };
 
   const handlePointerEnd = () => {
@@ -186,10 +190,7 @@ const AvatarZoomViewer: React.FC<AvatarZoomViewerProps> = ({
     const photo = photoRef.current;
     const dim = dimRef.current;
     if (!photo || !dim) return;
-    photo.style.transition = TRANSITION;
-    photo.style.transform = "none";
-    dim.style.transition = `opacity ${TRANSITION_MS}ms var(--ease-pk-move)`;
-    dim.style.opacity = "1";
+    applyPose(photo, dim, "none", 1, true);
   };
 
   const handleClick = () => {
@@ -227,8 +228,9 @@ const AvatarZoomViewer: React.FC<AvatarZoomViewerProps> = ({
         ref={photoRef}
         className="absolute overflow-hidden rounded-full bg-pk-neutral shadow-[0_20px_50px] shadow-pk-ink/30 ring-4 ring-white will-change-transform"
         style={{
-          left: center.left,
-          top: center.top,
+          // 창 크기·회전이 바뀌어도 가운데에 있도록 CSS로 가운데에 둔다
+          left: `calc(50% - ${AVATAR_ZOOM_SIZE / 2}px)`,
+          top: `calc(50% - ${AVATAR_ZOOM_SIZE / 2}px)`,
           width: AVATAR_ZOOM_SIZE,
           height: AVATAR_ZOOM_SIZE,
           transformOrigin: "0 0",
