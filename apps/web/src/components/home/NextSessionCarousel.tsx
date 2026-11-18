@@ -99,6 +99,15 @@ const NextSessionCarousel: React.FC<NextSessionCarouselProps> = ({
     updateActiveIndex();
   }, [count, updateActiveIndex]);
 
+  // 숨은 탭이 다시 보이거나 폭이 바뀌면 스크롤 이벤트 없이 위치가 달라질 수 있어 다시 고른다
+  useEffect(() => {
+    const track = trackRef.current;
+    if (!track || typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(() => updateActiveIndex());
+    observer.observe(track);
+    return () => observer.disconnect();
+  }, [count, updateActiveIndex]);
+
   useEffect(
     () => () => {
       if (frameRef.current !== null) cancelAnimationFrame(frameRef.current);
@@ -133,14 +142,15 @@ const NextSessionCarousel: React.FC<NextSessionCarouselProps> = ({
 
   return (
     <div className="flex flex-col gap-2">
-      {/* 홈 본문 좌우 여백(px-4)까지 넓혀 카드가 화면 끝에서 들어오고 나가게 한다 */}
+      {/* 홈 본문 좌우 여백(px-4)까지 넓혀 카드가 화면 끝에서 들어오고 나가게 한다.
+          relative는 카드 offsetLeft를 트랙 기준으로 재기 위해서다 */}
       <div
         ref={trackRef}
         role="region"
         aria-roledescription="carousel"
         aria-label="다가오는 세션"
         onScroll={handleScroll}
-        className="-mx-4 flex snap-x snap-mandatory scroll-px-4 gap-2 overflow-x-auto overscroll-x-contain px-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        className="relative -mx-4 flex snap-x snap-mandatory scroll-px-4 gap-2 overflow-x-auto overscroll-x-contain px-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
       >
         {sessions.map((session, index) => (
           <div
