@@ -109,7 +109,7 @@ pnpm lint
 - GitHub Actions `ci.yml`은 PR과 main push에서 설치·빌드·api/shared/web 테스트를 실행합니다.
 - api는 Supabase Edge Function `api`로 배포합니다(base URL `https://<project-ref>.supabase.co/functions/v1`, 경로 `/api/...`). 운영 배포는 GitHub Release 발행 때만 하며, 발행하면 `supabase-deploy.yml`(`supabase db push`와 함수 배포)과 `pages.yml`(web·admin)이 릴리즈 태그 커밋으로 함께 실행됩니다. main 머지만으로는 배포되지 않습니다. web·admin 앱 버전은 릴리즈 태그 이름입니다. Supabase 프로젝트 준비, GitHub secrets·variables, 함수 secrets는 `docs/deploy.md`가 기준이며, 새 함수 secret·설정이 생기면 이 문서에 추가합니다.
 - api의 CORS 허용 origin은 env `CORS_ALLOWED_ORIGINS`(쉼표 구분)와 localhost 개발 origin(8080, 3100)입니다.
-- 세션 일정·참석 현황은 동호회 구글 캘린더에 서버가 단방향으로 씁니다(`apps/api/src/services/SessionCalendarSync.ts`). 세션 생성·참여자 변경·삭제를 api `MatchRepository`의 `onSessionsChanged`로 받아 응답과 분리해 반영하고(Edge는 `EdgeRuntime.waitUntil`), 반영이 빠진 일정은 매일 예약 작업이 다가오는 세션을 다시 써서 맞춥니다. 일정 id는 세션 id에서 만들어 DB 매핑이 없습니다. env `GOOGLE_CALENDAR_SERVICE_ACCOUNT_JSON`·`GOOGLE_CALENDAR_ID`가 없으면 꺼지며 준비 절차는 `docs/deploy.md`를 따릅니다.
+- 세션 일정·참석 현황은 동호회 구글 캘린더에 서버가 단방향으로 씁니다(`apps/api/src/services/SessionCalendarSync.ts`). 세션 생성·참여자 변경·삭제를 api `MatchRepository`의 `onSessionsChanged`로 받아 응답과 분리해 반영하고(Edge는 `EdgeRuntime.waitUntil`), 반영이 빠진 일정은 매일 예약 작업이 다가오는 세션을 다시 써서 맞춥니다. 일정 id는 세션 id에서 만들어 DB 매핑이 없습니다. env `GOOGLE_CALENDAR_SERVICE_ACCOUNT_JSON`·`GOOGLE_CALENDAR_ID`가 없거나 `ENABLE_DEV_MOCK_DATA=true`(로컬 `pnpm dev`)면 꺼지며 준비 절차는 `docs/deploy.md`를 따릅니다.
 
 ## 작업 및 커밋 규칙
 

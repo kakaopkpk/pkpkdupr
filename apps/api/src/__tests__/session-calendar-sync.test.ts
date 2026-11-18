@@ -8,6 +8,7 @@ import {
 import {
   buildSessionCalendarEvent,
   createSessionCalendarSync,
+  getEnvGoogleCalendarClient,
   toCalendarEventId,
   type CalendarSessionSnapshot,
 } from "../services/SessionCalendarSync";
@@ -194,6 +195,32 @@ describe("readGoogleCalendarConfig", () => {
     ).toBeNull();
     expect(consoleError).toHaveBeenCalled();
     consoleError.mockRestore();
+  });
+});
+
+describe("getEnvGoogleCalendarClient", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.restoreAllMocks();
+  });
+
+  it("ENABLE_DEV_MOCK_DATA=true면 캘린더 설정이 있어도 연동을 끄고 한 번만 알린다", async () => {
+    const consoleWarn = vi
+      .spyOn(console, "warn")
+      .mockImplementation(() => undefined);
+    vi.stubEnv(
+      "GOOGLE_CALENDAR_SERVICE_ACCOUNT_JSON",
+      await createTestServiceAccountJson(),
+    );
+    vi.stubEnv("GOOGLE_CALENDAR_ID", "club@group.calendar.google.com");
+
+    vi.stubEnv("ENABLE_DEV_MOCK_DATA", "false");
+    expect(getEnvGoogleCalendarClient()).not.toBeNull();
+
+    vi.stubEnv("ENABLE_DEV_MOCK_DATA", "true");
+    expect(getEnvGoogleCalendarClient()).toBeNull();
+    expect(getEnvGoogleCalendarClient()).toBeNull();
+    expect(consoleWarn).toHaveBeenCalledTimes(1);
   });
 });
 
