@@ -1,3 +1,4 @@
+import { isDevMockDataEnabled } from "@pkpkdupr/db";
 import {
   kstDateKeyToDate,
   REGULAR_SESSION_END_TIME,
@@ -223,22 +224,18 @@ let cachedClient: { key: string; client: GoogleCalendarClient | null } | null =
  * `.env`에 캘린더 설정이 있어도 동호회 캘린더에 쓰지 않도록 연동을 끈다.
  */
 export const getEnvGoogleCalendarClient = (): GoogleCalendarClient | null => {
-  const isDevMock = process.env.ENABLE_DEV_MOCK_DATA === "true";
+  const isDevMock = isDevMockDataEnabled();
   const key = `${isDevMock}\n${process.env.GOOGLE_CALENDAR_SERVICE_ACCOUNT_JSON ?? ""}\n${process.env.GOOGLE_CALENDAR_ID ?? ""}`;
   if (cachedClient?.key !== key) {
-    if (isDevMock) {
-      if (readGoogleCalendarConfig(process.env)) {
-        console.warn(
-          "[CALENDAR] ENABLE_DEV_MOCK_DATA=true라 캘린더 설정이 있어도 연동을 끕니다.",
-        );
-      }
-      cachedClient = { key, client: null };
-      return null;
-    }
     const config = readGoogleCalendarConfig(process.env);
+    if (config && isDevMock) {
+      console.warn(
+        "[CALENDAR] ENABLE_DEV_MOCK_DATA=true라 캘린더 설정이 있어도 연동을 끕니다.",
+      );
+    }
     cachedClient = {
       key,
-      client: config ? createGoogleCalendarClient(config) : null,
+      client: config && !isDevMock ? createGoogleCalendarClient(config) : null,
     };
   }
   return cachedClient.client;
