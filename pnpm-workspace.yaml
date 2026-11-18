@@ -5,3 +5,5 @@ allowBuilds:
   '@parcel/watcher': true
   esbuild: true
   supabase: true
+patchedDependencies:
+  postgres@3.4.9: patches/postgres@3.4.9.patch

@@ -4,6 +4,9 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
+patchedDependencies:
+  postgres@3.4.9: 56dda844e11a5f7138b624a187d44df3ceaf029afac8a0ab3f5eeda1e188e858
+
 importers:
 
   .:
@@ -166,10 +169,10 @@ importers:
         version: link:../shared
       drizzle-orm:
         specifier: ^0.30.10
-        version: 0.30.10(@types/react@19.2.17)(postgres@3.4.9)(react@19.2.7)
+        version: 0.30.10(@types/react@19.2.17)(postgres@3.4.9(patch_hash=56dda844e11a5f7138b624a187d44df3ceaf029afac8a0ab3f5eeda1e188e858))(react@19.2.7)
       postgres:
         specifier: ^3.4.9
-        version: 3.4.9
+        version: 3.4.9(patch_hash=56dda844e11a5f7138b624a187d44df3ceaf029afac8a0ab3f5eeda1e188e858)
     devDependencies:
       '@types/node':
         specifier: ^20.x
@@ -5395,10 +5398,10 @@ snapshots:
       '@babel/runtime': 7.29.7
       csstype: 3.2.3
 
-  drizzle-orm@0.30.10(@types/react@19.2.17)(postgres@3.4.9)(react@19.2.7):
+  drizzle-orm@0.30.10(@types/react@19.2.17)(postgres@3.4.9(patch_hash=56dda844e11a5f7138b624a187d44df3ceaf029afac8a0ab3f5eeda1e188e858))(react@19.2.7):
     optionalDependencies:
       '@types/react': 19.2.17
-      postgres: 3.4.9
+      postgres: 3.4.9(patch_hash=56dda844e11a5f7138b624a187d44df3ceaf029afac8a0ab3f5eeda1e188e858)
       react: 19.2.7
 
   dunder-proto@1.0.1:
@@ -6155,7 +6158,7 @@ snapshots:
       picocolors: 1.1.1
       source-map-js: 1.2.1
 
-  postgres@3.4.9: {}
+  postgres@3.4.9(patch_hash=56dda844e11a5f7138b624a187d44df3ceaf029afac8a0ab3f5eeda1e188e858): {}
 
   pretty-bytes@5.6.0: {}
 
