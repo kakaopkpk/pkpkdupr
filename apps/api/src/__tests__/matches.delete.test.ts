@@ -357,6 +357,16 @@ describe("PUT /api/matches/:matchId expectedUpdatedAt", () => {
       MatchRepository.prototype,
       "findCompletedMatchOutcomes",
     ).mockResolvedValue([]);
+    // 경기 저장 응답의 새 업적은 랭킹 원천(전원의 평점 로그·회원·세션)으로 계산한다
+    vi.spyOn(
+      MatchRepository.prototype,
+      "getAllRatingChangeLogs",
+    ).mockResolvedValue([]);
+    vi.spyOn(
+      MatchRepository.prototype,
+      "findSessionsWithParticipantIds",
+    ).mockResolvedValue([]);
+    vi.spyOn(AuthService.prototype, "getAllPlayers").mockResolvedValue([]);
     vi.spyOn(MatchRepository.prototype, "cleanupExpired").mockResolvedValue(
       undefined,
     );
