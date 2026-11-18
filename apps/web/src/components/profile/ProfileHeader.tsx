@@ -46,10 +46,11 @@ export interface ProfileHeaderProps {
 }
 
 /**
- * 나 탭·회원 프로필 공용 머리. 흰 카드 없이 바탕 위에 아바타 72와 오른쪽 텍스트 열,
- * 오른쪽 슬롯을 한 행에 둔다. 텍스트 열은 이름 22/800 · "N경기 · N승 N패"(복식+단식 합) ·
- * 상태메시지 칩 줄(20px 고정)이고 합이 아바타 높이와 같다. 승패 줄과 상태메시지 줄은
- * 내용이 없어도 자리를 지켜, 사진·상태메시지 유무와 상관없이 머리 높이가 같다.
+ * 나 탭·회원 프로필 공용 머리. 흰 카드 없이 바탕 위에 아바타 72 오른쪽으로
+ * 이름 22/800 · "N경기 · N승 N패"(복식+단식 합) · 상태메시지 칩 줄(20px 고정)을 쌓고,
+ * 세 줄 합이 아바타 높이와 같다. 승패 줄과 상태메시지 줄은 내용이 없어도 자리를 지켜,
+ * 사진·상태메시지 유무와 상관없이 머리 높이가 같다.
+ * 오른쪽 슬롯은 이름·전적 두 줄 옆에 두고, 상태메시지 줄은 그 아래까지 폭을 써서 최대 20자가 들어간다.
  * 사진을 불러온 아바타는 누르면 사진 확대 보기(AvatarZoomViewer)를 연다.
  */
 const ProfileHeader: React.FC<ProfileHeaderProps> = ({
@@ -108,7 +109,15 @@ const ProfileHeader: React.FC<ProfileHeaderProps> = ({
   }, [isZoomVisible]);
 
   return (
-    <header className={cx("flex items-center gap-3", className)}>
+    <header
+      className={cx(
+        "grid items-start gap-x-3",
+        right
+          ? "grid-cols-[auto_minmax(0,1fr)_auto]"
+          : "grid-cols-[auto_minmax(0,1fr)]",
+        className,
+      )}
+    >
       {player ? (
         <button
           ref={avatarButtonRef}
@@ -119,7 +128,7 @@ const ProfileHeader: React.FC<ProfileHeaderProps> = ({
           tabIndex={canZoom ? undefined : -1}
           onClick={openZoom}
           className={cx(
-            "flex shrink-0 rounded-full transition-transform duration-150 ease-pk-move enabled:active:scale-[0.92] motion-reduce:transition-none",
+            "col-start-1 row-span-3 row-start-1 flex self-center rounded-full transition-transform duration-150 ease-pk-move enabled:active:scale-[0.92] motion-reduce:transition-none",
             isZoomVisible && "invisible",
           )}
         >
@@ -130,37 +139,38 @@ const ProfileHeader: React.FC<ProfileHeaderProps> = ({
           />
         </button>
       ) : (
-        <span className="size-[72px] shrink-0 animate-pulse rounded-full bg-pk-neutral" />
+        <span className="col-start-1 row-span-3 row-start-1 size-[72px] self-center animate-pulse rounded-full bg-pk-neutral" />
       )}
-      <div className="flex min-w-0 flex-1 flex-col items-start gap-0.5">
-        <Heading className="max-w-full truncate text-pk-22 leading-[1.25] font-extrabold tracking-[-0.02em] text-pk-ink">
-          {player?.username ?? ""}
-        </Heading>
-        {totalStats ? (
-          <span className="text-pk-13 text-pk-sub tabular-nums">
-            <CountUpNumber
-              value={totalStats.wins + totalStats.losses}
-              {...COUNT_UP}
-            />
-            경기 ·{" "}
-            <WinLossCount wins={totalStats.wins} losses={totalStats.losses} />
-          </span>
-        ) : (
-          <span className="flex h-[19.5px] items-center">
-            {hideStats ? null : <SkeletonBlock className="h-4 w-32" />}
-          </span>
-        )}
-        {/* 열의 gap 2px와 합쳐 전적과 칩 사이가 3px */}
-        <div className="mt-px flex h-5 max-w-full">
-          {statusMessage ? (
-            <StatusMessageChip
-              message={statusMessage}
-              color={statusMessageBackgroundColor}
-            />
-          ) : null}
+      <Heading className="col-start-2 row-start-1 truncate text-pk-22 leading-[1.25] font-extrabold tracking-[-0.02em] text-pk-ink">
+        {player?.username ?? ""}
+      </Heading>
+      {totalStats ? (
+        <span className="col-start-2 row-start-2 mt-0.5 text-pk-13 text-pk-sub tabular-nums">
+          <CountUpNumber
+            value={totalStats.wins + totalStats.losses}
+            {...COUNT_UP}
+          />
+          경기 ·{" "}
+          <WinLossCount wins={totalStats.wins} losses={totalStats.losses} />
+        </span>
+      ) : (
+        <span className="col-start-2 row-start-2 mt-0.5 flex h-[19.5px] items-center">
+          {hideStats ? null : <SkeletonBlock className="h-4 w-32" />}
+        </span>
+      )}
+      {right ? (
+        <div className="col-start-3 row-span-2 row-start-1 flex self-center">
+          {right}
         </div>
+      ) : null}
+      <div className="col-start-2 col-end-[-1] row-start-3 mt-[3px] flex h-5 min-w-0">
+        {statusMessage ? (
+          <StatusMessageChip
+            message={statusMessage}
+            color={statusMessageBackgroundColor}
+          />
+        ) : null}
       </div>
-      {right}
       {player && avatarUrl && isZoomVisible ? (
         <AvatarZoomViewer
           isOpen={isZoomOpen && isZoomRequested}
