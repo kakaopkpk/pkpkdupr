@@ -1,8 +1,5 @@
 import React from "react";
-import {
-  ACHIEVEMENTS,
-  sumAchievementPoints,
-} from "@pkpkdupr/shared/achievements";
+import { sumAchievementPoints } from "@pkpkdupr/shared/achievements";
 import { AchievementBadge } from "@/components/profile/AchievementBadge";
 import { AchievementPointsSummary } from "@/components/profile/AchievementPointsSummary";
 import { rowPressClassName } from "@/components/ui/Button";
@@ -38,7 +35,6 @@ export const AchievementsSection: React.FC<AchievementsSectionProps> = ({
 }) => {
   const { openAchievementDetail } = useAppNavigation();
   const earned = getEarnedAchievementsByRecent(progress);
-  const title = `업적 · ${earned.length}/${ACHIEVEMENTS.length}`;
 
   return (
     <section className="flex flex-col gap-2.5 pt-1">
@@ -51,7 +47,7 @@ export const AchievementsSection: React.FC<AchievementsSectionProps> = ({
           ) : undefined
         }
       >
-        {title}
+        업적
       </SectionLabel>
       {earned.length > 0 ? (
         <Card className="flex flex-col gap-4 px-2 py-4">

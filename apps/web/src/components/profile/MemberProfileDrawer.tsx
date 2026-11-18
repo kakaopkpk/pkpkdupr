@@ -217,7 +217,6 @@ export default function MemberProfileDrawer({
               <RecentMatchesSection
                 title="최근 경기"
                 matches={overview.summary.recentMatches}
-                totalCount={overview.summary.completedMatchCount}
                 viewerPlayerId={viewer?.id}
                 onViewAll={() => setIsMatchHistoryRequested(true)}
               />

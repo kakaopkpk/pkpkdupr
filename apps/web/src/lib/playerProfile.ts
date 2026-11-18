@@ -29,8 +29,6 @@ export interface PlayerProfileSummaryInfo {
   >;
   ratingHistory: PlayerRatingHistory;
   recentMatches: MatchInfo[];
-  /** 완료 경기 수(복식+단식, 평점 미반영 경기 포함) */
-  completedMatchCount: number;
   partners: PartnerStat[];
   /** 자주 진 상대(천적) */
   rivals: OpponentStat[];

@@ -120,6 +120,7 @@ const Me: React.FC = () => {
               <PreviewSection
                 title="파트너 궁합"
                 items={partners}
+                showCount={false}
                 renderPreview={(preview) => (
                   <PartnerChemistryCard partners={preview} />
                 )}
@@ -130,6 +131,7 @@ const Me: React.FC = () => {
               <PreviewSection
                 title="천적"
                 items={rivals}
+                showCount={false}
                 renderPreview={(preview) => <RivalCard rivals={preview} />}
                 onViewAll={() => setIsRivalsRequested(true)}
               />
@@ -144,7 +146,6 @@ const Me: React.FC = () => {
             <RecentMatchesSection
               title="최근 경기"
               matches={overview.summary.recentMatches}
-              totalCount={overview.summary.completedMatchCount}
               onViewAll={() => setIsMatchHistoryRequested(true)}
             />
           </>
