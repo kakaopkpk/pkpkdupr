@@ -41,6 +41,7 @@ pnpm supabase:link / db:push     # 원격 프로젝트 연결 / 원격 DB에 마
 pnpm build:edge                  # api를 Edge Function 번들로 빌드 (supabase/functions/api/dist/)
 pnpm functions:serve             # build:edge 후 로컬 Edge Function api 실행 (Docker 필요)
 pnpm db:import-mysql --dump <파일>  # 옛 MySQL 덤프로 DB를 비우고 다시 채움 (기본 dry-run, docs/data-migration.md)
+pnpm design:snapshot [화면...]    # 디자인 시안용 화면 스냅샷 (Docker 불필요, --record는 녹화, .claude/skills/design-canvas)
 
 pnpm build
 pnpm build:web

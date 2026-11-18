@@ -11,21 +11,22 @@ description: pkpkdupr web·admin 화면의 디자인 시안·캔버스·목업�
 
 - `docs/design.md`: 확정된 결정, 다시 제안하지 않는 것, 미결 항목
 - `apps/web/AGENTS.md`의 "스타일링 규칙"·"디자인 규칙"
-- admin 화면이면 `apps/admin-web/AGENTS.md`도 읽는다(PC 전용이라 폰 시안은 만들지 않는다). 스냅샷 스크립트는 web만 다루므로, admin은 `pnpm dev`로 띄운 :3100을 PC 폭으로 열어 직접 보고(스크린샷) 해당 화면 코드에서 그린다.
+- admin 화면이면 `apps/admin-web/AGENTS.md`도 읽는다(PC 전용이라 폰 시안은 만들지 않는다). 스냅샷 스크립트는 web만 다루므로, admin은 `pnpm dev`(Docker 필요)로 띄운 :3100을 PC 폭으로 열어 직접 보고(스크린샷) 해당 화면 코드에서 그린다.
 
 ## 2. 지금 화면 스냅샷 뜨기
 
 시안의 "지금" 보드는 손으로 그리지 않고 실제 앱을 렌더링한 결과에서 시작한다. 코드만 읽고 그리면 HeroUI 기본값·상속 글꼴·배치·장식(불꽃 후광, 랠리, 유리 탭바)이 실제와 달라진다.
 
-1. `pnpm dev`(Docker 필요, web :8080)로 앱을 띄운다. 처음이면 `pnpm exec playwright install chromium`도 한 번 실행한다.
-2. `pnpm design:snapshot`을 실행한다. 인자 없이 실행하면 폴더를 비우고 전부 다시 찍고, 화면 이름을 주면(`pnpm design:snapshot home ranking`) 그 화면만 덮어쓴다. dev 계정으로 로그인해 390px 폭으로 화면을 돌며 `.design-snapshots/`에 쓴다(커밋하지 않는다).
+1. 처음 한 번 `pnpm install`과 `pnpm exec playwright install chromium`을 실행한다.
+2. `pnpm design:snapshot`을 실행한다. Docker도 `pnpm dev`도 필요 없다. 스크립트가 web(Vite)만 :8091에 직접 띄우고, 로그인·API·아바타 요청은 저장해 둔 응답(`scripts/design-snapshot/fixtures/responses.json`)으로 답하며, 브라우저 시계를 녹화 시각에 고정한다. 그래서 화면 모양은 지금 코드이고, 데이터는 녹화 때의 dev mock 데이터다. 인자 없이 실행하면 폴더를 비우고 전부 다시 찍고, 화면 이름을 주면(`pnpm design:snapshot home ranking`) 그 화면만 덮어쓴다. 결과는 `.design-snapshots/`에 쓴다(커밋하지 않는다).
    - `<화면>.png`: 실제 모습. 시안과 비교하는 기준이다.
    - `<화면>.html`: 실제 DOM(앱의 Tailwind 클래스 그대로). 같은 폴더의 `app.css`(앱 CSS 전체)를 붙이면 앱과 똑같이 렌더링된다.
    - `index.html`: 찍은 화면을 한눈에 보는 페이지
-   - dev mock 아이디는 실제 형식 아이디(`minsu.kim`, `jay.21` …)로 바뀌어 나온다.
-3. 필요한 화면이 목록에 없으면 `scripts/design-snapshot.mjs`의 `SCREENS`에 단계를 추가한다(지금: home, schedule, ranking, me, plus-menu, record-sheet, match-detail, profile, settings). dev mock에 없는 상태(빈 날, 세션 없는 날 등)는 해당 화면 HTML을 복사해 내용만 고친다.
+   - 아이디는 실제 형식 아이디(`minsu.kim`, `jay.21` …)로 녹화돼 있다.
+3. "녹화 응답이 없는 요청"이 출력되면 API나 화면이 바뀐 것이다. 요청은 그대로인데 응답에 새 필드가 생긴 경우(새 기능이 화면에 안 보임)도 같다. Docker가 있는 환경에서 `pnpm dev`를 띄우고 `pnpm design:snapshot --record`로 다시 녹화해 `responses.json`을 함께 커밋한다(화면 이름을 주면 그 화면 응답만 기존 녹화에 덧붙인다). 녹화는 dev mock 아이디를 실제 형식 아이디로 바꿔 저장하고 로그인 토큰은 저장하지 않는다.
+4. 필요한 화면이 목록에 없으면 `scripts/design-snapshot/snapshot.mjs`의 `SCREENS`에 단계를 추가하고 다시 녹화한다(지금: home, schedule, ranking, me, plus-menu, record-sheet, match-detail, profile, settings). dev mock에 없는 상태(빈 날, 세션 없는 날 등)는 해당 화면 HTML을 복사해 내용만 고친다.
 
-앱을 띄울 수 없을 때만 예외로 해당 화면 컴포넌트와 `apps/web/src/components/ui/`, `apps/web/src/index.css`의 `@theme`를 읽어 그리고, 실제 화면과 대조하지 못했다는 사실을 사용자에게 알린다. 예전 디자인 캔버스(아티팩트)는 그 시점의 시안이라 지금 앱과 다를 수 있으므로 모양의 기준으로 쓰지 않는다.
+스냅샷을 만들 수 없을 때만 예외로 해당 화면 컴포넌트와 `apps/web/src/components/ui/`, `apps/web/src/index.css`의 `@theme`를 읽어 그리고, 실제 화면과 대조하지 못했다는 사실을 사용자에게 알린다. 예전 디자인 캔버스(아티팩트)는 그 시점의 시안이라 지금 앱과 다를 수 있으므로 모양의 기준으로 쓰지 않는다.
 
 ## 3. 안 그리기
 
