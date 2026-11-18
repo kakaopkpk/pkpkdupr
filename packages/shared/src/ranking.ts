@@ -24,11 +24,15 @@ export interface RankingEntry {
   matchCount: number;
   /** 기준 순위 - 현재 순위. 양수=상승, 0=보합, null=기준 시점에 순위 없음 */
   rankChange: number | null;
+  /** 지금 이어지는 연승 수(단식·복식 합, `computeCurrentWinStreak`) */
+  winStreak: number;
 }
 
 export interface UnratedRankingEntry {
   player: RankingEntryPlayer;
   matchCount: number;
+  /** 지금 이어지는 연승 수 */
+  winStreak: number;
 }
 
 /** 랭킹 분류. achievements는 업적 점수 순위다 */
@@ -40,6 +44,8 @@ export interface AchievementRankingEntry {
   player: RankingEntryPlayer;
   /** 받은 업적 점수 합 */
   points: number;
+  /** 지금 이어지는 연승 수 */
+  winStreak: number;
 }
 
 /**

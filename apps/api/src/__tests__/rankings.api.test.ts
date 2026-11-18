@@ -176,6 +176,7 @@ describe("랭킹·세션 리포트 API", () => {
           rating: 3.6,
           matchCount: 1,
           rankChange: 1,
+          winStreak: 1,
         },
         {
           rank: 2,
@@ -183,12 +184,14 @@ describe("랭킹·세션 리포트 API", () => {
           rating: 3.4,
           matchCount: 1,
           rankChange: -1,
+          winStreak: 0,
         },
       ],
       unrated: [
         {
           player: { id: carol.id, username: "carol", statusMessage: "NR 탈출 중" },
           matchCount: 0,
+          winStreak: 0,
         },
       ],
     });

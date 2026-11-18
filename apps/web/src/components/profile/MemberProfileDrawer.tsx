@@ -182,13 +182,15 @@ export default function MemberProfileDrawer({
           )}
         >
           <ProfileHeader
-            className="px-1 pb-1.5"
+            // 위 8px: 연승 링이 스크롤 영역 위 끝에 잘리지 않게 둔다(연승과 상관없이 같은 높이)
+            className="px-1 pt-2 pb-1.5"
             headingAs="h2"
             tabKey={tabKey}
             player={{ id: playerId, username, avatarUrl: shownPlayer?.avatarUrl }}
             statusMessage={member?.statusMessage}
             statusMessageBackgroundColor={member?.statusMessageBackgroundColor}
             matchStats={isInactive ? null : overview?.summary.matchStats}
+            winStreak={isInactive ? null : overview?.summary.winStreak}
             hideStats={hasError || isInactive}
           />
           {isInactive ? (

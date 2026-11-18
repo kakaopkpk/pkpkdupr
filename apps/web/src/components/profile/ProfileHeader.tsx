@@ -5,6 +5,7 @@ import { WinLossCount } from "@/components/profile/ProfileStatTile";
 import { COUNT_UP, CountUpNumber } from "@/components/ui/CountUpNumber";
 import { PlayerAvatar } from "@/components/ui/PlayerAvatar";
 import { StatusMessageChip } from "@/components/ui/StatusMessageChip";
+import { WinStreakAvatarFrame } from "@/components/ui/WinStreakAvatarFrame";
 import { cx } from "@/components/ui/cx";
 import {
   type TabKey,
@@ -35,6 +36,8 @@ export interface ProfileHeaderProps {
   player: { id: string; username: string; avatarUrl?: string | null } | null;
   statusMessage?: string | null;
   statusMessageBackgroundColor?: string | null;
+  /** 프로필 요약의 winStreak. 연승 중이면 아바타에 앰버 링과 "N연승" 태그를 붙인다 */
+  winStreak?: number | null;
   /** 프로필 요약의 matchStats. 없으면 불러오는 중(스켈레톤)이거나 숨김(hideStats)이다 */
   matchStats: PlayerProfileSummaryInfo["matchStats"] | null | undefined;
   /** matchStats가 없을 때 스켈레톤 대신 승패 줄을 빈칸으로 둔다. 요약을 불러오지 못했거나 비활성 회원일 때 */
@@ -61,6 +64,7 @@ const ProfileHeader: React.FC<ProfileHeaderProps> = ({
   player,
   statusMessage,
   statusMessageBackgroundColor,
+  winStreak,
   matchStats,
   hideStats = false,
   headingAs: Heading = "h1",
@@ -137,11 +141,13 @@ const ProfileHeader: React.FC<ProfileHeaderProps> = ({
             isZoomVisible && "invisible",
           )}
         >
-          <PlayerAvatar
-            player={player}
-            size={72}
-            onImageLoad={setLoadedAvatarUrl}
-          />
+          <WinStreakAvatarFrame winStreak={winStreak} size="lg">
+            <PlayerAvatar
+              player={player}
+              size={72}
+              onImageLoad={setLoadedAvatarUrl}
+            />
+          </WinStreakAvatarFrame>
         </button>
       ) : (
         <SkeletonBlock className={cx(AVATAR_CELL, "size-[72px] rounded-full")} />

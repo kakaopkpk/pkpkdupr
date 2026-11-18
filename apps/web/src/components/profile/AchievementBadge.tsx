@@ -3,6 +3,7 @@ import {
   isLowRatingAchievement,
   type AchievementDefinition,
 } from "@pkpkdupr/shared/achievements";
+import { FLAME_ICON_PATH } from "@/components/ui/Icons";
 import { cx } from "@/components/ui/cx";
 
 const EARNED_COLOR = "var(--color-pk-primary)";
@@ -61,7 +62,7 @@ const BADGE_ICON_PATHS: Record<BadgeIconKind, React.ReactNode> = {
     </>
   ),
   flame: (
-    <path d="M12 3c1 3 4.5 4.5 4.5 9.5a4.5 4.5 0 0 1-9 0c0-2.2 1-3.5 2.2-4.5 0 2 .8 3 1.8 3 0-3-1-5.2.5-8z" />
+    <path d={FLAME_ICON_PATH} />
   ),
   shield: (
     <>

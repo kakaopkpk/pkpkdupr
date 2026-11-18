@@ -32,6 +32,7 @@
   - 천적(맞대결 3경기 이상·진 비율 50% 이상, 둘 다 조건에 맞는 회원 전부)
   - 요청자 기준 분류별 상대 전적과 그 경기들에서 바뀐 요청자 평점 합 `headToHead[분류].ratingDelta`
   - 업적 진행 상태 `achievements`(아래 "업적")
+  - 지금 연승 수 `winStreak`(아래 "랭킹"과 같은 규칙)
 
 ## 경기
 
@@ -91,6 +92,7 @@
   - 기본 doubles, 게스트 제외.
   - 순위·완료 경기 수·가장 최근 세션 시작 직전 대비 순위 변동 `rankChange`, NR 회원은 `unrated`.
   - 회원(`player`)에 상태메시지 `statusMessage`·`statusMessageBackgroundColor` 포함.
+  - 세 분류 모두 줄마다 지금 연승 수 `winStreak`(`unrated` 포함). 평점 반영 완료 경기를 단식·복식 합쳐 마지막 경기부터 세고, 승패가 안 갈린 경기는 끊고 게스트 낀 경기는 건너뛴다(`packages/shared/src/streak.ts`).
   - achievements면 업적 점수 순위 `AchievementRankingResponse`: 활성 정회원 전원, 점수 내림차순 → 그 점수에 먼저 도달한 순 → 아이디 순, 0점은 맨 아래, 순위 변동 없음.
 - 세션 기록 목록 `GET /api/session-reports?limit=&playerId=`: 완료 경기가 있는 세션 최신순, limit 기본 20·최대 100, 홈이 사용
 - 기록 목록 `GET /api/records?limit=&cursor=&playerId=`

@@ -56,6 +56,24 @@ export const CrownIcon: React.FC<{ className?: string }> = ({ className }) => (
   </svg>
 );
 
+/** 불꽃(업적 연승 배지·연승 태그) 모양 */
+export const FLAME_ICON_PATH =
+  "M12 3c1 3 4.5 4.5 4.5 9.5a4.5 4.5 0 0 1-9 0c0-2.2 1-3.5 2.2-4.5 0 2 .8 3 1.8 3 0-3-1-5.2.5-8z";
+
+/** 채운 불꽃 아이콘 */
+export const FlameIcon: React.FC<{ size: number }> = ({ size }) => (
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 24 24"
+    aria-hidden="true"
+    fill="currentColor"
+    className="shrink-0"
+  >
+    <path d={FLAME_ICON_PATH} />
+  </svg>
+);
+
 /** 검색 돋보기 */
 export const SearchIcon: React.FC = () => (
   <svg

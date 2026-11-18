@@ -512,6 +512,41 @@
   }
 
   /*
+   * 연승 아바타 링(WinStreakAvatarFrame). 아바타 크기는 그대로 두고 바깥에 흰 틈(::after)과
+   * 하이라이트(앰버) 링(::before)을 그린다. 흰 틈은 --pk-streak-gap, 링 굵기는 --pk-streak-ring로 정하고,
+   * data-glow가 있으면 링 바깥에 앰버 빛을 더한다.
+   */
+  .pk-streak-ring {
+    position: relative;
+    display: inline-flex;
+    isolation: isolate;
+  }
+
+  .pk-streak-ring::before,
+  .pk-streak-ring::after {
+    content: "";
+    position: absolute;
+    border-radius: 9999px;
+  }
+
+  .pk-streak-ring::before {
+    inset: calc((var(--pk-streak-gap) + var(--pk-streak-ring)) * -1);
+    z-index: -2;
+    background: var(--color-pk-hl);
+  }
+
+  .pk-streak-ring[data-glow]::before {
+    box-shadow: 0 0 10px 1px
+      color-mix(in srgb, var(--color-pk-hl) 80%, transparent);
+  }
+
+  .pk-streak-ring::after {
+    inset: calc(var(--pk-streak-gap) * -1);
+    z-index: -1;
+    background: var(--color-white);
+  }
+
+  /*
    * 업적 달성 축하 연출(AchievementCelebration).
    * 색종이 색은 캔버스가 --pk-confetti-1~6을 읽어 쓴다.
    */
