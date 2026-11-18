@@ -44,9 +44,10 @@ const CATEGORY_OPTIONS: readonly SegmentedOption<RankingCategory>[] = [
 
 const SKELETON_ROW_COUNT = 6;
 
-// 순위 24 · 아바타 32 · 이름 · 평점+변동. 줄 좌우 여백 없이 카드 안쪽 12px에 맞춘다
+// 순위 24 · 아바타 32 · 이름 · 평점+변동. 줄 좌우 여백 없이 카드 안쪽 12px에 맞춘다.
+// 최소 높이 61은 이름 아래 상태메시지 칩이 붙은 줄 높이(이름 22.5 + 간격 2 + 칩 20 + 위아래 여백 16)라, 칩 유무와 상관없이 모든 줄 높이가 같다
 const rowGridClassName =
-  "grid min-h-[52px] w-full grid-cols-[24px_32px_minmax(0,1fr)_auto] items-center gap-1.5 rounded-pk-sm py-2 text-left text-pk-ink";
+  "grid min-h-[61px] w-full grid-cols-[24px_32px_minmax(0,1fr)_auto] items-center gap-1.5 rounded-pk-sm py-2 text-left text-pk-ink";
 
 // 평점(15px)과 변동(12px)의 글자 세로 중심을 맞춘다. 줄 높이를 1로 두어 브라우저마다 다른 기본 줄 높이에 흔들리지 않게 한다
 const ratingCellClassName = "flex items-center gap-1.5";
