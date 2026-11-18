@@ -55,7 +55,7 @@ pnpm lint
 - Supabase CLI는 루트 devDependency이므로 전역 설치 없이 `pnpm exec supabase ...`(또는 `pnpm supabase ...`)로 씁니다.
 - web Vite proxy는 `/api`를 API로 연결합니다. 아바타는 Supabase Storage 공개 URL에서 직접 받습니다. DB 조회는 Supabase Studio를 씁니다.
 - `apps/web/dist/`는 빌드 산출물이므로 커밋하지 않습니다.
-- `pnpm dev`는 한 번에 한 워크트리에서만 띄웁니다. 포트(web 8080·api 4000·admin 3100·Supabase 543xx)와 Supabase `project_id`가 고정이라, 두 번째 워크트리의 web은 다른 포트로 떠도 첫 워크트리의 api·로컬 DB를 쓰고 그 마이그레이션이 같은 DB에 섞입니다.
+- `pnpm dev`는 한 번에 한 워크트리에서만 띄웁니다(이유는 `docs/dev-environment.md`).
 - Node 버전은 `.nvmrc`, pnpm 버전은 `package.json`의 `packageManager`가 기준입니다. corepack(`corepack enable`)으로 그 pnpm을 씁니다.
 
 ### 마이그레이션
