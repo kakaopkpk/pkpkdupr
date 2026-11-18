@@ -6,8 +6,30 @@ import { cx } from "@/components/ui/cx";
 import { formatElapsed } from "@/lib/format";
 import { TeamsVersus } from "./TeamBlock";
 
+/** 카드 머리 줄(앞 칩·경과 시간·꺾쇠)과 가로 vs 두 팀 */
+const LiveMatchBody: React.FC<{
+  match: MatchInfo;
+  now: Date;
+  chip?: React.ReactNode;
+  avatarSize?: 24 | 28;
+}> = ({ match, now, chip, avatarSize }) => (
+  <>
+    <span className="flex w-full items-center gap-2">
+      {chip}
+      <span className="text-pk-13 text-pk-sub tabular-nums">
+        {formatElapsed(match.matchStartsAt, now)}
+      </span>
+      <ChevronRightIcon className="ml-auto shrink-0 text-pk-quiet" />
+    </span>
+    <TeamsVersus
+      teams={[match.teams[0].players, match.teams[1].players]}
+      size={avatarSize}
+    />
+  </>
+);
+
 /** 진행 중인 내 경기. 2px 연한 블루 테두리와 "점수 입력" 버튼. 버튼 위 본문을 누르면 경기 상세를 연다 */
-const MyLiveMatchCard: React.FC<{
+export const MyLiveMatchCard: React.FC<{
   match: MatchInfo;
   now: Date;
   onOpenDetail: () => void;
@@ -19,18 +41,15 @@ const MyLiveMatchCard: React.FC<{
       onClick={onOpenDetail}
       className="flex flex-col gap-3 text-left active:opacity-80"
     >
-      <span className="flex w-full items-center gap-2">
-        <span className="rounded-full bg-pk-primary px-[9px] py-[3px] text-pk-12 font-extrabold text-white">
-          내 경기
-        </span>
-        <span className="text-pk-13 text-pk-sub tabular-nums">
-          {formatElapsed(match.matchStartsAt, now)}
-        </span>
-        <ChevronRightIcon className="ml-auto shrink-0 text-pk-quiet" />
-      </span>
-      <TeamsVersus
-        teams={[match.teams[0].players, match.teams[1].players]}
-        size={28}
+      <LiveMatchBody
+        match={match}
+        now={now}
+        avatarSize={28}
+        chip={
+          <span className="rounded-full bg-pk-primary px-[9px] py-[3px] text-pk-12 font-extrabold text-white">
+            내 경기
+          </span>
+        }
       />
     </button>
     <PkButton size="md" fullWidth className="h-12" onClick={onEnterScore}>
@@ -53,14 +72,6 @@ export const LiveMatchCard: React.FC<{
       rowPressClassName,
     )}
   >
-    <span className="flex w-full items-center gap-2">
-      <span className="text-pk-13 text-pk-sub tabular-nums">
-        {formatElapsed(match.matchStartsAt, now)}
-      </span>
-      <ChevronRightIcon className="ml-auto shrink-0 text-pk-quiet" />
-    </span>
-    <TeamsVersus teams={[match.teams[0].players, match.teams[1].players]} />
+    <LiveMatchBody match={match} now={now} />
   </button>
 );
-
-export default MyLiveMatchCard;

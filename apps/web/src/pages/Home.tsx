@@ -4,7 +4,7 @@ import { toKstDateKey } from "@pkpkdupr/shared/session";
 import { getMatchPlayerIds, type MatchInfo } from "@/types/match";
 import HomeSkeleton from "@/components/home/HomeSkeleton";
 import LastSessionFeed from "@/components/home/LastSessionFeed";
-import MyLiveMatchCard, { LiveMatchCard } from "@/components/home/MyLiveMatchCard";
+import { LiveMatchCard, MyLiveMatchCard } from "@/components/home/LiveMatchCard";
 import NextSessionCarousel from "@/components/home/NextSessionCarousel";
 import RecommendationSection, {
   getCourtKey,
