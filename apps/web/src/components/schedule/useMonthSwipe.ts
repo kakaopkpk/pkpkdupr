@@ -17,6 +17,8 @@ interface SwipeState {
   startY: number;
   /** 끌기를 시작할 때 날짜 칸의 위치. 정착 연출 중에 다시 끌면 그 자리에서 이어 간다 */
   baseOffset: number;
+  /** 움직임 줄이기면 날짜 칸을 옮기지 않고 달만 바꾼다. 끌기를 시작할 때 한 번 읽는다 */
+  reduceMotion: boolean;
   samples: { x: number; time: number }[];
 }
 
@@ -41,11 +43,16 @@ export const useMonthSwipe = (
     let state: SwipeState | null = null;
     let suppressClickUntil = -Infinity;
 
-    const setOffset = (offset: number, animate: boolean) => {
+    const setOffset = (offset: number) => {
+      content.style.transform = offset === 0 ? "" : `translate3d(${offset}px, 0, 0)`;
+    };
+
+    /** 날짜 칸을 제자리로 보낸다 */
+    const settle = (animate: boolean) => {
       content.style.transition = animate
         ? `transform ${SETTLE_DURATION_MS}ms var(--ease-pk-move)`
         : "";
-      content.style.transform = offset === 0 ? "" : `translate3d(${offset}px, 0, 0)`;
+      setOffset(0);
     };
 
     const handleTouchStart = (event: TouchEvent) => {
@@ -61,6 +68,7 @@ export const useMonthSwipe = (
         startX: touch.clientX,
         startY: touch.clientY,
         baseOffset: 0,
+        reduceMotion: false,
         samples: [{ x: touch.clientX, time: event.timeStamp }],
       };
     };
@@ -83,11 +91,13 @@ export const useMonthSwipe = (
           return;
         }
         state.mode = "drag";
+        state.reduceMotion = prefersReducedMotion();
         state.baseOffset = new DOMMatrixReadOnly(getComputedStyle(content).transform).m41;
+        content.style.transition = "";
       }
 
       if (event.cancelable) event.preventDefault();
-      if (!prefersReducedMotion()) setOffset(state.baseOffset + deltaX, false);
+      if (!state.reduceMotion) setOffset(state.baseOffset + deltaX);
       state.samples.push({ x: touch.clientX, time: event.timeStamp });
       const cutoff = event.timeStamp - VELOCITY_WINDOW_MS;
       while (state.samples.length > 2 && state.samples[0].time < cutoff) {
@@ -113,24 +123,22 @@ export const useMonthSwipe = (
         velocityX: !isPaused && elapsed > 0 ? (last.x - first.x) / elapsed : 0,
         width,
       });
-      const offset = state.baseOffset + deltaX;
+      const { baseOffset, reduceMotion } = state;
       state = null;
 
-      if (step !== 0) onSwipeRef.current(step);
-      if (prefersReducedMotion()) {
-        setOffset(0, false);
-        return;
-      }
       if (step !== 0) {
-        // 새 달은 이 핸들러가 끝난 뒤 그리기 전에 렌더되므로, 반대편에서 시작해 제자리로 들어오게 한다
-        setOffset(step * Math.min(Math.abs(offset), width), false);
-        content.getBoundingClientRect();
+        onSwipeRef.current(step);
+        if (!reduceMotion) {
+          // 새 달은 이 핸들러가 끝난 뒤 그리기 전에 렌더되므로, 반대편에서 시작해 제자리로 들어오게 한다
+          setOffset(step * Math.min(Math.abs(baseOffset + deltaX), width));
+          content.getBoundingClientRect();
+        }
       }
-      setOffset(0, true);
+      settle(!reduceMotion);
     };
 
     const handleTouchCancel = () => {
-      if (state?.mode === "drag") setOffset(0, !prefersReducedMotion());
+      if (state?.mode === "drag") settle(!state.reduceMotion);
       state = null;
     };
 
@@ -153,7 +161,7 @@ export const useMonthSwipe = (
       area.removeEventListener("touchend", handleTouchEnd);
       area.removeEventListener("touchcancel", handleTouchCancel);
       area.removeEventListener("click", handleClickCapture, true);
-      setOffset(0, false);
+      settle(false);
     };
   }, [areaRef, contentRef]);
 };
