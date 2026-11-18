@@ -41,6 +41,7 @@ import {
   toKstDateKey,
   type MatchSessionKind,
 } from "@pkpkdupr/shared/session";
+import { computeCurrentWinStreaks } from "@pkpkdupr/shared/streak";
 
 /**
  * 랭킹·세션 리포트 계산. 순위 스냅샷을 저장하지 않고 평점 변경 로그로
@@ -314,6 +315,10 @@ export const rankPlayersAt = (
     .map((entry, index) => ({ ...entry, rank: index + 1 }));
 };
 
+/** 회원별 지금 연승 수. context.matches는 완료 경기라 그대로 넘긴다 */
+const computeContextWinStreaks = (context: RankingContext) =>
+  computeCurrentWinStreaks(context.matches);
+
 const toRankMap = (ranked: RankedPlayer[]) =>
   new Map(ranked.map((entry) => [entry.player.id, entry.rank]));
 
@@ -419,6 +424,7 @@ export const buildRankingResponse = ({
       )
     : null;
 
+  const winStreaks = computeContextWinStreaks(context);
   const entries: RankingEntry[] = current.map((entry) => {
     const baselineRank = baselineRanks?.get(entry.player.id);
     return {
@@ -427,6 +433,7 @@ export const buildRankingResponse = ({
       rating: entry.rating,
       matchCount: entry.matchCount,
       rankChange: baselineRank == null ? null : baselineRank - entry.rank,
+      winStreak: winStreaks.get(entry.player.id) ?? 0,
     };
   });
 
@@ -439,6 +446,7 @@ export const buildRankingResponse = ({
     .map((player) => ({
       player: toRankingEntryPlayer(player),
       matchCount: matchCounts.get(player.id) ?? 0,
+      winStreak: winStreaks.get(player.id) ?? 0,
     }))
     .sort(
       (left, right) =>
@@ -855,11 +863,13 @@ export const buildAchievementRankingResponse = (
         compareText(left.player.username, right.player.username) ||
         compareText(left.player.id, right.player.id),
     );
+  const winStreaks = computeContextWinStreaks(context);
   const entries: AchievementRankingEntry[] = scored.map(
     ({ player, points }, index) => ({
       rank: index + 1,
       player: toRankingEntryPlayer(player),
       points,
+      winStreak: winStreaks.get(player.id) ?? 0,
     }),
   );
   return { category: "achievements", entries };

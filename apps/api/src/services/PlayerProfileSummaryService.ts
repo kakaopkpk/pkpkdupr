@@ -22,6 +22,7 @@ import {
   type PartnerStat,
   type StatPlayer,
 } from "@pkpkdupr/shared/profileStats";
+import { computeCurrentWinStreak } from "@pkpkdupr/shared/streak";
 import { buildDoublesRatingAfterByMatchId } from "./RankingService";
 
 export type PlayerProfileMatchStats = Record<
@@ -60,6 +61,8 @@ export interface PlayerProfileSummary {
   headToHead: Record<MatchTopLevelType, HeadToHeadStat> | null;
   /** 업적 18개 전부의 진행 상태(정의 순서) */
   achievements: AchievementProgress[];
+  /** 지금 이어지는 연승 수(단식·복식 합, `computeCurrentWinStreak`) */
+  winStreak: number;
 }
 
 const createEmptyMatchStats = (): PlayerProfileMatchStats => ({
@@ -288,6 +291,21 @@ export const buildPlayerProfileSummary = (
       playerId,
       withDoublesRatingAfter(matches),
       dominatedSessionIds,
+    ),
+    winStreak: computeCurrentWinStreak(
+      matches
+        .filter((match) => match.status === "completed")
+        .map((match) => ({
+          id: match.id,
+          completedAt: match.completedAt ?? match.matchStartsAt,
+          teamPlayerIds: [
+            match.teams[0].players.map((player) => player.id),
+            match.teams[1].players.map((player) => player.id),
+          ],
+          scores: match.scores,
+          ratingExcluded: match.ratingExcluded,
+        })),
+      playerId,
     ),
   };
 };

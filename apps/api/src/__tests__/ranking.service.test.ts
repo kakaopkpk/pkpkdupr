@@ -356,6 +356,7 @@ describe("buildRankingResponse", () => {
           statusMessage: "복귀했어요",
         },
         matchCount: 0,
+        winStreak: 0,
       },
     ]);
   });

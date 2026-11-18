@@ -28,6 +28,7 @@ import {
 } from "@/components/ui/SegmentedControl";
 import { StateMessage } from "@/components/ui/StateMessage";
 import { StatusMessageChip } from "@/components/ui/StatusMessageChip";
+import { WinStreakAvatarFrame } from "@/components/ui/WinStreakAvatarFrame";
 import { cx } from "@/components/ui/cx";
 import { useAppNavigation } from "@/context/AppNavigationContext";
 import { useTabNavigation } from "@/context/TabNavigationContext";
@@ -75,6 +76,15 @@ const PlayerNameCell: React.FC<{ player: RankingEntryPlayer }> = ({
   </span>
 );
 
+/** 줄 아바타 32. 연승 중이면 불꽃 후광과 연승 수를 붙인다 */
+const RankingAvatar: React.FC<{
+  entry: { player: RankingEntryPlayer; winStreak?: number };
+}> = ({ entry }) => (
+  <WinStreakAvatarFrame winStreak={entry.winStreak} size="sm">
+    <PlayerAvatar player={entry.player} size={32} />
+  </WinStreakAvatarFrame>
+);
+
 /**
  * 순위 줄. 평점은 0.000부터 줄 순서만큼 늦게 세고, 다 세면 순위 변동이 튀어나온다
  */
@@ -94,7 +104,7 @@ const RankingRow: React.FC<{
       <span className="flex justify-center">
         <RankBadge rank={entry.rank} />
       </span>
-      <PlayerAvatar player={entry.player} size={32} />
+      <RankingAvatar entry={entry} />
       <PlayerNameCell player={entry.player} />
       <span className={ratingCellClassName}>
         <span className="text-pk-15 leading-none font-extrabold tabular-nums">
@@ -124,7 +134,7 @@ const AchievementRankingRow: React.FC<{
     <span className="flex justify-center">
       <RankBadge rank={entry.rank} />
     </span>
-    <PlayerAvatar player={entry.player} size={32} />
+    <RankingAvatar entry={entry} />
     <PlayerNameCell player={entry.player} />
     <span className="text-pk-15 leading-none font-extrabold tabular-nums">
       <CountUpNumber
@@ -150,7 +160,7 @@ const UnratedRow: React.FC<{
     <span className="flex justify-center text-pk-13 font-extrabold text-pk-muted">
       –
     </span>
-    <PlayerAvatar player={entry.player} size={32} />
+    <RankingAvatar entry={entry} />
     <PlayerNameCell player={entry.player} />
     <span className={cx(ratingCellClassName, "justify-end")}>
       <span className="text-pk-15 leading-none font-extrabold text-pk-muted">

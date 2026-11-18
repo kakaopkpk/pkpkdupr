@@ -5,6 +5,10 @@ import { WinLossCount } from "@/components/profile/ProfileStatTile";
 import { COUNT_UP, CountUpNumber } from "@/components/ui/CountUpNumber";
 import { PlayerAvatar } from "@/components/ui/PlayerAvatar";
 import { StatusMessageChip } from "@/components/ui/StatusMessageChip";
+import {
+  isWinStreakShown,
+  WinStreakAvatarFrame,
+} from "@/components/ui/WinStreakAvatarFrame";
 import { cx } from "@/components/ui/cx";
 import {
   type TabKey,
@@ -31,6 +35,8 @@ export interface ProfileHeaderProps {
   player: { id: string; username: string; avatarUrl?: string | null } | null;
   statusMessage?: string | null;
   statusMessageBackgroundColor?: string | null;
+  /** 프로필 요약의 winStreak. 연승 중이면 아바타에 불꽃 후광과 "N연승" 태그를 붙인다 */
+  winStreak?: number | null;
   /** 프로필 요약의 matchStats. 없으면 불러오는 중(스켈레톤)이거나 숨김(hideStats)이다 */
   matchStats: PlayerProfileSummaryInfo["matchStats"] | null | undefined;
   /** matchStats가 없을 때 스켈레톤 대신 승패 줄 자리를 비운다. 요약을 불러오지 못했거나 비활성 회원일 때 */
@@ -55,6 +61,7 @@ const ProfileHeader: React.FC<ProfileHeaderProps> = ({
   player,
   statusMessage,
   statusMessageBackgroundColor,
+  winStreak,
   matchStats,
   hideStats = false,
   headingAs: Heading = "h1",
@@ -120,14 +127,18 @@ const ProfileHeader: React.FC<ProfileHeaderProps> = ({
             onClick={openZoom}
             className={cx(
               "shrink-0 rounded-full transition-transform duration-150 ease-pk-move enabled:active:scale-[0.92] motion-reduce:transition-none",
+              // 연승 링·앰버 빛이 위 스크롤 영역에 잘리지 않고 아래 연승 태그가 상태메시지 칩에 닿지 않게 위아래로 띄운다
+              isWinStreakShown(winStreak) && "mt-3 mb-2",
               isZoomVisible && "invisible",
             )}
           >
-            <PlayerAvatar
-              player={player}
-              size={56}
-              onImageLoad={setLoadedAvatarUrl}
-            />
+            <WinStreakAvatarFrame winStreak={winStreak} size="lg">
+              <PlayerAvatar
+                player={player}
+                size={56}
+                onImageLoad={setLoadedAvatarUrl}
+              />
+            </WinStreakAvatarFrame>
           </button>
         ) : (
           <span className="size-14 shrink-0 animate-pulse rounded-full bg-pk-neutral" />

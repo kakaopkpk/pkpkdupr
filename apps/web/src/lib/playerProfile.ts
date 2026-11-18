@@ -36,6 +36,8 @@ export interface PlayerProfileSummaryInfo {
   headToHead: Record<MatchTopLevelType, HeadToHeadStat> | null;
   /** 업적 18개 진행 상태(ACHIEVEMENTS 순서) */
   achievements: AchievementProgressInfo[];
+  /** 지금 이어지는 연승 수(단식·복식 합) */
+  winStreak: number;
 }
 
 const requestJson = async <T>(path: string, fallbackMessage: string) => {

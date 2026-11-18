@@ -189,6 +189,7 @@ export default function MemberProfileDrawer({
             statusMessage={member?.statusMessage}
             statusMessageBackgroundColor={member?.statusMessageBackgroundColor}
             matchStats={isInactive ? null : overview?.summary.matchStats}
+            winStreak={isInactive ? null : overview?.summary.winStreak}
             hideStats={hasError || isInactive}
           />
           {isInactive ? (
