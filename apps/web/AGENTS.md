@@ -4,7 +4,7 @@
 
 - 일반 사용자용 웹 앱입니다.
 - 엔트리 라우트는 `/`, `/login`, `/force-change-password`(첫 로그인·비밀번호 초기화 직후)입니다. `AuthContext`의 `status`(`signedOut`·`mustChangePassword`·`authenticated`)가 열 수 있는 라우트를 정합니다.
-- `/`에서는 `BottomNav`가 내부 state로 홈(`Home`)·기록(`Records`)·랭킹(`Ranking`)·나(`Me`) 4탭을 전환합니다. 시작 탭은 홈이고, 한 번 연 탭은 숨겨도 마운트를 유지합니다(keep-alive).
+- `/`에서는 `BottomNav`가 내부 state로 홈(`Home`)·일정(`Schedule`)·랭킹(`Ranking`)·나(`Me`) 4탭을 전환합니다. 시작 탭은 홈이고, 한 번 연 탭은 숨겨도 마운트를 유지합니다(keep-alive).
 - 하단 바는 떠 있는 유리 알약 4탭과 66px 원형 + 버튼입니다. + 메뉴(`새로 만들기`)는 `경기 기록`과 `세션 만들기`만 엽니다. 설정(로그아웃 포함)은 나 탭에서 `openSettings()`로 엽니다.
 - 내가 든 진행 중 경기가 있으면(세션 밖 경기 포함) 홈 외 탭에서 하단 바 위에 미니바(본문을 누르면 경기 상세, 버튼은 `점수 입력`)가, 홈 탭에서 진행 중 세션에 참여하지 않았으면 같은 자리에 참여 알림 바가 뜹니다. `BottomNav`가 이 표시에 맞춰 `--app-bottom-dock-height`를 갱신하므로 하단 고정 UI와 여백은 이 변수를 기준으로 잡습니다. 하단 토스트(`SystemToast`)가 떠 있는 동안은 그 높이를 `--app-bottom-toast-height`로 알리며, 탭 패널 하단 여백이 이 값을 더합니다. 미니바·알림 바·토스트는 아래에서 올라오며 등장하고 가라앉으며 퇴장하는데, 퇴장이 끝날 때까지 마지막 내용을 남기는 처리는 `hooks/usePresence.ts`가 맡습니다. 두 변수는 퇴장을 기다리지 않고 표시 조건이 바뀌는 즉시 갱신하며, 토스트는 `bottom`을 바 없는 기본 높이에 두고 바 높이 차이를 transform으로 옮깁니다.
 
@@ -20,12 +20,12 @@
 ## 구조 가이드
 
 - `src/pages/`
-  - 탭 페이지: `Home.tsx`(홈)·`Records.tsx`(기록: `GET /api/records` 세션 카드·세션 없는 경기 카드를 KST 날짜 제목으로 묶은 최신순 목록, 전체/내 경기 세그먼트, 끝에서 카드 3개 남으면 `nextCursor`로 다음 묶음을 미리 받는 무한 스크롤, 세션 카드는 `openSessionReport`·경기 카드는 경기 상세)·`Ranking.tsx`(랭킹)·`Me.tsx`(나). props 없이 컨텍스트로 데이터를 받습니다.
+  - 탭 페이지: `Home.tsx`(홈)·`Schedule.tsx`(일정: 탭 머리 없이 월 달력 `schedule/MonthCalendar`(이전 달·"2026년 11월"(누르면 이번 달·오늘)·다음 달, 오늘은 `pk-hl` 바탕·고른 날은 블루 원, 세션 날은 블루 점+참여 인원·기록만 있는 날은 회색 점, 내 것이면 속 찬 점)과 고른 날 카드. `GET /api/schedule` 한 달 응답으로 `lib/schedule.ts`의 `buildScheduleDayMarks`·`getScheduleDayEntries`가 표시·카드를 정한다. 카드는 세션 먼저(진행 중 세션 `LiveSessionCard`(진행 화면 보기 → 홈 탭), 끝나지 않은 세션 `UpcomingSessionCard`(참여하기·참여 취소), 끝난 세션 `RecordSessionCard`(`openSessionReport`)), 그 뒤 세션 없는 경기 `RecordMatchCard`(경기 상세), 아무것도 없으면 `EmptyDayCard`(오늘·미래면 그 날짜로 `openCreateSession`, 지난 날은 문구만))·`Ranking.tsx`(랭킹)·`Me.tsx`(나). props 없이 컨텍스트로 데이터를 받습니다.
   - 그 밖의 전역 라우트: `Login.tsx`, `ForceChangePassword.tsx`
 - `src/components/`
   - `BottomNav.tsx`: 4탭 keep-alive 셸, 하단 바(`BottomDock.tsx`)와 + 메뉴, 전역 화면 래퍼 렌더, 진행 중 경기 미니바·참여 알림 바
   - 전역 화면 래퍼: `match/`(경기 상세, 진행 중 경기 팀 줄 위 랠리 연출 `LiveMatchRally`(공·패들·충격선은 `index.css`의 `pk-rally-*`, 움직임 줄이기면 공이 네트 위에 멈춤)), `profile/`(회원 프로필·경기 목록), `records/`(세션 상세 `SessionReportDrawer`와 그 위 평점 변화 전체 `SessionRatingChangesScreen`), `record/`(경기 기록 시트, 완료 단계에서 내 새 업적을 화면 전체 축하 연출 `AchievementCelebration`으로 띄우고 닫으면 확인 처리), `session/`(세션 만들기(날짜 칩·시작·종료 시각 칩 `SessionSchedulePicker`)·참여자 편집), `settings/`(설정·비밀번호 변경·프로필 사진 확인·상태메시지 편집)
-  - 탭 전용 조각: `home/`, `records/`(세션 리포트 조각 `SessionReportParts`는 기록 탭·세션 상세·홈이 같이 씀), `ranking/`
+  - 탭 전용 조각: `home/`, `schedule/`, `records/`(세션 리포트 조각 `SessionReportParts`는 일정 탭·세션 상세·홈이 같이 씀, 끝난 세션·세션 없는 경기 카드 `RecordCards`), `ranking/`. 세션 블루 카드 틀·참여 버튼 `session/SessionBlueCard`는 홈 다음 세션 카드와 일정 탭 세션 카드가 같이 씀
   - `ui/`: 새 디자인 공통 컴포넌트. 새 화면은 여기 것을 먼저 씁니다.
     - `Button.tsx`(`PkButton`, variant `primary`·`soft`·`outline`·`ghost`), `Card.tsx`, `SegmentedControl.tsx`, `Headers.tsx`(`TabHeader`·`DetailHeader`), `Form.tsx`(`TextField`), `Section.tsx`(`ListRow`·`SectionLabel`·`TextLink`), `SheetTitle.tsx`, `ConfirmDialog.tsx`(시트 위 가운데 확인 창. 바텀시트를 겹쳐 쌓지 않을 때 쓰고, 연 쪽이 `useLayerDepth` kind `dialog`로 뒤로가기에 묶는다)
     - `MatchRow.tsx`(`MatchRow`·`LiveMatchRow`), `PlayerAvatar.tsx`(`PlayerAvatar`·`TeamAvatars`), `Delta.tsx`(`RatingDelta`·`RankChange`), `RankBadge.tsx`, `Badges.tsx`(`LivePill`·`HighlightBadge`), `StatusMessageChip.tsx`, `StateMessage.tsx`(빈 상태 `empty`·불러오기 실패 `error`(항상 "다시 시도") 문구, size `panel` 탭·화면 전체·`inline` 카드·목록·시트 안), `CountUpText.tsx`(카운트업 숫자의 자리 폭을 최종 내용으로 고정), `SheenOverlay.tsx`(한 번 지나가는 흰 빛, 부모 `relative`·`overflow-hidden` 필요), `Icons.tsx`, `cx.ts`
@@ -33,8 +33,8 @@
   - 공용 레이어·상태: `BottomSheet.tsx`, `PushScreen.tsx`, `SkeletonBlock.tsx`, `TabPanelStatus.tsx`, `HoldToConfirmButton.tsx`, `SystemToast.tsx`, `OfflineBanner.tsx`, `PwaInstallPrompt.tsx`, `PwaUpdatePrompt.tsx`
 - `src/context/`
   - `AuthContext.tsx`: Supabase 세션 구독, `/api/me` 검증, `status`·`player`, 비밀번호 변경, `logout`
-  - `TabNavigationContext.tsx`: 탭(`TabKey`: `home`·`records`·`ranking`·`me`)·깊이 스택(`pushDepth`/`closeDepth`, 브라우저 뒤로가기 연동)·스크롤 복원·당겨서 새로고침 등록
-  - `AppNavigationContext.tsx`: `useAppNavigation()`으로 전역 화면 열기(`openMatchDetail`, `openMemberProfile`(내 id면 나 탭), `openRecordMatch`, `openCreateSession`, `openSettings`, `openSessionReport`(지금 탭 위에 세션 상세 화면), `openAchievementDetail`(업적 상세 시트, 경기 기록 시트보다 위 레이어)), `notifyDataChanged`·`dataVersion`, 전역 화면 레이어 번호 `GLOBAL_LAYER`
+  - `TabNavigationContext.tsx`: 탭(`TabKey`: `home`·`schedule`·`ranking`·`me`)·깊이 스택(`pushDepth`/`closeDepth`, 브라우저 뒤로가기 연동)·스크롤 복원·당겨서 새로고침 등록
+  - `AppNavigationContext.tsx`: `useAppNavigation()`으로 전역 화면 열기(`openMatchDetail`, `openMemberProfile`(내 id면 나 탭), `openRecordMatch`, `openCreateSession`(날짜를 골라 둔 채 열 수 있고, `onCreated`를 주면 만든 뒤 홈 탭으로 옮기지 않음), `openSettings`, `openSessionReport`(지금 탭 위에 세션 상세 화면), `openAchievementDetail`(업적 상세 시트, 경기 기록 시트보다 위 레이어)), `notifyDataChanged`·`dataVersion`, 전역 화면 레이어 번호 `GLOBAL_LAYER`
   - `LiveSessionContext.tsx`: `useLiveSession()`으로 오늘 진행 중 세션·그 경기, 세션과 상관없는 진행 중 경기(`GET /api/matches/in-progress`)와 그중 내 경기
   - `SystemNoticeContext.tsx`: `useSystemNotice().showSaveFailure({ onRetry })`로 저장 실패 토스트(네트워크 오류에만, 서버 4xx·5xx는 화면 인라인), `showToast({ message, actionLabel?, onAction?, durationMs? })`로 하단 바 위 알약 토스트(기본 5초, 동작 글자 하나)
   - `AppUpdateContext.tsx`: `useAppUpdate()`로 PWA 업데이트 확인·적용 상태
@@ -114,4 +114,4 @@
 - 경기 행은 팀 아바타 쌍을 넣고 이긴 쪽만 강조합니다(A·B팀 색 구분·승 배지 없음). 줄 맨 위 메타 줄에 시간을 두고 내 경기면 시간 뒤에 " · 내 경기" 글자만 붙으며(바탕 강조 없음), 시간 열은 따로 없고, 코트 번호는 어디에도 표시하지 않습니다.
 - 바텀시트는 고정 높이(화면의 약 3/4)이고 헤더·하단 버튼은 고정, 가운데만 스크롤합니다. 그랩바·헤더(위 56px) 또는 맨 위에서 시작한 본문을 아래로 끌어 닫을 수 있고(`hooks/useSheetDrag.ts`), 키보드가 열려 있는 동안은 하단 버튼(`BottomSheet.Footer`)이 숨습니다(`App.tsx`의 `<html data-keyboard-open>`). 열림 판정은 `lib/keyboardViewport.ts`로, 입력칸 포커스 중 보이는 높이가 포커스 없을 때보다 150px 이상 줄었는지로 봅니다(안드로이드 `resizes-content`는 레이아웃도 같이 줄어 `innerHeight` 차이로는 판정할 수 없습니다). 탭 셸 하단 바(탭바·+ 버튼·미니바·알림 바)와 `PushScreen` 하단 고정 바도 같은 기준(`app-keyboard-hidden`)으로 숨습니다. 새 경기 기록은 나를 첫 자리에 넣어 열고(내가 진행 중 경기에 있으면 비움), 선수 목록 맨 위에는 항상 내가 옵니다. 경기 저장은 2초 길게 누르기입니다.
 - 다크 테마는 만들지 않습니다.
-- 홈·나 탭은 탭 제목 머리(`TabHeader`) 없이 첫 콘텐츠로 시작하고, `TabHeader`는 기록·랭킹 탭만 씁니다. 홈 진행 중 세션 머리는 탭 제목이 아니라 세션 머리입니다.
+- 홈·나 탭은 탭 제목 머리(`TabHeader`) 없이 첫 콘텐츠로 시작하고, `TabHeader`는 랭킹 탭만 씁니다. 일정 탭은 달력 카드로 시작합니다. 홈 진행 중 세션 머리는 탭 제목이 아니라 세션 머리입니다.
