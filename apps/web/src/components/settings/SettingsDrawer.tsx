@@ -15,8 +15,8 @@ import {
   useTabNavigation,
 } from "@/context/TabNavigationContext";
 import { useLayerDepth } from "@/hooks/useLayerDepth";
-import { resizeAvatarImage } from "@/utils/avatar";
-import { AvatarConfirmSheetBody } from "./AvatarConfirmSheet";
+import { createAvatarSourceUrl } from "@/utils/avatar";
+import AvatarCropScreen from "./AvatarCropScreen";
 import PasswordChangeDrawer from "./PasswordChangeDrawer";
 import { type StatusEditInput, StatusEditSheetBody } from "./StatusEditSheet";
 import { isNetworkError } from "@/lib/errors";
@@ -63,7 +63,8 @@ export default function SettingsDrawer({
 
   const [isPasswordRequested, setIsPasswordRequested] = useState(false);
   const [isAvatarRequested, setIsAvatarRequested] = useState(false);
-  const [avatarPreviewUrl, setAvatarPreviewUrl] = useState<string | null>(null);
+  // 고른 사진의 object URL. 조정 화면을 닫거나 다른 사진을 고르면 해제한다
+  const [avatarSourceUrl, setAvatarSourceUrl] = useState<string | null>(null);
   const [avatarError, setAvatarError] = useState<string | null>(null);
   const [isAvatarSaving, setIsAvatarSaving] = useState(false);
   const [isStatusRequested, setIsStatusRequested] = useState(false);
@@ -89,7 +90,7 @@ export default function SettingsDrawer({
     isOpen: isAvatarRequested && isOpen,
     tabKey,
     depthId: AVATAR_DEPTH_ID,
-    kind: "bottom-sheet",
+    kind: "dialog",
     onClose: closeAvatar,
   });
   const closeStatus = useCallback(() => setIsStatusRequested(false), []);
@@ -109,11 +110,20 @@ export default function SettingsDrawer({
     setIsStatusRequested(false);
   }, [isOpen]);
 
+  useEffect(() => {
+    if (!isAvatarRequested) setAvatarSourceUrl(null);
+  }, [isAvatarRequested]);
+
+  useEffect(() => {
+    if (!avatarSourceUrl) return;
+    return () => URL.revokeObjectURL(avatarSourceUrl);
+  }, [avatarSourceUrl]);
+
   const closeLayer = (depthId: string, fallback: () => void) => {
     if (!closeDepth(tabKey, depthId)) fallback();
   };
 
-  const handleAvatarFileChange = async (
+  const handleAvatarFileChange = (
     event: React.ChangeEvent<HTMLInputElement>,
   ) => {
     const file = event.target.files?.[0];
@@ -121,19 +131,17 @@ export default function SettingsDrawer({
     if (!file) return;
 
     setAvatarError(null);
-    setAvatarPreviewUrl(null);
     setIsAvatarRequested(true);
     try {
-      setAvatarPreviewUrl(await resizeAvatarImage(file));
+      setAvatarSourceUrl(createAvatarSourceUrl(file));
     } catch (error) {
-      setAvatarPreviewUrl(null);
+      setAvatarSourceUrl(null);
       setAvatarError(getSaveErrorMessage(error, "사진을 읽지 못했습니다."));
     }
   };
 
-  const confirmAvatar = async () => {
-    const dataUrl = avatarPreviewUrl;
-    if (!dataUrl || isAvatarSaving) return;
+  const confirmAvatar = async (dataUrl: string) => {
+    if (isAvatarSaving) return;
 
     setAvatarError(null);
     setIsAvatarSaving(true);
@@ -317,7 +325,7 @@ export default function SettingsDrawer({
           ref={avatarInputRef}
           type="file"
           accept="image/*"
-          onChange={(event) => void handleAvatarFileChange(event)}
+          onChange={handleAvatarFileChange}
           className="hidden"
         />
       </PushScreen>
@@ -328,26 +336,18 @@ export default function SettingsDrawer({
         onClose={closePassword}
       />
 
-      <BottomSheet
+      <AvatarCropScreen
         isOpen={isAvatarOpen}
         isActive={isActive}
-        onOpenChange={(nextIsOpen) => {
-          if (!nextIsOpen && !isAvatarSaving) {
-            closeLayer(AVATAR_DEPTH_ID, closeAvatar);
-          }
-        }}
-        ariaLabel="프로필 사진"
         layer={GLOBAL_LAYER.sheet}
-        isFixedHeight={false}
-      >
-        <AvatarConfirmSheetBody
-          previewUrl={avatarPreviewUrl}
-          error={avatarError}
-          isSaving={isAvatarSaving}
-          onPickAgain={() => avatarInputRef.current?.click()}
-          onConfirm={() => void confirmAvatar()}
-        />
-      </BottomSheet>
+        sourceUrl={avatarSourceUrl}
+        error={avatarError}
+        isSaving={isAvatarSaving}
+        onCancel={() => closeLayer(AVATAR_DEPTH_ID, closeAvatar)}
+        onPickAgain={() => avatarInputRef.current?.click()}
+        onError={setAvatarError}
+        onConfirm={(dataUrl) => void confirmAvatar(dataUrl)}
+      />
 
       <BottomSheet
         isOpen={isStatusOpen}
