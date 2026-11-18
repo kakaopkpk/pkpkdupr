@@ -19,7 +19,7 @@ import ParticipantsSheet from "@/components/session/ParticipantsSheet";
 import { LiveSessionCard } from "@/components/session/SessionBlueCard";
 import { isSessionDateSelectable } from "@/components/session/SessionSchedulePicker";
 import { useSessionParticipation } from "@/components/session/useSessionParticipation";
-import { SectionLabel } from "@/components/ui/Section";
+import { Section } from "@/components/ui/Section";
 import { StateMessage } from "@/components/ui/StateMessage";
 import { useAppNavigation } from "@/context/AppNavigationContext";
 import { useAuth } from "@/context/AuthContext";
@@ -321,12 +321,9 @@ const Schedule: React.FC = () => {
           onNextMonth={() => showMonth(addScheduleMonths(monthKey, 1))}
           onGoToday={goToday}
         />
-        <div className="mt-0.5">
-          <SectionLabel>
-            {formatKstLongDate(kstDateKeyToDate(selectedDateKey))}
-          </SectionLabel>
-        </div>
-        {renderDay()}
+        <Section title={formatKstLongDate(kstDateKeyToDate(selectedDateKey))}>
+          {renderDay()}
+        </Section>
       </div>
       {participantsTarget ? (
         <ParticipantsSheet

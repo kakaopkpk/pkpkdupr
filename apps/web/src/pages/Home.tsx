@@ -24,7 +24,7 @@ import { isNetworkError } from "@/lib/errors";
 import { Card } from "@/components/ui/Card";
 import { StateMessage } from "@/components/ui/StateMessage";
 import { MatchRow } from "@/components/ui/MatchRow";
-import { SectionLabel } from "@/components/ui/Section";
+import { Section } from "@/components/ui/Section";
 import { useAppNavigation } from "@/context/AppNavigationContext";
 import { useAuth } from "@/context/AuthContext";
 import { useLiveSession } from "@/context/LiveSessionContext";
@@ -43,8 +43,6 @@ const EmptyCard: React.FC<{ message: string }> = ({ message }) => (
     <StateMessage kind="empty" message={message} />
   </Card>
 );
-
-const Spacer: React.FC = () => <div className="h-1.5" />;
 
 /** 누르면 경기 상세를 여는 경기 목록 카드 */
 const MatchListCard: React.FC<{
@@ -263,8 +261,7 @@ const Home: React.FC = () => {
   // ── 그리기 ─────────────────────────────────────────
   /** 진행 중 머리·내 경기 카드·남의 진행 중 경기 카드. 내 경기는 세션 밖 경기여도 맨 위에 온다 */
   const renderInProgress = (otherMatches: MatchInfo[]) => (
-    <>
-      <SectionLabel>진행 중</SectionLabel>
+    <Section title="진행 중">
       {myInProgressMatch ? (
         <MyLiveMatchCard
           match={myInProgressMatch}
@@ -287,7 +284,7 @@ const Home: React.FC = () => {
       ) : myInProgressMatch ? null : (
         <EmptyCard message="진행 중인 경기가 없어요" />
       )}
-    </>
+    </Section>
   );
 
   const renderLive = (session: MatchSessionDetailInfo) => (
@@ -297,40 +294,32 @@ const Home: React.FC = () => {
         session={session}
         onOpenParticipants={() => openParticipants(session, busyPlayerIds)}
       />
-      {liveTopRiser ? (
-        <>
-          <TopRiserCard report={liveTopRiser} />
-          <Spacer />
-        </>
-      ) : null}
+      {liveTopRiser ? <TopRiserCard report={liveTopRiser} /> : null}
       {renderInProgress(
         sessionInProgressMatches.filter(
           (match) => match.id !== myInProgressMatch?.id,
         ),
       )}
       {isLiveParticipant ? (
-        <>
-          <Spacer />
-          <RecommendationSection
-            state={visibleRecommendations}
-            waitingCount={waitingCount}
-            startingKey={startState.startingKey}
-            startError={startState.error}
-            onStart={(court) => void startRecommendedMatch(court)}
-          />
-        </>
-      ) : null}
-      <Spacer />
-      <SectionLabel>오늘 기록</SectionLabel>
-      {completedMatches.length > 0 ? (
-        <MatchListCard
-          matches={completedMatches}
-          currentPlayerId={playerId}
-          onOpenMatch={openMatchDetail}
+        <RecommendationSection
+          state={visibleRecommendations}
+          waitingCount={waitingCount}
+          startingKey={startState.startingKey}
+          startError={startState.error}
+          onStart={(court) => void startRecommendedMatch(court)}
         />
-      ) : (
-        <EmptyCard message="아직 기록된 경기가 없어요" />
-      )}
+      ) : null}
+      <Section title="오늘 기록">
+        {completedMatches.length > 0 ? (
+          <MatchListCard
+            matches={completedMatches}
+            currentPlayerId={playerId}
+            onOpenMatch={openMatchDetail}
+          />
+        ) : (
+          <EmptyCard message="아직 기록된 경기가 없어요" />
+        )}
+      </Section>
       {/* 미참여자의 참여하기는 셸의 알림 바가 맡는다. 그 바에 가리지 않게 여백을 둔다 */}
       {!isLiveParticipant ? <div className="h-16" /> : null}
     </>
@@ -340,16 +329,13 @@ const Home: React.FC = () => {
     const { data, status, error } = preSession;
     // 진행 중 경기는 다가오는 세션 조회와 따로 받으므로 그 조회가 실패해도 보인다
     const inProgressSection =
-      inProgressMatches.length > 0 ? (
-        <>
-          <Spacer />
-          {renderInProgress(
+      inProgressMatches.length > 0
+        ? renderInProgress(
             inProgressMatches.filter(
               (match) => match.id !== myInProgressMatch?.id,
             ),
-          )}
-        </>
-      ) : null;
+          )
+        : null;
     if (!data) {
       if (status === "error") {
         return (
@@ -393,10 +379,7 @@ const Home: React.FC = () => {
         )}
         {inProgressSection}
         {lastSessionReport ? (
-          <>
-            <Spacer />
-            <LastSessionFeed report={lastSessionReport} playerId={playerId} />
-          </>
+          <LastSessionFeed report={lastSessionReport} playerId={playerId} />
         ) : null}
       </>
     );

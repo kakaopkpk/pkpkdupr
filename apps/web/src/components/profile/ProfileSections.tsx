@@ -14,7 +14,7 @@ import {
   CountUpRatingDelta,
 } from "@/components/ui/CountUpNumber";
 import { MatchRow } from "@/components/ui/MatchRow";
-import { SectionLabel, TextLink } from "@/components/ui/Section";
+import { Section, TextLink } from "@/components/ui/Section";
 import { StateMessage } from "@/components/ui/StateMessage";
 import { useAppNavigation } from "@/context/AppNavigationContext";
 
@@ -124,16 +124,14 @@ export const RecentMatchesSection: React.FC<{
     .slice(0, RECENT_MATCH_COUNT);
 
   return (
-    <section className="flex flex-col gap-2.5 pt-1">
-      <SectionLabel
-        right={
-          <TextLink onPress={onViewAll} chevron>
-            전체 보기
-          </TextLink>
-        }
-      >
-        {title}
-      </SectionLabel>
+    <Section
+      title={title}
+      right={
+        <TextLink onPress={onViewAll} chevron>
+          전체 보기
+        </TextLink>
+      }
+    >
       <Card>
         {recentMatches.length > 0 ? (
           recentMatches.map((match) => (
@@ -149,7 +147,7 @@ export const RecentMatchesSection: React.FC<{
           <StateMessage kind="empty" message="완료한 경기가 없어요" />
         )}
       </Card>
-    </section>
+    </Section>
   );
 };
 

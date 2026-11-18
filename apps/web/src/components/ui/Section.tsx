@@ -15,6 +15,22 @@ export const SectionLabel: React.FC<{
   </div>
 );
 
+/**
+ * 섹션 하나(제목 + 내용). 부모는 세로 gap-2.5 목록이어야 한다.
+ * 앞 요소 → 제목 줄 20px(부모 gap 10 + pt-2.5), 제목 줄 → 내용·내용 사이 10px이다.
+ * 부모의 첫 요소(화면 머리·컨트롤 바로 아래)면 위 여백을 더하지 않는다.
+ */
+export const Section: React.FC<{
+  title: React.ReactNode;
+  right?: React.ReactNode;
+  children: React.ReactNode;
+}> = ({ title, right, children }) => (
+  <section className="flex flex-col gap-2.5 pt-2.5 first:pt-0">
+    <SectionLabel right={right}>{title}</SectionLabel>
+    {children}
+  </section>
+);
+
 /** 글자 높이 가운데에 맞춘 링크 꺽쇠 */
 export const LinkChevron: React.FC = () => (
   <ChevronRightIcon className="size-[1em] shrink-0" />
@@ -54,18 +70,16 @@ export const PreviewSection = <T,>({
   renderPreview: (preview: readonly T[]) => React.ReactNode;
   onViewAll: () => void;
 }): React.ReactElement => (
-  <section className="flex flex-col gap-2.5 pt-1">
-    <SectionLabel
-      right={
-        items.length > PREVIEW_COUNT ? (
-          <TextLink onPress={onViewAll} chevron>
-            전체 보기
-          </TextLink>
-        ) : undefined
-      }
-    >
-      {title}
-    </SectionLabel>
+  <Section
+    title={title}
+    right={
+      items.length > PREVIEW_COUNT ? (
+        <TextLink onPress={onViewAll} chevron>
+          전체 보기
+        </TextLink>
+      ) : undefined
+    }
+  >
     {renderPreview(items.slice(0, PREVIEW_COUNT))}
-  </section>
+  </Section>
 );

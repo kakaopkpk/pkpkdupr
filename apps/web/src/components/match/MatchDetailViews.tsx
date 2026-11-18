@@ -21,7 +21,7 @@ import {
 } from "@/components/ui/CountUpNumber";
 import { rowDividerClassName } from "@/components/ui/MatchRow";
 import { PlayerAvatar, TeamAvatars } from "@/components/ui/PlayerAvatar";
-import { LinkChevron, SectionLabel } from "@/components/ui/Section";
+import { LinkChevron, Section } from "@/components/ui/Section";
 import { cx } from "@/components/ui/cx";
 import { useMinuteClock } from "@/hooks/useMinuteClock";
 import {
@@ -235,22 +235,20 @@ const RatingChangeCard: React.FC<{
   // 게스트가 낀 경기는 평점 변화가 없으므로 제목 아래 미반영 안내 한 줄만 보인다
   if (match.ratingExcluded) {
     return (
-      <section className="flex flex-col gap-2.5 pt-1">
-        <SectionLabel>평점 변화</SectionLabel>
+      <Section title="평점 변화">
         <Card>
           <p className="py-[11px] text-pk-15 text-pk-sub">
             {RATING_EXCLUDED_NOTICE}
           </p>
         </Card>
-      </section>
+      </Section>
     );
   }
 
   if (entries.length === 0) return null;
 
   return (
-    <section className="flex flex-col gap-2.5 pt-1">
-      <SectionLabel>평점 변화</SectionLabel>
+    <Section title="평점 변화">
       <Card>
         {entries.map(({ player, change }) => (
           <button
@@ -275,7 +273,7 @@ const RatingChangeCard: React.FC<{
           </button>
         ))}
       </Card>
-    </section>
+    </Section>
   );
 };
 
@@ -293,20 +291,23 @@ export const CompletedMatchDetail: React.FC<CompletedMatchDetailProps> = ({
   onOpenSession,
   onOpenPlayer,
 }) => (
-  <div className="flex flex-col gap-4 px-4 pt-1">
-    <p className="text-center text-pk-13 text-pk-sub tabular-nums">
-      {formatKstShortDate(match.matchStartsAt)}{" "}
-      {formatKstTime(match.matchStartsAt)}
-      {match.session ? (
-        <>
-          {" · "}
-          <SessionLink session={match.session} onOpen={onOpenSession} />
-        </>
-      ) : null}
-    </p>
-    <ScoreBlock match={match} onOpenPlayer={onOpenPlayer} />
+  <div className="flex flex-col gap-2.5 px-4 pt-1">
+    {/* 섹션이 아닌 카드 사이는 16px이다. 평점 변화 섹션은 Section 규칙(위 20px)을 따른다 */}
+    <div className="flex flex-col gap-4">
+      <p className="text-center text-pk-13 text-pk-sub tabular-nums">
+        {formatKstShortDate(match.matchStartsAt)}{" "}
+        {formatKstTime(match.matchStartsAt)}
+        {match.session ? (
+          <>
+            {" · "}
+            <SessionLink session={match.session} onOpen={onOpenSession} />
+          </>
+        ) : null}
+      </p>
+      <ScoreBlock match={match} onOpenPlayer={onOpenPlayer} />
+    </div>
     <RatingChangeCard match={match} onOpenPlayer={onOpenPlayer} />
-    <Card>
+    <Card className="mt-1.5">
       <InfoRow label="장소">{match.location || "–"}</InfoRow>
       <InfoRow label="기록한 사람">{recorderUsername ?? "–"}</InfoRow>
     </Card>

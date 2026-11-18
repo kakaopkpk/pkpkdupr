@@ -6,7 +6,7 @@ import {
 import SkeletonBlock from "@/components/SkeletonBlock";
 import { buttonPressClassName } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
-import { SectionLabel, TextLink } from "@/components/ui/Section";
+import { Section, TextLink } from "@/components/ui/Section";
 import { cx } from "@/components/ui/cx";
 import { formatRating } from "@/utils/dupr";
 import { TeamsVersus } from "./TeamBlock";
@@ -119,18 +119,16 @@ const RecommendationSection: React.FC<{
   };
 
   return (
-    <>
-      <SectionLabel
-        right={
-          startingKey === null ? (
-            <TextLink onPress={recommendAgain}>다시 추천</TextLink>
-          ) : null
-        }
-      >
-        추천 매칭 · 대기 {waitingCount}명
-      </SectionLabel>
+    <Section
+      title={`추천 매칭 · 대기 ${waitingCount}명`}
+      right={
+        startingKey === null ? (
+          <TextLink onPress={recommendAgain}>다시 추천</TextLink>
+        ) : null
+      }
+    >
       {renderBody()}
-    </>
+    </Section>
   );
 };
 
