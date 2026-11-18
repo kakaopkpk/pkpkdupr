@@ -11,7 +11,3 @@
 - 빌드: `pnpm build`
 - 테스트: `pnpm --filter @pkpkdupr/api --filter @pkpkdupr/shared --filter @pkpkdupr/web test`
 - `pnpm lint`는 현재 eslint 의존성이 설치되어 있지 않아 실패한다. 검증 명령으로 쓰지 않는다.
-
-# 진행 중인 이전 작업
-
-Supabase(DB·Auth·Storage·Edge Functions) + GitHub Pages로 옮기는 중이다. 범위와 순서는 이슈 #1~#10을 따른다.

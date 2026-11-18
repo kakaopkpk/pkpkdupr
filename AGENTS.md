@@ -103,7 +103,7 @@ pnpm lint
 
 ## 운영과 배포
 
-- 운영·배포는 Supabase(DB·Auth·Storage·Edge Functions) + GitHub Pages로 이전 중입니다. 범위와 순서는 이슈 #1~#10을 따릅니다.
+- 운영은 Supabase(DB·Auth·Storage·Edge Functions)와 GitHub Pages(web·admin)로 합니다.
 - DB는 Supabase Postgres입니다. 모든 테이블은 RLS on·정책 없음(기본 거부)이며, DB 접근은 서버만 합니다. Docker는 로컬 Supabase 스택에만 씁니다.
 - GitHub Actions `ci.yml`은 PR과 main push에서 설치·빌드·api/shared/web 테스트를 실행합니다.
 - api는 Supabase Edge Function `api`로 배포합니다(base URL `https://<project-ref>.supabase.co/functions/v1`, 경로 `/api/...`). 운영 배포는 GitHub Release 발행 때만 하며, 발행하면 `supabase-deploy.yml`(`supabase db push`와 함수 배포)과 `pages.yml`(web·admin)이 릴리즈 태그 커밋으로 함께 실행됩니다. main 머지만으로는 배포되지 않습니다. web·admin 앱 버전은 릴리즈 태그 이름입니다. Supabase 프로젝트 준비, GitHub secrets·variables, 함수 secrets는 `docs/deploy.md`가 기준이며, 새 함수 secret·설정이 생기면 이 문서에 추가합니다.
