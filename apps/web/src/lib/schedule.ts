@@ -1,7 +1,4 @@
-import type {
-  ScheduleMonthResponse,
-  ScheduleSession,
-} from "@pkpkdupr/shared/schedule";
+import type { ScheduleSession } from "@pkpkdupr/shared/schedule";
 import { toKstDateKey } from "@pkpkdupr/shared/session";
 import { apiFetch } from "@/lib/api";
 import { RequestError } from "@/lib/rankings";
@@ -11,20 +8,17 @@ import {
   type RecordMatchItemInfo,
   type RecordSessionItemInfo,
 } from "@/lib/records";
-import type { MatchInfo } from "@/types/match";
+import { getMatchPlayerIds } from "@/types/match";
 
 /** JSON 응답 형태(날짜는 문자열) */
 export type ScheduleSessionInfo = Omit<ScheduleSession, "date"> & {
   date: string;
 };
 
-export type ScheduleMonthInfo = Omit<
-  ScheduleMonthResponse,
-  "sessions" | "records"
-> & {
+export interface ScheduleMonthInfo {
   sessions: ScheduleSessionInfo[];
   records: RecordItemInfo[];
-};
+}
 
 /** 그 달(KST, "YYYY-MM")의 세션과 기록 줄 */
 export const fetchScheduleMonth = async (
@@ -51,12 +45,6 @@ export type ScheduleDayMark =
   | { kind: "session"; participantCount: number; isMine: boolean }
   /** 세션 없이 경기 기록만 있는 날: 내가 뛴 경기가 있는지 */
   | { kind: "match"; isMine: boolean };
-
-const isMatchPlayer = (match: MatchInfo, playerId: string | undefined) =>
-  !!playerId &&
-  match.teams.some((team) =>
-    team.players.some((player) => player.id === playerId),
-  );
 
 /** 날짜 키별 달력 표시. 세션이 있는 날은 경기 기록이 있어도 세션 표시다 */
 export const buildScheduleDayMarks = (
@@ -92,7 +80,9 @@ export const buildScheduleDayMarks = (
     if (current?.kind === "session") continue;
     marks.set(dateKey, {
       kind: "match",
-      isMine: !!current?.isMine || isMatchPlayer(item.match, playerId),
+      isMine:
+        !!current?.isMine ||
+        (!!playerId && getMatchPlayerIds(item.match).includes(playerId)),
     });
   }
   return marks;
@@ -146,16 +136,15 @@ export const getScheduleDayEntries = (
       shownSessionIds.add(session.id);
     }
   }
+  const matchEntries: ScheduleDayEntry[] = [];
   for (const item of recordsOfDay) {
-    if (item.kind === "session") {
+    if (item.kind === "match") {
+      matchEntries.push({ kind: "record-match", item });
+    } else if (!shownSessionIds.has(item.session.id)) {
       // 세션 목록과 기록 줄의 시점이 어긋나도 기록은 보인다
-      if (!shownSessionIds.has(item.session.id)) {
-        entries.push({ kind: "record-session", item });
-      }
+      entries.push({ kind: "record-session", item });
     }
   }
-  for (const item of recordsOfDay) {
-    if (item.kind === "match") entries.push({ kind: "record-match", item });
-  }
+  entries.push(...matchEntries);
   return entries;
 };

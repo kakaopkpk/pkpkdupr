@@ -11,7 +11,7 @@ export type RecordMatchSheetRequest =
 export interface CreateSessionRequest {
   /** 처음 골라 둘 날짜(KST 날짜 키) */
   dateKey?: string;
-  /** 만든 뒤 부른다. 주면 홈 탭으로 옮기지 않는다 */
+  /** 만든 뒤(데이터 변경 알림 다음에) 부른다 */
   onCreated?: (session: MatchSessionDetailInfo) => void;
 }
 
@@ -27,7 +27,7 @@ export interface AppNavigationContextValue {
   /** 내 id면 나 탭으로 전환 */
   openMemberProfile: (playerId: string) => void;
   openRecordMatch: (request: RecordMatchSheetRequest) => void;
-  /** 세션 만들기 시트. request 없이 열면 만든 뒤 홈 탭으로 옮긴다 */
+  /** 세션 만들기 시트 */
   openCreateSession: (request?: CreateSessionRequest) => void;
   openSettings: () => void;
   /** 업적 상세 바텀시트. 열린 화면·경기 기록 시트 위에 뜬다 */

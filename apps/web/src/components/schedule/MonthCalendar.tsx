@@ -1,6 +1,7 @@
 import React from "react";
 import {
   addKstDays,
+  getKstWeekday,
   kstDateKeyToDate,
   WEEKDAY_LABELS,
 } from "@pkpkdupr/shared/session";
@@ -15,18 +16,12 @@ import type { ScheduleDayMark } from "@/lib/schedule";
 
 const DAYS_PER_WEEK = 7;
 
-/** 날짜 키의 요일(0=일). 날짜 키는 이미 KST 날짜라 UTC로 읽는다 */
-const getWeekday = (dateKey: string) => {
-  const [year, month, day] = dateKey.split("-").map(Number);
-  return new Date(Date.UTC(year, month - 1, day)).getUTCDay();
-};
-
 /** 그 달 첫날이 든 주 일요일부터 마지막 날이 든 주 토요일까지의 날짜 키 */
-export const getMonthCellKeys = (monthKey: string): string[] => {
+const getMonthCellKeys = (monthKey: string): string[] => {
   const { fromDateKey, toDateKey } = getScheduleMonthDateKeyRange(monthKey);
   const lastKey = addKstDays(toDateKey, -1);
-  const startKey = addKstDays(fromDateKey, -getWeekday(fromDateKey));
-  const endKey = addKstDays(lastKey, DAYS_PER_WEEK - 1 - getWeekday(lastKey));
+  const startKey = addKstDays(fromDateKey, -getKstWeekday(fromDateKey));
+  const endKey = addKstDays(lastKey, DAYS_PER_WEEK - 1 - getKstWeekday(lastKey));
   const keys: string[] = [];
   // YYYY-MM-DD 문자열은 사전순이 날짜순이다
   for (let key = startKey; key <= endKey; key = addKstDays(key, 1)) {

@@ -13,8 +13,6 @@ import {
   getSessionTimeUntilLabel,
 } from "./sessionTimeLabel";
 
-export type { ParticipationAction };
-
 /**
  * 다음 세션 블루 카드(오늘 세션 전·세션 없는 날). 참여하기/참여 취소는 나만 바꾸고,
  * "N명 참여 예정"을 누르면 참여자 시트가 열린다.

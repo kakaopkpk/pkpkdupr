@@ -623,8 +623,6 @@ describe("랭킹·세션 리포트 API", () => {
         "2026-11-01",
         "2026-12-01",
       );
-      expect(response.body.month).toBe("2026-11");
-      expect(response.body.dateKey).toBe("2026-11-12");
       expect(
         response.body.sessions.map(
           (item: { id: string; isEnded: boolean; participants: unknown[] }) => [

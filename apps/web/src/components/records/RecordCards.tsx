@@ -12,6 +12,7 @@ import { Card } from "@/components/ui/Card";
 import { ChevronRightIcon } from "@/components/ui/Icons";
 import { MatchRow } from "@/components/ui/MatchRow";
 import { cx } from "@/components/ui/cx";
+import { getSessionKindLabel } from "@/lib/matchSessions";
 import type { MatchSessionHistoryInfo } from "@/lib/rankings";
 import type { MatchInfo } from "@/types/match";
 
@@ -62,7 +63,7 @@ export const RecordSessionCard: React.FC<{
   >
     <span className="flex w-full items-center justify-between gap-2">
       <span className="text-pk-12 font-bold text-pk-sub">
-        {session.kind === "regular" ? "정기 세션" : "회원 세션"}
+        {getSessionKindLabel(session.kind)}
       </span>
       <ChevronRightIcon className="size-4 shrink-0 text-pk-quiet" />
     </span>

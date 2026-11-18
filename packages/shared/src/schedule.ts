@@ -2,7 +2,7 @@ import type { RecordItem } from "./ranking.js";
 import type { MatchSessionDetail } from "./session.js";
 
 /** "YYYY-MM" 월 키(KST) */
-export const SCHEDULE_MONTH_PATTERN = /^(\d{4})-(0[1-9]|1[0-2])$/;
+const SCHEDULE_MONTH_PATTERN = /^(\d{4})-(0[1-9]|1[0-2])$/;
 
 /** 일정 탭 세션: 세션 단건 응답 + 끝났는지 */
 export interface ScheduleSession extends MatchSessionDetail {
@@ -12,10 +12,6 @@ export interface ScheduleSession extends MatchSessionDetail {
 
 /** GET /api/schedule?month=YYYY-MM 응답 */
 export interface ScheduleMonthResponse {
-  /** 요청한 월 키 */
-  month: string;
-  /** 오늘 KST 날짜 키 */
-  dateKey: string;
   /**
    * 세션 날짜 키가 그 달인 세션. 끝난 세션은 완료 경기가 있는(records에 세션 줄이 있는) 세션만 남긴다.
    * 날짜 키 오름차순, 같은 날은 정기 세션 먼저
@@ -37,7 +33,7 @@ export const parseScheduleMonth = (
 };
 
 /** 연·월 → "YYYY-MM" */
-export const formatScheduleMonth = (year: number, month: number): string =>
+const formatScheduleMonth = (year: number, month: number): string =>
   `${year}-${String(month).padStart(2, "0")}`;
 
 /** 월 키를 months만큼 옮긴다. "2026-12" + 1 → "2027-01" */

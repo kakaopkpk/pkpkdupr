@@ -1,8 +1,10 @@
 import React from "react";
 import { formatSessionTimePlace } from "@/components/home/sessionTimeLabel";
+import { SESSION_DATE_OPTION_DAYS } from "@/components/session/SessionSchedulePicker";
 import {
   BlueCardOutlineButton,
   BlueCardSolidButton,
+  getJoinButtonLabel,
   JoinedLabel,
   ParticipationControls,
   ParticipationError,
@@ -12,12 +14,11 @@ import {
 } from "@/components/session/SessionBlueCard";
 import { LivePill } from "@/components/ui/Badges";
 import { PkButton } from "@/components/ui/Button";
-import { ChevronRightIcon } from "@/components/ui/Icons";
-import type { MatchSessionDetailInfo } from "@/lib/matchSessions";
-
-/** 일정 탭 세션 칩 문구 */
-const getSessionKindLabel = (session: Pick<MatchSessionDetailInfo, "kind">) =>
-  session.kind === "regular" ? "정기 세션" : "회원 세션";
+import { ChevronRightIcon, PlusIcon } from "@/components/ui/Icons";
+import {
+  getSessionKindLabel,
+  type MatchSessionDetailInfo,
+} from "@/lib/matchSessions";
 
 interface ParticipationProps {
   session: MatchSessionDetailInfo;
@@ -47,7 +48,7 @@ export const UpcomingSessionCard: React.FC<ParticipationProps> = ({
       session={session}
       top={
         <div className="flex items-center gap-2">
-          <SessionChip>{getSessionKindLabel(session)}</SessionChip>
+          <SessionChip>{getSessionKindLabel(session.kind)}</SessionChip>
         </div>
       }
       meta={formatSessionTimePlace(session)}
@@ -85,7 +86,7 @@ export const LiveSessionCard: React.FC<
       session={session}
       top={
         <div className="flex items-center justify-between gap-2">
-          <SessionChip>{getSessionKindLabel(session)}</SessionChip>
+          <SessionChip>{getSessionKindLabel(session.kind)}</SessionChip>
           <LivePill />
         </div>
       }
@@ -101,7 +102,7 @@ export const LiveSessionCard: React.FC<
         <div className="flex items-center justify-between gap-2">
           <span className="text-pk-15 font-bold">아직 참여하지 않았어요</span>
           <BlueCardOutlineButton onPress={onJoin} disabled={pendingAction !== null}>
-            {pendingAction === "join" ? "참여하는 중…" : "참여하기"}
+            {getJoinButtonLabel(pendingAction)}
           </BlueCardOutlineButton>
         </div>
       )}
@@ -114,22 +115,9 @@ export const LiveSessionCard: React.FC<
   </div>
 );
 
-const PlusIcon: React.FC = () => (
-  <svg
-    width="18"
-    height="18"
-    viewBox="0 0 24 24"
-    aria-hidden="true"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2.6"
-    strokeLinecap="round"
-  >
-    <path d="M12 5v14M5 12h14" />
-  </svg>
-);
+const DAYS_PER_WEEK = 7;
 
-/** 빈 날에서 세션을 만들 수 있는지: 만들 수 있음 / 지난 날 / 세션 만들기 달력 범위(오늘부터 3주) 밖 */
+/** 빈 날에서 세션을 만들 수 있는지: 만들 수 있음 / 지난 날 / 세션 만들기 달력 범위(SESSION_DATE_OPTION_DAYS) 밖 */
 export type EmptyDayKind = "creatable" | "past" | "out-of-range";
 
 /** 세션도 기록도 없는 날. 만들 수 있는 날만 그 날짜로 세션 만들기를 연다 */
@@ -145,7 +133,8 @@ export const EmptyDayCard: React.FC<{
     </b>
     {kind === "out-of-range" ? (
       <span className="text-pk-13 text-pk-sub">
-        세션은 오늘부터 3주 안의 날에 만들 수 있어요
+        세션은 오늘부터 {SESSION_DATE_OPTION_DAYS / DAYS_PER_WEEK}주 안의 날에
+        만들 수 있어요
       </span>
     ) : null}
     {kind === "creatable" ? (

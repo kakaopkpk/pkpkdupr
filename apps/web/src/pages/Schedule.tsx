@@ -17,24 +17,20 @@ import {
   UpcomingSessionCard,
 } from "@/components/schedule/ScheduleCards";
 import ParticipantsSheet from "@/components/session/ParticipantsSheet";
-import type { ParticipationAction } from "@/components/session/SessionBlueCard";
 import { isSessionDateSelectable } from "@/components/session/SessionSchedulePicker";
-import { getErrorMessage } from "@/components/session/saveError";
+import { useSessionParticipation } from "@/components/session/useSessionParticipation";
 import { SectionLabel } from "@/components/ui/Section";
 import { StateMessage } from "@/components/ui/StateMessage";
 import { useAppNavigation } from "@/context/AppNavigationContext";
 import { useAuth } from "@/context/AuthContext";
 import { useLiveSession } from "@/context/LiveSessionContext";
-import { useSystemNotice } from "@/context/SystemNoticeContext";
 import { useTabNavigation } from "@/context/TabNavigationContext";
 import { useMinuteClock } from "@/hooks/useMinuteClock";
-import { getUserErrorMessage, isNetworkError } from "@/lib/errors";
+import { getUserErrorMessage } from "@/lib/errors";
 import { formatKstLongDate } from "@/lib/format";
 import {
-  addMatchSessionParticipant,
   isSessionParticipant,
   type MatchSessionDetailInfo,
-  removeMatchSessionParticipant,
 } from "@/lib/matchSessions";
 import { getRecordItemKey } from "@/lib/records";
 import {
@@ -45,6 +41,7 @@ import {
   type ScheduleDayMark,
   type ScheduleMonthInfo,
 } from "@/lib/schedule";
+import { getMatchPlayerIds } from "@/types/match";
 
 const EMPTY_IDS: readonly string[] = [];
 const EMPTY_MARKS: ReadonlyMap<string, ScheduleDayMark> = new Map();
@@ -77,9 +74,6 @@ const getEmptyDayKind = (dateKey: string, todayKey: string): EmptyDayKind => {
   return isSessionDateSelectable(dateKey, todayKey) ? "creatable" : "out-of-range";
 };
 
-const getMatchPlayerIds = (match: { teams: { players: { id: string }[] }[] }) =>
-  match.teams.flatMap((team) => team.players.map((player) => player.id));
-
 /**
  * 일정 탭: 위는 월 달력, 아래는 고른 날의 세션·기록 카드.
  * 아직 끝나지 않은 세션은 여기서 참여·참여 취소하고, 오늘 진행 중 세션은 홈 진행 화면으로 보낸다
@@ -97,7 +91,6 @@ const Schedule: React.FC = () => {
     dataVersion,
   } = useAppNavigation();
   const { registerPullToRefresh } = useTabNavigation();
-  const { showSaveFailure } = useSystemNotice();
   const now = useMinuteClock();
   const todayKey = toKstDateKey(now);
 
@@ -200,86 +193,23 @@ const Schedule: React.FC = () => {
   };
 
   // ── 참여·참여 취소 ─────────────────────────────────
-  const [participation, setParticipation] = useState<{
-    sessionId: string;
-    action: ParticipationAction;
-    /** 성공 뒤 이 dataVersion 이상으로 새로 받은 데이터가 와야 버튼을 푼다. 요청 중이면 null */
-    awaitVersion: number | null;
-  } | null>(null);
-  const [participationError, setParticipationError] = useState<{
-    sessionId: string;
-    message: string;
-  } | null>(null);
-
-  const loadedVersion = monthState?.loadedVersion ?? -1;
-  useEffect(() => {
-    if (
-      participation?.awaitVersion != null &&
-      loadedVersion >= participation.awaitVersion
-    ) {
-      setParticipation(null);
-    }
-  }, [loadedVersion, participation]);
+  const participation = useSessionParticipation({
+    playerId,
+    loadedVersion: monthState?.loadedVersion ?? -1,
+  });
+  const { clearError: clearParticipationError } = participation;
 
   // 다른 날로 옮기면 이전 날의 오류 문구를 지운다
   useEffect(() => {
-    setParticipationError(null);
-  }, [selectedDateKey]);
-
-  const changeParticipation = async (
-    sessionId: string,
-    action: ParticipationAction,
-  ) => {
-    if (!playerId || participation) return;
-
-    const run = async () => {
-      if (action === "join") {
-        await addMatchSessionParticipant(sessionId, playerId);
-      } else {
-        await removeMatchSessionParticipant(sessionId, playerId);
-      }
-      // notifyDataChanged가 dataVersion을 1 올리고 그 값으로 다시 받는다.
-      // 요청 중 다른 곳에서 올린 버전도 반영하도록 호출 직전의 최신 값을 기준으로 삼는다
-      const awaitVersion = dataVersionRef.current + 1;
-      notifyDataChanged();
-      return awaitVersion;
-    };
-
-    setParticipation({ sessionId, action, awaitVersion: null });
-    setParticipationError(null);
-    try {
-      const awaitVersion = await run();
-      setParticipation({ sessionId, action, awaitVersion });
-    } catch (err) {
-      setParticipation(null);
-      if (isNetworkError(err)) {
-        showSaveFailure({
-          onRetry: async () => {
-            await run();
-          },
-        });
-      } else {
-        setParticipationError({
-          sessionId,
-          message: getErrorMessage(
-            err,
-            action === "join" ? "참여하지 못했어요." : "참여를 취소하지 못했어요.",
-          ),
-        });
-      }
-    }
-  };
+    clearParticipationError();
+  }, [clearParticipationError, selectedDateKey]);
 
   const getParticipationProps = (session: MatchSessionDetailInfo) => ({
     session,
     isJoined: isSessionParticipant(session, playerId),
-    pendingAction:
-      participation?.sessionId === session.id ? participation.action : null,
-    error:
-      participationError?.sessionId === session.id
-        ? participationError.message
-        : null,
-    onJoin: () => void changeParticipation(session.id, "join"),
+    pendingAction: participation.getPendingAction(session.id),
+    error: participation.getError(session.id),
+    onJoin: () => void participation.change(session.id, "join"),
   });
 
   const handleCreateSession = () =>
@@ -307,7 +237,7 @@ const Schedule: React.FC = () => {
           <UpcomingSessionCard
             key={`upcoming:${entry.session.id}`}
             {...getParticipationProps(entry.session)}
-            onLeave={() => void changeParticipation(entry.session.id, "leave")}
+            onLeave={() => void participation.change(entry.session.id, "leave")}
             onOpenParticipants={() => openParticipants(entry.session, EMPTY_IDS)}
           />
         );

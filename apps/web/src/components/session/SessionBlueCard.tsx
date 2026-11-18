@@ -1,5 +1,6 @@
 import React from "react";
 import { buttonPressClassName } from "@/components/ui/Button";
+import { CheckIcon } from "@/components/ui/Icons";
 import { PlayerAvatar } from "@/components/ui/PlayerAvatar";
 import { cx } from "@/components/ui/cx";
 import type { MatchSessionDetailInfo } from "@/lib/matchSessions";
@@ -9,22 +10,6 @@ const AVATAR_SIZE = 28;
 const PRIMARY_RING = "0 0 0 2px var(--color-pk-primary)";
 
 export type ParticipationAction = "join" | "leave";
-
-export const CheckIcon: React.FC = () => (
-  <svg
-    width="16"
-    height="16"
-    viewBox="0 0 24 24"
-    aria-hidden="true"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="3"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  >
-    <path d="M5 12.5l4.5 4.5L19 7.5" />
-  </svg>
-);
 
 /** 블루 카드 위 참여자 아바타 최대 4개 + "+N" */
 const ParticipantAvatars: React.FC<{
@@ -148,6 +133,10 @@ export const BlueCardSolidButton: React.FC<{
   </button>
 );
 
+/** 참여하기 버튼 문구. 참여 요청 중이면 "참여하는 중…" */
+export const getJoinButtonLabel = (pendingAction: ParticipationAction | null) =>
+  pendingAction === "join" ? "참여하는 중…" : "참여하기";
+
 /** 참여 중이면 "✓ 참여 중" + 참여 취소, 아니면 참여하기. 요청 중에는 버튼을 막는다 */
 export const ParticipationControls: React.FC<{
   isJoined: boolean;
@@ -165,7 +154,7 @@ export const ParticipationControls: React.FC<{
     </div>
   ) : (
     <BlueCardSolidButton onPress={onJoin} disabled={isPending}>
-      {pendingAction === "join" ? "참여하는 중…" : "참여하기"}
+      {getJoinButtonLabel(pendingAction)}
     </BlueCardSolidButton>
   );
 };

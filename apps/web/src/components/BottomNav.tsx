@@ -645,20 +645,10 @@ const BottomNav: React.FC = () => {
     [],
   );
 
-  const handleSessionCreated = useCallback(
-    (
-      session: MatchSessionDetailInfo,
-      request: CreateSessionRequest | null,
-    ) => {
-      notifyDataChanged();
-      if (request?.onCreated) {
-        request.onCreated(session);
-      } else {
-        selectTab("home");
-      }
-    },
-    [notifyDataChanged, selectTab],
-  );
+  const handleSessionCreated = (session: MatchSessionDetailInfo) => {
+    notifyDataChanged();
+    createSessionLayer.value?.onCreated?.(session);
+  };
 
   // ?matchId= 딥링크는 아래에 matchId 없는 히스토리를 남기고 경기 상세를 연다.
   // 그래서 뒤로가기로 닫으면 주소에서 matchId가 빠지고 드로어가 다시 열리지 않는다
@@ -1328,9 +1318,7 @@ const BottomNav: React.FC = () => {
               tabKey={createSessionLayer.tabKey}
               initialDateKey={createSessionLayer.value?.dateKey ?? null}
               onClose={closeCreateSession}
-              onCreated={(session) =>
-                handleSessionCreated(session, createSessionLayer.value)
-              }
+              onCreated={handleSessionCreated}
             />
             <SettingsDrawer
               isOpen={!!settingsLayer.value}
@@ -1378,7 +1366,12 @@ const BottomNav: React.FC = () => {
                             closeGlobalMenu(() => openRecordMatch({ kind: "new" }))
                           }
                           onCreateSession={() =>
-                            closeGlobalMenu(() => openCreateSession())
+                            closeGlobalMenu(() =>
+                              // + 메뉴에서 만든 세션은 홈 다음 세션 카드에서 보인다
+                              openCreateSession({
+                                onCreated: () => selectTab("home"),
+                              }),
+                            )
                           }
                         />
                         <PushScreenCoverDim

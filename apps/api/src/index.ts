@@ -863,6 +863,14 @@ const toMatchSessionDetail = (
   };
 };
 
+/** 날짜 키 오름차순, 같은 날은 정기 세션 먼저 */
+const compareSessionDetailsByDay = (
+  a: Pick<MatchSessionDetail, "dateKey" | "kind">,
+  b: Pick<MatchSessionDetail, "dateKey" | "kind">,
+) =>
+  a.dateKey.localeCompare(b.dateKey) ||
+  Number(b.kind === "regular") - Number(a.kind === "regular");
+
 /** 세션 상세를 만든다. 없으면 undefined */
 const loadMatchSessionDetail = async (
   sessionId: string,
@@ -1436,11 +1444,7 @@ app.get("/api/match-sessions/upcoming", async (req, res) => {
       )
       .map((session) => toMatchSessionDetail(session, activePlayersById, now));
     // 저장소가 시각 오름차순으로 주므로 날짜 키·정기 여부로만 다시 정렬한다(정렬은 안정적이다).
-    details.sort(
-      (a, b) =>
-        a.dateKey.localeCompare(b.dateKey) ||
-        Number(b.kind === "regular") - Number(a.kind === "regular"),
-    );
+    details.sort(compareSessionDetailsByDay);
     const response: UpcomingMatchSessionsResponse = {
       dateKey,
       sessions: details,
@@ -3185,15 +3189,9 @@ app.get("/api/schedule", async (req, res) => {
         (session) => !session.isEnded || recordedSessionIds.has(session.id),
       );
     // 저장소가 시각 오름차순으로 주므로 날짜 키·정기 여부로만 다시 정렬한다(정렬은 안정적이다)
-    scheduleSessions.sort(
-      (a, b) =>
-        a.dateKey.localeCompare(b.dateKey) ||
-        Number(b.kind === "regular") - Number(a.kind === "regular"),
-    );
+    scheduleSessions.sort(compareSessionDetailsByDay);
 
     const response: ScheduleMonthResponse = {
-      month,
-      dateKey: toKstDateKey(now),
       sessions: scheduleSessions,
       records: await hydrateRecordEntries(entries),
     };
