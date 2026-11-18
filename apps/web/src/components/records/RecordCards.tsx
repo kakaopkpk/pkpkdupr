@@ -47,12 +47,17 @@ const SessionMineStrip: React.FC<{ mine: SessionPlayerReport }> = ({ mine }) => 
   );
 };
 
-/** 끝난 세션 카드(일정 탭). 날짜는 바깥 날짜 제목이 보이므로 넣지 않는다 */
+/**
+ * 끝난 세션 카드(일정 탭·홈 지난 세션 요약). 맨 위 이름표 기본값은 세션 종류, 메타 줄 기본값은 장소·인원·경기 수다.
+ * 일정 탭은 바깥 날짜 제목이 보이므로 날짜를 넣지 않는다
+ */
 export const RecordSessionCard: React.FC<{
   session: MatchSessionHistoryInfo;
   mine: SessionPlayerReport | null;
   onPress: () => void;
-}> = ({ session, mine, onPress }) => (
+  label?: string;
+  meta?: string;
+}> = ({ session, mine, onPress, label, meta }) => (
   <button
     type="button"
     onClick={onPress}
@@ -63,7 +68,7 @@ export const RecordSessionCard: React.FC<{
   >
     <span className="flex w-full items-center justify-between gap-2">
       <span className="text-pk-12 font-bold text-pk-sub">
-        {getSessionKindLabel(session.kind)}
+        {label ?? getSessionKindLabel(session.kind)}
       </span>
       <ChevronRightIcon className="size-4 shrink-0 text-pk-quiet" />
     </span>
@@ -71,13 +76,14 @@ export const RecordSessionCard: React.FC<{
       {session.name}
     </span>
     <span className="truncate text-pk-13 text-pk-sub tabular-nums">
-      {[
-        session.location,
-        `${session.participantCount}명`,
-        `${session.matchCount}경기`,
-      ]
-        .filter(Boolean)
-        .join(" · ")}
+      {meta ??
+        [
+          session.location,
+          `${session.participantCount}명`,
+          `${session.matchCount}경기`,
+        ]
+          .filter(Boolean)
+          .join(" · ")}
     </span>
     {mine ? <SessionMineStrip mine={mine} /> : null}
   </button>

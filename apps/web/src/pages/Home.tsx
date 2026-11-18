@@ -3,7 +3,7 @@ import type { RecommendedCourt } from "@pkpkdupr/shared/matchmaking";
 import { toKstDateKey } from "@pkpkdupr/shared/session";
 import { getMatchPlayerIds, type MatchInfo } from "@/types/match";
 import HomeSkeleton from "@/components/home/HomeSkeleton";
-import LastSessionFeed from "@/components/home/LastSessionFeed";
+import LastSessionSummary from "@/components/home/LastSessionSummary";
 import { LiveMatchCard, MyLiveMatchCard } from "@/components/home/LiveMatchCard";
 import NextSessionCarousel from "@/components/home/NextSessionCarousel";
 import RecommendationSection, {
@@ -84,7 +84,7 @@ const INITIAL_START_STATE: StartState = {
 
 /**
  * 홈 탭. 셸의 진행 중 세션이 있으면 진행 화면(참여자 Main / 미참여자 MainGuest),
- * 없으면 다가오는 세션 카드(가로로 넘김), 세션 밖 진행 중 경기, 지난 세션 피드를 보인다.
+ * 없으면 다가오는 세션 카드(가로로 넘김), 세션 밖 진행 중 경기, 지난 세션 요약을 보인다.
  */
 const Home: React.FC = () => {
   const { player } = useAuth();
@@ -379,7 +379,7 @@ const Home: React.FC = () => {
         )}
         {inProgressSection}
         {lastSessionReport ? (
-          <LastSessionFeed report={lastSessionReport} playerId={playerId} />
+          <LastSessionSummary report={lastSessionReport} playerId={playerId} />
         ) : null}
       </>
     );
