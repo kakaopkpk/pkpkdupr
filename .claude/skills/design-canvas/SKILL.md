@@ -22,8 +22,8 @@ description: pkpkdupr web·admin 화면의 디자인 시안·캔버스·목업�
 
 ## 3. 지금 화면 보기
 
-- 가능하면 앱을 띄워 지금 화면을 직접 본다. `pnpm dev`(Docker 필요, web :8080) 후 dev 계정(`dev_alice` / `devpass1234`, `docs/dev-environment.md`)으로 로그인하고, 폰 폭(390px)으로 해당 화면을 연다. Playwright 같은 브라우저 도구가 있으면 스크린샷을 찍어 비교 기준으로 쓴다.
-- 띄울 수 없으면 2단계의 코드만으로 그리고, 그 사실을 사용자에게 알린다.
+- 앱을 띄워 지금 화면을 직접 본다. `pnpm dev`(Docker 필요, web :8080) 후 dev 계정(`dev_alice` / `devpass1234`, `docs/dev-environment.md`)으로 로그인하고, 폰 폭(390px)으로 해당 화면을 연다. Playwright 같은 브라우저 도구가 있으면 스크린샷을 찍어 비교 기준으로 쓴다.
+- 예외: Docker가 없는 등 띄울 수 없으면 2단계의 코드만으로 그리고, 그 사실을 사용자에게 알린다.
 
 ## 4. 캔버스 구성
 
@@ -35,7 +35,7 @@ description: pkpkdupr web·admin 화면의 디자인 시안·캔버스·목업�
 
 ## 5. 예시 데이터
 
-- 아이디는 실제 앱 아이디 형식(회사 메일 @ 앞부분, 예: `minsu.kim`, `jay.21`, `hana.lee`)으로 쓴다. `dev_alice` 같은 개발용 이름이나 Player 1 같은 자리 채우기 이름을 쓰지 않는다.
+- 아이디는 실제 앱 아이디 형식(메일 주소 @ 앞부분, 예: `minsu.kim`, `jay.21`, `hana.lee`)으로 쓴다. `dev_alice` 같은 개발용 이름이나 Player 1 같은 자리 채우기 이름을 쓰지 않는다.
 - 평점은 2.5~4.5 사이 소수 셋째 자리(예: 3.214), 점수는 11점제(듀스는 15:14까지)로 쓴다. 평점 없음은 "–"다.
 
 ## 6. 마무리
