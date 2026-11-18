@@ -1,5 +1,6 @@
 import { type AvatarCropRect, getAvatarCropOutputSize } from "./avatarCrop";
 
+/** 프로필 사진 확대 보기(240px 원)가 레티나 화면에서도 선명하도록 512px로 저장한다 */
 const MAX_AVATAR_SIZE = 512;
 const AVATAR_JPEG_QUALITY = 0.85;
 

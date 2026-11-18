@@ -82,6 +82,7 @@ const Me: React.FC = () => {
     <>
       <ProfileHeader
         className="pt-4 pr-4 pb-4 pl-5"
+        tabKey="me"
         player={
           player ? { id: player.id, username, avatarUrl: player.avatarUrl } : null
         }
