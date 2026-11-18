@@ -30,7 +30,7 @@ const loadLastSessionReport =
 const loadPreSessionData = async (): Promise<PreSessionData> => {
   const [upcoming, lastSessionReport] = await Promise.all([
     fetchUpcomingMatchSessions(),
-    // 지난 세션 피드는 보조 섹션이라 실패해도 화면 전체를 오류로 만들지 않고 숨긴다
+    // 지난 세션 요약은 보조 카드라 실패해도 화면 전체를 오류로 만들지 않고 숨긴다
     loadLastSessionReport().catch(() => null),
   ]);
   return { upcoming, lastSessionReport };

@@ -75,7 +75,7 @@ export const MyNewAchievementsCard: React.FC<{
  * 진행 중 세션이 없을 때 홈의 지난 세션 요약: 일정 탭 끝난 세션 카드 모양의 내 기록 카드와 그 아래 내 새 업적.
  * 가장 최근 세션에 내가 경기하지 않았으면 아무것도 보이지 않는다. 카드를 누르면 세션 리포트를 연다
  */
-const LastSessionFeed: React.FC<{
+const LastSessionSummary: React.FC<{
   report: MatchSessionReportInfo;
   playerId: string | undefined;
 }> = ({ report, playerId }) => {
@@ -95,8 +95,7 @@ const LastSessionFeed: React.FC<{
   if (!playerId || !myReport) return null;
 
   return (
-    // 다음 세션 카드와 섹션 사이처럼 앞 요소에서 20px 띄운다
-    <div className="flex flex-col gap-2.5 pt-2.5">
+    <Section>
       <RecordSessionCard
         session={session}
         mine={myReport}
@@ -111,8 +110,8 @@ const LastSessionFeed: React.FC<{
           titlePlacement="section"
         />
       ) : null}
-    </div>
+    </Section>
   );
 };
 
-export default LastSessionFeed;
+export default LastSessionSummary;

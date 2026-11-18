@@ -20,15 +20,16 @@ const SectionLabel: React.FC<{
  * 앞 요소 → 제목 줄 20px(부모 gap 10 + pt-2.5), 제목 줄 → 내용·내용 사이 10px이다.
  * 부모의 첫 요소(화면 머리·컨트롤 바로 아래)면 위 여백을 더하지 않는다.
  * subtitle은 제목 줄 바로 아래 간격 없이 붙고, 그 아래 내용까지는 14px이다.
+ * title이 없으면 제목 줄 없이 같은 위 여백·내용 사이 간격만 둔다.
  */
 export const Section: React.FC<{
-  title: React.ReactNode;
+  title?: React.ReactNode;
   right?: React.ReactNode;
   subtitle?: React.ReactNode;
   children?: React.ReactNode;
 }> = ({ title, right, subtitle, children }) => (
   <section className="flex flex-col gap-2.5 pt-2.5 first:pt-0">
-    {subtitle ? (
+    {title === undefined ? null : subtitle ? (
       <div className="pb-1">
         <SectionLabel right={right}>{title}</SectionLabel>
         {subtitle}
