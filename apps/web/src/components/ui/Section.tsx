@@ -41,22 +41,18 @@ export const TextLink: React.FC<{
 export const PREVIEW_COUNT = 3;
 
 /**
- * 목록 앞 PREVIEW_COUNT개만 보이는 섹션. showCount면 제목에 전체 개수를 붙이고(" · N"),
- * 더 있으면 제목 옆 "전체 보기"를 보인다. 빈 목록은 호출부가 그리지 않는다.
+ * 목록 앞 PREVIEW_COUNT개만 보이는 섹션. 더 있으면 제목 옆 "전체 보기"를 보인다. 빈 목록은 호출부가 그리지 않는다.
  */
 export const PreviewSection = <T,>({
   title,
   items,
   renderPreview,
   onViewAll,
-  showCount = true,
 }: {
   title: string;
   items: readonly T[];
   renderPreview: (preview: readonly T[]) => React.ReactNode;
   onViewAll: () => void;
-  /** 기본 true */
-  showCount?: boolean;
 }): React.ReactElement => (
   <section className="flex flex-col gap-2.5 pt-1">
     <SectionLabel
@@ -68,7 +64,7 @@ export const PreviewSection = <T,>({
         ) : undefined
       }
     >
-      {showCount ? `${title} · ${items.length}` : title}
+      {title}
     </SectionLabel>
     {renderPreview(items.slice(0, PREVIEW_COUNT))}
   </section>

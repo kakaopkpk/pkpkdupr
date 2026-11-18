@@ -152,11 +152,10 @@ const ProfileHeader: React.FC<ProfileHeaderProps> = ({
         {right}
       </div>
       {statusMessage ? (
-        <div className="min-w-0">
+        <div>
           <StatusMessageChip
             message={statusMessage}
             color={statusMessageBackgroundColor}
-            size="sm"
           />
         </div>
       ) : null}
