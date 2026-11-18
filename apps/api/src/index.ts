@@ -153,7 +153,7 @@ import {
   buildSessionReport,
   countAchievementHolders,
   createRankingContext,
-  findMatchAchievements,
+  findAchievementsEarnedByMatches,
   findPlayerEarnedAchievements,
   findSessionDominations,
   parseRecordsCursor,
@@ -1001,18 +1001,19 @@ const findAchievementPointsForNewAchievements = async (
 
 /**
  * 경기 상세 응답의 업적: 이 경기로 참가자 전원이 받은 업적(세션 리포트 achievements와 같은 규칙).
- * 완료 경기만 계산하고, 경기 상세를 막지 않도록 계산이 실패하면 빈 배열로 응답한다
+ * 경기 상세를 막지 않도록 계산이 실패하면 빈 배열로 응답한다
  */
 const findAchievementsEarnedByMatch = async (
   match: Match,
 ): Promise<EarnedAchievement[]> => {
+  // 진행 중·평점 미반영 경기는 업적 계산에서 빠져 결과가 늘 비므로 원천을 읽지 않는다
   if (match.status !== "completed" || match.ratingExcluded) return [];
   try {
     const { context, sessions } = await loadRankingSource();
-    return findMatchAchievements(
+    return findAchievementsEarnedByMatches(
       context,
       findSessionDominations(context, sessions, new Date()),
-      match.id,
+      new Set([match.id]),
       getTeamPlayerIds(match.teams),
     );
   } catch (err) {

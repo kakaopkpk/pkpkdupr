@@ -177,12 +177,17 @@ export interface MatchEarnedAchievement<P extends { id: string }> {
   player: P;
 }
 
-/** 경기로 받은 업적을 정의·받은 참가자와 함께 고른다(정의를 모르거나 참가자가 아닌 업적은 뺀다) */
+/**
+ * 경기로 받은 업적을 정의·받은 참가자와 함께 고른다(정의를 모르거나 참가자가 아닌 업적은 뺀다).
+ * 평점 미반영 경기는 서버 계산에서 빠져 업적이 오지 않는다
+ */
 export const pickMatchEarnedAchievements = <P extends { id: string }>(
   items: readonly EarnedAchievementInfo[],
-  players: readonly P[],
+  match: { teams: readonly { players: readonly P[] }[] },
 ): MatchEarnedAchievement<P>[] => {
-  const playerById = new Map(players.map((player) => [player.id, player]));
+  const playerById = new Map(
+    match.teams.flatMap((team) => team.players).map((player) => [player.id, player]),
+  );
   return items.flatMap((item) => {
     const definition = getAchievementDefinition(item.achievementId);
     const player = playerById.get(item.playerId);

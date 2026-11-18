@@ -285,14 +285,8 @@ const MatchAchievementsCard: React.FC<{
   onOpenAchievement: (playerId: string, achievementId: string) => void;
 }> = ({ match, onOpenAchievement }) => {
   const achievements = useMemo(
-    () =>
-      match.ratingExcluded
-        ? []
-        : pickMatchEarnedAchievements(
-            match.achievements ?? [],
-            match.teams.flatMap((team) => team.players),
-          ),
-    [match.achievements, match.ratingExcluded, match.teams],
+    () => pickMatchEarnedAchievements(match.achievements ?? [], match),
+    [match],
   );
 
   if (achievements.length === 0) return null;

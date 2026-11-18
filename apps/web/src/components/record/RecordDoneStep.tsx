@@ -25,7 +25,6 @@ import { prefersReducedMotion } from "@/hooks/useSheetDrag";
 import {
   markAchievementsSeen,
   pickMatchEarnedAchievements,
-  pickPlayerEarnedAchievements,
 } from "@/lib/achievements";
 import AchievementCelebration from "./AchievementCelebration";
 import { FooterError } from "./RecordMatchParts";
@@ -86,22 +85,14 @@ export default function RecordDoneStep({
   }, [match]);
   // 참가자 전원이 받은 업적을 띠로 보인다. 게스트가 낀 경기는 업적이 없으므로 띠·축하 연출도 없다
   const matchAchievements = useMemo(
-    () =>
-      match.ratingExcluded
-        ? []
-        : pickMatchEarnedAchievements(
-            match.newAchievements ?? [],
-            match.teams.flatMap((team) => team.players),
-          ),
-    [match.newAchievements, match.ratingExcluded, match.teams],
+    () => pickMatchEarnedAchievements(match.newAchievements ?? [], match),
+    [match],
   );
   // 화면 전체 축하 연출과 확인 처리는 내 업적만
   const myNewAchievementItems = useMemo(
     () =>
-      viewer && !match.ratingExcluded
-        ? pickPlayerEarnedAchievements(match.newAchievements ?? [], viewer.id)
-        : [],
-    [match.newAchievements, match.ratingExcluded, viewer],
+      matchAchievements.filter(({ player }) => player.id === viewer?.id),
+    [matchAchievements, viewer],
   );
   const myNewAchievements = useMemo(
     () => myNewAchievementItems.map(({ definition }) => definition),

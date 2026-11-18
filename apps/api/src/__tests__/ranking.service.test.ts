@@ -8,7 +8,7 @@ import {
   buildSessionReport,
   countAchievementHolders,
   createRankingContext,
-  findMatchAchievements,
+  findAchievementsEarnedByMatches,
   findSessionDominations,
   getRatingAt,
   rankPlayersAt,
@@ -795,7 +795,7 @@ describe("buildAchievementRankingResponse", () => {
   });
 });
 
-describe("findMatchAchievements", () => {
+describe("findAchievementsEarnedByMatches", () => {
   const players = [
     makePlayer("Pa", "a", 3),
     makePlayer("Pb", "b", 3),
@@ -813,7 +813,7 @@ describe("findMatchAchievements", () => {
 
   it("그 경기로 받은 업적만 받은 시각 → 업적 정의 → 회원 id 순으로 돌려준다", () => {
     expect(
-      findMatchAchievements(context, new Map(), "M1", allPlayerIds).map(
+      findAchievementsEarnedByMatches(context, new Map(), new Set(["M1"]), allPlayerIds).map(
         (item) => [item.playerId, item.achievementId, item.earnedMatchId],
       ),
     ).toEqual([
@@ -828,7 +828,7 @@ describe("findMatchAchievements", () => {
 
   it("앞 경기에서 이미 받은 업적은 다음 경기에 나오지 않는다", () => {
     expect(
-      findMatchAchievements(context, new Map(), "M2", allPlayerIds).filter(
+      findAchievementsEarnedByMatches(context, new Map(), new Set(["M2"]), allPlayerIds).filter(
         (item) =>
           item.achievementId === "matches-1" || item.achievementId === "wins-1",
       ),
@@ -837,7 +837,7 @@ describe("findMatchAchievements", () => {
 
   it("넘긴 회원의 업적만 센다", () => {
     expect(
-      findMatchAchievements(context, new Map(), "M1", ["Pc"]).map(
+      findAchievementsEarnedByMatches(context, new Map(), new Set(["M1"]), ["Pc"]).map(
         (item) => item.achievementId,
       ),
     ).toEqual(["matches-1"]);
