@@ -2022,6 +2022,16 @@ app.get("/api/admin/match-sessions", requireAdmin, async (_req, res) => {
   }
 });
 
+/** 정기 세션은 정기 요일(월·목)에만 둔다. 다른 요일이면 경기 기록이 정기 시간대 규칙으로 세션을 찾지 못한다 */
+const assertRegularSessionWeekday = (dateKey: string) => {
+  if (!REGULAR_SESSION_WEEKDAYS.includes(getKstWeekday(dateKey))) {
+    throw new MatchSessionRequestError(
+      "정기 세션은 월·목에만 둘 수 있어요.",
+      400,
+    );
+  }
+};
+
 /**
  * 관리자 세션 만들기. 종류(kind)를 고른다.
  * 회원·대회 세션은 회원 세션 만들기와 같은 규칙이고, 정기 세션은 그 날짜의 정기 세션(18:00~22:00)이 된다
@@ -2041,6 +2051,7 @@ app.post("/api/admin/match-sessions", requireAdmin, async (req, res) => {
       parseCreateMatchSessionRequest(body, now, {
         ignoreTime: kind === "regular",
       });
+    if (kind === "regular") assertRegularSessionWeekday(dateKey);
 
     await matchRepository.cleanupExpired(now);
     const sessionId =
@@ -2170,6 +2181,9 @@ app.patch(
       }
       const nextKind = body.kind ?? session.kind;
       const currentDateKey = toKstDateKey(session.date);
+      if (nextKind === "regular" && session.kind !== "regular") {
+        assertRegularSessionWeekday(currentDateKey);
+      }
       if (dateKey !== undefined || timeProvided) {
         if (nextKind === "regular") {
           throw new MatchSessionRequestError(
@@ -2216,11 +2230,12 @@ app.patch(
         date: dateChanged ? kstDateKeyToDate(nextDateKey) : undefined,
         ...(timeProvided ? { startTime, endTime } : {}),
       };
+      // 종류를 보내면 저장소가 잠근 행의 지금 종류와 비교한다(위에서 읽은 뒤 다른 관리자가 바꿨을 수 있다).
+      // 오늘·미래 정기 세션을 다른 종류로 바꾸면 그 날짜는 취소로 남아 다시 만들어지지 않는다
       const updated =
-        nextKind === session.kind
+        body.kind === undefined
           ? await matchRepository.updateSession(sessionId, input)
-          : // 오늘·미래 정기 세션을 다른 종류로 바꾸면 그 날짜는 취소로 남아 다시 만들어지지 않는다
-            await matchRepository.changeSessionKind(sessionId, nextKind, input, {
+          : await matchRepository.changeSessionKind(sessionId, body.kind, input, {
               cancelRegularFromDateKey: todayKey,
             });
       res.json(updated);

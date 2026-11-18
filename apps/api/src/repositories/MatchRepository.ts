@@ -40,6 +40,16 @@ import { db } from "../db";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const SESSION_CONFLICT_MESSAGE = "같은 이름의 세션이 이미 있습니다.";
+const REGULAR_SESSION_EXISTS_MESSAGE = "그 날짜에는 이미 정기 세션이 있어요.";
+
+/** 세션 유니크 위반을 409로 바꾼다. 정기 날짜 키 위반(동시에 만든 그날 정기 세션)은 그 안내로 */
+const toSessionConflictError = (error: unknown) =>
+  new MatchRepositoryError(
+    ((error as Error).message ?? "").includes("regular_date_key")
+      ? REGULAR_SESSION_EXISTS_MESSAGE
+      : SESSION_CONFLICT_MESSAGE,
+    409,
+  );
 
 /**
  * 저장소 호출 실패를 공개 API가 응답할 HTTP 상태와 함께 전달한다.
@@ -522,7 +532,7 @@ export class MatchRepository {
       );
     } catch (error) {
       if (isUniqueViolation(error)) {
-        throw new MatchRepositoryError(SESSION_CONFLICT_MESSAGE, 409);
+        throw toSessionConflictError(error);
       }
       throw error;
     }
@@ -552,7 +562,7 @@ export class MatchRepository {
       );
     } catch (error) {
       if (isUniqueViolation(error)) {
-        throw new MatchRepositoryError(SESSION_CONFLICT_MESSAGE, 409);
+        throw toSessionConflictError(error);
       }
       throw error;
     }

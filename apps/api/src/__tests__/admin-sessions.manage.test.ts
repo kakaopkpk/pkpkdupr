@@ -318,7 +318,9 @@ describe("PATCH /api/admin/match-sessions/:sessionId", () => {
     });
 
     it("정기로 바꾸면서 날짜·시각을 보내면 409", async () => {
-      const { changeSessionKind } = mockKindChange(customSession());
+      const { changeSessionKind } = mockKindChange(
+        customSession({ date: kstDateKeyToDate("2026-11-16") }),
+      );
 
       const response = await asAdmin(
         request(app).patch("/api/admin/match-sessions/Scustom1"),
@@ -328,8 +330,22 @@ describe("PATCH /api/admin/match-sessions/:sessionId", () => {
       expect(changeSessionKind).not.toHaveBeenCalled();
     });
 
+    it("정기 요일(월·목)이 아닌 세션은 정기로 바꿀 수 없다", async () => {
+      const { changeSessionKind } = mockKindChange(customSession());
+
+      const response = await asAdmin(
+        request(app).patch("/api/admin/match-sessions/Scustom1"),
+      ).send({ kind: "regular" });
+
+      expect(response.status).toBe(400);
+      expect(response.body).toEqual({
+        error: "정기 세션은 월·목에만 둘 수 있어요.",
+      });
+      expect(changeSessionKind).not.toHaveBeenCalled();
+    });
+
     it("정기로 바꿀 수 없는 날짜면 409", async () => {
-      mockSession(customSession());
+      mockSession(customSession({ date: kstDateKeyToDate("2026-11-16") }));
       vi.spyOn(db.matches, "changeSessionKind").mockRejectedValue(
         new RegularSessionConflictError("그 날짜에는 이미 정기 세션이 있어요."),
       );
@@ -487,12 +503,23 @@ describe("POST /api/admin/match-sessions", () => {
 
     const response = await asAdmin(
       request(app).post("/api/admin/match-sessions"),
-    ).send({ ...body, kind: "regular" });
+    ).send({ ...body, kind: "regular", dateKey: "2026-11-19" });
 
     expect(response.status).toBe(409);
     expect(response.body).toEqual({
       error: "쉬는 날에는 정기 세션을 둘 수 없어요.",
     });
+  });
+
+  it("정기 요일(월·목)이 아닌 날짜로는 정기 세션을 만들지 않는다", async () => {
+    const createRegularSession = vi.spyOn(db.matches, "createRegularSession");
+
+    const response = await asAdmin(
+      request(app).post("/api/admin/match-sessions"),
+    ).send({ ...body, kind: "regular" });
+
+    expect(response.status).toBe(400);
+    expect(createRegularSession).not.toHaveBeenCalled();
   });
 
   it("종류가 없거나 모르는 값이면 400", async () => {
