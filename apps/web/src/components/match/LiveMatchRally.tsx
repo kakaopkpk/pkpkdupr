@@ -1,6 +1,7 @@
 import React from "react";
 import { cx } from "@/components/ui/cx";
 import { TEAM_AVATAR_OVERLAP } from "@/components/ui/PlayerAvatar";
+import { useIsScreenVisible } from "@/context/ScreenVisibilityContext";
 
 /*
  * 진행 중 경기 상세 팀 줄 위에 겹쳐 그리는 랠리 연출. 장식이라 스크린 리더에서는 숨긴다.
@@ -87,13 +88,13 @@ const BALL_HOLES = [
   [-0.2, 2],
 ] as const;
 
-const Ball: React.FC = () => (
+const Ball: React.FC<{ ringClassName: string }> = ({ ringClassName }) => (
   <svg
     viewBox="-7 -7 14 14"
     className="absolute top-0 left-0 size-3.5 -translate-x-1/2 -translate-y-1/2 overflow-visible"
   >
     {/* 아바타와 겹쳐도 공이 따로 보이도록 바탕색 테두리를 두른다 */}
-    <circle r={7} className="fill-pk-bg" />
+    <circle r={7} className={ringClassName} />
     <circle r={5} className="fill-pk-hl" style={{ stroke: BALL_EDGE }} strokeWidth={1} />
     {BALL_HOLES.map(([cx, cy]) => (
       <circle key={`${cx},${cy}`} cx={cx} cy={cy} r={0.9} style={{ fill: BALL_EDGE }} />
@@ -104,7 +105,9 @@ const Ball: React.FC = () => (
 export const LiveMatchRally: React.FC<{
   leftCount: number;
   rightCount: number;
-}> = ({ leftCount, rightCount }) => {
+  /** 공 바깥 테두리 채움 클래스. 팀 줄 바탕색과 같아야 한다 */
+  ballRingClassName?: string;
+}> = ({ leftCount, rightCount, ballRingClassName = "fill-pk-bg" }) => {
   const track = getRallyTrack(leftCount, rightCount);
   return (
     <div aria-hidden="true" className="pointer-events-none absolute inset-0 z-10">
@@ -124,10 +127,51 @@ export const LiveMatchRally: React.FC<{
         <HitEffect side="right" />
         <div className="pk-rally-x absolute inset-x-0 top-0">
           <div className="pk-rally-y absolute top-0 left-0">
-            <Ball />
+            <Ball ringClassName={ballRingClassName} />
           </div>
         </div>
       </div>
+    </div>
+  );
+};
+
+/**
+ * 두 팀 칸 사이 네트 칸에 랠리를 겹쳐 그린 팀 줄. 예정 경기(isScheduled)면 랠리 없이 vs 글자만 보인다.
+ * 팀 칸은 renderTeam이 그리며, 아바타 쌍(TEAM_ROW_AVATAR_SIZE)을 칸 맨 위 가운데에 두고 avatarClassName(아바타 밀림)을 아바타 쌍에만 붙여야 한다.
+ */
+export const RallyTeamRow: React.FC<{
+  isScheduled: boolean;
+  playerCounts: readonly [number, number];
+  renderTeam: (side: 0 | 1, avatarClassName: string | undefined) => React.ReactNode;
+  vsClassName: string;
+  ballRingClassName?: string;
+}> = ({ isScheduled, playerCounts, renderTeam, vsClassName, ballRingClassName }) => {
+  const isVisible = useIsScreenVisible();
+  return (
+    <div
+      className={cx(
+        "relative grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center",
+        !isVisible && "pk-rally-paused",
+      )}
+      style={{ columnGap: TEAM_ROW_GAP, paddingTop: isScheduled ? undefined : RALLY_TOP_SPACE }}
+    >
+      {renderTeam(0, isScheduled ? undefined : "pk-rally-lunge")}
+      {isScheduled ? (
+        <span className={vsClassName}>vs</span>
+      ) : (
+        // 네트 칸. 화면에는 네트(LiveMatchRally)만 보이고 vs는 스크린 리더용으로 남긴다
+        <span style={{ width: RALLY_NET_COLUMN_WIDTH }}>
+          <span className="sr-only">vs</span>
+        </span>
+      )}
+      {renderTeam(1, isScheduled ? undefined : "pk-rally-lunge pk-rally-lunge-reverse")}
+      {isScheduled ? null : (
+        <LiveMatchRally
+          leftCount={playerCounts[0]}
+          rightCount={playerCounts[1]}
+          ballRingClassName={ballRingClassName}
+        />
+      )}
     </div>
   );
 };

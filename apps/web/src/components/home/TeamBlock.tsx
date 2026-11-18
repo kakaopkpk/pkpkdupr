@@ -6,21 +6,15 @@ import { cx } from "@/components/ui/cx";
 const TeamBlock: React.FC<{
   players: readonly AvatarPlayer[];
   align?: "start" | "end";
-  size?: 24 | 28;
-}> = ({ players, align = "start", size = 24 }) => (
+}> = ({ players, align = "start" }) => (
   <div
     className={cx(
       "flex min-w-0 items-center gap-2",
       align === "end" && "flex-row-reverse text-right",
     )}
   >
-    <TeamAvatars players={players} size={size} />
-    <span
-      className={cx(
-        "flex min-w-0 flex-col font-bold leading-[1.35] text-pk-ink",
-        size === 28 ? "text-pk-15" : "text-pk-13",
-      )}
-    >
+    <TeamAvatars players={players} size={24} />
+    <span className="flex min-w-0 flex-col text-pk-13 font-bold leading-[1.35] text-pk-ink">
       {players.map((player) => (
         <span key={player.id} className="truncate">
           {player.username}
@@ -33,11 +27,10 @@ const TeamBlock: React.FC<{
 /** 두 팀을 "vs"로 나란히 놓는다 */
 export const TeamsVersus: React.FC<{
   teams: readonly [readonly AvatarPlayer[], readonly AvatarPlayer[]];
-  size?: 24 | 28;
-}> = ({ teams, size }) => (
+}> = ({ teams }) => (
   <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2">
-    <TeamBlock players={teams[0]} size={size} />
+    <TeamBlock players={teams[0]} />
     <span className="text-pk-12 font-bold text-pk-muted">vs</span>
-    <TeamBlock players={teams[1]} size={size} align="end" />
+    <TeamBlock players={teams[1]} align="end" />
   </div>
 );

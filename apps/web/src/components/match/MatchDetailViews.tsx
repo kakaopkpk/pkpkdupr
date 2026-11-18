@@ -9,11 +9,8 @@ import SkeletonBlock from "@/components/SkeletonBlock";
 import { FooterError } from "@/components/record/RecordMatchParts";
 import { PkButton, rowPressClassName } from "@/components/ui/Button";
 import {
-  LiveMatchRally,
-  RALLY_NET_COLUMN_WIDTH,
-  RALLY_TOP_SPACE,
+  RallyTeamRow,
   TEAM_ROW_AVATAR_SIZE,
-  TEAM_ROW_GAP,
 } from "@/components/match/LiveMatchRally";
 import { MatchRatingChangeCount } from "@/components/match/MatchRatingChangeCount";
 import { Card } from "@/components/ui/Card";
@@ -25,7 +22,6 @@ import { rowDividerClassName } from "@/components/ui/MatchRow";
 import { PlayerAvatar, TeamAvatars } from "@/components/ui/PlayerAvatar";
 import { LinkChevron, SectionLabel } from "@/components/ui/Section";
 import { cx } from "@/components/ui/cx";
-import { useIsScreenVisible } from "@/context/ScreenVisibilityContext";
 import { useMinuteClock } from "@/hooks/useMinuteClock";
 import {
   formatElapsed,
@@ -119,7 +115,6 @@ export const LiveMatchDetail: React.FC<LiveMatchDetailProps> = ({
   // 관리자 예정 경기처럼 시작 시각 전의 created 경기는 진행 중이 아니라 예정으로 보인다
   const startsAt = new Date(match.matchStartsAt);
   const isScheduled = startsAt.getTime() > now.getTime();
-  const isVisible = useIsScreenVisible();
 
   return (
     <div className="flex flex-col gap-4 px-4 pt-1">
@@ -141,40 +136,19 @@ export const LiveMatchDetail: React.FC<LiveMatchDetailProps> = ({
           : `진행 중 · ${formatElapsed(startsAt, now)}`}
       </span>
       {/* 진행 중이면 vs 자리에 네트를 두고 두 팀 사이로 공이 오간다. 예정 경기는 vs 글자만 */}
-      <div
-        className={cx(
-          "relative grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center",
-          !isVisible && "pk-rally-paused",
-        )}
-        style={{ columnGap: TEAM_ROW_GAP, paddingTop: isScheduled ? undefined : RALLY_TOP_SPACE }}
-      >
-        <TeamColumn
-          team={match.teams[0]}
-          tone="strong"
-          onOpenPlayer={onOpenPlayer}
-          avatarClassName={isScheduled ? undefined : "pk-rally-lunge"}
-        />
-        {isScheduled ? (
-          <span className="text-pk-15 font-bold text-pk-muted">vs</span>
-        ) : (
-          // 네트 칸. 화면에는 네트(LiveMatchRally)만 보이고 vs는 스크린 리더용으로 남긴다
-          <span style={{ width: RALLY_NET_COLUMN_WIDTH }}>
-            <span className="sr-only">vs</span>
-          </span>
-        )}
-        <TeamColumn
-          team={match.teams[1]}
-          tone="strong"
-          onOpenPlayer={onOpenPlayer}
-          avatarClassName={isScheduled ? undefined : "pk-rally-lunge pk-rally-lunge-reverse"}
-        />
-        {isScheduled ? null : (
-          <LiveMatchRally
-            leftCount={match.teams[0].players.length}
-            rightCount={match.teams[1].players.length}
+      <RallyTeamRow
+        isScheduled={isScheduled}
+        playerCounts={[match.teams[0].players.length, match.teams[1].players.length]}
+        vsClassName="text-pk-15 font-bold text-pk-muted"
+        renderTeam={(side, avatarClassName) => (
+          <TeamColumn
+            team={match.teams[side]}
+            tone="strong"
+            onOpenPlayer={onOpenPlayer}
+            avatarClassName={avatarClassName}
           />
         )}
-      </div>
+      />
       <Card>
         {match.session ? (
           <InfoRow label="세션">
