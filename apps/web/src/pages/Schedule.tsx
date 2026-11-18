@@ -161,12 +161,15 @@ const Schedule: React.FC = () => {
     setSelectedDateKey(dateKey ?? getDefaultDateKey(nextMonthKey, todayKey));
   };
 
+  const goToday = useCallback(() => {
+    setMonthKey(toMonthKey(todayKey));
+    setSelectedDateKey(todayKey);
+  }, [todayKey]);
+
   // 일정 탭을 다시 누르면 이번 달·오늘로 되돌린다
-  const resetToTodayRef = useRef(() => {});
-  resetToTodayRef.current = () => showMonth(toMonthKey(todayKey), todayKey);
   useEffect(
-    () => registerTabReset("schedule", () => resetToTodayRef.current()),
-    [registerTabReset],
+    () => registerTabReset("schedule", goToday),
+    [goToday, registerTabReset],
   );
 
   const monthState = months[monthKey];
@@ -316,7 +319,7 @@ const Schedule: React.FC = () => {
           onSelectDate={setSelectedDateKey}
           onPrevMonth={() => showMonth(addScheduleMonths(monthKey, -1))}
           onNextMonth={() => showMonth(addScheduleMonths(monthKey, 1))}
-          onGoToday={() => showMonth(toMonthKey(todayKey), todayKey)}
+          onGoToday={goToday}
         />
         <div className="mt-0.5">
           <SectionLabel>

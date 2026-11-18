@@ -1,9 +1,10 @@
-import React, { useImperativeHandle, useRef } from "react";
+import React, { useEffect, useRef } from "react";
 import {
   ParticipationError,
   type ParticipationAction,
 } from "@/components/session/SessionBlueCard";
 import { cx } from "@/components/ui/cx";
+import { useTabNavigation } from "@/context/TabNavigationContext";
 import {
   isSessionParticipant,
   type MatchSessionDetailInfo,
@@ -40,12 +41,7 @@ const PositionIndicator: React.FC<{ count: number; activeIndex: number }> = ({
     </div>
   );
 
-export interface NextSessionCarouselHandle {
-  scrollToStart: () => void;
-}
-
 interface NextSessionCarouselProps {
-  ref?: React.Ref<NextSessionCarouselHandle>;
   /** 다가오는 세션. 서버 순서(날짜 오름차순)대로 첫 카드가 다음 세션이다 */
   sessions: readonly MatchSessionDetailInfo[];
   playerId: string | undefined;
@@ -62,7 +58,6 @@ interface NextSessionCarouselProps {
  * 다음 카드가 오른쪽에 살짝 보이고 카드 단위로 멈추며, 한 번 넘길 때 한 장만 넘어간다. 어느 카드에서든 참여하기·참여 취소가 된다
  */
 const NextSessionCarousel: React.FC<NextSessionCarouselProps> = ({
-  ref,
   sessions,
   playerId,
   todayKey,
@@ -76,14 +71,15 @@ const NextSessionCarousel: React.FC<NextSessionCarouselProps> = ({
   const count = sessions.length;
   const activeIndex = useCarouselSwipe(trackRef, count);
 
-  useImperativeHandle(
-    ref,
-    () => ({
-      scrollToStart: () => {
+  const { registerTabReset } = useTabNavigation();
+
+  // 홈 탭을 다시 누르면 첫 카드로 되돌린다
+  useEffect(
+    () =>
+      registerTabReset("home", () => {
         if (trackRef.current) scrollCarouselToStart(trackRef.current);
-      },
-    }),
-    [],
+      }),
+    [registerTabReset],
   );
 
   const renderCard = (session: MatchSessionDetailInfo, className?: string) => (
