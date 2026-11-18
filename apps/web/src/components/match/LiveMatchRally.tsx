@@ -1,25 +1,26 @@
 import React from "react";
 import { cx } from "@/components/ui/cx";
-import { TEAM_AVATAR_OVERLAP } from "@/components/ui/PlayerAvatar";
+import { TEAM_AVATAR_OVERLAP, TeamAvatars } from "@/components/ui/PlayerAvatar";
 import { useIsScreenVisible } from "@/context/ScreenVisibilityContext";
+import type { MatchInfo } from "@/types/match";
 
 /*
- * 진행 중 경기 상세 팀 줄 위에 겹쳐 그리는 랠리 연출. 장식이라 스크린 리더에서는 숨긴다.
- * 팀 줄은 grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]에 칸 간격 TEAM_ROW_GAP, 가운데 칸 폭 RALLY_NET_COLUMN_WIDTH이고
- * 아바타 쌍(TEAM_ROW_AVATAR_SIZE)은 같은 높이의 두 팀 칸 맨 위 가운데에 있다는 전제로 공 경로를 계산한다.
+ * 진행 중 경기 팀 줄(경기 상세, 홈 내 경기 카드)의 랠리 연출. 랠리 그림은 장식이라 스크린 리더에서는 숨긴다.
+ * 팀 줄(RallyTeamRow)은 grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]에 칸 간격 TEAM_ROW_GAP, 가운데 칸 폭 RALLY_NET_COLUMN_WIDTH이고
+ * 아바타 쌍(TEAM_ROW_AVATAR_SIZE)을 두 팀 칸 맨 위 가운데에 두며, 이 배치를 전제로 공 경로를 계산한다.
  * 공은 왼쪽 팀 아바타 바깥 가장자리에서 오른쪽 팀 아바타 바깥 가장자리까지 오간다.
  */
 
-/** 경기 상세 팀 줄의 아바타 크기·칸 간격(px). 팀 줄 마크업과 공 경로 계산이 같이 쓴다 */
+/** 팀 줄의 아바타 크기(px). 경기 상세의 끝난 경기 팀 칸도 같은 크기를 쓴다 */
 export const TEAM_ROW_AVATAR_SIZE = 32;
-export const TEAM_ROW_GAP = 8;
+const TEAM_ROW_GAP = 8;
 const AVATAR_SIZE = TEAM_ROW_AVATAR_SIZE;
-/** 가운데 네트 칸 폭(px). 팀 줄의 가운데 칸에 같은 폭을 준다 */
-export const RALLY_NET_COLUMN_WIDTH = 28;
+/** 가운데 네트 칸 폭(px) */
+const RALLY_NET_COLUMN_WIDTH = 28;
 /** 아바타 테두리와 공 사이 여백 */
 const BALL_GAP = 6;
 /** 팀 줄 위쪽 여백(px). 공이 아바타 위로 떠오를 자리 */
-export const RALLY_TOP_SPACE = 12;
+const RALLY_TOP_SPACE = 12;
 /** 공이 출발하는 높이. 아바타(위 여백 아래 32px) 가운데보다 6px 위 */
 const BALL_Y = RALLY_TOP_SPACE + AVATAR_SIZE / 2 - 6;
 const NET_HEIGHT = 24;
@@ -88,13 +89,13 @@ const BALL_HOLES = [
   [-0.2, 2],
 ] as const;
 
-const Ball: React.FC<{ ringClassName: string }> = ({ ringClassName }) => (
+const Ball: React.FC<{ ringColor: string }> = ({ ringColor }) => (
   <svg
     viewBox="-7 -7 14 14"
     className="absolute top-0 left-0 size-3.5 -translate-x-1/2 -translate-y-1/2 overflow-visible"
   >
     {/* 아바타와 겹쳐도 공이 따로 보이도록 바탕색 테두리를 두른다 */}
-    <circle r={7} className={ringClassName} />
+    <circle r={7} style={{ fill: ringColor }} />
     <circle r={5} className="fill-pk-hl" style={{ stroke: BALL_EDGE }} strokeWidth={1} />
     {BALL_HOLES.map(([cx, cy]) => (
       <circle key={`${cx},${cy}`} cx={cx} cy={cy} r={0.9} style={{ fill: BALL_EDGE }} />
@@ -102,15 +103,14 @@ const Ball: React.FC<{ ringClassName: string }> = ({ ringClassName }) => (
   </svg>
 );
 
-export const LiveMatchRally: React.FC<{
+const LiveMatchRally: React.FC<{
   leftCount: number;
   rightCount: number;
-  /** 공 바깥 테두리 채움 클래스. 팀 줄 바탕색과 같아야 한다 */
-  ballRingClassName?: string;
-}> = ({ leftCount, rightCount, ballRingClassName = "fill-pk-bg" }) => {
+  ringColor: string;
+}> = ({ leftCount, rightCount, ringColor }) => {
   const track = getRallyTrack(leftCount, rightCount);
   return (
-    <div aria-hidden="true" className="pointer-events-none absolute inset-0 z-10">
+    <span aria-hidden="true" className="pointer-events-none absolute inset-0 z-10">
       {/* 기둥과 받침이 이어진 네트. 팀 줄 가운데, 아바타 높이에 선다 */}
       <svg
         viewBox="155 22 18 24"
@@ -122,40 +122,57 @@ export const LiveMatchRally: React.FC<{
           d="M162.6 25 Q164 22.6 165.4 25 V38.5 Q166 42 171 42.8 Q172.6 43.2 172.2 44.2 Q171.9 45 170.6 45 H157.4 Q156.1 45 155.8 44.2 Q155.4 43.2 157 42.8 Q162 42 162.6 38.5 Z"
         />
       </svg>
-      <div className="absolute" style={{ top: BALL_Y, left: track.left, width: track.width }}>
+      <span className="absolute" style={{ top: BALL_Y, left: track.left, width: track.width }}>
         <HitEffect side="left" />
         <HitEffect side="right" />
-        <div className="pk-rally-x absolute inset-x-0 top-0">
-          <div className="pk-rally-y absolute top-0 left-0">
-            <Ball ringClassName={ballRingClassName} />
-          </div>
-        </div>
-      </div>
-    </div>
+        <span className="pk-rally-x absolute inset-x-0 top-0">
+          <span className="pk-rally-y absolute top-0 left-0">
+            <Ball ringColor={ringColor} />
+          </span>
+        </span>
+      </span>
+    </span>
   );
 };
 
 /**
  * 두 팀 칸 사이 네트 칸에 랠리를 겹쳐 그린 팀 줄. 예정 경기(isScheduled)면 랠리 없이 vs 글자만 보인다.
- * 팀 칸은 renderTeam이 그리며, 아바타 쌍(TEAM_ROW_AVATAR_SIZE)을 칸 맨 위 가운데에 두고 avatarClassName(아바타 밀림)을 아바타 쌍에만 붙여야 한다.
+ * 팀 칸마다 아바타 쌍을 맨 위 가운데에 두고 그 아래에 renderNames가 그린 이름을 둔다.
  */
 export const RallyTeamRow: React.FC<{
+  teams: MatchInfo["teams"];
   isScheduled: boolean;
-  playerCounts: readonly [number, number];
-  renderTeam: (side: 0 | 1, avatarClassName: string | undefined) => React.ReactNode;
+  /** 팀 줄 바탕색. 아바타 테두리와 공 바깥 테두리를 이 색으로 칠한다 */
+  ringColor: string;
   vsClassName: string;
-  ballRingClassName?: string;
-}> = ({ isScheduled, playerCounts, renderTeam, vsClassName, ballRingClassName }) => {
+  renderNames: (team: MatchInfo["teams"][number]) => React.ReactNode;
+}> = ({ teams, isScheduled, ringColor, vsClassName, renderNames }) => {
   const isVisible = useIsScreenVisible();
+  // 홈 카드처럼 버튼 안에도 들어가므로 span으로 쌓는다
+  const renderTeam = (side: 0 | 1) => (
+    <span className="flex min-w-0 flex-col items-center gap-1.5">
+      <span
+        className={cx(
+          "inline-flex",
+          // 친 팀 아바타 쌍이 공 쪽으로 밀린다
+          !isScheduled && "pk-rally-lunge",
+          !isScheduled && side === 1 && "pk-rally-lunge-reverse",
+        )}
+      >
+        <TeamAvatars players={teams[side].players} size={AVATAR_SIZE} ringColor={ringColor} />
+      </span>
+      {renderNames(teams[side])}
+    </span>
+  );
   return (
-    <div
+    <span
       className={cx(
         "relative grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center",
         !isVisible && "pk-rally-paused",
       )}
       style={{ columnGap: TEAM_ROW_GAP, paddingTop: isScheduled ? undefined : RALLY_TOP_SPACE }}
     >
-      {renderTeam(0, isScheduled ? undefined : "pk-rally-lunge")}
+      {renderTeam(0)}
       {isScheduled ? (
         <span className={vsClassName}>vs</span>
       ) : (
@@ -164,14 +181,14 @@ export const RallyTeamRow: React.FC<{
           <span className="sr-only">vs</span>
         </span>
       )}
-      {renderTeam(1, isScheduled ? undefined : "pk-rally-lunge pk-rally-lunge-reverse")}
+      {renderTeam(1)}
       {isScheduled ? null : (
         <LiveMatchRally
-          leftCount={playerCounts[0]}
-          rightCount={playerCounts[1]}
-          ballRingClassName={ballRingClassName}
+          leftCount={teams[0].players.length}
+          rightCount={teams[1].players.length}
+          ringColor={ringColor}
         />
       )}
-    </div>
+    </span>
   );
 };

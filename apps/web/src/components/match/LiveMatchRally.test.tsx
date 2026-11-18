@@ -94,11 +94,11 @@ describe("홈 진행 중 경기 카드 랠리", () => {
       />,
     );
 
-  it("내 경기 카드에는 카드 바탕색 테두리 공으로 랠리를 그린다", () => {
+  it("내 경기 카드에는 카드 바탕색(흰색) 테두리 공으로 랠리를 그린다", () => {
     const markup = renderMine(makeLiveMatch(new Date(Date.now() - 10 * 60_000).toISOString()));
     expect(markup).toContain("pk-rally-x");
     expect(markup).toContain("pk-rally-lunge");
-    expect(markup).toContain("fill-white");
+    expect(markup).toContain("fill:#ffffff");
     expect(markup).toContain('<span class="sr-only">vs</span>');
   });
 

@@ -2,6 +2,7 @@ import React, { useMemo } from "react";
 import { getMatchTopLevelType } from "@pkpkdupr/shared/match";
 import {
   getTeamResultScores,
+  isMatchScheduled,
   type MatchInfo,
   RATING_EXCLUDED_NOTICE,
 } from "@/types/match";
@@ -64,35 +65,40 @@ const SessionLink: React.FC<{
   </button>
 );
 
-/** 팀 아바타 쌍과 이름 두 줄을 세로로 쌓는다. 이름을 누르면 그 회원 프로필을 연다 */
+/** 팀 이름 두 줄. 이름을 누르면 그 회원 프로필을 연다 */
+const TeamNames: React.FC<{
+  team: MatchTeam;
+  tone: "strong" | "weak";
+  onOpenPlayer: (playerId: string) => void;
+}> = ({ team, tone, onOpenPlayer }) => (
+  <span
+    className={cx(
+      "flex max-w-full min-w-0 flex-col items-center text-pk-13 leading-[1.35]",
+      tone === "strong" ? "font-bold text-pk-ink" : "font-medium text-pk-sub",
+    )}
+  >
+    {team.players.map((player) => (
+      <button
+        key={player.id}
+        type="button"
+        onClick={() => onOpenPlayer(player.id)}
+        className="max-w-full truncate active:opacity-70"
+      >
+        {player.username}
+      </button>
+    ))}
+  </span>
+);
+
+/** 팀 아바타 쌍과 이름 두 줄을 세로로 쌓는다 */
 const TeamColumn: React.FC<{
   team: MatchTeam;
   tone: "strong" | "weak";
   onOpenPlayer: (playerId: string) => void;
-  /** 아바타 쌍에만 붙일 클래스(랠리 연출의 밀림) */
-  avatarClassName?: string;
-}> = ({ team, tone, onOpenPlayer, avatarClassName }) => (
+}> = ({ team, tone, onOpenPlayer }) => (
   <div className="flex min-w-0 flex-col items-center gap-1.5">
-    <span className={cx("inline-flex", avatarClassName)}>
-      <TeamAvatars players={team.players} size={TEAM_ROW_AVATAR_SIZE} ringColor={BG_COLOR} />
-    </span>
-    <span
-      className={cx(
-        "flex max-w-full min-w-0 flex-col items-center text-pk-13 leading-[1.35]",
-        tone === "strong" ? "font-bold text-pk-ink" : "font-medium text-pk-sub",
-      )}
-    >
-      {team.players.map((player) => (
-        <button
-          key={player.id}
-          type="button"
-          onClick={() => onOpenPlayer(player.id)}
-          className="max-w-full truncate active:opacity-70"
-        >
-          {player.username}
-        </button>
-      ))}
-    </span>
+    <TeamAvatars players={team.players} size={TEAM_ROW_AVATAR_SIZE} ringColor={BG_COLOR} />
+    <TeamNames team={team} tone={tone} onOpenPlayer={onOpenPlayer} />
   </div>
 );
 
@@ -112,9 +118,8 @@ export const LiveMatchDetail: React.FC<LiveMatchDetailProps> = ({
   onOpenPlayer,
 }) => {
   const now = useMinuteClock();
-  // 관리자 예정 경기처럼 시작 시각 전의 created 경기는 진행 중이 아니라 예정으로 보인다
   const startsAt = new Date(match.matchStartsAt);
-  const isScheduled = startsAt.getTime() > now.getTime();
+  const isScheduled = isMatchScheduled(match, now);
 
   return (
     <div className="flex flex-col gap-4 px-4 pt-1">
@@ -137,16 +142,12 @@ export const LiveMatchDetail: React.FC<LiveMatchDetailProps> = ({
       </span>
       {/* 진행 중이면 vs 자리에 네트를 두고 두 팀 사이로 공이 오간다. 예정 경기는 vs 글자만 */}
       <RallyTeamRow
+        teams={match.teams}
         isScheduled={isScheduled}
-        playerCounts={[match.teams[0].players.length, match.teams[1].players.length]}
+        ringColor={BG_COLOR}
         vsClassName="text-pk-15 font-bold text-pk-muted"
-        renderTeam={(side, avatarClassName) => (
-          <TeamColumn
-            team={match.teams[side]}
-            tone="strong"
-            onOpenPlayer={onOpenPlayer}
-            avatarClassName={avatarClassName}
-          />
+        renderNames={(team) => (
+          <TeamNames team={team} tone="strong" onOpenPlayer={onOpenPlayer} />
         )}
       />
       <Card>

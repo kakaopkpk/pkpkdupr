@@ -1,14 +1,11 @@
 import React from "react";
-import type { MatchInfo } from "@/types/match";
-import { RallyTeamRow, TEAM_ROW_AVATAR_SIZE } from "@/components/match/LiveMatchRally";
+import { isMatchScheduled, type MatchInfo } from "@/types/match";
+import { RallyTeamRow } from "@/components/match/LiveMatchRally";
 import { PkButton, rowPressClassName } from "@/components/ui/Button";
 import { ChevronRightIcon } from "@/components/ui/Icons";
-import { TeamAvatars } from "@/components/ui/PlayerAvatar";
 import { cx } from "@/components/ui/cx";
 import { formatElapsed } from "@/lib/format";
 import { TeamsVersus } from "./TeamBlock";
-
-type MatchTeam = MatchInfo["teams"][number];
 
 /** 카드 머리 줄. 앞 칩·경과 시간·꺾쇠 */
 const LiveMatchHeader: React.FC<{
@@ -22,25 +19,6 @@ const LiveMatchHeader: React.FC<{
       {formatElapsed(match.matchStartsAt, now)}
     </span>
     <ChevronRightIcon className="ml-auto shrink-0 text-pk-quiet" />
-  </span>
-);
-
-/** 랠리 팀 줄의 한 팀 칸. 아바타 쌍 아래 이름을 가운데 정렬한다 */
-const RallyTeamColumn: React.FC<{ team: MatchTeam; avatarClassName?: string }> = ({
-  team,
-  avatarClassName,
-}) => (
-  <span className="flex min-w-0 flex-col items-center gap-1.5">
-    <span className={cx("inline-flex", avatarClassName)}>
-      <TeamAvatars players={team.players} size={TEAM_ROW_AVATAR_SIZE} />
-    </span>
-    <span className="flex max-w-full min-w-0 flex-col items-center text-pk-15 font-bold leading-[1.35] text-pk-ink">
-      {team.players.map((player) => (
-        <span key={player.id} className="max-w-full truncate">
-          {player.username}
-        </span>
-      ))}
-    </span>
   </span>
 );
 
@@ -70,12 +48,18 @@ export const MyLiveMatchCard: React.FC<{
         }
       />
       <RallyTeamRow
-        isScheduled={new Date(match.matchStartsAt).getTime() > now.getTime()}
-        playerCounts={[match.teams[0].players.length, match.teams[1].players.length]}
+        teams={match.teams}
+        isScheduled={isMatchScheduled(match, now)}
+        ringColor="#ffffff"
         vsClassName="text-pk-12 font-bold text-pk-muted"
-        ballRingClassName="fill-white"
-        renderTeam={(side, avatarClassName) => (
-          <RallyTeamColumn team={match.teams[side]} avatarClassName={avatarClassName} />
+        renderNames={(team) => (
+          <span className="flex max-w-full min-w-0 flex-col items-center text-pk-15 font-bold leading-[1.35] text-pk-ink">
+            {team.players.map((player) => (
+              <span key={player.id} className="max-w-full truncate">
+                {player.username}
+              </span>
+            ))}
+          </span>
         )}
       />
     </button>
