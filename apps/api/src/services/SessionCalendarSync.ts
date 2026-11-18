@@ -218,9 +218,23 @@ export const createSessionCalendarSync = (
 let cachedClient: { key: string; client: GoogleCalendarClient | null } | null =
   null;
 
+/**
+ * 로컬 dev(`pnpm dev`가 ENABLE_DEV_MOCK_DATA=true를 넣는다)는 mock 데이터라
+ * `.env`에 캘린더 설정이 있어도 동호회 캘린더에 쓰지 않도록 연동을 끈다.
+ */
 export const getEnvGoogleCalendarClient = (): GoogleCalendarClient | null => {
-  const key = `${process.env.GOOGLE_CALENDAR_SERVICE_ACCOUNT_JSON ?? ""}\n${process.env.GOOGLE_CALENDAR_ID ?? ""}`;
+  const isDevMock = process.env.ENABLE_DEV_MOCK_DATA === "true";
+  const key = `${isDevMock}\n${process.env.GOOGLE_CALENDAR_SERVICE_ACCOUNT_JSON ?? ""}\n${process.env.GOOGLE_CALENDAR_ID ?? ""}`;
   if (cachedClient?.key !== key) {
+    if (isDevMock) {
+      if (readGoogleCalendarConfig(process.env)) {
+        console.warn(
+          "[CALENDAR] ENABLE_DEV_MOCK_DATA=true라 캘린더 설정이 있어도 연동을 끕니다.",
+        );
+      }
+      cachedClient = { key, client: null };
+      return null;
+    }
     const config = readGoogleCalendarConfig(process.env);
     cachedClient = {
       key,

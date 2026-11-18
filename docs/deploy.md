@@ -86,7 +86,7 @@ gh variable set SUPABASE_PROJECT_REF --body <project-ref>
 | `DATABASE_URL` | 예 | 커넥션 풀러 transaction mode 주소(위 1-3). 없으면 Supabase가 주입하는 `SUPABASE_DB_URL`(직접 연결)로 대신하며 경고를 남깁니다. |
 | `CORS_ALLOWED_ORIGINS` | 예 | 허용 origin(쉼표 구분). 운영값 `https://kakaopkpk.github.io` |
 | `STORAGE_PUBLIC_URL` | 아니오 | 아바타 공개 URL의 base. 없으면 `SUPABASE_URL`을 씁니다. 운영에서는 비워 두고, 로컬 `functions serve`에서만 `http://127.0.0.1:54321`로 넣습니다(함수 안의 `SUPABASE_URL`은 브라우저가 접근할 수 없는 `http://kong:8000`이기 때문). |
-| `GOOGLE_CALENDAR_SERVICE_ACCOUNT_JSON` | 아니오 | 동호회 구글 캘린더에 세션 일정을 쓰는 서비스 계정의 JSON 키 파일 내용 전체(아래 3-1). `GOOGLE_CALENDAR_ID`와 둘 다 있어야 연동이 켜지고, 하나라도 없으면 캘린더를 호출하지 않습니다. |
+| `GOOGLE_CALENDAR_SERVICE_ACCOUNT_JSON` | 아니오 | 동호회 구글 캘린더에 세션 일정을 쓰는 서비스 계정의 JSON 키 파일 내용 전체(아래 3-1). `GOOGLE_CALENDAR_ID`와 둘 다 있어야 연동이 켜지고, 하나라도 없거나 `ENABLE_DEV_MOCK_DATA=true`(로컬 `pnpm dev`)면 캘린더를 호출하지 않습니다. |
 | `GOOGLE_CALENDAR_ID` | 아니오 | 일정을 쓸 동호회 캘린더 ID(아래 3-1). 예 `abcd…@group.calendar.google.com` |
 | `CRON_SECRET` | 예 | 정기 세션 예약 작업(`POST /api/cron/regular-sessions`)이 헤더 `x-cron-secret`과 비교하는 값(아래 3-2). 없으면 예약 작업이 503으로 실패합니다. |
 | `WEB_APP_URL` | 아니오 | 일정 설명에 넣는 웹 앱 주소. 운영값 `https://kakaopkpk.github.io/pkpkdupr/`. 없으면 설명에서 앱 링크 두 줄을 뺍니다. |
