@@ -17,8 +17,8 @@
 | 워크플로 | 하는 일 |
 | --- | --- |
 | `ci.yml` | PR·main push 때 빌드와 테스트 |
-| `supabase-deploy.yml` | main push 때 DB 마이그레이션과 API 함수 배포 |
-| `pages.yml` | main push 때 web·admin 빌드와 Pages 배포 |
+| `supabase-deploy.yml` | GitHub Release 발행 때 DB 마이그레이션과 API 함수 배포 |
+| `pages.yml` | GitHub Release 발행 때 web·admin 빌드와 Pages 배포(앱 버전 = 릴리즈 태그) |
 | `db-keepalive.yml` | 3일마다 DB에 접속해 무료 프로젝트 일시정지를 막음 |
 
 매일 암호화 백업(`db-backup.yml`)은 비공개 저장소 [`kakaopkpk/pkpkdupr-backup`](https://github.com/kakaopkpk/pkpkdupr-backup)에서 돌고, 그 저장소 `backups/`에 쌓입니다. 앱 테이블과 로그인 계정을 백업하며, 복원과 설정은 [docs/backup-restore.md](docs/backup-restore.md)를 따릅니다.

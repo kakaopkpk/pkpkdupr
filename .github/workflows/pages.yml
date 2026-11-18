@@ -2,18 +2,11 @@ name: pages
 
 # web(루트)과 admin-web(admin/)을 한 GitHub Pages 사이트로 빌드·배포한다.
 # 필요한 Pages 설정과 repo variables는 docs/deploy.md의 "GitHub Pages (web·admin)"을 따른다.
+# 운영 배포는 GitHub Release를 발행할 때만 한다. 수동 실행은 고르는 브랜치·태그로 배포한다.
 on:
-  push:
-    branches:
-      - main
-    paths:
-      - "apps/web/**"
-      - "apps/admin-web/**"
-      - "packages/shared/**"
-      - "scripts/pages/**"
-      - "package.json"
-      - "pnpm-lock.yaml"
-      - ".github/workflows/pages.yml"
+  release:
+    types:
+      - published
   workflow_dispatch:
 
 # 배포가 겹치면 마지막 실행만 남긴다. 진행 중인 배포는 끊지 않는다.
@@ -35,15 +28,19 @@ jobs:
       VITE_FUNCTION_REGION: ${{ vars.VITE_FUNCTION_REGION }}
 
     steps:
+      # release 이벤트면 릴리즈 태그 커밋을 체크아웃한다.
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          # git describe가 HEAD 조상의 태그를 찾도록 전체 history와 태그를 받는다.
+          # 수동 실행에서 git describe가 HEAD 조상의 태그를 찾도록 전체 history와 태그를 받는다.
           fetch-depth: 0
 
+      # 앱 버전은 릴리즈 태그 이름이다. 수동 실행이면 가장 가까운 조상 태그를 쓴다.
       - name: Resolve app version
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
         run: |
-          APP_VERSION="$(git describe --tags --abbrev=0 2>/dev/null || echo "0.0.0+$(git rev-parse --short=8 HEAD)")"
+          APP_VERSION="${RELEASE_TAG:-$(git describe --tags --abbrev=0 2>/dev/null || echo "0.0.0+$(git rev-parse --short=8 HEAD)")}"
           echo "VITE_APP_VERSION=${APP_VERSION}" >> "$GITHUB_ENV"
 
       - name: Setup Node
