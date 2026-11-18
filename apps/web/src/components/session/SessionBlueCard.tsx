@@ -62,8 +62,22 @@ export const SessionBlueCard: React.FC<{
   participantsLabel: string;
   onOpenParticipants: () => void;
   children: React.ReactNode;
-}> = ({ session, top, meta, participantsLabel, onOpenParticipants, children }) => (
-  <article className="flex flex-col gap-3.5 rounded-pk-lg bg-pk-primary p-5 text-white">
+  className?: string;
+}> = ({
+  session,
+  top,
+  meta,
+  participantsLabel,
+  onOpenParticipants,
+  children,
+  className,
+}) => (
+  <article
+    className={cx(
+      "flex flex-col gap-3.5 rounded-pk-lg bg-pk-primary p-5 text-white",
+      className,
+    )}
+  >
     {top}
     <div className="flex min-w-0 flex-col gap-0.5">
       <h2 className="truncate text-pk-22 font-extrabold tracking-[-0.02em]">
