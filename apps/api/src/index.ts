@@ -1048,15 +1048,12 @@ const findNewAchievementsForSavedMatch = async (
 ): Promise<EarnedAchievement[]> => {
   try {
     const playerIds = getTeamPlayerIds(match.teams);
-    const [outcomes, logsByPlayer] = await Promise.all([
+    // 언더독은 참가자의 과거 경기 상대 평점도 보므로 전원의 평점 로그를 읽는다(랭킹·프로필 계산과 같게)
+    const [outcomes, logs] = await Promise.all([
       matchRepository.findCompletedMatchOutcomes(),
-      Promise.all(
-        playerIds.map((playerId) =>
-          matchRepository.getPlayerRatingChangeLogs(playerId),
-        ),
-      ),
+      matchRepository.getAllRatingChangeLogs(),
     ]);
-    const after = toAchievementMatches(outcomes, logsByPlayer.flat());
+    const after = toAchievementMatches(outcomes, logs);
     // 수정 전 평점 로그는 재계산으로 덮어써져 없으므로, 이미 완료였던 경기는 지금 평점을 그대로 붙인다.
     // 그래서 완료 경기 수정으로는 평점 업적·언더독이 새 업적으로 나오지 않는다(미확인 업적 조회로 축하한다).
     const saved = after.find((candidate) => candidate.id === match.id);

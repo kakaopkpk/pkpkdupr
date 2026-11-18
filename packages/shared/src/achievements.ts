@@ -729,6 +729,16 @@ export const isRatingAchievement = (achievementId: string) => {
 export const isLowRatingAchievement = (achievementId: string) =>
   ACHIEVEMENT_METRIC_BY_ID.get(achievementId) === "lowestDoublesRating";
 
+/** 다른 회원의 기록이 있어야 계산되는 업적(연승 저지·환영 인사·개근상). ClubFacts 참고 */
+export const isClubRecordAchievement = (achievementId: string) => {
+  const metric = ACHIEVEMENT_METRIC_BY_ID.get(achievementId);
+  return (
+    metric === "streakBreaks" ||
+    metric === "welcomes" ||
+    metric === "bestRegularSessionStreak"
+  );
+};
+
 /** 평점 업적에 필요한 평점 반영 복식 경기 수. 이 경기 수를 채운 뒤의 평점만 센다 */
 export const RATING_ACHIEVEMENT_MIN_DOUBLES_MATCHES = 10;
 

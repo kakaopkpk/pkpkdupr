@@ -302,19 +302,17 @@ describe("PUT /api/matches/:matchId", () => {
       },
     ]);
     const createdAt = new Date();
-    vi.mocked(MatchRepository.prototype.getPlayerRatingChangeLogs).mockImplementation(
-      async (playerId) => [
-        {
-          id: `log-${playerId}`,
-          playerId,
-          source: "match_completed",
-          sourceLogId: `match-completed-${existing.id}-${createdAt.getTime()}`,
-          previousRating: { singles: 3, doubles: 3.45 },
-          nextRating: { singles: 3, doubles: 3.6 },
-          delta: { singles: 0, doubles: 0.15 },
-          createdAt,
-        },
-      ],
+    vi.mocked(MatchRepository.prototype.getAllRatingChangeLogs).mockResolvedValue(
+      [requester.id, partner.id, opponentM.id, opponentF.id].map((playerId) => ({
+        id: `log-${playerId}`,
+        playerId,
+        source: "match_completed" as const,
+        sourceLogId: `match-completed-${existing.id}-${createdAt.getTime()}`,
+        previousRating: { singles: 3, doubles: 3.45 },
+        nextRating: { singles: 3, doubles: 3.6 },
+        delta: { singles: 0, doubles: 0.15 },
+        createdAt,
+      })),
     );
 
     const response = await putMatch();

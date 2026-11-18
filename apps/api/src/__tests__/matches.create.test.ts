@@ -544,8 +544,8 @@ describe("POST /api/matches", () => {
           doublesLog("player-f-1", "match-test-001", 3.55, savedAt),
         ],
       };
-      vi.mocked(MatchRepository.prototype.getPlayerRatingChangeLogs).mockImplementation(
-        async (playerId) => logsByPlayerId[playerId] ?? [],
+      vi.mocked(MatchRepository.prototype.getAllRatingChangeLogs).mockResolvedValue(
+        Object.values(logsByPlayerId).flat(),
       );
 
       const response = await request(app)
