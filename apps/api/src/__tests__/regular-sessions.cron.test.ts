@@ -435,6 +435,55 @@ describe("정기 세션 예약 작업", () => {
     );
   });
 
+  describe("캘린더 일정 다시 쓰기", () => {
+    const eventWrites = (sessionId: string) =>
+      fake.calendarCalls.filter(
+        (call) =>
+          (call.method === "POST" &&
+            (call.body as { id?: string } | undefined)?.id ===
+              toCalendarEventId(sessionId)) ||
+          (call.method === "PATCH" && call.url.includes(toCalendarEventId(sessionId))),
+      );
+
+    it("응답 전에 다가오는 세션마다 일정을 현재 상태로 다시 쓰고, 만료된 세션은 건드리지 않는다", async () => {
+      const upcoming = store.addRegular("2026-11-26", { participantIds: [admin.id] });
+      // 어제 끝난 빈 세션은 만료라 다시 쓰지 않는다
+      const expired = store.addRegular("2026-11-09");
+      useCalendar();
+
+      const response = await runCron();
+
+      expect(response.status).toBe(200);
+      expect(response.body.created).not.toContain("2026-11-26");
+      expect(eventWrites(upcoming.id)).toHaveLength(1);
+      expect(eventWrites(upcoming.id)[0]!.body).toEqual(
+        expect.objectContaining({ summary: "정기운동 (1명)" }),
+      );
+      expect(eventWrites(expired.id)).toHaveLength(0);
+      // 새로 만든 회차도 일정이 한 번만 써진다(생성 알림과 다시 쓰기를 합친다)
+      expect(eventWrites(regularSessionId("2026-12-07"))).toHaveLength(1);
+    });
+
+    it("일정 쓰기가 실패해도 예약 작업은 200으로 응답한다", async () => {
+      const errorLog = vi.spyOn(console, "error").mockImplementation(() => {});
+      store.addRegular("2026-11-26", { participantIds: [admin.id] });
+      useCalendar((call) =>
+        call.url.startsWith(holidayListUrlPrefix)
+          ? { status: 200, body: { items: holidayItems } }
+          : 500,
+      );
+
+      const response = await runCron();
+
+      expect(response.status).toBe(200);
+      expect(errorLog).toHaveBeenCalledWith(
+        "[CALENDAR] 세션 일정 반영 실패",
+        regularSessionId("2026-11-26"),
+        expect.any(Error),
+      );
+    });
+  });
+
   describe("관리자 취소", () => {
     it("오늘 이후 정기 세션을 지우면 취소로 남아 예약 작업·조회·기록 어디서도 다시 만들지 않는다", async () => {
       useCalendar();
