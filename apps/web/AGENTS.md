@@ -28,7 +28,7 @@
 - `src/pages/`
   - 탭 페이지는 props 없이 컨텍스트로 데이터를 받습니다.
     - `Home.tsx`(홈)
-      - 진행 중 세션이 있으면 맨 위에 진행 중 세션 블루 카드 `LiveSessionCard`를 "진행 화면 보기" 버튼 없이(`onOpenLive` 생략) 둔다(오른쪽 끝 LIVE, "N명 참여"를 누르면 경기 중인 선수를 잠근 참여자 시트).
+      - 진행 중 세션이 있으면 맨 위에 진행 중 세션 블루 카드 `LiveSessionCard`를 "진행 화면 보기" 버튼 없이(`onOpenLive` 생략) 둔다(오른쪽 끝 LIVE, "N명 참여"를 누르면 경기 중인 선수를 "경기 중"으로 표시·잠근 참여자 시트).
       - 진행 중 세션이 없으면 다가오는 세션마다 블루 카드를 두고 가로로 넘기는 `home/NextSessionCarousel`을 둔다.
         - 다음 카드가 오른쪽에 살짝 보이고 카드 단위로 멈춘다.
         - 넘기기는 `touch-pan-y` 트랙에서 직접 처리해 한 번에 한 장만 넘기고, 카드 폭 30% 이상 끌거나 60px 이상 빠르게 튕겨야 넘어간다(`carouselPosition`의 `getSwipeTargetIndex`).
@@ -63,7 +63,7 @@
     - `profile/`: 회원 프로필·경기 목록, 나 탭과 같이 쓰는 머리 `ProfileHeader`. 사진을 불러온 아바타를 누르면 그 자리에서 가운데 240px 원으로 커지는 확대 보기 `AvatarZoomViewer`(누르기·아래로 끌기·Escape·뒤로가기로 닫힘)
     - `records/`: 세션 상세 `SessionReportDrawer`와 그 위 평점 변화 전체 `SessionRatingChangesScreen`
     - `record/`: 경기 기록 시트. 완료 단계는 이 경기로 참가자 전원이 받은 업적을 띠(`match/MatchAchievementRow`)로 보이고, 그중 내 새 업적만 화면 전체 축하 연출 `AchievementCelebration`으로 띄우고 닫으면 확인 처리
-    - `session/`: 세션 만들기(날짜 칩·시작·종료 시각 칩 `SessionSchedulePicker`)·참여자 편집
+    - `session/`: 세션 만들기(날짜 칩·시작·종료 시각 칩 `SessionSchedulePicker`)·참여자 시트 `ParticipantsSheet`(열면 참여자 보기, 오른쪽 위 "수정"으로 같은 시트에서 전체 회원 체크·게스트 추가 수정 모드, 완료·취소·뒤로가기는 보기로 돌아감)
     - `settings/`: 설정·비밀번호 변경·상태메시지 편집·프로필 사진 조정 `AvatarCropScreen`
       - 고른 사진을 끌어 옮기고 핀치로 1~4배, 두 번 탭 2배↔1배, 원 안을 512px JPEG로 잘라 저장. 좌표 계산은 `utils/avatarCrop.ts`
   - 탭 전용 조각: `home/`, `schedule/`, `records/`(세션 리포트 조각 `SessionReportParts`는 일정 탭·세션 상세·홈이 같이 씀, 끝난 세션·세션 없는 경기 카드 `RecordCards`), `ranking/`. 세션 블루 카드 틀·참여 버튼 `session/SessionBlueCard`(오른쪽 위 피클볼 장식 `session/PickleballIllustration`, 첫 줄은 종류 칩 "정기"/"회원"과 남은 날 `getSessionDDayLabel`("D-1"·오늘이면 "D-Day"), 참여 중이면 "✓ 참여 중 … 취소" 버튼 하나, 진행 중 세션 카드 `LiveSessionCard`)는 홈 다음 세션·진행 중 세션 카드와 일정 탭 세션 카드가 같이 씀
