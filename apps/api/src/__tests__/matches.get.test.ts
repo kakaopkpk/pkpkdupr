@@ -102,6 +102,8 @@ describe("GET /api/matches/:matchId", () => {
     expect(response.body).toMatchObject({
       id: match.id,
       type: "singles",
+      // 완료 경기가 아니면 업적을 계산하지 않는다
+      achievements: [],
       ratingChanges: [
         expect.objectContaining({
           previousRating: { singles: 3, doubles: 3 },

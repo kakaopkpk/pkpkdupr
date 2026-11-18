@@ -14,6 +14,7 @@ import {
   matchTypeValues,
   type Match,
   type MatchTopLevelType,
+  type MatchDetailResponse,
   type MatchScore,
   type RecordMatchRequest,
   type RecordedMatchResponse,
@@ -152,6 +153,7 @@ import {
   buildSessionReport,
   countAchievementHolders,
   createRankingContext,
+  findMatchAchievements,
   findPlayerEarnedAchievements,
   findSessionDominations,
   parseRecordsCursor,
@@ -994,6 +996,28 @@ const findAchievementPointsForNewAchievements = async (
   } catch (err) {
     console.error("[MATCH] 업적 점수 계산 실패", err);
     return {};
+  }
+};
+
+/**
+ * 경기 상세 응답의 업적: 이 경기로 참가자 전원이 받은 업적(세션 리포트 achievements와 같은 규칙).
+ * 완료 경기만 계산하고, 경기 상세를 막지 않도록 계산이 실패하면 빈 배열로 응답한다
+ */
+const findAchievementsEarnedByMatch = async (
+  match: Match,
+): Promise<EarnedAchievement[]> => {
+  if (match.status !== "completed" || match.ratingExcluded) return [];
+  try {
+    const { context, sessions } = await loadRankingSource();
+    return findMatchAchievements(
+      context,
+      findSessionDominations(context, sessions, new Date()),
+      match.id,
+      getTeamPlayerIds(match.teams),
+    );
+  } catch (err) {
+    console.error("[MATCH] 경기 업적 계산 실패", err);
+    return [];
   }
 };
 
@@ -2522,7 +2546,12 @@ app.get("/api/matches/:matchId", async (req, res) => {
       return res.status(404).json({ error: "매치를 찾을 수 없습니다." });
     }
 
-    res.json({ ...result.match, ratingChanges: result.ratingChanges });
+    const response: MatchDetailResponse = {
+      ...result.match,
+      ratingChanges: result.ratingChanges,
+      achievements: await findAchievementsEarnedByMatch(result.match),
+    };
+    res.json(response);
   } catch (err) {
     res.status(500).json({ error: (err as Error).message });
   }

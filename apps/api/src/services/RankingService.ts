@@ -799,6 +799,31 @@ const buildSessionAchievements = (
     );
 };
 
+/**
+ * 경기 하나로 참가자들이 받은 업적. 세션 리포트 achievements와 같은 규칙으로, 지금 계산에서 받은 경기가
+ * 이 경기인 업적만 남기고 업적 기준 시각 전 경기로 받은 업적은 뺀다. 받은 시각 → 업적 정의 순서 → 회원 id 순
+ */
+export const findMatchAchievements = (
+  context: RankingContext,
+  dominations: SessionDominations,
+  matchId: string,
+  playerIds: readonly string[],
+): EarnedAchievement[] => {
+  const matches = toContextAchievementMatches(context);
+  return playerIds
+    .flatMap((playerId) =>
+      findPlayerEarnedAchievements(matches, dominations, playerId),
+    )
+    .filter(
+      (item) => item.earnedMatchId === matchId && isEarnedByCountedMatch(item),
+    )
+    .sort(
+      (left, right) =>
+        compareEarnedAchievements(left, right) ||
+        compareText(left.playerId, right.playerId),
+    );
+};
+
 /** 업적 id별 받은 활성 회원 수. 아무도 받지 않은 업적도 0으로 넣는다 */
 export const countAchievementHolders = (
   context: RankingContext,
