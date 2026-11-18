@@ -1,0 +1,150 @@
+import React, { useEffect, useRef } from "react";
+import { prefersReducedMotion } from "@/hooks/useSheetDrag";
+import { getMonthSwipeStep } from "./monthSwipe";
+
+/** 이만큼 움직인 뒤에 가로/세로 방향을 정한다 */
+const AXIS_LOCK_PX = 8;
+/** 속도는 최근 이 시간 안의 이동으로 잰다 */
+const VELOCITY_WINDOW_MS = 100;
+/** 손가락을 뗀 뒤 날짜 칸이 제자리로 오거나 새 달이 들어오는 시간 */
+const SETTLE_DURATION_MS = 240;
+/** 끌어서 넘긴 손가락을 뗀 뒤 이 시간 안의 클릭은 날짜 버튼에 닿지 않게 막는다 */
+const CLICK_SUPPRESS_MS = 400;
+
+interface SwipeState {
+  mode: "pending" | "drag" | "ignore";
+  startX: number;
+  startY: number;
+  samples: { x: number; time: number }[];
+}
+
+/**
+ * 달력 영역(touch-action: pan-y)의 좌우 밀기로 달을 옮긴다. 처음 움직임이 가로면 날짜 칸(content)이
+ * 손가락을 따라오고, 놓을 때 거리·속도로 옮길지 정해 onSwipe(1 다음 달, -1 이전 달)를 부른다.
+ * 옮기면 새 달이 민 쪽 반대편에서 들어오고, 아니면 제자리로 돌아온다. 세로 움직임은 브라우저 스크롤에 맡긴다
+ */
+export const useMonthSwipe = (
+  areaRef: React.RefObject<HTMLElement | null>,
+  contentRef: React.RefObject<HTMLElement | null>,
+  onSwipe: (step: 1 | -1) => void,
+) => {
+  const onSwipeRef = useRef(onSwipe);
+  onSwipeRef.current = onSwipe;
+
+  useEffect(() => {
+    const area = areaRef.current;
+    const content = contentRef.current;
+    if (!area || !content) return;
+
+    let state: SwipeState | null = null;
+    let suppressClickUntil = -Infinity;
+
+    const setOffset = (offset: number, animate: boolean) => {
+      content.style.transition = animate
+        ? `transform ${SETTLE_DURATION_MS}ms var(--ease-pk-move)`
+        : "";
+      content.style.transform = offset === 0 ? "" : `translate3d(${offset}px, 0, 0)`;
+    };
+
+    const handleTouchStart = (event: TouchEvent) => {
+      if (event.touches.length !== 1) {
+        state = null;
+        return;
+      }
+      const touch = event.touches[0];
+      state = {
+        mode: "pending",
+        startX: touch.clientX,
+        startY: touch.clientY,
+        samples: [{ x: touch.clientX, time: event.timeStamp }],
+      };
+    };
+
+    const handleTouchMove = (event: TouchEvent) => {
+      if (!state || state.mode === "ignore") return;
+      if (event.touches.length !== 1) {
+        // 두 번째 손가락이 닿으면 밀기를 멈추고 제자리로 돌린다
+        handleTouchCancel();
+        return;
+      }
+      const touch = event.touches[0];
+      const deltaX = touch.clientX - state.startX;
+      const deltaY = touch.clientY - state.startY;
+
+      if (state.mode === "pending") {
+        if (Math.max(Math.abs(deltaX), Math.abs(deltaY)) < AXIS_LOCK_PX) return;
+        if (Math.abs(deltaY) >= Math.abs(deltaX)) {
+          state.mode = "ignore";
+          return;
+        }
+        state.mode = "drag";
+      }
+
+      if (event.cancelable) event.preventDefault();
+      if (!prefersReducedMotion()) setOffset(deltaX, false);
+      state.samples.push({ x: touch.clientX, time: event.timeStamp });
+      const cutoff = event.timeStamp - VELOCITY_WINDOW_MS;
+      while (state.samples.length > 2 && state.samples[0].time < cutoff) {
+        state.samples.shift();
+      }
+    };
+
+    const handleTouchEnd = (event: TouchEvent) => {
+      if (state?.mode !== "drag") {
+        state = null;
+        return;
+      }
+      suppressClickUntil = event.timeStamp + CLICK_SUPPRESS_MS;
+      const first = state.samples[0];
+      const last = state.samples[state.samples.length - 1];
+      const elapsed = last.time - first.time;
+      const deltaX = last.x - state.startX;
+      const width = area.clientWidth;
+      const step = getMonthSwipeStep({
+        deltaX,
+        velocityX: elapsed > 0 ? (last.x - first.x) / elapsed : 0,
+        width,
+      });
+      state = null;
+
+      if (step !== 0) onSwipeRef.current(step);
+      if (prefersReducedMotion()) {
+        setOffset(0, false);
+        return;
+      }
+      if (step !== 0) {
+        // 새 달은 이 핸들러가 끝난 뒤 그리기 전에 렌더되므로, 반대편에서 시작해 제자리로 들어오게 한다
+        setOffset(step * Math.min(Math.abs(deltaX), width), false);
+        content.getBoundingClientRect();
+      }
+      setOffset(0, true);
+    };
+
+    const handleTouchCancel = () => {
+      if (state?.mode === "drag") setOffset(0, !prefersReducedMotion());
+      state = null;
+    };
+
+    // 끌어서 넘긴 손가락을 뗄 때 날짜 버튼이 눌리지 않게 한다
+    const handleClickCapture = (event: MouseEvent) => {
+      if (event.timeStamp > suppressClickUntil) return;
+      suppressClickUntil = -Infinity;
+      event.preventDefault();
+      event.stopPropagation();
+    };
+
+    area.addEventListener("touchstart", handleTouchStart, { passive: true });
+    area.addEventListener("touchmove", handleTouchMove, { passive: false });
+    area.addEventListener("touchend", handleTouchEnd);
+    area.addEventListener("touchcancel", handleTouchCancel);
+    area.addEventListener("click", handleClickCapture, true);
+    return () => {
+      area.removeEventListener("touchstart", handleTouchStart);
+      area.removeEventListener("touchmove", handleTouchMove);
+      area.removeEventListener("touchend", handleTouchEnd);
+      area.removeEventListener("touchcancel", handleTouchCancel);
+      area.removeEventListener("click", handleClickCapture, true);
+      setOffset(0, false);
+    };
+  }, [areaRef, contentRef]);
+};
