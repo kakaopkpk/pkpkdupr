@@ -1,11 +1,10 @@
 import React, { useMemo } from "react";
 import type { AchievementDefinition } from "@pkpkdupr/shared/achievements";
-import LastSessionMeCard from "@/components/home/LastSessionMeCard";
 import AchievementBadge from "@/components/profile/AchievementBadge";
-import { TopRiserCard } from "@/components/records/SessionReportParts";
+import { RecordSessionCard } from "@/components/records/RecordCards";
 import { Card } from "@/components/ui/Card";
 import { ChevronRightIcon } from "@/components/ui/Icons";
-import { Section, TextLink } from "@/components/ui/Section";
+import { Section } from "@/components/ui/Section";
 import { useAppNavigation } from "@/context/AppNavigationContext";
 import { getAchievementDefinition } from "@/lib/achievements";
 import { formatKstShortDate } from "@/lib/format";
@@ -73,15 +72,15 @@ export const MyNewAchievementsCard: React.FC<{
 };
 
 /**
- * 진행 중 세션이 없을 때 홈의 지난 세션 피드.
- * 머리(이름·날짜·인원·경기 수) 아래 세션 지배자 → 내 복식 평점 변동 → 내 새 업적 순으로, 해당 데이터가 있는 카드만 보인다.
+ * 진행 중 세션이 없을 때 홈의 지난 세션 요약: 일정 탭 끝난 세션 카드 모양의 내 기록 카드와 그 아래 내 새 업적.
+ * 가장 최근 세션에 내가 경기하지 않았으면 아무것도 보이지 않는다. 카드를 누르면 세션 리포트를 연다
  */
 const LastSessionFeed: React.FC<{
   report: MatchSessionReportInfo;
   playerId: string | undefined;
 }> = ({ report, playerId }) => {
   const { openSessionReport } = useAppNavigation();
-  const { session, topRiser } = report;
+  const { session } = report;
 
   const myReport = playerId
     ? report.players.find(
@@ -93,39 +92,26 @@ const LastSessionFeed: React.FC<{
     [playerId, report],
   );
 
+  if (!playerId || !myReport) return null;
+
   return (
-    <Section
-      title="지난 세션"
-      right={
-        <TextLink onPress={() => openSessionReport(session.id)} chevron>
-          리포트
-        </TextLink>
-      }
-      subtitle={
-        <div className="flex flex-col gap-0.5 px-1">
-          <h3 className="truncate text-pk-17 font-extrabold text-pk-ink">
-            {session.name}
-          </h3>
-          <span className="text-pk-13 text-pk-sub tabular-nums">
-            {[
-              formatKstShortDate(session.date),
-              `${session.participantCount}명`,
-              `${session.matchCount}경기`,
-            ].join(" · ")}
-          </span>
-        </div>
-      }
-    >
-      {topRiser ? <TopRiserCard report={topRiser} /> : null}
-      {myReport ? <LastSessionMeCard report={myReport} /> : null}
-      {playerId && myAchievements.length > 0 ? (
+    // 다음 세션 카드와 섹션 사이처럼 앞 요소에서 20px 띄운다
+    <div className="flex flex-col gap-2.5 pt-2.5">
+      <RecordSessionCard
+        session={session}
+        mine={myReport}
+        label="지난 세션 요약"
+        meta={`${formatKstShortDate(session.date)} · ${session.participantCount}명`}
+        onPress={() => openSessionReport(session.id)}
+      />
+      {myAchievements.length > 0 ? (
         <MyNewAchievementsCard
           playerId={playerId}
           achievements={myAchievements}
           titlePlacement="section"
         />
       ) : null}
-    </Section>
+    </div>
   );
 };
 
