@@ -180,7 +180,14 @@
 ### 세션
 
 - 목록 `GET /api/admin/match-sessions`
-- 회원 세션 수정 `PATCH /api/admin/match-sessions/:sessionId`: 이름·장소·오늘 이후 날짜·시각, 지난 세션 409
+- 만들기 `POST /api/admin/match-sessions` `{ kind, name, location, dateKey?, startTime?, endTime? }`: 응답 `ManagedMatchSession`
+  - 회원·대회 세션은 회원 세션 생성과 같은 규칙이다.
+  - 정기 세션은 그 날짜의 정기 세션(18:00~22:00, 보낸 시각 무시)이 되고, 이미 그날 정기 세션이 있거나 쉬는 날이면 409.
+- 수정 `PATCH /api/admin/match-sessions/:sessionId` `{ name?, location?, kind?, dateKey?, startTime?, endTime? }`
+  - 이름·장소·종류는 지난 세션을 포함한 모든 세션에서 고친다.
+  - 날짜·시각은 오늘·미래의 정기가 아닌 세션(바꾼 뒤 종류 기준)만, 아니면 409. 경기가 있는 세션은 날짜 409.
+  - 정기로 바꾸면 그날 정기 세션이 되고(이미 있거나 쉬는 날이면 409), 정기에서 바꾸면 18:00~22:00 시각이 남고 오늘·미래 날짜는 취소로 남는다.
+  - 종류 변경과 나머지 필드는 한 트랜잭션으로 반영한다.
 - 삭제 `DELETE /api/admin/match-sessions/:sessionId`: 오늘·미래 정기 세션을 지우면 그 날짜가 취소로 남음
 
 ### 쉬는 날

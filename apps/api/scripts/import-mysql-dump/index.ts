@@ -209,6 +209,7 @@ const findUpcomingRegularSessions = async (
       location: String(row.location),
       created_at: Number(row.created_at),
       updated_at: Number(row.updated_at),
+      kind: "regular",
       regular_date_key: String(row.regular_date_key),
       start_time: (row.start_time as string | null) ?? null,
       end_time: (row.end_time as string | null) ?? null,

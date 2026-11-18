@@ -4,6 +4,7 @@ import { kstDateKeyToDate } from "@pkpkdupr/shared/session";
 import request from "supertest";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  RegularSessionConflictError,
   RegularSessionSkipExistsError,
   SessionHasMatchesError,
 } from "@pkpkdupr/db";
@@ -213,32 +214,146 @@ describe("PATCH /api/admin/match-sessions/:sessionId", () => {
     expect(today.updateSession).toHaveBeenCalled();
   });
 
-  it("정기 세션은 409", async () => {
+  it("정기 세션은 이름을 고치고, 날짜·시각은 409", async () => {
     const { updateSession } = mockSession(regularSession("2026-11-16"));
 
-    const response = await asAdmin(
+    const renamed = await asAdmin(
       request(app).patch("/api/admin/match-sessions/Sregular"),
     ).send({ name: "월요 특별운동" });
+    expect(renamed.status).toBe(200);
+    expect(updateSession).toHaveBeenCalledWith(
+      "Sregular",
+      expect.objectContaining({ name: "월요 특별운동" }),
+    );
 
-    expect(response.status).toBe(409);
-    expect(response.body).toEqual({
-      error: "정기 세션 이름과 시간은 바꿀 수 없어요.",
+    updateSession.mockClear();
+    const moved = await asAdmin(
+      request(app).patch("/api/admin/match-sessions/Sregular"),
+    ).send({ startTime: "19:00", endTime: "21:00" });
+    expect(moved.status).toBe(409);
+    expect(moved.body).toEqual({
+      error: "정기 세션 날짜와 시간은 바꿀 수 없어요.",
     });
     expect(updateSession).not.toHaveBeenCalled();
   });
 
-  it("지난 세션은 409", async () => {
+  it("지난 세션은 이름을 고치고, 날짜·시각은 409", async () => {
     const { updateSession } = mockSession(
       customSession({ date: kstDateKeyToDate("2026-11-11") }),
     );
 
-    const response = await asAdmin(
+    const renamed = await asAdmin(
       request(app).patch("/api/admin/match-sessions/Scustom1"),
     ).send({ name: "어제 번개" });
+    expect(renamed.status).toBe(200);
+    expect(updateSession).toHaveBeenCalled();
 
-    expect(response.status).toBe(409);
-    expect(response.body).toEqual({ error: "지난 세션은 고칠 수 없어요." });
+    updateSession.mockClear();
+    const retimed = await asAdmin(
+      request(app).patch("/api/admin/match-sessions/Scustom1"),
+    ).send({ startTime: "19:00", endTime: "21:00" });
+    expect(retimed.status).toBe(409);
+    expect(retimed.body).toEqual({
+      error: "지난 세션은 날짜와 시간을 바꿀 수 없어요.",
+    });
     expect(updateSession).not.toHaveBeenCalled();
+  });
+
+  describe("종류 변경", () => {
+    const mockKindChange = (stored: ManagedMatchSession) => {
+      const { updateSession, notify } = mockSession(stored);
+      const changeSessionKind = vi
+        .spyOn(db.matches, "changeSessionKind")
+        .mockResolvedValue(true);
+      return { updateSession, notify, changeSessionKind };
+    };
+
+    it("회원 세션을 대회로 바꾸면 종류와 다른 필드를 함께 넘기고 세션 변경을 알린다", async () => {
+      const { updateSession, notify, changeSessionKind } = mockKindChange(
+        customSession(),
+      );
+
+      const response = await asAdmin(
+        request(app).patch("/api/admin/match-sessions/Scustom1"),
+      ).send({ kind: "tournament", name: "가을 대회" });
+
+      expect(response.status).toBe(200);
+      expect(changeSessionKind).toHaveBeenCalledWith(
+        "Scustom1",
+        "tournament",
+        expect.objectContaining({ name: "가을 대회", date: undefined }),
+        { cancelRegularFromDateKey: "2026-11-12" },
+      );
+      expect(updateSession).not.toHaveBeenCalled();
+      expect(notify).toHaveBeenCalledWith(["Scustom1"]);
+    });
+
+    it("지난 세션도 종류를 바꾼다", async () => {
+      const { changeSessionKind } = mockKindChange(
+        customSession({ date: kstDateKeyToDate("2026-11-11") }),
+      );
+
+      const response = await asAdmin(
+        request(app).patch("/api/admin/match-sessions/Scustom1"),
+      ).send({ kind: "tournament" });
+
+      expect(response.status).toBe(200);
+      expect(changeSessionKind).toHaveBeenCalled();
+    });
+
+    it("정기 세션을 다른 종류로 바꾸면서 시각을 고칠 수 있다", async () => {
+      const { changeSessionKind } = mockKindChange(regularSession("2026-11-16"));
+
+      const response = await asAdmin(
+        request(app).patch("/api/admin/match-sessions/Sregular"),
+      ).send({ kind: "custom", startTime: "19:00", endTime: "21:00" });
+
+      expect(response.status).toBe(200);
+      expect(changeSessionKind).toHaveBeenCalledWith(
+        "Sregular",
+        "custom",
+        expect.objectContaining({ startTime: "19:00", endTime: "21:00" }),
+        { cancelRegularFromDateKey: "2026-11-12" },
+      );
+    });
+
+    it("정기로 바꾸면서 날짜·시각을 보내면 409", async () => {
+      const { changeSessionKind } = mockKindChange(customSession());
+
+      const response = await asAdmin(
+        request(app).patch("/api/admin/match-sessions/Scustom1"),
+      ).send({ kind: "regular", dateKey: "2026-11-16" });
+
+      expect(response.status).toBe(409);
+      expect(changeSessionKind).not.toHaveBeenCalled();
+    });
+
+    it("정기로 바꿀 수 없는 날짜면 409", async () => {
+      mockSession(customSession());
+      vi.spyOn(db.matches, "changeSessionKind").mockRejectedValue(
+        new RegularSessionConflictError("그 날짜에는 이미 정기 세션이 있어요."),
+      );
+
+      const response = await asAdmin(
+        request(app).patch("/api/admin/match-sessions/Scustom1"),
+      ).send({ kind: "regular" });
+
+      expect(response.status).toBe(409);
+      expect(response.body).toEqual({
+        error: "그 날짜에는 이미 정기 세션이 있어요.",
+      });
+    });
+
+    it("모르는 종류는 400", async () => {
+      const { changeSessionKind } = mockKindChange(customSession());
+
+      const response = await asAdmin(
+        request(app).patch("/api/admin/match-sessions/Scustom1"),
+      ).send({ kind: "league" });
+
+      expect(response.status).toBe(400);
+      expect(changeSessionKind).not.toHaveBeenCalled();
+    });
   });
 
   it("경기가 있는 세션은 날짜만 바꿀 수 없다", async () => {
@@ -294,6 +409,102 @@ describe("PATCH /api/admin/match-sessions/:sessionId", () => {
     ).send({ name: "새 이름" });
 
     expect(response.status).toBe(404);
+  });
+});
+
+describe("POST /api/admin/match-sessions", () => {
+  const body = {
+    name: "가을 대회",
+    location: "야탑초등학교",
+    dateKey: "2026-11-21",
+    startTime: "09:00",
+    endTime: "17:00",
+  };
+
+  it("대회 세션은 회원 세션과 같은 규칙으로 만들고 종류를 넘긴다", async () => {
+    vi.spyOn(MatchRepository.prototype, "cleanupExpired").mockResolvedValue(
+      undefined as never,
+    );
+    const createSession = vi
+      .spyOn(db.matches, "createSession")
+      .mockImplementation(async (session) => session);
+    vi.spyOn(MatchRepository.prototype, "findSessionById").mockResolvedValue(
+      customSession({ id: "Stourn01", kind: "tournament" }),
+    );
+
+    const response = await asAdmin(
+      request(app).post("/api/admin/match-sessions"),
+    ).send({ ...body, kind: "tournament" });
+
+    expect(response.status).toBe(201);
+    expect(createSession).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: "가을 대회",
+        date: kstDateKeyToDate("2026-11-21"),
+        startTime: "09:00",
+        endTime: "17:00",
+      }),
+      "tournament",
+    );
+    expect(response.body).toMatchObject({ id: "Stourn01", kind: "tournament" });
+  });
+
+  it("정기 세션은 그 날짜의 정기 세션으로 만들고 시각은 무시한다", async () => {
+    vi.spyOn(MatchRepository.prototype, "cleanupExpired").mockResolvedValue(
+      undefined as never,
+    );
+    const createRegularSession = vi
+      .spyOn(db.matches, "createRegularSession")
+      .mockResolvedValue(regularSession("2026-11-19"));
+    vi.spyOn(MatchRepository.prototype, "findSessionById").mockResolvedValue(
+      regularSession("2026-11-19"),
+    );
+
+    const response = await asAdmin(
+      request(app).post("/api/admin/match-sessions"),
+    ).send({
+      ...body,
+      kind: "regular",
+      dateKey: "2026-11-19",
+      startTime: "09:00",
+      endTime: "09:00",
+    });
+
+    expect(response.status).toBe(201);
+    expect(createRegularSession).toHaveBeenCalledWith("2026-11-19", {
+      name: "가을 대회",
+      location: "야탑초등학교",
+    });
+  });
+
+  it("정기 세션을 만들 수 없는 날짜면 409", async () => {
+    vi.spyOn(MatchRepository.prototype, "cleanupExpired").mockResolvedValue(
+      undefined as never,
+    );
+    vi.spyOn(db.matches, "createRegularSession").mockRejectedValue(
+      new RegularSessionConflictError("쉬는 날에는 정기 세션을 둘 수 없어요."),
+    );
+
+    const response = await asAdmin(
+      request(app).post("/api/admin/match-sessions"),
+    ).send({ ...body, kind: "regular" });
+
+    expect(response.status).toBe(409);
+    expect(response.body).toEqual({
+      error: "쉬는 날에는 정기 세션을 둘 수 없어요.",
+    });
+  });
+
+  it("종류가 없거나 모르는 값이면 400", async () => {
+    const createSession = vi.spyOn(db.matches, "createSession");
+
+    for (const kind of [undefined, "league"]) {
+      const response = await asAdmin(
+        request(app).post("/api/admin/match-sessions"),
+      ).send({ ...body, kind });
+      expect(response.status).toBe(400);
+    }
+    expect(createSession).not.toHaveBeenCalled();
   });
 });
 
@@ -497,6 +708,7 @@ describe("정기 세션 쉬는 날", () => {
 describe("비관리자", () => {
   it.each([
     ["patch", "/api/admin/match-sessions/Scustom1"],
+    ["post", "/api/admin/match-sessions"],
     ["get", "/api/admin/regular-session-skips"],
     ["post", "/api/admin/regular-session-skips"],
     ["delete", "/api/admin/regular-session-skips/2026-11-16"],

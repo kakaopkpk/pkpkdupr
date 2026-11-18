@@ -10,7 +10,12 @@ import type {
 } from "@pkpkdupr/shared/match";
 import { randomUUID } from "crypto";
 import { generateEntityId, isEntityId } from "@pkpkdupr/shared/entityId";
-import { kstDateKeyToDate, toKstDateKey } from "@pkpkdupr/shared/session";
+import {
+  isMatchSessionKind,
+  kstDateKeyToDate,
+  toKstDateKey,
+  type MatchSessionKind,
+} from "@pkpkdupr/shared/session";
 import type {
   PlayerRatingChangeLog,
   PlayerRatingHistory,
@@ -19,9 +24,11 @@ import {
   MatchNotFoundError,
   MatchRecordUpdateConflictError,
   MatchStaleUpdateError,
+  RegularSessionConflictError,
   RegularSessionSkipExistsError,
   SessionHasMatchesError,
   type CompletedMatchOutcome,
+  type NonRegularSessionKind,
   type CreateMatchInput,
   type RegularSessionSkip,
   type SessionWithParticipantIds,
@@ -32,6 +39,7 @@ import {
 import { db } from "../db";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
+const SESSION_CONFLICT_MESSAGE = "같은 이름의 세션이 이미 있습니다.";
 
 /**
  * 저장소 호출 실패를 공개 API가 응답할 HTTP 상태와 함께 전달한다.
@@ -128,7 +136,7 @@ const hydrateManagedSession = (record: any): ManagedMatchSession => ({
   location: record.location,
   participantIds: record.participantIds ?? [],
   matchCount: Number(record.matchCount ?? 0),
-  kind: record.kind === "regular" ? "regular" : "custom",
+  kind: isMatchSessionKind(record.kind) ? record.kind : "custom",
   startTime: record.startTime ?? null,
   endTime: record.endTime ?? null,
   createdAt: new Date(record.createdAt),
@@ -375,22 +383,25 @@ export class MatchRepository {
    */
   async createSession(
     session: Omit<Session, "id"> & { id?: string },
-    options: { conflictOnDuplicate?: boolean } = {},
+    options: { conflictOnDuplicate?: boolean; kind?: NonRegularSessionKind } = {},
   ): Promise<Session> {
     let created;
     try {
       created = await this.run(
         () =>
-          db.matches.createSession({
-            ...session,
-            id: session.id ?? generateEntityId("session"),
-            date: new Date(session.date),
-          }),
+          db.matches.createSession(
+            {
+              ...session,
+              id: session.id ?? generateEntityId("session"),
+              date: new Date(session.date),
+            },
+            options.kind,
+          ),
         400,
       );
     } catch (error) {
       if (options.conflictOnDuplicate && isUniqueViolation(error)) {
-        throw new MatchRepositoryError("같은 이름의 세션이 이미 있습니다.", 409);
+        throw new MatchRepositoryError(SESSION_CONFLICT_MESSAGE, 409);
       }
       throw error;
     }
@@ -482,7 +493,7 @@ export class MatchRepository {
       );
     } catch (error) {
       if (isUniqueViolation(error)) {
-        throw new MatchRepositoryError("같은 이름의 세션이 이미 있습니다.", 409);
+        throw new MatchRepositoryError(SESSION_CONFLICT_MESSAGE, 409);
       }
       throw error;
     }
@@ -491,6 +502,66 @@ export class MatchRepository {
     }
     this.notifySessionsChanged([sessionId]);
     return hydrateManagedSession(updated);
+  }
+
+  /**
+   * 관리자가 고른 이름·장소로 그 날짜의 정기 세션을 만든다.
+   * 이미 그날 정기 세션이 있거나 쉬는 날, 같은 날 같은 이름이 있으면 409
+   */
+  async createRegularSession(
+    dateKey: string,
+    input: { name: string; location: string },
+  ): Promise<ManagedMatchSession> {
+    let created;
+    try {
+      created = await this.run(
+        () => db.matches.createRegularSession(dateKey, input),
+        500,
+        (error) =>
+          error instanceof RegularSessionConflictError ? 409 : undefined,
+      );
+    } catch (error) {
+      if (isUniqueViolation(error)) {
+        throw new MatchRepositoryError(SESSION_CONFLICT_MESSAGE, 409);
+      }
+      throw error;
+    }
+    const session = hydrateManagedSession(created);
+    this.notifySessionsChanged([session.id]);
+    return session;
+  }
+
+  /**
+   * 세션 종류를 바꾸고 input 필드도 같이 고친다. 없으면 404.
+   * 정기로 바꿀 수 없는 날짜(그날 정기 세션이 있거나 쉬는 날)거나 같은 날 같은 이름이 있으면 409.
+   * 정기에서 바꾼 cancelRegularFromDateKey 이후 날짜는 취소 쉬는 날로 남는다
+   */
+  async changeSessionKind(
+    sessionId: string,
+    kind: MatchSessionKind,
+    input: UpdateSessionInput,
+    options: { cancelRegularFromDateKey?: string } = {},
+  ): Promise<ManagedMatchSession> {
+    let changed;
+    try {
+      changed = await this.run(
+        () => db.matches.changeSessionKind(sessionId, kind, input, options),
+        500,
+        (error) =>
+          error instanceof RegularSessionConflictError ? 409 : undefined,
+      );
+    } catch (error) {
+      if (isUniqueViolation(error)) {
+        throw new MatchRepositoryError(SESSION_CONFLICT_MESSAGE, 409);
+      }
+      throw error;
+    }
+    const updated = changed ? await this.findSessionById(sessionId) : undefined;
+    if (!updated) {
+      throw new MatchRepositoryError("세션을 찾을 수 없습니다.", 404);
+    }
+    this.notifySessionsChanged([sessionId]);
+    return updated;
   }
 
   /** 모든 정기 회차 제외 날짜(날짜 내림차순) */

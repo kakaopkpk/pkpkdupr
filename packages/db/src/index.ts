@@ -36,6 +36,8 @@ export {
   MATCH_STALE_UPDATE_ERROR_MESSAGE,
   SessionHasMatchesError,
   RegularSessionSkipExistsError,
+  RegularSessionConflictError,
+  type NonRegularSessionKind,
   type UpdateSessionInput,
   type CreateMatchInput,
   type DeleteRecordedMatchInput,

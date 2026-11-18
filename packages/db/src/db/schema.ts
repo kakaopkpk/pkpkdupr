@@ -180,7 +180,9 @@ export const matchSessions = pgTable(
     location: varchar("location", { length: 255 }).notNull(),
     createdAt: unixTimestamp("created_at").notNull(),
     updatedAt: unixTimestamp("updated_at").notNull(),
-    /** 정기 세션의 KST 날짜 키(YYYY-MM-DD). 날짜당 하나만 있다. 회원·관리자가 만든 세션은 null이다. */
+    /** 세션 종류(MatchSessionKind): regular·custom·tournament. regular만 regularDateKey를 가진다 */
+    kind: varchar("kind", { length: 16 }).notNull().default("custom"),
+    /** 정기 세션의 KST 날짜 키(YYYY-MM-DD). 날짜당 하나만 있다. 정기 세션이 아니면 null이다. */
     regularDateKey: varchar("regular_date_key", { length: 10 }),
     /** 회원 세션의 시작·종료 시각("HH:MM", KST). 시각 없이 만든 세션과 정기 세션은 null이다(정기 세션 시각은 저장소가 채운다). */
     startTime: varchar("start_time", { length: 5 }),

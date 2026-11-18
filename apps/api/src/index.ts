@@ -37,6 +37,7 @@ import {
   getKstWeekday,
   getRegularSessionDateKeys,
   isInProgressMatchExpired,
+  isMatchSessionKind,
   isPastSessionStart,
   isRegularSessionTime,
   isSessionOnToday,
@@ -53,6 +54,7 @@ import {
   type AdminRegularSessionSkip,
   type AdminRegularSessionSkipsResponse,
   type AdminRevertRegularSessionSkipResponse,
+  type AdminCreateMatchSessionRequest,
   type AdminUpdateMatchSessionRequest,
   type AddMatchSessionParticipantRequest,
   type CreateMatchSessionRequest,
@@ -1519,64 +1521,83 @@ app.post("/api/match-sessions/regular/today", async (req, res) => {
   }
 });
 
+/**
+ * 세션 만들기 요청(이름·장소·날짜·시각)을 검사해 다듬는다. 날짜를 생략하면 오늘이고, 오늘보다 이르면 400.
+ * ignoreTime이면 시각을 읽지 않는다(정기 세션은 시각이 정해져 있다)
+ */
+const parseCreateMatchSessionRequest = (
+  body: Partial<CreateMatchSessionRequest> | undefined,
+  now: Date,
+  options: { ignoreTime?: boolean } = {},
+) => {
+  const name = requireMatchSessionText(
+    body?.name,
+    "이름",
+    MATCH_SESSION_NAME_MAX_LENGTH,
+  );
+  const location = requireMatchSessionText(
+    body?.location,
+    "장소",
+    MATCH_SESSION_LOCATION_MAX_LENGTH,
+  );
+
+  const todayKey = toKstDateKey(now);
+  const dateKey =
+    body?.dateKey == null
+      ? todayKey
+      : typeof body.dateKey === "string"
+        ? body.dateKey.trim()
+        : "";
+  if (!isValidKstDateKey(dateKey)) {
+    throw new MatchSessionRequestError(
+      "세션 날짜는 YYYY-MM-DD 형식의 실제 날짜여야 합니다.",
+      400,
+    );
+  }
+  // YYYY-MM-DD 날짜 키는 문자열 비교가 날짜 순서와 같다
+  if (dateKey < todayKey) {
+    throw new MatchSessionRequestError(
+      "오늘이나 이후 날짜로만 세션을 만들 수 있습니다.",
+      400,
+    );
+  }
+  if (options.ignoreTime) {
+    return { name, location, dateKey, startTime: null, endTime: null };
+  }
+
+  // 시각을 보내지 않는 이전 클라이언트도 받도록 둘 다 생략하면 시각 없는 세션으로 만든다.
+  // 종료가 시작보다 이르면 다음 날 종료이고, 세션 날짜는 시작 시각의 날짜다
+  const { startTime = null, endTime = null } = body ?? {};
+  if (
+    (startTime != null || endTime != null) &&
+    !isValidSessionTimeRange(startTime, endTime)
+  ) {
+    throw new MatchSessionRequestError(
+      "세션 시작·종료 시각은 HH:MM 형식으로 함께 보내고, 서로 달라야 합니다.",
+      400,
+    );
+  }
+  if (startTime != null && isPastSessionStart(dateKey, startTime, now)) {
+    throw new MatchSessionRequestError(
+      "이미 지난 시각으로는 세션을 만들 수 없습니다.",
+      400,
+    );
+  }
+  return { name, location, dateKey, startTime, endTime };
+};
+
 app.post("/api/match-sessions", async (req, res) => {
   try {
     if (!(await getAuthPayload(req, res))) {
       return;
     }
 
-    const body = req.body as Partial<CreateMatchSessionRequest> | undefined;
-    const name = requireMatchSessionText(
-      body?.name,
-      "이름",
-      MATCH_SESSION_NAME_MAX_LENGTH,
-    );
-    const location = requireMatchSessionText(
-      body?.location,
-      "장소",
-      MATCH_SESSION_LOCATION_MAX_LENGTH,
-    );
-
     const now = new Date();
-    const todayKey = toKstDateKey(now);
-    const dateKey =
-      body?.dateKey == null
-        ? todayKey
-        : typeof body.dateKey === "string"
-          ? body.dateKey.trim()
-          : "";
-    if (!isValidKstDateKey(dateKey)) {
-      throw new MatchSessionRequestError(
-        "세션 날짜는 YYYY-MM-DD 형식의 실제 날짜여야 합니다.",
-        400,
+    const { name, location, dateKey, startTime, endTime } =
+      parseCreateMatchSessionRequest(
+        req.body as Partial<CreateMatchSessionRequest> | undefined,
+        now,
       );
-    }
-    // YYYY-MM-DD 날짜 키는 문자열 비교가 날짜 순서와 같다
-    if (dateKey < todayKey) {
-      throw new MatchSessionRequestError(
-        "오늘이나 이후 날짜로만 세션을 만들 수 있습니다.",
-        400,
-      );
-    }
-
-    // 시각을 보내지 않는 이전 클라이언트도 받도록 둘 다 생략하면 시각 없는 세션으로 만든다.
-    // 종료가 시작보다 이르면 다음 날 종료이고, 세션 날짜는 시작 시각의 날짜다
-    const { startTime = null, endTime = null } = body ?? {};
-    if (
-      (startTime != null || endTime != null) &&
-      !isValidSessionTimeRange(startTime, endTime)
-    ) {
-      throw new MatchSessionRequestError(
-        "세션 시작·종료 시각은 HH:MM 형식으로 함께 보내고, 서로 달라야 합니다.",
-        400,
-      );
-    }
-    if (startTime != null && isPastSessionStart(dateKey, startTime, now)) {
-      throw new MatchSessionRequestError(
-        "이미 지난 시각으로는 세션을 만들 수 없습니다.",
-        400,
-      );
-    }
 
     await matchRepository.cleanupExpired(now);
     // 회원 세션 시각(date)은 시작 시각과 상관없이 고른 날 00:00 KST로 고정해
@@ -2001,6 +2022,53 @@ app.get("/api/admin/match-sessions", requireAdmin, async (_req, res) => {
   }
 });
 
+/**
+ * 관리자 세션 만들기. 종류(kind)를 고른다.
+ * 회원·대회 세션은 회원 세션 만들기와 같은 규칙이고, 정기 세션은 그 날짜의 정기 세션(18:00~22:00)이 된다
+ */
+app.post("/api/admin/match-sessions", requireAdmin, async (req, res) => {
+  try {
+    const body = req.body as Partial<AdminCreateMatchSessionRequest> | undefined;
+    const kind = body?.kind;
+    if (!isMatchSessionKind(kind)) {
+      throw new MatchSessionRequestError(
+        "세션 종류는 regular, custom, tournament 중 하나여야 합니다.",
+        400,
+      );
+    }
+    const now = new Date();
+    const { name, location, dateKey, startTime, endTime } =
+      parseCreateMatchSessionRequest(body, now, {
+        ignoreTime: kind === "regular",
+      });
+
+    await matchRepository.cleanupExpired(now);
+    const sessionId =
+      kind === "regular"
+        ? (await matchRepository.createRegularSession(dateKey, { name, location }))
+            .id
+        : (
+            await matchRepository.createSession(
+              {
+                name,
+                date: kstDateKeyToDate(dateKey),
+                location,
+                startTime,
+                endTime,
+              },
+              { conflictOnDuplicate: true, kind },
+            )
+          ).id;
+    const created = await matchRepository.findSessionById(sessionId);
+    if (!created) {
+      throw new MatchSessionRequestError("세션을 찾을 수 없습니다.", 404);
+    }
+    res.status(201).json(created);
+  } catch (err) {
+    sendMatchSessionFailure(res, err);
+  }
+});
+
 app.delete(
   "/api/admin/match-sessions/:sessionId",
   requireAdmin,
@@ -2025,8 +2093,9 @@ app.delete(
 );
 
 /**
- * 회원 세션의 이름·장소·날짜·시각을 고친다. 생략한 필드는 그대로 둔다.
- * 정기 세션·지난 세션은 409, 경기가 있는 세션은 날짜만 바꿀 수 없다(경기 시각과 세션 날짜가 어긋나므로)
+ * 세션의 이름·장소·종류·날짜·시각을 고친다. 생략한 필드는 그대로 둔다.
+ * - 이름·장소·종류는 지난 세션을 포함한 모든 세션에서 고친다
+ * - 날짜·시각은 오늘·미래의 정기가 아닌 세션(바꾼 뒤 종류 기준)만 고치고, 경기가 있는 세션은 날짜를 바꿀 수 없다(경기 시각과 세션 날짜가 어긋나므로)
  */
 app.patch(
   "/api/admin/match-sessions/:sessionId",
@@ -2054,6 +2123,12 @@ app.patch(
               "장소",
               MATCH_SESSION_LOCATION_MAX_LENGTH,
             );
+      if (body.kind !== undefined && !isMatchSessionKind(body.kind)) {
+        throw new MatchSessionRequestError(
+          "세션 종류는 regular, custom, tournament 중 하나여야 합니다.",
+          400,
+        );
+      }
 
       const now = new Date();
       const todayKey = toKstDateKey(now);
@@ -2093,15 +2168,21 @@ app.patch(
       if (!session) {
         throw new MatchSessionRequestError("세션을 찾을 수 없습니다.", 404);
       }
-      if (session.kind === "regular") {
-        throw new MatchSessionRequestError(
-          "정기 세션 이름과 시간은 바꿀 수 없어요.",
-          409,
-        );
-      }
+      const nextKind = body.kind ?? session.kind;
       const currentDateKey = toKstDateKey(session.date);
-      if (currentDateKey < todayKey) {
-        throw new MatchSessionRequestError("지난 세션은 고칠 수 없어요.", 409);
+      if (dateKey !== undefined || timeProvided) {
+        if (nextKind === "regular") {
+          throw new MatchSessionRequestError(
+            "정기 세션 날짜와 시간은 바꿀 수 없어요.",
+            409,
+          );
+        }
+        if (currentDateKey < todayKey) {
+          throw new MatchSessionRequestError(
+            "지난 세션은 날짜와 시간을 바꿀 수 없어요.",
+            409,
+          );
+        }
       }
       const dateChanged = dateKey !== undefined && dateKey !== currentDateKey;
       if (dateChanged && session.matchCount > 0) {
@@ -2128,13 +2209,20 @@ app.patch(
         );
       }
 
-      // 회원 세션 시각(date)은 생성 때처럼 고른 날 00:00 KST다
-      const updated = await matchRepository.updateSession(sessionId, {
+      // 정기가 아닌 세션 시각(date)은 생성 때처럼 고른 날 00:00 KST다
+      const input = {
         name,
         location,
         date: dateChanged ? kstDateKeyToDate(nextDateKey) : undefined,
         ...(timeProvided ? { startTime, endTime } : {}),
-      });
+      };
+      const updated =
+        nextKind === session.kind
+          ? await matchRepository.updateSession(sessionId, input)
+          : // 오늘·미래 정기 세션을 다른 종류로 바꾸면 그 날짜는 취소로 남아 다시 만들어지지 않는다
+            await matchRepository.changeSessionKind(sessionId, nextKind, input, {
+              cancelRegularFromDateKey: todayKey,
+            });
       res.json(updated);
     } catch (err) {
       sendMatchSessionFailure(res, err);
