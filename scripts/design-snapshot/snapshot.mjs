@@ -95,6 +95,11 @@ async function main() {
     throw new Error(`알 수 없는 화면: ${only.join(", ")} (가능: ${SCREENS.map((s) => s.name).join(", ")})`);
   }
 
+  // 녹화 시각과 응답의 날짜 기준이 한 번의 실행으로 맞아야 하므로 녹화는 항상 전체 화면을 돈다.
+  if (record && only.length) {
+    throw new Error("--record는 화면 이름 없이 전체를 녹화합니다.");
+  }
+
   let baseUrl;
   let fixtures;
   let stopVite = async () => {};
@@ -102,21 +107,25 @@ async function main() {
     assertLocalUrl(RECORD_URL);
     await assertAppRunning(RECORD_URL);
     baseUrl = RECORD_URL;
-    // 녹화에서 일부 화면만 돌면 나머지 화면의 응답이 빠지므로 기존 녹화에 덧붙인다.
-    const previous = only.length ? await loadFixtures().catch(() => null) : null;
-    fixtures = { recordedAt: previous?.recordedAt ?? Date.now(), authUserId: previous?.authUserId ?? null, responses: previous?.responses ?? {} };
+    fixtures = { recordedAt: Date.now(), authUserId: null, responses: {}, skipped: new Set(), remoteHosts: new Set() };
   } else {
     fixtures = await loadFixtures();
-    ({ baseUrl, stop: stopVite } = await startVite());
   }
 
-  // 전체를 찍을 때만 폴더를 비운다. 일부만 찍으면 그 화면 파일만 덮어쓴다.
-  if (!only.length) await rm(OUT_DIR, { recursive: true, force: true });
-  await mkdir(OUT_DIR, { recursive: true });
-
-  const browser = await chromium.launch();
   const missing = new Set();
+  let browser;
+  const onSignal = async () => {
+    await stopVite();
+    process.exit(130);
+  };
+  process.once("SIGINT", onSignal);
+  process.once("SIGTERM", onSignal);
   try {
+    if (!record) ({ baseUrl, stop: stopVite } = await startVite());
+    // 전체를 찍을 때만 폴더를 비운다. 일부만 찍으면 그 화면 파일만 덮어쓴다.
+    if (!only.length) await rm(OUT_DIR, { recursive: true, force: true });
+    await mkdir(OUT_DIR, { recursive: true });
+    browser = await chromium.launch();
     const context = await browser.newContext({
       viewport: VIEWPORT,
       deviceScaleFactor: 2,
@@ -162,6 +171,9 @@ async function main() {
     }
     await writeFile(path.join(OUT_DIR, "index.html"), await indexPage());
     console.log(`\n${results.length}/${screens.length}개 화면 → ${OUT_DIR}`);
+    if (record && fixtures.remoteHosts.size) {
+      console.log(`로컬이 아닌 주소(${[...fixtures.remoteHosts].join(", ")})의 요청 ${fixtures.skipped.size}개는 막고 저장하지 않았습니다.`);
+    }
     if (record) {
       await mkdir(path.dirname(FIXTURE_FILE), { recursive: true });
       await writeFile(FIXTURE_FILE, `${JSON.stringify(sortFixtures(fixtures), null, 2)}\n`);
@@ -176,15 +188,19 @@ async function main() {
       process.exitCode = 1;
     }
   } finally {
-    await browser.close();
+    await browser?.close();
     await stopVite();
+    process.off("SIGINT", onSignal);
+    process.off("SIGTERM", onSignal);
   }
 }
+
+const LOCAL_HOSTS = ["localhost", "127.0.0.1", "[::1]"];
 
 // dev 계정으로 로그인해 화면 데이터를 파일로 남기므로 로컬 앱만 대상으로 한다.
 function assertLocalUrl(url) {
   const { hostname } = new URL(url);
-  if (!["localhost", "127.0.0.1", "[::1]"].includes(hostname)) {
+  if (!LOCAL_HOSTS.includes(hostname)) {
     throw new Error(`DESIGN_SNAPSHOT_URL은 로컬 주소만 쓸 수 있습니다: ${url}`);
   }
 }
@@ -231,6 +247,15 @@ async function recordRoute(route, fixtures) {
     await route.fallback();
     return;
   }
+  // 녹화본은 커밋되므로 로컬이 아닌 곳(운영 Storage의 아바타 등)의 응답은 받지도 저장하지도 않는다.
+  // 막은 요청은 재생에서도 실패로 돌려준다(아바타는 이니셜로 보인다).
+  const { hostname, host } = new URL(request.url());
+  if (!LOCAL_HOSTS.includes(hostname)) {
+    fixtures.remoteHosts.add(host);
+    fixtures.skipped.add(requestKey(request));
+    await route.abort();
+    return;
+  }
   const response = await route.fetch();
   const headers = { ...response.headers() };
   delete headers["content-length"];
@@ -267,6 +292,10 @@ async function replayRoute(route, fixtures, missing) {
     return;
   }
   const key = requestKey(request);
+  if (fixtures.skipped?.includes(key)) {
+    await route.abort();
+    return;
+  }
   const saved = fixtures.responses[key];
   if (!saved) {
     missing.add(key);
@@ -315,7 +344,7 @@ function fakeAuthResponse(url, fixtures) {
 // 다시 녹화했을 때 diff가 읽히도록 키를 정렬한다.
 function sortFixtures(fixtures) {
   const responses = Object.fromEntries(Object.entries(fixtures.responses).sort(([a], [b]) => a.localeCompare(b)));
-  return { recordedAt: fixtures.recordedAt, authUserId: fixtures.authUserId, responses };
+  return { recordedAt: fixtures.recordedAt, authUserId: fixtures.authUserId, skipped: [...fixtures.skipped].sort(), responses };
 }
 
 // web(Vite)만 띄운다. Supabase 주소는 재생용 가짜 주소라 실제 연결은 없다.
@@ -339,7 +368,8 @@ async function startVite() {
   for (let i = 0; i < 120; i += 1) {
     if (child.exitCode != null) break;
     try {
-      if ((await fetch(baseUrl)).ok) return { baseUrl, stop };
+      // 이전 실행이 남긴 다른 서버가 응답한 것이 아닌지, 이번에 띄운 프로세스가 살아 있는지도 본다.
+      if ((await fetch(baseUrl)).ok && child.exitCode == null) return { baseUrl, stop };
     } catch {
       // 아직 뜨는 중이다.
     }
