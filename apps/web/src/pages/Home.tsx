@@ -264,39 +264,35 @@ const Home: React.FC = () => {
 
   // ── 그리기 ─────────────────────────────────────────
   /** 진행 중 머리·내 경기 카드·남의 진행 중 경기 줄. 내 경기는 세션 밖 경기여도 맨 위에 온다 */
-  const renderInProgress = (otherMatches: MatchInfo[]) => {
-    const count = otherMatches.length + (myInProgressMatch ? 1 : 0);
-
-    return (
-      <>
-        <SectionLabel>진행 중</SectionLabel>
-        {myInProgressMatch ? (
-          <MyLiveMatchCard
-            match={myInProgressMatch}
-            now={now}
-            onOpenDetail={() => openMatchDetail(myInProgressMatch.id)}
-            onEnterScore={() =>
-              openRecordMatch({ kind: "score", matchId: myInProgressMatch.id })
-            }
-          />
-        ) : null}
-        {otherMatches.length > 0 ? (
-          <Card>
-            {otherMatches.map((match) => (
-              <LiveMatchRow
-                key={match.id}
-                match={match}
-                now={now}
-                onPress={() => openMatchDetail(match.id)}
-              />
-            ))}
-          </Card>
-        ) : count === 0 ? (
-          <EmptyCard message="진행 중인 경기가 없어요" />
-        ) : null}
-      </>
-    );
-  };
+  const renderInProgress = (otherMatches: MatchInfo[]) => (
+    <>
+      <SectionLabel>진행 중</SectionLabel>
+      {myInProgressMatch ? (
+        <MyLiveMatchCard
+          match={myInProgressMatch}
+          now={now}
+          onOpenDetail={() => openMatchDetail(myInProgressMatch.id)}
+          onEnterScore={() =>
+            openRecordMatch({ kind: "score", matchId: myInProgressMatch.id })
+          }
+        />
+      ) : null}
+      {otherMatches.length > 0 ? (
+        <Card>
+          {otherMatches.map((match) => (
+            <LiveMatchRow
+              key={match.id}
+              match={match}
+              now={now}
+              onPress={() => openMatchDetail(match.id)}
+            />
+          ))}
+        </Card>
+      ) : myInProgressMatch ? null : (
+        <EmptyCard message="진행 중인 경기가 없어요" />
+      )}
+    </>
+  );
 
   const renderLive = () => (
     <>
