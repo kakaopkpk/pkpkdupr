@@ -174,11 +174,17 @@ export const startSessionMatch = async (
   );
 };
 
-/** 세션 종류 칩 문구 */
+const SESSION_KIND_SHORT_LABELS: Record<MatchSessionDetailInfo["kind"], string> = {
+  regular: "정기",
+  custom: "회원",
+  tournament: "대회",
+};
+
 /** 세션 블루 카드 칩의 짧은 종류 이름 */
 export const getSessionKindShortLabel = (kind: MatchSessionDetailInfo["kind"]) =>
-  kind === "regular" ? "정기" : "회원";
+  SESSION_KIND_SHORT_LABELS[kind];
 
+/** 세션 종류 칩 문구 */
 export const getSessionKindLabel = (kind: MatchSessionDetailInfo["kind"]) =>
   `${getSessionKindShortLabel(kind)} 세션`;
 

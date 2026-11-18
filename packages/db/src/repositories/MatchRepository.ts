@@ -49,7 +49,9 @@ import {
   REGULAR_SESSION_START_HOUR,
   REGULAR_SESSION_START_TIME,
   getEmptySessionExpiryCutoff,
+  isMatchSessionKind,
   kstDateKeyToDate,
+  toKstDateKey,
   type MatchSessionKind,
   type RegularSessionSkipReason,
 } from "@pkpkdupr/shared/session";
@@ -106,7 +108,18 @@ export class RegularSessionSkipExistsError extends Error {
   }
 }
 
-/** 회원 세션 수정 값. 키가 없는 필드는 그대로 둔다 */
+/** 정기 세션으로 만들거나 바꿀 수 없는 날짜(이미 그날 정기 세션이 있거나 쉬는 날) */
+export class RegularSessionConflictError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "RegularSessionConflictError";
+  }
+}
+
+/** 정기가 아닌 세션의 종류 */
+export type NonRegularSessionKind = Exclude<MatchSessionKind, "regular">;
+
+/** 세션 수정 값. 키가 없는 필드는 그대로 둔다 */
 export interface UpdateSessionInput {
   name?: string;
   location?: string;
@@ -228,15 +241,22 @@ export interface ExpiredCleanupResult {
   deletedSessionIds: string[];
 }
 
+export const REGULAR_SESSION_EXISTS_MESSAGE = "그 날짜에는 이미 정기 세션이 있어요.";
+const REGULAR_SESSION_SKIPPED_MESSAGE = "쉬는 날에는 정기 세션을 둘 수 없어요.";
+
 const toDateOrNull = (value: Date | string | number | null | undefined) =>
   value == null ? null : new Date(value);
 
 const toDate = (value: Date | string | number) => new Date(value);
 
-/** 정기 날짜 키가 있으면 정기 세션이다 */
 const toSessionKind = (
-  stored: Pick<StoredMatchSession, "regularDateKey">,
-): MatchSessionKind => (stored.regularDateKey ? "regular" : "custom");
+  stored: Pick<StoredMatchSession, "kind" | "regularDateKey">,
+): MatchSessionKind =>
+  isMatchSessionKind(stored.kind)
+    ? stored.kind
+    : stored.regularDateKey
+      ? "regular"
+      : "custom";
 
 // schema의 unixTimestamp 컬럼은 Unix 초로 저장한다. raw SQL은 그 변환을
 // 거치지 않으므로 경기 변경 타임스탬프를 여기서 직접 초로 바꾼다.
@@ -355,8 +375,11 @@ export class MatchRepository {
     private client: any,
   ) {}
 
-  async createSession(session: Session): Promise<Session> {
-    const sessionId = await this.ensureSession(session);
+  async createSession(
+    session: Session,
+    kind: NonRegularSessionKind = "custom",
+  ): Promise<Session> {
+    const sessionId = await this.ensureSession(session, kind);
     const stored = await this.db
       .select()
       .from(matchSessions)
@@ -482,6 +505,7 @@ export class MatchRepository {
           name: getRegularSessionName(dateKey),
           date: sessionDate,
           location: REGULAR_SESSION_LOCATION,
+          kind: "regular",
           regularDateKey: dateKey,
           createdAt: now,
           updatedAt: now,
@@ -2126,6 +2150,196 @@ export class MatchRepository {
     return await this.findSessionById(sessionId);
   }
 
+  /**
+   * 관리자가 고른 이름·장소로 그 KST 날짜의 정기 세션을 만든다(시각은 18:00~22:00 고정).
+   * 이미 그날 정기 세션이 있거나 쉬는 날이면 RegularSessionConflictError. (name, date) 유니크 위반은 그대로 던진다
+   */
+  async createRegularSession(
+    dateKey: string,
+    input: { name: string; location: string },
+  ): Promise<ManagedMatchSession> {
+    if (!REGULAR_DATE_KEY_PATTERN.test(dateKey)) {
+      throw new Error("유효한 정기 세션 날짜가 필요합니다.");
+    }
+    if (await this.isRegularSessionSkipped(dateKey)) {
+      throw new RegularSessionConflictError(REGULAR_SESSION_SKIPPED_MESSAGE);
+    }
+    const existing = await this.db
+      .select({ id: matchSessions.id })
+      .from(matchSessions)
+      .where(eq(matchSessions.regularDateKey, dateKey))
+      .limit(1)
+      .then(firstRow);
+    if (existing) {
+      throw new RegularSessionConflictError(REGULAR_SESSION_EXISTS_MESSAGE);
+    }
+
+    const now = new Date();
+    const id = generateEntityId("session");
+    await this.db.insert(matchSessions).values({
+      id,
+      name: input.name,
+      date: kstDateKeyToDate(dateKey, REGULAR_SESSION_START_HOUR),
+      location: input.location,
+      kind: "regular",
+      regularDateKey: dateKey,
+      createdAt: now,
+      updatedAt: now,
+    });
+    const created = await this.findSessionById(id);
+    if (!created) {
+      throw new Error("정기 세션을 만들지 못했습니다.");
+    }
+    return created;
+  }
+
+  /**
+   * 세션 종류를 바꾸고 data의 필드도 같이 고친다(트랜잭션 하나). 없으면 false.
+   * - 정기로 바꾸면 그 날짜의 정기 세션(18:00 KST, 시각은 정기 시각)이 된다. 이미 그날 정기 세션이 있거나 쉬는 날이면 RegularSessionConflictError
+   * - 정기에서 바꾸면 그날 00:00 KST·18:00~22:00 세션이 되고, 날짜가 cancelRegularFromDateKey 이후(포함)면 그 날짜를 취소로 남겨 다시 만들지 않는다
+   * - data는 종류를 바꾼 뒤 적용한다
+   * (name, date) 유니크 위반은 그대로 던진다
+   */
+  async changeSessionKind(
+    sessionId: string,
+    kind: MatchSessionKind,
+    data: UpdateSessionInput = {},
+    options: { cancelRegularFromDateKey?: string } = {},
+  ): Promise<boolean> {
+    if (!isEntityId(sessionId, "session")) {
+      throw new Error("유효한 세션 ID가 필요합니다.");
+    }
+
+    const transaction = await this.client.transaction("write");
+    let committed = false;
+    try {
+      const session = await transaction.execute({
+        sql: `SELECT kind, regular_date_key, "date" FROM match_sessions WHERE id = $1 FOR UPDATE`,
+        args: [sessionId],
+      });
+      const row = session.rows[0];
+      if (!row) {
+        await transaction.commit();
+        committed = true;
+        return false;
+      }
+
+      const currentKind = toSessionKind({
+        kind: String(row.kind),
+        regularDateKey: (row.regular_date_key as string | null) ?? null,
+      });
+      const dateKey =
+        typeof row.regular_date_key === "string"
+          ? row.regular_date_key
+          : toKstDateKey(new Date(Number(row.date) * 1000));
+      const updatedAt = toUnixTimestampSeconds(new Date());
+
+      if (currentKind === kind) {
+        // 종류는 그대로 두고 data만 적용한다
+      } else if (kind === "regular") {
+        const skip = await transaction.execute({
+          sql: "SELECT 1 FROM regular_session_skips WHERE date_key = $1",
+          args: [dateKey],
+        });
+        if (skip.rows.length) {
+          throw new RegularSessionConflictError(REGULAR_SESSION_SKIPPED_MESSAGE);
+        }
+        const existing = await transaction.execute({
+          sql: "SELECT 1 FROM match_sessions WHERE regular_date_key = $1",
+          args: [dateKey],
+        });
+        if (existing.rows.length) {
+          throw new RegularSessionConflictError(REGULAR_SESSION_EXISTS_MESSAGE);
+        }
+        await transaction.execute({
+          sql: `
+            UPDATE match_sessions
+            SET kind = 'regular', regular_date_key = $2, "date" = $3,
+                start_time = NULL, end_time = NULL, updated_at = $4
+            WHERE id = $1
+          `,
+          args: [
+            sessionId,
+            dateKey,
+            toUnixTimestampSeconds(
+              kstDateKeyToDate(dateKey, REGULAR_SESSION_START_HOUR),
+            ),
+            updatedAt,
+          ],
+        });
+      } else if (currentKind === "regular") {
+        // 정기 시각을 저장해 바꾼 뒤에도 같은 시간대 세션으로 남긴다
+        await transaction.execute({
+          sql: `
+            UPDATE match_sessions
+            SET kind = $2, regular_date_key = NULL, "date" = $3,
+                start_time = $4, end_time = $5, updated_at = $6
+            WHERE id = $1
+          `,
+          args: [
+            sessionId,
+            kind,
+            toUnixTimestampSeconds(kstDateKeyToDate(dateKey)),
+            REGULAR_SESSION_START_TIME,
+            REGULAR_SESSION_END_TIME,
+            updatedAt,
+          ],
+        });
+        // YYYY-MM-DD 날짜 키는 문자열 비교가 날짜 순서와 같다. 이미 공휴일로 있으면 그대로 둔다
+        if (
+          options.cancelRegularFromDateKey &&
+          dateKey >= options.cancelRegularFromDateKey
+        ) {
+          await transaction.execute({
+            sql: `
+              INSERT INTO regular_session_skips (date_key, reason, created_at)
+              VALUES ($1, 'canceled', $2)
+              ON CONFLICT (date_key) DO NOTHING
+            `,
+            args: [dateKey, updatedAt],
+          });
+        }
+      } else {
+        await transaction.execute({
+          sql: "UPDATE match_sessions SET kind = $2, updated_at = $3 WHERE id = $1",
+          args: [sessionId, kind, updatedAt],
+        });
+      }
+
+      const values: Array<[string, unknown]> = [
+        ["name", data.name],
+        ["location", data.location],
+        [
+          '"date"',
+          data.date === undefined
+            ? undefined
+            : toUnixTimestampSeconds(data.date),
+        ],
+        ["start_time", data.startTime],
+        ["end_time", data.endTime],
+      ];
+      const columns = values.filter(([, value]) => value !== undefined);
+      if (columns.length) {
+        await transaction.execute({
+          sql: `
+            UPDATE match_sessions
+            SET ${columns.map(([column], index) => `${column} = $${index + 2}`).join(", ")},
+                updated_at = $${columns.length + 2}
+            WHERE id = $1
+          `,
+          args: [sessionId, ...columns.map(([, value]) => value), updatedAt],
+        });
+      }
+      await transaction.commit();
+      committed = true;
+      return true;
+    } finally {
+      if (!committed) {
+        transaction.close();
+      }
+    }
+  }
+
   /** 모든 정기 회차 제외 날짜(날짜 내림차순) */
   async findAllRegularSessionSkips(): Promise<RegularSessionSkip[]> {
     const rows: Array<{ dateKey: string; reason: string }> = await this.db
@@ -2494,7 +2708,10 @@ export class MatchRepository {
     }
   }
 
-  private async ensureSession(session: Session): Promise<string> {
+  private async ensureSession(
+    session: Session,
+    kind: NonRegularSessionKind = "custom",
+  ): Promise<string> {
     if (!isEntityId(session.id, "session")) {
       throw new Error("유효한 세션 ID가 필요합니다.");
     }
@@ -2524,6 +2741,7 @@ export class MatchRepository {
           name,
           date,
           location,
+          kind,
           startTime: session.startTime ?? null,
           endTime: session.endTime ?? null,
           createdAt: now,

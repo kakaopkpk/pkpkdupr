@@ -10,6 +10,7 @@ import {
   getMonthGrid,
   getSessionDateKey,
 } from "./sessionDates";
+import { SESSION_KIND_PILL_CLASS } from "./sessionKind";
 
 const SKIP_LABELS: Record<AdminRegularSessionSkip["reason"], string> = {
   canceled: "쉬는 날",
@@ -194,9 +195,7 @@ export const SessionCalendar: React.FC<{
                           "focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-pk-primary",
                           isPastDay
                             ? "bg-pk-divider text-pk-sub hover:bg-pk-neutral"
-                            : session.kind === "regular"
-                              ? "bg-pk-primary text-white hover:bg-pk-deep"
-                              : "border border-pk-primary-line bg-white text-pk-primary hover:bg-pk-primary-soft",
+                            : SESSION_KIND_PILL_CLASS[session.kind],
                         )}
                       >
                         {label}

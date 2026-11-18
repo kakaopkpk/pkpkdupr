@@ -117,6 +117,7 @@ const SessionsPage: React.FC = () => {
       players={players}
       loadMatches={loadMatches}
       onClose={closePanel}
+      onEdit={(session) => setFormMode({ kind: "edit", session })}
     />
   ) : (
     <UpcomingSessionPanel

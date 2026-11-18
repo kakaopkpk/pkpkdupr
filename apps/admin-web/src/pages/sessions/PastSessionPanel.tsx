@@ -4,6 +4,7 @@ import type { ManagedMatchSession, Match } from "@pkpkdupr/shared/match";
 import type { AdminPlayer } from "@pkpkdupr/shared/player";
 import type { MatchSessionReport, SessionPlayerReport } from "@pkpkdupr/shared/ranking";
 import { fetchSessionReport } from "../../api/sessions";
+import { Button } from "../../components/ui/Button";
 import { DetailPanel, PanelSection } from "../../components/ui/DetailPanel";
 import { PlayerAvatar } from "../../components/ui/PlayerAvatar";
 import { RatingDelta } from "../../components/ui/RatingDelta";
@@ -41,14 +42,15 @@ const CountLine: React.FC<{ label: string; value: number; extra?: string | null 
   </p>
 );
 
-/** 지난 세션 패널(보기 전용). 수정·삭제·참여자 편집이 없다 */
+/** 지난 세션 패널. 이름·종류·장소 수정만 있고 삭제·참여자 편집은 없다 */
 export const PastSessionPanel: React.FC<{
   session: ManagedMatchSession;
   players: AdminPlayer[];
   /** 관리자 경기 목록. 세션의 평점 미반영 경기 수를 센다 */
   loadMatches: () => Promise<Match[]>;
   onClose: () => void;
-}> = ({ session, players, loadMatches, onClose }) => {
+  onEdit: (session: ManagedMatchSession) => void;
+}> = ({ session, players, loadMatches, onClose, onEdit }) => {
   const [report, setReport] = useState<MatchSessionReport | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [excludedCount, setExcludedCount] = useState<number | null>(null);
@@ -102,6 +104,10 @@ export const PastSessionPanel: React.FC<{
       subtitle={formatSessionSubtitle(session, "끝남")}
       onClose={onClose}
     >
+      <Button variant="soft" size="sm" onClick={() => onEdit(session)}>
+        이름·종류·장소 수정
+      </Button>
+
       <section className="space-y-1">
         <CountLine
           label="경기"

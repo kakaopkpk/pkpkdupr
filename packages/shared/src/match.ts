@@ -132,7 +132,7 @@ export interface ManagedMatchSession {
   location: string;
   participantIds: string[];
   matchCount: number;
-  /** 정기 세션 날짜 키(regular_date_key)가 있으면 "regular" */
+  /** 정기·회원·대회. 정기 세션만 날짜당 하나다 */
   kind: MatchSessionKind;
   /** 시작·종료 시각("HH:MM", KST). 정기 세션은 18:00~22:00, 시각 없이 만든 세션은 null */
   startTime: string | null;

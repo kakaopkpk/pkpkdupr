@@ -75,7 +75,8 @@ export const compareSessionsInDay = (
   a: ManagedMatchSession,
   b: ManagedMatchSession,
 ): number => {
-  if (a.kind !== b.kind) return a.kind === "regular" ? -1 : 1;
+  const regularOrder = Number(b.kind === "regular") - Number(a.kind === "regular");
+  if (regularOrder !== 0) return regularOrder;
   const aTime = a.startTime ?? NO_START_TIME_SORT_KEY;
   const bTime = b.startTime ?? NO_START_TIME_SORT_KEY;
   if (aTime !== bTime) return aTime < bTime ? -1 : 1;

@@ -20,7 +20,18 @@ export const MATCH_SESSION_LOCATION_MAX_LENGTH = 30;
 /** 점수 없는 진행 중 경기가 무효로 삭제되기까지의 시간(시작 시각 기준) */
 export const IN_PROGRESS_MATCH_TIMEOUT_MS = 2 * 60 * 60 * 1000;
 
-export type MatchSessionKind = "regular" | "custom";
+/** 세션 종류: 정기(regular)·회원(custom)·대회(tournament) */
+export type MatchSessionKind = "regular" | "custom" | "tournament";
+
+export const MATCH_SESSION_KINDS: readonly MatchSessionKind[] = [
+  "regular",
+  "custom",
+  "tournament",
+];
+
+export const isMatchSessionKind = (value: unknown): value is MatchSessionKind =>
+  typeof value === "string" &&
+  (MATCH_SESSION_KINDS as readonly string[]).includes(value);
 
 // KST는 일광절약이 없는 고정 UTC+9다. Intl 시간대 데이터 없이 계산해 런타임마다 같게 동작한다.
 const KST_OFFSET_MS = 9 * 60 * 60 * 1000;
@@ -203,8 +214,8 @@ export const isValidKstDateKey = (value: string): boolean =>
   toKstDateKey(kstDateKeyToDate(value)) === value;
 
 /**
- * 경기가 하나도 없는 세션이 사라지는 시각. 정기=그날 22:00 KST, 그 외=다음 날 00:00 KST.
- * 회원 세션이 자정을 넘겨 끝나면 다음 날 종료 시각까지 남긴다
+ * 경기가 하나도 없는 세션이 사라지는 시각. 정기=그날 22:00 KST, 그 외(회원·대회)=다음 날 00:00 KST.
+ * 회원·대회 세션이 자정을 넘겨 끝나면 다음 날 종료 시각까지 남긴다
  */
 export const getEmptySessionExpiresAt = (
   kind: MatchSessionKind,
@@ -349,10 +360,27 @@ export interface StartSessionMatchRequest {
   courtName?: string;
 }
 
-/** PATCH /api/admin/match-sessions/:sessionId 요청. 회원 세션만 고칠 수 있다. 생략한 필드는 그대로. 응답은 ManagedMatchSession */
+/**
+ * POST /api/admin/match-sessions 요청. 응답은 ManagedMatchSession.
+ * 대회·회원 세션은 회원 세션 만들기와 같은 규칙이다. 정기 세션은 그 날짜의 정기 세션이 되고 시각을 무시한다
+ * (이미 그날 정기 세션이 있거나 쉬는 날이면 409)
+ */
+export interface AdminCreateMatchSessionRequest extends CreateMatchSessionRequest {
+  kind: MatchSessionKind;
+}
+
+/**
+ * PATCH /api/admin/match-sessions/:sessionId 요청. 생략한 필드는 그대로. 응답은 ManagedMatchSession.
+ * 이름·장소·종류는 모든 세션에서 고친다. 날짜·시각은 오늘·미래의 정기가 아닌 세션만 고친다
+ */
 export interface AdminUpdateMatchSessionRequest {
   name?: string;
   location?: string;
+  /**
+   * 정기로 바꾸면 그 날짜의 정기 세션(18:00~22:00)이 된다(이미 있거나 쉬는 날이면 409).
+   * 정기에서 바꾸면 18:00~22:00 시각을 가진 세션이 되고, 오늘·미래 날짜는 취소 쉬는 날로 남는다
+   */
+  kind?: MatchSessionKind;
   /** KST 날짜 키(YYYY-MM-DD). 오늘 이후만 */
   dateKey?: string;
   /** "HH:MM" KST. 둘 다 보내거나 둘 다 생략한다. 둘 다 null이면 시각 없는 세션 */

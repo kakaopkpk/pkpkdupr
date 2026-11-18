@@ -339,6 +339,7 @@ export const buildImportPlan = (
       .filter((session) => !legacyRegularSessionIds.has(str(session, "id")))
       .map((session) => ({
         ...pick(session, ["id", "name", "date", "location", "created_at", "updated_at"]),
+        kind: "custom",
         regular_date_key: null,
         start_time: null,
         end_time: null,
@@ -350,6 +351,7 @@ export const buildImportPlan = (
       location: REGULAR_SESSION_LOCATION,
       created_at: session.createdAt,
       updated_at: session.updatedAt,
+      kind: "regular",
       regular_date_key: dateKey,
       start_time: null,
       end_time: null,

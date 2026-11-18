@@ -9,6 +9,7 @@
 - 공통 UI는 `src/components/ui/`, 레이아웃은 `src/components/layout/`에 둔다. 웹(`apps/web`)의 `components/ui`는 모바일 전제라 가져오지 않고, 토큰 값만 맞춘 어드민 전용 컴포넌트를 쓴다.
 - 다른 화면으로 보내는 링크는 `lib/adminRoutes.ts`의 `membersPath`·`matchesPath`·`sessionsPath`·`ratingsPath`로 만들고, 받는 화면은 `parse*Params`로 읽는다. 쿼리 키를 직접 쓰지 않는다.
 - 날짜·시각·평점 표시는 `lib/format.ts`(KST 기준)를 쓴다.
+- 세션 종류 이름·색(정기 블루 채움, 회원 세션 흰 바탕 블루 테두리, 대회 `pk-ink` 채움)은 `pages/sessions/sessionKind.ts`에서만 정한다. 세션 만들기·수정(`SessionFormDialog`)에서 종류를 고른다.
 - API는 `src/api/`의 도메인별 클라이언트 함수(`players`·`matches`·`sessions`·`ratings`, 공통 처리 `client.ts`)로 부른다. 화면에서 `apiFetch`(`lib/api.ts`)·`fetch`를 직접 부르지 않는다.
 
 ## 디자인 규칙

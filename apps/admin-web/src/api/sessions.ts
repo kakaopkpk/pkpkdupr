@@ -2,11 +2,11 @@ import type { ManagedMatchSession } from "@pkpkdupr/shared/match";
 import type { MatchSessionReport } from "@pkpkdupr/shared/ranking";
 import type {
   AdminAddRegularSessionSkipRequest,
+  AdminCreateMatchSessionRequest,
   AdminRegularSessionSkip,
   AdminRegularSessionSkipsResponse,
   AdminRevertRegularSessionSkipResponse,
   AdminUpdateMatchSessionRequest,
-  CreateMatchSessionRequest,
   MatchSessionDetail,
   TodayMatchSessionsResponse,
   UpcomingMatchSessionsResponse,
@@ -30,8 +30,11 @@ export const fetchUpcomingSessions = () =>
 export const fetchSessionReport = (sessionId: string) =>
   apiJson<MatchSessionReport>(`/api/session-reports/${sessionPath(sessionId)}`);
 
-export const createSession = (body: CreateMatchSessionRequest) =>
-  apiJson<MatchSessionDetail>("/api/match-sessions", { method: "POST", body });
+export const createSession = (body: AdminCreateMatchSessionRequest) =>
+  apiJson<ManagedMatchSession>("/api/admin/match-sessions", {
+    method: "POST",
+    body,
+  });
 
 export const updateSession = (
   sessionId: string,
