@@ -76,7 +76,7 @@ const PlayerNameCell: React.FC<{ player: RankingEntryPlayer }> = ({
   </span>
 );
 
-/** 줄 아바타 32. 연승 중이면 불꽃 후광과 연승 수를 붙인다 */
+/** 줄 아바타 32. 연승 중이면 앰버 링과 연승 수 태그를 붙인다 */
 const RankingAvatar: React.FC<{
   entry: { player: RankingEntryPlayer; winStreak?: number };
 }> = ({ entry }) => (

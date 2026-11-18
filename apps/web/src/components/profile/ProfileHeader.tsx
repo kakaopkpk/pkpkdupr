@@ -35,7 +35,7 @@ export interface ProfileHeaderProps {
   player: { id: string; username: string; avatarUrl?: string | null } | null;
   statusMessage?: string | null;
   statusMessageBackgroundColor?: string | null;
-  /** 프로필 요약의 winStreak. 연승 중이면 아바타에 불꽃 후광과 "N연승" 태그를 붙인다 */
+  /** 프로필 요약의 winStreak. 연승 중이면 아바타에 앰버 링과 "N연승" 태그를 붙인다 */
   winStreak?: number | null;
   /** 프로필 요약의 matchStats. 없으면 불러오는 중(스켈레톤)이거나 숨김(hideStats)이다 */
   matchStats: PlayerProfileSummaryInfo["matchStats"] | null | undefined;

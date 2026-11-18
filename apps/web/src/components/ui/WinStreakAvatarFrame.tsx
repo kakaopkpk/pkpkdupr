@@ -61,14 +61,16 @@ export const WinStreakAvatarFrame: React.FC<{
     >
       {children}
       <span
-        aria-label={`${winStreak}연승 중`}
         className={cx(
           "absolute left-1/2 inline-flex -translate-x-1/2 items-center gap-px rounded-full bg-pk-hl text-pk-12 leading-none font-extrabold whitespace-nowrap text-pk-ink tabular-nums shadow-[0_0_0_2px_var(--color-white)]",
           TAG_CLASS_NAME[size],
         )}
       >
-        <FlameIcon size={size === "sm" ? 10 : 12} />
-        {size === "sm" ? winStreak : `${winStreak}연승`}
+        <span aria-hidden="true" className="inline-flex items-center gap-px">
+          <FlameIcon size={size === "sm" ? 10 : 12} />
+          {size === "sm" ? winStreak : `${winStreak}연승`}
+        </span>
+        <span className="sr-only">{winStreak}연승 중</span>
       </span>
     </span>
   );
