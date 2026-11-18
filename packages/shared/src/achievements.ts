@@ -709,15 +709,15 @@ const METRIC_COUNT_START: Record<AchievementMetric, Date | null> = {
   bestOpponentWins: SECOND_ACHIEVEMENT_SET_COUNT_START,
 };
 
+const BEST_STREAK_METRICS: ReadonlySet<AchievementMetric> = new Set([
+  "bestStreak",
+  "bestPartnerStreak",
+  "bestRegularSessionStreak",
+]);
+
 /** 진행도가 누적 수가 아니라 최고 연속 기록인 업적(연승·환상의 콤비·개근상) */
-export const isBestStreakAchievement = (achievementId: string) => {
-  const metric = ACHIEVEMENT_METRIC_BY_ID.get(achievementId);
-  return (
-    metric === "bestStreak" ||
-    metric === "bestPartnerStreak" ||
-    metric === "bestRegularSessionStreak"
-  );
-};
+export const isBestStreakAchievement = (achievementId: string) =>
+  BEST_STREAK_METRICS.has(ACHIEVEMENT_METRIC_BY_ID.get(achievementId)!);
 
 /** 평점 업적(높은 평점 3.0~4.5, 낮은 평점 2.5·2.0). 진행도는 복식 평점이다 */
 export const isRatingAchievement = (achievementId: string) => {
@@ -728,16 +728,6 @@ export const isRatingAchievement = (achievementId: string) => {
 /** 낮은 평점 업적(2.5·2.0 이하). 진행도는 최저 복식 평점이고 목표 이하가 되면 받는다 */
 export const isLowRatingAchievement = (achievementId: string) =>
   ACHIEVEMENT_METRIC_BY_ID.get(achievementId) === "lowestDoublesRating";
-
-/** 다른 회원의 기록이 있어야 계산되는 업적(연승 저지·환영 인사·개근상). ClubFacts 참고 */
-export const isClubRecordAchievement = (achievementId: string) => {
-  const metric = ACHIEVEMENT_METRIC_BY_ID.get(achievementId);
-  return (
-    metric === "streakBreaks" ||
-    metric === "welcomes" ||
-    metric === "bestRegularSessionStreak"
-  );
-};
 
 /** 평점 업적에 필요한 평점 반영 복식 경기 수. 이 경기 수를 채운 뒤의 평점만 센다 */
 export const RATING_ACHIEVEMENT_MIN_DOUBLES_MATCHES = 10;
@@ -940,33 +930,25 @@ const RATING_EPSILON = 1e-9;
 
 /** 경기 직전 팀 평균 평점. 평점이 없는 선수는 DUPR_DEFAULT_RATING으로 친다 */
 const getTeamAverageRatingBefore = (
-  match: AchievementMatch,
-  teamIndex: 0 | 1,
   ratingBefore: Readonly<Record<string, number | null>>,
-) => {
-  const players = match.teams[teamIndex].players;
-  if (players.length === 0) return null;
-  const total = players.reduce(
+  team: AchievementTeam,
+) =>
+  team.players.reduce(
     (sum, player) => sum + (ratingBefore[player.id] ?? DUPR_DEFAULT_RATING),
     0,
-  );
-  return total / players.length;
-};
+  ) / team.players.length;
 
 /** 경기 직전 상대 팀 평균 평점이 우리 팀보다 UNDERDOG_MIN_RATING_GAP 이상 높았다 */
 const isUnderdogMatch = (match: AchievementMatch, teamIndex: 0 | 1) => {
-  if (!match.ratingBefore) return false;
-  const mine = getTeamAverageRatingBefore(match, teamIndex, match.ratingBefore);
+  const ratingBefore = match.ratingBefore;
+  if (!ratingBefore) return false;
+  const mine = getTeamAverageRatingBefore(ratingBefore, match.teams[teamIndex]);
   const theirs = getTeamAverageRatingBefore(
-    match,
-    teamIndex === 0 ? 1 : 0,
-    match.ratingBefore,
+    ratingBefore,
+    match.teams[teamIndex === 0 ? 1 : 0],
   );
-  return (
-    mine != null &&
-    theirs != null &&
-    theirs - mine >= UNDERDOG_MIN_RATING_GAP - RATING_EPSILON
-  );
+  // 빈 팀이면 평균이 NaN이라 비교가 거짓이 된다
+  return theirs - mine >= UNDERDOG_MIN_RATING_GAP - RATING_EPSILON;
 };
 
 /**
@@ -981,6 +963,13 @@ interface ClubFacts {
   /** 정기 세션 id → 경기가 열린 정기 회차 중 몇 번째인지(0부터, 첫 경기 완료 순) */
   regularSessionOrdinalById: Map<string, number>;
 }
+
+/** 다른 회원 기록이 없을 때 쓰는 빈 값. 연승 저지·환영 인사·개근상이 모두 0이 된다 */
+const EMPTY_CLUB_FACTS: ClubFacts = {
+  streaksBeforeByMatchId: new Map(),
+  firstMatchIdByPlayerId: new Map(),
+  regularSessionOrdinalById: new Map(),
+};
 
 /** 같은 경기 목록으로 회원마다 업적을 계산할 때 ClubFacts를 다시 구하지 않게 한다 */
 const clubFactsCache = new WeakMap<readonly AchievementMatch[], ClubFacts>();
@@ -1362,16 +1351,18 @@ const computeProgressSince = (
  * 복식 경기 직후 평점)에서 시작해, 그때 이미 경기 수와 기준을 채웠으면 그 경기로 받는다.
  * 그 전 최고치·최저치는 세지 않는다.
  * 연승 저지(상대의 경기 직전 연승)·환영 인사(파트너의 첫 경기)·개근상(정기 회차 순서)은 다른 회원의 기록이
- * 필요하므로 matches에는 이 회원의 경기만이 아니라 동호회 전체 완료 경기를 넘긴다.
+ * 필요하므로 matches에는 동호회 전체 완료 경기를 넘긴다. 이 회원의 경기만 넘길 수밖에 없으면
+ * clubMatches를 false로 주고, 그 업적들은 잘못 받지 않도록 세지 않는다.
  * 언더독은 경기 직전 평점(ratingBefore)이 있는 경기만 센다.
  */
 export function computeAchievements(
   playerId: string,
   matches: readonly AchievementMatch[],
   dominatedSessionIds: ReadonlySet<string> = NO_SESSIONS,
+  { clubMatches = true }: { clubMatches?: boolean } = {},
 ): AchievementProgress[] {
   const playerMatches = getPlayerCountedMatches(playerId, matches);
-  const facts = getClubFacts(matches);
+  const facts = clubMatches ? getClubFacts(matches) : EMPTY_CLUB_FACTS;
   /** 집계 시작 시각(ms, 전체 기록은 null) → 그 시각부터 계산한 진행 상태 */
   const progressByStart = new Map<number | null, AchievementProgress[]>();
   return ACHIEVEMENTS.map((definition, index) => {

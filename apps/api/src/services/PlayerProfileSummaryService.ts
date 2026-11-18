@@ -1,6 +1,5 @@
 import {
   computeAchievements,
-  isClubRecordAchievement,
   type AchievementMatch,
   type AchievementProgress,
 } from "@pkpkdupr/shared/achievements";
@@ -299,7 +298,12 @@ export const buildPlayerProfileSummary = (
     headToHead,
     achievements: achievementMatches
       ? computeAchievements(playerId, achievementMatches, dominatedSessionIds)
-      : computeOwnMatchAchievements(playerId, matches, dominatedSessionIds),
+      : computeAchievements(
+          playerId,
+          withDoublesRatingAfter(matches),
+          dominatedSessionIds,
+          { clubMatches: false },
+        ),
     winStreak: computeCurrentWinStreak(
       completedMatches.map((match) => ({
           id: match.id,
@@ -315,31 +319,6 @@ export const buildPlayerProfileSummary = (
     ),
   };
 };
-
-/**
- * 이 회원 경기만으로 계산한 업적. 다른 회원 기록이 필요한 업적은 이 경기들만으로는
- * 파트너 첫 경기·정기 회차를 알 수 없어 잘못 받을 수 있으므로 받지 않은 상태로 둔다
- */
-const computeOwnMatchAchievements = (
-  playerId: string,
-  matches: readonly MatchWithRatingChanges[],
-  dominatedSessionIds?: ReadonlySet<string>,
-): AchievementProgress[] =>
-  computeAchievements(
-    playerId,
-    withDoublesRatingAfter(matches),
-    dominatedSessionIds,
-  ).map((item) =>
-    isClubRecordAchievement(item.id)
-      ? {
-          ...item,
-          earned: false,
-          earnedAt: null,
-          earnedMatchId: null,
-          current: 0,
-        }
-      : item,
-  );
 
 /** 경기에 붙은 평점 변경 로그로 경기 직후 선수별 복식 평점(평점 업적 입력)을 붙인다 */
 const withDoublesRatingAfter = (

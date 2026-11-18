@@ -710,44 +710,47 @@ export const buildSessionReport = ({
   };
 };
 
+/** map[matchId][playerId] = rating */
+const setMatchRating = (
+  map: Map<string, Record<string, number>>,
+  matchId: string,
+  playerId: string,
+  rating: number,
+) => {
+  const ratings = map.get(matchId) ?? {};
+  ratings[playerId] = rating;
+  map.set(matchId, ratings);
+};
+
 /**
- * 경기 id별 그 경기 직후 선수별 복식 평점(평점 업적 입력).
- * 같은 경기·선수의 로그가 여럿이면 가장 늦게 쓴 로그를 쓴다.
+ * 경기 id별 선수별 업적 평점 입력. 같은 경기·선수의 로그가 여럿이면 가장 늦게 쓴 로그를 쓴다.
+ * - doublesAfter: 경기 직후 복식 평점(평점 업적)
+ * - before: 경기 직전 평점(그 경기 분류, 언더독). categoryByMatchId에 없는 경기는 넣지 않는다
  */
-export const buildDoublesRatingAfterByMatchId = (
+const buildMatchRatingInputs = (
   logs: readonly PlayerRatingChangeLog[],
-): Map<string, Record<string, number>> => {
-  const ratingsByMatchId = new Map<string, Record<string, number>>();
+  categoryByMatchId?: ReadonlyMap<string, MatchTopLevelType>,
+) => {
+  const doublesAfter = new Map<string, Record<string, number>>();
+  const before = new Map<string, Record<string, number>>();
   // createdAt 순으로 덮어써 마지막 값이 가장 늦게 쓴 로그가 된다
   for (const log of [...logs].sort(byCreatedAtAsc)) {
     const matchId = getLogMatchId(log);
     if (!matchId) continue;
-    const ratings = ratingsByMatchId.get(matchId) ?? {};
-    ratings[log.playerId] = log.nextRating.doubles;
-    ratingsByMatchId.set(matchId, ratings);
+    setMatchRating(doublesAfter, matchId, log.playerId, log.nextRating.doubles);
+    const category = categoryByMatchId?.get(matchId);
+    if (category) {
+      setMatchRating(before, matchId, log.playerId, log.previousRating[category]);
+    }
   }
-  return ratingsByMatchId;
+  return { doublesAfter, before };
 };
 
-/**
- * 경기 id별 그 경기 직전 선수별 평점(그 경기 분류, 언더독 업적 입력).
- * 같은 경기·선수의 로그가 여럿이면 가장 늦게 쓴 로그를 쓴다.
- */
-export const buildRatingBeforeByMatchId = (
+/** 경기 id별 그 경기 직후 선수별 복식 평점(평점 업적 입력) */
+export const buildDoublesRatingAfterByMatchId = (
   logs: readonly PlayerRatingChangeLog[],
-  categoryByMatchId: ReadonlyMap<string, MatchTopLevelType>,
-): Map<string, Record<string, number>> => {
-  const ratingsByMatchId = new Map<string, Record<string, number>>();
-  for (const log of [...logs].sort(byCreatedAtAsc)) {
-    const matchId = getLogMatchId(log);
-    const category = matchId ? categoryByMatchId.get(matchId) : undefined;
-    if (!matchId || !category) continue;
-    const ratings = ratingsByMatchId.get(matchId) ?? {};
-    ratings[log.playerId] = log.previousRating[category];
-    ratingsByMatchId.set(matchId, ratings);
-  }
-  return ratingsByMatchId;
-};
+): Map<string, Record<string, number>> =>
+  buildMatchRatingInputs(logs).doublesAfter;
 
 /** 완료 경기 요약을 업적 계산 입력으로 바꾼다 */
 export const toAchievementMatch = (
@@ -772,23 +775,26 @@ export const toAchievementMatch = (
   ratingBefore,
 });
 
-/** 완료 경기 요약에 평점 변경 로그로 평점 업적·언더독 입력까지 붙여 업적 계산 입력으로 바꾼다 */
+/**
+ * 완료 경기 요약에 평점 변경 로그로 평점 업적·언더독 입력까지 붙여 업적 계산 입력으로 바꾼다.
+ * categoryByMatchId(경기 분류)는 이미 있으면 넘기고, 없으면 matches로 만든다
+ */
 export const toAchievementMatches = (
   matches: readonly RankingMatch[],
   logs: readonly PlayerRatingChangeLog[],
+  categoryByMatchId: ReadonlyMap<string, MatchTopLevelType> = new Map(
+    matches.map((match) => [match.id, getMatchTopLevelType(match.type)]),
+  ),
 ): AchievementMatch[] => {
-  const ratingsAfterByMatchId = buildDoublesRatingAfterByMatchId(logs);
-  const ratingsBeforeByMatchId = buildRatingBeforeByMatchId(
+  const { doublesAfter, before } = buildMatchRatingInputs(
     logs,
-    new Map(
-      matches.map((match) => [match.id, getMatchTopLevelType(match.type)]),
-    ),
+    categoryByMatchId,
   );
   return matches.map((match) =>
     toAchievementMatch(
       match,
-      ratingsAfterByMatchId.get(match.id),
-      ratingsBeforeByMatchId.get(match.id),
+      doublesAfter.get(match.id),
+      before.get(match.id),
     ),
   );
 };
@@ -798,6 +804,7 @@ export const toContextAchievementMatches = (context: RankingContext) =>
   toAchievementMatches(
     context.matches,
     [...context.logsByPlayerId.values()].flat(),
+    context.categoryByMatchId,
   );
 
 /** 한 회원이 지금 받은 업적(ACHIEVEMENTS 순서). 세션 지배자는 끝난 세션 기준이다 */
