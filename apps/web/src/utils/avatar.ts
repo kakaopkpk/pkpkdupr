@@ -1,54 +1,43 @@
-const MAX_AVATAR_SIZE = 128;
+import { type AvatarCropRect, getAvatarCropOutputSize } from "./avatarCrop";
+
+const MAX_AVATAR_SIZE = 512;
 const AVATAR_JPEG_QUALITY = 0.85;
 
-const readImage = (src: string) =>
-  new Promise<HTMLImageElement>((resolve, reject) => {
-    const image = new Image();
-    image.onload = () => resolve(image);
-    image.onerror = () => reject(new Error("이미지를 읽지 못했습니다."));
-    image.src = src;
-  });
-
-export const resizeAvatarImage = async (file: File) => {
+/** 고른 파일이 이미지인지 확인하고 조정 화면에 띄울 object URL을 만든다. 다 쓰면 URL.revokeObjectURL로 해제한다 */
+export const createAvatarSourceUrl = (file: File) => {
   if (!file.type.startsWith("image/")) {
     throw new Error("이미지 파일만 선택할 수 있습니다.");
   }
+  return URL.createObjectURL(file);
+};
 
-  const objectUrl = URL.createObjectURL(file);
+/** 원본 사진의 rect 영역을 정사각형 JPEG data URL로 그린다. 원본 영역이 MAX_AVATAR_SIZE보다 작으면 키우지 않는다 */
+export const cropAvatarImage = (
+  image: HTMLImageElement,
+  rect: AvatarCropRect,
+) => {
+  const outputSize = getAvatarCropOutputSize(rect.size, MAX_AVATAR_SIZE);
+  const canvas = document.createElement("canvas");
+  canvas.width = outputSize;
+  canvas.height = outputSize;
 
-  try {
-    const image = await readImage(objectUrl);
-    const sourceSize = Math.min(image.naturalWidth, image.naturalHeight);
-    if (!sourceSize) {
-      throw new Error("이미지 크기를 확인하지 못했습니다.");
-    }
-
-    const outputSize = Math.min(MAX_AVATAR_SIZE, sourceSize);
-    const sourceX = Math.floor((image.naturalWidth - sourceSize) / 2);
-    const sourceY = Math.floor((image.naturalHeight - sourceSize) / 2);
-    const canvas = document.createElement("canvas");
-    canvas.width = outputSize;
-    canvas.height = outputSize;
-
-    const context = canvas.getContext("2d");
-    if (!context) {
-      throw new Error("이미지를 처리하지 못했습니다.");
-    }
-
-    context.drawImage(
-      image,
-      sourceX,
-      sourceY,
-      sourceSize,
-      sourceSize,
-      0,
-      0,
-      outputSize,
-      outputSize,
-    );
-
-    return canvas.toDataURL("image/jpeg", AVATAR_JPEG_QUALITY);
-  } finally {
-    URL.revokeObjectURL(objectUrl);
+  const context = canvas.getContext("2d");
+  if (!context) {
+    throw new Error("이미지를 처리하지 못했습니다.");
   }
+
+  context.imageSmoothingQuality = "high";
+  context.drawImage(
+    image,
+    rect.x,
+    rect.y,
+    rect.size,
+    rect.size,
+    0,
+    0,
+    outputSize,
+    outputSize,
+  );
+
+  return canvas.toDataURL("image/jpeg", AVATAR_JPEG_QUALITY);
 };
