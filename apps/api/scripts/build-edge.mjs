@@ -17,10 +17,17 @@ const outfile = path.join(repoRoot, "supabase/functions/api/dist/api.js");
 const builtins = new Set(builtinModules.filter((name) => !name.startsWith("_")));
 
 /**
- * 외부 import 대신 번들에 넣는 npm 패키지. pnpm-workspace.yaml patchedDependencies와 맞춘다.
- * - postgres: Deno에서 비운 쓰기 버퍼(null)를 소켓에 써 워커가 죽는 문제를 patches/postgres@*.patch로 막는다.
+ * 외부 import 대신 번들에 넣는 npm 패키지. pnpm-workspace.yaml의 patchedDependencies 키
+ * (`<name>@<version>`)에서 이름만 읽는다. 패치한 패키지를 npm:으로 받으면 Deno가 원본을 쓰기 때문이다.
  */
-const BUNDLED_PACKAGES = new Set(["postgres"]);
+const readPatchedPackageNames = () => {
+  const workspace = readFileSync(path.join(repoRoot, "pnpm-workspace.yaml"), "utf8");
+  const block = workspace.match(/^patchedDependencies:\n((?:[ \t]+.*\n?)*)/m)?.[1] ?? "";
+  return new Set(
+    [...block.matchAll(/^\s+['"]?(.+)@[^@'"\s]+['"]?:/gm)].map((match) => match[1]),
+  );
+};
+const BUNDLED_PACKAGES = readPatchedPackageNames();
 
 const splitPackageName = (specifier) => {
   const parts = specifier.split("/");
@@ -54,15 +61,12 @@ const denoExternalsPlugin = {
       if (args.path.startsWith("node:")) {
         return { path: args.path, external: true };
       }
-      if (builtins.has(splitPackageName(args.path).name)) {
+      const { name, subpath } = splitPackageName(args.path);
+      if (builtins.has(name)) {
         return { path: `node:${args.path}`, external: true };
       }
-      // 워크스페이스 패키지는 tsconfig paths로 소스를 번들한다.
-      if (args.path.startsWith("@pkpkdupr/")) {
-        return undefined;
-      }
-      const { name, subpath } = splitPackageName(args.path);
-      if (BUNDLED_PACKAGES.has(name)) {
+      // 워크스페이스 패키지는 tsconfig paths로, 패치한 패키지는 설치된 소스로 번들한다.
+      if (args.path.startsWith("@pkpkdupr/") || BUNDLED_PACKAGES.has(name)) {
         return undefined;
       }
       const version = findInstalledVersion(name, args.resolveDir);
