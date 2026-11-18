@@ -174,6 +174,10 @@ export const startSessionMatch = async (
   );
 };
 
+/** 세션 종류 칩 문구 */
+export const getSessionKindLabel = (kind: MatchSessionDetailInfo["kind"]) =>
+  kind === "regular" ? "정기 세션" : "회원 세션";
+
 export const isSessionParticipant = (
   session: Pick<MatchSessionDetailInfo, "participants">,
   playerId: string | undefined,

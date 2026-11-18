@@ -1,13 +1,11 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { RecommendedCourt } from "@pkpkdupr/shared/matchmaking";
 import { toKstDateKey } from "@pkpkdupr/shared/session";
-import type { MatchInfo } from "@/types/match";
+import { getMatchPlayerIds, type MatchInfo } from "@/types/match";
 import HomeSkeleton from "@/components/home/HomeSkeleton";
 import LastSessionFeed from "@/components/home/LastSessionFeed";
 import MyLiveMatchCard from "@/components/home/MyLiveMatchCard";
-import NextSessionCard, {
-  type ParticipationAction,
-} from "@/components/home/NextSessionCard";
+import NextSessionCard from "@/components/home/NextSessionCard";
 import RecommendationSection, {
   getCourtKey,
 } from "@/components/home/RecommendationSection";
@@ -20,6 +18,7 @@ import { useSessionRecommendations } from "@/components/home/useSessionRecommend
 import { useSessionTopRiser } from "@/components/home/useSessionTopRiser";
 import { TopRiserCard } from "@/components/records/SessionReportParts";
 import ParticipantsSheet from "@/components/session/ParticipantsSheet";
+import { useSessionParticipation } from "@/components/session/useSessionParticipation";
 import { getErrorMessage } from "@/components/session/saveError";
 import { isNetworkError } from "@/lib/errors";
 import { LivePill } from "@/components/ui/Badges";
@@ -35,17 +34,12 @@ import { useSystemNotice } from "@/context/SystemNoticeContext";
 import { useTabNavigation } from "@/context/TabNavigationContext";
 import { useMinuteClock } from "@/hooks/useMinuteClock";
 import {
-  addMatchSessionParticipant,
   isSessionParticipant,
   type MatchSessionDetailInfo,
-  removeMatchSessionParticipant,
   startSessionMatch,
 } from "@/lib/matchSessions";
 
 const EMPTY_IDS: readonly string[] = [];
-
-const getMatchPlayerIds = (match: MatchInfo) =>
-  match.teams.flatMap((team) => team.players.map((player) => player.id));
 
 const EmptyCard: React.FC<{ message: string }> = ({ message }) => (
   <Card>
@@ -111,9 +105,6 @@ const Home: React.FC = () => {
   const { showSaveFailure } = useSystemNotice();
   const now = useMinuteClock();
   const todayKey = toKstDateKey(now);
-  // 비동기 요청이 끝난 시점에 최신 dataVersion을 읽기 위한 ref
-  const dataVersionRef = useRef(dataVersion);
-  dataVersionRef.current = dataVersion;
 
   const liveSession = live.liveSession;
   const isLiveResolved = live.status !== "loading" || liveSession !== null;
@@ -148,74 +139,22 @@ const Home: React.FC = () => {
   // ── 다음 세션 참여·취소 ─────────────────────────────
   const nextSession = preSession.data?.upcoming.sessions[0] ?? null;
   const isJoinedNext = !!nextSession && isSessionParticipant(nextSession, playerId);
-  const [participation, setParticipation] = useState<{
-    action: ParticipationAction;
-    /** 성공 뒤 이 dataVersion 이상으로 새로 받은 데이터가 와야 버튼을 푼다. 요청 중이면 null */
-    awaitVersion: number | null;
-  } | null>(null);
-  const [participationError, setParticipationError] = useState<string | null>(
-    null,
-  );
+  const participation = useSessionParticipation({
+    playerId,
+    loadedVersion: preSession.loadedVersion,
+  });
+  const { reset: resetParticipation, clearError: clearParticipationError } =
+    participation;
 
+  // 진행 중 화면으로 바뀌면 다음 세션 카드가 사라지므로 기다리지 않는다
   useEffect(() => {
-    if (!participation) return;
-    // 진행 중 화면으로 바뀌면 다음 세션 카드가 사라지므로 기다리지 않는다
-    if (
-      !isPreSession ||
-      (participation.awaitVersion !== null &&
-        preSession.loadedVersion >= participation.awaitVersion)
-    ) {
-      setParticipation(null);
-    }
-  }, [isPreSession, participation, preSession.loadedVersion]);
+    if (!isPreSession) resetParticipation();
+  }, [isPreSession, resetParticipation]);
 
   // 다른 세션으로 바뀌면 이전 세션의 오류 문구를 지운다
   useEffect(() => {
-    setParticipationError(null);
-  }, [nextSession?.id]);
-
-  const changeParticipation = async (action: ParticipationAction) => {
-    if (!nextSession || !playerId || participation) return;
-
-    const sessionId = nextSession.id;
-    const run = async () => {
-      if (action === "join") {
-        await addMatchSessionParticipant(sessionId, playerId);
-      } else {
-        await removeMatchSessionParticipant(sessionId, playerId);
-      }
-      // notifyDataChanged가 dataVersion을 1 올리고 그 값으로 다시 받는다.
-      // 요청 중 다른 곳에서 올린 버전도 반영하도록 호출 직전의 최신 값을 기준으로 삼는다
-      const awaitVersion = dataVersionRef.current + 1;
-      notifyDataChanged();
-      return awaitVersion;
-    };
-
-    setParticipation({ action, awaitVersion: null });
-    setParticipationError(null);
-    try {
-      const awaitVersion = await run();
-      setParticipation({ action, awaitVersion });
-    } catch (err) {
-      setParticipation(null);
-      if (isNetworkError(err)) {
-        showSaveFailure({
-          onRetry: async () => {
-            await run();
-          },
-        });
-      } else {
-        setParticipationError(
-          getErrorMessage(
-            err,
-            action === "join"
-              ? "참여하지 못했어요."
-              : "참여를 취소하지 못했어요.",
-          ),
-        );
-      }
-    }
-  };
+    clearParticipationError();
+  }, [clearParticipationError, nextSession?.id]);
 
   // ── 진행 중 세션 ────────────────────────────────────
   // 세션 밖 경기까지 포함한 진행 중 경기. 경기 중인 선수 판단(대기 인원·참여 취소 잠금)에 쓴다
@@ -455,10 +394,10 @@ const Home: React.FC = () => {
             todayKey={todayKey}
             now={now}
             isJoined={isJoinedNext}
-            pendingAction={participation?.action ?? null}
-            error={participationError}
-            onJoin={() => void changeParticipation("join")}
-            onLeave={() => void changeParticipation("leave")}
+            pendingAction={participation.getPendingAction(nextSession.id)}
+            error={participation.getError(nextSession.id)}
+            onJoin={() => void participation.change(nextSession.id, "join")}
+            onLeave={() => void participation.change(nextSession.id, "leave")}
             onOpenParticipants={() => openParticipants(nextSession, EMPTY_IDS)}
           />
         ) : (

@@ -3,7 +3,7 @@ import {
   type CompletedMatchOutcome,
   type SessionWithParticipantIds,
 } from "@pkpkdupr/db";
-import type { Match } from "@pkpkdupr/shared/match";
+import type { ManagedMatchSession, Match } from "@pkpkdupr/shared/match";
 import type { Player, PlayerRatingChangeLog } from "@pkpkdupr/shared/player";
 import request from "supertest";
 import {
@@ -136,6 +136,7 @@ describe("랭킹·세션 리포트 API", () => {
     "/api/achievements/holders",
     "/api/me/achievements/unseen",
     "/api/records",
+    "/api/schedule?month=2026-11",
   ])("%s는 토큰이 없으면 401이다", async (path) => {
     const response = await request(app).get(path);
     expect(response.status).toBe(401);
@@ -535,6 +536,120 @@ describe("랭킹·세션 리포트 API", () => {
       "%s면 400이다",
       async (query) => {
         const response = await authorized(`/api/records?${query}`);
+        expect(response.status).toBe(400);
+      },
+    );
+  });
+
+  describe("GET /api/schedule", () => {
+    const toManaged = (
+      source: SessionWithParticipantIds,
+      matchCount: number,
+    ): ManagedMatchSession => ({
+      ...source,
+      matchCount,
+      createdAt: now,
+      updatedAt: now,
+    });
+    // 11-12 21:00 KST 기준: 11-09 세션은 완료 경기가 있고 끝남, 11-10 세션은 완료 경기 없이 끝남, 11-16 세션은 다가옴
+    const upcomingSession: SessionWithParticipantIds = {
+      ...session,
+      id: "Supcomi1",
+      date: new Date("2026-11-16T09:00:00.000Z"),
+      participantIds: [bob.id],
+    };
+    const standaloneMatch: CompletedMatchOutcome = {
+      ...match,
+      id: "Mstand01",
+      sessionId: null,
+      matchStartsAt: new Date("2026-11-11T09:00:00.000Z"),
+      completedAt: new Date("2026-11-11T09:30:00.000Z"),
+    };
+    // 10-31 23:00 KST라 11월이 아니다
+    const octoberMatch: CompletedMatchOutcome = {
+      ...standaloneMatch,
+      id: "Moctob01",
+      matchStartsAt: new Date("2026-10-31T14:00:00.000Z"),
+      completedAt: new Date("2026-10-31T14:30:00.000Z"),
+    };
+    let findSessionsInDateKeyRange: MockInstance<
+      MatchRepository["findSessionsInDateKeyRange"]
+    >;
+
+    beforeEach(() => {
+      vi.useFakeTimers({ toFake: ["Date"] });
+      vi.setSystemTime(now);
+      vi.spyOn(MatchRepository.prototype, "cleanupExpired").mockResolvedValue();
+      vi.spyOn(AuthService.prototype, "getPublicPlayers").mockResolvedValue([
+        alice,
+        bob,
+      ]);
+      findSessionsInDateKeyRange = vi
+        .spyOn(MatchRepository.prototype, "findSessionsInDateKeyRange")
+        .mockResolvedValue([
+          toManaged(session, 1),
+          // 취소·진행 중 경기만 있어 matchCount가 있어도 완료 경기가 없으면 뺀다
+          toManaged(emptySession, 1),
+          toManaged(upcomingSession, 0),
+        ]);
+      vi.spyOn(
+        MatchRepository.prototype,
+        "findCompletedMatchOutcomes",
+      ).mockResolvedValue([match, standaloneMatch, octoberMatch]);
+      vi.spyOn(MatchRepository.prototype, "findByIds").mockImplementation(
+        async (ids: string[]) =>
+          [standaloneMatch, octoberMatch]
+            .filter((outcome) => ids.includes(outcome.id))
+            .map(
+              (outcome) =>
+                ({
+                  id: outcome.id,
+                  status: "completed",
+                  matchStartsAt: outcome.matchStartsAt,
+                }) as unknown as Match,
+            ),
+      );
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it("그 달 세션(완료 경기 없이 끝난 세션 제외)과 그 달 기록 줄을 돌려준다", async () => {
+      const response = await authorized("/api/schedule?month=2026-11");
+
+      expect(response.status).toBe(200);
+      expect(findSessionsInDateKeyRange).toHaveBeenCalledWith(
+        "2026-11-01",
+        "2026-12-01",
+      );
+      expect(
+        response.body.sessions.map(
+          (item: { id: string; isEnded: boolean; participants: unknown[] }) => [
+            item.id,
+            item.isEnded,
+            item.participants.length,
+          ],
+        ),
+      ).toEqual([
+        [session.id, true, 2],
+        [upcomingSession.id, false, 1],
+      ]);
+      expect(
+        response.body.records.map(
+          (item: { kind: string; session?: { id: string }; match?: { id: string } }) =>
+            item.kind === "session" ? item.session?.id : item.match?.id,
+        ),
+      ).toEqual([standaloneMatch.id, session.id]);
+      expect(response.body.records[1].mine).toEqual(
+        expect.objectContaining({ player: expect.objectContaining({ id: alice.id }) }),
+      );
+    });
+
+    it.each(["", "?month=2026-13", "?month=2026-1", "?month=abc"])(
+      "month%s가 YYYY-MM이 아니면 400이다",
+      async (query) => {
+        const response = await authorized(`/api/schedule${query}`);
         expect(response.status).toBe(400);
       },
     );

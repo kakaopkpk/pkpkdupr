@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import type { MatchInfo } from "@/types/match";
 import type { TabKey } from "@/context/TabNavigationContext";
 import { useMinuteClock } from "@/hooks/useMinuteClock";
+import { PlusIcon } from "@/components/ui/Icons";
 import { formatElapsed } from "@/lib/format";
 import {
   PRESENCE_ENTER_CLASS,
@@ -23,12 +24,10 @@ const HomeIcon = () => (
   </svg>
 );
 
-const RecordsIcon = () => (
+const ScheduleIcon = () => (
   <svg width="22" height="22" strokeWidth={2} {...svgProps}>
-    <path d="M9 7h11M9 12h11M9 17h11" />
-    <circle cx="4.5" cy="7" r="1.3" fill="currentColor" stroke="none" />
-    <circle cx="4.5" cy="12" r="1.3" fill="currentColor" stroke="none" />
-    <circle cx="4.5" cy="17" r="1.3" fill="currentColor" stroke="none" />
+    <rect x="4" y="5" width="16" height="15" rx="3" />
+    <path d="M4 10h16M9 3v4M15 3v4" />
   </svg>
 );
 
@@ -42,12 +41,6 @@ const MeIcon = () => (
   <svg width="22" height="22" strokeWidth={2} {...svgProps}>
     <circle cx="12" cy="8" r="4" />
     <path d="M4 20c1.5-4 4.5-6 8-6s6.5 2 8 6" />
-  </svg>
-);
-
-export const PlusIcon = () => (
-  <svg width="28" height="28" strokeWidth={2.4} {...svgProps}>
-    <path d="M12 5v14M5 12h14" />
   </svg>
 );
 
@@ -71,7 +64,7 @@ export const TAB_ITEMS: {
   Icon: React.FC;
 }[] = [
   { key: "home", label: "홈", Icon: HomeIcon },
-  { key: "records", label: "기록", Icon: RecordsIcon },
+  { key: "schedule", label: "일정", Icon: ScheduleIcon },
   { key: "ranking", label: "랭킹", Icon: RankingIcon },
   { key: "me", label: "나", Icon: MeIcon },
 ];
@@ -210,7 +203,7 @@ export const PlusMenu: React.FC<{
         <span
           className={`flex transition-transform duration-[380ms] ease-pk-spring motion-reduce:transition-none ${isOpen ? "rotate-[135deg]" : ""}`}
         >
-          <PlusIcon />
+          <PlusIcon size={28} strokeWidth={2.4} />
         </span>
       </button>
     </div>

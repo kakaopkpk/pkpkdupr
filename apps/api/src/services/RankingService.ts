@@ -895,37 +895,29 @@ export type RecordsPageEntry =
   | RecordSessionItem
   | { kind: "match"; matchId: string };
 
+type RecordRow = RecordsCursor &
+  (
+    | { kind: "session"; session: RankingSession; matches: RankingMatch[] }
+    | { kind: "match"; match: RankingMatch }
+  );
+
+const compareRecordRows = (left: RecordsCursor, right: RecordsCursor) =>
+  right.atMs - left.atMs || compareText(right.id, left.id);
+
 /**
- * 기록 탭 목록 한 페이지. 완료 경기가 있는 세션과 세션 없는 완료 경기를
- * 정렬 시각(세션 date·경기 matchStartsAt) 내림차순 → id 내림차순으로 섞고 cursor 뒤에서 limit개를 자른다.
- * playerId를 주면 그 회원이 완료 경기를 뛴 세션·경기만 남긴다.
- * 세션 줄의 mine은 세션 리포트 players의 requesterId 줄이다(업적·지배자 계산은 하지 않는다).
+ * 기록 줄 후보. 완료 경기가 있는 세션과 세션 없는 완료 경기를 정렬 시각(세션 date·경기 matchStartsAt)
+ * 내림차순 → id 내림차순으로 섞는다. playerId를 주면 그 회원이 완료 경기를 뛴 세션·경기만 남긴다.
  */
-export const buildRecordsPage = ({
-  context,
-  sessions,
-  limit = SESSION_HISTORY_DEFAULT_LIMIT,
-  cursor,
-  playerId,
-  requesterId,
-}: {
-  context: RankingContext;
-  sessions: RankingSession[];
-  limit?: number;
-  cursor?: RecordsCursor | null;
-  playerId?: string;
-  requesterId: string;
-}): { entries: RecordsPageEntry[]; nextCursor: string | null } => {
+const collectRecordRows = (
+  context: RankingContext,
+  sessions: RankingSession[],
+  playerId: string | undefined,
+): RecordRow[] => {
   const hasPlayer = (match: RankingMatch) =>
     !playerId || match.teamPlayerIds.some((team) => team.includes(playerId));
   const matchesBySession = groupMatchesBySession(context.matches);
 
-  type Row = RecordsCursor &
-    (
-      | { kind: "session"; session: RankingSession; matches: RankingMatch[] }
-      | { kind: "match"; match: RankingMatch }
-    );
-  const rows: Row[] = [];
+  const rows: RecordRow[] = [];
   for (const session of sessions) {
     const sessionMatches = matchesBySession.get(session.id);
     if (!sessionMatches?.length || !sessionMatches.some(hasPlayer)) continue;
@@ -946,17 +938,17 @@ export const buildRecordsPage = ({
       match,
     });
   }
+  return rows.sort(compareRecordRows);
+};
 
-  const compareRows = (left: RecordsCursor, right: RecordsCursor) =>
-    right.atMs - left.atMs || compareText(right.id, left.id);
-  const remaining = rows
-    .filter((row) => !cursor || compareRows(row, cursor) > 0)
-    .sort(compareRows);
-  const page = remaining.slice(0, limit);
-  const last = page.at(-1);
-
+/** 세션 줄의 mine은 세션 리포트 players의 requesterId 줄이다(업적·지배자 계산은 하지 않는다) */
+const toRecordsPageEntries = (
+  context: RankingContext,
+  rows: RecordRow[],
+  requesterId: string,
+): RecordsPageEntry[] => {
   const activePlayerIds = getActivePlayerIds(context);
-  const entries = page.map((row): RecordsPageEntry => {
+  return rows.map((row): RecordsPageEntry => {
     if (row.kind === "match") return { kind: "match", matchId: row.id };
     const players = buildSessionPlayerReports(
       context,
@@ -974,10 +966,59 @@ export const buildRecordsPage = ({
         players?.find((report) => report.player.id === requesterId) ?? null,
     };
   });
+};
+
+/**
+ * 기록 탭 목록 한 페이지. 기록 줄 후보(`collectRecordRows`)에서 cursor 뒤의 limit개를 자른다.
+ */
+export const buildRecordsPage = ({
+  context,
+  sessions,
+  limit = SESSION_HISTORY_DEFAULT_LIMIT,
+  cursor,
+  playerId,
+  requesterId,
+}: {
+  context: RankingContext;
+  sessions: RankingSession[];
+  limit?: number;
+  cursor?: RecordsCursor | null;
+  playerId?: string;
+  requesterId: string;
+}): { entries: RecordsPageEntry[]; nextCursor: string | null } => {
+  const remaining = collectRecordRows(context, sessions, playerId).filter(
+    (row) => !cursor || compareRecordRows(row, cursor) > 0,
+  );
+  const page = remaining.slice(0, limit);
+  const last = page.at(-1);
 
   return {
-    entries,
+    entries: toRecordsPageEntries(context, page, requesterId),
     nextCursor:
       remaining.length > limit && last ? formatRecordsCursor(last) : null,
   };
 };
+
+/**
+ * 정렬 시각이 [from, to)인 기록 줄 전부(일정 탭 한 달). 순서·mine 규칙은 기록 탭 목록과 같다.
+ */
+export const buildRecordsInRange = ({
+  context,
+  sessions,
+  from,
+  to,
+  requesterId,
+}: {
+  context: RankingContext;
+  sessions: RankingSession[];
+  from: Date;
+  to: Date;
+  requesterId: string;
+}): RecordsPageEntry[] =>
+  toRecordsPageEntries(
+    context,
+    collectRecordRows(context, sessions, undefined).filter(
+      (row) => row.atMs >= from.getTime() && row.atMs < to.getTime(),
+    ),
+    requesterId,
+  );

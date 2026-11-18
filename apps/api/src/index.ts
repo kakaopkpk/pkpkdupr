@@ -102,6 +102,12 @@ import type {
   RecordItem,
   RecordsResponse,
 } from "@pkpkdupr/shared/ranking";
+import {
+  getScheduleMonthDateKeyRange,
+  parseScheduleMonth,
+  type ScheduleMonthResponse,
+  type ScheduleSession,
+} from "@pkpkdupr/shared/schedule";
 import type {
   AdminRegisterPlayerRequest,
   AdminUpdateUsernameRequest,
@@ -139,6 +145,7 @@ import {
   SESSION_HISTORY_MAX_LIMIT,
   buildAchievementRankingResponse,
   buildRankingResponse,
+  buildRecordsInRange,
   buildRecordsPage,
   buildSessionHistory,
   buildSessionReport,
@@ -147,6 +154,7 @@ import {
   findPlayerEarnedAchievements,
   findSessionDominations,
   parseRecordsCursor,
+  type RecordsPageEntry,
   toAchievementMatches,
   toContextAchievementMatches,
 } from "./services/RankingService";
@@ -855,6 +863,14 @@ const toMatchSessionDetail = (
   };
 };
 
+/** 날짜 키 오름차순, 같은 날은 정기 세션 먼저 */
+const compareSessionDetailsByDay = (
+  a: Pick<MatchSessionDetail, "dateKey" | "kind">,
+  b: Pick<MatchSessionDetail, "dateKey" | "kind">,
+) =>
+  a.dateKey.localeCompare(b.dateKey) ||
+  Number(b.kind === "regular") - Number(a.kind === "regular");
+
 /** 세션 상세를 만든다. 없으면 undefined */
 const loadMatchSessionDetail = async (
   sessionId: string,
@@ -1428,11 +1444,7 @@ app.get("/api/match-sessions/upcoming", async (req, res) => {
       )
       .map((session) => toMatchSessionDetail(session, activePlayersById, now));
     // 저장소가 시각 오름차순으로 주므로 날짜 키·정기 여부로만 다시 정렬한다(정렬은 안정적이다).
-    details.sort(
-      (a, b) =>
-        a.dateKey.localeCompare(b.dateKey) ||
-        Number(b.kind === "regular") - Number(a.kind === "regular"),
-    );
+    details.sort(compareSessionDetailsByDay);
     const response: UpcomingMatchSessionsResponse = {
       dateKey,
       sessions: details,
@@ -3070,6 +3082,26 @@ app.get("/api/session-reports", async (req, res) => {
   }
 });
 
+/** 기록 줄의 경기 id를 공개 Match로 바꾼다. 줄에 든 경기만 조회하고, 그새 사라진 경기는 뺀다 */
+const hydrateRecordEntries = async (
+  entries: RecordsPageEntry[],
+): Promise<RecordItem[]> => {
+  const matchesById = new Map(
+    (
+      await matchRepository.findByIds(
+        entries.flatMap((entry) =>
+          entry.kind === "match" ? [entry.matchId] : [],
+        ),
+      )
+    ).map((match) => [match.id, match]),
+  );
+  return entries.flatMap((entry): RecordItem[] => {
+    if (entry.kind === "session") return [entry];
+    const match = matchesById.get(entry.matchId);
+    return match ? [{ kind: "match", match }] : [];
+  });
+};
+
 app.get("/api/records", async (req, res) => {
   try {
     const auth = await getAuthPayload(req, res);
@@ -3098,23 +3130,70 @@ app.get("/api/records", async (req, res) => {
       playerId: playerId?.trim() || undefined,
       requesterId: auth.playerId,
     });
-    // 공개 Match hydrate는 페이지에 든 경기만 한다
-    const matchesById = new Map(
-      (
-        await matchRepository.findByIds(
-          page.entries.flatMap((entry) =>
-            entry.kind === "match" ? [entry.matchId] : [],
-          ),
-        )
-      ).map((match) => [match.id, match]),
-    );
     const response: RecordsResponse = {
-      items: page.entries.flatMap((entry): RecordItem[] => {
-        if (entry.kind === "session") return [entry];
-        const match = matchesById.get(entry.matchId);
-        return match ? [{ kind: "match", match }] : [];
-      }),
+      items: await hydrateRecordEntries(page.entries),
       nextCursor: page.nextCursor,
+    };
+    res.json(response);
+  } catch (err) {
+    sendRankingFailure(res, err);
+  }
+});
+
+app.get("/api/schedule", async (req, res) => {
+  try {
+    const auth = await getAuthPayload(req, res);
+    if (!auth) {
+      return;
+    }
+
+    const month = req.query.month;
+    if (typeof month !== "string" || !parseScheduleMonth(month)) {
+      throw new RankingRequestError("month는 YYYY-MM 형식이어야 합니다.", 400);
+    }
+    const { fromDateKey, toDateKey } = getScheduleMonthDateKeyRange(month);
+
+    const now = new Date();
+    await matchRepository.cleanupExpired(now);
+    const [monthSessions, activePlayersById, { context, sessions }] =
+      await Promise.all([
+        matchRepository.findSessionsInDateKeyRange(fromDateKey, toDateKey),
+        loadActivePlayersById(),
+        loadRankingSource(),
+      ]);
+
+    const entries = buildRecordsInRange({
+      context,
+      sessions,
+      from: kstDateKeyToDate(fromDateKey),
+      to: kstDateKeyToDate(toDateKey),
+      requesterId: auth.playerId,
+    });
+    // 끝난 세션은 완료 경기가 있는(기록 줄이 있는) 세션만 남긴다.
+    // 정리가 best-effort라 남은 빈 세션, 취소·진행 중 경기만 있던 세션은 일정에 보일 내용이 없다
+    const recordedSessionIds = new Set(
+      entries.flatMap((entry) =>
+        entry.kind === "session" ? [entry.session.id] : [],
+      ),
+    );
+    const scheduleSessions = monthSessions
+      .map((session): ScheduleSession => {
+        const isEnded =
+          getEmptySessionExpiresAt(session.kind, session.date, session) <= now;
+        return {
+          ...toMatchSessionDetail(session, activePlayersById, now),
+          isEnded,
+        };
+      })
+      .filter(
+        (session) => !session.isEnded || recordedSessionIds.has(session.id),
+      );
+    // 저장소가 시각 오름차순으로 주므로 날짜 키·정기 여부로만 다시 정렬한다(정렬은 안정적이다)
+    scheduleSessions.sort(compareSessionDetailsByDay);
+
+    const response: ScheduleMonthResponse = {
+      sessions: scheduleSessions,
+      records: await hydrateRecordEntries(entries),
     };
     res.json(response);
   } catch (err) {

@@ -13,10 +13,18 @@ import { cx } from "@/components/ui/cx";
 import { formatKstLongDate } from "@/lib/format";
 
 /** 오늘부터 고를 수 있는 날 수(3주) */
-const DATE_OPTION_COUNT = 21;
+export const SESSION_DATE_OPTION_DAYS = 21;
+
+/** 세션 만들기 달력에서 고를 수 있는 마지막 날 */
+const getLastSelectableDateKey = (todayKey: string) =>
+  addKstDays(todayKey, SESSION_DATE_OPTION_DAYS - 1);
 const SESSION_TIME_STEP_MINUTES = 30;
 /** 길이 1~6시간 */
 const SESSION_DURATION_OPTIONS_MINUTES = [60, 120, 180, 240, 300, 360];
+
+/** 세션 만들기 달력에서 고를 수 있는 날짜인지(오늘부터 3주) */
+export const isSessionDateSelectable = (dateKey: string, todayKey: string) =>
+  dateKey >= todayKey && dateKey <= getLastSelectableDateKey(todayKey);
 
 /** "2시간" */
 export const formatDurationHours = (minutes: number) => `${minutes / 60}시간`;
@@ -82,7 +90,7 @@ export const SessionCalendar: React.FC<{
   value: string | null;
   onChange: (dateKey: string) => void;
 }> = ({ todayKey, value, onChange }) => {
-  const lastKey = addKstDays(todayKey, DATE_OPTION_COUNT - 1);
+  const lastKey = getLastSelectableDateKey(todayKey);
   const firstCellKey = addKstDays(todayKey, -getDateParts(todayKey).weekday);
   const lastCellKey = addKstDays(lastKey, 6 - getDateParts(lastKey).weekday);
   const cellKeys: string[] = [];
