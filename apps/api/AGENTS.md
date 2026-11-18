@@ -1,0 +1,197 @@
+# apps/api API 계약
+
+루트 `AGENTS.md`의 아키텍처·도메인 규칙과 함께 따릅니다. API 경로·요청·응답·상태 코드를 바꾸면 이 문서의 해당 엔드포인트 항목을 같은 PR에서 고칩니다. 엔드포인트 하나를 항목 하나로 쓰고, 조건·예외는 하위 항목으로 나눕니다.
+
+## 상태
+
+- `GET /api/health`
+- `GET /api/ping`
+
+## 예약 작업
+
+- `POST /api/cron/regular-sessions`
+  - 헤더 `x-cron-secret`을 함수 secret `CRON_SECRET`과 비교한다. 없거나 틀리면 401, `CRON_SECRET` 미설정이면 503.
+  - 응답은 `RegularSessionsCronResponse`이고, 응답 전에 다가오는 세션 전부의 구글 캘린더 일정을 다시 쓴다.
+  - GitHub Actions `regular-sessions-cron.yml`이 매일 KST 04:00에 부른다.
+
+## 인증·프로필
+
+- 로그인과 비밀번호 변경은 클라이언트가 Supabase Auth로 직접 합니다.
+- `GET /api/me`
+- `POST /api/me/password-changed`: 첫 로그인 비밀번호 변경 완료
+- `PATCH /api/me/profile`
+- avatar API
+
+## 플레이어
+
+- `GET /api/players`: active만
+- 프로필 요약 `GET /api/players/:playerId/profile-summary`
+  - 회원 정보 `player`(비활성 회원 포함, 없는 회원 404)
+  - 승패·평점 변화·최근 7일 경기 수
+  - 파트너 궁합(같은 팀 3경기 이상)
+  - 천적(맞대결 3경기 이상·진 비율 50% 이상, 둘 다 조건에 맞는 회원 전부)
+  - 요청자 기준 분류별 상대 전적과 그 경기들에서 바뀐 요청자 평점 합 `headToHead[분류].ratingDelta`
+  - 업적 진행 상태 `achievements`(아래 "업적")
+
+## 경기
+
+- `GET /api/matches`: `playerId`와 함께 `category=singles|doubles`로 분류 필터
+- 경기 기록 `POST /api/matches`
+- 수정 `PUT /api/matches/:matchId`
+  - 관리자는 24시간 검사 없이 고친다.
+  - 관리자 전용 `sessionId`(문자열이면 그 세션으로 옮기고 null이면 세션에서 뺌)·`matchStartsAt`(완료 경기면 `completedAt`도 같은 만큼 옮김)으로 세션·경기 시각을 바꾼다. 회원이 이 둘을 보내면 403.
+  - 선택적 `expectedUpdatedAt`이 서버 `updatedAt`과 다르면 409.
+- 삭제 `DELETE /api/matches/:matchId`
+  - `isMatchRecordDeletable`, 이미 지워졌으면 404.
+  - 선택적 `expectedUpdatedAt`이 서버 `updatedAt`과 다르면 409.
+- 경기 상세 `GET /api/matches/:matchId`
+- 세션과 상관없는 진행 중 경기 시작 `POST /api/matches/start`
+  - 요청 `sessionId`가 오늘 회원 세션이면 그 세션, 아니면 기록과 같은 시간 규칙을 따른다.
+  - 선수가 이미 진행 중 경기에 있으면 409 "<아이디>님이 다른 경기 중이에요".
+  - 확인·생성은 advisory 잠금으로 직렬화한다.
+- 진행 중 경기 전부 `GET /api/matches/in-progress`: `/api/matches/:matchId`보다 먼저 등록
+- `GET /api/match-feed`
+- 세션 조회 API
+
+## 세션
+
+- 오늘 세션 `GET /api/match-sessions/today`: 전날 시작해 자정을 넘긴 회원 세션도 끝나기 전까지 오늘 세션이다(`isSessionOnToday`).
+- 다가오는 세션 `GET /api/match-sessions/upcoming`
+  - 만료 전 오늘·미래 세션, 날짜 키 오름차순·같은 날은 정기 세션 먼저.
+  - 조회 때 공휴일·취소 날짜를 건너뛴 다음 정기 회차를 find-or-create.
+- 오늘 정기 세션 열기 `POST /api/match-sessions/regular/today`: 정기 요일 22시 전만, 오늘이 공휴일·취소 날짜면 409
+- 회원 세션 생성 `POST /api/match-sessions`
+  - `dateKey` 생략 시 오늘, 과거 날짜 400.
+  - 시작·종료 시각 `startTime`·`endTime`("HH:MM" KST)은 함께 주거나 함께 생략한다. 형식 오류·두 시각이 같으면 400.
+  - 종료 < 시작이면 다음 날 종료.
+  - 오늘 세션의 시작 시각이 지금보다 이르면 400.
+  - 세션 날짜는 시작 시각의 날짜이고 세션 시각(`date`)은 시작 시각과 상관없이 그날 00:00 KST라, 같은 날 같은 이름은 409.
+- 세션 응답의 `startTime`·`endTime`은 정기 세션이면 18:00~22:00, 시각 없이 만든 회원 세션이면 null
+- 상세 `GET /api/match-sessions/:sessionId`
+- 세션 경기 `GET /api/match-sessions/:sessionId/matches`
+- 점수 없이 진행 중 경기 시작 `POST /api/match-sessions/:sessionId/matches`: `POST /api/matches/start`와 같은 처리, 오늘 세션만, 이미 진행 중인 선수 포함 시 409, 선수 자동 참여
+- 복식 추천 매칭 `GET /api/match-sessions/:sessionId/recommendations?courts=N&seed=S`
+  - 오늘 세션만, courts 기본 3·1~4로 자름.
+  - seed 생략 시 서버가 정해 응답에 포함하고, 같은 seed면 같은 결과.
+  - 진행 중 경기 선수 제외.
+  - 팀 나누기는 NR을 참여자 평점 중앙값으로 대체하고, 응답 팀 `averageRating`은 NR(게스트 포함)을 3.0으로 친 표시용 평균.
+- 참여자 한 명씩 추가 `POST /api/match-sessions/:sessionId/participants`·삭제 `DELETE /api/match-sessions/:sessionId/participants/:playerId`
+  - 활성 회원 누구나·대리 가능, 오늘·미래 세션만(지난 세션 403), 멱등.
+- 게스트 추가 `POST /api/match-sessions/:sessionId/guests` `{ username }`
+  - 그 아이디로 게스트를 만들고 세션 참여자로 넣어 201 `Player`.
+  - 세션 규칙은 참여자 추가와 같다.
+  - `isValidUsername` 실패 400, 대소문자 무시 중복 409.
+  - 추가한 회원·세션을 저장한다.
+
+## 랭킹·세션 리포트
+
+스냅샷 저장 없이 평점 변경 로그로 조회 시 계산합니다.
+
+- 랭킹 `GET /api/rankings?category=doubles|singles|achievements`
+  - 기본 doubles, 게스트 제외.
+  - 순위·완료 경기 수·가장 최근 세션 시작 직전 대비 순위 변동 `rankChange`, NR 회원은 `unrated`.
+  - 회원(`player`)에 상태메시지 `statusMessage`·`statusMessageBackgroundColor` 포함.
+  - achievements면 업적 점수 순위 `AchievementRankingResponse`: 활성 정회원 전원, 점수 내림차순 → 그 점수에 먼저 도달한 순 → 아이디 순, 0점은 맨 아래, 순위 변동 없음.
+- 세션 기록 목록 `GET /api/session-reports?limit=&playerId=`: 완료 경기가 있는 세션 최신순, limit 기본 20·최대 100, 홈이 사용
+- 기록 목록 `GET /api/records?limit=&cursor=&playerId=`
+  - 지금 웹은 쓰지 않음. 응답 `RecordsResponse` `{ items, nextCursor }`.
+  - 완료 경기가 있는 세션 줄 `kind: 'session'`과 세션 없는 완료 경기 줄 `kind: 'match'`를 세션 `date`·경기 `matchStartsAt` 내림차순, 같으면 id 내림차순으로 섞는다.
+  - 세션 줄의 요청자 줄 `mine`은 세션 리포트 players의 요청자 줄과 같고, 안 뛰었으면 null, 업적 제외.
+  - limit 규칙은 세션 기록 목록과 같다.
+  - `cursor`는 `nextCursor`를 그대로 넘기며 형식 오류 400, 더 없으면 `nextCursor` null.
+  - `playerId`는 그 회원이 뛴 세션·경기만.
+  - 공개 Match hydrate는 페이지 경기만.
+- 일정 탭 월별 조회 `GET /api/schedule?month=YYYY-MM`
+  - 응답 `ScheduleMonthResponse`, month 형식 오류 400.
+  - `sessions`: 세션 날짜 키가 그 달(KST)인 세션. 참여자·끝남 여부 `isEnded`(만료 시각 지남) 포함, 끝난 세션은 완료 경기가 있는 세션만, 날짜 키 오름차순·같은 날 정기 먼저.
+  - `records`: 정렬 시각이 그 달인 기록 줄. 기록 목록 항목과 같은 형태·순서, 요청자 기준 `mine`.
+- 세션 리포트 `GET /api/session-reports/:sessionId`: 선수별 경기·승패와 복식 평점·순위 전후, 최대 상승자 `topRiser`
+- 세션 줄(`MatchSessionHistoryItem`)의 `startTime`은 정기 세션 "18:00", 시각 없는 회원 세션 null
+
+## 업적
+
+저장 없이 완료 경기로 조회 시 계산합니다. 정의·계산은 `packages/shared/src/achievements.ts`입니다.
+
+- 점수
+  - 업적 점수는 정의의 `points`(10·25·50·100점)이다.
+  - 회원 점수는 받은 업적 점수 합(`sumAchievementPoints`, 만점 `ACHIEVEMENT_MAX_POINTS`)이라 업적을 잃으면 점수도 빠진다.
+- 집계 시작 시각
+  - 진행도 지표별 `METRIC_COUNT_START`로 정한다.
+  - 경기 수·승 수·개근은 이관 경기를 포함한 전체 기록을 센다.
+  - 나머지 지표는 업적 기준 시각 `ACHIEVEMENT_COUNT_START`(2026-11-17 00:00 KST, `achievementCountStart.ts`) 뒤 완료 경기만 센다.
+  - 새 지표를 쓰는 업적을 추가하면 그 지표는 추가 배포일 00:00 KST부터 센다.
+  - 기존 지표에 단계만 늘리는 업적(예: 1000경기 다음 5000경기)은 그 지표의 시작 시각을 따른다.
+  - 기존 업적의 조건 수정은 원래 시작 시각부터 다시 계산한다.
+  - 업적 기준 시각 전 경기로 받은 업적은 받은 업적으로 치지만 세션 리포트 `achievements`와 `newAchievements`에는 나오지 않는다(`isEarnedByCountedMatch`).
+- 응답에 나오는 곳
+  - 프로필 요약의 `achievements`: 42개 진행 상태, 평점 업적은 평점 반영 복식 경기 수 `ratedDoublesMatches` 포함.
+  - 경기 기록·수정 응답의 `newAchievements`(이 저장으로 참가자 전원이 새로 받은 업적)와 `achievementPoints`(새 업적을 받은 참가자별 지금 업적 점수 합).
+  - 세션 리포트의 `achievements`: 그 세션 경기로 받은 업적.
+- 업적별 받은 활성 회원 수 `GET /api/achievements/holders`
+- 축하 연출 확인
+  - 확인 여부만 `player_seen_achievements`에 업적별 확인 당시 획득 경기로 저장한다.
+  - 미확인 업적 `GET /api/me/achievements/unseen`: 응답에 요청자 업적 점수 합 `points`, 확인 기록이 없거나 기록의 획득 경기가 지금과 다르면 미확인, 받은 시각 → 업적 정의 순서.
+  - 확인 처리 `POST /api/me/achievements/seen` `{ achievements: [{ achievementId, earnedMatchId }] }`: 멱등, 204.
+  - 업적을 잃었다가 다른 경기로 다시 받으면 다시 미확인이 된다.
+- 무패 세션은 세션의 모든 경기로 판정해, 4경기 전승으로 받은 뒤 같은 세션에서 지면 받지 않은 상태로 돌아간다.
+- 세션 지배자 업적은 끝난 세션(만료 시각이 지난 세션)의 `topRiser`로 세며(`findSessionDominations`), 그 회원의 세션 마지막 경기로 받고 `newAchievements`에는 나오지 않는다.
+- 평점 업적
+  - 높은 평점 3.0·3.5·4.0·4.5(수면 위로·구름 위 산책·성층권·궤도 진입)와 낮은 평점 2.5·2.0 이하(심해 탐사·마리아나 해구) 6개다.
+  - 평점 반영 복식 경기가 10경기(`RATING_ACHIEVEMENT_MIN_DOUBLES_MATCHES`, 업적 기준 시각 전 경기 포함) 이상이 된 뒤의 복식 경기 직후 복식 평점(그 경기의 평점 변경 로그, 경기 업적 입력의 `doublesRatingAfter`)만 센다.
+  - 높은 평점은 처음 기준 이상, 낮은 평점은 처음 기준 이하가 된 경기로 받고, 그 뒤 평점이 바뀌어도 유지된다(재계산하면 다시 쓴 로그를 따른다).
+  - 평점 업적만은 업적 기준 시각 시점 평점(기준 시각 전 마지막 평점 반영 복식 경기 직후 평점, 그 전 최고치·최저치는 보지 않음)에서 시작해, 그때 이미 10경기와 기준을 채웠으면 그 경기로 받는다. 이 업적은 세션 리포트 `achievements`에 나오지 않는다.
+
+## 관리자
+
+전부 관리자 권한이 필요합니다.
+
+### 회원
+
+- 목록 `GET /api/admin/players`: 항목 `AdminPlayer`에 다음을 포함
+  - 게스트 추가 정보 `guestAddedInfo`(정회원 null)
+  - 평점 미반영 경기 수 `ratingExcludedMatchCount`
+  - 첫 로그인 비밀번호 변경 전 `isFirstLogin`
+  - 로그인 계정 여부 `hasLoginAccount`
+  - 경기 행 수 `matchCount`, 가장 늦은 경기 시각 `lastMatchStartsAt`
+- 경기 없는 회원 삭제 `DELETE /api/admin/players/:playerId`
+- 성별·상태 변경 `PATCH /api/admin/players/:playerId/gender|status`
+- 생성·상태 감사 로그 `GET /api/admin/player-creation-logs`·`player-status-logs`
+- 회원 추가 `POST /api/admin/register`
+- 비밀번호 초기화 `POST /api/admin/players/:playerId/password-reset`
+- 아이디 변경 `PATCH /api/admin/players/:playerId/username`
+- 게스트 정회원 승급 `POST /api/admin/players/:playerId/promote`
+  - `{ gender }` 필수. 성별 저장과 로그인 계정 발급을 함께 하고 회원 추가 응답 형태로 돌려주며, 첫 로그인 비밀번호 변경을 강제한다.
+  - 게스트 아님 409, 없는 회원 404, 성별 오류 400.
+  - 승급 전 `ratingExcluded` 경기는 계속 미반영.
+- 회원 추가·승급·비밀번호 초기화의 임시 비밀번호는 `123qwe`(`ADMIN_ISSUED_PASSWORD`) 고정이다.
+
+### 경기
+
+- 전체 목록 `GET /api/admin/matches`
+- 일괄 등록 `POST /api/admin/matches/batch`: 세션은 `sessionId`로만 지정하고 그 세션 참여자로 선수를 넣는다. `session` 입력을 보내면 400 "세션은 sessionId로 지정해 주세요."
+- 세션 연결 `PATCH /api/admin/matches/bulk-metadata` `{ matchIds, sessionId }`: 세션에 연결하면 선수를 참여자로 넣고, null로 빼면 참여자는 그대로
+- 관리자 삭제 `DELETE /api/admin/matches/:matchId`
+- 삭제 기록 `GET /api/admin/match-deletion-logs`: 지운 시각 내림차순
+- 경기 정정은 `PUT /api/matches/:matchId`를 같이 쓴다.
+
+### 세션
+
+- 목록 `GET /api/admin/match-sessions`
+- 회원 세션 수정 `PATCH /api/admin/match-sessions/:sessionId`: 이름·장소·오늘 이후 날짜·시각, 지난 세션 409
+- 삭제 `DELETE /api/admin/match-sessions/:sessionId`: 오늘·미래 정기 세션을 지우면 그 날짜가 취소로 남음
+
+### 쉬는 날
+
+- 목록 `GET /api/admin/regular-session-skips`
+- 취소 날짜 추가 `POST /api/admin/regular-session-skips`
+- 되돌리기 `DELETE /api/admin/regular-session-skips/:dateKey`: 공휴일은 409, 응답에 다시 만든 정기 세션
+
+### 평점
+
+- 전체 재계산 `POST /api/admin/ratings/recalculate`
+- 공식 DUPR 미리보기 `POST /api/admin/players/:playerId/official-dupr/preview`
+- 공식 DUPR 반영 `POST /api/admin/players/:playerId/official-dupr`
+
+### 진단
+
+- `GET /api/admin/diagnostics/timestamp-units`
