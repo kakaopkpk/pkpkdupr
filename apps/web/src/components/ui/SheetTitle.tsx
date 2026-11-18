@@ -1,6 +1,6 @@
 import React from "react";
 
-/** 시트 제목 22/800 + 부제 + 오른쪽 슬롯 */
+/** 시트 제목 22/800 + 부제 + 오른쪽 슬롯(제목·부제 묶음의 세로 가운데) */
 export const SheetTitle: React.FC<{
   title: string;
   sub?: React.ReactNode;
@@ -13,6 +13,8 @@ export const SheetTitle: React.FC<{
       </h2>
       {sub ? <div className="text-pk-13 text-pk-sub">{sub}</div> : null}
     </div>
-    {right ? <div className="flex shrink-0 items-center">{right}</div> : null}
+    {right ? (
+      <div className="flex shrink-0 items-center self-center">{right}</div>
+    ) : null}
   </div>
 );
