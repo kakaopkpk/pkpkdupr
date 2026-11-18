@@ -171,6 +171,25 @@ export interface PlayerEarnedAchievement {
   definition: AchievementDefinition;
 }
 
+export interface MatchEarnedAchievement<P extends { id: string }> {
+  item: EarnedAchievementInfo;
+  definition: AchievementDefinition;
+  player: P;
+}
+
+/** 경기로 받은 업적을 정의·받은 참가자와 함께 고른다(정의를 모르거나 참가자가 아닌 업적은 뺀다) */
+export const pickMatchEarnedAchievements = <P extends { id: string }>(
+  items: readonly EarnedAchievementInfo[],
+  players: readonly P[],
+): MatchEarnedAchievement<P>[] => {
+  const playerById = new Map(players.map((player) => [player.id, player]));
+  return items.flatMap((item) => {
+    const definition = getAchievementDefinition(item.achievementId);
+    const player = playerById.get(item.playerId);
+    return definition && player ? [{ item, definition, player }] : [];
+  });
+};
+
 /** 받은 업적 중 이 회원 것만 정의와 함께 고른다(정의를 모르는 업적은 뺀다) */
 export const pickPlayerEarnedAchievements = (
   items: readonly EarnedAchievementInfo[],

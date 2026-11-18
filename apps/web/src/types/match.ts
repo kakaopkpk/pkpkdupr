@@ -30,6 +30,8 @@ export type MatchInfo = Omit<
   newAchievements?: EarnedAchievementInfo[];
   /** 기록·수정 응답에만 있다. 새 업적을 받은 참가자별 지금 업적 점수 합 */
   achievementPoints?: Record<string, number>;
+  /** 경기 상세 응답에만 있다. 이 경기로 참가자들이 받은 업적(지금 계산 기준) */
+  achievements?: EarnedAchievementInfo[];
 };
 
 /** 경기에 든 선수 id 전부 */

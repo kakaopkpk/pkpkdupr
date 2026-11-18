@@ -5,7 +5,7 @@ import {
 } from "@pkpkdupr/shared/match";
 import type { Player, PlayerRatingChangeLog } from "@pkpkdupr/shared/player";
 import BottomSheet from "@/components/BottomSheet";
-import { AchievementBadge } from "@/components/profile/AchievementBadge";
+import { MatchAchievementRow } from "@/components/match/MatchAchievementRow";
 import { type MatchInfo, RATING_EXCLUDED_NOTICE } from "@/types/match";
 import { PkButton } from "@/components/ui/Button";
 import { MatchRatingChangeCount } from "@/components/match/MatchRatingChangeCount";
@@ -24,6 +24,7 @@ import { usePlayOnShow } from "@/hooks/usePlayOnShow";
 import { prefersReducedMotion } from "@/hooks/useSheetDrag";
 import {
   markAchievementsSeen,
+  pickMatchEarnedAchievements,
   pickPlayerEarnedAchievements,
 } from "@/lib/achievements";
 import AchievementCelebration from "./AchievementCelebration";
@@ -83,7 +84,18 @@ export default function RecordDoneStep({
         return change ? [{ player: teamPlayer, change }] : [];
       });
   }, [match]);
-  // 참가자 전원이 받은 업적 중 내 것만 띠로 보인다. 게스트가 낀 경기는 업적이 없으므로 띠·축하 연출도 없다
+  // 참가자 전원이 받은 업적을 띠로 보인다. 게스트가 낀 경기는 업적이 없으므로 띠·축하 연출도 없다
+  const matchAchievements = useMemo(
+    () =>
+      match.ratingExcluded
+        ? []
+        : pickMatchEarnedAchievements(
+            match.newAchievements ?? [],
+            match.teams.flatMap((team) => team.players),
+          ),
+    [match.newAchievements, match.ratingExcluded, match.teams],
+  );
+  // 화면 전체 축하 연출과 확인 처리는 내 업적만
   const myNewAchievementItems = useMemo(
     () =>
       viewer && !match.ratingExcluded
@@ -96,26 +108,24 @@ export default function RecordDoneStep({
     [myNewAchievementItems],
   );
 
-
   return (
     <>
-      {/* 제목까지 본문에 넣어 그랩바 아래 전부가 함께 스크롤된다 */}
+      {/* 완료 줄까지 본문에 넣어 그랩바 아래 전부가 함께 스크롤된다 */}
       <BottomSheet.Body className="pb-2">
-        <div className="flex shrink-0 flex-col gap-0.5 px-1 pt-0.5">
-          <h2
-            className="flex items-center gap-1.5 text-pk-22 font-extrabold tracking-[-0.02em] text-pk-ink"
-            onAnimationEnd={() => {
-              // 업적 띠가 없으면 체크 그리기가 마지막 CSS 연출이다
-              if (myNewAchievements.length === 0) finish();
-            }}
-          >
-            <CheckIcon size={22} className="text-pk-up" draw={isPlaying} />
-            기록했어요
-          </h2>
+        {/* 경기 상세 맨 위 메타 줄과 같은 자리·모양의 한 줄 */}
+        <h2
+          className="flex shrink-0 items-center justify-center gap-1 text-pk-13 text-pk-sub"
+          onAnimationEnd={() => {
+            // 업적 띠가 없으면 체크 그리기가 마지막 CSS 연출이다
+            if (matchAchievements.length === 0) finish();
+          }}
+        >
+          <CheckIcon size={14} className="text-pk-up" draw={isPlaying} />
+          <span className="font-bold text-pk-ink">기록했어요</span>
           {match.session?.name ? (
-            <p className="text-pk-13 text-pk-sub">{match.session.name}</p>
+            <span className="min-w-0 truncate">· {match.session.name}</span>
           ) : null}
-        </div>
+        </h2>
         {score ? (
           <div className="grid shrink-0 grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2">
             <ScoreSide
@@ -144,7 +154,7 @@ export default function RecordDoneStep({
             />
           </div>
         ) : null}
-        {viewer && myNewAchievements.length > 0 ? (
+        {matchAchievements.length > 0 ? (
           <div
             className="flex shrink-0 flex-col gap-2"
             onAnimationEnd={(event) => {
@@ -152,56 +162,39 @@ export default function RecordDoneStep({
               if (event.animationName === "pk-pop") finish();
             }}
           >
-            {myNewAchievements.map((definition) => (
-              <button
-                key={definition.id}
-                type="button"
-                onClick={() =>
+            {matchAchievements.map((achievement) => (
+              <MatchAchievementRow
+                key={`${achievement.player.id}:${achievement.definition.id}`}
+                achievement={achievement}
+                onPress={() =>
                   openAchievementDetail({
-                    playerId: viewer.id,
-                    achievementId: definition.id,
+                    playerId: achievement.player.id,
+                    achievementId: achievement.definition.id,
                   })
                 }
                 // 연출 전에도 자리는 차지한다(fill-mode both로 지연 동안 투명)
                 style={isPlaying ? { animationDelay: `${ACHIEVEMENT_DELAY_MS}ms` } : undefined}
                 className={cx(
-                  "flex items-center gap-3 rounded-pk-sm bg-pk-primary-soft px-3.5 py-3 text-left active:opacity-80",
+                  "rounded-pk-sm bg-pk-primary-soft px-3.5 py-3 active:opacity-80",
                   isPlaying && "animate-pk-fade-up motion-reduce:animate-none",
                 )}
-              >
-                <span
-                  style={
-                    isPlaying
-                      ? {
-                          animationDelay: `${ACHIEVEMENT_DELAY_MS}ms`,
-                          animationDuration: `${ACHIEVEMENT_BADGE_POP_MS}ms`,
-                        }
-                      : undefined
-                  }
-                  className={cx(
-                    "flex shrink-0",
-                    isPlaying && "animate-pk-pop motion-reduce:animate-none",
-                  )}
-                >
-                  <AchievementBadge achievement={definition} earned size={40} />
-                </span>
-                <span className="flex min-w-0 flex-col gap-0.5">
-                  <span className="truncate text-pk-15 font-extrabold text-pk-ink">
-                    새 업적 · {definition.name}
-                  </span>
-                  <span className="truncate text-pk-13 text-pk-sub">
-                    {definition.condition}
-                  </span>
-                </span>
-              </button>
+                badgeStyle={
+                  isPlaying
+                    ? {
+                        animationDelay: `${ACHIEVEMENT_DELAY_MS}ms`,
+                        animationDuration: `${ACHIEVEMENT_BADGE_POP_MS}ms`,
+                      }
+                    : undefined
+                }
+                badgeClassName={cx(
+                  isPlaying && "animate-pk-pop motion-reduce:animate-none",
+                )}
+              />
             ))}
           </div>
         ) : null}
         {match.ratingExcluded || ratingRows.length > 0 ? (
           <div className="shrink-0 rounded-pk-lg bg-pk-bg px-4 py-1">
-            <h3 className="mt-3 mb-0.5 text-pk-13 font-bold text-pk-sub">
-              평점 변화
-            </h3>
             {match.ratingExcluded ? (
               <p className="py-[11px] text-pk-15 text-pk-sub">
                 {RATING_EXCLUDED_NOTICE}
