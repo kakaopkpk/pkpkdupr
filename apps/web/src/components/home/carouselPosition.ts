@@ -23,3 +23,39 @@ export const getActiveSlideIndex = ({
   });
   return nearest;
 };
+
+/** 카드 폭의 이 비율 이상 끌고 놓으면 넘어간다 */
+export const SWIPE_DISTANCE_RATIO = 0.3;
+/** 빠르게 튕겨 넘기려면 적어도 이만큼은 끌어야 한다(살짝 튕기기는 넘기지 않는다) */
+export const FLICK_MIN_DISTANCE_PX = 60;
+/** 놓기 직전 이 속도(px/ms) 이상으로 같은 방향으로 움직였으면 튕긴 것으로 본다 */
+export const FLICK_MIN_VELOCITY_PX_PER_MS = 0.5;
+
+/**
+ * 손가락을 놓았을 때 멈출 카드. 한 번에 최대 한 장만 넘기며, 카드 폭의 일정 비율 이상 끌었거나
+ * 충분히 끈 채로 빠르게 튕겼을 때만 넘기고 아니면 시작 카드로 돌아온다.
+ * deltaX·velocityX는 손가락 이동 방향 기준이라 음수(왼쪽으로 밀기)면 다음 카드다
+ */
+export const getSwipeTargetIndex = ({
+  startIndex,
+  count,
+  deltaX,
+  velocityX,
+  slideWidth,
+}: {
+  startIndex: number;
+  count: number;
+  deltaX: number;
+  velocityX: number;
+  slideWidth: number;
+}) => {
+  if (count <= 0 || deltaX === 0) return Math.max(0, Math.min(startIndex, count - 1));
+  const distance = Math.abs(deltaX);
+  const isDragged = slideWidth > 0 && distance >= slideWidth * SWIPE_DISTANCE_RATIO;
+  const isFlicked =
+    distance >= FLICK_MIN_DISTANCE_PX &&
+    Math.sign(velocityX) === Math.sign(deltaX) &&
+    Math.abs(velocityX) >= FLICK_MIN_VELOCITY_PX_PER_MS;
+  const nextIndex = isDragged || isFlicked ? startIndex + (deltaX < 0 ? 1 : -1) : startIndex;
+  return Math.max(0, Math.min(nextIndex, count - 1));
+};
