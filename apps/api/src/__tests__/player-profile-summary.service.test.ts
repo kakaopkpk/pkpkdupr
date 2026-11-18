@@ -82,6 +82,23 @@ describe("buildPlayerProfileSummary", () => {
     expect(summary.recentMatches.map((match) => match.id)).toEqual([
       "Mcomplet",
     ]);
+    expect(summary.completedMatchCount).toBe(1);
+  });
+
+  it("완료 경기 수는 평점 미반영 경기도 센다", () => {
+    const rated = makeMatch({ id: "Mrated01" });
+    const excluded = makeMatch({ id: "Mexclude", ratingExcluded: true });
+
+    const summary = buildPlayerProfileSummary(
+      [rated, excluded],
+      me.id,
+      emptyHistory,
+      me.id,
+      now,
+    );
+
+    expect(summary.matchStats.singles.matchWins).toBe(1);
+    expect(summary.completedMatchCount).toBe(2);
   });
 
   it("업적 42개 진행 상태를 정의 순서로 넣고 진행 중 경기는 세지 않는다", () => {

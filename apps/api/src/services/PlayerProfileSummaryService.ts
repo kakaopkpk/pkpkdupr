@@ -53,6 +53,8 @@ export interface PlayerProfileSummary {
   ratingDelta: PlayerProfileRatingDelta;
   ratingHistory: PlayerRatingHistory;
   recentMatches: MatchWithRatingChanges[];
+  /** 완료 경기 수(복식+단식, 평점 미반영 경기 포함). 경기 목록 전체 보기와 같은 기준이다 */
+  completedMatchCount: number;
   partners: PartnerStat[];
   /** 자주 진 상대(천적). 조건에 맞는 상대 전부 */
   rivals: OpponentStat[];
@@ -271,8 +273,10 @@ export const buildPlayerProfileSummary = (
     )
     .sort(sortRivalStats);
 
-  const recentMatches = matches
-    .filter((match) => match.status === "completed")
+  const completedMatches = matches.filter(
+    (match) => match.status === "completed",
+  );
+  const recentMatches = [...completedMatches]
     .sort((left, right) => getMatchStartsAtMs(right) - getMatchStartsAtMs(left))
     .slice(0, 5);
 
@@ -281,6 +285,7 @@ export const buildPlayerProfileSummary = (
     ratingDelta,
     ratingHistory,
     recentMatches,
+    completedMatchCount: completedMatches.length,
     partners,
     rivals,
     headToHead,
