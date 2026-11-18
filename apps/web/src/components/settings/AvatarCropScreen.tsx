@@ -34,7 +34,7 @@ export interface AvatarCropScreenProps {
 
 /** 조정 영역 가장자리와 원 사이 여백(px)과 원 지름 상한(px) */
 const CIRCLE_MARGIN_PX = 24;
-const CIRCLE_MAX_DIAMETER_PX = 320;
+const CIRCLE_MAX_DIAMETER_PX = 280;
 /** 두 번 탭 판정: 두 탭 사이 시간(ms)과 거리(px) */
 const DOUBLE_TAP_MS = 300;
 const DOUBLE_TAP_SLOP_PX = 24;
@@ -97,6 +97,15 @@ const AvatarCropScreen: React.FC<AvatarCropScreenProps> = ({
     setImageSize(null);
     setView(INITIAL_AVATAR_CROP_VIEW);
   }, [sourceUrl]);
+
+  // 손가락이 닿은 채 닫히면 pointerup이 오지 않으므로, 닫힐 때 제스처 상태를 비운다
+  useEffect(() => {
+    if (isVisible) return;
+    pointersRef.current.clear();
+    gestureRef.current = null;
+    lastTapRef.current = null;
+    setIsDragging(false);
+  }, [isVisible]);
 
   useEffect(() => {
     const area = areaRef.current;
