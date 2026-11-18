@@ -1,13 +1,11 @@
 import React from "react";
 import { getTeamResultScores, type MatchInfo } from "@/types/match";
 import {
-  formatElapsed,
   formatKstDateTime,
   formatKstTime,
   formatKstWeekdayTime,
 } from "@/lib/format";
 import { rowPressClassName } from "./Button";
-import { ChevronRightIcon } from "./Icons";
 import { TeamAvatars } from "./PlayerAvatar";
 import { cx } from "./cx";
 
@@ -149,32 +147,3 @@ export const MatchRow: React.FC<{
     </RowContainer>
   );
 };
-
-/** 진행 중 경기 한 줄. 시작 후 지난 분과 꺾쇠를 보이고 코트 번호는 없다 */
-export const LiveMatchRow: React.FC<{
-  match: MatchInfo;
-  now: Date;
-  onPress?: () => void;
-}> = ({ match, now, onPress }) => (
-  <RowContainer
-    onPress={onPress}
-    className={cx(
-      "grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-2 py-3 text-pk-ink",
-      rowDividerClassName,
-    )}
-  >
-    <div className="flex min-w-0 flex-col gap-1.5">
-      {match.teams.map((team) => (
-        <TeamLine
-          key={team.id}
-          team={team}
-          emphasis="none"
-        />
-      ))}
-    </div>
-    <span className="whitespace-nowrap text-pk-12 text-pk-muted tabular-nums">
-      {formatElapsed(match.matchStartsAt, now)}
-    </span>
-    <ChevronRightIcon />
-  </RowContainer>
-);

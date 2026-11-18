@@ -4,7 +4,7 @@ import { toKstDateKey } from "@pkpkdupr/shared/session";
 import { getMatchPlayerIds, type MatchInfo } from "@/types/match";
 import HomeSkeleton from "@/components/home/HomeSkeleton";
 import LastSessionFeed from "@/components/home/LastSessionFeed";
-import MyLiveMatchCard from "@/components/home/MyLiveMatchCard";
+import MyLiveMatchCard, { LiveMatchCard } from "@/components/home/MyLiveMatchCard";
 import NextSessionCarousel from "@/components/home/NextSessionCarousel";
 import RecommendationSection, {
   getCourtKey,
@@ -24,7 +24,7 @@ import { isNetworkError } from "@/lib/errors";
 import { LivePill } from "@/components/ui/Badges";
 import { Card } from "@/components/ui/Card";
 import { StateMessage } from "@/components/ui/StateMessage";
-import { LiveMatchRow, MatchRow } from "@/components/ui/MatchRow";
+import { MatchRow } from "@/components/ui/MatchRow";
 import { LinkChevron, SectionLabel } from "@/components/ui/Section";
 import { cx } from "@/components/ui/cx";
 import { useAppNavigation } from "@/context/AppNavigationContext";
@@ -263,7 +263,7 @@ const Home: React.FC = () => {
   );
 
   // ── 그리기 ─────────────────────────────────────────
-  /** 진행 중 머리·내 경기 카드·남의 진행 중 경기 줄. 내 경기는 세션 밖 경기여도 맨 위에 온다 */
+  /** 진행 중 머리·내 경기 카드·남의 진행 중 경기 카드. 내 경기는 세션 밖 경기여도 맨 위에 온다 */
   const renderInProgress = (otherMatches: MatchInfo[]) => (
     <>
       <SectionLabel>진행 중</SectionLabel>
@@ -278,16 +278,14 @@ const Home: React.FC = () => {
         />
       ) : null}
       {otherMatches.length > 0 ? (
-        <Card>
-          {otherMatches.map((match) => (
-            <LiveMatchRow
-              key={match.id}
-              match={match}
-              now={now}
-              onPress={() => openMatchDetail(match.id)}
-            />
-          ))}
-        </Card>
+        otherMatches.map((match) => (
+          <LiveMatchCard
+            key={match.id}
+            match={match}
+            now={now}
+            onOpenDetail={() => openMatchDetail(match.id)}
+          />
+        ))
       ) : myInProgressMatch ? null : (
         <EmptyCard message="진행 중인 경기가 없어요" />
       )}
