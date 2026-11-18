@@ -138,7 +138,6 @@ const Me: React.FC = () => {
               <AchievementsSection
                 playerId={playerId}
                 progress={achievements}
-                variant="me"
                 onViewAll={() => setIsAchievementsRequested(true)}
               />
             ) : null}

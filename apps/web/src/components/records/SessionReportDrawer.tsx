@@ -246,7 +246,7 @@ export default function SessionReportDrawer({
         ) : null}
         {players.length > 0 ? (
           <PreviewSection
-            title="평점 변화"
+            title={`평점 변화 · ${players.length}`}
             items={players}
             renderPreview={(preview) => (
               <Card>

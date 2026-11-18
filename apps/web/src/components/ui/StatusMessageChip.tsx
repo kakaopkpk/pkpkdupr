@@ -1,25 +1,15 @@
 import React from "react";
 import { resolveStatusMessageColor } from "@/lib/statusMessagePalette";
-import { cx } from "./cx";
 
-/** md: 프로필·나 탭 머리, sm: 랭킹 줄처럼 좁은 칸 */
-const SIZE_CLASS_NAMES = {
-  md: "px-2.5 py-[3px] text-pk-13",
-  sm: "px-2 py-px text-pk-12",
-} as const;
-
+/** 회원이 고른 배경색의 한 줄 상태메시지 칩. 프로필 머리·랭킹 줄·상태메시지 미리보기가 같은 크기를 쓴다 */
 export const StatusMessageChip: React.FC<{
   message: string;
   color?: string | null;
-  size?: keyof typeof SIZE_CLASS_NAMES;
-}> = ({ message, color, size = "md" }) => {
+}> = ({ message, color }) => {
   const { bg, fg } = resolveStatusMessageColor(color);
   return (
     <span
-      className={cx(
-        "inline-block max-w-full truncate rounded-full font-medium",
-        SIZE_CLASS_NAMES[size],
-      )}
+      className="inline-block max-w-full truncate rounded-full px-2 py-px text-pk-12 font-medium"
       style={{ backgroundColor: bg, color: fg }}
     >
       {message}

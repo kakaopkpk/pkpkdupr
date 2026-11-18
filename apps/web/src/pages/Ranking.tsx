@@ -70,7 +70,6 @@ const PlayerNameCell: React.FC<{ player: RankingEntryPlayer }> = ({
       <StatusMessageChip
         message={player.statusMessage}
         color={player.statusMessageBackgroundColor}
-        size="sm"
       />
     ) : null}
   </span>

@@ -211,7 +211,6 @@ export default function MemberProfileDrawer({
               <AchievementsSection
                 playerId={playerId}
                 progress={overview.summary.achievements}
-                variant="member"
                 badgeSize={44}
                 onViewAll={() => setIsAchievementsRequested(true)}
               />

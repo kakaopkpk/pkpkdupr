@@ -46,8 +46,9 @@ export interface ProfileHeaderProps {
 }
 
 /**
- * 나 탭·회원 프로필 공용 머리. 흰 카드 없이 바탕 위에 아바타 52 · 이름 22/800 · 상태메시지 칩 ·
- * "N경기 · N승 N패"(복식+단식 합) 줄과 오른쪽 슬롯.
+ * 나 탭·회원 프로필 공용 머리. 흰 카드 없이 바탕 위에 아바타 56 · 이름 22/800 ·
+ * "N경기 · N승 N패"(복식+단식 합) 줄과 오른쪽 슬롯을 한 행에 두고,
+ * 상태메시지는 그 행 아래 작은 칩으로 둔다. 상태메시지 유무와 상관없이 행 높이가 같다.
  * 사진을 불러온 아바타는 누르면 사진 확대 보기(AvatarZoomViewer)를 연다.
  */
 const ProfileHeader: React.FC<ProfileHeaderProps> = ({
@@ -106,54 +107,58 @@ const ProfileHeader: React.FC<ProfileHeaderProps> = ({
   }, [isZoomVisible]);
 
   return (
-    <header className={cx("flex items-center gap-3", className)}>
-      {player ? (
-        <button
-          ref={avatarButtonRef}
-          type="button"
-          disabled={!canZoom}
-          aria-label={canZoom ? `${player.username} 프로필 사진 크게 보기` : undefined}
-          aria-hidden={canZoom ? undefined : true}
-          tabIndex={canZoom ? undefined : -1}
-          onClick={openZoom}
-          className={cx(
-            "shrink-0 rounded-full transition-transform duration-150 ease-pk-move enabled:active:scale-[0.92] motion-reduce:transition-none",
-            isZoomVisible && "invisible",
+    <header className={cx("flex flex-col gap-1.5", className)}>
+      <div className="flex items-center gap-3">
+        {player ? (
+          <button
+            ref={avatarButtonRef}
+            type="button"
+            disabled={!canZoom}
+            aria-label={canZoom ? `${player.username} 프로필 사진 크게 보기` : undefined}
+            aria-hidden={canZoom ? undefined : true}
+            tabIndex={canZoom ? undefined : -1}
+            onClick={openZoom}
+            className={cx(
+              "shrink-0 rounded-full transition-transform duration-150 ease-pk-move enabled:active:scale-[0.92] motion-reduce:transition-none",
+              isZoomVisible && "invisible",
+            )}
+          >
+            <PlayerAvatar
+              player={player}
+              size={56}
+              onImageLoad={setLoadedAvatarUrl}
+            />
+          </button>
+        ) : (
+          <span className="size-14 shrink-0 animate-pulse rounded-full bg-pk-neutral" />
+        )}
+        <div className="flex min-w-0 flex-1 flex-col items-start gap-0.5">
+          <Heading className="max-w-full truncate text-pk-22 leading-[1.25] font-extrabold tracking-[-0.02em] text-pk-ink">
+            {player?.username ?? ""}
+          </Heading>
+          {totalStats ? (
+            <span className="text-pk-13 text-pk-sub tabular-nums">
+              <CountUpNumber
+                value={totalStats.wins + totalStats.losses}
+                {...COUNT_UP}
+              />
+              경기 ·{" "}
+              <WinLossCount wins={totalStats.wins} losses={totalStats.losses} />
+            </span>
+          ) : hideStats ? null : (
+            <SkeletonBlock className="h-4 w-32" />
           )}
-        >
-          <PlayerAvatar
-            player={player}
-            size={52}
-            onImageLoad={setLoadedAvatarUrl}
-          />
-        </button>
-      ) : (
-        <span className="size-[52px] shrink-0 animate-pulse rounded-full bg-pk-neutral" />
-      )}
-      <div className="flex min-w-0 flex-1 flex-col items-start gap-1">
-        <Heading className="max-w-full truncate text-pk-22 font-extrabold tracking-[-0.02em] text-pk-ink">
-          {player?.username ?? ""}
-        </Heading>
-        {statusMessage ? (
+        </div>
+        {right}
+      </div>
+      {statusMessage ? (
+        <div>
           <StatusMessageChip
             message={statusMessage}
             color={statusMessageBackgroundColor}
           />
-        ) : null}
-        {totalStats ? (
-          <span className="text-pk-13 text-pk-sub tabular-nums">
-            <CountUpNumber
-              value={totalStats.wins + totalStats.losses}
-              {...COUNT_UP}
-            />
-            경기 ·{" "}
-            <WinLossCount wins={totalStats.wins} losses={totalStats.losses} />
-          </span>
-        ) : hideStats ? null : (
-          <SkeletonBlock className="h-4 w-32" />
-        )}
-      </div>
-      {right}
+        </div>
+      ) : null}
       {player && avatarUrl && isZoomVisible ? (
         <AvatarZoomViewer
           isOpen={isZoomOpen && isZoomRequested}
