@@ -50,6 +50,10 @@ describe("getSwipeTargetIndex", () => {
 
   it("끈 방향과 반대로 튕기며 놓으면 넘기지 않는다", () => {
     expect(getSwipeTargetIndex({ ...base, deltaX: -80, velocityX: 1 })).toBe(1);
+    // 카드 폭의 30% 넘게 끌었어도 반대로 빠르게 되돌리며 놓으면 취소다
+    expect(getSwipeTargetIndex({ ...base, deltaX: -200, velocityX: FLICK_MIN_VELOCITY_PX_PER_MS })).toBe(1);
+    // 반대 방향이어도 느리게 움직이며 놓으면 거리로 판정한다
+    expect(getSwipeTargetIndex({ ...base, deltaX: -200, velocityX: 0.1 })).toBe(2);
   });
 
   it("아무리 세게 멀리 넘겨도 한 번에 한 장만 넘긴다", () => {

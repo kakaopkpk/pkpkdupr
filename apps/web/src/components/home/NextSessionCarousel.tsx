@@ -20,6 +20,11 @@ const AXIS_LOCK_PX = 8;
 const VELOCITY_WINDOW_MS = 100;
 /** 손가락 밖(트랙패드·키보드 포커스)으로 스크롤이 멈추고 이 시간이 지나면 가까운 카드에 맞춘다 */
 const SCROLL_SETTLE_DELAY_MS = 150;
+/** 첫·마지막 카드 바깥으로 끌면 손가락 이동의 이 비율만 따라온다 */
+const EDGE_RESISTANCE = 0.3;
+const EDGE_SETTLE_DURATION_MS = 180;
+/** 끌어서 넘긴 손가락을 뗀 뒤 이 시간 안의 클릭은 카드 안 버튼에 닿지 않게 막는다 */
+const CLICK_SUPPRESS_MS = 400;
 
 interface SwipeState {
   mode: "pending" | "drag" | "ignore";
@@ -170,10 +175,32 @@ const NextSessionCarousel: React.FC<NextSessionCarouselProps> = ({
     if (!track) return;
 
     let state: SwipeState | null = null;
-    let shouldSuppressClick = false;
+    let suppressClickUntil = -Infinity;
+    let edgeSettleTimeout: number | null = null;
+
+    // 가장자리 바깥으로 끈 만큼은 스크롤로 갈 수 없어 카드들을 직접 옮겨 보여 준다
+    const setEdgeOffset = (offset: number, animate: boolean) => {
+      if (edgeSettleTimeout !== null) {
+        window.clearTimeout(edgeSettleTimeout);
+        edgeSettleTimeout = null;
+      }
+      const transition =
+        animate && !prefersReducedMotion() ? `transform ${EDGE_SETTLE_DURATION_MS}ms ease-out` : "";
+      for (const slide of Array.from(track.children) as HTMLElement[]) {
+        slide.style.transition = transition;
+        slide.style.transform = offset === 0 ? "" : `translate3d(${offset}px, 0, 0)`;
+      }
+      if (transition) {
+        edgeSettleTimeout = window.setTimeout(() => {
+          edgeSettleTimeout = null;
+          for (const slide of Array.from(track.children) as HTMLElement[]) {
+            slide.style.transition = "";
+          }
+        }, EDGE_SETTLE_DURATION_MS);
+      }
+    };
 
     const handleTouchStart = (event: TouchEvent) => {
-      shouldSuppressClick = false;
       if (event.touches.length !== 1) {
         state = null;
         return;
@@ -212,7 +239,16 @@ const NextSessionCarousel: React.FC<NextSessionCarouselProps> = ({
       }
 
       if (event.cancelable) event.preventDefault();
-      track.scrollLeft = state.startScrollLeft - deltaX;
+      const nextScrollLeft = state.startScrollLeft - deltaX;
+      const maxScrollLeft = Math.max(0, track.scrollWidth - track.clientWidth);
+      const overscroll =
+        nextScrollLeft < 0
+          ? nextScrollLeft
+          : nextScrollLeft > maxScrollLeft
+            ? nextScrollLeft - maxScrollLeft
+            : 0;
+      track.scrollLeft = nextScrollLeft;
+      setEdgeOffset(-overscroll * EDGE_RESISTANCE, false);
       state.samples.push({ x: touch.clientX, time: event.timeStamp });
       const cutoff = event.timeStamp - VELOCITY_WINDOW_MS;
       while (state.samples.length > 2 && state.samples[0].time < cutoff) {
@@ -225,7 +261,8 @@ const NextSessionCarousel: React.FC<NextSessionCarouselProps> = ({
       state = null;
       if (!current || current.mode !== "drag") return;
       isDraggingRef.current = false;
-      shouldSuppressClick = true;
+      suppressClickUntil = event.timeStamp + CLICK_SUPPRESS_MS;
+      setEdgeOffset(0, true);
 
       const first = current.samples[0];
       const last = current.samples[current.samples.length - 1];
@@ -245,13 +282,14 @@ const NextSessionCarousel: React.FC<NextSessionCarouselProps> = ({
       state = null;
       if (current?.mode !== "drag") return;
       isDraggingRef.current = false;
+      setEdgeOffset(0, true);
       scrollToSlide(track, current.startIndex, true);
     };
 
     // 끌어서 넘긴 손가락을 뗄 때 카드 안 버튼이 눌리지 않게 한다
     const handleClickCapture = (event: MouseEvent) => {
-      if (!shouldSuppressClick) return;
-      shouldSuppressClick = false;
+      if (event.timeStamp > suppressClickUntil) return;
+      suppressClickUntil = -Infinity;
       event.preventDefault();
       event.stopPropagation();
     };
@@ -263,6 +301,7 @@ const NextSessionCarousel: React.FC<NextSessionCarouselProps> = ({
     track.addEventListener("click", handleClickCapture, true);
     return () => {
       isDraggingRef.current = false;
+      setEdgeOffset(0, false);
       track.removeEventListener("touchstart", handleTouchStart);
       track.removeEventListener("touchmove", handleTouchMove);
       track.removeEventListener("touchend", handleTouchEnd);
