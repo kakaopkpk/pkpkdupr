@@ -370,27 +370,31 @@ describe("createSessionCalendarSync", () => {
     );
   });
 
-  it("resyncSessions는 연동이 꺼져 있으면 바로 끝나고, 캘린더 실패에도 throw 하지 않는다", async () => {
+  it("resyncSessions는 연동이 꺼져 있으면 세션을 읽지 않고 바로 끝난다", async () => {
     const loadSession = vi.fn(async () => makeSnapshot());
-    const off = createSessionCalendarSync({
+    const sync = createSessionCalendarSync({
       getClient: () => null,
       loadSession,
       getWebAppUrl: () => undefined,
     });
-    await expect(off.resyncSessions(["Sregular"])).resolves.toBeUndefined();
-    expect(loadSession).not.toHaveBeenCalled();
 
+    await expect(sync.resyncSessions(["Sregular"])).resolves.toBeUndefined();
+    expect(loadSession).not.toHaveBeenCalled();
+  });
+
+  it("resyncSessions는 캘린더 실패에도 throw 하지 않고 로그만 남긴다", async () => {
     const consoleError = vi
       .spyOn(console, "error")
       .mockImplementation(() => undefined);
     const client = makeClient();
     client.upsertEvent.mockRejectedValue(new Error("calendar down"));
-    const failing = createSessionCalendarSync({
+    const sync = createSessionCalendarSync({
       getClient: () => client,
-      loadSession,
+      loadSession: async () => makeSnapshot(),
       getWebAppUrl: () => undefined,
     });
-    await expect(failing.resyncSessions(["Sregular"])).resolves.toBeUndefined();
+
+    await expect(sync.resyncSessions(["Sregular"])).resolves.toBeUndefined();
     expect(consoleError).toHaveBeenCalledWith(
       "[CALENDAR] 세션 일정 반영 실패",
       "Sregular",

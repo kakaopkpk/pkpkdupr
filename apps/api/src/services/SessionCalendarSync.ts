@@ -167,9 +167,8 @@ export const createSessionCalendarSync = (
 
   /** 세션 반영 작업을 걸고 그 작업을 돌려준다. 시작 전 작업이 이미 있으면 그 작업이 최신 상태를 읽으므로 그것을 돌려준다 */
   const enqueue = (client: GoogleCalendarClient, sessionId: string) => {
-    const queuedTask = queued.has(sessionId) ? chains.get(sessionId) : undefined;
-    if (queuedTask) {
-      return queuedTask;
+    if (queued.has(sessionId)) {
+      return chains.get(sessionId)!;
     }
     queued.add(sessionId);
     const previous = chains.get(sessionId) ?? deferToNextTask();

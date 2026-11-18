@@ -2242,18 +2242,24 @@ app.post("/api/cron/regular-sessions", async (req, res) => {
   }
 
   const now = new Date();
-  let result: RegularSessionsCronResponse | undefined;
-  let cronError: unknown;
+  let status = 200;
+  let body: RegularSessionsCronResponse | { error: string };
   try {
-    result = await runRegularSessionCron({
+    body = await runRegularSessionCron({
       now,
       calendarClient: getEnvGoogleCalendarClient(),
       repository: matchRepository,
     });
-    console.log("[CRON] 정기 세션 예약 작업 완료", JSON.stringify(result));
+    console.log("[CRON] 정기 세션 예약 작업 완료", JSON.stringify(body));
   } catch (err) {
     console.error("[CRON] 정기 세션 예약 작업 실패", err);
-    cronError = err;
+    if (err instanceof RegularSessionCronError) {
+      status = err.status;
+      body = { error: err.message };
+    } else {
+      status = 500;
+      body = { error: "정기 세션을 만들지 못했습니다." };
+    }
   }
 
   // 정기 세션 생성 결과와 상관없이 하고, 실패해도 응답은 바꾸지 않는다.
@@ -2265,13 +2271,7 @@ app.post("/api/cron/regular-sessions", async (req, res) => {
     console.error("[CRON] 세션 캘린더 일정 다시 쓰기 실패", err);
   }
 
-  if (result) {
-    return res.json(result);
-  }
-  if (cronError instanceof RegularSessionCronError) {
-    return res.status(cronError.status).json({ error: cronError.message });
-  }
-  res.status(500).json({ error: "정기 세션을 만들지 못했습니다." });
+  res.status(status).json(body);
 });
 
 app.post("/api/admin/matches/batch", requireAdmin, async (req, res) => {
