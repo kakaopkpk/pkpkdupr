@@ -246,7 +246,7 @@ export default function SessionReportDrawer({
         ) : null}
         {players.length > 0 ? (
           <PreviewSection
-            title={`평점 변화 · ${players.length}`}
+            title="평점 변화"
             items={players}
             renderPreview={(preview) => (
               <Card>
@@ -275,7 +275,7 @@ export default function SessionReportDrawer({
               />
             }
           >
-            경기 {visibleMatches.length}
+            경기
           </SectionLabel>
           <SegmentSwitchFade
             isPlaying={isListFading}

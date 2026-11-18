@@ -257,7 +257,7 @@ const RatingChangeCard: React.FC<{
       });
   }, [match.ratingChanges, match.teams]);
 
-  // 게스트가 낀 경기는 평점 변화가 없으므로 개수 없는 제목 아래 미반영 안내 한 줄만 보인다
+  // 게스트가 낀 경기는 평점 변화가 없으므로 제목 아래 미반영 안내 한 줄만 보인다
   if (match.ratingExcluded) {
     return (
       <section className="flex flex-col gap-2.5 pt-1">
@@ -275,7 +275,7 @@ const RatingChangeCard: React.FC<{
 
   return (
     <section className="flex flex-col gap-2.5 pt-1">
-      <SectionLabel>평점 변화 · {entries.length}</SectionLabel>
+      <SectionLabel>평점 변화</SectionLabel>
       <Card>
         {entries.map(({ player, change }) => (
           <button
