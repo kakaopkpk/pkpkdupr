@@ -210,6 +210,7 @@ const Schedule: React.FC = () => {
     pendingAction: participation.getPendingAction(session.id),
     error: participation.getError(session.id),
     onJoin: () => void participation.change(session.id, "join"),
+    onLeave: () => void participation.change(session.id, "leave"),
   });
 
   const handleCreateSession = () =>
@@ -238,7 +239,6 @@ const Schedule: React.FC = () => {
             key={`upcoming:${entry.session.id}`}
             {...getParticipationProps(entry.session)}
             todayKey={todayKey}
-            onLeave={() => void participation.change(entry.session.id, "leave")}
             onOpenParticipants={() => openParticipants(entry.session, EMPTY_IDS)}
           />
         );

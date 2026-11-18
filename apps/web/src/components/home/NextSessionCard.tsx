@@ -3,10 +3,12 @@ import {
   ParticipationControls,
   type ParticipationAction,
   SessionBlueCard,
-  SessionCardTop,
 } from "@/components/session/SessionBlueCard";
 import type { MatchSessionDetailInfo } from "@/lib/matchSessions";
-import { getSessionDDayLabel, getSessionMetaLabel } from "./sessionTimeLabel";
+import {
+  getSessionDDayLabel,
+  getSessionMetaLabel,
+} from "@/components/session/sessionTimeLabel";
 
 export interface NextSessionCardProps {
   session: MatchSessionDetailInfo;
@@ -37,12 +39,7 @@ const NextSessionCard: React.FC<NextSessionCardProps> = ({
   <SessionBlueCard
     session={session}
     className={className}
-    top={
-      <SessionCardTop
-        kind={session.kind}
-        dDayLabel={getSessionDDayLabel(session, todayKey)}
-      />
-    }
+    dDayLabel={getSessionDDayLabel(session, todayKey)}
     meta={getSessionMetaLabel(session, todayKey)}
     participantsLabel={`${session.participants.length}명 참여 예정`}
     onOpenParticipants={onOpenParticipants}

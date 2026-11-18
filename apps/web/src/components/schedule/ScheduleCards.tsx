@@ -2,7 +2,7 @@ import React from "react";
 import {
   formatSessionTimePlace,
   getSessionDDayLabel,
-} from "@/components/home/sessionTimeLabel";
+} from "@/components/session/sessionTimeLabel";
 import { SESSION_DATE_OPTION_DAYS } from "@/components/session/SessionSchedulePicker";
 import {
   BlueCardSolidButton,
@@ -10,7 +10,6 @@ import {
   ParticipationError,
   type ParticipationAction,
   SessionBlueCard,
-  SessionCardTop,
 } from "@/components/session/SessionBlueCard";
 import { LivePill } from "@/components/ui/Badges";
 import { PkButton } from "@/components/ui/Button";
@@ -43,12 +42,7 @@ export const UpcomingSessionCard: React.FC<{
   <div className="flex flex-col gap-2">
     <SessionBlueCard
       session={session}
-      top={
-        <SessionCardTop
-          kind={session.kind}
-          dDayLabel={getSessionDDayLabel(session, todayKey)}
-        />
-      }
+      dDayLabel={getSessionDDayLabel(session, todayKey)}
       meta={formatSessionTimePlace(session)}
       participantsLabel={`${session.participants.length}명 참여 예정`}
       onOpenParticipants={onOpenParticipants}
@@ -75,7 +69,7 @@ export const LiveSessionCard: React.FC<{
 }> = ({ session, onOpenParticipants, onOpenLive }) => (
   <SessionBlueCard
     session={session}
-    top={<SessionCardTop kind={session.kind} trailing={<LivePill />} />}
+    trailing={<LivePill />}
     meta={formatSessionTimePlace(session)}
     participantsLabel={`${session.participants.length}명 참여`}
     onOpenParticipants={onOpenParticipants}

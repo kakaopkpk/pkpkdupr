@@ -46,31 +46,16 @@ const ParticipantAvatars: React.FC<{
 };
 
 /**
- * 블루 카드 첫 줄: 세션 종류 칩("정기"/"회원") → 남은 날("D-1"·"D-Day"), 오른쪽 끝에 trailing(LIVE 등)
- */
-export const SessionCardTop: React.FC<{
-  kind: MatchSessionDetailInfo["kind"];
-  dDayLabel?: string;
-  trailing?: React.ReactNode;
-}> = ({ kind, dDayLabel, trailing }) => (
-  <div className="flex items-center gap-2">
-    <span className="rounded-full bg-white/[0.18] px-2.5 py-[3px] text-pk-12 font-bold">
-      {getSessionKindShortLabel(kind)}
-    </span>
-    {dDayLabel ? (
-      <span className="text-pk-13 font-extrabold tabular-nums">{dDayLabel}</span>
-    ) : null}
-    {trailing ? <span className="ml-auto flex">{trailing}</span> : null}
-  </div>
-);
-
-/**
- * 세션 블루 카드 틀: 첫 줄(top) → 이름·메타 → 참여자 줄(누르면 참여자 시트) → children(버튼).
- * 오른쪽 위에 피클볼 장식이 걸친다. 홈 다음 세션 카드와 일정 탭 세션 카드가 같이 쓴다
+ * 세션 블루 카드 틀: 첫 줄(종류 칩 "정기"/"회원" → 남은 날 → 오른쪽 끝 trailing) → 이름·메타
+ * → 참여자 줄(누르면 참여자 시트) → children(버튼). 오른쪽 위에 피클볼 장식이 걸친다.
+ * 홈 다음 세션 카드와 일정 탭 세션 카드가 같이 쓴다
  */
 export const SessionBlueCard: React.FC<{
   session: MatchSessionDetailInfo;
-  top: React.ReactNode;
+  /** "D-1" | "D-Day". 진행 중 세션은 없다 */
+  dDayLabel?: string;
+  /** 첫 줄 오른쪽 끝(LIVE 등) */
+  trailing?: React.ReactNode;
   meta: string;
   /** "9명 참여 예정" | "9명 참여" */
   participantsLabel: string;
@@ -79,7 +64,8 @@ export const SessionBlueCard: React.FC<{
   className?: string;
 }> = ({
   session,
-  top,
+  dDayLabel,
+  trailing,
   meta,
   participantsLabel,
   onOpenParticipants,
@@ -95,7 +81,17 @@ export const SessionBlueCard: React.FC<{
     <PickleballIllustration className="pointer-events-none absolute -top-[62px] -right-[54px]" />
     {/* 장식 위에 그려지도록 내용은 relative로 쌓는다 */}
     <div className="relative flex flex-col gap-4 px-5 pt-[22px] pb-5">
-      {top}
+      <div className="flex items-center gap-2">
+        <span className="rounded-full bg-white/[0.18] px-2.5 py-[3px] text-pk-12 font-bold">
+          {getSessionKindShortLabel(session.kind)}
+        </span>
+        {dDayLabel ? (
+          <span className="text-pk-13 font-extrabold tabular-nums">
+            {dDayLabel}
+          </span>
+        ) : null}
+        {trailing ? <span className="ml-auto flex">{trailing}</span> : null}
+      </div>
       <div className="flex min-w-0 flex-col gap-1">
         <h2 className="truncate text-pk-26 font-extrabold tracking-[-0.02em]">
           {session.name}
@@ -120,6 +116,12 @@ export const SessionBlueCard: React.FC<{
   </article>
 );
 
+/** 블루 카드 위 큰 버튼(52px) 공통 틀 */
+const blueCardButtonClassName = cx(
+  "flex h-[52px] items-center rounded-pk-sm disabled:opacity-60",
+  buttonPressClassName,
+);
+
 /** 블루 카드 위 흰 바탕·블루 글자 큰 버튼(참여하기·진행 화면 보기) */
 export const BlueCardSolidButton: React.FC<{
   onPress: () => void;
@@ -131,8 +133,8 @@ export const BlueCardSolidButton: React.FC<{
     onClick={onPress}
     disabled={disabled}
     className={cx(
-      "flex h-[52px] items-center justify-center gap-1 rounded-pk-sm bg-white text-pk-15 font-extrabold text-pk-primary disabled:opacity-60",
-      buttonPressClassName,
+      blueCardButtonClassName,
+      "justify-center gap-1 bg-white text-pk-15 font-extrabold text-pk-primary",
     )}
   >
     {children}
@@ -165,8 +167,8 @@ export const ParticipationControls: React.FC<{
       disabled={isPending}
       aria-label={isLeaving ? undefined : "참여 중, 누르면 참여 취소"}
       className={cx(
-        "flex h-[52px] items-center justify-between gap-2 rounded-pk-sm bg-white/[0.14] px-4 text-white disabled:opacity-60",
-        buttonPressClassName,
+        blueCardButtonClassName,
+        "justify-between gap-2 bg-white/[0.14] px-4 text-white",
       )}
     >
       <span className="inline-flex items-center gap-1.5 text-pk-15 font-extrabold">

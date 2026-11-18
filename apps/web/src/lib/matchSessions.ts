@@ -175,12 +175,12 @@ export const startSessionMatch = async (
 };
 
 /** 세션 종류 칩 문구 */
-export const getSessionKindLabel = (kind: MatchSessionDetailInfo["kind"]) =>
-  kind === "regular" ? "정기 세션" : "회원 세션";
-
 /** 세션 블루 카드 칩의 짧은 종류 이름 */
 export const getSessionKindShortLabel = (kind: MatchSessionDetailInfo["kind"]) =>
   kind === "regular" ? "정기" : "회원";
+
+export const getSessionKindLabel = (kind: MatchSessionDetailInfo["kind"]) =>
+  `${getSessionKindShortLabel(kind)} 세션`;
 
 export const isSessionParticipant = (
   session: Pick<MatchSessionDetailInfo, "participants">,

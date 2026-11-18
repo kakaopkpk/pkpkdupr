@@ -20,8 +20,8 @@ interface Hole {
   rx: number;
   /** 접선 방향 반지름 */
   ry: number;
-  /** 화면 중심에서 구멍을 향하는 각도(도) */
-  angle: number;
+  /** 짧은 반지름이 화면 중심에서 구멍을 향하도록 돌리는 SVG transform */
+  transform: string;
 }
 
 /**
@@ -40,21 +40,23 @@ const computeHoles = (): Hole[] => {
     const x0 = ring * Math.cos(goldenAngle * i);
     const z0 = ring * Math.sin(goldenAngle * i);
 
-    const y1 = y0 * Math.cos(TILT_X) - z0 * Math.sin(TILT_X);
+    const y = y0 * Math.cos(TILT_X) - z0 * Math.sin(TILT_X);
     const z1 = y0 * Math.sin(TILT_X) + z0 * Math.cos(TILT_X);
     const x = x0 * Math.cos(TILT_Y) + z1 * Math.sin(TILT_Y);
     const z = -x0 * Math.sin(TILT_Y) + z1 * Math.cos(TILT_Y);
-    const y = y1;
 
     // 테두리에 걸친 구멍까지 남긴다
     if (z <= -Math.sin(HOLE_ANGULAR_RADIUS)) continue;
 
+    const cx = CENTER + centerDistance * x;
+    const cy = CENTER - centerDistance * y;
+    const angle = (Math.atan2(-y, x) * 180) / Math.PI;
     holes.push({
-      cx: CENTER + centerDistance * x,
-      cy: CENTER - centerDistance * y,
+      cx,
+      cy,
       rx: Math.max(tangentRadius * z, MIN_HOLE_MINOR_RADIUS),
       ry: tangentRadius,
-      angle: (Math.atan2(-y, x) * 180) / Math.PI,
+      transform: `rotate(${angle} ${cx} ${cy})`,
     });
   }
   return holes;
@@ -93,7 +95,7 @@ const PickleballIllustration: React.FC<{ className?: string }> = ({
             cy={hole.cy}
             rx={hole.rx}
             ry={hole.ry}
-            transform={`rotate(${hole.angle} ${hole.cx} ${hole.cy})`}
+            transform={hole.transform}
           />
         ))}
       </g>
@@ -101,4 +103,5 @@ const PickleballIllustration: React.FC<{ className?: string }> = ({
   );
 };
 
-export default PickleballIllustration;
+// 늘 같은 모양이라 캐러셀 넘김·분 단위 재렌더 때 다시 그리지 않는다
+export default React.memo(PickleballIllustration);

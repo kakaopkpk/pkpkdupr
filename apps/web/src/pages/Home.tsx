@@ -13,7 +13,7 @@ import {
   byLatestStart,
   usePreSessionData,
 } from "@/components/home/usePreSessionData";
-import { formatSessionTimePlace } from "@/components/home/sessionTimeLabel";
+import { formatSessionTimePlace } from "@/components/session/sessionTimeLabel";
 import { useSessionRecommendations } from "@/components/home/useSessionRecommendations";
 import { useSessionTopRiser } from "@/components/home/useSessionTopRiser";
 import { TopRiserCard } from "@/components/records/SessionReportParts";
