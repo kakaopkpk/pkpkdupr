@@ -53,6 +53,8 @@ export const GLOBAL_LAYER = {
   recordMatch: 90,
   createSession: 90,
   achievementDetail: 95,
+  /** 프로필 사진 확대 보기. 프로필 화면(PushScreen) 위 */
+  avatarZoom: 90,
   /** 업적 달성 축하 연출. 경기 기록 시트·업적 상세보다 위 */
   achievementCelebration: 100,
 } as const;

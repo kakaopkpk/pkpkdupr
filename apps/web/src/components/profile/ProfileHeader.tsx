@@ -1,10 +1,17 @@
-import React from "react";
+import React, { useCallback, useId, useRef, useState } from "react";
 import SkeletonBlock from "@/components/SkeletonBlock";
+import AvatarZoomViewer from "@/components/profile/AvatarZoomViewer";
 import { WinLossCount } from "@/components/profile/ProfileStatTile";
 import { COUNT_UP, CountUpNumber } from "@/components/ui/CountUpNumber";
 import { PlayerAvatar } from "@/components/ui/PlayerAvatar";
 import { StatusMessageChip } from "@/components/ui/StatusMessageChip";
 import { cx } from "@/components/ui/cx";
+import {
+  type TabKey,
+  useTabNavigation,
+} from "@/context/TabNavigationContext";
+import { useLayerDepth } from "@/hooks/useLayerDepth";
+import { resolveAssetUrl } from "@/lib/api";
 import type { PlayerProfileSummaryInfo } from "@/lib/playerProfile";
 
 /** 복식·단식을 합친 승패 */
@@ -30,6 +37,8 @@ export interface ProfileHeaderProps {
   hideStats?: boolean;
   /** 이름 제목 태그. 화면 머리에 다른 h1이 있으면 h2를 쓴다 */
   headingAs?: "h1" | "h2";
+  /** 사진 확대 보기를 뒤로가기에 묶을 탭 */
+  tabKey: TabKey;
   /** 오른쪽 슬롯(예: 나 탭 설정 버튼) */
   right?: React.ReactNode;
   /** 바깥 여백은 화면마다 정한다 */
@@ -39,6 +48,7 @@ export interface ProfileHeaderProps {
 /**
  * 나 탭·회원 프로필 공용 머리. 흰 카드 없이 바탕 위에 아바타 52 · 이름 22/800 · 상태메시지 칩 ·
  * "N경기 · N승 N패"(복식+단식 합) 줄과 오른쪽 슬롯.
+ * 사진을 불러온 아바타는 누르면 사진 확대 보기(AvatarZoomViewer)를 연다.
  */
 const ProfileHeader: React.FC<ProfileHeaderProps> = ({
   player,
@@ -47,15 +57,68 @@ const ProfileHeader: React.FC<ProfileHeaderProps> = ({
   matchStats,
   hideStats = false,
   headingAs: Heading = "h1",
+  tabKey,
   right,
   className,
 }) => {
   const totalStats = matchStats ? getTotalMatchStats(matchStats) : null;
+  const { closeDepth } = useTabNavigation();
+  const zoomDepthId = `avatar-zoom-${useId()}`;
+  const avatarButtonRef = useRef<HTMLButtonElement>(null);
+  const [loadedAvatarUrl, setLoadedAvatarUrl] = useState<string | null>(null);
+  const [isZoomRequested, setIsZoomRequested] = useState(false);
+  /** 확대 보기가 화면에 있는 동안(닫힘 전환 포함) 원래 아바타를 숨긴다 */
+  const [isZoomVisible, setIsZoomVisible] = useState(false);
+
+  const avatarUrl = resolveAssetUrl(player?.avatarUrl);
+  const canZoom = !!player && !!avatarUrl && loadedAvatarUrl === avatarUrl;
+
+  const closeZoom = useCallback(() => setIsZoomRequested(false), []);
+  const isZoomOpen = useLayerDepth({
+    isOpen: isZoomRequested,
+    tabKey,
+    depthId: zoomDepthId,
+    kind: "dialog",
+    onClose: closeZoom,
+  });
+
+  const openZoom = () => {
+    if (!canZoom) return;
+    setIsZoomVisible(true);
+    setIsZoomRequested(true);
+  };
+
+  const requestCloseZoom = useCallback(() => {
+    if (!closeDepth(tabKey, zoomDepthId)) closeZoom();
+  }, [closeDepth, closeZoom, tabKey, zoomDepthId]);
+
+  const handleZoomExited = useCallback(() => {
+    setIsZoomVisible(false);
+    avatarButtonRef.current?.focus({ preventScroll: true });
+  }, []);
 
   return (
     <header className={cx("flex items-center gap-3", className)}>
       {player ? (
-        <PlayerAvatar player={player} size={52} />
+        <button
+          ref={avatarButtonRef}
+          type="button"
+          disabled={!canZoom}
+          aria-label={canZoom ? `${player.username} 프로필 사진 크게 보기` : undefined}
+          aria-hidden={canZoom ? undefined : true}
+          tabIndex={canZoom ? undefined : -1}
+          onClick={openZoom}
+          className={cx(
+            "shrink-0 rounded-full transition-transform duration-150 ease-pk-move enabled:active:scale-[0.92] motion-reduce:transition-none",
+            isZoomVisible && "invisible",
+          )}
+        >
+          <PlayerAvatar
+            player={player}
+            size={52}
+            onImageLoad={setLoadedAvatarUrl}
+          />
+        </button>
       ) : (
         <span className="size-[52px] shrink-0 animate-pulse rounded-full bg-pk-neutral" />
       )}
@@ -83,6 +146,16 @@ const ProfileHeader: React.FC<ProfileHeaderProps> = ({
         )}
       </div>
       {right}
+      {player && avatarUrl && isZoomVisible ? (
+        <AvatarZoomViewer
+          isOpen={isZoomOpen && isZoomRequested}
+          imageUrl={avatarUrl}
+          username={player.username}
+          originRef={avatarButtonRef}
+          onRequestClose={requestCloseZoom}
+          onExited={handleZoomExited}
+        />
+      ) : null}
     </header>
   );
 };
