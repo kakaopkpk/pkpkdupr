@@ -269,8 +269,8 @@ export default function RecordMatchFlow({
       teams: toTeamRequests(slotTeams),
       location: trimmedLocation,
       scores: [decidedScore],
-      // 정기 세션은 서버가 시작 시각 규칙으로 정하므로 회원 세션만 지정한다
-      ...(!matchId && liveSession?.kind === "custom"
+      // 정기 세션은 서버가 시작 시각 규칙으로 정하므로 회원·대회 세션만 지정한다
+      ...(!matchId && liveSession && liveSession.kind !== "regular"
         ? { sessionId: liveSession.id }
         : {}),
       // 마지막으로 본 경기와 그사이 다른 회원이 고쳤으면 서버가 409로 막는다

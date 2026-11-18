@@ -38,6 +38,7 @@ import {
   upcomingSkips,
 } from "./homeSummary";
 import { useLoader, type LoadState } from "./useLoader";
+import { SESSION_KIND_LABELS } from "../sessions/sessionKind";
 
 const UPCOMING_SESSION_LIMIT = 3;
 const IN_PROGRESS_TIMEOUT_HOURS = IN_PROGRESS_MATCH_TIMEOUT_MS / (60 * 60 * 1000);
@@ -409,7 +410,7 @@ const UpcomingSessionsCard: React.FC<{
                         <span className="truncate text-pk-15 font-semibold text-pk-ink">
                           {session.name}
                         </span>
-                        <Chip>{session.kind === "regular" ? "정기" : "회원 세션"}</Chip>
+                        <Chip>{SESSION_KIND_LABELS[session.kind]}</Chip>
                       </div>
                       <p className="mt-1 truncate text-pk-13 text-pk-sub">
                         {formatSessionTimePlace(session)}

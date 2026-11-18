@@ -18,7 +18,7 @@ import {
   SessionPanelTitle,
 } from "./SessionPanelParts";
 
-/** 오늘·미래 세션 패널. 정기 세션은 '이 날 취소', 회원 세션은 수정·삭제가 있다 */
+/** 오늘·미래 세션 패널. 모든 세션을 고칠 수 있고, 정기 세션은 '이 날 취소', 그 밖의 세션은 삭제가 있다 */
 export const UpcomingSessionPanel: React.FC<{
   session: ManagedMatchSession;
   players: AdminPlayer[];
@@ -92,18 +92,16 @@ export const UpcomingSessionPanel: React.FC<{
           <span className="block">{formatSessionSubtitle(session, session.location)}</span>
           {isRegular && (
             <span className="mt-0.5 block text-pk-12 text-pk-muted">
-              정기 세션 이름과 시간은 고정이에요.
+              정기 세션 날짜와 시간은 고정이에요.
             </span>
           )}
         </>
       }
       onClose={onClose}
     >
-      {!isRegular && (
-        <Button variant="soft" size="sm" onClick={() => onEdit(session)}>
-          이름·날짜·시간 수정
-        </Button>
-      )}
+      <Button variant="soft" size="sm" onClick={() => onEdit(session)}>
+        {isRegular ? "이름·종류·장소 수정" : "이름·종류·날짜·시간 수정"}
+      </Button>
 
       {detail ? (
         <SessionParticipantsEditor

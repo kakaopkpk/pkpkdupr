@@ -3,18 +3,17 @@ import type { ManagedMatchSession } from "@pkpkdupr/shared/match";
 import { formatSessionTimeRange } from "@pkpkdupr/shared/session";
 import { Chip } from "../../components/ui/Chip";
 import { formatKstDateWithWeekday } from "../../lib/format";
+import { SESSION_KIND_CHIP_CLASS, SESSION_KIND_LABELS } from "./sessionKind";
 
-/** 패널 머리 제목: 이름 + 정기/회원 세션 칩 */
+/** 패널 머리 제목: 이름 + 종류(정기·회원 세션·대회) 칩 */
 export const SessionPanelTitle: React.FC<{
   session: Pick<ManagedMatchSession, "name" | "kind">;
 }> = ({ session }) => (
   <span className="flex min-w-0 items-center gap-2">
     <span className="truncate">{session.name}</span>
-    {session.kind === "regular" ? (
-      <Chip className="bg-pk-primary text-white">정기</Chip>
-    ) : (
-      <Chip className="border border-pk-primary-line bg-white text-pk-primary">회원 세션</Chip>
-    )}
+    <Chip className={SESSION_KIND_CHIP_CLASS[session.kind]}>
+      {SESSION_KIND_LABELS[session.kind]}
+    </Chip>
   </span>
 );
 
