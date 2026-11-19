@@ -244,14 +244,15 @@ export const getSessionEndsAt = (
   sessionDate: Date,
   timeRange?: SessionTimeRange | null,
 ): Date => {
-  if (kind === "regular" || !timeRange?.endTime) {
+  // 자정을 넘기는 세션은 만료 시각이 곧 다음 날 종료 시각이다
+  if (
+    kind === "regular" ||
+    !timeRange?.endTime ||
+    isOvernightSessionTimeRange(timeRange)
+  ) {
     return getEmptySessionExpiresAt(kind, sessionDate, timeRange);
   }
-  const dateKey = toKstDateKey(sessionDate);
-  const endDateKey = isOvernightSessionTimeRange(timeRange)
-    ? addKstDays(dateKey, 1)
-    : dateKey;
-  return kstDateKeyTimeToDate(endDateKey, timeRange.endTime);
+  return kstDateKeyTimeToDate(toKstDateKey(sessionDate), timeRange.endTime);
 };
 
 /**

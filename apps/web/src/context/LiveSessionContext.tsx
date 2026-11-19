@@ -61,13 +61,11 @@ export const getLiveSessionStartsAt = (
   return kstDateKeyTimeToDate(toKstDateKey(sessionDate), session.startTime);
 };
 
-type SessionEndGetter = typeof getSessionEndsAt;
-
 /** 시작 시각 ≤ now < getEndsAt인 첫 세션(정기 우선) */
 const pickSessionBetween = (
   sessions: MatchSessionDetailInfo[],
   now: Date,
-  getEndsAt: SessionEndGetter,
+  getEndsAt: typeof getSessionEndsAt,
 ): MatchSessionDetailInfo | null => {
   const candidates = sessions.filter(
     (session) =>
@@ -155,8 +153,6 @@ export const useLiveSessionState = (
   const [status, setStatus] = useState<LiveSessionState["status"]>("loading");
   const [liveSession, setLiveSession] =
     useState<MatchSessionDetailInfo | null>(null);
-  const [recordingSession, setRecordingSession] =
-    useState<MatchSessionDetailInfo | null>(null);
   const [matches, setMatches] = useState<MatchInfo[]>([]);
   const [inProgressMatches, setInProgressMatches] = useState<MatchInfo[]>([]);
   /** 마지막으로 받은 오늘 세션. 다음 경계 시각 계산용 */
@@ -171,7 +167,6 @@ export const useLiveSessionState = (
 
     if (!playerId) {
       setLiveSession(null);
-      setRecordingSession(null);
       setMatches([]);
       setInProgressMatches([]);
       setTodaySessions([]);
@@ -192,7 +187,6 @@ export const useLiveSessionState = (
       if (requestIdRef.current !== requestId) return;
 
       setLiveSession(nextLiveSession);
-      setRecordingSession(pickRecordingSession(today.sessions));
       setMatches(nextMatches);
       if (nextInProgressMatches) setInProgressMatches(nextInProgressMatches);
       setTodaySessions(today.sessions);
@@ -253,7 +247,7 @@ export const useLiveSessionState = (
     return {
       status,
       liveSession,
-      recordingSession,
+      recordingSession: liveSession ?? pickRecordingSession(todaySessions),
       isParticipant: !!liveSession && isSessionParticipant(liveSession, playerId),
       matches,
       inProgressMatches,
@@ -265,9 +259,9 @@ export const useLiveSessionState = (
     liveSession,
     matches,
     playerId,
-    recordingSession,
     reload,
     status,
+    todaySessions,
   ]);
 };
 

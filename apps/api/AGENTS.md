@@ -173,7 +173,7 @@
   - 정기 세션 여부는 완료 경기 요약의 `regularSession`(업적 입력 `session.regular`)이다.
   - 경기가 열린 정기 회차에 빠지면 1부터 다시 세고, 진행도는 최고 연속 참여 수다.
 - 천적: 같은 상대 한 명에게 10번 이긴 것이다.
-- 세션 지배자 업적은 끝난 세션(만료 시각이 지난 세션)의 `topRiser`로 세며(`findSessionDominations`), 그 회원의 세션 마지막 경기로 받고 `newAchievements`에는 나오지 않는다.
+- 세션 지배자 업적은 만료된 세션(종료 시각이 아니라 빈 세션 만료 시각이 지난 세션)의 `topRiser`로 세며(`findSessionDominations`), 그 회원의 세션 마지막 경기로 받고 `newAchievements`에는 나오지 않는다.
 - 평점 업적
   - 높은 평점 3.0·3.5·4.0·4.5(수면 위로·구름 위 산책·성층권·궤도 진입)와 낮은 평점 2.5·2.0 이하(심해 탐사·마리아나 해구) 6개다.
   - 평점 반영 복식 경기가 10경기(`RATING_ACHIEVEMENT_MIN_DOUBLES_MATCHES`, 업적 기준 시각 전 경기 포함) 이상이 된 뒤의 복식 경기 직후 복식 평점(그 경기의 평점 변경 로그, 경기 업적 입력의 `doublesRatingAfter`)만 센다.
