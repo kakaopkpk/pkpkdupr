@@ -54,13 +54,25 @@ const MonthNavButton: React.FC<{
   </button>
 );
 
+/** 날 표시 점 색: 내 것이면 채움(filled), 아니면 테두리(outlined) */
+const dayMarkDotTones = {
+  tournament: { filled: "bg-pk-hl", outlined: "border-pk-hl" },
+  session: { filled: "bg-pk-primary", outlined: "border-pk-primary" },
+  match: { filled: "bg-pk-sub", outlined: "border-pk-sub" },
+} as const;
+
 /**
  * 날짜 아래 점(+ 숫자). 내 것이면 속이 찬 점, 아니면 1.5px 테두리 원.
  * 대회 세션이 있는 날은 점 색만 하이라이트(pk-hl)이고 인원 글자색은 그대로다
  */
 const DayMark: React.FC<{ mark: ScheduleDayMark }> = ({ mark }) => {
   const isSession = mark.kind === "session";
-  const isTournament = mark.kind === "session" && mark.isTournament;
+  const dotTone =
+    mark.kind === "session" && mark.isTournament
+      ? dayMarkDotTones.tournament
+      : isSession
+        ? dayMarkDotTones.session
+        : dayMarkDotTones.match;
   return (
     <span
       aria-hidden="true"
@@ -72,20 +84,7 @@ const DayMark: React.FC<{ mark: ScheduleDayMark }> = ({ mark }) => {
       <span
         className={cx(
           "size-2 shrink-0 rounded-full",
-          mark.isMine
-            ? isTournament
-              ? "bg-pk-hl"
-              : isSession
-                ? "bg-pk-primary"
-                : "bg-pk-sub"
-            : cx(
-                "border-[1.5px]",
-                isTournament
-                  ? "border-pk-hl"
-                  : isSession
-                    ? "border-pk-primary"
-                    : "border-pk-sub",
-              ),
+          mark.isMine ? dotTone.filled : cx("border-[1.5px]", dotTone.outlined),
         )}
       />
       {isSession ? mark.participantCount : null}

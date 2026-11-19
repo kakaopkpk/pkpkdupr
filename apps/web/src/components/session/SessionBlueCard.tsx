@@ -66,6 +66,10 @@ const SessionKindChip: React.FC<{ kind: MatchSessionDetailInfo["kind"] }> = ({
     </span>
   );
 
+/** 오른쪽 위 장식(피클볼·트로피) 자리 */
+const decorationClassName =
+  "pointer-events-none absolute -top-[62px] -right-[54px]";
+
 /**
  * 세션 블루 카드 틀: 첫 줄(종류 칩 "정기"/"회원"/"대회" → 남은 날 → 오른쪽 끝 trailing) → 이름·메타
  * → 참여자 줄(onOpenParticipants가 있으면 누르면 참여자 시트) → children(버튼, 없으면 참여자 줄로 끝난다).
@@ -137,9 +141,9 @@ export const SessionBlueCard: React.FC<{
       )}
     >
       {isTournament ? (
-        <TrophyIllustration className="pointer-events-none absolute -top-[62px] -right-[54px]" />
+        <TrophyIllustration className={decorationClassName} />
       ) : (
-        <PickleballIllustration className="pointer-events-none absolute -top-[62px] -right-[54px]" />
+        <PickleballIllustration className={decorationClassName} />
       )}
       {/* 장식 위에 그려지도록 내용은 relative로 쌓는다 */}
       <div className="relative flex flex-col gap-4 px-5 pt-[22px] pb-5">
