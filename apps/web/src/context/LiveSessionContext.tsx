@@ -10,6 +10,7 @@ import React, {
 import {
   canOpenRegularSession,
   getEmptySessionExpiresAt,
+  kstDateKeyTimeToDate,
   kstDateKeyToDate,
   REGULAR_SESSION_START_HOUR,
   toKstDateKey,
@@ -27,7 +28,7 @@ export interface LiveSessionState {
   status: "loading" | "ready" | "error";
   /**
    * 진행 중 세션. GET /api/match-sessions/today의 세션 중
-   * date ≤ 지금 < getEmptySessionExpiresAt(kind, date)인 첫 세션(정기 우선). 없으면 null
+   * getLiveSessionStartsAt ≤ 지금 < getEmptySessionExpiresAt(kind, date)인 첫 세션(정기 우선). 없으면 null
    */
   liveSession: MatchSessionDetailInfo | null;
   isParticipant: boolean;
@@ -42,16 +43,31 @@ export interface LiveSessionState {
 
 const LiveSessionContext = createContext<LiveSessionState | null>(null);
 
+/**
+ * 세션이 LIVE가 되는 시각. 대회 세션은 시작 시각(startTime이 있으면 그날 그 시각, 없으면 date)이고,
+ * 정기·회원 세션은 세션 시각(date)이다
+ */
+export const getLiveSessionStartsAt = (
+  session: Pick<MatchSessionDetailInfo, "kind" | "date" | "startTime">,
+): Date => {
+  const sessionDate = new Date(session.date);
+  if (session.kind !== "tournament" || !session.startTime) return sessionDate;
+  return kstDateKeyTimeToDate(toKstDateKey(sessionDate), session.startTime);
+};
+
 export const pickLiveSession = (
   sessions: MatchSessionDetailInfo[],
   now: Date = new Date(),
 ): MatchSessionDetailInfo | null => {
   const liveSessions = sessions.filter((session) => {
-    const startsAt = new Date(session.date);
+    const expiresAt = getEmptySessionExpiresAt(
+      session.kind,
+      new Date(session.date),
+      session,
+    );
     return (
-      startsAt.getTime() <= now.getTime() &&
-      now.getTime() <
-        getEmptySessionExpiresAt(session.kind, startsAt, session).getTime()
+      getLiveSessionStartsAt(session).getTime() <= now.getTime() &&
+      now.getTime() < expiresAt.getTime()
     );
   });
 
@@ -72,10 +88,10 @@ export const getNextLiveSessionBoundary = (
   now: Date = new Date(),
 ): Date => {
   const todayKey = toKstDateKey(now);
-  const candidates = sessions.flatMap((session) => {
-    const startsAt = new Date(session.date);
-    return [startsAt, getEmptySessionExpiresAt(session.kind, startsAt, session)];
-  });
+  const candidates = sessions.flatMap((session) => [
+    getLiveSessionStartsAt(session),
+    getEmptySessionExpiresAt(session.kind, new Date(session.date), session),
+  ]);
   // 24시는 다음 날 0시다
   candidates.push(kstDateKeyToDate(todayKey, 24));
 

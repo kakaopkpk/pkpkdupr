@@ -35,6 +35,11 @@
         - 아래 위치 점은 10개까지, 넘으면 "n / N".
         - 어느 카드에서든 참여하기·참여 취소.
       - 진행 중 경기는 경기마다 가로 vs 카드로 둔다. `home/LiveMatchCard`의 내 경기 `MyLiveMatchCard`는 테두리·"내 경기" 칩·점수 입력 버튼과 경기 상세 같은 랠리 팀 줄(`RallyTeamRow`)이 있고, 남의 경기 `LiveMatchCard`는 없다.
+      - 진행 중 세션이 대회 세션이면 진행 화면이 대회 카드(`LiveSessionCard`) → "내 경기" 섹션 → 라운드별 대진(`TournamentBracketSection`, `showFilter` false)이다.
+        - 세션 지배자·"진행 중" 섹션·추천 매칭·"오늘 기록"은 없고, 남의 진행 중 경기는 대진 안 제자리에만 있다.
+        - "내 경기"는 내 진행 중 경기(대진 밖 경기여도)면 `MyLiveMatchCard`(`isTournament`, 칩 대신 "진행 중 · N라운드" 글자 머리)다.
+        - 내 진행 중 경기가 없으면 내 다음 대진 경기(`findMyNextBracketMatch`)를 `MyNextBracketMatchCard`("다음 경기 · N라운드", "경기 시작" → `startScheduledMatch` → `notifyDataChanged()`)로 보인다. 4xx 문구는 카드 아래, 네트워크 오류는 `showSaveFailure`다.
+        - 둘 다 없으면 섹션이 없다.
     - `Schedule.tsx`(일정)
       - 탭 머리 없이 월 달력 `schedule/MonthCalendar`와 고른 날 카드를 둔다.
       - 달력 머리는 이전 달·"2026년 11월"(누르면 이번 달·오늘)·다음 달.
@@ -85,6 +90,7 @@
   - `TabNavigationContext.tsx`: 탭(`TabKey`: `home`·`schedule`·`ranking`·`me`)·깊이 스택(`pushDepth`/`closeDepth`, 브라우저 뒤로가기 연동)·스크롤 복원·당겨서 새로고침 등록
   - `AppNavigationContext.tsx`: `useAppNavigation()`으로 전역 화면 열기(`openMatchDetail`, `openMemberProfile`(내 id면 나 탭), `openRecordMatch`, `openCreateSession`(`dateKey`로 날짜를 골라 둔 채 열고, 만든 뒤 `onCreated`를 부름. + 메뉴는 홈 탭으로, 일정 탭은 만든 날로 옮김), `openSettings`, `openSessionReport`(지금 탭 위에 세션 상세 화면), `openAchievementDetail`(업적 상세 시트, 경기 기록 시트보다 위 레이어)), `notifyDataChanged`·`dataVersion`, 전역 화면 레이어 번호 `GLOBAL_LAYER`
   - `LiveSessionContext.tsx`: `useLiveSession()`으로 오늘 진행 중 세션·그 경기, 세션과 상관없는 진행 중 경기(`GET /api/matches/in-progress`)와 그중 내 경기
+    - 진행 중 세션은 `getLiveSessionStartsAt` ≤ 지금 < 빈 세션 만료 시각인 세션(정기 우선)이다. 대회 세션만 시작 시각(`startTime`이 있으면 그날 그 시각)부터이고, 다음 재조회 시각(`getNextLiveSessionBoundary`)도 같은 기준이다.
   - `SystemNoticeContext.tsx`: `useSystemNotice().showSaveFailure({ onRetry })`로 저장 실패 토스트(네트워크 오류에만, 서버 4xx·5xx는 화면 인라인), `showToast({ message, actionLabel?, onAction?, durationMs? })`로 하단 바 위 알약 토스트(기본 5초, 동작 글자 하나)
   - `AppUpdateContext.tsx`: `useAppUpdate()`로 PWA 업데이트 확인·적용 상태
   - `ScreenVisibilityContext.tsx`: `useIsScreenVisible()`로 안쪽 화면이 지금 보이는지. 탭 패널(선택됨 && 탭 셸이 PushScreen에 덮이지 않음)과 PushScreen 본문(열림 && 활성 && 덮이지 않음)이 제공하고, 제공자 밖(바텀시트 등)은 언제나 보임
