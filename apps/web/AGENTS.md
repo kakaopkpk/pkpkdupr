@@ -43,7 +43,7 @@
         - 내 진행 중 경기가 없으면 내 다음 대진 경기(`findMyNextBracketMatch`)를 `MyNextBracketMatchCard`("다음 경기 · N라운드", "경기 시작" → `startScheduledMatch` → `notifyDataChanged()`)로 보인다. 4xx 문구는 카드 아래, 네트워크 오류는 `showSaveFailure`다.
         - 둘 다 없으면 섹션이 없다.
     - `Schedule.tsx`(일정)
-      - 탭 머리 없이 월 달력 `schedule/MonthCalendar`와 고른 날 카드를 둔다.
+      - 탭 머리 없이 월 달력 `schedule/MonthCalendar`(카드 위 오른쪽에 점 범례 세션·대회·경기 기록)와 고른 날 카드를 둔다.
       - 달력 머리는 이전 달·"2026년 11월"(누르면 이번 달·오늘)·다음 달.
       - 달력은 달마다 6주(42칸, `schedule/monthGrid`의 `getMonthGridDateKeys`)이고, 이전·이번·다음 달 판을 이어 붙인 트랙에서 가운데 판만 보이며 옆 판은 `inert`다.
       - 달력 카드를 왼쪽으로 밀면 다음 달, 오른쪽이면 이전 달(버튼과 같은 이동)이다.
@@ -85,7 +85,7 @@
       - 끝난 대회: `TournamentRankCard`(누를 수 없음, `mine`은 리포트 `players`의 내 줄) → 세션 지배자·내 평점·내 새 업적·평점 변화 → `TournamentBracketSection`.
       - 끝난 일반 세션: `RecordSessionCard`(`onPress` 없이 누를 수 없음, 메타 줄 앞에 날짜) → 세션 지배자·내 평점·내 새 업적·평점 변화 → "경기" 섹션. 리포트가 없으면 버튼 없는 블루 카드("종료").
     - `record/`: 경기 기록 시트. 완료 단계는 이 경기로 참가자 전원이 받은 업적을 띠(`match/MatchAchievementRow`)로 보이고, 그중 내 새 업적만 화면 전체 축하 연출 `AchievementCelebration`으로 띄우고 닫으면 확인 처리
-    - `session/`: 세션 만들기(‹ › 로 넘기는 월 달력·시작·종료 시각 칩 `SessionSchedulePicker`, 오늘 이후 어느 날이든)·참여자 시트 `ParticipantsSheet`(열면 참여자 보기, 오른쪽 위 "수정"으로 같은 시트에서 전체 회원 체크·게스트 추가 수정 모드, 완료·취소·뒤로가기는 보기로 돌아감)
+    - `session/`: 세션 만들기(일정 탭과 같은 `MonthCalendar`로 고르는 날짜, `minDateKey`로 지난 날·오늘이 든 달 앞은 막음, 표시는 `schedule/useScheduleMonthMarks`·시작·종료 시각 칩 `SessionSchedulePicker`, 오늘 이후 어느 날이든)·참여자 시트 `ParticipantsSheet`(열면 참여자 보기, 오른쪽 위 "수정"으로 같은 시트에서 전체 회원 체크·게스트 추가 수정 모드, 완료·취소·뒤로가기는 보기로 돌아감)
     - `settings/`: 설정·비밀번호 변경·상태메시지 편집·프로필 사진 조정 `AvatarCropScreen`
       - 고른 사진을 끌어 옮기고 핀치로 1~4배, 두 번 탭 2배↔1배, 원 안을 512px JPEG로 잘라 저장. 좌표 계산은 `utils/avatarCrop.ts`
   - 탭 전용 조각: `home/`, `schedule/`, `records/`(세션 리포트 조각 `SessionReportParts`는 일정 탭·세션 상세·홈이 같이 씀, 끝난 세션·세션 없는 경기 카드 `RecordCards`, 세션 상세 내 새 업적 카드 `MyNewAchievementsCard`), `ranking/`. 세션 블루 카드 틀·참여 버튼 `session/SessionBlueCard`(오른쪽 위 피클볼 장식 `session/PickleballIllustration`, 첫 줄은 종류 칩 "정기"/"회원"/"대회"와 남은 날 `getSessionDDayLabel`("D-1"·오늘이면 "D-Day"), 참여 중이면 "✓ 참여 중 … 취소" 버튼 하나, 진행 중 세션 카드 `LiveSessionCard`)는 홈 다음 세션·진행 중 세션 카드와 일정 탭 세션 카드가 같이 씀
@@ -220,4 +220,4 @@
   - 탭 셸 하단 바(탭바·+ 버튼·미니바·알림 바)와 `PushScreen` 하단 고정 바도 같은 기준(`app-keyboard-hidden`)으로 숨습니다.
 - 새 경기 기록은 나를 첫 자리에 넣어 열고(내가 진행 중 경기에 있으면 비움), 선수 목록 맨 위에는 항상 내가 옵니다. 경기 저장은 1초 길게 누르기(`HOLD_TO_CONFIRM_DURATION_MS`)입니다.
 - 다크 테마는 만들지 않습니다.
-- 홈·나 탭은 탭 제목 머리(`TabHeader`) 없이 첫 콘텐츠로 시작하고, `TabHeader`는 랭킹 탭만 씁니다. 일정 탭은 달력 카드로 시작합니다. 홈은 진행 중 세션이 있으면 그 세션의 블루 카드(`SessionBlueCard`, 버튼 없음)로 시작합니다.
+- 홈·나 탭은 탭 제목 머리(`TabHeader`) 없이 첫 콘텐츠로 시작하고, `TabHeader`는 랭킹 탭만 씁니다. 일정 탭은 점 범례 한 줄과 달력 카드로 시작합니다. 홈은 진행 중 세션이 있으면 그 세션의 블루 카드(`SessionBlueCard`, 버튼 없음)로 시작합니다.

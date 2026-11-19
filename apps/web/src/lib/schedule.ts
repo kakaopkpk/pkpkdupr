@@ -99,6 +99,20 @@ export const buildScheduleDayMarks = (
   return marks;
 };
 
+/** 여러 달 응답의 달력 표시를 하나로 합친다 */
+export const mergeScheduleDayMarks = (
+  months: readonly Pick<ScheduleMonthInfo, "sessions" | "records">[],
+  playerId: string | undefined,
+): Map<string, ScheduleDayMark> => {
+  const merged = new Map<string, ScheduleDayMark>();
+  for (const data of months) {
+    for (const [dateKey, mark] of buildScheduleDayMarks(data, playerId)) {
+      merged.set(dateKey, mark);
+    }
+  }
+  return merged;
+};
+
 /** 고른 날 카드 한 장 */
 export type ScheduleDayEntry =
   /** 오늘 진행 중 세션 */
