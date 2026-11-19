@@ -45,16 +45,19 @@ const CATEGORY_OPTIONS: readonly SegmentedOption<RankingCategory>[] = [
 
 const SKELETON_ROW_COUNT = 6;
 
-// 순위 24 · 아바타 32 · 이름 · 평점+변동. 줄 좌우 여백 없이 카드 안쪽 12px에 맞춘다.
+// 순위 24 · 아바타 32 · 이름 · 평점(아래 변동). 줄 좌우 여백 없이 카드 안쪽 12px에 맞춘다.
 // 최소 높이 61은 이름 아래 상태메시지 칩이 붙은 줄 높이(이름 22.5 + 간격 2 + 칩 20 + 위아래 여백 16)라, 칩 유무와 상관없이 모든 줄 높이가 같다
 const rowGridClassName =
   "grid min-h-[61px] w-full grid-cols-[24px_32px_minmax(0,1fr)_auto] items-center gap-1.5 rounded-pk-sm py-2 text-left text-pk-ink";
 
-// 평점(15px)과 변동(12px)의 글자 세로 중심을 맞춘다. 줄 높이를 1로 두어 브라우저마다 다른 기본 줄 높이에 흔들리지 않게 한다
-const ratingCellClassName = "flex items-center gap-1.5";
+// 평점을 줄 오른쪽 끝에 붙이고 순위 변동은 그 아래 오른쪽 정렬로 둔다. 업적 점수도 같은 자리라 분류를 바꿔도 숫자 위치가 같다
+const ratingCellClassName = "flex flex-col items-end gap-1";
 
-/** 변동 32px 폭. 왼쪽 정렬이라 ▲·▼·– 시작 위치와 평점과의 간격이 모든 줄에서 같다. flex라 부모 글꼴 줄 높이(strut)가 끼지 않는다 */
-const changeSlotClassName = "flex w-8 shrink-0 items-center whitespace-nowrap";
+/** 평점·점수 글자. 줄 높이를 1로 두어 브라우저마다 다른 기본 줄 높이에 흔들리지 않게 한다 */
+const ratingTextClassName = "text-pk-15 leading-none font-extrabold tabular-nums";
+
+/** 평점 아래 변동 줄. flex라 부모 글꼴 줄 높이(strut)가 끼지 않는다 */
+const changeLineClassName = "flex whitespace-nowrap";
 
 /** 랭킹 카드: Card 기본 좌우 여백 16을 12로 줄인다 */
 const rankingCardClassName = "px-3 py-1.5";
@@ -107,10 +110,10 @@ const RankingRow: React.FC<{
       <RankingAvatar entry={entry} />
       <PlayerNameCell player={entry.player} />
       <span className={ratingCellClassName}>
-        <span className="text-pk-15 leading-none font-extrabold tabular-nums">
+        <span className={ratingTextClassName}>
           <CountUpNumber value={entry.rating} format={formatRating} {...countUp} />
         </span>
-        <span className={changeSlotClassName}>
+        <span className={changeLineClassName}>
           <CountUpPop delayMs={getCountUpEndMs(countUp)}>
             <RankChange value={entry.rankChange} className="leading-none" />
           </CountUpPop>
@@ -120,10 +123,7 @@ const RankingRow: React.FC<{
   );
 };
 
-/**
- * 업적 점수 순위 줄. 점수는 0부터 줄 순서만큼 늦게 세고, 순위 변동은 없다.
- * 변동 칸은 비워 두어 점수가 복식·단식 줄의 평점과 같은 우측 여백에 놓인다
- */
+/** 업적 점수 순위 줄. 점수는 0부터 줄 순서만큼 늦게 세고, 순위 변동은 없다 */
 const AchievementRankingRow: React.FC<{
   entry: AchievementRankingEntry;
   index: number;
@@ -139,21 +139,18 @@ const AchievementRankingRow: React.FC<{
     </span>
     <RankingAvatar entry={entry} />
     <PlayerNameCell player={entry.player} />
-    <span className={ratingCellClassName}>
-      <span className="text-pk-15 leading-none font-extrabold tabular-nums">
-        <CountUpNumber
-          value={entry.points}
-          format={formatAchievementPoints}
-          {...getRowCountUp(index)}
-        />
-        점
-      </span>
-      <span className={changeSlotClassName} />
+    <span className={ratingTextClassName}>
+      <CountUpNumber
+        value={entry.points}
+        format={formatAchievementPoints}
+        {...getRowCountUp(index)}
+      />
+      점
     </span>
   </button>
 );
 
-/** 평점 없는(NR) 회원 줄. 순위 카드 맨 아래에 순위·평점 모두 "–"로 이어 붙고 변동은 비운다 */
+/** 평점 없는(NR) 회원 줄. 순위 카드 맨 아래에 순위·평점 모두 "–"로 이어 붙고 변동 줄은 없다 */
 const UnratedRow: React.FC<{
   entry: UnratedRankingEntry;
   onPress: () => void;
@@ -168,11 +165,8 @@ const UnratedRow: React.FC<{
     </span>
     <RankingAvatar entry={entry} />
     <PlayerNameCell player={entry.player} />
-    <span className={cx(ratingCellClassName, "justify-end")}>
-      <span className="text-pk-15 leading-none font-extrabold text-pk-muted">
-        –
-      </span>
-      <span className={changeSlotClassName} />
+    <span className="text-pk-15 leading-none font-extrabold text-pk-muted">
+      –
     </span>
   </button>
 );
@@ -202,9 +196,9 @@ const RankingSkeleton: React.FC = () => (
           <SkeletonBlock className="h-4 w-24" />
           <SkeletonBlock className="h-3 w-16" />
         </div>
-        <span className="flex items-center gap-1.5">
+        <span className={ratingCellClassName}>
           <SkeletonBlock className="h-4 w-11" />
-          <span className={changeSlotClassName} />
+          <SkeletonBlock className="h-3 w-6" />
         </span>
       </div>
     ))}
