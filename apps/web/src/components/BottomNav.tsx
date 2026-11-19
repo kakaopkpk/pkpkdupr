@@ -208,53 +208,57 @@ const closedLayer = <T,>(): GlobalLayerState<T> => ({
   tabKey: "home",
 });
 
+/** 하단 바 뒤 블러·흰빛 덮개 공통 자리. 바 윗변 위 3rem(index.css --pb-ramp와 같은 값)부터 화면 아래까지 */
+const BOTTOM_DOCK_OVERLAY_CLASS =
+  "app-keyboard-hidden pointer-events-none absolute inset-x-0 bottom-0 z-10 h-[calc(var(--app-bottom-dock-height)+3rem)]";
+
+/** 흰빛 두 구역의 경계. 알약 윗변과 미니바 아랫변 사이 간격 가운데다 */
+const TINT_ZONE_SPLIT = `calc(var(--safe-bottom) + ${
+  NAV_BOTTOM_GAP_PX + NAV_BAR_HEIGHT_PX + DOCK_BAR_GAP_PX / 2
+}px)`;
+
 /**
  * 하단 바 주변 흰빛(index.css .app-bottom-tint). 알약과 미니바·알림 바 자리를 비우고 둘레만 칠한다.
  * 구멍 위치는 하단 바 줄 배치(좌우 여백·높이·간격 상수)와 맞춘다. 미니바 구멍은 표시 조건을 따라 바로 생기고 없어진다.
  */
-const BottomDockTint: React.FC<{ isDockBarVisible: boolean }> = ({
-  isDockBarVisible,
-}) => {
-  const navBottom = `calc(var(--safe-bottom) + ${NAV_BOTTOM_GAP_PX}px)`;
-  // 알약 윗변과 미니바 아랫변 사이 간격 가운데에서 두 구역을 나눈다
-  const zoneSplit = `calc(var(--safe-bottom) + ${
-    NAV_BOTTOM_GAP_PX + NAV_BAR_HEIGHT_PX + DOCK_BAR_GAP_PX / 2
-  }px)`;
-
-  return (
+const BottomDockTint = React.memo<{ isDockBarVisible: boolean }>(
+  ({ isDockBarVisible }) => (
     <div
       aria-hidden="true"
-      className="app-bottom-tint app-keyboard-hidden pointer-events-none absolute inset-x-0 bottom-0 z-10 h-[calc(var(--app-bottom-dock-height)+3rem)]"
+      className={`app-bottom-tint ${BOTTOM_DOCK_OVERLAY_CLASS}`}
     >
-      <div className="app-bottom-tint-zone top-0" style={{ bottom: zoneSplit }}>
-        {isDockBarVisible ? (
-          <span
-            className="app-bottom-tint-hole"
-            style={{
-              left: DOCK_SIDE_PADDING_PX,
-              right: DOCK_SIDE_PADDING_PX,
-              bottom: DOCK_BAR_GAP_PX / 2,
-              height: DOCK_BAR_HEIGHT_PX,
-            }}
-          />
-        ) : (
-          <span className="app-bottom-tint-hole size-0" />
-        )}
-      </div>
-      <div className="app-bottom-tint-zone bottom-0" style={{ height: zoneSplit }}>
+      <div
+        className="absolute inset-x-0 top-0 overflow-hidden"
+        style={{ bottom: TINT_ZONE_SPLIT }}
+      >
+        {/* 미니바가 없을 때도 높이 0으로 남겨 그림자가 이 구역을 칠하게 한다 */}
         <span
-          className="app-bottom-tint-hole"
+          className="app-bottom-tint-hole absolute rounded-full"
+          style={{
+            left: DOCK_SIDE_PADDING_PX,
+            right: DOCK_SIDE_PADDING_PX,
+            bottom: DOCK_BAR_GAP_PX / 2,
+            height: isDockBarVisible ? DOCK_BAR_HEIGHT_PX : 0,
+          }}
+        />
+      </div>
+      <div
+        className="absolute inset-x-0 bottom-0 overflow-hidden"
+        style={{ height: TINT_ZONE_SPLIT }}
+      >
+        <span
+          className="app-bottom-tint-hole absolute rounded-full"
           style={{
             left: DOCK_SIDE_PADDING_PX,
             right: DOCK_SIDE_PADDING_PX + NAV_BAR_HEIGHT_PX + DOCK_BAR_GAP_PX,
-            bottom: navBottom,
+            bottom: `calc(var(--safe-bottom) + ${NAV_BOTTOM_GAP_PX}px)`,
             height: NAV_BAR_HEIGHT_PX,
           }}
         />
       </div>
     </div>
-  );
-};
+  ),
+);
 
 const BottomNav: React.FC = () => {
   const { player } = useAuth();
@@ -1313,7 +1317,7 @@ const BottomNav: React.FC = () => {
               {/* 바 윗변 위 3rem부터 바 뒤·아래까지 콘텐츠가 점점 세게 흐려지게 한다(층 5개는 index.css) */}
               <div
                 aria-hidden="true"
-                className="app-progressive-blur app-keyboard-hidden pointer-events-none absolute inset-x-0 bottom-0 z-10 h-[calc(var(--app-bottom-dock-height)+3rem)]"
+                className={`app-progressive-blur ${BOTTOM_DOCK_OVERLAY_CLASS}`}
               >
                 <div />
                 <div />

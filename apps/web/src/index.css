@@ -457,10 +457,10 @@
   }
 
   /*
-   * 하단 바 주변 흰빛. 블러와 같은 램프로 짙어지되 유리 바(알약·미니바) 자리는 비워,
+   * 하단 바 주변 흰빛(BottomDockTint). 블러와 같은 램프로 짙어지되 유리 바(알약·미니바) 자리는 비워,
    * 바 뒤 콘텐츠가 대비를 잃지 않고 유리에 비쳐 일렁이게 한다.
    * 바 모양 구멍(.app-bottom-tint-hole)의 큰 바깥 그림자가 흰빛을 칠한다. 구멍끼리
-   * 그림자가 서로를 덮지 않게, 구역(.app-bottom-tint-zone)마다 구멍 하나를 두고 잘라 낸다.
+   * 그림자가 서로를 덮지 않게, overflow를 잘라 낸 구역마다 구멍 하나를 둔다.
    */
   .app-bottom-tint {
     -webkit-mask-image: linear-gradient(
@@ -471,15 +471,7 @@
     mask-image: linear-gradient(to bottom, transparent, #000 var(--pb-ramp));
   }
 
-  .app-bottom-tint-zone {
-    position: absolute;
-    inset-inline: 0;
-    overflow: hidden;
-  }
-
   .app-bottom-tint-hole {
-    position: absolute;
-    border-radius: 9999px;
     box-shadow: 0 0 0 100vmax
       color-mix(in srgb, var(--color-white) 55%, transparent);
   }
