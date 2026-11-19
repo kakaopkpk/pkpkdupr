@@ -26,7 +26,7 @@ const makeSession = (
   startTime: "10:00",
   endTime: "18:00",
   isToday: false,
-  participants: [member("alice"), member("bob"), member("carol")],
+  participants: [member("alice"), member("bob"), member("carol")] as MatchSessionDetailInfo["participants"],
   matchCount: 6,
   placements,
 });
