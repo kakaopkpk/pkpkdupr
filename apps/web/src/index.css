@@ -444,16 +444,34 @@
   }
 
   /*
-   * 하단 바 뒤 점진적 블러. 블러 세기가 다른 자식 5개가 높이 1/6씩 내려가며
-   * 절반 높이 띠를 맡고, 띠 위아래 끝을 마스크로 흐려 이어 붙인다. 위는 선명하고
-   * 아래로 갈수록 세게 흐려지며, 흰빛 틴트 없이 뒤 콘텐츠의 색을 그대로 둔다.
-   * 마지막 띠는 컨테이너 아래로 넘치지만 탭 셸이 잘라 낸다.
+   * 하단 바 뒤 점진적 블러. 컨테이너 윗변(바 윗변 위 3rem)에서 --pb-ramp만큼
+   * 내려간 곳, 곧 바 윗변 조금 아래에서 최대 세기가 되고 그 아래는 최대로 유지한다.
+   * 램프를 5등분한 --pb-unit마다 블러가 두 배인 자식 5개를 내려 쌓는다. 1~4층은
+   * 3칸 높이 띠의 위아래 1칸을 마스크로 흐려 이어 붙이고, 5층은 위 1칸만 흐린 채
+   * 바닥까지 덮는다. 블러 위에는 같은 램프로 짙어지는 흰빛(::after)을 얹는다.
    */
+  .app-progressive-blur {
+    --pb-ramp: calc(3rem + 0.75rem);
+    --pb-unit: calc(var(--pb-ramp) / 5);
+    --pb-tint: color-mix(in srgb, var(--color-white) 55%, transparent);
+  }
+
+  .app-progressive-blur::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+      to bottom,
+      transparent,
+      var(--pb-tint) var(--pb-ramp)
+    );
+  }
+
   .app-progressive-blur > * {
     position: absolute;
     inset-inline: 0;
-    top: calc((var(--pb-step) - 1) * 100% / 6);
-    height: 50%;
+    top: calc((var(--pb-step) - 1) * var(--pb-unit));
+    height: calc(var(--pb-unit) * 3);
     -webkit-backdrop-filter: blur(var(--pb-blur));
     backdrop-filter: blur(var(--pb-blur));
     -webkit-mask-image: linear-gradient(
@@ -474,27 +492,35 @@
 
   .app-progressive-blur > :nth-child(1) {
     --pb-step: 1;
-    --pb-blur: 1px;
+    --pb-blur: 0.375px;
   }
 
   .app-progressive-blur > :nth-child(2) {
     --pb-step: 2;
-    --pb-blur: 2px;
+    --pb-blur: 0.75px;
   }
 
   .app-progressive-blur > :nth-child(3) {
     --pb-step: 3;
-    --pb-blur: 4px;
+    --pb-blur: 1.5px;
   }
 
   .app-progressive-blur > :nth-child(4) {
     --pb-step: 4;
-    --pb-blur: 8px;
+    --pb-blur: 3px;
   }
 
   .app-progressive-blur > :nth-child(5) {
     --pb-step: 5;
-    --pb-blur: 16px;
+    --pb-blur: 6px;
+    height: auto;
+    bottom: 0;
+    -webkit-mask-image: linear-gradient(
+      to bottom,
+      transparent,
+      #000 var(--pb-unit)
+    );
+    mask-image: linear-gradient(to bottom, transparent, #000 var(--pb-unit));
   }
 
   /*
@@ -505,7 +531,7 @@
   .app-glass {
     position: relative;
     isolation: isolate;
-    background-color: rgb(255 255 255 / 0.38);
+    background-color: rgb(255 255 255 / 0.32);
     box-shadow:
       inset 0 1px 0 rgb(255 255 255 / 0.95),
       inset 0 -1px 1px rgb(255 255 255 / 0.45),

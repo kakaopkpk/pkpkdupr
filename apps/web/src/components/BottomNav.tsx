@@ -1260,7 +1260,7 @@ const BottomNav: React.FC = () => {
                 })}
               </div>
 
-              {/* 바 윗변 위 3rem부터 바 뒤·아래까지 콘텐츠가 점점 세게 흐려지게 한다(층 5개는 index.css) */}
+              {/* 바 윗변 위 3rem부터 바 뒤·아래까지 콘텐츠가 점점 세게 흐려지고 흰빛이 짙어지게 한다(층 5개·흰빛은 index.css) */}
               <div
                 aria-hidden="true"
                 className="app-progressive-blur app-keyboard-hidden pointer-events-none absolute inset-x-0 bottom-0 z-10 h-[calc(var(--app-bottom-dock-height)+3rem)]"
