@@ -54,6 +54,12 @@ export const formatKstLongDate = (date: Date | string) => {
   return `${month}월 ${day}일 ${weekday}`;
 };
 
+/** "11월 17일" 연도·요일 없는 날짜 */
+export const formatKstMonthDay = (date: Date | string) => {
+  const { month, day } = getKstParts(date);
+  return `${month}월 ${day}일`;
+};
+
 /** "11월 13일 목" */
 export const formatKstShortDate = (date: Date | string) => {
   const { month, day, weekday } = getKstParts(date);
