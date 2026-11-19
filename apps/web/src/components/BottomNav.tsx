@@ -1260,11 +1260,17 @@ const BottomNav: React.FC = () => {
                 })}
               </div>
 
-              {/* 바 뒤 콘텐츠가 흐려지며 끝나게 한다. 유리 바 뒤로 콘텐츠가 비치도록 끝까지 가리지는 않는다 */}
+              {/* 바 윗변 위 3rem부터 바 뒤·아래까지 콘텐츠가 점점 세게 흐려지게 한다(층 5개는 index.css) */}
               <div
                 aria-hidden="true"
-                className="app-keyboard-hidden pointer-events-none absolute inset-x-0 bottom-0 z-10 h-[calc(var(--app-bottom-dock-height)+5.5rem)] bg-[linear-gradient(to_bottom,transparent,color-mix(in_srgb,var(--color-pk-bg)_55%,transparent)_75%)]"
-              />
+                className="app-progressive-blur app-keyboard-hidden pointer-events-none absolute inset-x-0 bottom-0 z-10 h-[calc(var(--app-bottom-dock-height)+3rem)]"
+              >
+                <div />
+                <div />
+                <div />
+                <div />
+                <div />
+              </div>
 
               {/* 바를 살짝 빗나간 터치(바 아래 여백·바 위 가장자리)가 뒤 콘텐츠로 가지 않게 막는다 */}
               <div

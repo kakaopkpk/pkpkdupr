@@ -444,6 +444,60 @@
   }
 
   /*
+   * 하단 바 뒤 점진적 블러. 블러 세기가 다른 자식 5개가 높이 1/6씩 내려가며
+   * 절반 높이 띠를 맡고, 띠 위아래 끝을 마스크로 흐려 이어 붙인다. 위는 선명하고
+   * 아래로 갈수록 세게 흐려지며, 흰빛 틴트 없이 뒤 콘텐츠의 색을 그대로 둔다.
+   * 마지막 띠는 컨테이너 아래로 넘치지만 탭 셸이 잘라 낸다.
+   */
+  .app-progressive-blur > * {
+    position: absolute;
+    inset-inline: 0;
+    top: calc((var(--pb-step) - 1) * 100% / 6);
+    height: 50%;
+    -webkit-backdrop-filter: blur(var(--pb-blur));
+    backdrop-filter: blur(var(--pb-blur));
+    -webkit-mask-image: linear-gradient(
+      to bottom,
+      transparent,
+      #000 33.33%,
+      #000 66.67%,
+      transparent
+    );
+    mask-image: linear-gradient(
+      to bottom,
+      transparent,
+      #000 33.33%,
+      #000 66.67%,
+      transparent
+    );
+  }
+
+  .app-progressive-blur > :nth-child(1) {
+    --pb-step: 1;
+    --pb-blur: 1px;
+  }
+
+  .app-progressive-blur > :nth-child(2) {
+    --pb-step: 2;
+    --pb-blur: 2px;
+  }
+
+  .app-progressive-blur > :nth-child(3) {
+    --pb-step: 3;
+    --pb-blur: 4px;
+  }
+
+  .app-progressive-blur > :nth-child(4) {
+    --pb-step: 4;
+    --pb-blur: 8px;
+  }
+
+  .app-progressive-blur > :nth-child(5) {
+    --pb-step: 5;
+    --pb-blur: 16px;
+  }
+
+  /*
    * 하단 바·미니바 공통 유리. 뒤가 비치도록 옅게 칠하고 안쪽 윗변 하이라이트와
    * 가장자리 림, 위쪽 반사광(::before)으로 유리 두께를 낸다. 반사광은 z-index -1로
    * 내용 아래에 깔리도록 isolation으로 쌓임 맥락을 만든다.
