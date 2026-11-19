@@ -43,6 +43,7 @@
   - 관리자 전용 `sessionId`(문자열이면 그 세션으로 옮기고 null이면 세션에서 뺌)·`matchStartsAt`(완료 경기면 `completedAt`도 같은 만큼 옮김)으로 세션·경기 시각을 바꾼다. 회원이 이 둘을 보내면 403.
   - 선택적 `expectedUpdatedAt`이 서버 `updatedAt`과 다르면 409.
   - 대진 예정 경기(`scheduled`)에 점수를 넣으면 진행 중 경기 첫 점수와 같은 규칙으로 completed가 되고, 수정 기록(`match_edit_logs`)은 남기지 않는다.
+  - 대진 예정 경기에 바로 점수를 넣는 것은 관리자만 한다. 회원이면 409, `POST /api/matches/:matchId/start`로 시작한 뒤 넣는다.
   - 이미 completed인 경기를 고치면 같은 트랜잭션에서 수정 전·후 스냅샷을 `match_edit_logs`에 남긴다(관리자 수정 포함). 진행 중 경기의 첫 점수 입력과 종류·이름·장소·팀·점수·세션·경기 시각이 그대로인 저장은 남기지 않는다.
 - 삭제 `DELETE /api/matches/:matchId`
   - `isMatchRecordDeletable`, 이미 지워졌으면 404.
