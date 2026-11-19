@@ -2642,7 +2642,8 @@ export class MatchRepository {
         { players: [] },
       ];
       for (const participant of participantsByMatch.get(row.id) ?? []) {
-        teams[participant.teamIndex === 1 ? 1 : 0].players.push({
+        if (participant.teamIndex !== 0 && participant.teamIndex !== 1) continue;
+        teams[participant.teamIndex].players.push({
           id: participant.playerId,
         });
       }

@@ -2485,6 +2485,7 @@ const parseTournamentPlacements = (
     if (!Array.isArray(playerIds) || playerIds.length === 0) {
       throw new MatchSessionRequestError("순위마다 1명 이상 골라 주세요.", 400);
     }
+    const validPlayerIds: string[] = [];
     for (const playerId of playerIds) {
       if (typeof playerId !== "string" || !participantIds.has(playerId)) {
         throw new MatchSessionRequestError(
@@ -2499,8 +2500,9 @@ const parseTournamentPlacements = (
         );
       }
       placedPlayerIds.add(playerId);
+      validPlayerIds.push(playerId);
     }
-    return { place, playerIds: playerIds as string[] };
+    return { place, playerIds: validPlayerIds };
   });
   return placements.sort((a, b) => a.place - b.place);
 };

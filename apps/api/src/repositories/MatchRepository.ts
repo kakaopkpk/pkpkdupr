@@ -604,10 +604,14 @@ export class MatchRepository {
       () => db.matches.findCompletedRoundMatches(placedSessionIds),
       500,
     );
+    const matchesBySession = new Map<string, typeof roundMatches>();
+    for (const match of roundMatches) {
+      const list = matchesBySession.get(match.sessionId) ?? [];
+      list.push(match);
+      matchesBySession.set(match.sessionId, list);
+    }
     for (const placement of placements) {
-      const sessionMatches = roundMatches.filter(
-        (match) => match.sessionId === placement.sessionId,
-      );
+      const sessionMatches = matchesBySession.get(placement.sessionId) ?? [];
       const list = result.get(placement.sessionId) ?? [];
       list.push({
         place: placement.place as TournamentPlace,
