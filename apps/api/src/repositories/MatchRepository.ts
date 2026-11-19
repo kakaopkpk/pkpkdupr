@@ -134,6 +134,9 @@ const hydrateSession = (record: any): Session | undefined => {
       typeof record.session.location === "string" && record.session.location.trim()
         ? record.session.location.trim()
         : "Court TBD",
+    kind: record.session.kind,
+    startTime: record.session.startTime ?? null,
+    endTime: record.session.endTime ?? null,
   };
 };
 

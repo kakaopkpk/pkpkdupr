@@ -289,6 +289,28 @@ const toSessionKind = (
       ? "regular"
       : "custom";
 
+/** 세션 종류와 시작·종료 시각. 정기 세션 시각은 저장하지 않고 정해진 18:00~22:00으로 채운다 */
+const toSessionKindAndTimes = (
+  stored: Pick<
+    StoredMatchSession,
+    "kind" | "regularDateKey" | "startTime" | "endTime"
+  >,
+): {
+  kind: MatchSessionKind;
+  startTime: string | null;
+  endTime: string | null;
+} => {
+  const kind = toSessionKind(stored);
+  const isRegular = kind === "regular";
+  return {
+    kind,
+    startTime: isRegular
+      ? REGULAR_SESSION_START_TIME
+      : (stored.startTime ?? null),
+    endTime: isRegular ? REGULAR_SESSION_END_TIME : (stored.endTime ?? null),
+  };
+};
+
 // schema의 unixTimestamp 컬럼은 Unix 초로 저장한다. raw SQL은 그 변환을
 // 거치지 않으므로 경기 변경 타임스탬프를 여기서 직접 초로 바꾼다.
 const toUnixTimestampSeconds = (value: Date) =>
@@ -1184,20 +1206,12 @@ export class MatchRepository {
 
     return (sessionRows as StoredMatchSession[]).map(
       (session): SessionWithParticipantIds => {
-        const kind = toSessionKind(session);
-        const isRegular = kind === "regular";
         return {
           id: session.id,
           name: session.name,
           date: toDate(session.date),
           location: session.location,
-          kind,
-          startTime: isRegular
-            ? REGULAR_SESSION_START_TIME
-            : (session.startTime ?? null),
-          endTime: isRegular
-            ? REGULAR_SESSION_END_TIME
-            : (session.endTime ?? null),
+          ...toSessionKindAndTimes(session),
           participantIds: participantIdsBySessionId.get(session.id) ?? [],
         };
       },
@@ -2961,6 +2975,7 @@ export class MatchRepository {
               name: session.name,
               date: toDate(session.date),
               location: session.location,
+              ...toSessionKindAndTimes(session),
             }
           : undefined,
         status: match.status as Match["status"],

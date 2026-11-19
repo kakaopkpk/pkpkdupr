@@ -49,6 +49,7 @@
   - `isMatchRecordDeletable`, 이미 지워졌으면 404.
   - 선택적 `expectedUpdatedAt`이 서버 `updatedAt`과 다르면 409.
 - 경기 상세 `GET /api/matches/:matchId`: 응답 `MatchDetailResponse`(경기·`ratingChanges`·이 경기로 받은 업적 `achievements`, 아래 "업적")
+- 경기 응답(상세·세션 경기 목록 등)의 `session`은 `id`·`name`·`date`·`location`에 더해 `kind`·`startTime`·`endTime`(위 세션 응답과 같은 값)을 담는다. 웹이 서버 start 검증과 같은 `isSessionOnToday`로 "경기 시작" 노출을 판정하는 데 쓴다.
 - 세션과 상관없는 진행 중 경기 시작 `POST /api/matches/start`
   - 요청 `sessionId`가 오늘 회원 세션이면 그 세션, 아니면 기록과 같은 시간 규칙을 따른다.
   - 선수가 이미 진행 중 경기에 있으면 409 "<아이디>님이 다른 경기 중이에요".

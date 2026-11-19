@@ -3,8 +3,7 @@ import {
   isMatchRecordDeletable,
   isMatchRecordEditable,
 } from "@pkpkdupr/shared/match";
-import { toKstDateKey } from "@pkpkdupr/shared/session";
-import type { MatchInfo } from "@/types/match";
+import { isMatchSessionToday, type MatchInfo } from "@/types/match";
 import PushScreen from "@/components/PushScreen";
 import { getErrorMessage } from "@/components/record/recordMatch.utils";
 import { StateMessage } from "@/components/ui/StateMessage";
@@ -15,6 +14,7 @@ import {
   type TabKey,
   useTabNavigation,
 } from "@/context/TabNavigationContext";
+import { useMinuteClock } from "@/hooks/useMinuteClock";
 import { useLayerDepth } from "@/hooks/useLayerDepth";
 import { useOnlineStatus } from "@/hooks/useOnlineStatus";
 import { usePlayers } from "@/hooks/usePlayers";
@@ -58,11 +58,6 @@ type LoadState =
 
 class MatchNotFoundError extends Error {}
 
-/** 세션 날짜가 오늘(KST)이면 true. 자정을 넘긴 세션 등 그 밖의 경우는 서버 거절 문구로 처리한다 */
-const isSessionToday = (match: MatchInfo, now: Date) =>
-  !!match.session &&
-  toKstDateKey(new Date(match.session.date)) === toKstDateKey(now);
-
 const fetchMatch = async (matchId: string): Promise<MatchInfo> => {
   const res = await apiFetch(`/api/matches/${encodeURIComponent(matchId)}`);
   if (res.status === 404) throw new MatchNotFoundError();
@@ -99,6 +94,8 @@ export default function MatchDetailDrawer({
   const showStartedMatchToast = useStartedMatchToast();
   const { players } = usePlayers();
   const isOnline = useOnlineStatus();
+  // 자정·세션 종료 시각을 지나면 "경기 시작" 노출이 따라 바뀐다
+  const now = useMinuteClock();
   const [loadState, setLoadState] = useState<LoadState>({ kind: "loading" });
   const requestIdRef = useRef(0);
   const isOpen = useLayerDepth({
@@ -404,7 +401,7 @@ export default function MatchDetailDrawer({
           onOpenPlayer={openMemberProfile}
         />
       );
-      if (isSessionToday(match, new Date())) {
+      if (isMatchSessionToday(match, now)) {
         actions = (
           <ScheduledMatchActions
             isBusy={isStartingScheduled}
