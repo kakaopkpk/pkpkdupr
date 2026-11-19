@@ -751,16 +751,15 @@ export class MatchRepository {
       () => db.matches.startScheduledMatch(matchId, now),
       500,
     );
-    if (result.reason === "not_found") {
-      throw new MatchRepositoryError("매치를 찾을 수 없습니다.", 404);
-    }
-    if (result.reason === "not_scheduled") {
-      throw new MatchRepositoryError(MATCH_ALREADY_STARTED_MESSAGE, 409);
+    if ("match" in result) {
+      return { match: hydrateMatch(result.match) };
     }
     if (result.reason === "player_busy") {
       return { conflictPlayerId: result.conflictPlayerId };
     }
-    return { match: hydrateMatch(result.match) };
+    throw result.reason === "not_found"
+      ? new MatchRepositoryError("매치를 찾을 수 없습니다.", 404)
+      : new MatchRepositoryError(MATCH_ALREADY_STARTED_MESSAGE, 409);
   }
 
   /** 세션과 상관없이 지금 진행 중인(만료 전, 시작한, 점수 없는) 경기 */

@@ -163,6 +163,7 @@ describe("GET /api/matches/:matchId", () => {
       .spyOn(db.matches, "deleteExpiredInProgressMatchesAndEmptySessions")
       .mockResolvedValue({
         deletedMatchCount: 1,
+        revertedMatchCount: 0,
         deletedSessionCount: 1,
         deletedSessionIds: [],
       });
