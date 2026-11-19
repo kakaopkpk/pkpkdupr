@@ -149,9 +149,9 @@ export const dateKeyBlock = (dateKey: string) => {
   return { month: `${month}월`, day: String(day), weekday };
 };
 
-/** "12/3 목 정기운동 취소됨" | "10/5 월 공휴일" */
+/** "12/3 목 정기 쉬는 날" | "10/5 월 공휴일" */
 export const formatSkip = (skip: AdminRegularSessionSkip): string =>
-  `${formatDateKeyShort(skip.dateKey)} ${skip.reason === "canceled" ? "정기운동 취소됨" : "공휴일"}`;
+  `${formatDateKeyShort(skip.dateKey)} ${skip.reason === "canceled" ? "정기 쉬는 날" : "공휴일"}`;
 
 /** "18:00~22:00 · 장소", 시각이 없으면 장소만 */
 export const formatSessionTimePlace = (session: MatchSessionDetail): string =>

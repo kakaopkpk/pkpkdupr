@@ -8,7 +8,6 @@ import { Button } from "../../components/ui/Button";
 import { ConfirmDialog } from "../../components/ui/ConfirmDialog";
 import { DetailPanel, PanelSection } from "../../components/ui/DetailPanel";
 import { useToast } from "../../components/ui/Toast";
-import { formatShortDateWithWeekday, getSessionDateKey } from "./sessionDates";
 import { getLoadErrorMessage } from "./sessionErrors";
 import { SessionParticipantsEditor } from "./SessionParticipantsEditor";
 import {
@@ -17,9 +16,10 @@ import {
   PanelStatus,
   SessionPanelTitle,
 } from "./SessionPanelParts";
+import { SkipAutoRegularDialog } from "./SkipAutoRegularDialog";
 import { TournamentBracketSection } from "./TournamentBracketSection";
 
-/** 오늘·미래 세션 패널. 모든 세션을 고칠 수 있고, 정기 세션은 '이 날 취소', 그 밖의 세션은 삭제가 있다 */
+/** 오늘·미래 세션 패널. 모든 세션을 고칠 수 있고, 자동 정기 세션은 '정기 쉬는 날로 지정', 그 밖의 세션은 삭제가 있다 */
 export const UpcomingSessionPanel: React.FC<{
   session: ManagedMatchSession;
   players: AdminPlayer[];
@@ -33,11 +33,12 @@ export const UpcomingSessionPanel: React.FC<{
   const [detail, setDetail] = useState<MatchSessionDetail | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [skipConfirmOpen, setSkipConfirmOpen] = useState(false);
   const [detailReloadKey, setDetailReloadKey] = useState(0);
 
   const isRegular = session.kind === "regular";
+  const isAutoRegular = isRegular && session.autoCreated;
   const isTournament = session.kind === "tournament";
-  const dateKey = getSessionDateKey(session);
 
   useEffect(() => {
     let canceled = false;
@@ -88,11 +89,7 @@ export const UpcomingSessionPanel: React.FC<{
       showToast(getLoadErrorMessage(err, "처리하지 못했어요. 다시 시도해 주세요."));
       return;
     }
-    showToast(
-      isRegular
-        ? `${formatShortDateWithWeekday(dateKey)}요 정기운동을 취소했어요`
-        : `'${session.name}' 세션을 지웠어요`,
-    );
+    showToast(`'${session.name}' 세션을 지웠어요`);
     onDeleted();
   };
 
@@ -104,7 +101,9 @@ export const UpcomingSessionPanel: React.FC<{
           <span className="block">{formatSessionSubtitle(session, session.location)}</span>
           {isRegular && (
             <span className="mt-0.5 block text-pk-12 text-pk-muted">
-              정기 세션 날짜와 시간은 고정이에요.
+              {isAutoRegular
+                ? "자동으로 만든 정기 세션이라 종류를 바꿀 수 없어요."
+                : "정기 세션 날짜와 시간은 고정이에요."}
             </span>
           )}
         </>
@@ -112,7 +111,11 @@ export const UpcomingSessionPanel: React.FC<{
       onClose={onClose}
     >
       <Button variant="soft" size="sm" onClick={() => onEdit(session)}>
-        {isRegular ? "이름·종류·장소 수정" : "이름·종류·날짜·시간 수정"}
+        {isAutoRegular
+          ? "이름·장소 수정"
+          : isRegular
+            ? "이름·종류·장소 수정"
+            : "이름·종류·날짜·시간 수정"}
       </Button>
 
       {detail ? (
@@ -140,25 +143,25 @@ export const UpcomingSessionPanel: React.FC<{
         </PanelSection>
       )}
 
-      {isRegular ? (
+      {isAutoRegular ? (
         <DangerSection
-          title="이 날 정기운동 취소"
-          description={`세션과 참여 신청 ${participantCount}명을 지우고 구글 캘린더 일정도 지워요. 이 날짜는 쉬는 날로 남아요. 경기가 하나라도 있으면 취소할 수 없어요.`}
+          title="정기 쉬는 날로 지정"
+          description={`세션과 참여 신청 ${participantCount}명을 지우고 구글 캘린더 일정도 지워요. 이 날은 정기 쉬는 날로 남아요. 경기가 있으면 지정할 수 없어요.`}
           action={
             <Button
               variant="outline"
               size="sm"
               disabled={hasMatches}
-              onClick={() => setConfirmOpen(true)}
+              onClick={() => setSkipConfirmOpen(true)}
             >
-              이 날 취소…
+              정기 쉬는 날로 지정…
             </Button>
           }
         />
       ) : (
         <DangerSection
           title="세션 삭제"
-          description="세션과 참여 신청을 지우고 구글 캘린더 일정도 지워요. 쉬는 날로 남지 않아요. 경기가 있으면 지울 수 없어요."
+          description="세션과 참여 신청을 지우고 구글 캘린더 일정도 지워요. 정기 쉬는 날로 남지 않아요. 경기가 있으면 지울 수 없어요."
           action={
             <Button
               variant="outline"
@@ -174,19 +177,17 @@ export const UpcomingSessionPanel: React.FC<{
 
       <ConfirmDialog
         open={confirmOpen}
-        title={
-          isRegular
-            ? `${formatShortDateWithWeekday(dateKey)}요 정기운동을 취소할까요?`
-            : `'${session.name}' 세션을 지울까요?`
-        }
-        description={
-          isRegular
-            ? `참여 신청 ${participantCount}명이 지워지고, 이 날짜는 쉬는 날로 남아요.`
-            : `참여 신청 ${participantCount}명이 함께 지워져요.`
-        }
-        confirmLabel={isRegular ? "이 날 취소" : "세션 삭제"}
+        title={`'${session.name}' 세션을 지울까요?`}
+        description={`참여 신청 ${participantCount}명이 함께 지워져요.`}
+        confirmLabel="세션 삭제"
         onConfirm={handleDelete}
         onClose={() => setConfirmOpen(false)}
+      />
+      <SkipAutoRegularDialog
+        session={skipConfirmOpen ? session : null}
+        participantCount={participantCount}
+        onClose={() => setSkipConfirmOpen(false)}
+        onDone={onDeleted}
       />
     </DetailPanel>
   );

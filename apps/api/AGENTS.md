@@ -68,8 +68,8 @@
 - 오늘 세션 `GET /api/match-sessions/today`: 전날 시작해 자정을 넘긴 회원 세션도 끝나기 전까지 오늘 세션이다(`isSessionOnToday`).
 - 다가오는 세션 `GET /api/match-sessions/upcoming`
   - 끝나기 전(`getSessionEndsAt`, 회원·대회 세션은 종료 시각) 오늘·미래 세션, 날짜 키 오름차순·같은 날은 정기 세션 먼저.
-  - 조회 때 공휴일·취소 날짜를 건너뛴 다음 정기 회차를 find-or-create.
-- 오늘 정기 세션 열기 `POST /api/match-sessions/regular/today`: 정기 요일 22시 전만, 오늘이 공휴일·취소 날짜면 409
+  - 조회 때 공휴일·정기 쉬는 날을 건너뛴 다음 정기 회차를 find-or-create.
+- 오늘 정기 세션 열기 `POST /api/match-sessions/regular/today`: 정기 요일 22시 전만, 오늘이 공휴일·정기 쉬는 날이면 409
 - 회원 세션 생성 `POST /api/match-sessions`
   - `dateKey` 생략 시 오늘, 과거 날짜 400.
   - 시작·종료 시각 `startTime`·`endTime`("HH:MM" KST)은 함께 주거나 함께 생략한다. 형식 오류·두 시각이 같으면 400.
@@ -221,13 +221,16 @@
 - 목록 `GET /api/admin/match-sessions`
 - 만들기 `POST /api/admin/match-sessions` `{ kind, name, location, dateKey?, startTime?, endTime? }`: 응답 `ManagedMatchSession`
   - 회원·대회 세션은 회원 세션 생성과 같은 규칙이다.
-  - 정기 세션은 그 날짜의 정기 세션(18:00~22:00, 보낸 시각 무시)이 된다. 정기 요일(월·목)이 아니면 400, 이미 그날 정기 세션이 있거나 쉬는 날이면 409.
+  - 정기 세션은 그 날짜의 직접 만든 정기 세션(18:00~22:00, 보낸 시각 무시, `autoCreated` false)이 된다. 정기 요일(월·목)이 아니면 400, 이미 그날 정기 세션이 있거나 공휴일이면 409.
+  - 정기 쉬는 날에도 만들고 쉬는 날 기록은 그대로 둔다.
 - 수정 `PATCH /api/admin/match-sessions/:sessionId` `{ name?, location?, kind?, dateKey?, startTime?, endTime? }`
   - 이름·장소·종류는 지난 세션을 포함한 모든 세션에서 고친다.
   - 날짜·시각은 오늘·미래의 정기가 아닌 세션(바꾼 뒤 종류 기준)만, 아니면 409. 경기가 있는 세션은 날짜 409.
-  - 정기로 바꾸면 그날 정기 세션이 되고(월·목이 아니면 400, 이미 있거나 쉬는 날이면 409), 정기에서 바꾸면 18:00~22:00 시각이 남고 오늘·미래 날짜는 취소로 남는다.
+  - 정기로 바꾸면 그날 직접 만든 정기 세션이 된다. 월·목이 아니면 400, 이미 있거나 공휴일이면 409.
+  - 직접 만든 정기에서 바꾸면 18:00~22:00 시각이 남고 정기 쉬는 날은 생기지 않는다.
+  - 자동 정기 세션(`autoCreated`)의 종류를 바꾸면 409.
   - 종류 변경과 나머지 필드는 한 트랜잭션으로 반영한다.
-- 삭제 `DELETE /api/admin/match-sessions/:sessionId`: 오늘·미래 정기 세션을 지우면 그 날짜가 취소로 남음
+- 삭제 `DELETE /api/admin/match-sessions/:sessionId`: 오늘·미래 자동 정기 세션을 지우면 그 날짜가 정기 쉬는 날로 남고, 직접 만든 정기 세션은 남지 않음
 - 대진 예정 경기 만들기 `POST /api/admin/match-sessions/:sessionId/bracket-matches` `{ round, teams }`: 201 `Match`
   - 대회 세션에 `status` scheduled·`source` admin_created·`round`인 점수 없는 경기 하나를 만든다. 팀 선수는 세션 참여자로 넣는다.
   - 세션 없음 404, 대회 세션이 아니거나 끝난 세션이면 409, 라운드·팀 오류 400.
@@ -238,9 +241,13 @@
 
 ### 쉬는 날
 
-- 목록 `GET /api/admin/regular-session-skips`
-- 취소 날짜 추가 `POST /api/admin/regular-session-skips`
-- 되돌리기 `DELETE /api/admin/regular-session-skips/:dateKey`: 공휴일은 409, 응답에 다시 만든 정기 세션
+- 목록 `GET /api/admin/regular-session-skips`: 공휴일 `holiday`·정기 쉬는 날 `canceled`
+- 정기 쉬는 날 지정 `POST /api/admin/regular-session-skips` `{ dateKey }`: 201 `{ dateKey, reason: "canceled" }`
+  - 오늘·미래 월·목만(아니면 400), 이미 쉬는 날이면 409.
+  - 그날 자동 정기 세션은 참여자와 함께 지우고(경기가 있으면 409), 직접 만든 정기 세션은 그대로 둔다.
+- 정기 쉬는 날 해제 `DELETE /api/admin/regular-session-skips/:dateKey`
+  - 공휴일·지난 날짜는 409.
+  - 응답 `session`은 그 자리에서 만든 자동 정기 세션(그날 직접 만든 정기 세션이 있으면 그 세션, 오늘 22시 이후면 null).
 
 ### 평점
 

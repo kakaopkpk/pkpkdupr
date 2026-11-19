@@ -489,7 +489,7 @@ const NoticeCard: React.FC<{
                   {restDays.map(formatSkip).join(" · ")} · 그날은 정기 세션을 만들지
                   않아요
                 </p>
-                <TextLink to={sessionsPath()}>쉬는 날 ›</TextLink>
+                <TextLink to={sessionsPath()}>세션 달력 ›</TextLink>
               </Row>
             )}
           </ul>

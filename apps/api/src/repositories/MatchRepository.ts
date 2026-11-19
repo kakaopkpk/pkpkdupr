@@ -477,7 +477,7 @@ export class MatchRepository {
     return { session, created: result.created };
   }
 
-  /** from 이상 to 미만 KST 날짜 키의 정기 회차 제외 날짜(공휴일·취소) */
+  /** from 이상 to 미만 KST 날짜 키의 정기 회차 제외 날짜(공휴일·정기 쉬는 날) */
   async findRegularSessionSkips(
     fromDateKey: string,
     toDateKey: string,

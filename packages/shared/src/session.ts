@@ -126,7 +126,7 @@ export interface RegularSessionsCronResponse {
   toDateKey: string;
   /** 새로 만든 정기 회차 날짜 */
   created: string[];
-  /** 공휴일·취소라 만들지 않은 정기 회차 날짜 */
+  /** 공휴일·정기 쉬는 날이라 만들지 않은 정기 회차 날짜 */
   skipped: Array<{ dateKey: string; reason: RegularSessionSkipReason }>;
   /** 공휴일로 확인돼 지운 빈 정기 세션 날짜 */
   deleted: string[];

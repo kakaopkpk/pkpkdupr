@@ -9,17 +9,23 @@ import {
   REGULAR_SESSION_LOCATION,
   REGULAR_SESSION_START_TIME,
   type AdminCreateMatchSessionRequest,
+  type AdminRegularSessionSkip,
   type AdminUpdateMatchSessionRequest,
   type MatchSessionKind,
 } from "@pkpkdupr/shared/session";
-import { createSession, updateSession } from "../../api/sessions";
+import { addRegularSessionSkip, createSession, updateSession } from "../../api/sessions";
 import { Button } from "../../components/ui/Button";
 import { Dialog } from "../../components/ui/Dialog";
 import { InlineError } from "../../components/ui/InlineError";
 import { SegmentedControl } from "../../components/ui/SegmentedControl";
 import { TextInput } from "../../components/ui/TextInput";
 import { useToast } from "../../components/ui/Toast";
-import { formatWeekdaySuffix, getSessionDateKey } from "./sessionDates";
+import { getRegularSkipDayAction } from "./regularSkipDay";
+import {
+  formatShortDateWithWeekday,
+  formatWeekdaySuffix,
+  getSessionDateKey,
+} from "./sessionDates";
 import { reportMutationError } from "./sessionErrors";
 import { SESSION_KIND_OPTIONS } from "./sessionKind";
 
@@ -58,14 +64,18 @@ export type SessionFormDialogMode =
 /**
  * 세션 만들기·수정 대화상자. 종류(회원 세션·대회·정기)를 고르고, 수정은 바뀐 필드만 `updateSession`으로 보낸다.
  * 정기 세션은 시각이 18:00~22:00으로 정해져 있어 날짜·시간을 고르지 않는다(만들 때는 날짜만).
- * 지난 세션은 이름·종류·장소만, 경기가 있는 세션은 날짜를 빼고 고친다.
+ * 지난 세션은 이름·종류·장소만, 경기가 있는 세션은 날짜를 빼고 고친다. 자동 정기 세션은 종류를 바꾸지 않는다.
+ * 만들기에서 고른 날짜가 세션 없는 월·목이면 왼쪽 아래 버튼으로 그날을 정기 쉬는 날로 지정할 수 있다.
  */
 export const SessionFormDialog: React.FC<{
   mode: SessionFormDialogMode | null;
   todayKey: string;
+  sessions: ManagedMatchSession[];
+  skips: AdminRegularSessionSkip[];
   onClose: () => void;
   onSaved: (sessionId: string, dateKey: string) => void;
-}> = ({ mode, todayKey, onClose, onSaved }) => {
+  onSkipAdded: () => void;
+}> = ({ mode, todayKey, sessions, skips, onClose, onSaved, onSkipAdded }) => {
   const { showToast } = useToast();
   const fieldId = useId();
   const [values, setValues] = useState<FormValues>({
@@ -105,6 +115,8 @@ export const SessionFormDialog: React.FC<{
   }, [mode]);
 
   const editingSession = mode?.kind === "edit" ? mode.session : null;
+  const kindLocked =
+    editingSession?.kind === "regular" && editingSession.autoCreated;
   const isRegular = values.kind === "regular";
   const isPast =
     !!editingSession && getSessionDateKey(editingSession) < todayKey;
@@ -131,6 +143,17 @@ export const SessionFormDialog: React.FC<{
           ? "정기 세션은 날짜를 바꿀 수 없어요"
           : null;
   const canSubmit = !!name && !!location && !timeError && !dateError && !pending;
+  const canMarkSkip =
+    mode?.kind === "create" &&
+    !!values.dateKey &&
+    getRegularSkipDayAction({
+      dateKey: values.dateKey,
+      todayKey,
+      daySessions: sessions.filter(
+        (session) => getSessionDateKey(session) === values.dateKey,
+      ),
+      skipReason: skips.find((skip) => skip.dateKey === values.dateKey)?.reason,
+    })?.kind === "skipEmpty";
 
   const update = (patch: Partial<FormValues>) => {
     setValues((current) => ({ ...current, ...patch }));
@@ -208,6 +231,23 @@ export const SessionFormDialog: React.FC<{
     }
   };
 
+  const handleMarkSkip = async () => {
+    if (!canMarkSkip || pending) return;
+    setPending(true);
+    setError(null);
+    try {
+      await addRegularSessionSkip(values.dateKey);
+      showToast(
+        `${formatShortDateWithWeekday(values.dateKey)}요일을 정기 쉬는 날로 지정했어요`,
+      );
+      onSkipAdded();
+      onClose();
+    } catch (err) {
+      reportMutationError(err, setError, showToast);
+      setPending(false);
+    }
+  };
+
   const formId = `${fieldId}-form`;
 
   return (
@@ -219,6 +259,17 @@ export const SessionFormDialog: React.FC<{
       width={480}
       footer={
         <>
+          {canMarkSkip && (
+            // 28일 자동 생성 범위 밖 월·목을 미리 쉬게 할 때 쓴다
+            <Button
+              variant="ghost"
+              className="mr-auto"
+              disabled={pending}
+              onClick={() => void handleMarkSkip()}
+            >
+              정기 쉬는 날로 지정
+            </Button>
+          )}
           <Button variant="soft" disabled={pending} onClick={onClose}>
             취소
           </Button>
@@ -233,15 +284,19 @@ export const SessionFormDialog: React.FC<{
           <FieldLabel>종류</FieldLabel>
           <SegmentedControl
             ariaLabel="세션 종류"
-            options={SESSION_KIND_OPTIONS}
+            options={
+              kindLocked
+                ? SESSION_KIND_OPTIONS.filter((option) => option.value === "regular")
+                : SESSION_KIND_OPTIONS
+            }
             value={values.kind}
             onChange={(kind) => {
-              if (!pending) changeKind(kind);
+              if (!pending && !kindLocked) changeKind(kind);
             }}
           />
-          {editingSession?.kind === "regular" && !isRegular && !isPast && (
+          {kindLocked && (
             <p className="mt-1.5 text-pk-13 text-pk-muted">
-              정기 세션에서 바꾸면 이 날짜는 쉬는 날로 남아 정기 세션이 다시 만들어지지 않아요.
+              자동으로 만든 정기 세션이라 종류를 바꿀 수 없어요.
             </p>
           )}
         </div>

@@ -1509,7 +1509,7 @@ app.get("/api/match-sessions/upcoming", async (req, res) => {
     const now = new Date();
     await matchRepository.cleanupExpired(now);
     // 예약 작업이 실패해도 다음 정기 회차 1개는 조회 때 보장한다(날짜당 하나는 regular_date_key 유니크가 보장).
-    // 공휴일·취소 날짜는 만들어지지 않으므로 그다음 정기 회차로 넘어간다.
+    // 공휴일·정기 쉬는 날은 만들어지지 않으므로 그다음 정기 회차로 넘어간다.
     for (const regularDateKey of getRegularSessionDateKeys(
       now,
       REGULAR_SESSION_LOOKAHEAD_DAYS,
@@ -2661,7 +2661,7 @@ app.delete(
 );
 
 /**
- * 매일 예약 작업(GitHub Actions)이 부른다. 오늘부터 4주 안의 정기 회차를 공휴일·취소 날짜를 빼고 미리 만들고,
+ * 매일 예약 작업(GitHub Actions)이 부른다. 오늘부터 4주 안의 정기 회차를 공휴일·정기 쉬는 날을 빼고 미리 만들고,
  * 다가오는 세션의 구글 캘린더 일정을 현재 상태로 다시 쓴다(변경 때 반영이 빠진 일정을 하루 안에 맞춘다).
  * 헤더 x-cron-secret을 함수 secret CRON_SECRET과 비교한다.
  */
