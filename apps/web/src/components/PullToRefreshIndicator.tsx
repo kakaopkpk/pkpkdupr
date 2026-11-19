@@ -1,5 +1,4 @@
-import React from "react";
-import { IoCheckmark } from "react-icons/io5";
+import React, { useRef } from "react";
 
 export type PullToRefreshStatus =
   | "idle"
@@ -14,6 +13,14 @@ interface PullToRefreshIndicatorProps {
   threshold: number;
 }
 
+const RING_SIZE = 20.8;
+const RING_RADIUS = 9.4;
+const RING_CIRCUMFERENCE = 2 * Math.PI * RING_RADIUS;
+// 끝까지 당겼을 때 호 길이이자, 임계 거리만큼 당겼을 때 링 회전 각도
+const RING_FULL_DEGREES = 270;
+// animate-spin 한 바퀴 시간(ms)
+const SPIN_DURATION_MS = 1000;
+
 const PullToRefreshIndicator: React.FC<PullToRefreshIndicatorProps> = ({
   distance,
   status,
@@ -22,12 +29,28 @@ const PullToRefreshIndicator: React.FC<PullToRefreshIndicatorProps> = ({
   const isVisible = status !== "idle";
   const isPullGestureActive = status === "pulling" || status === "armed";
   const progress = Math.min(distance / threshold, 1);
-  const isRefreshing = status === "refreshing";
+  const isSpinning = status === "refreshing";
   const isArmed = status === "armed";
   const translateY =
     status === "refreshing" || status === "error"
       ? 117
       : -70.2 + progress * 187.2;
+
+  // 놓으면 distance가 0으로 돌아가므로, 마지막 제스처 각도·호 길이를 기억해 그 자리에서 이어서 돈다.
+  const lastGestureRef = useRef({ angle: 0, arcDegrees: 0 });
+  if (isPullGestureActive) {
+    lastGestureRef.current = {
+      angle: (distance / threshold) * RING_FULL_DEGREES,
+      arcDegrees: progress * RING_FULL_DEGREES,
+    };
+  }
+  const { angle } = lastGestureRef.current;
+  const arcDegrees =
+    status === "refreshing" || status === "error"
+      ? RING_FULL_DEGREES
+      : lastGestureRef.current.arcDegrees;
+  const arcLength = (arcDegrees / 360) * RING_CIRCUMFERENCE;
+
   return (
     <div
       aria-hidden={!isVisible}
@@ -53,30 +76,45 @@ const PullToRefreshIndicator: React.FC<PullToRefreshIndicatorProps> = ({
               ? "새로고침 중"
               : "새로고침"
         }
-        className={`flex size-[46.8px] items-center justify-center rounded-full border shadow-sm backdrop-blur transition-transform ${
-          isArmed
-            ? "scale-110 border-pk-primary bg-pk-primary"
-            : "border-sky-100/90 bg-white/90"
+        className={`flex size-[46.8px] items-center justify-center rounded-full border border-sky-100/90 bg-white/90 shadow-sm backdrop-blur transition-transform ${
+          isArmed ? "scale-110" : ""
         }`}
       >
-        {isArmed ? (
-          <IoCheckmark
-            aria-hidden="true"
-            className="size-[26px] text-white"
-          />
-        ) : (
-          <span
-            aria-hidden="true"
-            className={`size-[20.8px] rounded-full border-2 border-sky-100 border-t-pk-primary ${
-              isRefreshing ? "animate-spin" : ""
-            }`}
-            style={
-              isRefreshing
-                ? undefined
-                : { transform: `rotate(${Math.round(progress * 270)}deg)` }
-            }
-          />
-        )}
+        <span
+          aria-hidden="true"
+          className={`block size-[20.8px] ${isSpinning ? "animate-spin" : ""}`}
+          style={
+            isSpinning
+              ? {
+                  // 음수 지연으로 회전 위상을 놓는 순간의 각도에 맞춘다.
+                  animationDelay: `${-((angle % 360) / 360) * SPIN_DURATION_MS}ms`,
+                }
+              : { transform: `rotate(${angle}deg)` }
+          }
+        >
+          <svg
+            viewBox={`0 0 ${RING_SIZE} ${RING_SIZE}`}
+            className="size-full -rotate-90"
+          >
+            <circle
+              cx={RING_SIZE / 2}
+              cy={RING_SIZE / 2}
+              r={RING_RADIUS}
+              fill="none"
+              strokeWidth={2}
+              className="stroke-sky-100"
+            />
+            <circle
+              cx={RING_SIZE / 2}
+              cy={RING_SIZE / 2}
+              r={RING_RADIUS}
+              fill="none"
+              strokeWidth={2}
+              strokeDasharray={`${arcLength} ${RING_CIRCUMFERENCE}`}
+              className="stroke-pk-primary"
+            />
+          </svg>
+        </span>
       </div>
     </div>
   );
