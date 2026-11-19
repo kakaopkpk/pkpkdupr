@@ -14,22 +14,27 @@ import { DELETED_PLAYER_LABEL } from "./matchView";
 
 const TEAM_INDEXES = [0, 1] as const;
 
-/** 팀 1·팀 2 선수 칩·콤보박스·점수 입력 */
+/** 팀 1·팀 2 선수 칩·콤보박스·점수 입력. 대진처럼 점수 없이 팀만 고를 때는 hideScores */
 export const MatchLineupEditor: React.FC<{
   value: MatchLineupValue;
   onChange: (value: MatchLineupValue) => void;
   /** 이름·게스트 여부를 찾을 회원 전체(비활성 포함). 후보는 이 중 활성 회원·게스트 */
   players: AdminPlayer[];
   disabled?: boolean;
-}> = ({ value, onChange, players, disabled = false }) => {
+  /** 주면 후보를 이 id의 활성 회원·게스트로 좁힌다(예: 세션 참여자) */
+  candidateIds?: string[];
+  hideScores?: boolean;
+}> = ({ value, onChange, players, disabled = false, candidateIds, hideScores = false }) => {
   const playersById = useMemo(
     () => new Map(players.map((player) => [player.id, player])),
     [players],
   );
-  const candidates = useMemo(
-    () => players.filter((player) => player.status === "active"),
-    [players],
-  );
+  const candidates = useMemo(() => {
+    const allowed = candidateIds ? new Set(candidateIds) : null;
+    return players.filter(
+      (player) => player.status === "active" && (!allowed || allowed.has(player.id)),
+    );
+  }, [players, candidateIds]);
   const selectedIds = useMemo(() => value.teams.flat(), [value.teams]);
   const winnerIndex = getLineupWinnerIndex(value);
 
@@ -99,26 +104,28 @@ export const MatchLineupEditor: React.FC<{
                 />
               )}
             </div>
-            <label className="w-20 shrink-0 space-y-2">
-              <span className="block text-pk-12 font-bold text-pk-muted">점수</span>
-              <input
-                type="text"
-                inputMode="numeric"
-                autoComplete="off"
-                aria-label={`${label} 점수`}
-                value={value.scores[teamIndex]}
-                disabled={disabled}
-                onChange={(event) => updateScore(teamIndex, event.target.value)}
-                className={cx(
-                  textInputClassName,
-                  "text-center tabular-nums",
-                  // 이긴 쪽 점수만 진하게 보인다
-                  winnerIndex === teamIndex
-                    ? "font-bold text-pk-ink"
-                    : "font-normal text-pk-sub",
-                )}
-              />
-            </label>
+            {!hideScores && (
+              <label className="w-20 shrink-0 space-y-2">
+                <span className="block text-pk-12 font-bold text-pk-muted">점수</span>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  autoComplete="off"
+                  aria-label={`${label} 점수`}
+                  value={value.scores[teamIndex]}
+                  disabled={disabled}
+                  onChange={(event) => updateScore(teamIndex, event.target.value)}
+                  className={cx(
+                    textInputClassName,
+                    "text-center tabular-nums",
+                    // 이긴 쪽 점수만 진하게 보인다
+                    winnerIndex === teamIndex
+                      ? "font-bold text-pk-ink"
+                      : "font-normal text-pk-sub",
+                  )}
+                />
+              </label>
+            )}
           </div>
         );
       })}

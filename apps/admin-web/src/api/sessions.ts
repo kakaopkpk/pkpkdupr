@@ -1,4 +1,8 @@
-import type { ManagedMatchSession } from "@pkpkdupr/shared/match";
+import type {
+  AdminCreateBracketMatchRequest,
+  ManagedMatchSession,
+  Match,
+} from "@pkpkdupr/shared/match";
 import type { MatchSessionReport } from "@pkpkdupr/shared/ranking";
 import type {
   AdminAddRegularSessionSkipRequest,
@@ -11,6 +15,7 @@ import type {
   TodayMatchSessionsResponse,
   UpcomingMatchSessionsResponse,
 } from "@pkpkdupr/shared/session";
+import type { AdminUpdateTournamentPlacementsRequest } from "@pkpkdupr/shared/tournament";
 import { apiJson } from "./client";
 
 const sessionPath = (sessionId: string) => encodeURIComponent(sessionId);
@@ -50,6 +55,30 @@ export const deleteSessionAsAdmin = async (sessionId: string): Promise<void> => 
     method: "DELETE",
   });
 };
+
+/** 세션 경기(대진 예정 경기 포함) */
+export const fetchSessionMatches = (sessionId: string) =>
+  apiJson<Match[]>(`/api/match-sessions/${sessionPath(sessionId)}/matches`);
+
+/** 대회 세션에 점수 없는 대진 예정 경기 하나를 만든다 */
+export const createBracketMatch = (
+  sessionId: string,
+  body: AdminCreateBracketMatchRequest,
+) =>
+  apiJson<Match>(
+    `/api/admin/match-sessions/${sessionPath(sessionId)}/bracket-matches`,
+    { method: "POST", body },
+  );
+
+/** 대회 최종 순위를 통째로 바꾼다 */
+export const updateTournamentPlacements = (
+  sessionId: string,
+  body: AdminUpdateTournamentPlacementsRequest,
+) =>
+  apiJson<MatchSessionDetail>(
+    `/api/admin/match-sessions/${sessionPath(sessionId)}/placements`,
+    { method: "PUT", body },
+  );
 
 export const addSessionParticipant = (sessionId: string, playerId: string) =>
   apiJson<MatchSessionDetail>(
