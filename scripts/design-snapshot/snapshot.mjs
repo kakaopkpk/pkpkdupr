@@ -125,11 +125,11 @@ async function main() {
     // 전체를 찍을 때만 폴더를 비운다. 일부만 찍으면 그 화면 파일만 덮어쓴다.
     if (!only.length) await rm(OUT_DIR, { recursive: true, force: true });
     await mkdir(OUT_DIR, { recursive: true });
-    // headless 소프트웨어 렌더링은 2배 해상도에서 backdrop-filter 블러가 요소 아래쪽을 덮지 못해
-    // 원본 글자가 비친다. macOS에서는 GPU(ANGLE Metal)로 그린다.
-    browser = await chromium.launch(
-      process.platform === "darwin" ? { args: ["--use-gl=angle", "--use-angle=metal", "--enable-gpu"] } : {},
-    );
+    // 기본 headless 렌더링은 2배 해상도에서 backdrop-filter 블러가 요소 아래쪽을 덮지 못해
+    // 원본 글자가 비친다. 모든 OS에서 같은 결과가 나오도록 ANGLE SwiftShader(소프트웨어 GL)로 그린다.
+    browser = await chromium.launch({
+      args: ["--use-gl=angle", "--use-angle=swiftshader", "--enable-unsafe-swiftshader"],
+    });
     const context = await browser.newContext({
       viewport: VIEWPORT,
       deviceScaleFactor: 2,

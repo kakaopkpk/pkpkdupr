@@ -444,66 +444,57 @@
   }
 
   /*
-   * 하단 바 뒤 점진적 블러. 블러 세기가 다른 자식 5개를 겹치고 자식마다
-   * 마스크로 세로 구간을 나눠, 위는 선명하고 아래로 갈수록 세게 흐려진다.
-   * 흰빛 틴트 없이 뒤 콘텐츠의 색을 그대로 둔다.
+   * 하단 바 뒤 점진적 블러. 블러 세기가 다른 자식 5개가 높이 1/6씩 내려가며
+   * 절반 높이 띠를 맡고, 띠 위아래 끝을 마스크로 흐려 이어 붙인다. 위는 선명하고
+   * 아래로 갈수록 세게 흐려지며, 흰빛 틴트 없이 뒤 콘텐츠의 색을 그대로 둔다.
+   * 마지막 띠는 컨테이너 아래로 넘치지만 탭 셸이 잘라 낸다.
    */
   .app-progressive-blur > * {
     position: absolute;
-    inset: 0;
+    inset-inline: 0;
+    top: calc((var(--pb-step) - 1) * 100% / 6);
+    height: 50%;
     -webkit-backdrop-filter: blur(var(--pb-blur));
     backdrop-filter: blur(var(--pb-blur));
-    -webkit-mask-image: var(--pb-mask);
-    mask-image: var(--pb-mask);
+    -webkit-mask-image: linear-gradient(
+      to bottom,
+      transparent,
+      #000 33.33%,
+      #000 66.67%,
+      transparent
+    );
+    mask-image: linear-gradient(
+      to bottom,
+      transparent,
+      #000 33.33%,
+      #000 66.67%,
+      transparent
+    );
   }
 
   .app-progressive-blur > :nth-child(1) {
+    --pb-step: 1;
     --pb-blur: 1px;
-    --pb-mask: linear-gradient(
-      to bottom,
-      transparent 0%,
-      #000 16.67%,
-      #000 33.33%,
-      transparent 50%
-    );
   }
 
   .app-progressive-blur > :nth-child(2) {
+    --pb-step: 2;
     --pb-blur: 2px;
-    --pb-mask: linear-gradient(
-      to bottom,
-      transparent 16.67%,
-      #000 33.33%,
-      #000 50%,
-      transparent 66.67%
-    );
   }
 
   .app-progressive-blur > :nth-child(3) {
+    --pb-step: 3;
     --pb-blur: 4px;
-    --pb-mask: linear-gradient(
-      to bottom,
-      transparent 33.33%,
-      #000 50%,
-      #000 66.67%,
-      transparent 83.33%
-    );
   }
 
   .app-progressive-blur > :nth-child(4) {
+    --pb-step: 4;
     --pb-blur: 8px;
-    --pb-mask: linear-gradient(
-      to bottom,
-      transparent 50%,
-      #000 66.67%,
-      #000 83.33%,
-      transparent 100%
-    );
   }
 
   .app-progressive-blur > :nth-child(5) {
+    --pb-step: 5;
     --pb-blur: 16px;
-    --pb-mask: linear-gradient(to bottom, transparent 66.67%, #000 83.33%);
   }
 
   /*
