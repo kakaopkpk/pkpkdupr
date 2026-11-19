@@ -792,6 +792,7 @@ describe("POST /api/admin/players/:playerId/promote", () => {
           gender,
           isFirstLogin: true,
           ...(authUserId ? { authUserId } : {}),
+          promotedAt: new Date(),
         });
         return row as any;
       },
@@ -834,6 +835,22 @@ describe("POST /api/admin/players/:playerId/promote", () => {
       authUserId: "auth-promoted",
       isFirstLogin: true,
     });
+  });
+
+  it("승급 시각을 저장하고 응답과 회원 목록에 내려준다", async () => {
+    const response = await promote(guest.id);
+
+    expect(response.status).toBe(200);
+    expect(response.body.player.promotedAt).toBe(wednesdayMorning.toISOString());
+    expect(rows.get(guest.id)?.promotedAt).toEqual(wednesdayMorning);
+
+    vi.spyOn(db.players, "findAll").mockResolvedValue([...rows.values()] as any);
+    const players = await new AuthService().getAllPlayers();
+    expect(players.find((player) => player.id === guest.id)?.promotedAt).toEqual(
+      wednesdayMorning,
+    );
+    // 승급 기록이 없는 회원은 null이다.
+    expect(players.find((player) => player.id === requester.id)?.promotedAt).toBeNull();
   });
 
   it("게스트가 아니면 409, 없는 회원이면 404이고 계정을 만들지 않는다", async () => {

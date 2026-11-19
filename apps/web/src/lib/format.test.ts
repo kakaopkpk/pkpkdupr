@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   formatElapsed,
   formatKstDateTime,
+  formatKstMonthDay,
   formatKstNumericDate,
 } from "@/lib/format";
 
@@ -43,6 +44,18 @@ describe("formatKstNumericDate", () => {
   it("UTC로는 전날이어도 KST 날짜를 쓴다", () => {
     expect(formatKstNumericDate(new Date("2025-03-02T16:30:00.000Z"))).toBe(
       "2025. 3. 3.",
+    );
+  });
+});
+
+describe("formatKstMonthDay", () => {
+  it("KST 월·일만 쓴다", () => {
+    expect(formatKstMonthDay("2026-11-17T03:00:00.000Z")).toBe("11월 17일");
+  });
+
+  it("UTC로는 전날이어도 KST 날짜를 쓴다", () => {
+    expect(formatKstMonthDay(new Date("2025-03-02T16:30:00.000Z"))).toBe(
+      "3월 3일",
     );
   });
 });

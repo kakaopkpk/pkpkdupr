@@ -32,12 +32,14 @@ import PullToRefreshIndicator, {
 import MatchDetailDrawer from "@/components/match/MatchDetailDrawer";
 import AchievementDetailSheet from "@/components/profile/AchievementDetailSheet";
 import MemberProfileDrawer from "@/components/profile/MemberProfileDrawer";
+import PlayerAchievementsDrawer from "@/components/profile/PlayerAchievementsDrawer";
 import RecordMatchSheet from "@/components/record/RecordMatchSheet";
 import SessionReportDrawer from "@/components/records/SessionReportDrawer";
 import CreateSessionSheet from "@/components/session/CreateSessionSheet";
 import SettingsDrawer from "@/components/settings/SettingsDrawer";
 import {
   type AchievementDetailRequest,
+  type AchievementsScreenRequest,
   AppNavigationProvider,
   type AppNavigationContextValue,
   type CreateSessionRequest,
@@ -162,10 +164,11 @@ const isTabDepthHistoryState = (
 type GlobalScreenRoute =
   | { kind: "match-detail"; matchId: string }
   | { kind: "member-profile"; playerId: string }
-  | { kind: "session-report"; sessionId: string };
+  | { kind: "session-report"; sessionId: string }
+  | ({ kind: "achievements" } & AchievementsScreenRequest);
 
 /**
- * 화면 위에 계속 쌓을 수 있는 전역 화면(경기 상세·회원 프로필·세션 상세) 하나.
+ * 화면 위에 계속 쌓을 수 있는 전역 화면(경기 상세·회원 프로필·세션 상세·업적 전체 보기) 하나.
  * id는 깊이 id로도 쓰며, 닫힌 뒤(isOpen=false)에도 닫히는 움직임이 끝날 때까지 남는다.
  */
 interface GlobalScreenEntry {
@@ -183,6 +186,12 @@ const isSameRoute = (a: GlobalScreenRoute, b: GlobalScreenRoute) => {
       return b.kind === "member-profile" && a.playerId === b.playerId;
     case "session-report":
       return b.kind === "session-report" && a.sessionId === b.sessionId;
+    case "achievements":
+      return (
+        b.kind === "achievements" &&
+        a.playerId === b.playerId &&
+        a.focusAchievementId === b.focusAchievementId
+      );
   }
 };
 
@@ -624,6 +633,16 @@ const BottomNav: React.FC = () => {
       }));
     },
     [],
+  );
+
+  const openAchievements = useCallback(
+    (request: AchievementsScreenRequest) =>
+      openGlobalScreen({
+        kind: "achievements",
+        playerId: request.playerId,
+        focusAchievementId: request.focusAchievementId,
+      }),
+    [openGlobalScreen],
   );
 
   const openSessionReport = useCallback(
@@ -1150,6 +1169,7 @@ const BottomNav: React.FC = () => {
       openCreateSession,
       openSettings,
       openAchievementDetail,
+      openAchievements,
       openSessionReport,
       notifyDataChanged,
       dataVersion,
@@ -1158,6 +1178,7 @@ const BottomNav: React.FC = () => {
       dataVersion,
       notifyDataChanged,
       openAchievementDetail,
+      openAchievements,
       openCreateSession,
       openMatchDetail,
       openMemberProfile,
@@ -1325,6 +1346,15 @@ const BottomNav: React.FC = () => {
                     <SessionReportDrawer
                       key={screen.id}
                       sessionId={screen.route.sessionId}
+                      {...screenProps}
+                    />
+                  );
+                case "achievements":
+                  return (
+                    <PlayerAchievementsDrawer
+                      key={screen.id}
+                      playerId={screen.route.playerId}
+                      focusAchievementId={screen.route.focusAchievementId}
                       {...screenProps}
                     />
                   );

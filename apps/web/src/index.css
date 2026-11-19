@@ -75,6 +75,8 @@
   --animate-pk-celebrate-pop: pk-celebrate-pop 560ms linear both;
   --animate-pk-rays-pulse: pk-rays-pulse 800ms var(--ease-pk-move) both;
   --animate-pk-slide-away: pk-slide-away 220ms var(--ease-pk-move) both;
+  /* 한 번 나타났다 사라지는 반짝임(시작·끝 모두 투명) */
+  --animate-pk-flash: pk-flash 1400ms var(--ease-pk-move) both;
 
   @keyframes nav-icon-pop {
     30% {
@@ -186,6 +188,16 @@
   @keyframes pk-rays-pulse {
     30% {
       transform: scale(1.28);
+    }
+  }
+
+  @keyframes pk-flash {
+    0%,
+    100% {
+      opacity: 0;
+    }
+    30% {
+      opacity: 1;
     }
   }
 

@@ -49,7 +49,7 @@ const SessionMineStrip: React.FC<{ mine: SessionPlayerReport }> = ({ mine }) => 
 };
 
 /**
- * 끝난 세션 카드(일정 탭·홈 지난 세션 요약·세션 상세 머리). 맨 위 이름표 기본값은 세션 종류, 메타 줄 기본값은 장소·인원·경기 수다.
+ * 끝난 세션 카드(일정 탭·세션 상세 머리). 맨 위 이름표는 세션 종류, 메타 줄은 장소·인원·경기 수다.
  * 일정 탭은 바깥 날짜 제목이 보이므로 날짜를 넣지 않고, 바깥 날짜 제목이 없는 곳(세션 상세 머리)은 showDate로 메타 줄 앞에 날짜를 붙인다.
  * onPress를 생략하면(세션 상세 머리) 누를 수 없고 화살표가 없다
  */
@@ -57,15 +57,13 @@ export const RecordSessionCard: React.FC<{
   session: MatchSessionHistoryInfo;
   mine: SessionPlayerReport | null;
   onPress?: () => void;
-  label?: string;
-  meta?: string;
   showDate?: boolean;
-}> = ({ session, mine, onPress, label, meta, showDate = false }) => {
+}> = ({ session, mine, onPress, showDate = false }) => {
   const content = (
     <>
       <span className="flex w-full items-center justify-between gap-2">
         <span className="text-pk-12 font-bold text-pk-sub">
-          {label ?? getSessionKindLabel(session.kind)}
+          {getSessionKindLabel(session.kind)}
         </span>
         {onPress ? (
           <ChevronRightIcon className="size-4 shrink-0 text-pk-quiet" />
@@ -75,15 +73,14 @@ export const RecordSessionCard: React.FC<{
         {session.name}
       </span>
       <span className="truncate text-pk-13 text-pk-sub tabular-nums">
-        {meta ??
-          [
-            showDate ? formatKstShortDate(session.date) : null,
-            session.location,
-            `${session.participantCount}명`,
-            `${session.matchCount}경기`,
-          ]
-            .filter(Boolean)
-            .join(" · ")}
+        {[
+          showDate ? formatKstShortDate(session.date) : null,
+          session.location,
+          `${session.participantCount}명`,
+          `${session.matchCount}경기`,
+        ]
+          .filter(Boolean)
+          .join(" · ")}
       </span>
       {mine ? <SessionMineStrip mine={mine} /> : null}
     </>

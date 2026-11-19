@@ -223,11 +223,11 @@ export const createRankingContext = (
 };
 
 /** 평점에 반영된 완료 경기만(게스트가 낀 경기 제외) */
-const getRatedMatches = (matches: RankingMatch[]) =>
+export const getRatedMatches = (matches: RankingMatch[]) =>
   matches.filter((match) => !match.ratingExcluded);
 
 /** 랭킹 대상 회원: 활성 정회원. 게스트는 랭킹에 나오지 않는다 */
-const isRankablePlayer = (player: RankingSourcePlayer) =>
+export const isRankablePlayer = (player: RankingSourcePlayer) =>
   player.status === "active" && !player.isGuest;
 
 /** 시점. null이면 현재 */
@@ -286,7 +286,7 @@ export interface RankedPlayer {
 }
 
 /** 이름 비교는 런타임 로케일에 따라 달라지지 않도록 코드 포인트 순으로 한다 */
-const compareText = (left: string, right: string) =>
+export const compareText = (left: string, right: string) =>
   left < right ? -1 : left > right ? 1 : 0;
 
 /**
@@ -320,7 +320,7 @@ export const rankPlayersAt = (
 const toRankMap = (ranked: RankedPlayer[]) =>
   new Map(ranked.map((entry) => [entry.player.id, entry.rank]));
 
-const toRankingPlayer = (player: RankingSourcePlayer): RankingPlayer => ({
+export const toRankingPlayer = (player: RankingSourcePlayer): RankingPlayer => ({
   id: player.id,
   username: player.username,
   avatarUrl: player.avatarUrl,
@@ -337,7 +337,7 @@ const toRankingEntryPlayer = (
     : {}),
 });
 
-const groupMatchesBySession = (matches: RankingMatch[]) => {
+export const groupMatchesBySession = (matches: RankingMatch[]) => {
   const bySession = new Map<string, RankingMatch[]>();
   for (const match of matches) {
     if (!match.sessionId) continue;
@@ -361,7 +361,7 @@ export const getSessionStartAt = (
   );
 
 /** 세션 마지막 완료 경기 시각. 완료 경기가 없으면 null */
-const getSessionEndAt = (sessionMatches: RankingMatch[]): Date | null =>
+export const getSessionEndAt = (sessionMatches: RankingMatch[]): Date | null =>
   sessionMatches.length
     ? new Date(
         Math.max(...sessionMatches.map((match) => match.completedAt.getTime())),
@@ -461,7 +461,7 @@ export const buildRankingResponse = ({
   };
 };
 
-const toSessionHistoryItem = (
+export const toSessionHistoryItem = (
   session: RankingSession,
   completedMatchCount: number,
   activePlayerIds: Set<string>,
@@ -479,12 +479,18 @@ const toSessionHistoryItem = (
   matchCount: completedMatchCount,
 });
 
-const getActivePlayerIds = (context: RankingContext) =>
+export const getActivePlayerIds = (context: RankingContext) =>
   new Set(
     [...context.playersById.values()]
       .filter((player) => player.status === "active")
       .map((player) => player.id),
   );
+
+/** 세션 date 내림차순 → id 내림차순 */
+export const compareSessionsLatestFirst = (
+  left: Pick<RankingSession, "id" | "date">,
+  right: Pick<RankingSession, "id" | "date">,
+) => right.date.getTime() - left.date.getTime() || compareText(right.id, left.id);
 
 /** 완료 경기가 있는 세션 목록(세션 date 내림차순). playerId를 주면 그 선수가 완료 경기를 뛴 세션만 */
 export const buildSessionHistory = ({
@@ -511,11 +517,7 @@ export const buildSessionHistory = ({
         )
       );
     })
-    .sort(
-      (left, right) =>
-        right.date.getTime() - left.date.getTime() ||
-        compareText(right.id, left.id),
-    )
+    .sort(compareSessionsLatestFirst)
     .slice(0, limit)
     .map((session) =>
       toSessionHistoryItem(
@@ -617,7 +619,7 @@ const buildSessionPlayerStats = (
 };
 
 /** 세션 참가자 보고(복식 순위 전후 포함, ratingDelta 내림차순). 완료 경기가 없으면 null */
-const buildSessionPlayerReports = (
+export const buildSessionPlayerReports = (
   context: RankingContext,
   session: RankingSession,
   sessionMatches: RankingMatch[],
@@ -637,7 +639,7 @@ const buildSessionPlayerReports = (
 };
 
 /** 세션 지배자: 복식 평점이 가장 많이 오른 참가자. 오른 사람이 없으면 null */
-const pickTopRiser = <T extends SessionPlayerStats>(players: T[]): T | null =>
+export const pickTopRiser = <T extends SessionPlayerStats>(players: T[]): T | null =>
   players[0] && players[0].ratingDelta > 0 ? players[0] : null;
 
 /** 회원 id → 세션 지배자로 확정된 세션 id(`findSessionDominations`) */
@@ -835,10 +837,23 @@ export const findAchievementsEarnedByMatches = (
   playerIds: readonly string[],
 ): EarnedAchievement[] => {
   const matches = toContextAchievementMatches(context);
-  return playerIds
-    .flatMap((playerId) =>
+  return selectAchievementsEarnedByMatches(
+    playerIds.flatMap((playerId) =>
       findPlayerEarnedAchievements(matches, dominations, playerId),
-    )
+    ),
+    matchIds,
+  );
+};
+
+/**
+ * 이미 계산한 받은 업적에서 받은 경기가 matchIds인 업적만 고른다(`findAchievementsEarnedByMatches`와 같은 규칙).
+ * 받은 시각 → 업적 정의 순서 → 회원 id 순
+ */
+export const selectAchievementsEarnedByMatches = (
+  earned: readonly EarnedAchievement[],
+  matchIds: ReadonlySet<string>,
+): EarnedAchievement[] =>
+  earned
     .filter(
       (item) =>
         matchIds.has(item.earnedMatchId) && isEarnedByCountedMatch(item),
@@ -848,7 +863,6 @@ export const findAchievementsEarnedByMatches = (
         compareEarnedAchievements(left, right) ||
         compareText(left.playerId, right.playerId),
     );
-};
 
 /** 업적 id별 받은 활성 회원 수. 아무도 받지 않은 업적도 0으로 넣는다 */
 export const countAchievementHolders = (

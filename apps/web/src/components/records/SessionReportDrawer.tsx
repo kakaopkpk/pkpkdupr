@@ -12,7 +12,7 @@ import LastSessionMeCard from "@/components/home/LastSessionMeCard";
 import {
   getPlayerSessionAchievements,
   MyNewAchievementsCard,
-} from "@/components/home/LastSessionSummary";
+} from "@/components/records/MyNewAchievementsCard";
 import { RecordSessionCard } from "@/components/records/RecordCards";
 import SessionRatingChangesScreen from "@/components/records/SessionRatingChangesScreen";
 import {

@@ -60,6 +60,8 @@ export const players = pgTable("players", {
   authUserId: uuid("auth_user_id").unique("players_auth_user_id_unique"),
   /** 관리자가 발급·초기화한 비밀번호를 아직 바꾸지 않은 상태. */
   isFirstLogin: boolean("is_first_login").notNull().default(false),
+  /** 게스트가 정회원으로 승급된 시각. 승급 기록을 남기기 전 회원·일반 가입 회원·게스트는 null이다 */
+  promotedAt: unixTimestamp("promoted_at"),
   createdAt: unixTimestamp("created_at").notNull(),
   updatedAt: unixTimestamp("updated_at").notNull(),
 });

@@ -30,7 +30,7 @@ export const getSessionRankChange = (
  * 세션 전후 평점이 모두 있는지. 세션 전 NR이던 회원도 ratingBefore에 첫 경기 시작 평점(3.0)이 들어 있어
  * 다른 회원처럼 "3.000 → 3.124"와 변화량을 보인다. 첫 평점이 공식 DUPR 조정이면 ratingBefore가 null이다
  */
-const hasRatingBeforeAndAfter = (
+export const hasRatingBeforeAndAfter = (
   report: Pick<SessionPlayerReport, "ratingBefore" | "ratingAfter">,
 ): boolean => report.ratingBefore !== null && report.ratingAfter !== null;
 
