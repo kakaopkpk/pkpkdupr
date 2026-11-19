@@ -1,14 +1,14 @@
-import { useEffect, useMemo, useState } from "react";
-import { addScheduleMonths } from "@pkpkdupr/shared/schedule";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  buildScheduleDayMarks,
   fetchScheduleMonth,
+  mergeScheduleDayMarks,
   type ScheduleDayMark,
   type ScheduleMonthInfo,
 } from "@/lib/schedule";
+import { getCalendarMonthKeys } from "./monthGrid";
 
 /**
- * 보는 달과 앞뒤 달의 달력 표시. 일정 탭 밖(세션 만들기)에서 쓰며, 한 달은 마운트 동안 한 번만 받는다.
+ * 달력에 그리는 달들의 표시. 일정 탭 밖(세션 만들기)에서 쓰며, 한 달은 마운트 동안 한 번만 받는다.
  * 받지 못한 달은 표시 없이 둔다
  */
 export const useScheduleMonthMarks = (
@@ -16,28 +16,22 @@ export const useScheduleMonthMarks = (
   playerId: string | undefined,
 ): ReadonlyMap<string, ScheduleDayMark> => {
   const [months, setMonths] = useState<Record<string, ScheduleMonthInfo>>({});
-  const [requested] = useState(() => new Set<string>());
+  const requestedRef = useRef(new Set<string>());
 
   useEffect(() => {
-    for (const step of [-1, 0, 1]) {
-      const month = addScheduleMonths(monthKey, step);
-      if (requested.has(month)) continue;
-      requested.add(month);
+    for (const month of getCalendarMonthKeys(monthKey)) {
+      if (requestedRef.current.has(month)) continue;
+      requestedRef.current.add(month);
       fetchScheduleMonth(month).then(
         (data) => setMonths((current) => ({ ...current, [month]: data })),
         // 표시는 보조 정보라 실패해도 날짜는 고를 수 있다. 다음 마운트에서 다시 받는다
         () => undefined,
       );
     }
-  }, [monthKey, requested]);
+  }, [monthKey]);
 
-  return useMemo(() => {
-    const merged = new Map<string, ScheduleDayMark>();
-    for (const data of Object.values(months)) {
-      for (const [dateKey, mark] of buildScheduleDayMarks(data, playerId)) {
-        merged.set(dateKey, mark);
-      }
-    }
-    return merged;
-  }, [months, playerId]);
+  return useMemo(
+    () => mergeScheduleDayMarks(Object.values(months), playerId),
+    [months, playerId],
+  );
 };

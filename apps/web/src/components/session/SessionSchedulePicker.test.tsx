@@ -31,7 +31,6 @@ describe("SessionCalendar", () => {
     expect(markup).toContain("2026년 11월");
     expect(markup).toContain("달력 표시");
     const isDisabled = (label: string) =>
-      new RegExp(`<button[^>]*disabled=""[^>]*aria-label="${label}`).test(markup) ||
       new RegExp(`<button[^>]*aria-label="${label}[^"]*"[^>]*disabled=""`).test(markup);
     expect(isDisabled("11월 12일")).toBe(true);
     expect(isDisabled("11월 13일")).toBe(false);

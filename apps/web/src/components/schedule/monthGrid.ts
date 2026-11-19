@@ -1,4 +1,5 @@
 import {
+  addScheduleMonths,
   getScheduleMonthDateKeyRange,
   parseScheduleMonth,
 } from "@pkpkdupr/shared/schedule";
@@ -16,6 +17,10 @@ export const formatMonthTitle = (monthKey: string) => {
 
 /** "2026-11-17" → "2026-11" */
 export const toMonthKey = (dateKey: string) => dateKey.slice(0, 7);
+
+/** 달력이 그리는 날짜의 달. 앞뒤 달 판의 6주가 ±2달 날짜까지 걸친다 */
+export const getCalendarMonthKeys = (monthKey: string): string[] =>
+  [-2, -1, 0, 1, 2].map((offset) => addScheduleMonths(monthKey, offset));
 
 /** 그 달 1일이 든 주 일요일부터 6주(42칸)의 날짜 키 */
 export const getMonthGridDateKeys = (monthKey: string): string[] => {

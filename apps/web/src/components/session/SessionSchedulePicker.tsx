@@ -4,9 +4,7 @@ import {
   minutesToSessionTime,
   sessionTimeToMinutes,
 } from "@pkpkdupr/shared/session";
-import MonthCalendar, {
-  DayMarkLegend,
-} from "@/components/schedule/MonthCalendar";
+import MonthCalendar from "@/components/schedule/MonthCalendar";
 import { toMonthKey } from "@/components/schedule/monthGrid";
 import { useScheduleMonthMarks } from "@/components/schedule/useScheduleMonthMarks";
 import { ChevronRightIcon } from "@/components/ui/Icons";
@@ -60,7 +58,7 @@ const FieldLabel: React.FC<{
 );
 
 /**
- * 세션 날짜를 고르는 달력. 일정 탭 달력(`MonthCalendar`)과 같은 모양·동작이고 위에 같은 점 범례를 둔다.
+ * 세션 날짜를 고르는 달력. 일정 탭 달력(`MonthCalendar`)과 같은 모양·동작이다.
  * 처음에는 고른 날(없으면 오늘)이 든 달을 보이고, 지난 날만 누를 수 없으며 오늘이 든 달보다 앞으로는 넘기지 않는다
  */
 export const SessionCalendar: React.FC<{
@@ -69,30 +67,25 @@ export const SessionCalendar: React.FC<{
   playerId: string | undefined;
   onChange: (dateKey: string) => void;
 }> = ({ todayKey, value, playerId, onChange }) => {
-  const todayMonthKey = toMonthKey(todayKey);
   const [monthKey, setMonthKey] = useState(() =>
     toMonthKey(value ?? todayKey),
   );
   const marks = useScheduleMonthMarks(monthKey, playerId);
 
   return (
-    <div className="flex flex-col gap-1.5">
-      <DayMarkLegend />
-      <MonthCalendar
-        monthKey={monthKey}
-        todayKey={todayKey}
-        selectedDateKey={value}
-        marks={marks}
-        onSelectDate={(dateKey) => {
-          setMonthKey(toMonthKey(dateKey));
-          onChange(dateKey);
-        }}
-        onChangeMonth={(step) => setMonthKey(addScheduleMonths(monthKey, step))}
-        onGoToday={() => setMonthKey(todayMonthKey)}
-        isDateDisabled={(dateKey) => !isSessionDateSelectable(dateKey, todayKey)}
-        minMonthKey={todayMonthKey}
-      />
-    </div>
+    <MonthCalendar
+      monthKey={monthKey}
+      todayKey={todayKey}
+      selectedDateKey={value}
+      marks={marks}
+      onSelectDate={(dateKey) => {
+        setMonthKey(toMonthKey(dateKey));
+        onChange(dateKey);
+      }}
+      onChangeMonth={(step) => setMonthKey(addScheduleMonths(monthKey, step))}
+      onGoToday={() => setMonthKey(toMonthKey(todayKey))}
+      minDateKey={todayKey}
+    />
   );
 };
 

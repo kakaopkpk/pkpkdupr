@@ -6,8 +6,8 @@ import {
   RecordMatchCard,
   RecordSessionCard,
 } from "@/components/records/RecordCards";
-import MonthCalendar, { DayMarkLegend } from "@/components/schedule/MonthCalendar";
-import { toMonthKey } from "@/components/schedule/monthGrid";
+import MonthCalendar from "@/components/schedule/MonthCalendar";
+import { getCalendarMonthKeys, toMonthKey } from "@/components/schedule/monthGrid";
 import {
   EmptyDayCard,
   UpcomingSessionCard,
@@ -32,11 +32,10 @@ import {
 } from "@/lib/matchSessions";
 import { getRecordItemKey } from "@/lib/records";
 import {
-  buildScheduleDayMarks,
   fetchScheduleMonth,
   getScheduleDayEntries,
+  mergeScheduleDayMarks,
   type ScheduleDayEntry,
-  type ScheduleDayMark,
   type ScheduleMonthInfo,
 } from "@/lib/schedule";
 import { getMatchPlayerIds } from "@/types/match";
@@ -133,7 +132,7 @@ const Schedule: React.FC = () => {
   const neededMonthKeys = useMemo(
     () => [
       ...new Set([
-        ...[-2, -1, 0, 1, 2].map((offset) => addScheduleMonths(monthKey, offset)),
+        ...getCalendarMonthKeys(monthKey),
         selectedMonthKey,
       ]),
     ],
@@ -185,17 +184,14 @@ const Schedule: React.FC = () => {
     [goToday, registerTabReset],
   );
 
-  const marks = useMemo(() => {
-    const merged = new Map<string, ScheduleDayMark>();
-    for (const month of neededMonthKeys) {
-      const monthData = months[month]?.data;
-      if (!monthData) continue;
-      for (const [dateKey, mark] of buildScheduleDayMarks(monthData, playerId)) {
-        merged.set(dateKey, mark);
-      }
-    }
-    return merged;
-  }, [months, neededMonthKeys, playerId]);
+  const marks = useMemo(
+    () =>
+      mergeScheduleDayMarks(
+        neededMonthKeys.flatMap((month) => months[month]?.data ?? []),
+        playerId,
+      ),
+    [months, neededMonthKeys, playerId],
+  );
   const monthState = months[selectedMonthKey];
   const data = monthState?.data ?? null;
   const liveSessionId = live.liveSession?.id ?? null;
@@ -341,18 +337,15 @@ const Schedule: React.FC = () => {
   return (
     <>
       <div className="flex flex-col gap-2.5 px-4 pt-4 pb-6">
-        <div className="flex flex-col gap-1.5">
-          <DayMarkLegend />
-          <MonthCalendar
-            monthKey={monthKey}
-            todayKey={todayKey}
-            selectedDateKey={selectedDateKey}
-            marks={marks}
-            onSelectDate={selectDate}
-            onChangeMonth={(step) => setMonthKey(addScheduleMonths(monthKey, step))}
-            onGoToday={goToday}
-          />
-        </div>
+        <MonthCalendar
+          monthKey={monthKey}
+          todayKey={todayKey}
+          selectedDateKey={selectedDateKey}
+          marks={marks}
+          onSelectDate={selectDate}
+          onChangeMonth={(step) => setMonthKey(addScheduleMonths(monthKey, step))}
+          onGoToday={goToday}
+        />
         <Section title={formatKstLongDate(kstDateKeyToDate(selectedDateKey))}>
           {renderDay()}
         </Section>

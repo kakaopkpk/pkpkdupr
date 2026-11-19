@@ -1,18 +1,12 @@
 import React, { useRef, useState } from "react";
 import { kstDateKeyToDate, WEEKDAY_LABELS } from "@pkpkdupr/shared/session";
-import { addScheduleMonths, parseScheduleMonth } from "@pkpkdupr/shared/schedule";
+import { addScheduleMonths } from "@pkpkdupr/shared/schedule";
 import { ChevronRightIcon } from "@/components/ui/Icons";
 import { cx } from "@/components/ui/cx";
 import { formatKstLongDate } from "@/lib/format";
 import type { ScheduleDayMark } from "@/lib/schedule";
-import { getMonthGridDateKeys, toMonthKey } from "./monthGrid";
+import { formatMonthTitle, getMonthGridDateKeys, toMonthKey } from "./monthGrid";
 import { useMonthSwipe } from "./useMonthSwipe";
-
-/** "2026년 11월" */
-const formatMonthTitle = (monthKey: string) => {
-  const parsed = parseScheduleMonth(monthKey);
-  return parsed ? `${parsed.year}년 ${parsed.month}월` : monthKey;
-};
 
 const MonthNavButton: React.FC<{
   label: string;
@@ -46,8 +40,8 @@ const LEGEND_ITEMS = [
   { label: "경기 기록", dotClassName: dayMarkDotTones.match.filled },
 ] as const;
 
-/** 달력 위 오른쪽 점 범례. 일정 탭과 세션 만들기가 같이 쓴다 */
-export const DayMarkLegend: React.FC = () => (
+/** 달력 위 오른쪽 점 범례 */
+const DayMarkLegend: React.FC = () => (
   <ul
     aria-label="달력 표시"
     className="flex items-center justify-end gap-3 px-1 text-pk-12 font-bold text-pk-sub"
@@ -121,7 +115,8 @@ interface MonthPanelProps {
   todayKey: string;
   selectedDateKey: string | null;
   marks: ReadonlyMap<string, ScheduleDayMark>;
-  isDateDisabled?: (dateKey: string) => boolean;
+  /** 이 날보다 앞은 누를 수 없다 */
+  minDateKey?: string;
   /** 가운데(보이는) 판이 아니면 트랙 옆에 숨어 있으므로 누를 수도 읽을 수도 없다 */
   isCurrent: boolean;
   onPressDate: (dateKey: string) => void;
@@ -129,14 +124,14 @@ interface MonthPanelProps {
 
 /**
  * 한 달 6주 판. 다른 달 날짜도 누를 수 있고, 숫자는 더 옅고 점은 반투명이다.
- * 누를 수 없는 날(isDateDisabled)도 다른 달 날짜처럼 옅게 그린다
+ * minDateKey보다 앞 날은 누를 수 없고 다른 달 날짜처럼 옅게 그린다
  */
 const MonthPanel: React.FC<MonthPanelProps> = ({
   monthKey,
   todayKey,
   selectedDateKey,
   marks,
-  isDateDisabled,
+  minDateKey,
   isCurrent,
   onPressDate,
 }) => (
@@ -147,7 +142,8 @@ const MonthPanel: React.FC<MonthPanelProps> = ({
   >
     {getMonthGridDateKeys(monthKey).map((dateKey) => {
       const isInMonth = toMonthKey(dateKey) === monthKey;
-      const isDisabled = isDateDisabled?.(dateKey) ?? false;
+      const isDisabled = !!minDateKey && dateKey < minDateKey;
+      const isDimmed = !isInMonth || isDisabled;
       const isSelected = dateKey === selectedDateKey;
       const isToday = dateKey === todayKey;
       const mark = marks.get(dateKey);
@@ -162,7 +158,7 @@ const MonthPanel: React.FC<MonthPanelProps> = ({
           onClick={() => onPressDate(dateKey)}
           className={cx(
             "flex h-[52px] min-w-0 flex-col items-center justify-start gap-[3px] px-px pt-0.5",
-            !isInMonth || isDisabled
+            isDimmed
               ? "text-pk-quiet"
               : dateKey < todayKey
                 ? "text-pk-muted"
@@ -179,7 +175,7 @@ const MonthPanel: React.FC<MonthPanelProps> = ({
           >
             {Number(dateKey.slice(-2))}
           </span>
-          {mark ? <DayMark mark={mark} isDimmed={!isInMonth || isDisabled} /> : null}
+          {mark ? <DayMark mark={mark} isDimmed={isDimmed} /> : null}
         </button>
       );
     })}
@@ -191,7 +187,7 @@ const MonthPanel: React.FC<MonthPanelProps> = ({
  * 달마다 6주를 그려 높이가 같고, 이전·이번·다음 달 판을 가로로 이어 붙여 밀면 옆 달이 따라 들어온다. 제목은 판이 멈춘 뒤 바뀐다.
  * 오늘은 하이라이트 바탕, 고른 날은 블루 원(오늘을 고르면 고른 날 표시만), 지난 날은 muted, 다른 달 날짜는 더 옅다.
  * 달을 옮겨도 고른 날은 그대로이고, 다른 달 날짜를 누르면 그 날을 고르며 그 달로 넘어간다.
- * 세션 만들기는 지난 날을 isDateDisabled로 막고, minMonthKey보다 앞 달로는 버튼·밀기로 넘어가지 않는다
+ * 카드 위 오른쪽에 점 범례를 둔다. minDateKey를 주면 그 앞 날은 누를 수 없고, 그 날이 든 달보다 앞으로는 버튼·밀기로 넘어가지 않는다
  */
 const MonthCalendar: React.FC<{
   monthKey: string;
@@ -205,10 +201,8 @@ const MonthCalendar: React.FC<{
   /** 보는 달을 step(1 다음 달, -1 이전 달)만큼 옮긴다 */
   onChangeMonth: (step: 1 | -1) => void;
   onGoToday: () => void;
-  /** 누를 수 없는 날 */
-  isDateDisabled?: (dateKey: string) => boolean;
-  /** 이 달보다 앞으로는 옮기지 않는다 */
-  minMonthKey?: string;
+  /** 고를 수 있는 첫날 */
+  minDateKey?: string;
 }> = ({
   monthKey,
   todayKey,
@@ -217,12 +211,11 @@ const MonthCalendar: React.FC<{
   onSelectDate,
   onChangeMonth,
   onGoToday,
-  isDateDisabled,
-  minMonthKey,
+  minDateKey,
 }) => {
   const areaRef = useRef<HTMLElement>(null);
   const trackRef = useRef<HTMLDivElement>(null);
-  const canGoPrev = !minMonthKey || monthKey > minMonthKey;
+  const canGoPrev = !minDateKey || monthKey > toMonthKey(minDateKey);
   const { slideIn, isSliding } = useMonthSwipe(
     areaRef,
     trackRef,
@@ -253,61 +246,64 @@ const MonthCalendar: React.FC<{
   ];
 
   return (
-    <section
-      ref={areaRef}
-      aria-label="달력"
-      className="touch-pan-y touch-pinch-zoom overflow-hidden rounded-pk-lg bg-white px-2 pt-1 pb-2"
-    >
-      <div className="flex items-center justify-between">
-        <MonthNavButton
-          label="이전 달"
-          direction="prev"
-          disabled={!canGoPrev}
-          onPress={() => moveMonth(-1)}
-        />
-        <button
-          type="button"
-          onClick={onGoToday}
-          aria-label={`${formatMonthTitle(titleMonthKey)}, 누르면 오늘로 이동`}
-          className="flex min-h-11 items-center px-3 text-pk-15 font-extrabold text-pk-ink tabular-nums"
-        >
-          {formatMonthTitle(titleMonthKey)}
-        </button>
-        <MonthNavButton
-          label="다음 달"
-          direction="next"
-          onPress={() => moveMonth(1)}
-        />
-      </div>
-      <div className="grid grid-cols-7">
-        {WEEKDAY_LABELS.map((label) => (
-          <span
-            key={label}
-            aria-hidden="true"
-            className="h-[22px] text-center text-pk-12 leading-[22px] font-bold text-pk-sub"
+    <div className="flex flex-col gap-1.5">
+      <DayMarkLegend />
+        <section
+        ref={areaRef}
+        aria-label="달력"
+        className="touch-pan-y touch-pinch-zoom overflow-hidden rounded-pk-lg bg-white px-2 pt-1 pb-2"
+      >
+        <div className="flex items-center justify-between">
+          <MonthNavButton
+            label="이전 달"
+            direction="prev"
+            disabled={!canGoPrev}
+            onPress={() => moveMonth(-1)}
+          />
+          <button
+            type="button"
+            onClick={onGoToday}
+            aria-label={`${formatMonthTitle(titleMonthKey)}, 누르면 오늘로 이동`}
+            className="flex min-h-11 items-center px-3 text-pk-15 font-extrabold text-pk-ink tabular-nums"
           >
-            {label}
-          </span>
-        ))}
-      </div>
-      {/* 판은 카드 안쪽 여백까지 차지해 옆 달이 카드 끝에서 잘린다. 트랙은 가운데 판을 기본 위치로 둔다 */}
-      <div className="-mx-2 overflow-hidden">
-        <div ref={trackRef} className="flex w-[300%] -translate-x-1/3">
-          {panelMonthKeys.map((panelMonthKey) => (
-            <MonthPanel
-              key={panelMonthKey}
-              monthKey={panelMonthKey}
-              todayKey={todayKey}
-              selectedDateKey={selectedDateKey}
-              marks={marks}
-              isDateDisabled={isDateDisabled}
-              isCurrent={panelMonthKey === monthKey}
-              onPressDate={pressDate}
-            />
+            {formatMonthTitle(titleMonthKey)}
+          </button>
+          <MonthNavButton
+            label="다음 달"
+            direction="next"
+            onPress={() => moveMonth(1)}
+          />
+        </div>
+        <div className="grid grid-cols-7">
+          {WEEKDAY_LABELS.map((label) => (
+            <span
+              key={label}
+              aria-hidden="true"
+              className="h-[22px] text-center text-pk-12 leading-[22px] font-bold text-pk-sub"
+            >
+              {label}
+            </span>
           ))}
         </div>
-      </div>
-    </section>
+        {/* 판은 카드 안쪽 여백까지 차지해 옆 달이 카드 끝에서 잘린다. 트랙은 가운데 판을 기본 위치로 둔다 */}
+        <div className="-mx-2 overflow-hidden">
+          <div ref={trackRef} className="flex w-[300%] -translate-x-1/3">
+            {panelMonthKeys.map((panelMonthKey) => (
+              <MonthPanel
+                key={panelMonthKey}
+                monthKey={panelMonthKey}
+                todayKey={todayKey}
+                selectedDateKey={selectedDateKey}
+                marks={marks}
+                minDateKey={minDateKey}
+                isCurrent={panelMonthKey === monthKey}
+                onPressDate={pressDate}
+              />
+            ))}
+          </div>
+        </div>
+      </section>
+    </div>
   );
 };
 
