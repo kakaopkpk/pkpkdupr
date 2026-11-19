@@ -111,6 +111,26 @@ describe("pickRecordingSession", () => {
     expect(pickRecordingSession([custom], at("12:00"))?.id).toBe("C");
     expect(pickRecordingSession([custom], at("23:59"))?.id).toBe("C");
   });
+
+  it("같은 날 끝난 세션보다 진행 중 세션을 먼저 고른다", () => {
+    const ended = makeSession({
+      id: "A",
+      kind: "custom",
+      date: at("00:00").toISOString(),
+      startTime: "10:00",
+      endTime: "12:00",
+    });
+    const live = makeSession({
+      id: "B",
+      kind: "custom",
+      date: at("00:00").toISOString(),
+      startTime: "14:00",
+      endTime: "16:00",
+    });
+
+    expect(pickLiveSession([ended, live], at("15:00"))?.id).toBe("B");
+    expect(pickRecordingSession([ended, live], at("15:00"))?.id).toBe("B");
+  });
 });
 
 describe("getNextLiveSessionBoundary", () => {

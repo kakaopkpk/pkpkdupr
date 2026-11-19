@@ -33,7 +33,7 @@ export interface LiveSessionState {
    */
   liveSession: MatchSessionDetailInfo | null;
   /**
-   * 경기 기록 시트가 새 경기를 붙이는 세션. liveSession과 같은 고르기지만 끝을 빈 세션 만료 시각으로 잡아,
+   * 경기 기록 시트가 새 경기를 붙이는 세션. liveSession이 있으면 그 세션이고, 없으면 끝을 빈 세션 만료 시각으로 잡아
    * 종료 시각이 지난 회원·대회 세션도 그날 자정까지 기록이 그 세션에 붙는다
    */
   recordingSession: MatchSessionDetailInfo | null;
@@ -89,10 +89,12 @@ export const pickLiveSession = (
 ): MatchSessionDetailInfo | null =>
   pickSessionBetween(sessions, now, getSessionEndsAt);
 
+/** 진행 중 세션이 있으면 그 세션, 없으면 종료 시각이 지났어도 만료 전인 세션 */
 export const pickRecordingSession = (
   sessions: MatchSessionDetailInfo[],
   now: Date = new Date(),
 ): MatchSessionDetailInfo | null =>
+  pickLiveSession(sessions, now) ??
   pickSessionBetween(sessions, now, getEmptySessionExpiresAt);
 
 /**
