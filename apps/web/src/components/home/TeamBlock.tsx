@@ -1,6 +1,7 @@
 import React from "react";
 import { type AvatarPlayer, TeamAvatars } from "@/components/ui/PlayerAvatar";
 import { cx } from "@/components/ui/cx";
+import { formatRating } from "@/utils/dupr";
 
 /** 팀 아바타 쌍 + 이름 두 줄. 오른쪽 팀(align="end")은 아바타가 바깥쪽에 온다 */
 const TeamBlock: React.FC<{
@@ -32,5 +33,19 @@ export const TeamsVersus: React.FC<{
     <TeamBlock players={teams[0]} />
     <span className="text-pk-12 font-bold text-pk-muted">vs</span>
     <TeamBlock players={teams[1]} align="end" />
+  </div>
+);
+
+/** 위에 두 팀 평균 평점(양 끝 정렬), 아래에 팀 vs 팀. 추천 매칭 줄·대진 예정 경기 줄의 왼쪽 열 */
+export const TeamsVersusWithAverages: React.FC<{
+  teams: readonly [readonly AvatarPlayer[], readonly AvatarPlayer[]];
+  averages: readonly [number, number];
+}> = ({ teams, averages }) => (
+  <div className="flex min-w-0 flex-1 flex-col gap-1">
+    <div className="flex justify-between gap-2 text-pk-12 text-pk-muted tabular-nums">
+      <span>평균 {formatRating(averages[0])}</span>
+      <span>평균 {formatRating(averages[1])}</span>
+    </div>
+    <TeamsVersus teams={teams} />
   </div>
 );

@@ -52,6 +52,23 @@ export const startMatch = async (body: StartMatchRequest): Promise<MatchInfo> =>
   return (await res.json()) as MatchInfo;
 };
 
+/**
+ * 대진 예정 경기를 진행 중으로 바꾼다(POST /api/matches/:matchId/start). 실패하면 서버 문구로 Error.
+ * 선수 중 누구든 다른 진행 중 경기에 있거나 세션 날이 아니면 서버가 거절한다.
+ */
+export const startScheduledMatch = async (matchId: string): Promise<MatchInfo> => {
+  const res = await apiFetch(
+    `/api/matches/${encodeURIComponent(matchId)}/start`,
+    { method: "POST" },
+  );
+  if (!res.ok) {
+    throw new Error(
+      await readErrorMessage(res, "경기를 시작하지 못했어요."),
+    );
+  }
+  return (await res.json()) as MatchInfo;
+};
+
 /** 세션 밖 경기까지 포함한 모든 진행 중 경기 */
 export const fetchInProgressMatches = async (): Promise<MatchInfo[]> => {
   const res = await apiFetch("/api/matches/in-progress");
