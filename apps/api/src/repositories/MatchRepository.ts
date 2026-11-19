@@ -41,6 +41,7 @@ import {
 import { db } from "../db";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
+export const MATCH_ALREADY_STARTED_MESSAGE = "이미 시작한 경기예요.";
 const SESSION_CONFLICT_MESSAGE = "같은 이름의 세션이 이미 있습니다.";
 
 /** 세션 유니크 위반을 409로 바꾼다. 정기 날짜 키 위반(동시에 만든 그날 정기 세션)은 그 안내로 */
@@ -221,6 +222,7 @@ export const hydrateMatch = (record: any): Match => ({
   createdAt: new Date(record.createdAt),
   updatedAt: new Date(record.updatedAt),
   ratingExcluded: record.ratingExcluded === true,
+  round: typeof record.round === "number" ? record.round : null,
 });
 
 const hydrateSessionSummary = (record: any): MatchSessionSummary => ({
@@ -737,6 +739,30 @@ export class MatchRepository {
     throw new MatchRepositoryError("매치 ID 생성에 실패했습니다.", 500);
   }
 
+  /**
+   * 대진 예정 경기를 진행 중(created, matchStartsAt=now)으로 바꾼다. 진행 중 경기 시작과 같은 잠금 안에서 확인한다.
+   * 경기 없음 404, 예정 경기가 아니면 409. 선수가 이미 진행 중 경기에 있으면 바꾸지 않고 그 선수 id를 돌려준다.
+   */
+  async startScheduled(
+    matchId: string,
+    now: Date,
+  ): Promise<{ match: Match } | { conflictPlayerId: string }> {
+    const result = await this.run(
+      () => db.matches.startScheduledMatch(matchId, now),
+      500,
+    );
+    if (result.reason === "not_found") {
+      throw new MatchRepositoryError("매치를 찾을 수 없습니다.", 404);
+    }
+    if (result.reason === "not_scheduled") {
+      throw new MatchRepositoryError(MATCH_ALREADY_STARTED_MESSAGE, 409);
+    }
+    if (result.reason === "player_busy") {
+      return { conflictPlayerId: result.conflictPlayerId };
+    }
+    return { match: hydrateMatch(result.match) };
+  }
+
   /** 세션과 상관없이 지금 진행 중인(만료 전, 시작한, 점수 없는) 경기 */
   async findInProgress(now: Date = new Date()): Promise<Match[]> {
     const records = await this.run(
@@ -977,14 +1003,15 @@ export class MatchRepository {
     return await this.run(() => db.matches.getTimestampUnitAudit(), 500);
   }
 
-  /** 모든 경기 목록 */
+  /** 모든 경기 목록. 대진 예정 경기(scheduled)는 includeScheduled일 때만(관리자 경기 목록) 넣는다 */
   async findAll(
     page: number = 0,
     limit: number = 20,
     playerId?: string,
+    options: { includeScheduled?: boolean } = {},
   ): Promise<{ matches: Match[]; total: number }> {
     const result = await this.run(
-      () => db.matches.findAll(page, limit, playerId || undefined),
+      () => db.matches.findAll(page, limit, playerId || undefined, options),
       500,
     );
 
