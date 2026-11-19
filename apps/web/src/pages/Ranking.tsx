@@ -50,7 +50,7 @@ const SKELETON_ROW_COUNT = 6;
 const rowGridClassName =
   "grid min-h-[61px] w-full grid-cols-[24px_32px_minmax(0,1fr)_auto] items-center gap-1.5 rounded-pk-sm py-2 text-left text-pk-ink";
 
-// 평점을 줄 오른쪽 끝에 붙이고 순위 변동은 그 아래 오른쪽 정렬로 둔다. 업적 점수도 같은 자리라 분류를 바꿔도 숫자 위치가 같다
+// 평점을 줄 오른쪽 끝에 붙이고 순위 변동은 그 아래 오른쪽 정렬로 둔다
 const ratingCellClassName = "flex flex-col items-end gap-1";
 
 /** 평점·점수 글자. 줄 높이를 1로 두어 브라우저마다 다른 기본 줄 높이에 흔들리지 않게 한다 */
@@ -123,7 +123,7 @@ const RankingRow: React.FC<{
   );
 };
 
-/** 업적 점수 순위 줄. 점수는 0부터 줄 순서만큼 늦게 세고, 순위 변동은 없다 */
+/** 업적 점수 순위 줄. 점수는 0부터 줄 순서만큼 늦게 세고, 순위 변동은 없다. 점수는 복식·단식 평점처럼 줄 오른쪽 끝에 붙는다 */
 const AchievementRankingRow: React.FC<{
   entry: AchievementRankingEntry;
   index: number;
@@ -165,9 +165,7 @@ const UnratedRow: React.FC<{
     </span>
     <RankingAvatar entry={entry} />
     <PlayerNameCell player={entry.player} />
-    <span className="text-pk-15 leading-none font-extrabold text-pk-muted">
-      –
-    </span>
+    <span className={cx(ratingTextClassName, "text-pk-muted")}>–</span>
   </button>
 );
 
