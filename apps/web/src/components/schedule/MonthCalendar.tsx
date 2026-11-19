@@ -1,35 +1,12 @@
-import React, { useRef } from "react";
-import {
-  addKstDays,
-  getKstWeekday,
-  kstDateKeyToDate,
-  WEEKDAY_LABELS,
-} from "@pkpkdupr/shared/session";
-import {
-  getScheduleMonthDateKeyRange,
-  parseScheduleMonth,
-} from "@pkpkdupr/shared/schedule";
+import React, { useRef, useState } from "react";
+import { kstDateKeyToDate, WEEKDAY_LABELS } from "@pkpkdupr/shared/session";
+import { addScheduleMonths, parseScheduleMonth } from "@pkpkdupr/shared/schedule";
 import { ChevronRightIcon } from "@/components/ui/Icons";
 import { cx } from "@/components/ui/cx";
 import { formatKstLongDate } from "@/lib/format";
 import type { ScheduleDayMark } from "@/lib/schedule";
+import { getMonthGridDateKeys, toMonthKey } from "./monthGrid";
 import { useMonthSwipe } from "./useMonthSwipe";
-
-const DAYS_PER_WEEK = 7;
-
-/** 그 달 첫날이 든 주 일요일부터 마지막 날이 든 주 토요일까지의 날짜 키 */
-const getMonthCellKeys = (monthKey: string): string[] => {
-  const { fromDateKey, toDateKey } = getScheduleMonthDateKeyRange(monthKey);
-  const lastKey = addKstDays(toDateKey, -1);
-  const startKey = addKstDays(fromDateKey, -getKstWeekday(fromDateKey));
-  const endKey = addKstDays(lastKey, DAYS_PER_WEEK - 1 - getKstWeekday(lastKey));
-  const keys: string[] = [];
-  // YYYY-MM-DD 문자열은 사전순이 날짜순이다
-  for (let key = startKey; key <= endKey; key = addKstDays(key, 1)) {
-    keys.push(key);
-  }
-  return keys;
-};
 
 /** "2026년 11월" */
 const formatMonthTitle = (monthKey: string) => {
@@ -62,10 +39,13 @@ const dayMarkDotTones = {
 } as const;
 
 /**
- * 날짜 아래 점(+ 숫자). 내 것이면 속이 찬 점, 아니면 1.5px 테두리 원.
+ * 날짜 아래 점(+ 숫자). 내 것이면 속이 찬 점, 아니면 1.5px 테두리 원. 다른 달 날짜면 옅게.
  * 대회 세션이 있는 날은 점 색만 하이라이트(pk-hl)이고 인원 글자색은 그대로다
  */
-const DayMark: React.FC<{ mark: ScheduleDayMark }> = ({ mark }) => {
+const DayMark: React.FC<{ mark: ScheduleDayMark; isDimmed: boolean }> = ({
+  mark,
+  isDimmed,
+}) => {
   const isSession = mark.kind === "session";
   const dotTone =
     mark.kind === "session" && mark.isTournament
@@ -79,6 +59,7 @@ const DayMark: React.FC<{ mark: ScheduleDayMark }> = ({ mark }) => {
       className={cx(
         "inline-flex h-[18px] items-center gap-[3px] text-pk-12 font-bold tabular-nums",
         isSession ? "text-pk-primary" : "text-pk-sub",
+        isDimmed && "opacity-45",
       )}
     >
       <span
@@ -109,19 +90,85 @@ const getDayLabel = (
     .filter(Boolean)
     .join(", ");
 
+interface MonthPanelProps {
+  monthKey: string;
+  todayKey: string;
+  selectedDateKey: string;
+  marks: ReadonlyMap<string, ScheduleDayMark>;
+  /** 가운데(보이는) 판이 아니면 트랙 옆에 숨어 있으므로 누를 수도 읽을 수도 없다 */
+  isCurrent: boolean;
+  onPressDate: (dateKey: string) => void;
+}
+
+/** 한 달 6주 판. 다른 달 날짜도 누를 수 있고, 숫자는 더 옅고 점은 반투명이다 */
+const MonthPanel: React.FC<MonthPanelProps> = ({
+  monthKey,
+  todayKey,
+  selectedDateKey,
+  marks,
+  isCurrent,
+  onPressDate,
+}) => (
+  <div
+    aria-hidden={isCurrent ? undefined : true}
+    inert={!isCurrent}
+    className="grid w-1/3 shrink-0 grid-cols-7 px-2"
+  >
+    {getMonthGridDateKeys(monthKey).map((dateKey) => {
+      const isInMonth = toMonthKey(dateKey) === monthKey;
+      const isSelected = dateKey === selectedDateKey;
+      const isToday = dateKey === todayKey;
+      const mark = marks.get(dateKey);
+      return (
+        <button
+          key={dateKey}
+          type="button"
+          aria-pressed={isSelected}
+          aria-current={isToday ? "date" : undefined}
+          aria-label={getDayLabel(dateKey, isToday, mark)}
+          onClick={() => onPressDate(dateKey)}
+          className={cx(
+            "flex h-[52px] min-w-0 flex-col items-center justify-start gap-[3px] px-px pt-0.5",
+            !isInMonth
+              ? "text-pk-quiet"
+              : dateKey < todayKey
+                ? "text-pk-muted"
+                : "text-pk-ink",
+          )}
+        >
+          <span
+            className={cx(
+              "flex size-7 items-center justify-center rounded-full text-pk-15 font-semibold",
+              isSelected
+                ? "bg-pk-primary font-extrabold text-white"
+                : isToday && "bg-pk-hl font-extrabold text-pk-ink",
+            )}
+          >
+            {Number(dateKey.slice(-2))}
+          </span>
+          {mark ? <DayMark mark={mark} isDimmed={!isInMonth} /> : null}
+        </button>
+      );
+    })}
+  </div>
+);
+
 /**
  * 일정 탭 월 달력. 머리는 이전 달 · "2026년 11월"(누르면 이번 달·오늘) · 다음 달.
- * 오늘은 하이라이트 바탕, 고른 날은 블루 원(오늘을 고르면 고른 날 표시만), 지난 날은 muted, 이번 달 밖 날은 더 옅고 누를 수 없다.
- * 달력을 왼쪽으로 밀면 다음 달, 오른쪽으로 밀면 이전 달이다
+ * 달마다 6주를 그려 높이가 같고, 이전·이번·다음 달 판을 가로로 이어 붙여 밀면 옆 달이 따라 들어온다. 제목은 판이 멈춘 뒤 바뀐다.
+ * 오늘은 하이라이트 바탕, 고른 날은 블루 원(오늘을 고르면 고른 날 표시만), 지난 날은 muted, 다른 달 날짜는 더 옅다.
+ * 달을 옮겨도 고른 날은 그대로이고, 다른 달 날짜를 누르면 그 날을 고르며 그 달로 넘어간다
  */
 const MonthCalendar: React.FC<{
   monthKey: string;
   todayKey: string;
   selectedDateKey: string;
+  /** 보이는 달과 앞뒤 달의 날짜 표시 */
   marks: ReadonlyMap<string, ScheduleDayMark>;
+  /** 날짜를 고른다. 다른 달 날짜면 부모가 그 달로 옮긴다 */
   onSelectDate: (dateKey: string) => void;
-  onPrevMonth: () => void;
-  onNextMonth: () => void;
+  /** 보는 달을 step(1 다음 달, -1 이전 달)만큼 옮긴다 */
+  onChangeMonth: (step: 1 | -1) => void;
   onGoToday: () => void;
 }> = ({
   monthKey,
@@ -129,16 +176,34 @@ const MonthCalendar: React.FC<{
   selectedDateKey,
   marks,
   onSelectDate,
-  onPrevMonth,
-  onNextMonth,
+  onChangeMonth,
   onGoToday,
 }) => {
-  const cellKeys = getMonthCellKeys(monthKey);
   const areaRef = useRef<HTMLElement>(null);
-  const daysRef = useRef<HTMLDivElement>(null);
-  useMonthSwipe(areaRef, daysRef, (step) =>
-    step === 1 ? onNextMonth() : onPrevMonth(),
-  );
+  const trackRef = useRef<HTMLDivElement>(null);
+  const { slideIn, isSliding } = useMonthSwipe(areaRef, trackRef, onChangeMonth);
+  // 머리 제목은 슬라이드가 멈출 때까지 옮기기 전 달에 둔다
+  const [titleMonthKey, setTitleMonthKey] = useState(monthKey);
+  if (!isSliding && titleMonthKey !== monthKey) setTitleMonthKey(monthKey);
+
+  const moveMonth = (step: 1 | -1) => {
+    slideIn(step);
+    onChangeMonth(step);
+  };
+
+  const pressDate = (dateKey: string) => {
+    const dateMonthKey = toMonthKey(dateKey);
+    if (dateMonthKey !== monthKey) {
+      slideIn(dateMonthKey > monthKey ? 1 : -1);
+    }
+    onSelectDate(dateKey);
+  };
+
+  const panelMonthKeys = [
+    addScheduleMonths(monthKey, -1),
+    monthKey,
+    addScheduleMonths(monthKey, 1),
+  ];
 
   return (
     <section
@@ -147,18 +212,26 @@ const MonthCalendar: React.FC<{
       className="touch-pan-y touch-pinch-zoom overflow-hidden rounded-pk-lg bg-white px-2 pt-1 pb-2"
     >
       <div className="flex items-center justify-between">
-        <MonthNavButton label="이전 달" direction="prev" onPress={onPrevMonth} />
+        <MonthNavButton
+          label="이전 달"
+          direction="prev"
+          onPress={() => moveMonth(-1)}
+        />
         <button
           type="button"
           onClick={onGoToday}
-          aria-label={`${formatMonthTitle(monthKey)}, 누르면 오늘로 이동`}
+          aria-label={`${formatMonthTitle(titleMonthKey)}, 누르면 오늘로 이동`}
           className="flex min-h-11 items-center px-3 text-pk-15 font-extrabold text-pk-ink tabular-nums"
         >
-          {formatMonthTitle(monthKey)}
+          {formatMonthTitle(titleMonthKey)}
         </button>
-        <MonthNavButton label="다음 달" direction="next" onPress={onNextMonth} />
+        <MonthNavButton
+          label="다음 달"
+          direction="next"
+          onPress={() => moveMonth(1)}
+        />
       </div>
-      <div ref={daysRef} className="grid grid-cols-7">
+      <div className="grid grid-cols-7">
         {WEEKDAY_LABELS.map((label) => (
           <span
             key={label}
@@ -168,57 +241,22 @@ const MonthCalendar: React.FC<{
             {label}
           </span>
         ))}
-        {cellKeys.map((dateKey) => {
-          const day = Number(dateKey.slice(-2));
-          const isInMonth = dateKey.startsWith(monthKey);
-          const cellClassName =
-            "flex h-[52px] min-w-0 flex-col items-center justify-start gap-[3px] px-px pt-0.5";
-
-          if (!isInMonth) {
-            return (
-              <span
-                key={dateKey}
-                aria-hidden="true"
-                className={cx(cellClassName, "text-pk-quiet")}
-              >
-                <span className="flex size-7 items-center justify-center text-pk-15 font-semibold tabular-nums">
-                  {day}
-                </span>
-              </span>
-            );
-          }
-
-          const isSelected = dateKey === selectedDateKey;
-          const isToday = dateKey === todayKey;
-          const mark = marks.get(dateKey);
-          return (
-            <button
-              key={dateKey}
-              type="button"
-              aria-pressed={isSelected}
-              aria-current={isToday ? "date" : undefined}
-              aria-label={getDayLabel(dateKey, isToday, mark)}
-              onClick={() => onSelectDate(dateKey)}
-              className={cx(
-                cellClassName,
-                dateKey < todayKey ? "text-pk-muted" : "text-pk-ink",
-              )}
-            >
-              <span
-                className={cx(
-                  "flex size-7 items-center justify-center rounded-full text-pk-15 font-semibold tabular-nums",
-                  isSelected
-                    ? "bg-pk-primary font-extrabold text-white"
-                    : isToday &&
-                        "bg-pk-hl font-extrabold text-pk-ink",
-                )}
-              >
-                {day}
-              </span>
-              {mark ? <DayMark mark={mark} /> : null}
-            </button>
-          );
-        })}
+      </div>
+      {/* 판은 카드 안쪽 여백까지 차지해 옆 달이 카드 끝에서 잘린다. 트랙은 가운데 판을 기본 위치로 둔다 */}
+      <div className="-mx-2 overflow-hidden">
+        <div ref={trackRef} className="flex w-[300%] -translate-x-1/3">
+          {panelMonthKeys.map((panelMonthKey) => (
+            <MonthPanel
+              key={panelMonthKey}
+              monthKey={panelMonthKey}
+              todayKey={todayKey}
+              selectedDateKey={selectedDateKey}
+              marks={marks}
+              isCurrent={panelMonthKey === monthKey}
+              onPressDate={pressDate}
+            />
+          ))}
+        </div>
       </div>
     </section>
   );
