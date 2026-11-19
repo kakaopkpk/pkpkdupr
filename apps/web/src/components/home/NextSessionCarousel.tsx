@@ -51,6 +51,8 @@ interface NextSessionCarouselProps {
   onJoin: (sessionId: string) => void;
   onLeave: (sessionId: string) => void;
   onOpenParticipants: (session: MatchSessionDetailInfo) => void;
+  /** 카드 빈 곳을 누르면. 세션 상세 열기 */
+  onOpenSession: (sessionId: string) => void;
 }
 
 /**
@@ -66,6 +68,7 @@ const NextSessionCarousel: React.FC<NextSessionCarouselProps> = ({
   onJoin,
   onLeave,
   onOpenParticipants,
+  onOpenSession,
 }) => {
   const trackRef = useRef<HTMLDivElement>(null);
   const count = sessions.length;
@@ -91,6 +94,7 @@ const NextSessionCarousel: React.FC<NextSessionCarouselProps> = ({
       onJoin={() => onJoin(session.id)}
       onLeave={() => onLeave(session.id)}
       onOpenParticipants={() => onOpenParticipants(session)}
+      onPress={() => onOpenSession(session.id)}
       className={className}
     />
   );
