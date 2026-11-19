@@ -49,16 +49,21 @@ export const isAwaitingFirstPasswordChange = (player: AdminPlayer): boolean =>
 export const getLastSignInLabel = (player: AdminPlayer): string => {
   if (player.status === "inactive") return "로그인 막힘";
   if (!player.hasLoginAccount) return "계정 없음";
-  if (!player.lastSignInAt) return "로그인 전";
+  // 필드가 없으면 서버가 Auth 조회에 실패해 모르는 것이다
+  if (player.lastSignInAt === undefined) return "–";
+  if (player.lastSignInAt === null) return "로그인 전";
   return formatRelativeDay(player.lastSignInAt);
 };
 
 /** 상세 패널 계정 상태 줄. 계정이 없으면 비밀번호 줄이 이미 알려 주므로 null */
 export const getAccountStatusText = (player: AdminPlayer): string | null => {
   if (!player.hasLoginAccount) return null;
-  const lastSignIn = player.lastSignInAt
-    ? `마지막 로그인 ${formatKstDateTime(player.lastSignInAt)}`
-    : "로그인한 적 없음";
+  const lastSignIn =
+    player.lastSignInAt === undefined
+      ? "마지막 로그인을 불러오지 못했어요"
+      : player.lastSignInAt === null
+        ? "로그인한 적 없음"
+        : `마지막 로그인 ${formatKstDateTime(player.lastSignInAt)}`;
   return isAwaitingFirstPasswordChange(player)
     ? `${lastSignIn} · 첫 비밀번호 변경 전`
     : lastSignIn;
@@ -104,7 +109,7 @@ const sortValue = (player: AdminPlayer, key: SortKey): number | null => {
       return toTime(player.lastMatchStartsAt);
     case "lastSignIn":
       // 로그인할 수 없는 회원은 지난 로그인 시각이 있어도 "–" 쪽(맨 아래)으로 보낸다
-      return player.status === "inactive" ? null : toTime(player.lastSignInAt);
+      return player.status === "inactive" ? null : toTime(player.lastSignInAt ?? null);
   }
 };
 

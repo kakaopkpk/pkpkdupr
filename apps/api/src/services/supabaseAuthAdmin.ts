@@ -98,7 +98,7 @@ export class SupabaseAuthAdmin {
     }
   }
 
-  /** 모든 Auth 사용자. 전체 목록을 훑으므로 dev 시딩·데이터 이관·관리자 회원 목록처럼 드문 경로에서만 쓴다. */
+  /** 모든 Auth 사용자. 1000명씩 페이지를 훑으므로 동호회 규모에서는 요청 한 번이다. */
   async listUsers(): Promise<AuthUserSummary[]> {
     const users: AuthUserSummary[] = [];
     for (let page = 1; ; page += 1) {

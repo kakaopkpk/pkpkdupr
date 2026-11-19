@@ -132,7 +132,7 @@ describe("GET /api/admin/players", () => {
     expect(byId.get(member.id)).not.toHaveProperty("authUserId");
   });
 
-  it("Auth 조회가 실패해도 마지막 로그인만 비우고 목록을 돌려준다", async () => {
+  it("Auth 조회가 실패해도 마지막 로그인만 빼고 목록을 돌려준다", async () => {
     vi.spyOn(db.players, "findAll").mockResolvedValue([admin, member]);
     vi.spyOn(db.matches, "countRatingExcludedMatchesByPlayerId").mockResolvedValue({});
     vi.spyOn(db.matches, "findMatchStatsByPlayerId").mockResolvedValue({});
@@ -146,11 +146,11 @@ describe("GET /api/admin/players", () => {
       .set("Authorization", "Bearer token");
 
     expect(response.status).toBe(200);
-    expect(
-      (response.body as Array<Record<string, unknown>>).map(
-        (player) => player.lastSignInAt,
-      ),
-    ).toEqual([null, null]);
+    const body = response.body as Array<Record<string, unknown>>;
+    expect(body).toHaveLength(2);
+    for (const player of body) {
+      expect(player).not.toHaveProperty("lastSignInAt");
+    }
   });
 });
 

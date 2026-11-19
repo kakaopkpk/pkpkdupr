@@ -503,9 +503,9 @@ export interface AdminPlayer extends Player {
   lastMatchStartsAt: Date | null;
   /**
    * Supabase Auth 마지막 아이디·비밀번호 로그인 시각(토큰 갱신은 안 바뀜).
-   * 로그인 계정이 없거나 로그인한 적이 없거나 Auth 조회에 실패하면 null
+   * 로그인 계정이 없거나 로그인한 적이 없으면 null, Auth 조회에 실패해 모르면 필드가 없다
    */
-  lastSignInAt: Date | null;
+  lastSignInAt?: Date | null;
 }
 
 /** POST /api/admin/players/:playerId/promote 요청. 응답은 AdminPromoteGuestResponse(관리자 회원 추가 응답과 같은 형태)다 */

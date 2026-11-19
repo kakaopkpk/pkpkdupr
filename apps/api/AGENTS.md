@@ -191,7 +191,7 @@
   - 첫 로그인 비밀번호 변경 전 `isFirstLogin`
   - 로그인 계정 여부 `hasLoginAccount`
   - 경기 행 수 `matchCount`, 가장 늦은 경기 시각 `lastMatchStartsAt`
-  - Supabase Auth 마지막 로그인 시각 `lastSignInAt`(계정·기록 없음 null). Auth 조회가 실패해도 목록은 200이고 이 값만 null
+  - Supabase Auth 마지막 로그인 시각 `lastSignInAt`(계정·기록 없음 null). Auth 조회가 실패해도 목록은 200이고 이 필드만 빠진다
 - 경기 없는 회원 삭제 `DELETE /api/admin/players/:playerId`
 - 성별·상태 변경 `PATCH /api/admin/players/:playerId/gender|status`
 - 생성·상태 감사 로그 `GET /api/admin/player-creation-logs`·`player-status-logs`
