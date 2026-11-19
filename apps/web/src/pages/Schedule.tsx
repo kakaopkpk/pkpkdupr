@@ -252,6 +252,7 @@ const Schedule: React.FC = () => {
             {...getParticipationProps(entry.session)}
             todayKey={todayKey}
             onOpenParticipants={() => openParticipants(entry.session, EMPTY_IDS)}
+            onPress={() => openSessionReport(entry.session.id)}
           />
         );
       case "record-session":

@@ -48,46 +48,56 @@ const SessionMineStrip: React.FC<{ mine: SessionPlayerReport }> = ({ mine }) => 
 };
 
 /**
- * 끝난 세션 카드(일정 탭·홈 지난 세션 요약). 맨 위 이름표 기본값은 세션 종류, 메타 줄 기본값은 장소·인원·경기 수다.
- * 일정 탭은 바깥 날짜 제목이 보이므로 날짜를 넣지 않는다
+ * 끝난 세션 카드(일정 탭·홈 지난 세션 요약·세션 상세 머리). 맨 위 이름표 기본값은 세션 종류, 메타 줄 기본값은 장소·인원·경기 수다.
+ * 일정 탭은 바깥 날짜 제목이 보이므로 날짜를 넣지 않는다. onPress를 생략하면(세션 상세 머리) 누를 수 없고 화살표가 없다
  */
 export const RecordSessionCard: React.FC<{
   session: MatchSessionHistoryInfo;
   mine: SessionPlayerReport | null;
-  onPress: () => void;
+  onPress?: () => void;
   label?: string;
   meta?: string;
-}> = ({ session, mine, onPress, label, meta }) => (
-  <button
-    type="button"
-    onClick={onPress}
-    className={cx(
-      "flex w-full flex-col rounded-pk-lg bg-white px-4 py-3.5 text-left active:bg-pk-primary-soft/60",
-      rowPressClassName,
-    )}
-  >
-    <span className="flex w-full items-center justify-between gap-2">
-      <span className="text-pk-12 font-bold text-pk-sub">
-        {label ?? getSessionKindLabel(session.kind)}
+}> = ({ session, mine, onPress, label, meta }) => {
+  const content = (
+    <>
+      <span className="flex w-full items-center justify-between gap-2">
+        <span className="text-pk-12 font-bold text-pk-sub">
+          {label ?? getSessionKindLabel(session.kind)}
+        </span>
+        {onPress ? (
+          <ChevronRightIcon className="size-4 shrink-0 text-pk-quiet" />
+        ) : null}
       </span>
-      <ChevronRightIcon className="size-4 shrink-0 text-pk-quiet" />
-    </span>
-    <span className="mt-0.5 truncate text-pk-17 font-extrabold text-pk-ink">
-      {session.name}
-    </span>
-    <span className="truncate text-pk-13 text-pk-sub tabular-nums">
-      {meta ??
-        [
-          session.location,
-          `${session.participantCount}명`,
-          `${session.matchCount}경기`,
-        ]
-          .filter(Boolean)
-          .join(" · ")}
-    </span>
-    {mine ? <SessionMineStrip mine={mine} /> : null}
-  </button>
-);
+      <span className="mt-0.5 truncate text-pk-17 font-extrabold text-pk-ink">
+        {session.name}
+      </span>
+      <span className="truncate text-pk-13 text-pk-sub tabular-nums">
+        {meta ??
+          [
+            session.location,
+            `${session.participantCount}명`,
+            `${session.matchCount}경기`,
+          ]
+            .filter(Boolean)
+            .join(" · ")}
+      </span>
+      {mine ? <SessionMineStrip mine={mine} /> : null}
+    </>
+  );
+  const className = "flex w-full flex-col rounded-pk-lg bg-white px-4 py-3.5 text-left";
+
+  return onPress ? (
+    <button
+      type="button"
+      onClick={onPress}
+      className={cx(className, "active:bg-pk-primary-soft/60", rowPressClassName)}
+    >
+      {content}
+    </button>
+  ) : (
+    <div className={className}>{content}</div>
+  );
+};
 
 /** 세션 없는 경기 카드: 카드 하나에 경기 줄 하나 */
 export const RecordMatchCard: React.FC<{
