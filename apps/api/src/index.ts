@@ -28,6 +28,7 @@ import {
   type AdminBatchMatchRequest,
   type AdminBatchMatchResponse,
   type AdminMatchDeletionLogsResponse,
+  type AdminMatchEditLogsResponse,
 } from "@pkpkdupr/shared/match";
 import {
   addKstDays,
@@ -2593,6 +2594,27 @@ app.get(
   },
 );
 
+app.get("/api/admin/match-edit-logs", requireAdmin, async (_req, res) => {
+  try {
+    const [logs, allPlayers] = await Promise.all([
+      matchRepository.findEditLogs(),
+      authService.getAllPlayers(),
+    ]);
+    const usernameById = new Map(
+      allPlayers.map((player) => [player.id, player.username]),
+    );
+    const response: AdminMatchEditLogsResponse = {
+      logs: logs.map((log) => ({
+        ...log,
+        editedByUsername: usernameById.get(log.editedByPlayerId) ?? null,
+      })),
+    };
+    res.json(response);
+  } catch (err) {
+    res.status(500).json({ error: (err as Error).message });
+  }
+});
+
 app.get(
   "/api/admin/diagnostics/timestamp-units",
   requireAdmin,
@@ -2922,6 +2944,11 @@ app.put("/api/matches/:matchId", async (req, res) => {
         prepared.teams,
       ),
       expectedUpdatedAt: expectedUpdatedAt ?? existing.updatedAt,
+      // 완료 경기를 고칠 때만 저장소가 수정 기록을 남긴다(첫 점수 입력은 기록이라 남기지 않음)
+      editLog: {
+        id: `match-edit-${randomUUID()}`,
+        editedByAdmin: decoded.isAdmin,
+      },
     });
   } catch (err) {
     return sendMatchRecordFailure(res, err);

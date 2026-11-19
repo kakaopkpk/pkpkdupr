@@ -4,6 +4,7 @@ import {
   getDevMockUsernames,
   isDevMockDataEnabled,
   MatchDeletionLogRepository,
+  MatchEditLogRepository,
   MatchRepository,
   OfficialDuprAdjustmentLogRepository,
   PlayerAdminRepository,
@@ -51,6 +52,7 @@ export const db: {
   officialDuprAdjustmentLogs: OfficialDuprAdjustmentLogRepository;
   matches: MatchRepository;
   matchDeletionLogs: MatchDeletionLogRepository;
+  matchEditLogs: MatchEditLogRepository;
   ratingWriteLock: RatingWriteLock;
   testData: TestDataRepository;
 } = {
@@ -68,6 +70,7 @@ export const db: {
   ),
   matches: new MatchRepository(drizzleDb, client),
   matchDeletionLogs: new MatchDeletionLogRepository(drizzleDb),
+  matchEditLogs: new MatchEditLogRepository(drizzleDb),
   ratingWriteLock: new RatingWriteLock(client),
   testData: new TestDataRepository(
     drizzleDb,

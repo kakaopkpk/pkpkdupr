@@ -58,6 +58,10 @@ import {
 import { firstRow, placeholders, type RawQueryResult } from "../db/client";
 import { buildMatchDeletionLogInsert } from "./MatchDeletionLogRepository";
 import {
+  buildMatchEditLogInsert,
+  hasRecordedMatchChanged,
+} from "./MatchEditLogRepository";
+import {
   PlayerRepository,
   type CreateStoredPlayerInput,
   type StoredPlayerRecord,
@@ -193,6 +197,11 @@ export interface UpdateRecordedMatchInput {
   ratingExcluded: boolean;
   /** 주면 저장된 updated_at(초 단위)과 같을 때만 고치고, 다르면 MatchStaleUpdateError */
   expectedUpdatedAt?: Date;
+  /**
+   * 주면 이미 completed였던 경기를 고칠 때 같은 트랜잭션에서 match_edit_logs를 남긴다.
+   * 수정한 회원·시각은 resultSubmittedByPlayerId·resultSubmittedAt이다. 바뀐 내용이 없으면 남기지 않는다.
+   */
+  editLog?: { id: string; editedByAdmin: boolean };
 }
 
 export interface DeleteRecordedMatchInput {
@@ -1770,6 +1779,18 @@ export class MatchRepository {
     let committed = false;
 
     try {
+      // 수정 기록용 수정 전 스냅샷. 행을 잠그고 읽어 아래 UPDATE와 사이에 다른 수정이 끼지 않게 한다.
+      let before: Match | undefined;
+      if (data.editLog) {
+        const locked = await transaction.execute({
+          sql: `SELECT status FROM matches WHERE id = $1 FOR UPDATE`,
+          args: [matchId],
+        });
+        if (locked.rows[0]?.status === "completed") {
+          before = await this.findByIdWith(transaction.db, matchId);
+        }
+      }
+
       const submittedAtSeconds = toUnixTimestampSeconds(data.resultSubmittedAt);
       const args: unknown[] = [
         data.type,
@@ -1904,6 +1925,23 @@ export class MatchRepository {
         scoreColumns,
         transaction,
       );
+
+      if (data.editLog && before) {
+        const after = await this.findByIdWith(transaction.db, matchId);
+        if (after && hasRecordedMatchChanged(before, after)) {
+          await transaction.execute(
+            buildMatchEditLogInsert({
+              id: data.editLog.id,
+              matchId,
+              editedByPlayerId: data.resultSubmittedByPlayerId,
+              editedByAdmin: data.editLog.editedByAdmin,
+              before,
+              after,
+              editedAt: data.resultSubmittedAt,
+            }),
+          );
+        }
+      }
 
       await transaction.commit();
       committed = true;

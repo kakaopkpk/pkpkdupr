@@ -57,6 +57,13 @@ export {
   type CreateMatchDeletionLogInput,
   type MatchDeletionLog,
 } from "./repositories/MatchDeletionLogRepository";
+export {
+  MatchEditLogRepository,
+  buildMatchEditLogInsert,
+  hasRecordedMatchChanged,
+  type CreateMatchEditLogInput,
+  type MatchEditLog,
+} from "./repositories/MatchEditLogRepository";
 export { PlayerSeenAchievementRepository } from "./repositories/PlayerSeenAchievementRepository";
 export {
   TestDataRepository,

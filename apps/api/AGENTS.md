@@ -42,6 +42,7 @@
   - 관리자는 24시간 검사 없이 고친다.
   - 관리자 전용 `sessionId`(문자열이면 그 세션으로 옮기고 null이면 세션에서 뺌)·`matchStartsAt`(완료 경기면 `completedAt`도 같은 만큼 옮김)으로 세션·경기 시각을 바꾼다. 회원이 이 둘을 보내면 403.
   - 선택적 `expectedUpdatedAt`이 서버 `updatedAt`과 다르면 409.
+  - 이미 completed인 경기를 고치면 같은 트랜잭션에서 수정 전·후 스냅샷을 `match_edit_logs`에 남긴다(관리자 수정 포함). 진행 중 경기의 첫 점수 입력과 종류·이름·장소·팀·점수·세션·경기 시각이 그대로인 저장은 남기지 않는다.
 - 삭제 `DELETE /api/matches/:matchId`
   - `isMatchRecordDeletable`, 이미 지워졌으면 404.
   - 선택적 `expectedUpdatedAt`이 서버 `updatedAt`과 다르면 409.
@@ -185,6 +186,7 @@
 - 세션 연결 `PATCH /api/admin/matches/bulk-metadata` `{ matchIds, sessionId }`: 세션에 연결하면 선수를 참여자로 넣고, null로 빼면 참여자는 그대로
 - 관리자 삭제 `DELETE /api/admin/matches/:matchId`
 - 삭제 기록 `GET /api/admin/match-deletion-logs`: 지운 시각 내림차순
+- 수정 기록 `GET /api/admin/match-edit-logs`: 응답 `AdminMatchEditLogsResponse`(수정 전·후 경기 스냅샷 `before`·`after`, 고친 회원 아이디), 고친 시각 내림차순
 - 경기 정정은 `PUT /api/matches/:matchId`를 같이 쓴다.
 
 ### 세션

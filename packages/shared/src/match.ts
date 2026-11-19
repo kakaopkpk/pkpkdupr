@@ -309,6 +309,26 @@ export interface AdminMatchDeletionLogsResponse {
   logs: AdminMatchDeletionLog[];
 }
 
+/** GET /api/admin/match-edit-logs 항목. 이미 완료된 경기를 PUT /api/matches/:matchId로 고친 기록이다 */
+export interface AdminMatchEditLog {
+  id: string;
+  matchId: string;
+  editedAt: Date;
+  editedByPlayerId: string;
+  /** 고친 회원의 지금 아이디. 회원이 없어졌으면 null */
+  editedByUsername: string | null;
+  editedByAdmin: boolean;
+  /** 고치기 전 경기 전체(스냅샷) */
+  before: Match;
+  /** 고친 직후 경기 전체(스냅샷). 그 뒤 또 고쳤거나 지웠으면 지금 경기와 다를 수 있다 */
+  after: Match;
+}
+
+/** GET /api/admin/match-edit-logs 응답. 고친 시각 내림차순 */
+export interface AdminMatchEditLogsResponse {
+  logs: AdminMatchEditLog[];
+}
+
 /** POST /api/admin/matches/batch의 경기 한 개 */
 export interface AdminBatchMatchItemRequest {
   name?: string;

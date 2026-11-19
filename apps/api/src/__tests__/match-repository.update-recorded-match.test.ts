@@ -156,3 +156,102 @@ describe("MatchRepository.updateRecordedMatch 관리자 정정", () => {
     expect(update.sql).toMatch(/WHEN status = 'completed' AND completed_at IS NOT NULL/);
   });
 });
+
+describe("MatchRepository.updateRecordedMatch 수정 기록", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  const snapshot = (overrides: Partial<Match> = {}): Match =>
+    ({
+      id: "Mfix1",
+      type: "singles",
+      location: "야탑초등학교",
+      teams: baseInput.teams,
+      scores: [{ scoreA: 11, scoreB: 7 }],
+      matchStartsAt: SUBMITTED_AT,
+      ...overrides,
+    }) as Match;
+
+  /** 잠근 행의 상태와 트랜잭션 안 조회(수정 전·후 순서) 결과를 정해 저장소를 만든다 */
+  const createLoggingRepository = (lockedStatus: string, reads: Match[]) => {
+    const statements: Statement[] = [];
+    const transaction = {
+      execute: vi.fn(async (statement: Statement) => {
+        statements.push(statement);
+        if (statement.sql.includes("FOR UPDATE")) {
+          return { rows: [{ status: lockedStatus }], rowsAffected: 0 };
+        }
+        if (statement.sql.includes("SELECT player_id")) {
+          return { rows: [], rowsAffected: 0 };
+        }
+        return { rows: [], rowsAffected: 1 };
+      }),
+      commit: vi.fn().mockResolvedValue(undefined),
+      close: vi.fn(),
+      db: {},
+    };
+    const client = { execute: vi.fn(), transaction: vi.fn(async () => transaction) };
+    const repository = new MatchRepository({}, client);
+    vi.spyOn(repository, "findById").mockResolvedValue({ id: "Mfix1" } as Match);
+    const findByIdWith = vi.fn();
+    for (const read of reads) findByIdWith.mockResolvedValueOnce(read);
+    // 트랜잭션 커넥션 조회(private)를 수정 전·후 스냅샷으로 바꾼다
+    (repository as unknown as { findByIdWith: typeof findByIdWith }).findByIdWith =
+      findByIdWith;
+    const logInsert = () =>
+      statements.find((statement) => statement.sql.includes("INSERT INTO match_edit_logs"));
+    return { repository, transaction, logInsert, findByIdWith };
+  };
+
+  const editInput: UpdateRecordedMatchInput = {
+    ...baseInput,
+    editLog: { id: "match-edit-1", editedByAdmin: false },
+  };
+
+  it("완료 경기를 고치면 수정 전·후 스냅샷을 같은 트랜잭션에 남긴다", async () => {
+    const before = snapshot();
+    const after = snapshot({ scores: [{ scoreA: 7, scoreB: 11 }] });
+    const { repository, transaction, logInsert } = createLoggingRepository(
+      "completed",
+      [before, after],
+    );
+
+    await repository.updateRecordedMatch("Mfix1", editInput);
+
+    const insert = logInsert()!;
+    expect(insert.args.slice(0, 4)).toEqual([
+      "match-edit-1",
+      "Mfix1",
+      "player-admin",
+      false,
+    ]);
+    expect(JSON.parse(String(insert.args[4])).scores).toEqual(before.scores);
+    expect(JSON.parse(String(insert.args[5])).scores).toEqual(after.scores);
+    expect(insert.args[6]).toBe(SUBMITTED_AT.getTime() / 1000);
+    expect(transaction.commit).toHaveBeenCalled();
+  });
+
+  it("진행 중 경기에 첫 점수를 넣는 것은 남기지 않는다", async () => {
+    const { repository, logInsert, findByIdWith } = createLoggingRepository(
+      "created",
+      [],
+    );
+
+    await repository.updateRecordedMatch("Mfix1", editInput);
+
+    expect(findByIdWith).not.toHaveBeenCalled();
+    expect(logInsert()).toBeUndefined();
+  });
+
+  it("바뀐 내용이 없으면 남기지 않는다", async () => {
+    const { repository, logInsert } = createLoggingRepository("completed", [
+      snapshot(),
+      snapshot({ updatedAt: new Date() }),
+    ]);
+
+    await repository.updateRecordedMatch("Mfix1", editInput);
+
+    expect(logInsert()).toBeUndefined();
+  });
+});

@@ -226,6 +226,11 @@ describe("PUT /api/matches/:matchId", () => {
     });
     expect(input).not.toHaveProperty("matchStartsAt");
     expect(input).not.toHaveProperty("courtName");
+    // 완료 경기 수정 기록은 저장소가 같은 트랜잭션에서 남긴다
+    expect(input.editLog).toEqual({
+      id: expect.stringMatching(/^match-edit-/),
+      editedByAdmin: false,
+    });
     expect(recalculate).toHaveBeenCalledTimes(1);
     expect(recalculate.mock.calls[0]?.[1]).toMatchObject({
       source: "manual_recalculation",

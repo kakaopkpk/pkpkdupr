@@ -80,6 +80,74 @@ describe("관리자 경기 API", () => {
     vi.restoreAllMocks();
   });
 
+  describe("GET /api/admin/match-edit-logs", () => {
+    it("고친 회원 아이디와 수정 전·후 스냅샷을 돌려준다", async () => {
+      const editedAt = new Date("2026-07-22T12:00:00.000Z");
+      vi.spyOn(MatchRepository.prototype, "findEditLogs").mockResolvedValue([
+        {
+          id: "edit-1",
+          matchId: "Medited",
+          editedAt,
+          editedByPlayerId: playerA.id,
+          editedByAdmin: false,
+          before: buildMatch("Medited"),
+          after: buildMatch("Medited", { scores: [{ scoreA: 7, scoreB: 11 }] }),
+        },
+        {
+          id: "edit-0",
+          matchId: "Mother",
+          editedAt: new Date("2026-07-20T12:00:00.000Z"),
+          editedByPlayerId: "player-gone",
+          editedByAdmin: true,
+          before: buildMatch("Mother"),
+          after: buildMatch("Mother"),
+        },
+      ]);
+      vi.spyOn(AuthService.prototype, "getAllPlayers").mockResolvedValue([
+        admin,
+        playerA,
+      ]);
+
+      const response = await request(app)
+        .get("/api/admin/match-edit-logs")
+        .set("Authorization", "Bearer admin-token");
+
+      expect(response.status).toBe(200);
+      expect(response.body.logs[0]).toMatchObject({
+        id: "edit-1",
+        matchId: "Medited",
+        editedAt: editedAt.toISOString(),
+        editedByUsername: playerA.username,
+        editedByAdmin: false,
+        before: { scores: [{ scoreA: 11, scoreB: 7 }] },
+        after: { scores: [{ scoreA: 7, scoreB: 11 }] },
+      });
+      expect(response.body.logs[1]).toMatchObject({
+        editedByUsername: null,
+        editedByAdmin: true,
+      });
+    });
+
+    it("관리자가 아니면 403이다", async () => {
+      vi.spyOn(
+        AuthService.prototype,
+        "authenticateAccessToken",
+      ).mockResolvedValue({
+        ...adminSession,
+        payload: { playerId: playerA.id, isAdmin: false },
+        player: playerA,
+      });
+      const findEditLogs = vi.spyOn(MatchRepository.prototype, "findEditLogs");
+
+      const response = await request(app)
+        .get("/api/admin/match-edit-logs")
+        .set("Authorization", "Bearer member-token");
+
+      expect(response.status).toBe(403);
+      expect(findEditLogs).not.toHaveBeenCalled();
+    });
+  });
+
   describe("GET /api/admin/match-deletion-logs", () => {
     it("지운 시각 내림차순으로 지운 회원 아이디와 경기 스냅샷을 돌려준다", async () => {
       const newer = new Date("2026-07-22T12:00:00.000Z");
