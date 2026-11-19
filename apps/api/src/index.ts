@@ -108,6 +108,7 @@ import type {
   RecordItem,
   RecordsResponse,
 } from "@pkpkdupr/shared/ranking";
+import type { NewsFeedResponse } from "@pkpkdupr/shared/newsFeed";
 import {
   getScheduleMonthDateKeyRange,
   parseScheduleMonth,
@@ -165,6 +166,10 @@ import {
   type SessionDominations,
   toContextAchievementMatches,
 } from "./services/RankingService";
+import {
+  buildNewsFeedPage,
+  parseNewsFeedCursor,
+} from "./services/NewsFeedService";
 import {
   AvatarValidationError,
   buildAvatarObjectPath,
@@ -3197,7 +3202,11 @@ const loadRankingSource = async () => {
     matchRepository.findCompletedMatchOutcomes(),
     matchRepository.findSessionsWithParticipantIds(),
   ]);
-  return { context: createRankingContext(players, logs, matches), sessions };
+  return {
+    context: createRankingContext(players, logs, matches),
+    sessions,
+    players,
+  };
 };
 
 const parseRankingCategory = (value: unknown): RankingCategory => {
@@ -3328,6 +3337,35 @@ app.get("/api/records", async (req, res) => {
       items: await hydrateRecordEntries(page.entries),
       nextCursor: page.nextCursor,
     };
+    res.json(response);
+  } catch (err) {
+    sendRankingFailure(res, err);
+  }
+});
+
+app.get("/api/news-feed", async (req, res) => {
+  try {
+    const auth = await getAuthPayload(req, res);
+    if (!auth) {
+      return;
+    }
+
+    const rawCursor = req.query.cursor;
+    const cursor =
+      typeof rawCursor === "string" ? parseNewsFeedCursor(rawCursor) : null;
+    if (rawCursor !== undefined && cursor == null) {
+      throw new RankingRequestError("cursor 형식이 올바르지 않습니다.", 400);
+    }
+
+    const { context, sessions, players } = await loadRankingSource();
+    const response: NewsFeedResponse = buildNewsFeedPage({
+      context,
+      sessions,
+      players,
+      dominations: findSessionDominations(context, sessions, new Date()),
+      requesterId: auth.playerId,
+      cursor,
+    });
     res.json(response);
   } catch (err) {
     sendRankingFailure(res, err);
