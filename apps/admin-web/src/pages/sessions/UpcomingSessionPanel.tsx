@@ -161,7 +161,7 @@ export const UpcomingSessionPanel: React.FC<{
       ) : (
         <DangerSection
           title="세션 삭제"
-          description="세션과 참여 신청을 지우고 구글 캘린더 일정도 지워요. 정기 쉬는 날로 남지 않아요. 경기가 있으면 지울 수 없어요."
+          description="세션과 참여 신청을 지우고 구글 캘린더 일정도 지워요. 지워도 정기 쉬는 날이 새로 생기지 않아요. 경기가 있으면 지울 수 없어요."
           action={
             <Button
               variant="outline"
