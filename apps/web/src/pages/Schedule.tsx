@@ -134,13 +134,11 @@ const Schedule: React.FC = () => {
   }, []);
 
   const selectedMonthKey = toMonthKey(selectedDateKey);
-  // 달력은 앞뒤 달 판도 그리고, 아래 카드는 고른 날의 달로 그린다
+  // 달력은 앞뒤 달 판(그 판의 6주에 걸치는 ±2달 날짜까지)도 그리고, 아래 카드는 고른 날의 달로 그린다
   const neededMonthKeys = useMemo(
     () => [
       ...new Set([
-        addScheduleMonths(monthKey, -1),
-        monthKey,
-        addScheduleMonths(monthKey, 1),
+        ...[-2, -1, 0, 1, 2].map((offset) => addScheduleMonths(monthKey, offset)),
         selectedMonthKey,
       ]),
     ],

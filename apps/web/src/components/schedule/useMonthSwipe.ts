@@ -29,15 +29,19 @@ interface SwipeState {
  * 이어 붙이고 CSS로 가운데 판을 보이게 둔 트랙이며, 여기서는 그 위에 transform으로 끈 거리만 더한다.
  * 처음 움직임이 가로면 세 판이 손가락을 따라오고, 놓을 때 거리·속도로 옮길지 정해 onSwipe(1 다음 달, -1 이전 달)를 부른다.
  * 옮기면 새 달이 렌더된 뒤에도 보던 자리에서 이어 가운데로 들어오고, 아니면 제자리로 돌아온다. 세로 움직임은 브라우저 스크롤에 맡긴다.
- * 돌려주는 slideIn(step)은 버튼·다른 달 날짜로 달을 옮기기 직전에 불러 같은 슬라이드로 넘긴다
+ * 돌려주는 slideIn(step)은 버튼·다른 달 날짜로 달을 옮기기 직전에 불러 같은 슬라이드로 넘긴다.
+ * onSettled는 트랙이 가운데 판 자리에 멈출 때(연출이 없으면 바로) 불린다
  */
 export const useMonthSwipe = (
   areaRef: React.RefObject<HTMLElement | null>,
   trackRef: React.RefObject<HTMLElement | null>,
   onSwipe: (step: 1 | -1) => void,
+  onSettled: () => void,
 ) => {
   const onSwipeRef = useRef(onSwipe);
   onSwipeRef.current = onSwipe;
+  const onSettledRef = useRef(onSettled);
+  onSettledRef.current = onSettled;
   const slideInRef = useRef<(step: 1 | -1) => void>(() => {});
 
   useEffect(() => {
@@ -47,6 +51,8 @@ export const useMonthSwipe = (
 
     let state: SwipeState | null = null;
     let suppressClickUntil = -Infinity;
+    // 끝난 전환은 transitionend가 오지 않을 수 있어(움직일 거리가 없거나 끊김) 시간으로 정착을 알린다
+    let settleTimer: ReturnType<typeof setTimeout> | undefined;
 
     const getPanelWidth = () => track.offsetWidth / PANEL_COUNT;
 
@@ -60,6 +66,12 @@ export const useMonthSwipe = (
         ? `transform ${SETTLE_DURATION_MS}ms var(--ease-pk-move)`
         : "";
       setOffset(0);
+      clearTimeout(settleTimer);
+      if (animate) {
+        settleTimer = setTimeout(() => onSettledRef.current(), SETTLE_DURATION_MS);
+      } else {
+        onSettledRef.current();
+      }
     };
 
     /**
@@ -67,8 +79,10 @@ export const useMonthSwipe = (
      * 판 한 칸만큼 반대로 옮겨 두고 가운데로 정착시킨다. 새 달은 이 이벤트가 끝나고 그리기 전에 렌더된다
      */
     const slideFrom = (offset: number, step: 1 | -1) => {
+      const width = getPanelWidth();
       track.style.transition = "";
-      setOffset(offset + step * getPanelWidth());
+      // 정착 중에 또 옮기면 한 칸을 넘을 수 있어, 판이 채운 범위 안에서 시작한다
+      setOffset(Math.max(-width, Math.min(width, offset + step * width)));
       track.getBoundingClientRect();
       settle(true);
     };
@@ -191,7 +205,9 @@ export const useMonthSwipe = (
       area.removeEventListener("touchcancel", handleTouchCancel);
       area.removeEventListener("click", handleClickCapture, true);
       slideInRef.current = () => {};
-      settle(false);
+      clearTimeout(settleTimer);
+      track.style.transition = "";
+      setOffset(0);
     };
   }, [areaRef, trackRef]);
 

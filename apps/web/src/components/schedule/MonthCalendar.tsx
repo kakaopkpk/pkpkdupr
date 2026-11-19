@@ -1,4 +1,5 @@
-import React, { useRef } from "react";
+import React, { useRef, useState } from "react";
+import { prefersReducedMotion } from "@/hooks/useSheetDrag";
 import { kstDateKeyToDate, WEEKDAY_LABELS } from "@pkpkdupr/shared/session";
 import { addScheduleMonths, parseScheduleMonth } from "@pkpkdupr/shared/schedule";
 import { ChevronRightIcon } from "@/components/ui/Icons";
@@ -145,7 +146,7 @@ const MonthPanel: React.FC<MonthPanelProps> = ({
 
 /**
  * 일정 탭 월 달력. 머리는 이전 달 · "2026년 11월"(누르면 이번 달·오늘) · 다음 달.
- * 달마다 6주를 그려 높이가 같고, 이전·이번·다음 달 판을 가로로 이어 붙여 밀면 옆 달이 따라 들어온다.
+ * 달마다 6주를 그려 높이가 같고, 이전·이번·다음 달 판을 가로로 이어 붙여 밀면 옆 달이 따라 들어온다. 제목은 판이 멈춘 뒤 바뀐다.
  * 오늘은 하이라이트 바탕, 고른 날은 블루 원(오늘을 고르면 고른 날 표시만), 지난 날은 muted, 다른 달 날짜는 더 옅다.
  * 달을 옮겨도 고른 날은 그대로이고, 다른 달 날짜를 누르면 그 날을 고르며 그 달로 넘어간다
  */
@@ -172,9 +173,23 @@ const MonthCalendar: React.FC<{
 }) => {
   const areaRef = useRef<HTMLElement>(null);
   const trackRef = useRef<HTMLDivElement>(null);
-  const changeMonth = (step: 1 | -1) =>
-    step === 1 ? onNextMonth() : onPrevMonth();
-  const slideIn = useMonthSwipe(areaRef, trackRef, changeMonth);
+  // 슬라이드가 멈출 때까지 머리 제목은 옮기기 전 달에 둔다. null이면 보는 달을 따른다
+  const [heldTitleMonthKey, setHeldTitleMonthKey] = useState<string | null>(null);
+  const titleMonthKey = heldTitleMonthKey ?? monthKey;
+
+  const holdTitle = () => {
+    if (!prefersReducedMotion()) {
+      setHeldTitleMonthKey((held) => held ?? monthKey);
+    }
+  };
+  const changeMonth = (step: 1 | -1) => {
+    holdTitle();
+    if (step === 1) onNextMonth();
+    else onPrevMonth();
+  };
+  const slideIn = useMonthSwipe(areaRef, trackRef, changeMonth, () =>
+    setHeldTitleMonthKey(null),
+  );
 
   const moveMonth = (step: 1 | -1) => {
     slideIn(step);
@@ -185,6 +200,7 @@ const MonthCalendar: React.FC<{
     const dateMonthKey = toMonthKey(dateKey);
     if (dateMonthKey !== monthKey) {
       slideIn(dateMonthKey > monthKey ? 1 : -1);
+      holdTitle();
     }
     onSelectDate(dateKey);
   };
@@ -210,10 +226,10 @@ const MonthCalendar: React.FC<{
         <button
           type="button"
           onClick={onGoToday}
-          aria-label={`${formatMonthTitle(monthKey)}, 누르면 오늘로 이동`}
+          aria-label={`${formatMonthTitle(titleMonthKey)}, 누르면 오늘로 이동`}
           className="flex min-h-11 items-center px-3 text-pk-15 font-extrabold text-pk-ink tabular-nums"
         >
-          {formatMonthTitle(monthKey)}
+          {formatMonthTitle(titleMonthKey)}
         </button>
         <MonthNavButton
           label="다음 달"
