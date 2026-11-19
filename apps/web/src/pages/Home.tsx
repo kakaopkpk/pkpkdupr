@@ -3,12 +3,13 @@ import type { RecommendedCourt } from "@pkpkdupr/shared/matchmaking";
 import { toKstDateKey } from "@pkpkdupr/shared/session";
 import { getMatchPlayerIds, type MatchInfo } from "@/types/match";
 import HomeSkeleton from "@/components/home/HomeSkeleton";
-import LastSessionSummary from "@/components/home/LastSessionSummary";
 import { LiveMatchCard, MyLiveMatchCard } from "@/components/home/LiveMatchCard";
+import NewsFeed from "@/components/home/NewsFeed";
 import NextSessionCarousel from "@/components/home/NextSessionCarousel";
 import RecommendationSection, {
   getCourtKey,
 } from "@/components/home/RecommendationSection";
+import { useNewsFeed } from "@/components/home/useNewsFeed";
 import {
   byLatestStart,
   usePreSessionData,
@@ -84,7 +85,7 @@ const INITIAL_START_STATE: StartState = {
 
 /**
  * 홈 탭. 셸의 진행 중 세션이 있으면 진행 화면(참여자 Main / 미참여자 MainGuest),
- * 없으면 다가오는 세션 카드(가로로 넘김), 세션 밖 진행 중 경기, 지난 세션 요약을 보인다.
+ * 없으면 다가오는 세션 카드(가로로 넘김), 세션 밖 진행 중 경기, 소식 피드를 보인다.
  */
 const Home: React.FC = () => {
   const { player } = useAuth();
@@ -111,6 +112,7 @@ const Home: React.FC = () => {
     dataVersion,
     todayKey,
   });
+  const newsFeed = useNewsFeed({ enabled: isPreSession, dataVersion });
   const liveTopRiser = useSessionTopRiser(liveSession?.id ?? null, dataVersion);
   const recommendations = useSessionRecommendations(
     isLiveParticipant && liveSession ? liveSession.id : null,
@@ -248,7 +250,7 @@ const Home: React.FC = () => {
   const refreshRef = useRef<() => Promise<void>>(async () => {});
   refreshRef.current = async () => {
     if (isPreSession) {
-      await preSession.reload();
+      await Promise.all([preSession.reload(), newsFeed.reload()]);
     } else if (isLiveParticipant) {
       await recommendations.reload();
     }
@@ -353,8 +355,6 @@ const Home: React.FC = () => {
       return <HomeSkeleton />;
     }
 
-    const { lastSessionReport } = data;
-
     return (
       <>
         {/* 다시 받기에 실패하면 이전 데이터를 둔 채 실패를 알린다 */}
@@ -378,9 +378,7 @@ const Home: React.FC = () => {
           <EmptyCard message="다가오는 세션이 없어요" />
         )}
         {inProgressSection}
-        {lastSessionReport ? (
-          <LastSessionSummary report={lastSessionReport} playerId={playerId} />
-        ) : null}
+        <NewsFeed feed={newsFeed} />
       </>
     );
   };

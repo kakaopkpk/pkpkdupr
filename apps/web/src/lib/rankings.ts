@@ -28,7 +28,7 @@ export class RequestError extends Error {
   }
 }
 
-const requestJson = async <T>(
+export const requestJson = async <T>(
   path: string,
   fallbackMessage: string,
 ): Promise<T> => {
@@ -62,20 +62,6 @@ export function fetchRankings(category: RankingCategory) {
 
 /** 업적 점수 순위 */
 export const fetchAchievementRanking = () => fetchRankings("achievements");
-
-export const fetchSessionHistory = async (
-  options: { limit?: number; playerId?: string } = {},
-): Promise<MatchSessionHistoryInfo[]> => {
-  const params = new URLSearchParams();
-  if (options.limit !== undefined) params.set("limit", String(options.limit));
-  if (options.playerId) params.set("playerId", options.playerId);
-  const query = params.toString();
-  const response = await requestJson<{ sessions: MatchSessionHistoryInfo[] }>(
-    `/api/session-reports${query ? `?${query}` : ""}`,
-    "세션 기록을 불러오지 못했어요.",
-  );
-  return response.sessions;
-};
 
 export const fetchSessionReport = (sessionId: string) =>
   requestJson<MatchSessionReportInfo>(
