@@ -28,13 +28,15 @@ const HeaderTitle: React.FC<{ children: React.ReactNode }> = ({ children }) => (
   <span className="text-pk-15 font-extrabold text-pk-ink">{children}</span>
 );
 
-/** "진행 중 · 4라운드" | 라운드 없는 경기면 "진행 중" */
-const formatInProgressTitle = (round: number | null | undefined) =>
-  round == null ? "진행 중" : `진행 중 · ${formatBracketRoundLabel(round)}`;
+/** "진행 중 · 4라운드" | 라운드 없는 경기면 접두 글자만 */
+const formatRoundTitle = (prefix: string, round: number | null | undefined) =>
+  round == null ? prefix : `${prefix} · ${formatBracketRoundLabel(round)}`;
 
-/** "다음 경기 · 4라운드" | 라운드 없는 경기면 "다음 경기" */
+const formatInProgressTitle = (round: number | null | undefined) =>
+  formatRoundTitle("진행 중", round);
+
 const formatNextMatchTitle = (round: number | null | undefined) =>
-  round == null ? "다음 경기" : `다음 경기 · ${formatBracketRoundLabel(round)}`;
+  formatRoundTitle("다음 경기", round);
 
 /** 내 경기 카드 틀. 2px 연한 블루 테두리, 위 본문(누르면 경기 상세)과 아래 버튼 */
 const MyMatchCardFrame: React.FC<{
