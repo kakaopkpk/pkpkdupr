@@ -274,7 +274,7 @@ export interface ExpiredCleanupResult {
 
 export const REGULAR_SESSION_EXISTS_MESSAGE = "그 날짜에는 이미 정기 세션이 있어요.";
 const REGULAR_SESSION_HOLIDAY_MESSAGE = "공휴일에는 정기 세션을 둘 수 없어요.";
-export const AUTO_REGULAR_SESSION_KIND_LOCKED_MESSAGE =
+const AUTO_REGULAR_SESSION_KIND_LOCKED_MESSAGE =
   "자동으로 만든 정기 세션은 종류를 바꿀 수 없어요.";
 
 const toDateOrNull = (value: Date | string | number | null | undefined) =>
@@ -2270,24 +2270,18 @@ export class MatchRepository {
     }
   }
 
-  private async isRegularSessionSkipped(dateKey: string): Promise<boolean> {
-    const row = await this.db
-      .select({ dateKey: regularSessionSkips.dateKey })
-      .from(regularSessionSkips)
-      .where(eq(regularSessionSkips.dateKey, dateKey))
-      .limit(1)
-      .then(firstRow);
-    return row !== undefined;
-  }
-
-  private async isRegularSessionHoliday(dateKey: string): Promise<boolean> {
+  /** 그 날짜가 쉬는 날인지. reason을 주면 그 사유인 쉬는 날만 본다 */
+  private async isRegularSessionSkipped(
+    dateKey: string,
+    reason?: RegularSessionSkipReason,
+  ): Promise<boolean> {
     const row = await this.db
       .select({ dateKey: regularSessionSkips.dateKey })
       .from(regularSessionSkips)
       .where(
         and(
           eq(regularSessionSkips.dateKey, dateKey),
-          eq(regularSessionSkips.reason, "holiday"),
+          reason ? eq(regularSessionSkips.reason, reason) : undefined,
         ),
       )
       .limit(1)
@@ -2402,7 +2396,7 @@ export class MatchRepository {
     if (!REGULAR_DATE_KEY_PATTERN.test(dateKey)) {
       throw new Error("유효한 정기 세션 날짜가 필요합니다.");
     }
-    if (await this.isRegularSessionHoliday(dateKey)) {
+    if (await this.isRegularSessionSkipped(dateKey, "holiday")) {
       throw new RegularSessionConflictError(REGULAR_SESSION_HOLIDAY_MESSAGE);
     }
     const existing = await this.db

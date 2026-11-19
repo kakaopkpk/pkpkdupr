@@ -20,10 +20,14 @@ import { useToast } from "../../components/ui/Toast";
 import { parseSessionsParams, sessionsPath } from "../../lib/adminRoutes";
 import { CalendarDayMenu, type CalendarDayMenuItem } from "./CalendarDayMenu";
 import { PastSessionPanel } from "./PastSessionPanel";
-import { getRegularSkipDayAction, SKIP_LABELS } from "./regularSkipDay";
+import {
+  formatSkipAddedMessage,
+  getDayState,
+  getRegularSkipDayAction,
+  SKIP_LABELS,
+} from "./regularSkipDay";
 import { SessionCalendar } from "./SessionCalendar";
 import {
-  compareSessionsInDay,
   formatShortDateWithWeekday,
   getSessionDateKey,
   getTodayKey,
@@ -138,7 +142,7 @@ const SessionsPage: React.FC = () => {
   const markSkip = async (dateKey: string) => {
     try {
       await addRegularSessionSkip(dateKey);
-      showToast(`${formatShortDateWithWeekday(dateKey)}요일을 정기 쉬는 날로 지정했어요`);
+      showToast(formatSkipAddedMessage(dateKey));
     } catch (err) {
       reportMutationError(err, showToast, showToast);
     }
@@ -163,10 +167,7 @@ const SessionsPage: React.FC = () => {
   const getDayMenuProps = () => {
     if (!dayMenu || !sessions) return null;
     const { dateKey } = dayMenu;
-    const daySessions = sessions
-      .filter((session) => getSessionDateKey(session) === dateKey)
-      .sort(compareSessionsInDay);
-    const skipReason = skips.find((skip) => skip.dateKey === dateKey)?.reason;
+    const { daySessions, skipReason } = getDayState(sessions, skips, dateKey);
     const action = getRegularSkipDayAction({ dateKey, todayKey, daySessions, skipReason });
 
     const items: CalendarDayMenuItem[] = [

@@ -5,6 +5,7 @@ import { deleteSessionAsAdmin } from "../../api/sessions";
 import { ConfirmDialog } from "../../components/ui/ConfirmDialog";
 import { useToast } from "../../components/ui/Toast";
 import { formatShortDateWithWeekday, getSessionDateKey } from "./sessionDates";
+import { formatSkipAddedMessage } from "./regularSkipDay";
 import { getLoadErrorMessage } from "./sessionErrors";
 
 /**
@@ -30,7 +31,7 @@ export const SkipAutoRegularDialog: React.FC<{
       showToast(getLoadErrorMessage(err, "처리하지 못했어요. 다시 시도해 주세요."));
       return;
     }
-    showToast(`${dateLabel}요일을 정기 쉬는 날로 지정했어요`);
+    showToast(formatSkipAddedMessage(getSessionDateKey(session)));
     onDone();
   };
 

@@ -37,7 +37,7 @@ export const UpcomingSessionPanel: React.FC<{
   const [detailReloadKey, setDetailReloadKey] = useState(0);
 
   const isRegular = session.kind === "regular";
-  const isAutoRegular = isRegular && session.autoCreated;
+  const isAutoRegular = session.autoCreated;
   const isTournament = session.kind === "tournament";
 
   useEffect(() => {

@@ -2,14 +2,36 @@ import type { ManagedMatchSession } from "@pkpkdupr/shared/match";
 import {
   getKstWeekday,
   REGULAR_SESSION_WEEKDAYS,
+  type AdminRegularSessionSkip,
   type RegularSessionSkipReason,
 } from "@pkpkdupr/shared/session";
+import {
+  compareSessionsInDay,
+  formatShortDateWithWeekday,
+  getSessionDateKey,
+} from "./sessionDates";
 
 /** 달력 칸에 보이는 쉬는 날 이름 */
 export const SKIP_LABELS: Record<RegularSessionSkipReason, string> = {
   canceled: "정기 쉬는 날",
   holiday: "공휴일",
 };
+
+/** 정기 쉬는 날로 지정한 뒤 토스트 문구 */
+export const formatSkipAddedMessage = (dateKey: string): string =>
+  `${formatShortDateWithWeekday(dateKey)}요일을 정기 쉬는 날로 지정했어요`;
+
+/** 그날 세션(같은 날 정렬 순서)과 쉬는 날 사유 */
+export const getDayState = (
+  sessions: ManagedMatchSession[],
+  skips: AdminRegularSessionSkip[],
+  dateKey: string,
+): { daySessions: ManagedMatchSession[]; skipReason: RegularSessionSkipReason | undefined } => ({
+  daySessions: sessions
+    .filter((session) => getSessionDateKey(session) === dateKey)
+    .sort(compareSessionsInDay),
+  skipReason: skips.find((skip) => skip.dateKey === dateKey)?.reason,
+});
 
 /**
  * 오늘·미래 날짜의 정기 쉬는 날 동작(우클릭 메뉴의 두 번째 항목).
@@ -35,9 +57,7 @@ export const getRegularSkipDayAction = ({
   skipReason: RegularSessionSkipReason | undefined;
 }): RegularSkipDayAction | null => {
   if (dateKey < todayKey) return null;
-  const autoRegular = daySessions.find(
-    (session) => session.kind === "regular" && session.autoCreated,
-  );
+  const autoRegular = daySessions.find((session) => session.autoCreated);
   if (autoRegular) return { kind: "skipAutoRegular", session: autoRegular };
   if (skipReason === "canceled") return { kind: "revert" };
   if (

@@ -20,12 +20,12 @@ import { InlineError } from "../../components/ui/InlineError";
 import { SegmentedControl } from "../../components/ui/SegmentedControl";
 import { TextInput } from "../../components/ui/TextInput";
 import { useToast } from "../../components/ui/Toast";
-import { getRegularSkipDayAction } from "./regularSkipDay";
 import {
-  formatShortDateWithWeekday,
-  formatWeekdaySuffix,
-  getSessionDateKey,
-} from "./sessionDates";
+  formatSkipAddedMessage,
+  getDayState,
+  getRegularSkipDayAction,
+} from "./regularSkipDay";
+import { formatWeekdaySuffix, getSessionDateKey } from "./sessionDates";
 import { reportMutationError } from "./sessionErrors";
 import { SESSION_KIND_OPTIONS } from "./sessionKind";
 
@@ -115,8 +115,7 @@ export const SessionFormDialog: React.FC<{
   }, [mode]);
 
   const editingSession = mode?.kind === "edit" ? mode.session : null;
-  const kindLocked =
-    editingSession?.kind === "regular" && editingSession.autoCreated;
+  const kindLocked = !!editingSession?.autoCreated;
   const isRegular = values.kind === "regular";
   const isPast =
     !!editingSession && getSessionDateKey(editingSession) < todayKey;
@@ -149,10 +148,7 @@ export const SessionFormDialog: React.FC<{
     getRegularSkipDayAction({
       dateKey: values.dateKey,
       todayKey,
-      daySessions: sessions.filter(
-        (session) => getSessionDateKey(session) === values.dateKey,
-      ),
-      skipReason: skips.find((skip) => skip.dateKey === values.dateKey)?.reason,
+      ...getDayState(sessions, skips, values.dateKey),
     })?.kind === "skipEmpty";
 
   const update = (patch: Partial<FormValues>) => {
@@ -237,9 +233,7 @@ export const SessionFormDialog: React.FC<{
     setError(null);
     try {
       await addRegularSessionSkip(values.dateKey);
-      showToast(
-        `${formatShortDateWithWeekday(values.dateKey)}요일을 정기 쉬는 날로 지정했어요`,
-      );
+      showToast(formatSkipAddedMessage(values.dateKey));
       onSkipAdded();
       onClose();
     } catch (err) {
