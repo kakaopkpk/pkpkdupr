@@ -91,6 +91,11 @@ describe("GET /api/admin/players", () => {
         [guest.id]: { matchCount: 1, lastMatchStartsAt },
       });
     vi.spyOn(db.matches, "findSessionById").mockResolvedValue(undefined);
+    const lastSignInAt = new Date("2026-11-17T08:30:00+09:00");
+    vi.spyOn(SupabaseAuthAdmin.prototype, "listUsers").mockResolvedValue([
+      { id: "auth-admin", email: null, lastSignInAt },
+      { id: "auth-member", email: null, lastSignInAt: null },
+    ]);
 
     const response = await request(app)
       .get("/api/admin/players")
@@ -109,19 +114,43 @@ describe("GET /api/admin/players", () => {
       hasLoginAccount: true,
       matchCount: 0,
       lastMatchStartsAt: null,
+      lastSignInAt: lastSignInAt.toISOString(),
     });
     expect(byId.get(member.id)).toMatchObject({
       isFirstLogin: true,
       hasLoginAccount: true,
       matchCount: 3,
       lastMatchStartsAt: lastMatchStartsAt.toISOString(),
+      lastSignInAt: null,
     });
     expect(byId.get(guest.id)).toMatchObject({
       hasLoginAccount: false,
       matchCount: 1,
       ratingExcludedMatchCount: 1,
+      lastSignInAt: null,
     });
     expect(byId.get(member.id)).not.toHaveProperty("authUserId");
+  });
+
+  it("Auth 조회가 실패해도 마지막 로그인만 비우고 목록을 돌려준다", async () => {
+    vi.spyOn(db.players, "findAll").mockResolvedValue([admin, member]);
+    vi.spyOn(db.matches, "countRatingExcludedMatchesByPlayerId").mockResolvedValue({});
+    vi.spyOn(db.matches, "findMatchStatsByPlayerId").mockResolvedValue({});
+    vi.spyOn(SupabaseAuthAdmin.prototype, "listUsers").mockRejectedValue(
+      new Error("auth down"),
+    );
+    vi.spyOn(console, "error").mockImplementation(() => {});
+
+    const response = await request(app)
+      .get("/api/admin/players")
+      .set("Authorization", "Bearer token");
+
+    expect(response.status).toBe(200);
+    expect(
+      (response.body as Array<Record<string, unknown>>).map(
+        (player) => player.lastSignInAt,
+      ),
+    ).toEqual([null, null]);
   });
 });
 

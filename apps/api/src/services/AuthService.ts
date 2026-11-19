@@ -1123,12 +1123,17 @@ export class AuthService {
   }
 
   async getAdminPlayers(): Promise<AdminPlayer[]> {
-    const [players, excludedMatchCountByPlayerId, matchStatsByPlayerId] =
-      await Promise.all([
-        db.players.findAll().then((records) => records.map(hydratePlayer)),
-        db.matches.countRatingExcludedMatchesByPlayerId(),
-        db.matches.findMatchStatsByPlayerId(),
-      ]);
+    const [
+      players,
+      excludedMatchCountByPlayerId,
+      matchStatsByPlayerId,
+      lastSignInAtByAuthUserId,
+    ] = await Promise.all([
+      db.players.findAll().then((records) => records.map(hydratePlayer)),
+      db.matches.countRatingExcludedMatchesByPlayerId(),
+      db.matches.findMatchStatsByPlayerId(),
+      this.loadLastSignInAtByAuthUserId(),
+    ]);
     const usernameById = new Map(
       players.map((player) => [player.id, player.username]),
     );
@@ -1176,8 +1181,22 @@ export class AuthService {
         matchCount: matchStatsByPlayerId[player.id]?.matchCount ?? 0,
         lastMatchStartsAt:
           matchStatsByPlayerId[player.id]?.lastMatchStartsAt ?? null,
+        lastSignInAt: player.authUserId
+          ? (lastSignInAtByAuthUserId.get(player.authUserId) ?? null)
+          : null,
       };
     });
+  }
+
+  /** Auth 사용자 id → 마지막 로그인 시각. 조회에 실패해도 회원 목록은 보여야 하므로 빈 맵을 돌려준다 */
+  private async loadLastSignInAtByAuthUserId(): Promise<Map<string, Date | null>> {
+    try {
+      const users = await this.authAdmin.listUsers();
+      return new Map(users.map((user) => [user.id, user.lastSignInAt]));
+    } catch (err) {
+      console.error("[ADMIN] Auth 마지막 로그인 조회 실패", err);
+      return new Map();
+    }
   }
 
   /**
