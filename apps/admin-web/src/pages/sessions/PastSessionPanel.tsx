@@ -3,7 +3,8 @@ import { Link } from "react-router-dom";
 import type { ManagedMatchSession, Match } from "@pkpkdupr/shared/match";
 import type { AdminPlayer } from "@pkpkdupr/shared/player";
 import type { MatchSessionReport, SessionPlayerReport } from "@pkpkdupr/shared/ranking";
-import { fetchSessionReport } from "../../api/sessions";
+import type { MatchSessionDetail } from "@pkpkdupr/shared/session";
+import { fetchSessionDetail, fetchSessionReport } from "../../api/sessions";
 import { Button } from "../../components/ui/Button";
 import { DetailPanel, PanelSection } from "../../components/ui/DetailPanel";
 import { PlayerAvatar } from "../../components/ui/PlayerAvatar";
@@ -12,6 +13,7 @@ import { matchesPath } from "../../lib/adminRoutes";
 import { formatRatingDelta } from "../../lib/format";
 import { getLoadErrorMessage } from "./sessionErrors";
 import { formatSessionSubtitle, PanelStatus, SessionPanelTitle } from "./SessionPanelParts";
+import { TournamentPlacementsSection } from "./TournamentPlacementsSection";
 
 const TOP_MOVERS_LIMIT = 5;
 
@@ -42,7 +44,7 @@ const CountLine: React.FC<{ label: string; value: number; extra?: string | null 
   </p>
 );
 
-/** 지난 세션 패널. 이름·종류·장소 수정만 있고 삭제·참여자 편집은 없다 */
+/** 지난 세션 패널. 이름·종류·장소 수정만 있고 삭제·참여자 편집은 없다. 대회 세션은 최종 순위를 입력한다 */
 export const PastSessionPanel: React.FC<{
   session: ManagedMatchSession;
   players: AdminPlayer[];
@@ -54,6 +56,9 @@ export const PastSessionPanel: React.FC<{
   const [report, setReport] = useState<MatchSessionReport | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [excludedCount, setExcludedCount] = useState<number | null>(null);
+  const [detail, setDetail] = useState<MatchSessionDetail | null>(null);
+  const [detailError, setDetailError] = useState<string | null>(null);
+  const isTournament = session.kind === "tournament";
 
   useEffect(() => {
     let canceled = false;
@@ -88,6 +93,26 @@ export const PastSessionPanel: React.FC<{
     };
   }, [session.id, loadMatches]);
 
+  // 최종 순위 초기값은 세션 상세(placements)에서 읽는다
+  useEffect(() => {
+    if (!isTournament) return;
+    let canceled = false;
+    setDetail(null);
+    setDetailError(null);
+    fetchSessionDetail(session.id)
+      .then((next) => {
+        if (!canceled) setDetail(next);
+      })
+      .catch((err: unknown) => {
+        if (!canceled) {
+          setDetailError(getLoadErrorMessage(err, "최종 순위를 불러오지 못했어요."));
+        }
+      });
+    return () => {
+      canceled = true;
+    };
+  }, [session.id, isTournament]);
+
   const guestCount = useMemo(() => {
     const guestIds = new Set(
       players.filter((player) => player.isGuest).map((player) => player.id),
@@ -120,6 +145,15 @@ export const PastSessionPanel: React.FC<{
           extra={guestCount ? `게스트 ${guestCount}` : null}
         />
       </section>
+
+      {isTournament &&
+        (detail ? (
+          <TournamentPlacementsSection detail={detail} players={players} />
+        ) : (
+          <PanelSection title="최종 순위">
+            <PanelStatus>{detailError ?? "최종 순위를 불러오는 중…"}</PanelStatus>
+          </PanelSection>
+        ))}
 
       {!report ? (
         <PanelStatus>{loadError ?? "세션 기록을 불러오는 중…"}</PanelStatus>

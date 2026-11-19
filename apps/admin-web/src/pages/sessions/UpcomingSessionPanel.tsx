@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import type { ManagedMatchSession } from "@pkpkdupr/shared/match";
 import type { AdminPlayer } from "@pkpkdupr/shared/player";
 import type { MatchSessionDetail } from "@pkpkdupr/shared/session";
@@ -17,6 +17,7 @@ import {
   PanelStatus,
   SessionPanelTitle,
 } from "./SessionPanelParts";
+import { TournamentBracketSection } from "./TournamentBracketSection";
 
 /** 오늘·미래 세션 패널. 모든 세션을 고칠 수 있고, 정기 세션은 '이 날 취소', 그 밖의 세션은 삭제가 있다 */
 export const UpcomingSessionPanel: React.FC<{
@@ -32,13 +33,14 @@ export const UpcomingSessionPanel: React.FC<{
   const [detail, setDetail] = useState<MatchSessionDetail | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [detailReloadKey, setDetailReloadKey] = useState(0);
 
   const isRegular = session.kind === "regular";
+  const isTournament = session.kind === "tournament";
   const dateKey = getSessionDateKey(session);
 
   useEffect(() => {
     let canceled = false;
-    setDetail(null);
     setLoadError(null);
     fetchSessionDetail(session.id)
       .then((next) => {
@@ -52,8 +54,8 @@ export const UpcomingSessionPanel: React.FC<{
     return () => {
       canceled = true;
     };
-    // 수정으로 이름·날짜가 바뀌면 다시 읽는다
-  }, [session.id, session.updatedAt]);
+    // 수정으로 이름·날짜가 바뀌거나 대진이 바뀌면 다시 읽는다
+  }, [session.id, session.updatedAt, detailReloadKey]);
 
   const handleParticipantsChanged = useCallback(
     (next: MatchSessionDetail) => {
@@ -61,6 +63,16 @@ export const UpcomingSessionPanel: React.FC<{
       onParticipantsChanged();
     },
     [onParticipantsChanged],
+  );
+
+  const handleBracketChanged = useCallback(() => {
+    setDetailReloadKey((key) => key + 1);
+    onParticipantsChanged();
+  }, [onParticipantsChanged]);
+
+  const participantIds = useMemo(
+    () => detail?.participants.map((participant) => participant.id) ?? [],
+    [detail],
   );
 
   const matchCount = detail?.matchCount ?? session.matchCount;
@@ -115,9 +127,18 @@ export const UpcomingSessionPanel: React.FC<{
         </PanelSection>
       )}
 
-      <PanelSection title={`경기 ${matchCount}`}>
-        <PanelStatus>경기는 회원 앱에서 시작·기록해요.</PanelStatus>
-      </PanelSection>
+      {isTournament ? (
+        <TournamentBracketSection
+          sessionId={session.id}
+          players={players}
+          participantIds={participantIds}
+          onChanged={handleBracketChanged}
+        />
+      ) : (
+        <PanelSection title={`경기 ${matchCount}`}>
+          <PanelStatus>경기는 회원 앱에서 시작·기록해요.</PanelStatus>
+        </PanelSection>
+      )}
 
       {isRegular ? (
         <DangerSection
