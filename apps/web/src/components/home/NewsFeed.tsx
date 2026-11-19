@@ -1,4 +1,5 @@
 import React, { useEffect, useRef } from "react";
+import type { AchievementDefinition } from "@pkpkdupr/shared/achievements";
 import type { SessionPlayerReport } from "@pkpkdupr/shared/ranking";
 import AchievementBadge from "@/components/profile/AchievementBadge";
 import {
@@ -24,6 +25,7 @@ import { formatKstMonthDay, formatKstShortDate } from "@/lib/format";
 import { getObjectParticle } from "@/lib/korean";
 import {
   getNewsFeedItemKey,
+  type NewsFeedAchievementLineInfo,
   type NewsFeedLineInfo,
   type NewsFeedNewMemberItemInfo,
   type NewsFeedSessionItemInfo,
@@ -94,13 +96,20 @@ const FeedLineButton: React.FC<{
   </button>
 );
 
-const FeedLine: React.FC<{ line: NewsFeedLineInfo }> = ({ line }) => {
-  const { openAchievements, openMemberProfile, selectTab } = useAppNavigation();
-  const { player } = line;
+/** 그릴 소식 줄. 업적 줄은 찾은 업적 정의를 함께 싣는다 */
+type FeedLineEntry =
+  | { line: NewsFeedAchievementLineInfo; definition: AchievementDefinition }
+  | {
+      line: Exclude<NewsFeedLineInfo, { kind: "achievement" }>;
+      definition?: undefined;
+    };
 
-  if (line.kind === "achievement") {
-    const definition = getAchievementDefinition(line.achievementId);
-    if (!definition) return null;
+const FeedLine: React.FC<{ entry: FeedLineEntry }> = ({ entry }) => {
+  const { openAchievements, openMemberProfile, selectTab } = useAppNavigation();
+  const { player } = entry.line;
+
+  if (entry.definition) {
+    const { line, definition } = entry;
     return (
       <FeedLineButton
         player={player}
@@ -127,6 +136,7 @@ const FeedLine: React.FC<{ line: NewsFeedLineInfo }> = ({ line }) => {
     );
   }
 
+  const { line } = entry;
   if (line.kind === "winStreak") {
     return (
       <FeedLineButton player={player} onPress={() => openMemberProfile(player.id)}>
@@ -239,19 +249,22 @@ const NewsSessionCard: React.FC<{ item: NewsFeedSessionItemInfo }> = ({
 }) => {
   const { openSessionReport } = useAppNavigation();
   const { session, mine, topRiser } = item;
-  // 정의를 찾지 못한 업적 줄은 그리지 않으므로 줄 묶음 표시 여부도 그 기준으로 정한다
-  const lines = item.lines.filter(
-    (line) =>
-      line.kind !== "achievement" ||
-      getAchievementDefinition(line.achievementId) !== null,
-  );
+  // 정의를 찾지 못한 업적 줄은 그리지 않으므로 줄 묶음 표시 여부도 걸러낸 줄로 정한다
+  const lines = item.lines.flatMap((line): FeedLineEntry[] => {
+    if (line.kind !== "achievement") return [{ line }];
+    const definition = getAchievementDefinition(line.achievementId);
+    return definition ? [{ line, definition }] : [];
+  });
   const blocks = [
     mine ? <FeedMineStats key="mine" mine={mine} /> : null,
     topRiser ? <FeedTopRiser key="riser" report={topRiser} /> : null,
     lines.length > 0 ? (
       <div key="lines" className="flex flex-col">
-        {lines.map((line, index) => (
-          <FeedLine key={`${line.kind}:${line.player.id}:${index}`} line={line} />
+        {lines.map((entry, index) => (
+          <FeedLine
+            key={`${entry.line.kind}:${entry.line.player.id}:${index}`}
+            entry={entry}
+          />
         ))}
       </div>
     ) : null,

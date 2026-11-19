@@ -41,8 +41,11 @@ export const useNewsFeed = ({
   const [hasMoreError, setHasMoreError] = useState(false);
   const requestIdRef = useRef(0);
   const isLoadingMoreRef = useRef(false);
+  // reload 실패 처리가 응답을 기다린 뒤의 목록 유무를 읽는다
   const hasItemsRef = useRef(false);
-  hasItemsRef.current = items.length > 0;
+  useEffect(() => {
+    hasItemsRef.current = items.length > 0;
+  }, [items]);
 
   const reload = useCallback(async () => {
     const requestId = ++requestIdRef.current;
