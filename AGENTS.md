@@ -132,7 +132,7 @@ pnpm lint
 - 회원 누구나 `PUT /api/matches/:matchId`로 첫 점수를 넣는 순간 completed(`completedAt`=입력 시각)가 되고 평점에 증분 반영됩니다.
 - 진행 중 경기는 평점·평점 이력·통계·`lastPlayedAt`에서 빠집니다.
 - 시작 2시간(`isInProgressMatchExpired`)이 지나도록 점수가 없으면 조회 시점 정리(`cleanupExpired`)에서 빈 세션 정리보다 먼저 삭제됩니다.
-  - 이 정리는 라운드 없는 점수 없는 created 경기(관리자 예정 경기 포함) 전부에 적용됩니다.
+  - 이 정리는 라운드 없는 점수 없는 created 경기(세션에서 시작한 경기와 관리자가 만든 `source: "admin_created"` 경기 포함) 전부에 적용됩니다.
   - 대진 예정 경기(`scheduled`)는 정리 대상이 아니고, 시작한 대진 경기(라운드 있는 created)는 지우지 않고 예정으로 되돌립니다("대회 대진·순위").
 
 ### 세션 종류·정기 세션·세션 정리
