@@ -36,12 +36,13 @@
 
 ## 경기
 
-- `GET /api/matches`: `playerId`와 함께 `category=singles|doubles`로 분류 필터
+- `GET /api/matches`: `playerId`와 함께 `category=singles|doubles`로 분류 필터, 대진 예정 경기(`scheduled`) 제외
 - 경기 기록 `POST /api/matches`
 - 수정 `PUT /api/matches/:matchId`
   - 관리자는 24시간 검사 없이 고친다.
   - 관리자 전용 `sessionId`(문자열이면 그 세션으로 옮기고 null이면 세션에서 뺌)·`matchStartsAt`(완료 경기면 `completedAt`도 같은 만큼 옮김)으로 세션·경기 시각을 바꾼다. 회원이 이 둘을 보내면 403.
   - 선택적 `expectedUpdatedAt`이 서버 `updatedAt`과 다르면 409.
+  - 대진 예정 경기(`scheduled`)에 점수를 넣으면 진행 중 경기 첫 점수와 같은 규칙으로 completed가 된다.
   - 이미 completed인 경기를 고치면 같은 트랜잭션에서 수정 전·후 스냅샷을 `match_edit_logs`에 남긴다(관리자 수정 포함). 진행 중 경기의 첫 점수 입력과 종류·이름·장소·팀·점수·세션·경기 시각이 그대로인 저장은 남기지 않는다.
 - 삭제 `DELETE /api/matches/:matchId`
   - `isMatchRecordDeletable`, 이미 지워졌으면 404.
@@ -51,8 +52,13 @@
   - 요청 `sessionId`가 오늘 회원 세션이면 그 세션, 아니면 기록과 같은 시간 규칙을 따른다.
   - 선수가 이미 진행 중 경기에 있으면 409 "<아이디>님이 다른 경기 중이에요".
   - 확인·생성은 advisory 잠금으로 직렬화한다.
-- 진행 중 경기 전부 `GET /api/matches/in-progress`: `/api/matches/:matchId`보다 먼저 등록
-- `GET /api/match-feed`
+- 대진 예정 경기 시작 `POST /api/matches/:matchId/start`: 200 `Match`
+  - 활성 회원 누구나. `status`를 created로, `matchStartsAt`을 시작 시각으로 바꾼다.
+  - 경기 없음 404, 예정 경기가 아니면 409, 세션이 오늘 세션이 아니면 409.
+  - 선수가 이미 진행 중 경기에 있으면 409 "<아이디>님이 다른 경기 중이에요".
+  - `POST /api/matches/start`와 같은 advisory 잠금으로 직렬화한다.
+- 진행 중 경기 전부 `GET /api/matches/in-progress`: `/api/matches/:matchId`보다 먼저 등록, 대진 예정 경기 제외
+- `GET /api/match-feed`: 대진 예정 경기 제외
 - 세션 조회 API
 
 ## 세션
@@ -69,8 +75,9 @@
   - 오늘 세션의 시작 시각이 지금보다 이르면 400.
   - 세션 날짜는 시작 시각의 날짜이고 세션 시각(`date`)은 시작 시각과 상관없이 그날 00:00 KST라, 같은 날 같은 이름은 409.
 - 세션 응답의 `startTime`·`endTime`은 정기 세션이면 18:00~22:00, 시각 없이 만든 회원 세션이면 null
+- 세션 응답 `MatchSessionDetail`(상세·일정·오늘·다가오는 세션)에는 대회 세션만 최종 순위 `placements`(1~3위, 순위마다 고른 순서의 선수, 첫 선수가 대표)가 붙는다.
 - 상세 `GET /api/match-sessions/:sessionId`
-- 세션 경기 `GET /api/match-sessions/:sessionId/matches`
+- 세션 경기 `GET /api/match-sessions/:sessionId/matches`: 대진 예정 경기(`scheduled`, `round` 포함)도 포함
 - 점수 없이 진행 중 경기 시작 `POST /api/match-sessions/:sessionId/matches`: `POST /api/matches/start`와 같은 처리, 오늘 세션만, 이미 진행 중인 선수 포함 시 409, 선수 자동 참여
 - 복식 추천 매칭 `GET /api/match-sessions/:sessionId/recommendations?courts=N&seed=S`
   - 오늘 세션만, courts 기본 3·1~4로 자름.
@@ -181,7 +188,7 @@
 
 ### 경기
 
-- 전체 목록 `GET /api/admin/matches`
+- 전체 목록 `GET /api/admin/matches`: 대진 예정 경기 포함
 - 일괄 등록 `POST /api/admin/matches/batch`: 세션은 `sessionId`로만 지정하고 그 세션 참여자로 선수를 넣는다. `session` 입력을 보내면 400 "세션은 sessionId로 지정해 주세요."
 - 세션 연결 `PATCH /api/admin/matches/bulk-metadata` `{ matchIds, sessionId }`: 세션에 연결하면 선수를 참여자로 넣고, null로 빼면 참여자는 그대로
 - 관리자 삭제 `DELETE /api/admin/matches/:matchId`
@@ -201,6 +208,13 @@
   - 정기로 바꾸면 그날 정기 세션이 되고(월·목이 아니면 400, 이미 있거나 쉬는 날이면 409), 정기에서 바꾸면 18:00~22:00 시각이 남고 오늘·미래 날짜는 취소로 남는다.
   - 종류 변경과 나머지 필드는 한 트랜잭션으로 반영한다.
 - 삭제 `DELETE /api/admin/match-sessions/:sessionId`: 오늘·미래 정기 세션을 지우면 그 날짜가 취소로 남음
+- 대진 예정 경기 만들기 `POST /api/admin/match-sessions/:sessionId/bracket-matches` `{ round, teams }`: 201 `Match`
+  - 대회 세션에 `status` scheduled·`source` admin_created·`round`인 점수 없는 경기 하나를 만든다. 팀 선수는 세션 참여자로 넣는다.
+  - 세션 없음 404, 대회 세션이 아니거나 끝난 세션이면 409, 라운드·팀 오류 400.
+- 최종 순위 바꾸기 `PUT /api/admin/match-sessions/:sessionId/placements` `{ placements: [{ place, playerIds }] }`: 200 `MatchSessionDetail`
+  - 통째로 바꾼다(빈 배열이면 순위 없음). `playerIds` 순서를 저장하고 첫 선수가 대표다.
+  - 세션 없음 404, 대회 세션이 아니면 409.
+  - 400: 1~3위 밖, 같은 순위 중복, 빈 선수, 세션 참여자 아님, 한 사람이 두 순위.
 
 ### 쉬는 날
 

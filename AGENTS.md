@@ -131,7 +131,9 @@ pnpm lint
 - 예외로 세션에서 시작한 경기는 점수 없는 진행 중 경기(`status: "created"`)입니다.
 - 회원 누구나 `PUT /api/matches/:matchId`로 첫 점수를 넣는 순간 completed(`completedAt`=입력 시각)가 되고 평점에 증분 반영됩니다.
 - 진행 중 경기는 평점·평점 이력·통계·`lastPlayedAt`에서 빠집니다.
-- 시작 2시간(`isInProgressMatchExpired`)이 지나도록 점수가 없으면 조회 시점 정리(`cleanupExpired`)에서 빈 세션 정리보다 먼저 삭제됩니다. 이 정리는 관리자 예정 경기를 포함한 점수 없는 created 경기 전부에 적용됩니다.
+- 시작 2시간(`isInProgressMatchExpired`)이 지나도록 점수가 없으면 조회 시점 정리(`cleanupExpired`)에서 빈 세션 정리보다 먼저 삭제됩니다.
+  - 이 정리는 라운드 없는 점수 없는 created 경기(관리자 예정 경기 포함) 전부에 적용됩니다.
+  - 대진 예정 경기(`scheduled`)는 정리 대상이 아니고, 시작한 대진 경기(라운드 있는 created)는 지우지 않고 예정으로 되돌립니다("대회 대진·순위").
 
 ### 세션 종류·정기 세션·세션 정리
 
@@ -151,6 +153,28 @@ pnpm lint
   - 공휴일을 확인하지 못하면(조회 실패·캘린더 설정 없음) 그날 실행은 아무것도 만들지 않고 5xx다.
   - 관리자가 오늘·미래 정기 세션을 지우면(`DELETE /api/admin/match-sessions/:sessionId`) 그 날짜가 취소로 남는다.
 - 경기가 없는 세션은 그날 만료 시각(정기 22:00, 회원·대회 다음 날 0시, 자정을 넘기는 회원·대회 세션은 다음 날 종료 시각)이 지나면 참여자와 함께 정리되므로, 미래 세션은 그날이 지나기 전에는 지워지지 않는다.
+
+### 대회 대진·순위
+
+- 대진 예정 경기는 `Match.status` `"scheduled"`, `source` `"admin_created"`이고 라운드 `Match.round`(1 이상 정수, `matches.round`)를 가진다.
+  - 관리자만 대회 세션에 만들고(`POST /api/admin/match-sessions/:sessionId/bracket-matches`), 라운드는 만들 때 정한다. 팀 선수는 세션 참여자로 넣는다.
+- 시작: 활성 회원 누구나 세션이 오늘 세션일 때 예정 경기를 시작하면(`POST /api/matches/:matchId/start`) created(진행 중)가 되고 `matchStartsAt`이 시작 시각이 된다.
+  - 그 뒤는 진행 중 경기와 같다(첫 점수 → completed, 평점 증분 반영, 게스트면 평점 미반영).
+  - 예정 경기에 바로 점수를 넣는 `PUT /api/matches/:matchId`(관리자 정정용)도 첫 점수와 같은 규칙이다.
+- 정리: 예정 경기는 시작 2시간 자동 삭제·빈 세션 정리 대상이 아니다. 시작한 대진 경기(라운드 있는 created)가 시작 2시간이 지나도록 점수가 없으면 지우지 않고 `scheduled`로 되돌린다.
+- 삭제: 회원은 완료 전 대진 경기를 지울 수 없고(`isMatchRecordDeletable`의 `admin_created` 규칙), 관리자는 `DELETE /api/admin/matches/:matchId`로 지운다.
+- 예정 경기는 다음에서 빠진다.
+  - 진행 중 경기, 추천 매칭 제외 대상, "다른 경기 중" 409 검사.
+  - 평점·통계·업적·기록·랭킹.
+  - 경기 목록 `GET /api/matches`와 피드 `GET /api/match-feed`. 세션 경기 목록 `GET /api/match-sessions/:sessionId/matches`와 관리자 경기 목록에만 나온다.
+- 대회 세션에서 라운드 없이 기록된 경기는 대진 목록 맨 끝 "그 밖의 경기" 묶음이다.
+- 최종 순위는 대회 세션마다 1~3위이고 관리자가 통째로 바꾼다(`PUT /api/admin/match-sessions/:sessionId/placements`). 자동 계산하지 않고 회원은 고칠 수 없다.
+  - 순위마다 그 세션 참여자(게스트 포함) 1명 이상이고, 한 사람은 한 순위에만 들어간다.
+  - 고른 순서를 저장하고 첫 사람이 "대표"다.
+  - 세션 응답 `MatchSessionDetail`(세션 상세·일정·오늘·다가오는 세션)에 대회 세션만 `placements`가 붙는다.
+- 순위 승패는 라운드 있는 완료 경기 중 그 참가 단위가 한 팀을 이루는 경기만 센다.
+  - 팀 선수가 모두 그 단위에 있거나, 1명 단위면 그 사람이 있는 팀이 그 단위의 팀이다.
+  - 두 팀 모두 해당하거나 승패가 갈리지 않은 경기는 뺀다. 센 경기가 없으면 승패를 보이지 않는다.
 
 ## 운영과 배포
 
