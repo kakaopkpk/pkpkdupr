@@ -1,4 +1,5 @@
 import React, { useRef } from "react";
+import { cx } from "@/components/ui/cx";
 
 export type PullToRefreshStatus =
   | "idle"
@@ -14,8 +15,13 @@ interface PullToRefreshIndicatorProps {
 }
 
 const RING_SIZE = 20.8;
-const RING_RADIUS = 9.4;
-const RING_CIRCUMFERENCE = 2 * Math.PI * RING_RADIUS;
+const RING_CIRCLE_PROPS = {
+  cx: RING_SIZE / 2,
+  cy: RING_SIZE / 2,
+  r: 9.4,
+  fill: "none",
+  strokeWidth: 2,
+};
 // 끝까지 당겼을 때 호 길이이자, 임계 거리만큼 당겼을 때 링 회전 각도
 const RING_FULL_DEGREES = 270;
 // 놓은 뒤 한 바퀴 도는 시간(ms)
@@ -28,25 +34,23 @@ const PullToRefreshIndicator: React.FC<PullToRefreshIndicatorProps> = ({
 }) => {
   const isVisible = status !== "idle";
   const isPullGestureActive = status === "pulling" || status === "armed";
-  const progress = Math.min(distance / threshold, 1);
+  const rawProgress = distance / threshold;
+  const progress = Math.min(rawProgress, 1);
   // 놓은 뒤(새로고침 중·오류 표시)
   const isReleased = status === "refreshing" || status === "error";
   const isArmed = status === "armed";
   const translateY = isReleased ? 117 : -70.2 + progress * 187.2;
 
-  // 놓으면 distance가 0으로 돌아가므로, 마지막 제스처 각도·호 길이를 기억해 그 자리에서 이어서 돈다.
-  const lastGestureRef = useRef({ angle: 0, arcDegrees: 0 });
+  // 놓으면 distance가 0으로 돌아가므로, 마지막 제스처 각도를 기억해 그 자리에서 이어서 돈다.
+  const lastAngleRef = useRef(0);
   if (isPullGestureActive) {
-    lastGestureRef.current = {
-      angle: (distance / threshold) * RING_FULL_DEGREES,
-      arcDegrees: progress * RING_FULL_DEGREES,
-    };
+    lastAngleRef.current = Math.round(rawProgress * RING_FULL_DEGREES);
   }
-  const { angle } = lastGestureRef.current;
+  const angle = lastAngleRef.current;
+  // 호는 당긴 만큼(회전 각도와 같은 값, 최대 270°) 차오르고 놓은 뒤에는 270°다.
   const arcDegrees = isReleased
     ? RING_FULL_DEGREES
-    : lastGestureRef.current.arcDegrees;
-  const arcLength = (arcDegrees / 360) * RING_CIRCUMFERENCE;
+    : Math.min(angle, RING_FULL_DEGREES);
 
   return (
     <div
@@ -73,13 +77,14 @@ const PullToRefreshIndicator: React.FC<PullToRefreshIndicatorProps> = ({
               ? "새로고침 중"
               : "새로고침"
         }
-        className={`flex size-[46.8px] items-center justify-center rounded-full border border-sky-100/90 bg-white/90 shadow-sm backdrop-blur transition-transform ${
-          isArmed ? "scale-110" : ""
-        }`}
+        className={cx(
+          "flex size-[46.8px] items-center justify-center rounded-full border border-sky-100/90 bg-white/90 shadow-sm backdrop-blur transition-transform",
+          isArmed && "scale-110",
+        )}
       >
         <span
           aria-hidden="true"
-          className={`block size-[20.8px] ${isReleased ? "animate-spin" : ""}`}
+          className={cx("block size-[20.8px]", isReleased && "animate-spin")}
           style={
             isReleased
               ? {
@@ -96,21 +101,11 @@ const PullToRefreshIndicator: React.FC<PullToRefreshIndicatorProps> = ({
             viewBox={`0 0 ${RING_SIZE} ${RING_SIZE}`}
             className="size-full -rotate-90"
           >
+            <circle {...RING_CIRCLE_PROPS} className="stroke-sky-100" />
             <circle
-              cx={RING_SIZE / 2}
-              cy={RING_SIZE / 2}
-              r={RING_RADIUS}
-              fill="none"
-              strokeWidth={2}
-              className="stroke-sky-100"
-            />
-            <circle
-              cx={RING_SIZE / 2}
-              cy={RING_SIZE / 2}
-              r={RING_RADIUS}
-              fill="none"
-              strokeWidth={2}
-              strokeDasharray={`${arcLength} ${RING_CIRCUMFERENCE}`}
+              {...RING_CIRCLE_PROPS}
+              pathLength={360}
+              strokeDasharray={`${arcDegrees} 360`}
               className="stroke-pk-primary"
             />
           </svg>
