@@ -6,7 +6,7 @@ import { SortHeader } from "../../components/ui/SortHeader";
 import { formatRating, formatRelativeDay } from "../../lib/format";
 import {
   KIND_LABEL,
-  getAccountLabel,
+  getLastSignInLabel,
   getMemberKind,
   type SortKey,
   type SortState,
@@ -20,13 +20,14 @@ const SortableHeader: React.FC<{
   sortKey: SortKey;
   sort: SortState;
   onSort: (key: SortKey) => void;
-}> = ({ label, sortKey, sort, onSort }) => (
+  className?: string;
+}> = ({ label, sortKey, sort, onSort, className }) => (
   <th
     scope="col"
     aria-sort={
       sort.key === sortKey ? (sort.direction === "asc" ? "ascending" : "descending") : "none"
     }
-    className={cx(headerCellClassName, "text-right")}
+    className={cx(headerCellClassName, "text-right", className)}
   >
     <SortHeader
       label={label}
@@ -66,9 +67,13 @@ export const MembersTable: React.FC<{
           <SortableHeader label="복식 평점" sortKey="rating" sort={sort} onSort={onSort} />
           <SortableHeader label="경기" sortKey="matches" sort={sort} onSort={onSort} />
           <SortableHeader label="최근 경기" sortKey="lastMatch" sort={sort} onSort={onSort} />
-          <th scope="col" className={cx(headerCellClassName, "pr-5 text-left")}>
-            계정
-          </th>
+          <SortableHeader
+            label="최근 로그인"
+            sortKey="lastSignIn"
+            sort={sort}
+            onSort={onSort}
+            className="pr-5"
+          />
         </tr>
       </thead>
       <tbody>
@@ -123,8 +128,14 @@ export const MembersTable: React.FC<{
               <td className={cx(cellClassName, "text-right tabular-nums")}>
                 {player.lastMatchStartsAt ? formatRelativeDay(player.lastMatchStartsAt) : "–"}
               </td>
-              <td className={cx(cellClassName, "pr-5", !inactive && "text-pk-sub")}>
-                {getAccountLabel(player)}
+              <td
+                className={cx(
+                  cellClassName,
+                  "whitespace-nowrap pr-5 text-right tabular-nums",
+                  !inactive && !player.lastSignInAt && "text-pk-sub",
+                )}
+              >
+                {getLastSignInLabel(player)}
               </td>
             </tr>
           );

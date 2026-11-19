@@ -19,6 +19,7 @@ import {
   GENDER_LABEL,
   buildHistoryLines,
   formatCreationSummary,
+  getAccountStatusText,
   getCreationLog,
   reportActionError,
   runConfirmedAction,
@@ -79,6 +80,7 @@ export const MemberPanel: React.FC<{
   const creationLog = getCreationLog(creationLogs);
   const historyLines = buildHistoryLines(creationLogs, statusLogs);
   const hasStatusLogs = (statusLogs?.length ?? 0) > 0;
+  const accountStatusText = getAccountStatusText(player);
 
   const subtitle = [
     "정회원",
@@ -163,6 +165,9 @@ export const MemberPanel: React.FC<{
 
       <PanelSection title="계정">
         <div className="space-y-4">
+          {accountStatusText && (
+            <div className="text-pk-13 tabular-nums text-pk-sub">{accountStatusText}</div>
+          )}
           <UsernameEditor
             player={player}
             buttonLabel="아이디 변경"

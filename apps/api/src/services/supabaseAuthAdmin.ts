@@ -21,6 +21,13 @@ const throwAuthAdminError = (error: unknown, email?: string): never => {
 
 const LIST_USERS_PAGE_SIZE = 1000;
 
+export interface AuthUserSummary {
+  id: string;
+  email: string | null;
+  /** 마지막 아이디·비밀번호 로그인 시각. 로그인한 적이 없으면 null */
+  lastSignInAt: Date | null;
+}
+
 /**
  * service role 키로 Supabase Auth 사용자를 만들고 바꾸는 관리자 클라이언트.
  * Edge Function에는 SUPABASE_URL·SUPABASE_SERVICE_ROLE_KEY가 자동 주입되고, 로컬 Node api는 `pnpm dev`가 넣는다.
@@ -91,9 +98,9 @@ export class SupabaseAuthAdmin {
     }
   }
 
-  /** 모든 Auth 사용자(id·이메일). 전체 목록을 훑으므로 dev 시딩·데이터 이관처럼 드문 경로에서만 쓴다. */
-  async listUsers(): Promise<Array<{ id: string; email: string | null }>> {
-    const users: Array<{ id: string; email: string | null }> = [];
+  /** 모든 Auth 사용자. 1000명씩 페이지를 훑으므로 동호회 규모에서는 요청 한 번이다. */
+  async listUsers(): Promise<AuthUserSummary[]> {
+    const users: AuthUserSummary[] = [];
     for (let page = 1; ; page += 1) {
       const { data, error } = await this.getClient().auth.admin.listUsers({
         page,
@@ -102,7 +109,13 @@ export class SupabaseAuthAdmin {
       if (error) {
         throw error;
       }
-      users.push(...data.users.map((user) => ({ id: user.id, email: user.email ?? null })));
+      users.push(
+        ...data.users.map((user) => ({
+          id: user.id,
+          email: user.email ?? null,
+          lastSignInAt: user.last_sign_in_at ? new Date(user.last_sign_in_at) : null,
+        })),
+      );
       if (data.users.length < LIST_USERS_PAGE_SIZE) {
         return users;
       }
