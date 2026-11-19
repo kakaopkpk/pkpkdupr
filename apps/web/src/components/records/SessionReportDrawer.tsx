@@ -48,7 +48,6 @@ import {
 import { useLayerDepth } from "@/hooks/useLayerDepth";
 import { useMinuteClock } from "@/hooks/useMinuteClock";
 import { getUserErrorMessage } from "@/lib/errors";
-import { formatKstShortDate } from "@/lib/format";
 import {
   fetchMatchSession,
   fetchSessionMatches,
@@ -312,22 +311,8 @@ export default function SessionReportDrawer({
       return <TournamentRankCard session={session} mine={myReport} />;
     }
     if (report) {
-      const reportSession = report.session;
-      return (
-        <RecordSessionCard
-          session={reportSession}
-          mine={myReport}
-          // 일정 탭과 달리 바깥 날짜 제목이 없어 날짜를 앞에 붙인다
-          meta={[
-            formatKstShortDate(reportSession.date),
-            reportSession.location,
-            `${reportSession.participantCount}명`,
-            `${reportSession.matchCount}경기`,
-          ]
-            .filter(Boolean)
-            .join(" · ")}
-        />
-      );
+      // 일정 탭과 달리 바깥 날짜 제목이 없어 날짜를 앞에 붙인다
+      return <RecordSessionCard session={report.session} mine={myReport} showDate />;
     }
     return (
       <SessionBlueCard

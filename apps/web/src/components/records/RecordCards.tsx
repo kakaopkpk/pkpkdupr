@@ -12,6 +12,7 @@ import { Card } from "@/components/ui/Card";
 import { ChevronRightIcon } from "@/components/ui/Icons";
 import { MatchRow } from "@/components/ui/MatchRow";
 import { cx } from "@/components/ui/cx";
+import { formatKstShortDate } from "@/lib/format";
 import { getSessionKindLabel } from "@/lib/matchSessions";
 import type { MatchSessionHistoryInfo } from "@/lib/rankings";
 import type { MatchInfo } from "@/types/match";
@@ -49,7 +50,8 @@ const SessionMineStrip: React.FC<{ mine: SessionPlayerReport }> = ({ mine }) => 
 
 /**
  * 끝난 세션 카드(일정 탭·홈 지난 세션 요약·세션 상세 머리). 맨 위 이름표 기본값은 세션 종류, 메타 줄 기본값은 장소·인원·경기 수다.
- * 일정 탭은 바깥 날짜 제목이 보이므로 날짜를 넣지 않는다. onPress를 생략하면(세션 상세 머리) 누를 수 없고 화살표가 없다
+ * 일정 탭은 바깥 날짜 제목이 보이므로 날짜를 넣지 않고, 바깥 날짜 제목이 없는 곳(세션 상세 머리)은 showDate로 메타 줄 앞에 날짜를 붙인다.
+ * onPress를 생략하면(세션 상세 머리) 누를 수 없고 화살표가 없다
  */
 export const RecordSessionCard: React.FC<{
   session: MatchSessionHistoryInfo;
@@ -57,7 +59,8 @@ export const RecordSessionCard: React.FC<{
   onPress?: () => void;
   label?: string;
   meta?: string;
-}> = ({ session, mine, onPress, label, meta }) => {
+  showDate?: boolean;
+}> = ({ session, mine, onPress, label, meta, showDate = false }) => {
   const content = (
     <>
       <span className="flex w-full items-center justify-between gap-2">
@@ -74,6 +77,7 @@ export const RecordSessionCard: React.FC<{
       <span className="truncate text-pk-13 text-pk-sub tabular-nums">
         {meta ??
           [
+            showDate ? formatKstShortDate(session.date) : null,
             session.location,
             `${session.participantCount}명`,
             `${session.matchCount}경기`,
