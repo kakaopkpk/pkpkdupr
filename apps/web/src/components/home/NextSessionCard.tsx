@@ -19,12 +19,14 @@ export interface NextSessionCardProps {
   onJoin: () => void;
   onLeave: () => void;
   onOpenParticipants: () => void;
+  /** 카드 빈 곳을 누르면(버튼 제외). 세션 상세 열기 */
+  onPress: () => void;
   className?: string;
 }
 
 /**
  * 다가오는 세션 블루 카드(오늘 세션 전·세션 없는 날). 참여하기/참여 취소는 나만 바꾸고,
- * "N명 참여 예정"을 누르면 참여자 시트가 열린다. 참여 변경 오류 문구는 카드 묶음 아래에 둔다
+ * "N명 참여 예정"을 누르면 참여자 시트, 카드 빈 곳을 누르면 세션 상세가 열린다. 참여 변경 오류 문구는 카드 묶음 아래에 둔다
  */
 const NextSessionCard: React.FC<NextSessionCardProps> = ({
   session,
@@ -34,6 +36,7 @@ const NextSessionCard: React.FC<NextSessionCardProps> = ({
   onJoin,
   onLeave,
   onOpenParticipants,
+  onPress,
   className,
 }) => (
   <SessionBlueCard
@@ -43,6 +46,7 @@ const NextSessionCard: React.FC<NextSessionCardProps> = ({
     meta={getSessionMetaLabel(session, todayKey)}
     participantsLabel={`${session.participants.length}명 참여 예정`}
     onOpenParticipants={onOpenParticipants}
+    onPress={onPress}
   >
     <ParticipationControls
       isJoined={isJoined}

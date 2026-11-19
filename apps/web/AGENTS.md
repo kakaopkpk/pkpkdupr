@@ -29,6 +29,7 @@
   - 탭 페이지는 props 없이 컨텍스트로 데이터를 받습니다.
     - `Home.tsx`(홈)
       - 진행 중 세션이 있으면 맨 위에 진행 중 세션 블루 카드 `LiveSessionCard`를 "진행 화면 보기" 버튼 없이(`onOpenLive` 생략) 둔다(오른쪽 끝 LIVE, "N명 참여"를 누르면 경기 중인 선수를 "경기 중"으로 표시·잠근 참여자 시트).
+      - 진행 중 세션 카드와 다가오는 세션 카드 모두 카드 빈 곳을 누르면 `openSessionReport`로 세션 상세를 연다.
       - 진행 중 세션이 없으면 다가오는 세션마다 블루 카드를 두고 가로로 넘기는 `home/NextSessionCarousel`을 둔다.
         - 다음 카드가 오른쪽에 살짝 보이고 카드 단위로 멈춘다.
         - 넘기기는 `touch-pan-y` 트랙에서 직접 처리해 한 번에 한 장만 넘기고, 카드 폭 30% 이상 끌거나 60px 이상 빠르게 튕겨야 넘어간다(`carouselPosition`의 `getSwipeTargetIndex`).

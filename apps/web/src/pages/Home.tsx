@@ -115,6 +115,7 @@ const Home: React.FC = () => {
   const {
     openRecordMatch,
     openMatchDetail,
+    openSessionReport,
     notifyDataChanged,
     dataVersion,
   } = useAppNavigation();
@@ -379,6 +380,7 @@ const Home: React.FC = () => {
       <LiveSessionCard
         session={session}
         onOpenParticipants={() => openParticipants(session, busyPlayerIds)}
+        onPress={() => openSessionReport(session.id)}
       />
       {liveTopRiser ? <TopRiserCard report={liveTopRiser} /> : null}
       {renderInProgress(
@@ -453,6 +455,7 @@ const Home: React.FC = () => {
       <LiveSessionCard
         session={session}
         onOpenParticipants={() => openParticipants(session, busyPlayerIds)}
+        onPress={() => openSessionReport(session.id)}
       />
       {renderTournamentMyMatch()}
       <TournamentBracketSection
@@ -511,6 +514,7 @@ const Home: React.FC = () => {
             onJoin={(sessionId) => void participation.change(sessionId, "join")}
             onLeave={(sessionId) => void participation.change(sessionId, "leave")}
             onOpenParticipants={(session) => openParticipants(session, EMPTY_IDS)}
+            onOpenSession={openSessionReport}
           />
         ) : (
           <EmptyCard message="다가오는 세션이 없어요" />
