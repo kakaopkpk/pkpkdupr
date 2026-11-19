@@ -89,13 +89,9 @@ const FeedLineButton: React.FC<{
       rowPressClassName,
     )}
   >
-    {hasFlameAura ? (
-      <span className="pk-flame-aura shrink-0">
-        <PlayerAvatar player={player} size={36} />
-      </span>
-    ) : (
+    <span className={cx("inline-flex shrink-0", hasFlameAura && "pk-flame-aura")}>
       <PlayerAvatar player={player} size={36} />
-    )}
+    </span>
     <span className="flex min-w-0 flex-1 flex-col gap-0.5">{children}</span>
     {right}
   </button>

@@ -315,6 +315,12 @@ describe("buildNewsFeedPage 세션 항목", () => {
     return item;
   };
 
+  // 이 세션 지배자(nina)가 이 세션으로 받은 첫 세션 지배자 업적
+  const isTopRiserFirstDominator = (earned: {
+    playerId: string;
+    achievementId: string;
+  }) => earned.playerId === nina.id && earned.achievementId === "dominator-1";
+
   const report = () => {
     const context = createRankingContext(players, logs, matches);
     const result = buildSessionReport({
@@ -377,10 +383,6 @@ describe("buildNewsFeedPage 세션 항목", () => {
 
   it("업적 줄은 세션 리포트 achievements 중 활성 정회원 것이고, 줄 순서는 랭킹 → 연승 → 업적이다", () => {
     const item = sessionItem(alice.id);
-    const isTopRiserFirstDominator = (earned: {
-      playerId: string;
-      achievementId: string;
-    }) => earned.playerId === nina.id && earned.achievementId === "dominator-1";
     const expected = report()
       .achievements.filter(
         (earned) =>
@@ -421,16 +423,15 @@ describe("buildNewsFeedPage 세션 항목", () => {
   it("지배자가 이 세션으로 받은 첫 세션 지배자 업적은 지배자 줄과 겹쳐 업적 줄에서 뺀다", () => {
     const item = sessionItem(alice.id);
     expect(item.topRiser?.player.id).toBe(nina.id);
-    expect(
-      report().achievements.some(
-        (earned) =>
-          earned.playerId === nina.id && earned.achievementId === "dominator-1",
-      ),
-    ).toBe(true);
+    expect(report().achievements.some(isTopRiserFirstDominator)).toBe(true);
     expect(
       item.lines.some(
         (line) =>
-          line.kind === "achievement" && line.achievementId === "dominator-1",
+          line.kind === "achievement" &&
+          isTopRiserFirstDominator({
+            playerId: line.player.id,
+            achievementId: line.achievementId,
+          }),
       ),
     ).toBe(false);
   });
