@@ -4,7 +4,11 @@ import { toKstDateKey } from "@pkpkdupr/shared/session";
 import { getMatchPlayerIds, type MatchInfo } from "@/types/match";
 import HomeSkeleton from "@/components/home/HomeSkeleton";
 import LastSessionSummary from "@/components/home/LastSessionSummary";
-import { LiveMatchCard, MyLiveMatchCard } from "@/components/home/LiveMatchCard";
+import {
+  LiveMatchCard,
+  MyLiveMatchCard,
+  MyNextBracketMatchCard,
+} from "@/components/home/LiveMatchCard";
 import NextSessionCarousel from "@/components/home/NextSessionCarousel";
 import RecommendationSection, {
   getCourtKey,
@@ -19,8 +23,11 @@ import { TopRiserCard } from "@/components/records/SessionReportParts";
 import ParticipantsSheet from "@/components/session/ParticipantsSheet";
 import { LiveSessionCard } from "@/components/session/SessionBlueCard";
 import { useSessionParticipation } from "@/components/session/useSessionParticipation";
+import { TournamentBracketSection } from "@/components/tournament/TournamentBracketSection";
 import { getErrorMessage } from "@/components/session/saveError";
 import { isNetworkError } from "@/lib/errors";
+import { startScheduledMatch } from "@/lib/matches";
+import { findMyNextBracketMatch } from "@/lib/tournament";
 import { Card } from "@/components/ui/Card";
 import { StateMessage } from "@/components/ui/StateMessage";
 import { MatchRow } from "@/components/ui/MatchRow";
@@ -82,8 +89,22 @@ const INITIAL_START_STATE: StartState = {
   startedKeys: new Set(),
 };
 
+/** 대진 예정 경기 시작 요청 상태 */
+interface BracketStartState {
+  startingMatchId: string | null;
+  /** 시작에 성공해 셸이 세션 경기를 다시 읽기 전까지 버튼을 막아 둘 경기 */
+  startedMatchId: string | null;
+  error: { matchId: string; message: string } | null;
+}
+
+const INITIAL_BRACKET_START_STATE: BracketStartState = {
+  startingMatchId: null,
+  startedMatchId: null,
+  error: null,
+};
+
 /**
- * 홈 탭. 셸의 진행 중 세션이 있으면 진행 화면(참여자 Main / 미참여자 MainGuest),
+ * 홈 탭. 셸의 진행 중 세션이 있으면 진행 화면(참여자 Main / 미참여자 MainGuest, 대회 세션이면 내 경기·대진),
  * 없으면 다가오는 세션 카드(가로로 넘김), 세션 밖 진행 중 경기, 지난 세션 요약을 보인다.
  */
 const Home: React.FC = () => {
@@ -105,15 +126,22 @@ const Home: React.FC = () => {
   const isLiveResolved = live.status !== "loading" || liveSession !== null;
   const isPreSession = isLiveResolved && !liveSession;
   const isLiveParticipant = !!liveSession && live.isParticipant;
+  // 대회 진행 화면은 세션 지배자·추천 매칭을 보이지 않으므로 받지도 않는다
+  const isTournamentLive = liveSession?.kind === "tournament";
 
   const preSession = usePreSessionData({
     enabled: isPreSession,
     dataVersion,
     todayKey,
   });
-  const liveTopRiser = useSessionTopRiser(liveSession?.id ?? null, dataVersion);
+  const liveTopRiser = useSessionTopRiser(
+    liveSession && !isTournamentLive ? liveSession.id : null,
+    dataVersion,
+  );
   const recommendations = useSessionRecommendations(
-    isLiveParticipant && liveSession ? liveSession.id : null,
+    isLiveParticipant && liveSession && !isTournamentLive
+      ? liveSession.id
+      : null,
     dataVersion,
   );
 
@@ -243,13 +271,69 @@ const Home: React.FC = () => {
     };
   }, [recommendations, startState.startedKeys]);
 
+  // ── 대회 내 다음 대진 경기 ─────────────────────────
+  // 내 진행 중 경기가 있으면 그 카드가 "내 경기"를 차지하므로 다음 경기를 보이지 않는다
+  const myNextBracketMatch = useMemo(
+    () =>
+      isTournamentLive && playerId && !myInProgressMatch
+        ? findMyNextBracketMatch(live.matches, playerId)
+        : null,
+    [isTournamentLive, live.matches, myInProgressMatch, playerId],
+  );
+  const [bracketStartState, setBracketStartState] = useState<BracketStartState>(
+    INITIAL_BRACKET_START_STATE,
+  );
+
+  // 셸이 세션 경기를 다시 읽으면 시작 완료로 막아 둔 버튼을 푼다
+  useEffect(() => {
+    setBracketStartState((state) =>
+      state.startedMatchId === null ? state : { ...state, startedMatchId: null },
+    );
+  }, [live.matches]);
+
+  const startBracketMatch = async (match: MatchInfo) => {
+    if (bracketStartState.startingMatchId) return;
+
+    const matchId = match.id;
+    const run = async () => {
+      await startScheduledMatch(matchId);
+      notifyDataChanged();
+    };
+
+    setBracketStartState((state) => ({
+      ...state,
+      startingMatchId: matchId,
+      error: null,
+    }));
+    try {
+      await run();
+      setBracketStartState((state) => ({
+        ...state,
+        startingMatchId: null,
+        startedMatchId: matchId,
+      }));
+    } catch (err) {
+      setBracketStartState((state) => ({
+        ...state,
+        startingMatchId: null,
+        error: isNetworkError(err)
+          ? null
+          : {
+              matchId,
+              message: getErrorMessage(err, "경기를 시작하지 못했어요."),
+            },
+      }));
+      if (isNetworkError(err)) showSaveFailure({ onRetry: run });
+    }
+  };
+
   // ── 당겨서 새로고침 ─────────────────────────────────
   // 진행 중 세션은 셸이 함께 다시 읽으므로 홈 자체 데이터만 다시 받는다
   const refreshRef = useRef<() => Promise<void>>(async () => {});
   refreshRef.current = async () => {
     if (isPreSession) {
       await preSession.reload();
-    } else if (isLiveParticipant) {
+    } else if (isLiveParticipant && !isTournamentLive) {
       await recommendations.reload();
     }
   };
@@ -325,6 +409,60 @@ const Home: React.FC = () => {
     </>
   );
 
+  /** 대회 "내 경기" 섹션. 내 진행 중 경기(대진 밖 경기여도), 없으면 내 다음 대진 경기. 둘 다 없으면 섹션이 없다 */
+  const renderTournamentMyMatch = () => {
+    if (myInProgressMatch) {
+      return (
+        <Section title="내 경기">
+          <MyLiveMatchCard
+            match={myInProgressMatch}
+            now={now}
+            isTournament
+            onOpenDetail={() => openMatchDetail(myInProgressMatch.id)}
+            onEnterScore={() =>
+              openRecordMatch({ kind: "score", matchId: myInProgressMatch.id })
+            }
+          />
+        </Section>
+      );
+    }
+    if (!myNextBracketMatch) return null;
+    const { startingMatchId, startedMatchId, error } = bracketStartState;
+    return (
+      <Section title="내 경기">
+        <MyNextBracketMatchCard
+          match={myNextBracketMatch}
+          now={now}
+          isStarting={
+            startingMatchId === myNextBracketMatch.id ||
+            startedMatchId === myNextBracketMatch.id
+          }
+          error={error?.matchId === myNextBracketMatch.id ? error.message : null}
+          onOpenDetail={() => openMatchDetail(myNextBracketMatch.id)}
+          onStart={() => void startBracketMatch(myNextBracketMatch)}
+        />
+      </Section>
+    );
+  };
+
+  /** 대회 진행 화면. 대회 카드 → 내 경기 → 라운드별 대진. 남의 진행 중 경기는 대진 안 제자리에만 둔다 */
+  const renderTournamentLive = (session: MatchSessionDetailInfo) => (
+    <>
+      <LiveSessionCard
+        session={session}
+        onOpenParticipants={() => openParticipants(session, busyPlayerIds)}
+      />
+      {renderTournamentMyMatch()}
+      <TournamentBracketSection
+        matches={live.matches}
+        currentPlayerId={playerId}
+        showFilter={false}
+      />
+      {/* 미참여자의 참여하기는 셸의 알림 바가 맡는다. 그 바에 가리지 않게 여백을 둔다 */}
+      {!isLiveParticipant ? <div className="h-16" /> : null}
+    </>
+  );
+
   const renderPreSession = () => {
     const { data, status, error } = preSession;
     // 진행 중 경기는 다가오는 세션 조회와 따로 받으므로 그 조회가 실패해도 보인다
@@ -389,7 +527,11 @@ const Home: React.FC = () => {
     <>
       {/* 홈은 탭 제목 없이 첫 카드부터 보인다. 진행 중 세션이면 첫 카드가 그 세션의 블루 카드다 */}
       <div className="flex flex-col gap-2.5 px-4 pt-4 pb-6">
-        {liveSession ? renderLive(liveSession) : null}
+        {liveSession
+          ? isTournamentLive
+            ? renderTournamentLive(liveSession)
+            : renderLive(liveSession)
+          : null}
         {isPreSession ? renderPreSession() : null}
         {!isLiveResolved ? <HomeSkeleton /> : null}
       </div>
