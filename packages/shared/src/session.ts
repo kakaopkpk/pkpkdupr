@@ -5,6 +5,7 @@ import type {
   RecordMatchTeamRequest,
 } from "./match.js";
 import type { PublicPlayerDupr } from "./player.js";
+import type { TournamentPlacement } from "./tournament.js";
 
 /** 정기 세션 요일(KST, 0=일요일). 월·목 */
 export const REGULAR_SESSION_WEEKDAYS: readonly number[] = [1, 4];
@@ -305,6 +306,8 @@ export interface MatchSessionDetail {
   /** active 회원만 */
   participants: MatchSessionMember[];
   matchCount: number;
+  /** 대회 세션의 최종 순위(순위 오름차순, 입력 전이면 빈 배열). 대회가 아닌 세션은 생략 */
+  placements?: TournamentPlacement[];
 }
 
 /** GET /api/match-sessions/today 응답 */

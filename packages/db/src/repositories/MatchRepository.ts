@@ -38,6 +38,7 @@ import {
   matches,
   matchScores,
   matchSessionParticipants,
+  matchSessionPlacements,
   matchSessions,
   players,
   regularSessionSkips,
@@ -117,6 +118,22 @@ export class RegularSessionConflictError extends Error {
     super(message);
     this.name = "RegularSessionConflictError";
   }
+}
+
+/** 대회 최종 순위 한 칸의 저장 값. players는 관리자가 고른 순서다 */
+export interface StoredSessionPlacement {
+  sessionId: string;
+  place: number;
+  players: { id: string; username: string; avatarUrl?: string }[];
+}
+
+/** 대회 승패 계산에 쓰는 라운드 있는 완료 경기 */
+export interface StoredRoundMatch {
+  sessionId: string;
+  status: MatchStatus;
+  round: number;
+  teams: [{ players: { id: string }[] }, { players: { id: string }[] }];
+  scores: MatchScore[];
 }
 
 /** 정기가 아닌 세션의 종류 */
@@ -2515,6 +2532,178 @@ export class MatchRepository {
             WHERE id = $1
           `,
           args: [sessionId, ...columns.map(([, value]) => value), updatedAt],
+        });
+      }
+      await transaction.commit();
+      committed = true;
+      return true;
+    } finally {
+      if (!committed) {
+        transaction.close();
+      }
+    }
+  }
+
+  /** 세션들의 대회 최종 순위(세션·순위 오름차순, 순위 안은 고른 순서) */
+  async findSessionPlacements(
+    sessionIds: string[],
+  ): Promise<StoredSessionPlacement[]> {
+    if (!sessionIds.length) return [];
+    const rows: Array<{
+      sessionId: string;
+      place: number;
+      playerId: string;
+      username: string;
+      avatarUrl: string | null;
+    }> = await this.db
+      .select({
+        sessionId: matchSessionPlacements.sessionId,
+        place: matchSessionPlacements.place,
+        playerId: players.id,
+        username: players.username,
+        avatarUrl: players.avatarUrl,
+      })
+      .from(matchSessionPlacements)
+      .innerJoin(players, eq(players.id, matchSessionPlacements.playerId))
+      .where(inArray(matchSessionPlacements.sessionId, sessionIds))
+      .orderBy(
+        asc(matchSessionPlacements.sessionId),
+        asc(matchSessionPlacements.place),
+        asc(matchSessionPlacements.position),
+      );
+
+    const placements: StoredSessionPlacement[] = [];
+    for (const row of rows) {
+      let last = placements.at(-1);
+      if (!last || last.sessionId !== row.sessionId || last.place !== row.place) {
+        last = { sessionId: row.sessionId, place: Number(row.place), players: [] };
+        placements.push(last);
+      }
+      last.players.push({
+        id: row.playerId,
+        username: row.username,
+        avatarUrl: row.avatarUrl ?? undefined,
+      });
+    }
+    return placements;
+  }
+
+  /** 세션들의 라운드 있는 완료 경기(팀 선수 id·점수만) */
+  async findCompletedRoundMatches(
+    sessionIds: string[],
+  ): Promise<StoredRoundMatch[]> {
+    if (!sessionIds.length) return [];
+    const matchRows: Array<{ id: string; sessionId: string; round: number }> =
+      await this.db
+        .select({
+          id: matches.id,
+          sessionId: matches.sessionId,
+          round: matches.round,
+        })
+        .from(matches)
+        .where(
+          and(
+            inArray(matches.sessionId, sessionIds),
+            eq(matches.status, "completed"),
+            isNotNull(matches.round),
+          ),
+        );
+    if (!matchRows.length) return [];
+
+    const matchIds = matchRows.map((row) => row.id);
+    const [participantRows, scoreRows]: [
+      Array<{ matchId: string; teamIndex: number; playerId: string }>,
+      Array<{ matchId: string; scoreA: number; scoreB: number }>,
+    ] = await Promise.all([
+      this.db
+        .select({
+          matchId: matchParticipants.matchId,
+          teamIndex: matchParticipants.teamIndex,
+          playerId: matchParticipants.playerId,
+        })
+        .from(matchParticipants)
+        .where(inArray(matchParticipants.matchId, matchIds)),
+      this.db
+        .select({
+          matchId: matchScores.matchId,
+          scoreA: matchScores.scoreA,
+          scoreB: matchScores.scoreB,
+        })
+        .from(matchScores)
+        .where(inArray(matchScores.matchId, matchIds))
+        .orderBy(asc(matchScores.id)),
+    ]);
+    const participantsByMatch = groupByMatchId(participantRows);
+    const scoresByMatch = groupByMatchId(scoreRows);
+
+    return matchRows.map((row) => {
+      const teams: StoredRoundMatch["teams"] = [
+        { players: [] },
+        { players: [] },
+      ];
+      for (const participant of participantsByMatch.get(row.id) ?? []) {
+        if (participant.teamIndex !== 0 && participant.teamIndex !== 1) continue;
+        teams[participant.teamIndex].players.push({
+          id: participant.playerId,
+        });
+      }
+      return {
+        sessionId: row.sessionId,
+        status: "completed",
+        round: Number(row.round),
+        teams,
+        scores: (scoresByMatch.get(row.id) ?? []).map(({ scoreA, scoreB }) => ({
+          scoreA: Number(scoreA),
+          scoreB: Number(scoreB),
+        })),
+      };
+    });
+  }
+
+  /**
+   * 세션의 대회 최종 순위를 통째로 바꾼다(한 트랜잭션). 세션이 없으면 false.
+   * 검증(대회 세션·참여자·중복)은 호출부가 한다
+   */
+  async replaceSessionPlacements(
+    sessionId: string,
+    placements: { place: number; playerIds: string[] }[],
+  ): Promise<boolean> {
+    if (!isEntityId(sessionId, "session")) {
+      throw new Error("유효한 세션 ID가 필요합니다.");
+    }
+
+    const transaction = await this.client.transaction("write");
+    let committed = false;
+    try {
+      const session = await transaction.execute({
+        sql: "SELECT id FROM match_sessions WHERE id = $1 FOR UPDATE",
+        args: [sessionId],
+      });
+      if (!session.rows.length) {
+        await transaction.commit();
+        committed = true;
+        return false;
+      }
+
+      await transaction.execute({
+        sql: "DELETE FROM match_session_placements WHERE session_id = $1",
+        args: [sessionId],
+      });
+      const rows = placements.flatMap(({ place, playerIds }) =>
+        playerIds.map((playerId, position) => [
+          sessionId,
+          playerId,
+          place,
+          position,
+        ]),
+      );
+      if (rows.length) {
+        await transaction.execute({
+          sql: `
+            INSERT INTO match_session_placements (session_id, player_id, place, position)
+            VALUES ${rows.map((_, index) => `(${placeholders(4, index * 4 + 1)})`).join(", ")}
+          `,
+          args: rows.flat(),
         });
       }
       await transaction.commit();

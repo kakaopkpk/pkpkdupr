@@ -17,6 +17,11 @@ import {
   toKstDateKey,
   type MatchSessionKind,
 } from "@pkpkdupr/shared/session";
+import {
+  countTournamentUnitRecord,
+  type TournamentPlace,
+  type TournamentPlacement,
+} from "@pkpkdupr/shared/tournament";
 import type {
   PlayerRatingChangeLog,
   PlayerRatingHistory,
@@ -575,6 +580,64 @@ export class MatchRepository {
     }
     this.notifySessionsChanged([sessionId]);
     return updated;
+  }
+
+  /**
+   * 세션별 대회 최종 순위(순위 오름차순). 순위 없는 세션은 결과에 없다.
+   * record는 그 세션의 라운드 있는 완료 경기로 센 참가 단위 승패다
+   */
+  async findTournamentPlacements(
+    sessionIds: string[],
+  ): Promise<Map<string, TournamentPlacement[]>> {
+    const result = new Map<string, TournamentPlacement[]>();
+    if (!sessionIds.length) return result;
+    const placements = await this.run(
+      () => db.matches.findSessionPlacements(sessionIds),
+      500,
+    );
+    if (!placements.length) return result;
+
+    const placedSessionIds = [
+      ...new Set(placements.map((placement) => placement.sessionId)),
+    ];
+    const roundMatches = await this.run(
+      () => db.matches.findCompletedRoundMatches(placedSessionIds),
+      500,
+    );
+    const matchesBySession = new Map<string, typeof roundMatches>();
+    for (const match of roundMatches) {
+      const list = matchesBySession.get(match.sessionId) ?? [];
+      list.push(match);
+      matchesBySession.set(match.sessionId, list);
+    }
+    for (const placement of placements) {
+      const sessionMatches = matchesBySession.get(placement.sessionId) ?? [];
+      const list = result.get(placement.sessionId) ?? [];
+      list.push({
+        place: placement.place as TournamentPlace,
+        players: placement.players,
+        record: countTournamentUnitRecord(
+          placement.players.map((player) => player.id),
+          sessionMatches,
+        ),
+      });
+      result.set(placement.sessionId, list);
+    }
+    return result;
+  }
+
+  /** 세션의 대회 최종 순위를 통째로 바꾼다. 세션이 없으면 404 */
+  async replaceSessionPlacements(
+    sessionId: string,
+    placements: { place: TournamentPlace; playerIds: string[] }[],
+  ): Promise<void> {
+    const replaced = await this.run(
+      () => db.matches.replaceSessionPlacements(sessionId, placements),
+      500,
+    );
+    if (!replaced) {
+      throw new MatchRepositoryError("세션을 찾을 수 없습니다.", 404);
+    }
   }
 
   /** 모든 정기 회차 제외 날짜(날짜 내림차순) */

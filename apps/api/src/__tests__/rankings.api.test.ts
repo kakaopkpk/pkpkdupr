@@ -651,6 +651,31 @@ describe("랭킹·세션 리포트 API", () => {
       );
     });
 
+    it("대회 세션에만 최종 순위 placements를 붙인다", async () => {
+      findSessionsInDateKeyRange.mockResolvedValue([
+        toManaged(session, 1),
+        toManaged({ ...upcomingSession, kind: "tournament" }, 0),
+      ]);
+      const placement = {
+        place: 1 as const,
+        players: [{ id: bob.id, username: bob.username }],
+        record: { wins: 2, losses: 0 },
+      };
+      const findTournamentPlacements = vi
+        .spyOn(MatchRepository.prototype, "findTournamentPlacements")
+        .mockResolvedValue(new Map([[upcomingSession.id, [placement]]]));
+
+      const response = await authorized("/api/schedule?month=2026-11");
+
+      expect(response.status).toBe(200);
+      expect(findTournamentPlacements).toHaveBeenCalledWith([
+        upcomingSession.id,
+      ]);
+      const [regular, tournament] = response.body.sessions;
+      expect(regular).not.toHaveProperty("placements");
+      expect(tournament.placements).toEqual([placement]);
+    });
+
     it.each(["", "?month=2026-13", "?month=2026-1", "?month=abc"])(
       "month%s가 YYYY-MM이 아니면 400이다",
       async (query) => {

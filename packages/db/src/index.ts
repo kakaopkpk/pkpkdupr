@@ -50,6 +50,8 @@ export {
   type CompletedMatchOutcome,
   type SessionWithParticipantIds,
   type RegularSessionSkip,
+  type StoredSessionPlacement,
+  type StoredRoundMatch,
 } from "./repositories/MatchRepository";
 export {
   MatchDeletionLogRepository,

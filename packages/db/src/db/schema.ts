@@ -262,6 +262,29 @@ export const officialDuprAdjustmentLogs = pgTable(
   }),
 );
 
+/**
+ * 대회 최종 순위. 한 순위에 참가 단위의 선수 여러 명이 들어가고 position은 관리자가 고른 순서(0이 대표)다.
+ * 한 세션에서 한 회원은 한 줄만 있고, 세션·회원이 지워지면 FK cascade로 함께 지워진다.
+ */
+export const matchSessionPlacements = pgTable(
+  "match_session_placements",
+  {
+    sessionId: id("session_id").notNull(),
+    playerId: id("player_id").notNull(),
+    place: integer("place").notNull(),
+    position: integer("position").notNull(),
+  },
+  (table) => ({
+    pk: primaryKey({
+      name: "match_session_placements_pkey",
+      columns: [table.sessionId, table.playerId],
+    }),
+    playerIdIndex: index("match_session_placements_player_id_idx").on(
+      table.playerId,
+    ),
+  }),
+);
+
 /** 경기 삭제 감사 로그. matchSnapshot은 지운 시점의 경기 전체(shared Match를 JSON으로 직렬화한 값)다. */
 export const matchDeletionLogs = pgTable(
   "match_deletion_logs",

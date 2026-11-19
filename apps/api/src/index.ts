@@ -71,6 +71,11 @@ import {
 } from "@pkpkdupr/shared/session";
 import { isEntityId } from "@pkpkdupr/shared/entityId";
 import {
+  isTournamentPlace,
+  type AdminUpdateTournamentPlacementsRequest,
+  type TournamentPlace,
+} from "@pkpkdupr/shared/tournament";
+import {
   ACHIEVEMENTS,
   findNewAchievements,
   findUnseenAchievements,
@@ -882,18 +887,38 @@ const compareSessionDetailsByDay = (
   a.dateKey.localeCompare(b.dateKey) ||
   Number(b.kind === "regular") - Number(a.kind === "regular");
 
-/** 세션 상세를 만든다. 없으면 undefined */
+/** 대회 세션 상세에 최종 순위를 붙인다(입력 전이면 빈 배열). 대회가 아닌 세션은 그대로 둔다 */
+const attachTournamentPlacements = async <T extends MatchSessionDetail>(
+  details: T[],
+): Promise<T[]> => {
+  const tournamentIds = details
+    .filter((detail) => detail.kind === "tournament")
+    .map((detail) => detail.id);
+  if (!tournamentIds.length) return details;
+  const placementsBySession =
+    await matchRepository.findTournamentPlacements(tournamentIds);
+  return details.map((detail) =>
+    detail.kind === "tournament"
+      ? { ...detail, placements: placementsBySession.get(detail.id) ?? [] }
+      : detail,
+  );
+};
+
+/** 세션 상세를 만든다. 없으면 undefined. withPlacements가 false면 대회 순위를 읽지 않는다 */
 const loadMatchSessionDetail = async (
   sessionId: string,
   now: Date,
+  { withPlacements = true }: { withPlacements?: boolean } = {},
 ): Promise<MatchSessionDetail | undefined> => {
   const [session, activePlayersById] = await Promise.all([
     matchRepository.findSessionById(sessionId),
     loadActivePlayersById(),
   ]);
-  return session
-    ? toMatchSessionDetail(session, activePlayersById, now)
-    : undefined;
+  if (!session) return undefined;
+  const detail = toMatchSessionDetail(session, activePlayersById, now);
+  return withPlacements
+    ? (await attachTournamentPlacements([detail]))[0]
+    : detail;
 };
 
 /**
@@ -920,7 +945,9 @@ const sessionCalendarSync = createSessionCalendarSync({
   getWebAppUrl: () => process.env.WEB_APP_URL,
   waitUntil: getRuntimeWaitUntil(),
   loadSession: async (sessionId): Promise<CalendarSessionSnapshot | undefined> => {
-    const detail = await loadMatchSessionDetail(sessionId, new Date());
+    const detail = await loadMatchSessionDetail(sessionId, new Date(), {
+      withPlacements: false,
+    });
     return detail
       ? {
           id: detail.id,
@@ -1456,8 +1483,10 @@ app.get("/api/match-sessions/today", async (req, res) => {
     const response: TodayMatchSessionsResponse = {
       dateKey,
       regularSessionOpen: canOpenRegularSession(now),
-      sessions: ordered.map((session) =>
-        toMatchSessionDetail(session, activePlayersById, now),
+      sessions: await attachTournamentPlacements(
+        ordered.map((session) =>
+          toMatchSessionDetail(session, activePlayersById, now),
+        ),
       ),
     };
     res.json(response);
@@ -1489,8 +1518,10 @@ app.get("/api/match-sessions/upcoming", async (req, res) => {
       findUpcomingSessions(now),
       loadActivePlayersById(),
     ]);
-    const details = sessions.map((session) =>
-      toMatchSessionDetail(session, activePlayersById, now),
+    const details = await attachTournamentPlacements(
+      sessions.map((session) =>
+        toMatchSessionDetail(session, activePlayersById, now),
+      ),
     );
     // 저장소가 시각 오름차순으로 주므로 날짜 키·정기 여부로만 다시 정렬한다(정렬은 안정적이다).
     details.sort(compareSessionDetailsByDay);
@@ -2420,6 +2451,89 @@ app.post(
         ratingExcluded: false,
       });
       res.status(201).json(match);
+    } catch (err) {
+      sendMatchSessionFailure(res, err);
+    }
+  },
+);
+
+/**
+ * 요청의 최종 순위를 검사해 순위 오름차순으로 돌려준다. 오류는 400.
+ * 선수는 세션 참여자(게스트 포함)여야 하고, 한 사람은 한 순위에만 들어간다
+ */
+const parseTournamentPlacements = (
+  value: unknown,
+  participantIds: ReadonlySet<string>,
+): { place: TournamentPlace; playerIds: string[] }[] => {
+  if (!Array.isArray(value)) {
+    throw new MatchSessionRequestError("placements 배열이 필요합니다.", 400);
+  }
+  const places = new Set<TournamentPlace>();
+  const placedPlayerIds = new Set<string>();
+  const placements = value.map((item) => {
+    const { place, playerIds } = (item ?? {}) as {
+      place?: unknown;
+      playerIds?: unknown;
+    };
+    if (!isTournamentPlace(place)) {
+      throw new MatchSessionRequestError("순위는 1~3위만 정할 수 있어요.", 400);
+    }
+    if (places.has(place)) {
+      throw new MatchSessionRequestError("순위가 중복됐어요.", 400);
+    }
+    places.add(place);
+    if (!Array.isArray(playerIds) || playerIds.length === 0) {
+      throw new MatchSessionRequestError("순위마다 1명 이상 골라 주세요.", 400);
+    }
+    const validPlayerIds: string[] = [];
+    for (const playerId of playerIds) {
+      if (typeof playerId !== "string" || !participantIds.has(playerId)) {
+        throw new MatchSessionRequestError(
+          "세션 참여자만 순위에 넣을 수 있어요.",
+          400,
+        );
+      }
+      if (placedPlayerIds.has(playerId)) {
+        throw new MatchSessionRequestError(
+          "한 사람은 한 순위에만 넣을 수 있어요.",
+          400,
+        );
+      }
+      placedPlayerIds.add(playerId);
+      validPlayerIds.push(playerId);
+    }
+    return { place, playerIds: validPlayerIds };
+  });
+  return placements.sort((a, b) => a.place - b.place);
+};
+
+/** 대회 세션의 최종 순위를 통째로 바꾼다. 빠진 순위는 비우고, 빈 배열이면 순위를 모두 지운다 */
+app.put(
+  "/api/admin/match-sessions/:sessionId/placements",
+  requireAdmin,
+  async (req, res) => {
+    try {
+      const { sessionId } = req.params;
+      if (!isEntityId(sessionId, "session")) {
+        throw new MatchSessionRequestError("유효한 세션 ID가 필요합니다.", 400);
+      }
+      const session = await matchRepository.findSessionById(sessionId);
+      if (!session) {
+        throw new MatchSessionRequestError("세션을 찾을 수 없습니다.", 404);
+      }
+      if (session.kind !== "tournament") {
+        throw new MatchSessionRequestError(
+          "대회 세션만 순위를 정할 수 있어요.",
+          409,
+        );
+      }
+      const body = (req.body ?? {}) as Partial<AdminUpdateTournamentPlacementsRequest>;
+      const placements = parseTournamentPlacements(
+        body.placements,
+        new Set(session.participantIds),
+      );
+      await matchRepository.replaceSessionPlacements(sessionId, placements);
+      res.json(await requireMatchSessionDetail(sessionId, new Date()));
     } catch (err) {
       sendMatchSessionFailure(res, err);
     }
@@ -3556,18 +3670,21 @@ app.get("/api/schedule", async (req, res) => {
         entry.kind === "session" ? [entry.session.id] : [],
       ),
     );
-    const scheduleSessions = monthSessions
-      .map((session): ScheduleSession => {
-        const isEnded =
-          getEmptySessionExpiresAt(session.kind, session.date, session) <= now;
-        return {
-          ...toMatchSessionDetail(session, activePlayersById, now),
-          isEnded,
-        };
-      })
-      .filter(
-        (session) => !session.isEnded || recordedSessionIds.has(session.id),
-      );
+    const scheduleSessions = await attachTournamentPlacements(
+      monthSessions
+        .map((session): ScheduleSession => {
+          const isEnded =
+            getEmptySessionExpiresAt(session.kind, session.date, session) <=
+            now;
+          return {
+            ...toMatchSessionDetail(session, activePlayersById, now),
+            isEnded,
+          };
+        })
+        .filter(
+          (session) => !session.isEnded || recordedSessionIds.has(session.id),
+        ),
+    );
     // 저장소가 시각 오름차순으로 주므로 날짜 키·정기 여부로만 다시 정렬한다(정렬은 안정적이다)
     scheduleSessions.sort(compareSessionDetailsByDay);
 
