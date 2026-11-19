@@ -13,6 +13,7 @@ import {
   UpcomingSessionCard,
 } from "@/components/schedule/ScheduleCards";
 import ParticipantsSheet from "@/components/session/ParticipantsSheet";
+import { isSessionDateSelectable } from "@/components/session/SessionSchedulePicker";
 import { LiveSessionCard } from "@/components/session/SessionBlueCard";
 import { useSessionParticipation } from "@/components/session/useSessionParticipation";
 import { TournamentRankCard } from "@/components/tournament/TournamentRankCard";
@@ -329,7 +330,7 @@ const Schedule: React.FC = () => {
           entries.map(renderEntry)
         ) : (
           <EmptyDayCard
-            isPast={selectedDateKey < todayKey}
+            canCreateSession={isSessionDateSelectable(selectedDateKey, todayKey)}
             onCreateSession={handleCreateSession}
           />
         )}

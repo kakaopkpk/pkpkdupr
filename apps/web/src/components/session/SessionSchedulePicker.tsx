@@ -1,19 +1,23 @@
 import React, { useLayoutEffect, useRef, useState } from "react";
-import { addScheduleMonths, parseScheduleMonth } from "@pkpkdupr/shared/schedule";
 import {
+  addScheduleMonths,
+  getScheduleMonthDateKeyRange,
+} from "@pkpkdupr/shared/schedule";
+import {
+  addKstDays,
+  getKstWeekday,
   kstDateKeyToDate,
   minutesToSessionTime,
   REGULAR_SESSION_WEEKDAYS,
   sessionTimeToMinutes,
   WEEKDAY_LABELS,
 } from "@pkpkdupr/shared/session";
-import { getMonthGridDateKeys, toMonthKey } from "@/components/schedule/monthGrid";
+import { formatMonthTitle, toMonthKey } from "@/components/schedule/monthGrid";
 import { ChevronRightIcon } from "@/components/ui/Icons";
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { cx } from "@/components/ui/cx";
 import { formatKstLongDate } from "@/lib/format";
 
-const DAYS_PER_WEEK = 7;
 const SESSION_TIME_STEP_MINUTES = 30;
 /** 길이 1~6시간 */
 const SESSION_DURATION_OPTIONS_MINUTES = [60, 120, 180, 240, 300, 360];
@@ -43,16 +47,6 @@ export const getStartTimeSegment = (startTime: string): StartTimeSegment =>
     Math.floor(sessionTimeToMinutes(startTime) / (SEGMENT_HOURS * 60))
   ].value;
 
-/** 날짜 키의 일·요일(0=일). 날짜 키는 이미 KST 날짜라 UTC로 읽는다 */
-const getDateParts = (dateKey: string) => {
-  const [year, month, day] = dateKey.split("-").map(Number);
-  return {
-    month,
-    day,
-    weekday: new Date(Date.UTC(year, month - 1, day)).getUTCDay(),
-  };
-};
-
 const FieldLabel: React.FC<{
   id: string;
   label: string;
@@ -77,21 +71,18 @@ const RegularDot: React.FC<{ className?: string }> = ({ className }) => (
   />
 );
 
-/** "2026년 11월" */
-const formatMonthTitle = (monthKey: string) => {
-  const parsed = parseScheduleMonth(monthKey);
-  return parsed ? `${parsed.year}년 ${parsed.month}월` : monthKey;
-};
-
-/** 그 달 날짜가 하나라도 든 주만 남긴 달력 칸. 다른 달 날은 null(빈 칸) */
+/** 그 달 날짜 칸. 1일 앞의 요일 수만큼 빈 칸(null)을 두면 7열 그리드에서 요일이 맞는다 */
 const getSessionMonthCells = (monthKey: string): (string | null)[] => {
-  const cells = getMonthGridDateKeys(monthKey).map((dateKey) =>
-    toMonthKey(dateKey) === monthKey ? dateKey : null,
+  const { fromDateKey, toDateKey } = getScheduleMonthDateKeyRange(monthKey);
+  const cells: (string | null)[] = Array.from(
+    { length: getKstWeekday(fromDateKey) },
+    () => null,
   );
-  const weeks = Array.from({ length: cells.length / DAYS_PER_WEEK }, (_, index) =>
-    cells.slice(index * DAYS_PER_WEEK, (index + 1) * DAYS_PER_WEEK),
-  );
-  return weeks.filter((week) => week.some(Boolean)).flat();
+  // YYYY-MM-DD 문자열은 사전순이 날짜순이다
+  for (let key = fromDateKey; key < toDateKey; key = addKstDays(key, 1)) {
+    cells.push(key);
+  }
+  return cells;
 };
 
 const CalendarMonthButton: React.FC<{
@@ -179,8 +170,8 @@ export const SessionCalendar: React.FC<{
           if (!dateKey) {
             return <span key={`blank-${index}`} aria-hidden="true" />;
           }
-          const { day, weekday } = getDateParts(dateKey);
-          const isDisabled = dateKey < todayKey;
+          const weekday = getKstWeekday(dateKey);
+          const isDisabled = !isSessionDateSelectable(dateKey, todayKey);
           const isSelected = dateKey === value;
           const isRegular = REGULAR_SESSION_WEEKDAYS.includes(weekday);
           return (
@@ -211,7 +202,7 @@ export const SessionCalendar: React.FC<{
                     : !isSelected && weekday === 0 && "text-pk-down",
                 )}
               >
-                {day}
+                {Number(dateKey.slice(-2))}
               </span>
               <span
                 className={cx(

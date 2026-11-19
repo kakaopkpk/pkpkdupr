@@ -66,16 +66,16 @@ export const UpcomingSessionCard: React.FC<{
   </div>
 );
 
-/** 세션도 기록도 없는 날. 오늘·앞날은 그 날짜로 세션 만들기를 열고, 지난 날은 문구만 둔다 */
+/** 세션도 기록도 없는 날. 세션을 만들 수 있는 날(오늘·앞날)은 그 날짜로 세션 만들기를 열고, 지난 날은 문구만 둔다 */
 export const EmptyDayCard: React.FC<{
-  isPast: boolean;
+  canCreateSession: boolean;
   onCreateSession: () => void;
-}> = ({ isPast, onCreateSession }) => (
+}> = ({ canCreateSession, onCreateSession }) => (
   <div className="flex flex-col items-center gap-1 rounded-pk-lg bg-white px-4 pt-5 pb-4 text-center">
     <b className="text-pk-15 font-bold text-pk-ink">
-      {isPast ? "이날은 경기 기록이 없어요" : "아직 세션이 없어요"}
+      {canCreateSession ? "아직 세션이 없어요" : "이날은 경기 기록이 없어요"}
     </b>
-    {isPast ? null : (
+    {canCreateSession && (
       <PkButton size="lg" fullWidth className="mt-3" onClick={onCreateSession}>
         <PlusIcon />
         세션 만들기
