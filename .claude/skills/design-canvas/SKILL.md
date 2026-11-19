@@ -22,6 +22,7 @@ description: pkpkdupr web·admin 화면의 디자인 시안·캔버스·목업�
    - `<화면>.png`: 실제 모습. 시안과 비교하는 기준이다.
    - `<화면>.html`: 실제 DOM(앱의 Tailwind 클래스 그대로). 같은 폴더의 `app.css`(앱 CSS 전체)를 붙이면 앱과 똑같이 렌더링된다.
    - `index.html`: 찍은 화면을 한눈에 보는 페이지
+   - macOS에서는 GPU(ANGLE Metal)로 그린다. 다른 OS의 소프트웨어 렌더링은 2배 해상도에서 `backdrop-filter` 블러가 요소 아래쪽을 덮지 못해 원본 글자가 비치므로, 블러가 들어간 화면·시안은 macOS에서 찍는다.
    - 회원 아이디는 실제 회원 아이디로 녹화돼 있다(dev mock 회원을 실제 회원 아이디로 바꾸고 겹치는 줄은 하나만 남긴다). 로그인 회원은 brad.ley다.
 3. "녹화 응답이 없는 요청"이 출력되면 API나 화면이 바뀐 것이다. 요청은 그대로인데 응답에 새 필드가 생긴 경우(새 기능이 화면에 안 보임)도 같다. Docker가 있는 환경에서 `pnpm dev`를 띄우고 `pnpm design:snapshot --record`로 다시 녹화해 `responses.json`을 함께 커밋한다. 녹화는 시각을 맞추기 위해 항상 전체 화면을 돌고, 로컬 주소의 응답만 저장한다(운영 Storage를 가리키는 아바타 등 로컬이 아닌 요청은 막고 목록만 남기며, 재생에서도 실패로 돌려줘 이니셜로 보인다). dev mock 아이디는 실제 회원 아이디로 바꿔 저장하고 로그인 토큰은 저장하지 않는다.
 4. 필요한 화면이 목록에 없으면 `scripts/design-snapshot/snapshot.mjs`의 `SCREENS`에 단계를 추가하고 다시 녹화한다(지금: home, schedule, ranking, me, plus-menu, record-sheet, match-detail, profile, settings). dev mock에 없는 상태(빈 날, 세션 없는 날 등)는 해당 화면 HTML을 복사해 내용만 고친다.
