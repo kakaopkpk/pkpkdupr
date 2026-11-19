@@ -97,6 +97,7 @@ const createFakeStore = () => {
       participantIds: [],
       matchCount: 0,
       kind: "regular",
+      autoCreated: true,
       startTime: "18:00",
       endTime: "22:00",
       createdAt: thursdayMorning,

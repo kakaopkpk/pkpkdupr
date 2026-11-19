@@ -87,7 +87,10 @@ export const getRegularSessionName = (dateKey: string): string =>
 /** 정기 세션을 미리 만드는 기간(일). 오늘(KST)을 포함해 이 일수 안의 정기 회차를 만든다 */
 export const REGULAR_SESSION_LOOKAHEAD_DAYS = 28;
 
-/** 정기 회차를 만들지 않는 날짜의 사유. holiday=공휴일, canceled=관리자가 지운 회차 */
+/**
+ * 정기 회차를 만들지 않는 날짜의 사유. holiday=공휴일,
+ * canceled=정기 쉬는 날(관리자가 지정했거나 자동 정기 세션을 지운 날, 화면 이름 "정기 쉬는 날")
+ */
 export type RegularSessionSkipReason = "holiday" | "canceled";
 
 /**
@@ -387,8 +390,8 @@ export interface StartSessionMatchRequest {
 
 /**
  * POST /api/admin/match-sessions 요청. 응답은 ManagedMatchSession.
- * 대회·회원 세션은 회원 세션 만들기와 같은 규칙이다. 정기 세션은 그 날짜의 정기 세션이 되고 시각을 무시한다
- * (이미 그날 정기 세션이 있거나 쉬는 날이면 409)
+ * 대회·회원 세션은 회원 세션 만들기와 같은 규칙이다. 정기 세션은 그 날짜의 직접 만든 정기 세션이 되고 시각을 무시한다
+ * (이미 그날 정기 세션이 있거나 공휴일이면 409, 정기 쉬는 날에는 쉬는 날을 남긴 채 만든다)
  */
 export interface AdminCreateMatchSessionRequest extends CreateMatchSessionRequest {
   kind: MatchSessionKind;
@@ -402,8 +405,9 @@ export interface AdminUpdateMatchSessionRequest {
   name?: string;
   location?: string;
   /**
-   * 정기로 바꾸면 그 날짜의 정기 세션(18:00~22:00)이 된다(이미 있거나 쉬는 날이면 409).
-   * 정기에서 바꾸면 18:00~22:00 시각을 가진 세션이 되고, 오늘·미래 날짜는 취소 쉬는 날로 남는다
+   * 정기로 바꾸면 그 날짜의 직접 만든 정기 세션(18:00~22:00)이 된다(이미 있거나 공휴일이면 409).
+   * 직접 만든 정기에서 바꾸면 18:00~22:00 시각을 가진 세션이 되고 정기 쉬는 날은 생기지 않는다.
+   * 자동 정기 세션(autoCreated)은 종류를 바꿀 수 없다(409)
    */
   kind?: MatchSessionKind;
   /** KST 날짜 키(YYYY-MM-DD). 오늘 이후만 */
@@ -413,7 +417,7 @@ export interface AdminUpdateMatchSessionRequest {
   endTime?: string | null;
 }
 
-/** 정기 세션을 만들지 않는 날 */
+/** 정기 세션을 만들지 않는 날(공휴일·정기 쉬는 날) */
 export interface AdminRegularSessionSkip {
   dateKey: string;
   reason: RegularSessionSkipReason;
@@ -424,12 +428,18 @@ export interface AdminRegularSessionSkipsResponse {
   skips: AdminRegularSessionSkip[];
 }
 
-/** POST /api/admin/regular-session-skips 요청. 응답은 201 AdminRegularSessionSkip(reason "canceled") */
+/**
+ * POST /api/admin/regular-session-skips 요청. 그 날짜를 정기 쉬는 날로 지정한다. 응답은 201 AdminRegularSessionSkip(reason "canceled").
+ * 그날 자동 정기 세션이 있으면 참여자와 함께 지운다(직접 만든 정기 세션은 그대로 둔다)
+ */
 export interface AdminAddRegularSessionSkipRequest {
   dateKey: string;
 }
 
-/** DELETE /api/admin/regular-session-skips/:dateKey 응답. 다시 만든 정기 세션(만들 수 없는 시각이면 null) */
+/**
+ * DELETE /api/admin/regular-session-skips/:dateKey 응답. 정기 쉬는 날을 해제하고 그 자리에서 만든 자동 정기 세션
+ * (그날 직접 만든 정기 세션이 이미 있으면 그 세션, 만들 수 없는 시각이면 null)
+ */
 export interface AdminRevertRegularSessionSkipResponse {
   session: ManagedMatchSession | null;
 }

@@ -231,6 +231,7 @@ describe("관리자 경기 API", () => {
       participantIds: [],
       matchCount: 0,
       kind: "regular",
+      autoCreated: true,
       startTime: "18:00",
       endTime: "22:00",
       createdAt: now,

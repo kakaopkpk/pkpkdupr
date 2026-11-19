@@ -188,6 +188,8 @@ export const matchSessions = pgTable(
     kind: varchar("kind", { length: 16 }).notNull().default("custom"),
     /** 정기 세션의 KST 날짜 키(YYYY-MM-DD). 날짜당 하나만 있다. 정기 세션이 아니면 null이다. */
     regularDateKey: varchar("regular_date_key", { length: 10 }),
+    /** 서버가 자동으로 만든 정기 세션이면 true. 관리자가 직접 만든 정기 세션과 다른 종류는 false다 */
+    autoCreated: boolean("auto_created").notNull().default(false),
     /** 회원 세션의 시작·종료 시각("HH:MM", KST). 시각 없이 만든 세션과 정기 세션은 null이다(정기 세션 시각은 저장소가 채운다). */
     startTime: varchar("start_time", { length: 5 }),
     endTime: varchar("end_time", { length: 5 }),
@@ -339,7 +341,7 @@ export const playerSeenAchievements = pgTable(
 
 /**
  * 정기 회차를 만들지 않는 KST 날짜. holiday=공휴일(예약 작업이 구글 공휴일 캘린더로 채움),
- * canceled=관리자가 지운 오늘·미래 정기 세션. 여기 있는 날짜의 정기 세션은 어떤 경로로도 새로 만들지 않는다.
+ * canceled=정기 쉬는 날(관리자가 지정했거나 자동 정기 세션을 지운 날). 여기 있는 날짜의 정기 세션은 자동 경로로 새로 만들지 않는다.
  */
 export const regularSessionSkips = pgTable("regular_session_skips", {
   dateKey: varchar("date_key", { length: 10 }).primaryKey(),

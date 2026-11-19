@@ -158,6 +158,7 @@ const hydrateManagedSession = (record: any): ManagedMatchSession => ({
   participantIds: record.participantIds ?? [],
   matchCount: Number(record.matchCount ?? 0),
   kind: isMatchSessionKind(record.kind) ? record.kind : "custom",
+  autoCreated: record.autoCreated === true,
   startTime: record.startTime ?? null,
   endTime: record.endTime ?? null,
   createdAt: new Date(record.createdAt),
@@ -449,7 +450,7 @@ export class MatchRepository {
 
   /**
    * 그 KST 날짜의 정기 세션을 찾거나 만든다. 같은 날짜에 하나만 존재한다.
-   * 세션이 없고 그 날짜가 공휴일·취소 날짜면 만들지 않고 undefined를 돌려준다.
+   * 세션이 없고 그 날짜가 공휴일·정기 쉬는 날이면 만들지 않고 undefined를 돌려준다. 새로 만든 세션은 자동 정기 세션이다.
    * 이 호출이 새로 만들었을 때만 세션 변경을 알린다(이미 있던 세션 조회는 알리지 않음).
    */
   async findOrCreateRegularSession(
@@ -527,8 +528,8 @@ export class MatchRepository {
   }
 
   /**
-   * 관리자가 고른 이름·장소로 그 날짜의 정기 세션을 만든다.
-   * 이미 그날 정기 세션이 있거나 쉬는 날, 같은 날 같은 이름이 있으면 409
+   * 관리자가 고른 이름·장소로 그 날짜의 직접 만든 정기 세션을 만든다(정기 쉬는 날이어도 만들고 쉬는 날은 남긴다).
+   * 이미 그날 정기 세션이 있거나 공휴일, 같은 날 같은 이름이 있으면 409
    */
   async createRegularSession(
     dateKey: string,
@@ -555,19 +556,18 @@ export class MatchRepository {
 
   /**
    * 세션 종류를 바꾸고 input 필드도 같이 고친다. 없으면 404.
-   * 정기로 바꿀 수 없는 날짜(그날 정기 세션이 있거나 쉬는 날)거나 같은 날 같은 이름이 있으면 409.
-   * 정기에서 바꾼 cancelRegularFromDateKey 이후 날짜는 취소 쉬는 날로 남는다
+   * 정기로 바꿀 수 없는 날짜(그날 정기 세션이 있거나 공휴일), 자동 정기 세션의 종류 변경, 같은 날 같은 이름이면 409.
+   * 직접 만든 정기에서 바꿔도 정기 쉬는 날은 남지 않는다
    */
   async changeSessionKind(
     sessionId: string,
     kind: MatchSessionKind,
     input: UpdateSessionInput,
-    options: { cancelRegularFromDateKey?: string } = {},
   ): Promise<ManagedMatchSession> {
     let changed;
     try {
       changed = await this.run(
-        () => db.matches.changeSessionKind(sessionId, kind, input, options),
+        () => db.matches.changeSessionKind(sessionId, kind, input),
         500,
         (error) =>
           error instanceof RegularSessionConflictError ? 409 : undefined,
@@ -650,8 +650,8 @@ export class MatchRepository {
   }
 
   /**
-   * 그 날짜를 취소 쉬는 날로 남기고 그날 정기 세션을 참여자와 함께 지운다.
-   * 이미 쉬는 날이거나 정기 세션에 경기가 있으면 409
+   * 그 날짜를 정기 쉬는 날로 남기고 그날 자동 정기 세션을 참여자와 함께 지운다(직접 만든 정기 세션은 그대로).
+   * 이미 쉬는 날이거나 자동 정기 세션에 경기가 있으면 409
    */
   async addRegularSessionCancellation(dateKey: string): Promise<void> {
     const { deletedSessionId } = await this.run(
@@ -666,7 +666,7 @@ export class MatchRepository {
     this.notifySessionsChanged([deletedSessionId ?? undefined]);
   }
 
-  /** 취소 쉬는 날을 지운다(공휴일은 지우지 않음). 지웠으면 true */
+  /** 정기 쉬는 날을 지운다(공휴일은 지우지 않음). 지웠으면 true */
   async deleteRegularSessionCancellation(dateKey: string): Promise<boolean> {
     return await this.run(
       () => db.matches.deleteRegularSessionCancellation(dateKey),
@@ -838,7 +838,7 @@ export class MatchRepository {
     return records.map(hydrateMatch);
   }
 
-  /** 경기가 없는 세션을 지운다. 오늘(now, KST)·미래 정기 세션이면 그 날짜를 취소로 남겨 다시 만들지 않는다 */
+  /** 경기가 없는 세션을 지운다. 오늘(now, KST)·미래 자동 정기 세션이면 그 날짜를 정기 쉬는 날로 남겨 다시 만들지 않는다 */
   async deleteSession(
     sessionId: string,
     now: Date = new Date(),

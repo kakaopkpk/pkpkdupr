@@ -45,6 +45,7 @@ const customSession = (
   participantIds: [],
   matchCount: 0,
   kind: "custom",
+  autoCreated: false,
   startTime: null,
   endTime: null,
   createdAt: thursdayMorning,
@@ -52,7 +53,10 @@ const customSession = (
   ...overrides,
 });
 
-const regularSession = (dateKey: string): ManagedMatchSession => ({
+const regularSession = (
+  dateKey: string,
+  autoCreated = true,
+): ManagedMatchSession => ({
   id: "Sregular",
   name: "월요 정기운동",
   date: kstDateKeyToDate(dateKey, 18),
@@ -60,6 +64,7 @@ const regularSession = (dateKey: string): ManagedMatchSession => ({
   participantIds: [],
   matchCount: 0,
   kind: "regular",
+  autoCreated,
   startTime: "18:00",
   endTime: "22:00",
   createdAt: thursdayMorning,
@@ -282,7 +287,6 @@ describe("PATCH /api/admin/match-sessions/:sessionId", () => {
         "Scustom1",
         "tournament",
         expect.objectContaining({ name: "가을 대회", date: undefined }),
-        { cancelRegularFromDateKey: "2026-11-12" },
       );
       expect(updateSession).not.toHaveBeenCalled();
       expect(notify).toHaveBeenCalledWith(["Scustom1"]);
@@ -301,8 +305,10 @@ describe("PATCH /api/admin/match-sessions/:sessionId", () => {
       expect(changeSessionKind).toHaveBeenCalled();
     });
 
-    it("정기 세션을 다른 종류로 바꾸면서 시각을 고칠 수 있다", async () => {
-      const { changeSessionKind } = mockKindChange(regularSession("2026-11-16"));
+    it("직접 만든 정기 세션을 다른 종류로 바꾸면서 시각을 고칠 수 있다", async () => {
+      const { changeSessionKind } = mockKindChange(
+        regularSession("2026-11-16", false),
+      );
 
       const response = await asAdmin(
         request(app).patch("/api/admin/match-sessions/Sregular"),
@@ -313,7 +319,6 @@ describe("PATCH /api/admin/match-sessions/:sessionId", () => {
         "Sregular",
         "custom",
         expect.objectContaining({ startTime: "19:00", endTime: "21:00" }),
-        { cancelRegularFromDateKey: "2026-11-12" },
       );
     });
 
@@ -357,6 +362,24 @@ describe("PATCH /api/admin/match-sessions/:sessionId", () => {
       expect(response.status).toBe(409);
       expect(response.body).toEqual({
         error: "그 날짜에는 이미 정기 세션이 있어요.",
+      });
+    });
+
+    it("자동 정기 세션의 종류를 바꾸면 409", async () => {
+      mockSession(regularSession("2026-11-16"));
+      vi.spyOn(db.matches, "changeSessionKind").mockRejectedValue(
+        new RegularSessionConflictError(
+          "자동으로 만든 정기 세션은 종류를 바꿀 수 없어요.",
+        ),
+      );
+
+      const response = await asAdmin(
+        request(app).patch("/api/admin/match-sessions/Sregular"),
+      ).send({ kind: "tournament" });
+
+      expect(response.status).toBe(409);
+      expect(response.body).toEqual({
+        error: "자동으로 만든 정기 세션은 종류를 바꿀 수 없어요.",
       });
     });
 

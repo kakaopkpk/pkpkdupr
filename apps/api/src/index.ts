@@ -2181,7 +2181,7 @@ app.delete(
       if (!isEntityId(req.params.sessionId, "session")) {
         return res.status(400).json({ error: "유효한 세션 ID가 필요합니다." });
       }
-      // 오늘·미래 정기 세션을 지우면 그 날짜는 취소로 남아 다시 만들어지지 않는다
+      // 오늘·미래 자동 정기 세션을 지우면 그 날짜는 정기 쉬는 날로 남아 다시 만들어지지 않는다
       await matchRepository.deleteSession(req.params.sessionId, new Date());
       res.status(204).send();
     } catch (err) {
@@ -2324,13 +2324,11 @@ app.patch(
         ...(timeProvided ? { startTime, endTime } : {}),
       };
       // 종류를 보내면 저장소가 잠근 행의 지금 종류와 비교한다(위에서 읽은 뒤 다른 관리자가 바꿨을 수 있다).
-      // 오늘·미래 정기 세션을 다른 종류로 바꾸면 그 날짜는 취소로 남아 다시 만들어지지 않는다
+      // 자동 정기 세션은 종류를 바꿀 수 없고(409), 직접 만든 정기 세션을 바꿔도 정기 쉬는 날은 남지 않는다
       const updated =
         body.kind === undefined
           ? await matchRepository.updateSession(sessionId, input)
-          : await matchRepository.changeSessionKind(sessionId, body.kind, input, {
-              cancelRegularFromDateKey: todayKey,
-            });
+          : await matchRepository.changeSessionKind(sessionId, body.kind, input);
       res.json(updated);
     } catch (err) {
       sendMatchSessionFailure(res, err);
@@ -2566,7 +2564,10 @@ app.get(
   },
 );
 
-/** 오늘 이후 정기 요일을 취소 쉬는 날로 남긴다. 그날 정기 세션이 있으면 참여자와 함께 지운다(경기가 있으면 409) */
+/**
+ * 오늘 이후 정기 요일을 정기 쉬는 날로 지정한다. 그날 자동 정기 세션이 있으면 참여자와 함께 지운다(경기가 있으면 409).
+ * 직접 만든 정기 세션은 그대로 둔다
+ */
 app.post(
   "/api/admin/regular-session-skips",
   requireAdmin,
@@ -2606,7 +2607,7 @@ app.post(
 );
 
 /**
- * 취소 쉬는 날을 되돌리고 그 날짜의 정기 세션을 바로 다시 만든다(28일 범위와 상관없음).
+ * 정기 쉬는 날을 해제하고 그 날짜의 자동 정기 세션을 바로 다시 만든다(28일 범위와 상관없음).
  * 오늘이고 정기 세션을 열 수 없는 시각(22시 이후)이면 만들지 않는다. 지워졌던 참여 신청은 되살리지 않는다
  */
 app.delete(
