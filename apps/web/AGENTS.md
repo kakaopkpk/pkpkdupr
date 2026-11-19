@@ -34,6 +34,7 @@
         - 넘기기는 `touch-pan-y` 트랙에서 직접 처리해 한 번에 한 장만 넘기고, 카드 폭 30% 이상 끌거나 60px 이상 빠르게 튕겨야 넘어간다(`carouselPosition`의 `getSwipeTargetIndex`).
         - 아래 위치 점은 10개까지, 넘으면 "n / N".
         - 어느 카드에서든 참여하기·참여 취소.
+      - 진행 중 세션이 없으면 캐러셀(과 진행 중 경기) 아래 "소식" 피드 `home/NewsFeed`(`GET /api/news-feed`, 무한 스크롤, 데이터는 `home/useNewsFeed`)를 둔다. 카드 모양·누르면 가는 곳은 `docs/design.md` "홈"을 따른다.
       - 진행 중 경기는 경기마다 가로 vs 카드로 둔다. `home/LiveMatchCard`의 내 경기 `MyLiveMatchCard`는 테두리·"내 경기" 칩·점수 입력 버튼과 경기 상세 같은 랠리 팀 줄(`RallyTeamRow`)이 있고, 남의 경기 `LiveMatchCard`는 없다.
     - `Schedule.tsx`(일정)
       - 탭 머리 없이 월 달력 `schedule/MonthCalendar`와 고른 날 카드를 둔다.
@@ -66,7 +67,7 @@
     - `session/`: 세션 만들기(날짜 칩·시작·종료 시각 칩 `SessionSchedulePicker`)·참여자 시트 `ParticipantsSheet`(열면 참여자 보기, 오른쪽 위 "수정"으로 같은 시트에서 전체 회원 체크·게스트 추가 수정 모드, 완료·취소·뒤로가기는 보기로 돌아감)
     - `settings/`: 설정·비밀번호 변경·상태메시지 편집·프로필 사진 조정 `AvatarCropScreen`
       - 고른 사진을 끌어 옮기고 핀치로 1~4배, 두 번 탭 2배↔1배, 원 안을 512px JPEG로 잘라 저장. 좌표 계산은 `utils/avatarCrop.ts`
-  - 탭 전용 조각: `home/`, `schedule/`, `records/`(세션 리포트 조각 `SessionReportParts`는 일정 탭·세션 상세·홈이 같이 씀, 끝난 세션·세션 없는 경기 카드 `RecordCards`), `ranking/`. 세션 블루 카드 틀·참여 버튼 `session/SessionBlueCard`(오른쪽 위 피클볼 장식 `session/PickleballIllustration`, 첫 줄은 종류 칩 "정기"/"회원"과 남은 날 `getSessionDDayLabel`("D-1"·오늘이면 "D-Day"), 참여 중이면 "✓ 참여 중 … 취소" 버튼 하나, 진행 중 세션 카드 `LiveSessionCard`)는 홈 다음 세션·진행 중 세션 카드와 일정 탭 세션 카드가 같이 씀
+  - 탭 전용 조각: `home/`, `schedule/`, `records/`(세션 리포트 조각 `SessionReportParts`는 일정 탭·세션 상세·홈이 같이 씀, 끝난 세션·세션 없는 경기 카드 `RecordCards`, 세션 상세 내 새 업적 카드 `MyNewAchievementsCard`), `ranking/`. 세션 블루 카드 틀·참여 버튼 `session/SessionBlueCard`(오른쪽 위 피클볼 장식 `session/PickleballIllustration`, 첫 줄은 종류 칩 "정기"/"회원"과 남은 날 `getSessionDDayLabel`("D-1"·오늘이면 "D-Day"), 참여 중이면 "✓ 참여 중 … 취소" 버튼 하나, 진행 중 세션 카드 `LiveSessionCard`)는 홈 다음 세션·진행 중 세션 카드와 일정 탭 세션 카드가 같이 씀
   - `ui/`: 새 디자인 공통 컴포넌트. 새 화면은 여기 것을 먼저 씁니다.
     - `Button.tsx`(`PkButton`, variant `primary`·`soft`·`outline`·`ghost`), `Card.tsx`, `SegmentedControl.tsx`, `Headers.tsx`(`TabHeader`·`DetailHeader`), `Form.tsx`(`TextField`·`ListRow`), `Section.tsx`(`Section`·`PreviewSection`·`TextLink`. 섹션 제목이 붙는 묶음은 `Section`으로 만든다), `SheetTitle.tsx`, `ConfirmDialog.tsx`(시트 위 가운데 확인 창. 바텀시트를 겹쳐 쌓지 않을 때 쓰고, 연 쪽이 `useLayerDepth` kind `dialog`로 뒤로가기에 묶는다)
     - `MatchRow.tsx`(`MatchRow`), `PlayerAvatar.tsx`(`PlayerAvatar`·`TeamAvatars`), `Delta.tsx`(`RatingDelta`·`RankChange`), `RankBadge.tsx`, `Badges.tsx`(`LivePill`·`HighlightBadge`), `StatusMessageChip.tsx`, `StateMessage.tsx`(빈 상태 `empty`·불러오기 실패 `error`(항상 "다시 시도") 문구, size `panel` 탭·화면 전체·`inline` 카드·목록·시트 안), `CountUpText.tsx`(카운트업 숫자의 자리 폭을 최종 내용으로 고정), `SheenOverlay.tsx`(한 번 지나가는 흰 빛, 부모 `relative`·`overflow-hidden` 필요), `Icons.tsx`, `cx.ts`

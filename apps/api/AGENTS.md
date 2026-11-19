@@ -95,7 +95,7 @@
   - 회원(`player`)에 상태메시지 `statusMessage`·`statusMessageBackgroundColor` 포함.
   - 세 분류 모두 줄마다 지금 연승 수 `winStreak`(`unrated` 포함). 평점 반영 완료 경기를 단식·복식 합쳐 마지막 경기부터 세고, 승패가 안 갈린 경기는 끊고 게스트 낀 경기는 건너뛴다(`packages/shared/src/streak.ts`).
   - achievements면 업적 점수 순위 `AchievementRankingResponse`: 활성 정회원 전원, 점수 내림차순 → 그 점수에 먼저 도달한 순 → 아이디 순, 0점은 맨 아래, 순위 변동 없음.
-- 세션 기록 목록 `GET /api/session-reports?limit=&playerId=`: 완료 경기가 있는 세션 최신순, limit 기본 20·최대 100, 홈이 사용
+- 세션 기록 목록 `GET /api/session-reports?limit=&playerId=`: 완료 경기가 있는 세션 최신순, limit 기본 20·최대 100, 지금 웹은 쓰지 않음
 - 기록 목록 `GET /api/records?limit=&cursor=&playerId=`
   - 지금 웹은 쓰지 않음. 응답 `RecordsResponse` `{ items, nextCursor }`.
   - 완료 경기가 있는 세션 줄 `kind: 'session'`과 세션 없는 완료 경기 줄 `kind: 'match'`를 세션 `date`·경기 `matchStartsAt` 내림차순, 같으면 id 내림차순으로 섞는다.
@@ -109,6 +109,7 @@
   - `sessions`: 세션 날짜 키가 그 달(KST)인 세션. 참여자·끝남 여부 `isEnded`(만료 시각 지남) 포함, 끝난 세션은 완료 경기가 있는 세션만, 날짜 키 오름차순·같은 날 정기 먼저.
   - `records`: 정렬 시각이 그 달인 기록 줄. 기록 목록 항목과 같은 형태·순서, 요청자 기준 `mine`.
 - 홈 소식 피드 `GET /api/news-feed?cursor=`
+  - 홈(진행 중 세션이 없을 때)의 "소식" 피드가 사용.
   - 응답 `NewsFeedResponse` `{ items, nextCursor }`(`packages/shared/src/newsFeed.ts`). 저장 없이 요청마다 계산한다.
   - `cursor`는 `nextCursor`(세션 `date` ms 정수 문자열)를 그대로 넘기며 형식 오류 400, 첫 페이지는 생략.
   - 페이지: 완료 경기가 있는 세션 중 남은(cursor보다 이른) 세션의 가장 최근 `date`부터 28일 전까지(포함)의 세션 전부. 더 오래된 세션이 남으면 `nextCursor`는 이 페이지 가장 오래된 세션 `date`, 없으면 null.
