@@ -3,6 +3,7 @@ import type {
   PlayerRatingChangeLog,
   PlayerRatingHistory,
 } from "@pkpkdupr/shared/player";
+import { isSessionOnToday, type MatchSessionKind } from "@pkpkdupr/shared/session";
 import type { EarnedAchievementInfo } from "@/lib/achievements";
 
 /** API JSON 응답 기준 경기. 날짜 필드는 ISO 문자열이다. */
@@ -24,6 +25,10 @@ export type MatchInfo = Omit<
     id: string;
     name?: string;
     date: string;
+    /** 세션 종류와 시작·종료 시각("HH:MM", KST). 경기 응답에는 항상 있다 */
+    kind: MatchSessionKind;
+    startTime: string | null;
+    endTime: string | null;
   };
   ratingChanges?: PlayerRatingChangeLog[];
   /** 기록·수정 응답에만 있다. 이 저장으로 참가자들이 새로 받은 업적 */
@@ -45,6 +50,17 @@ export const isMatchScheduled = (
 ): boolean =>
   match.status === "scheduled" ||
   new Date(match.matchStartsAt).getTime() > now.getTime();
+
+/** 서버 start 검증과 같은 기준(`isSessionOnToday`)으로 오늘 세션의 경기면 true. 전날 시작해 아직 끝나지 않은 자정 넘김 세션도 포함한다 */
+export const isMatchSessionToday = (
+  match: Pick<MatchInfo, "session">,
+  now: Date,
+): boolean =>
+  !!match.session &&
+  isSessionOnToday(
+    { ...match.session, date: new Date(match.session.date) },
+    now,
+  );
 
 /** 게스트가 낀 경기(ratingExcluded)의 평점 변화 자리에 보이는 한 줄 */
 export const RATING_EXCLUDED_NOTICE = "평점 미반영 · 게스트 참여 경기";

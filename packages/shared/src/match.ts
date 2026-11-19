@@ -123,6 +123,8 @@ export interface Session {
   name?: string;
   date: Date;
   location: string;
+  /** 경기 응답에는 항상 있다. 세션을 새로 만드는 입력에서는 생략할 수 있다 */
+  kind?: MatchSessionKind;
   /** 시작·종료 시각("HH:MM", KST). 시각 없는 세션은 생략하거나 null */
   startTime?: string | null;
   endTime?: string | null;
