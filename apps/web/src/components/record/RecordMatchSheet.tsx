@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { DEFAULT_MATCH_LOCATION } from "@pkpkdupr/shared/session";
 import BottomSheet from "@/components/BottomSheet";
 import type { MatchInfo } from "@/types/match";
@@ -74,6 +74,8 @@ export default function RecordMatchSheet({
   const [scoreLoadAttempt, setScoreLoadAttempt] = useState(0);
   // 닫히는 애니메이션 동안 마지막 요청의 화면을 유지한다
   const [displayedRequest, setDisplayedRequest] = useState(request);
+  // 닫기를 시작하면 true, 다시 열면 false. RecordMatchFlow가 닫히는 동안 단계를 바꾸지 않는 데 쓴다
+  const isClosingRef = useRef(false);
   const isOpen = useLayerDepth({
     isOpen: !!request,
     tabKey,
@@ -88,6 +90,7 @@ export default function RecordMatchSheet({
 
   useEffect(() => {
     if (!request) return;
+    isClosingRef.current = false;
     setDisplayedRequest(request);
     setSheetKey((key) => key + 1);
   }, [request]);
@@ -126,6 +129,7 @@ export default function RecordMatchSheet({
   }, [scoreMatchId, sheetKey, scoreLoadAttempt]);
 
   const close = useCallback(() => {
+    isClosingRef.current = true;
     const closeSheet = () => {
       if (!closeDepth(tabKey, DEPTH_ID)) onClose();
     };
@@ -185,6 +189,7 @@ export default function RecordMatchSheet({
         initial={initial}
         isOpen={isOpen}
         tabKey={tabKey}
+        isClosingRef={isClosingRef}
         onClose={close}
       />
     );
