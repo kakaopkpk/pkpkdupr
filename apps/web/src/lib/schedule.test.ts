@@ -87,11 +87,47 @@ describe("buildScheduleDayMarks", () => {
 
     const marks = buildScheduleDayMarks(data, ME);
 
-    expect(marks.get("2026-11-19")).toEqual({ kind: "session", participantCount: 2, isMine: true });
-    expect(marks.get("2026-11-23")).toEqual({ kind: "session", participantCount: 1, isMine: false });
+    expect(marks.get("2026-11-19")).toEqual({
+      kind: "session",
+      participantCount: 2,
+      isMine: true,
+      isTournament: false,
+    });
+    expect(marks.get("2026-11-23")).toEqual({
+      kind: "session",
+      participantCount: 1,
+      isMine: false,
+      isTournament: false,
+    });
     expect(marks.get("2026-11-14")).toEqual({ kind: "match", isMine: true });
     expect(marks.get("2026-11-07")).toEqual({ kind: "match", isMine: false });
     expect(marks.has("2026-11-20")).toBe(false);
+  });
+
+  it("대회 세션이 있는 날은 다른 세션과 같은 날이어도 대회 표시", () => {
+    const data: Pick<ScheduleMonthInfo, "sessions" | "records"> = {
+      sessions: [
+        makeSession({ id: "T1", dateKey: "2026-11-21", kind: "tournament", participants: [member(OTHER)] }),
+        makeSession({ id: "R1", dateKey: "2026-11-26", participants: [member(ME)] }),
+        makeSession({ id: "T2", dateKey: "2026-11-26", kind: "tournament", participants: [member(OTHER)] }),
+      ],
+      records: [],
+    };
+
+    const marks = buildScheduleDayMarks(data, ME);
+
+    expect(marks.get("2026-11-21")).toEqual({
+      kind: "session",
+      participantCount: 1,
+      isMine: false,
+      isTournament: true,
+    });
+    expect(marks.get("2026-11-26")).toEqual({
+      kind: "session",
+      participantCount: 2,
+      isMine: true,
+      isTournament: true,
+    });
   });
 });
 

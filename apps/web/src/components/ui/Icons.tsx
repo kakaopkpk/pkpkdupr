@@ -56,6 +56,35 @@ export const CrownIcon: React.FC<{ className?: string }> = ({ className }) => (
   </svg>
 );
 
+/** 트로피(대회 세션 칩) 선 아이콘. 몸통 → 손잡이·기둥·받침 */
+const TROPHY_ICON_PATHS = [
+  "M8 4h8v5a4 4 0 0 1-8 0z",
+  "M8 6H5.5a2.5 2.5 0 0 0 2.5 4M16 6h2.5a2.5 2.5 0 0 1-2.5 4M12 13v4M9 20h6",
+] as const;
+
+export const TrophyIcon: React.FC<{
+  size?: number;
+  strokeWidth?: number;
+  className?: string;
+}> = ({ size = 12, strokeWidth = 2.4, className }) => (
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 24 24"
+    aria-hidden="true"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth={strokeWidth}
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    className={className ?? "shrink-0"}
+  >
+    {TROPHY_ICON_PATHS.map((d) => (
+      <path key={d} d={d} />
+    ))}
+  </svg>
+);
+
 /** 불꽃(업적 연승 배지·연승 태그) 모양 */
 export const FLAME_ICON_PATH =
   "M12 3c1 3 4.5 4.5 4.5 9.5a4.5 4.5 0 0 1-9 0c0-2.2 1-3.5 2.2-4.5 0 2 .8 3 1.8 3 0-3-1-5.2.5-8z";
