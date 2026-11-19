@@ -10,6 +10,8 @@ import { formatRatingDelta } from "@/lib/format";
 import type { MatchSessionDetailInfo } from "@/lib/matchSessions";
 
 const MAX_UNIT_AVATARS = 4;
+/** 이 인원까지는 이름을 모두 나열하고, 넘으면 "대표 외 N명" */
+const MAX_LISTED_UNIT_NAMES = 2;
 const UNIT_AVATAR_SIZE = 24;
 const DEEP_RING_COLOR = "var(--color-pk-deep)";
 
@@ -20,7 +22,7 @@ const dividerClassName = "border-t border-white/[0.14]";
 export const formatPlacementUnitName = (
   players: TournamentPlacement["players"],
 ) => {
-  if (players.length <= 2) {
+  if (players.length <= MAX_LISTED_UNIT_NAMES) {
     return players.map((player) => player.username).join(" · ");
   }
   return `${players[0].username} 외 ${players.length - 1}명`;
@@ -31,6 +33,7 @@ const formatRecord = (record: { wins: number; losses: number }) =>
 
 /** 남색 바탕 위 평점 변화 색. 상승·하락은 연한 초록·코랄, 0은 흐린 흰색 */
 const getDeepDeltaClassName = (delta: number) => {
+  // formatRatingDelta와 같이 소수 셋째 자리에서 0이 되는 값은 보합으로 본다
   const rounded = Math.round(delta * 1000) / 1000;
   if (rounded > 0) return "text-pk-up-on-deep";
   if (rounded < 0) return "text-pk-down-on-deep";

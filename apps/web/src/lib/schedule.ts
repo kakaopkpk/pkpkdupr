@@ -108,7 +108,9 @@ export type ScheduleDayEntry =
   /** 끝난 대회 세션(순위 카드). 기록 줄이 있을 때만 */
   | {
       kind: "tournament-result";
+      /** 일정 응답의 세션(순위 placements 포함) */
       session: ScheduleSessionInfo;
+      /** 같은 세션의 기록 줄(내 기록 mine) */
       item: RecordSessionItemInfo;
     }
   /** 끝난 세션(세션 카드와 내 기록 띠) */
