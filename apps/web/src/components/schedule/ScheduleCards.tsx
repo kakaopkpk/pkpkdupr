@@ -3,7 +3,6 @@ import {
   formatSessionTimePlace,
   getSessionDDayLabel,
 } from "@/components/session/sessionTimeLabel";
-import { SESSION_DATE_OPTION_DAYS } from "@/components/session/SessionSchedulePicker";
 import {
   ParticipationControls,
   ParticipationError,
@@ -67,43 +66,20 @@ export const UpcomingSessionCard: React.FC<{
   </div>
 );
 
-const DAYS_PER_WEEK = 7;
-
-/** 빈 날에서 세션을 만들 수 있는지: 만들 수 있음 / 지난 날 / 세션 만들기 달력 범위(SESSION_DATE_OPTION_DAYS) 밖 */
-export type EmptyDayKind = "creatable" | "past" | "out-of-range";
-
-/** 세션도 기록도 없는 날. 만들 수 있는 날만 그 날짜로 세션 만들기를 연다 */
+/** 세션도 기록도 없는 날. 세션을 만들 수 있는 날(오늘·앞날)은 그 날짜로 세션 만들기를 열고, 지난 날은 문구만 둔다 */
 export const EmptyDayCard: React.FC<{
-  kind: EmptyDayKind;
+  canCreateSession: boolean;
   onCreateSession: () => void;
-}> = ({ kind, onCreateSession }) => (
+}> = ({ canCreateSession, onCreateSession }) => (
   <div className="flex flex-col items-center gap-1 rounded-pk-lg bg-white px-4 pt-5 pb-4 text-center">
     <b className="text-pk-15 font-bold text-pk-ink">
-      {kind === "past"
-        ? "세션도 경기 기록도 없어요"
-        : "아직 세션도 경기 기록도 없어요"}
+      {canCreateSession ? "아직 세션이 없어요" : "이날은 경기 기록이 없어요"}
     </b>
-    {kind === "out-of-range" ? (
-      <span className="text-pk-13 text-pk-sub">
-        세션은 오늘부터 {SESSION_DATE_OPTION_DAYS / DAYS_PER_WEEK}주 안의 날에
-        만들 수 있어요
-      </span>
-    ) : null}
-    {kind === "creatable" ? (
-      <>
-        <span className="text-pk-13 text-pk-sub">
-          세션을 만들면 다른 회원도 참여할 수 있어요
-        </span>
-        <PkButton
-          size="lg"
-          fullWidth
-          className="mt-3"
-          onClick={onCreateSession}
-        >
-          <PlusIcon />
-          세션 만들기
-        </PkButton>
-      </>
-    ) : null}
+    {canCreateSession && (
+      <PkButton size="lg" fullWidth className="mt-3" onClick={onCreateSession}>
+        <PlusIcon />
+        세션 만들기
+      </PkButton>
+    )}
   </div>
 );
