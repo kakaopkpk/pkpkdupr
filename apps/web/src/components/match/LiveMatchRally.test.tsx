@@ -42,6 +42,11 @@ const makeLiveMatch = (matchStartsAt: string): MatchInfo => ({
   updatedAt: matchStartsAt,
 });
 
+const makeAdminScheduledMatch = (matchStartsAt: string): MatchInfo => ({
+  ...makeLiveMatch(matchStartsAt),
+  source: "admin_created",
+});
+
 const render = (match: MatchInfo) =>
   renderToStaticMarkup(
     <LiveMatchDetail
@@ -76,10 +81,16 @@ describe("LiveMatchDetail 랠리 연출", () => {
     expect(markup).toContain('<span class="sr-only">vs</span>');
   });
 
-  it("시작 전 예정 경기에는 연출 없이 vs 글자만 보인다", () => {
-    const markup = render(makeLiveMatch(new Date(Date.now() + 60 * 60_000).toISOString()));
+  it("시작 전 관리자 예정 경기에는 연출 없이 vs 글자만 보인다", () => {
+    const markup = render(makeAdminScheduledMatch(new Date(Date.now() + 60 * 60_000).toISOString()));
     expect(markup).not.toContain("pk-rally");
     expect(markup).toMatch(/text-pk-muted">vs<\/span>/);
+  });
+
+  it("회원이 시작한 경기는 시작 시각이 지금보다 늦어도(단말 시계가 느림) 랠리를 그린다", () => {
+    const markup = render(makeLiveMatch(new Date(Date.now() + 30_000).toISOString()));
+    expect(markup).toContain("pk-rally-x");
+    expect(markup).toContain("진행 중 · 방금 시작");
   });
 
   it("대진 예정 경기는 vs 글자만 보이고 시각·시작한 사람이 없다", () => {
@@ -118,10 +129,24 @@ describe("홈 진행 중 경기 카드 랠리", () => {
     expect(markup).toContain('<span class="sr-only">vs</span>');
   });
 
-  it("시작 전 예정인 내 경기는 vs 글자만 보인다", () => {
-    const markup = renderMine(makeLiveMatch(new Date(Date.now() + 60 * 60_000).toISOString()));
+  it("시작 전 관리자 예정인 내 경기는 vs 글자만 보인다", () => {
+    const markup = renderMine(makeAdminScheduledMatch(new Date(Date.now() + 60 * 60_000).toISOString()));
     expect(markup).not.toContain("pk-rally");
     expect(markup).toMatch(/text-pk-muted">vs<\/span>/);
+  });
+
+  it("홈 시각(now)이 갱신되기 전에 막 시작한 내 경기도 랠리를 그린다", () => {
+    // 홈 keep-alive 탭의 분 단위 시계가 경기 시작 시각보다 늦게 남아 있는 경우
+    const startedAt = new Date();
+    const markup = renderToStaticMarkup(
+      <MyLiveMatchCard
+        match={makeLiveMatch(startedAt.toISOString())}
+        now={new Date(startedAt.getTime() - 40_000)}
+        onOpenDetail={() => {}}
+        onEnterScore={() => {}}
+      />,
+    );
+    expect(markup).toContain("pk-rally-x");
   });
 
   it("남의 경기 카드에는 랠리가 없다", () => {

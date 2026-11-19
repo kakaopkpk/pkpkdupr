@@ -43,13 +43,17 @@ export type MatchInfo = Omit<
 export const getMatchPlayerIds = (match: Pick<MatchInfo, "teams">): string[] =>
   match.teams.flatMap((team) => team.players.map((player) => player.id));
 
-/** 대진 예정 경기(status "scheduled")이거나 관리자 예정 경기처럼 시작 시각 전이면 예정으로 본다 */
+/**
+ * 대진 예정 경기(status "scheduled")이거나 시작 시각 전인 관리자 예정 경기면 예정으로 본다.
+ * 회원이 시작한 경기는 시작 시각이 서버의 지금이라, 단말 시계가 느리거나 now가 늦게 갱신돼도 예정으로 보지 않는다.
+ */
 export const isMatchScheduled = (
-  match: Pick<MatchInfo, "matchStartsAt" | "status">,
+  match: Pick<MatchInfo, "matchStartsAt" | "status" | "source">,
   now: Date,
 ): boolean =>
   match.status === "scheduled" ||
-  new Date(match.matchStartsAt).getTime() > now.getTime();
+  (match.source === "admin_created" &&
+    new Date(match.matchStartsAt).getTime() > now.getTime());
 
 /** 서버 start 검증과 같은 기준(`isSessionOnToday`)으로 오늘 세션의 경기면 true. 전날 시작해 아직 끝나지 않은 자정 넘김 세션도 포함한다 */
 export const isMatchSessionToday = (
