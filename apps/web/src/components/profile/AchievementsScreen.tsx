@@ -108,7 +108,7 @@ const AchievementRow: React.FC<{
         // 카드 안쪽 좌우 여백(px-4)까지 덮는다
         <span
           aria-hidden
-          className="pointer-events-none absolute inset-y-0 -inset-x-4 -z-10 animate-pk-flash rounded-pk-sm bg-pk-primary-soft motion-reduce:hidden"
+          className="pointer-events-none absolute inset-y-0 -inset-x-4 -z-10 animate-pk-flash rounded-pk-sm bg-pk-primary-soft"
           style={{ animationDelay: `${FLASH_DELAY_MS}ms` }}
           onAnimationEnd={onFlashEnd}
         />
@@ -155,7 +155,7 @@ const AchievementRow: React.FC<{
 
 /** 지정한 업적 줄 위쪽 끝을 둘 위치(스크롤 영역 높이 비율) */
 const FOCUS_ROW_VIEWPORT_RATIO = 0.4;
-/** 화면이 들어오는 움직임(320ms)이 거의 끝난 뒤 반짝인다 */
+/** 화면이 들어오는 움직임(PushScreen TRANSITION_MS 320ms)이 거의 끝난 뒤 반짝인다. 그 값을 바꾸면 함께 맞춘다 */
 const FLASH_DELAY_MS = 280;
 
 /** 화면 본문 안에 두어 스크롤 영역에서 지정한 업적 줄 위쪽 끝이 영역 높이의 40%에 오게 한 번 스크롤한다 */
@@ -190,7 +190,12 @@ const FocusRowScroller: React.FC<{
 
 /** 진행도를 불러오는 동안 보이는 자리. 맨 위 요약 카드와 분류 카드 모양 */
 const AchievementsSkeleton: React.FC = () => (
-  <div aria-busy="true" aria-label="불러오는 중" className="flex flex-col gap-2.5">
+  <div
+    role="status"
+    aria-busy="true"
+    aria-label="불러오는 중"
+    className="flex flex-col gap-2.5"
+  >
     <SkeletonBlock className="h-[104px] rounded-pk-lg" />
     <SkeletonBlock className="mt-3 h-[320px] rounded-pk-lg" />
   </div>
