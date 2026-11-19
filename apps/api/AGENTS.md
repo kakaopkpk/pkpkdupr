@@ -108,6 +108,19 @@
   - 응답 `ScheduleMonthResponse`, month 형식 오류 400.
   - `sessions`: 세션 날짜 키가 그 달(KST)인 세션. 참여자·끝남 여부 `isEnded`(만료 시각 지남) 포함, 끝난 세션은 완료 경기가 있는 세션만, 날짜 키 오름차순·같은 날 정기 먼저.
   - `records`: 정렬 시각이 그 달인 기록 줄. 기록 목록 항목과 같은 형태·순서, 요청자 기준 `mine`.
+- 홈 소식 피드 `GET /api/news-feed?cursor=`
+  - 응답 `NewsFeedResponse` `{ items, nextCursor }`(`packages/shared/src/newsFeed.ts`). 저장 없이 요청마다 계산한다.
+  - `cursor`는 `nextCursor`(세션 `date` ms 정수 문자열)를 그대로 넘기며 형식 오류 400, 첫 페이지는 생략.
+  - 페이지: 완료 경기가 있는 세션 중 남은(cursor보다 이른) 세션의 가장 최근 `date`부터 28일 전까지(포함)의 세션 전부. 더 오래된 세션이 남으면 `nextCursor`는 이 페이지 가장 오래된 세션 `date`, 없으면 null.
+  - 새 회원 항목 `kind: 'newMember'`: 지금 활성 정회원마다 하나, 시각은 `getPlayerJoinedAt`(승급 회원은 `promotedAt`).
+    - 시각이 이 페이지 가장 오래된 세션 `date` 이상, cursor 미만인 페이지에 나온다.
+    - 첫 페이지는 위 끝(cursor), 마지막 페이지는 아래 끝이 없다.
+  - `items`는 시각(세션 `date`·`joinedAt`) 내림차순, 같으면 세션 먼저, 세션끼리는 id 내림차순.
+  - 세션 항목의 `session`·`mine`(요청자 줄, 안 뛰었으면 null)·`topRiser`는 세션 리포트와 같은 값이다.
+  - 세션 항목 `lines`는 지금 활성 정회원만, 랭킹 → 연승 → 업적 순이다.
+  - 랭킹 줄: 세션 참가자 중 복식 `rankAfter` ≤ 3이고 `rankBefore`가 null이거나 더 큰 회원, 순위 오름차순. `rankChange`는 `rankBefore - rankAfter`(`rankBefore` null이면 null).
+  - 연승 줄: 그 세션에서 평점 반영 경기를 뛰었고, 세션 마지막 완료 경기까지 센 연승(랭킹 `winStreak` 규칙)이 `WIN_STREAK_DISPLAY_MIN` 이상인 회원. 연승 내림차순 → 아이디 순.
+  - 업적 줄: 세션 리포트 `achievements`와 같은 집합·순서, 개수 제한 없음.
 - 세션 리포트 `GET /api/session-reports/:sessionId`: 선수별 경기·승패와 복식 평점·순위 전후, 최대 상승자 `topRiser`
 - 세션 줄(`MatchSessionHistoryItem`)의 `startTime`은 정기 세션 "18:00", 시각 없는 회원 세션 null
 
