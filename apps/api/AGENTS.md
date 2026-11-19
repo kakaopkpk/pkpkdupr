@@ -112,7 +112,9 @@
   - 응답 `NewsFeedResponse` `{ items, nextCursor }`(`packages/shared/src/newsFeed.ts`). 저장 없이 요청마다 계산한다.
   - `cursor`는 `nextCursor`(세션 `date` ms 정수 문자열)를 그대로 넘기며 형식 오류 400, 첫 페이지는 생략.
   - 페이지: 완료 경기가 있는 세션 중 남은(cursor보다 이른) 세션의 가장 최근 `date`부터 28일 전까지(포함)의 세션 전부. 더 오래된 세션이 남으면 `nextCursor`는 이 페이지 가장 오래된 세션 `date`, 없으면 null.
-  - 새 회원 항목 `kind: 'newMember'`: 지금 활성 정회원마다 하나, 시각은 `getPlayerJoinedAt`(승급 회원은 `promotedAt`). [이 페이지 가장 오래된 세션 `date`, cursor) 구간 페이지에 나오고, 첫 페이지는 위 끝·마지막 페이지는 아래 끝이 없다.
+  - 새 회원 항목 `kind: 'newMember'`: 지금 활성 정회원마다 하나, 시각은 `getPlayerJoinedAt`(승급 회원은 `promotedAt`).
+    - 시각이 이 페이지 가장 오래된 세션 `date` 이상, cursor 미만인 페이지에 나온다.
+    - 첫 페이지는 위 끝(cursor), 마지막 페이지는 아래 끝이 없다.
   - `items`는 시각(세션 `date`·`joinedAt`) 내림차순, 같으면 세션 먼저, 세션끼리는 id 내림차순.
   - 세션 항목의 `session`·`mine`(요청자 줄, 안 뛰었으면 null)·`topRiser`는 세션 리포트와 같은 값이다.
   - 세션 항목 `lines`는 지금 활성 정회원만, 랭킹 → 연승 → 업적 순이다.

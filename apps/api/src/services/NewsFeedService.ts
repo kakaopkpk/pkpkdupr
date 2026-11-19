@@ -100,7 +100,7 @@ const buildSessionItem = ({
   const endAt = getSessionEndAt(sessionMatches);
   if (!players || !endAt) return null;
 
-  // 소식 줄은 지금 활성 정회원만 넣는다
+  // 소식 줄 대상: 세션 참가자 중 지금 활성 정회원(id → 회원)
   const lineMembers = new Map(
     players.flatMap((report) => {
       const player = context.playersById.get(report.player.id);
@@ -111,22 +111,21 @@ const buildSessionItem = ({
   );
 
   const rankLines: NewsFeedLine[] = players
-    .filter(
-      (report) =>
-        lineMembers.has(report.player.id) &&
-        report.rankAfter != null &&
-        report.rankAfter <= NEWS_FEED_RANK_LIMIT &&
-        (report.rankBefore == null || report.rankAfter < report.rankBefore),
-    )
-    .sort((left, right) => (left.rankAfter ?? 0) - (right.rankAfter ?? 0))
-    .map((report) => ({
+    .flatMap((report) => {
+      const { rankAfter, rankBefore } = report;
+      return lineMembers.has(report.player.id) &&
+        rankAfter != null &&
+        rankAfter <= NEWS_FEED_RANK_LIMIT &&
+        (rankBefore == null || rankAfter < rankBefore)
+        ? [{ player: report.player, rank: rankAfter, rankBefore }]
+        : [];
+    })
+    .sort((left, right) => left.rank - right.rank)
+    .map(({ player, rank, rankBefore }) => ({
       kind: "rank",
-      player: report.player,
-      rank: report.rankAfter ?? 0,
-      rankChange:
-        report.rankBefore == null
-          ? null
-          : report.rankBefore - (report.rankAfter ?? 0),
+      player,
+      rank,
+      rankChange: rankBefore == null ? null : rankBefore - rank,
     }));
 
   const ratedPlayerIds = new Set(
