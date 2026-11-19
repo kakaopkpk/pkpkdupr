@@ -120,6 +120,8 @@ const NAV_BAR_HEIGHT_PX = 66;
 const DOCK_BAR_HEIGHT_PX = 60;
 const DOCK_BAR_GAP_PX = 10;
 const NAV_BOTTOM_GAP_PX = 8;
+/** 하단 바 줄 좌우 여백(px-4)과 알약·+ 버튼 사이 간격(gap-2.5, 미니바 간격과 같음) */
+const DOCK_SIDE_PADDING_PX = 16;
 
 const HISTORY_DEPTH_STATE_KEY = "__pkpkduprTabDepth";
 const PULL_TO_REFRESH_SLOW_REQUEST_MS = 8_000;
@@ -205,6 +207,54 @@ const closedLayer = <T,>(): GlobalLayerState<T> => ({
   value: null,
   tabKey: "home",
 });
+
+/**
+ * 하단 바 주변 흰빛(index.css .app-bottom-tint). 알약과 미니바·알림 바 자리를 비우고 둘레만 칠한다.
+ * 구멍 위치는 하단 바 줄 배치(좌우 여백·높이·간격 상수)와 맞춘다. 미니바 구멍은 표시 조건을 따라 바로 생기고 없어진다.
+ */
+const BottomDockTint: React.FC<{ isDockBarVisible: boolean }> = ({
+  isDockBarVisible,
+}) => {
+  const navBottom = `calc(var(--safe-bottom) + ${NAV_BOTTOM_GAP_PX}px)`;
+  // 알약 윗변과 미니바 아랫변 사이 간격 가운데에서 두 구역을 나눈다
+  const zoneSplit = `calc(var(--safe-bottom) + ${
+    NAV_BOTTOM_GAP_PX + NAV_BAR_HEIGHT_PX + DOCK_BAR_GAP_PX / 2
+  }px)`;
+
+  return (
+    <div
+      aria-hidden="true"
+      className="app-bottom-tint app-keyboard-hidden pointer-events-none absolute inset-x-0 bottom-0 z-10 h-[calc(var(--app-bottom-dock-height)+3rem)]"
+    >
+      <div className="app-bottom-tint-zone top-0" style={{ bottom: zoneSplit }}>
+        {isDockBarVisible ? (
+          <span
+            className="app-bottom-tint-hole"
+            style={{
+              left: DOCK_SIDE_PADDING_PX,
+              right: DOCK_SIDE_PADDING_PX,
+              bottom: DOCK_BAR_GAP_PX / 2,
+              height: DOCK_BAR_HEIGHT_PX,
+            }}
+          />
+        ) : (
+          <span className="app-bottom-tint-hole size-0" />
+        )}
+      </div>
+      <div className="app-bottom-tint-zone bottom-0" style={{ height: zoneSplit }}>
+        <span
+          className="app-bottom-tint-hole"
+          style={{
+            left: DOCK_SIDE_PADDING_PX,
+            right: DOCK_SIDE_PADDING_PX + NAV_BAR_HEIGHT_PX + DOCK_BAR_GAP_PX,
+            bottom: navBottom,
+            height: NAV_BAR_HEIGHT_PX,
+          }}
+        />
+      </div>
+    </div>
+  );
+};
 
 const BottomNav: React.FC = () => {
   const { player } = useAuth();
@@ -1260,7 +1310,7 @@ const BottomNav: React.FC = () => {
                 })}
               </div>
 
-              {/* 바 윗변 위 3rem부터 바 뒤·아래까지 콘텐츠가 점점 세게 흐려지고 흰빛이 짙어지게 한다(층 5개·흰빛은 index.css) */}
+              {/* 바 윗변 위 3rem부터 바 뒤·아래까지 콘텐츠가 점점 세게 흐려지게 한다(층 5개는 index.css) */}
               <div
                 aria-hidden="true"
                 className="app-progressive-blur app-keyboard-hidden pointer-events-none absolute inset-x-0 bottom-0 z-10 h-[calc(var(--app-bottom-dock-height)+3rem)]"
@@ -1271,6 +1321,8 @@ const BottomNav: React.FC = () => {
                 <div />
                 <div />
               </div>
+
+              <BottomDockTint isDockBarVisible={isDockBarVisible} />
 
               {/* 바를 살짝 빗나간 터치(바 아래 여백·바 위 가장자리)가 뒤 콘텐츠로 가지 않게 막는다 */}
               <div

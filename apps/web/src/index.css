@@ -448,23 +448,40 @@
    * 내려간 곳, 곧 바 윗변 조금 아래에서 최대 세기가 되고 그 아래는 최대로 유지한다.
    * 램프를 5등분한 --pb-unit마다 블러가 두 배인 자식 5개를 내려 쌓는다. 1~4층은
    * 3칸 높이 띠의 위아래 1칸을 마스크로 흐려 이어 붙이고, 5층은 위 1칸만 흐린 채
-   * 바닥까지 덮는다. 블러 위에는 같은 램프로 짙어지는 흰빛(::after)을 얹는다.
+   * 바닥까지 덮는다. 블러 위 흰빛은 .app-bottom-tint가 맡는다.
    */
-  .app-progressive-blur {
+  .app-progressive-blur,
+  .app-bottom-tint {
     --pb-ramp: calc(3rem + 0.75rem);
     --pb-unit: calc(var(--pb-ramp) / 5);
-    --pb-tint: color-mix(in srgb, var(--color-white) 55%, transparent);
   }
 
-  .app-progressive-blur::after {
-    content: "";
-    position: absolute;
-    inset: 0;
-    background: linear-gradient(
+  /*
+   * 하단 바 주변 흰빛. 블러와 같은 램프로 짙어지되 유리 바(알약·미니바) 자리는 비워,
+   * 바 뒤 콘텐츠가 대비를 잃지 않고 유리에 비쳐 일렁이게 한다.
+   * 바 모양 구멍(.app-bottom-tint-hole)의 큰 바깥 그림자가 흰빛을 칠한다. 구멍끼리
+   * 그림자가 서로를 덮지 않게, 구역(.app-bottom-tint-zone)마다 구멍 하나를 두고 잘라 낸다.
+   */
+  .app-bottom-tint {
+    -webkit-mask-image: linear-gradient(
       to bottom,
       transparent,
-      var(--pb-tint) var(--pb-ramp)
+      #000 var(--pb-ramp)
     );
+    mask-image: linear-gradient(to bottom, transparent, #000 var(--pb-ramp));
+  }
+
+  .app-bottom-tint-zone {
+    position: absolute;
+    inset-inline: 0;
+    overflow: hidden;
+  }
+
+  .app-bottom-tint-hole {
+    position: absolute;
+    border-radius: 9999px;
+    box-shadow: 0 0 0 100vmax
+      color-mix(in srgb, var(--color-white) 55%, transparent);
   }
 
   .app-progressive-blur > * {
@@ -540,8 +557,8 @@
         color-mix(in srgb, var(--color-pk-ink) 10%, transparent),
       0 8px 24px color-mix(in srgb, var(--color-pk-ink) 12%, transparent),
       0 1px 3px color-mix(in srgb, var(--color-pk-ink) 8%, transparent);
-    -webkit-backdrop-filter: blur(12px) saturate(200%) brightness(1.06);
-    backdrop-filter: blur(12px) saturate(200%) brightness(1.06);
+    -webkit-backdrop-filter: blur(18px) saturate(200%) brightness(1.06);
+    backdrop-filter: blur(18px) saturate(200%) brightness(1.06);
   }
 
   .app-glass::before {
