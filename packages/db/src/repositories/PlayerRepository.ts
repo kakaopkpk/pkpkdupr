@@ -175,6 +175,7 @@ export class PlayerRepository {
     if (authUserId) {
       conditions.push(isNull(players.authUserId));
     }
+    const now = new Date();
     const updated = await this.db
       .update(players)
       .set({
@@ -182,7 +183,8 @@ export class PlayerRepository {
         gender,
         isFirstLogin: true,
         ...(authUserId ? { authUserId } : {}),
-        updatedAt: new Date(),
+        promotedAt: now,
+        updatedAt: now,
       })
       .where(and(...conditions))
       .returning({ id: players.id });
@@ -228,6 +230,7 @@ export class PlayerRepository {
       isGuest: player.isGuest === true,
       guestAddedByPlayerId: player.guestAddedByPlayerId ?? null,
       guestAddedSessionId: player.guestAddedSessionId ?? null,
+      promotedAt: player.promotedAt ?? null,
       affiliations,
       ...(statusMessage ? { statusMessage } : {}),
       ...(statusMessageBackgroundColor ? { statusMessageBackgroundColor } : {}),
