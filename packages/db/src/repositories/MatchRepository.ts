@@ -1772,7 +1772,7 @@ export class MatchRepository {
         args: [matchId],
       });
       const playerIds = [
-        ...new Set(
+        ...new Set<string>(
           participants.rows.map((row: Record<string, unknown>) =>
             String(row.player_id),
           ),
