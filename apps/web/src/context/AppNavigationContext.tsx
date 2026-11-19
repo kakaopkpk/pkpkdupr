@@ -32,7 +32,10 @@ export interface AppNavigationContextValue {
   openSettings: () => void;
   /** 업적 상세 바텀시트. 열린 화면·경기 기록 시트 위에 뜬다 */
   openAchievementDetail: (params: AchievementDetailRequest) => void;
-  /** 지금 탭 위에 세션 상세 화면을 쌓는다 */
+  /**
+   * 지금 탭 위에 세션 상세 화면을 쌓는다. 다가오는·진행 중·끝난 세션 모두 열리며,
+   * 끝난 세션만 세션 리포트를 함께 보인다(완료 경기가 없으면 리포트 없이)
+   */
   openSessionReport: (sessionId: string) => void;
   /** 경기 기록·수정·시작, 세션 생성, 참여 변경 뒤 호출 */
   notifyDataChanged: () => void;

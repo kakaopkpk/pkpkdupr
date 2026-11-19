@@ -51,7 +51,7 @@
       - `GET /api/schedule` 한 달 응답으로 `lib/schedule.ts`의 `buildScheduleDayMarks`·`getScheduleDayEntries`가 표시·카드를 정한다.
       - 카드는 세션 먼저, 그 뒤 세션 없는 경기 순서다.
         - 진행 중 세션 `LiveSessionCard`: 버튼은 진행 화면 보기 → 홈 탭뿐, 참여·참여 취소는 진행 화면에서.
-        - 끝나지 않은 세션 `UpcomingSessionCard`: 참여하기·참여 취소.
+        - 끝나지 않은 세션 `UpcomingSessionCard`(대회 포함): 참여하기·참여 취소, 카드 빈 곳을 누르면 `openSessionReport`.
         - 끝난 세션 `RecordSessionCard`: `openSessionReport`.
         - 끝난 대회 세션은 `RecordSessionCard` 대신 대회 순위 카드 `tournament/TournamentRankCard`: `openSessionReport`. 일정 항목은 세션과 기록 줄을 함께 담은 `tournament-result`다.
         - 세션 없는 경기 `RecordMatchCard`: 경기 상세.
@@ -69,6 +69,13 @@
       - 대진 예정 경기(`status: "scheduled"`)는 vs 글자만·시각 없이 보이고 점수 입력·수정·삭제·한 판 더가 없다. 세션 날짜가 오늘(KST)이면 하단 "경기 시작"(`startScheduledMatch`)만 있다.
     - `profile/`: 회원 프로필·경기 목록, 나 탭과 같이 쓰는 머리 `ProfileHeader`. 사진을 불러온 아바타를 누르면 그 자리에서 가운데 240px 원으로 커지는 확대 보기 `AvatarZoomViewer`(누르기·아래로 끌기·Escape·뒤로가기로 닫힘)
     - `records/`: 세션 상세 `SessionReportDrawer`와 그 위 평점 변화 전체 `SessionRatingChangesScreen`
+      - 다가오는·진행 중·끝난 세션 모두 연다. 세션 단건·경기는 항상, 끝난 세션(`getEmptySessionExpiresAt` ≤ 지금)만 세션 리포트를 더 읽고, 리포트 404면 리포트 조각 없이 그린다.
+      - 머리는 글자가 아니라 카드다(불러오는 중 스켈레톤도 카드 자리).
+      - 끝나기 전: 일정 탭 `UpcomingSessionCard`(참여자 시트·참여 버튼) → 대회면 `TournamentBracketSection`, 아니면 "경기" 섹션(빈 상태 "아직 경기가 없어요"). 참여자 목록 섹션은 없다.
+        - 진행 중(`useLiveSession().liveSession?.id`가 이 세션)이면 D-day 대신 LIVE다. 대회도 진행 중에 모양이 같다.
+        - 메타 줄은 홈 다음 세션 카드와 같은 `getSessionMetaLabel`(미래면 날짜까지).
+      - 끝난 대회: `TournamentRankCard`(누를 수 없음, `mine`은 리포트 `players`의 내 줄) → 세션 지배자·내 평점·내 새 업적·평점 변화 → `TournamentBracketSection`.
+      - 끝난 일반 세션: `RecordSessionCard`(`onPress` 없이 누를 수 없음, 메타 줄 앞에 날짜) → 세션 지배자·내 평점·내 새 업적·평점 변화 → "경기" 섹션. 리포트가 없으면 버튼 없는 블루 카드("종료").
     - `record/`: 경기 기록 시트. 완료 단계는 이 경기로 참가자 전원이 받은 업적을 띠(`match/MatchAchievementRow`)로 보이고, 그중 내 새 업적만 화면 전체 축하 연출 `AchievementCelebration`으로 띄우고 닫으면 확인 처리
     - `session/`: 세션 만들기(날짜 칩·시작·종료 시각 칩 `SessionSchedulePicker`)·참여자 시트 `ParticipantsSheet`(열면 참여자 보기, 오른쪽 위 "수정"으로 같은 시트에서 전체 회원 체크·게스트 추가 수정 모드, 완료·취소·뒤로가기는 보기로 돌아감)
     - `settings/`: 설정·비밀번호 변경·상태메시지 편집·프로필 사진 조정 `AvatarCropScreen`

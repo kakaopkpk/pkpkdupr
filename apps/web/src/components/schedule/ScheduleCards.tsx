@@ -10,13 +10,15 @@ import {
   type ParticipationAction,
   SessionBlueCard,
 } from "@/components/session/SessionBlueCard";
+import { LivePill } from "@/components/ui/Badges";
 import { PkButton } from "@/components/ui/Button";
 import { PlusIcon } from "@/components/ui/Icons";
 import type { MatchSessionDetailInfo } from "@/lib/matchSessions";
 
 /**
- * 아직 끝나지 않은 세션 블루 카드. 홈 다음 세션 카드와 같은 모양이고,
- * 날짜는 바깥 날짜 제목이 보이므로 메타 줄은 시간·장소만이다
+ * 아직 끝나지 않은 세션 블루 카드. 홈 다음 세션 카드와 같은 모양이고 참여하기·참여 취소가 있다.
+ * 일정 탭은 날짜를 바깥 날짜 제목이 보이므로 메타 줄 기본값은 시간·장소다.
+ * 진행 중(isLive)이면 남은 날 대신 LIVE를 붙인다. 세션 상세 머리도 이 카드다
  */
 export const UpcomingSessionCard: React.FC<{
   session: MatchSessionDetailInfo;
@@ -27,6 +29,10 @@ export const UpcomingSessionCard: React.FC<{
   onJoin: () => void;
   onLeave: () => void;
   onOpenParticipants: () => void;
+  isLive?: boolean;
+  meta?: string;
+  /** 카드 빈 곳을 누르면(버튼 제외). 세션 상세 열기 */
+  onPress?: () => void;
 }> = ({
   session,
   todayKey,
@@ -36,14 +42,19 @@ export const UpcomingSessionCard: React.FC<{
   onJoin,
   onLeave,
   onOpenParticipants,
+  isLive = false,
+  meta,
+  onPress,
 }) => (
   <div className="flex flex-col gap-2">
     <SessionBlueCard
       session={session}
-      dDayLabel={getSessionDDayLabel(session, todayKey)}
-      meta={formatSessionTimePlace(session)}
-      participantsLabel={`${session.participants.length}명 참여 예정`}
+      dDayLabel={isLive ? undefined : getSessionDDayLabel(session, todayKey)}
+      trailing={isLive ? <LivePill /> : undefined}
+      meta={meta ?? formatSessionTimePlace(session)}
+      participantsLabel={`${session.participants.length}명 참여${isLive ? "" : " 예정"}`}
       onOpenParticipants={onOpenParticipants}
+      onPress={onPress}
     >
       <ParticipationControls
         isJoined={isJoined}
@@ -55,7 +66,6 @@ export const UpcomingSessionCard: React.FC<{
     <ParticipationError error={error} />
   </div>
 );
-
 
 const DAYS_PER_WEEK = 7;
 
