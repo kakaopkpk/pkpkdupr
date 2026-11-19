@@ -195,7 +195,7 @@ const findUpcomingRegularSessions = async (
     plan.rows.match_sessions.map((session) => session.regular_date_key).filter(Boolean),
   );
   const { rows } = await execute(
-    `SELECT id, name, "date", location, created_at, updated_at, regular_date_key, start_time, end_time
+    `SELECT id, name, "date", location, created_at, updated_at, regular_date_key, auto_created, start_time, end_time
      FROM match_sessions
      WHERE regular_date_key >= $1
      ORDER BY regular_date_key${lock ? " FOR UPDATE" : ""}`,
@@ -212,6 +212,7 @@ const findUpcomingRegularSessions = async (
       updated_at: Number(row.updated_at),
       kind: "regular",
       regular_date_key: String(row.regular_date_key),
+      auto_created: row.auto_created === true,
       start_time: (row.start_time as string | null) ?? null,
       end_time: (row.end_time as string | null) ?? null,
     }));

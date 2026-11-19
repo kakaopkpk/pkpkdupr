@@ -552,6 +552,7 @@ describe("랭킹·세션 리포트 API", () => {
       matchCount: number,
     ): ManagedMatchSession => ({
       ...source,
+      autoCreated: source.kind === "regular",
       matchCount,
       createdAt: now,
       updatedAt: now,

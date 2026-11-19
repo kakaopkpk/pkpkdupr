@@ -5,29 +5,49 @@ import type { AdminPlayer } from "@pkpkdupr/shared/player";
 import type { AdminRegularSessionSkip } from "@pkpkdupr/shared/session";
 import { fetchAdminMatches } from "../../api/matches";
 import { fetchAdminPlayers } from "../../api/players";
-import { fetchAdminSessions, fetchRegularSessionSkips } from "../../api/sessions";
+import {
+  addRegularSessionSkip,
+  fetchAdminSessions,
+  fetchRegularSessionSkips,
+  revertRegularSessionSkip,
+} from "../../api/sessions";
 import { Button } from "../../components/ui/Button";
 import { Card } from "../../components/ui/Card";
 import { InlineError } from "../../components/ui/InlineError";
 import { ListWithPanel } from "../../components/ui/ListWithPanel";
 import { PageHeader } from "../../components/ui/PageHeader";
+import { useToast } from "../../components/ui/Toast";
 import { parseSessionsParams, sessionsPath } from "../../lib/adminRoutes";
+import { CalendarDayMenu, type CalendarDayMenuItem } from "./CalendarDayMenu";
 import { PastSessionPanel } from "./PastSessionPanel";
-import { RegularSessionSkipsCard } from "./RegularSessionSkipsCard";
+import {
+  formatSkipAddedMessage,
+  getDayState,
+  getRegularSkipDayAction,
+  SKIP_LABELS,
+} from "./regularSkipDay";
 import { SessionCalendar } from "./SessionCalendar";
 import {
+  formatShortDateWithWeekday,
   getSessionDateKey,
   getTodayKey,
   isPastSession,
   shiftMonth,
   toMonthKey,
 } from "./sessionDates";
-import { getLoadErrorMessage } from "./sessionErrors";
+import { getLoadErrorMessage, reportMutationError } from "./sessionErrors";
 import { SessionFormDialog, type SessionFormDialogMode } from "./SessionFormDialog";
+import { SkipAutoRegularDialog } from "./SkipAutoRegularDialog";
 import { UpcomingSessionPanel } from "./UpcomingSessionPanel";
+
+interface DayMenuState {
+  dateKey: string;
+  position: { x: number; y: number };
+}
 
 const SessionsPage: React.FC = () => {
   const navigate = useNavigate();
+  const { showToast } = useToast();
   const [searchParams] = useSearchParams();
   const params = parseSessionsParams(searchParams);
   const todayKey = getTodayKey();
@@ -38,6 +58,8 @@ const SessionsPage: React.FC = () => {
   const [skipsError, setSkipsError] = useState<string | null>(null);
   const [players, setPlayers] = useState<AdminPlayer[]>([]);
   const [formMode, setFormMode] = useState<SessionFormDialogMode | null>(null);
+  const [dayMenu, setDayMenu] = useState<DayMenuState | null>(null);
+  const [skipTarget, setSkipTarget] = useState<ManagedMatchSession | null>(null);
   const matchesRef = useRef<Promise<Match[]> | null>(null);
 
   const reloadSessions = useCallback(async () => {
@@ -54,7 +76,7 @@ const SessionsPage: React.FC = () => {
       setSkips(await fetchRegularSessionSkips());
       setSkipsError(null);
     } catch (err) {
-      setSkipsError(getLoadErrorMessage(err, "쉬는 날을 불러오지 못했어요."));
+      setSkipsError(getLoadErrorMessage(err, "정기 쉬는 날을 불러오지 못했어요."));
     }
   }, []);
 
@@ -108,6 +130,73 @@ const SessionsPage: React.FC = () => {
     void reloadSessions();
   };
 
+  const handleAutoRegularSkipped = () => {
+    if (skipTarget && skipTarget.id === selectedSession?.id) {
+      handleDeleted();
+      return;
+    }
+    handleSkipsChanged();
+  };
+
+  // 메뉴에서 바로 실행하는 작업은 입력 칸이 없어 4xx 문구도 토스트로 알린다
+  const markSkip = async (dateKey: string) => {
+    try {
+      await addRegularSessionSkip(dateKey);
+      showToast(formatSkipAddedMessage(dateKey));
+    } catch (err) {
+      reportMutationError(err, showToast, showToast);
+    }
+    handleSkipsChanged();
+  };
+
+  const revertSkip = async (dateKey: string) => {
+    try {
+      const { session } = await revertRegularSessionSkip(dateKey);
+      const label = formatShortDateWithWeekday(dateKey);
+      showToast(
+        session
+          ? `${label}요일 정기 쉬는 날을 해제하고 정기 세션을 다시 만들었어요`
+          : `${label}요일 정기 쉬는 날을 해제했어요`,
+      );
+    } catch (err) {
+      reportMutationError(err, showToast, showToast);
+    }
+    handleSkipsChanged();
+  };
+
+  const getDayMenuProps = () => {
+    if (!dayMenu || !sessions) return null;
+    const { dateKey } = dayMenu;
+    const { daySessions, skipReason } = getDayState(sessions, skips, dateKey);
+    const action = getRegularSkipDayAction({ dateKey, todayKey, daySessions, skipReason });
+
+    const items: CalendarDayMenuItem[] = [
+      {
+        label: "세션 만들기…",
+        onSelect: () => setFormMode({ kind: "create", dateKey }),
+      },
+    ];
+    if (action?.kind === "skipAutoRegular") {
+      items.push({
+        label: "정기 쉬는 날로 지정…",
+        disabled: action.session.matchCount > 0,
+        onSelect: () => setSkipTarget(action.session),
+      });
+    } else if (action?.kind === "revert") {
+      items.push({ label: "정기 쉬는 날 해제", onSelect: () => void revertSkip(dateKey) });
+    } else if (action?.kind === "skipEmpty") {
+      items.push({ label: "정기 쉬는 날로 지정", onSelect: () => void markSkip(dateKey) });
+    }
+
+    // 머리줄: "11/23 월요일 · 정기 쉬는 날"처럼 날짜와 그날 상태 하나
+    const status = skipReason ? SKIP_LABELS[skipReason] : daySessions[0]?.name;
+    const heading = [`${formatShortDateWithWeekday(dateKey)}요일`, status]
+      .filter(Boolean)
+      .join(" · ");
+    return { heading, items, position: dayMenu.position };
+  };
+  const dayMenuProps = getDayMenuProps();
+
   const closePanel = () => go(undefined, monthKey);
 
   const panel = !selectedSession ? null : isPastSession(selectedSession, todayKey) ? (
@@ -152,11 +241,13 @@ const SessionsPage: React.FC = () => {
                 sessions={sessions}
                 skips={skips}
                 selectedSessionId={selectedSession?.id}
+                menuDateKey={dayMenu?.dateKey ?? null}
                 onChangeMonth={(delta) =>
                   go(selectedSession?.id, shiftMonth(monthKey, delta))
                 }
                 onSelectSession={(session) => go(session.id, monthKey)}
                 onCreateOnDate={(dateKey) => setFormMode({ kind: "create", dateKey })}
+                onOpenDayMenu={(dateKey, position) => setDayMenu({ dateKey, position })}
               />
             ) : (
               <Card className="text-pk-15 text-pk-sub">
@@ -175,13 +266,16 @@ const SessionsPage: React.FC = () => {
               </Card>
             )}
 
-            <RegularSessionSkipsCard
-              skips={skips}
-              loadError={skipsError}
-              todayKey={todayKey}
-              sessions={sessions ?? []}
-              onChanged={handleSkipsChanged}
-            />
+            {skipsError && (
+              <InlineError
+                message={skipsError}
+                action={
+                  <Button size="sm" variant="soft" onClick={() => void reloadSkips()}>
+                    다시 시도
+                  </Button>
+                }
+              />
+            )}
           </div>
         }
         panel={panel}
@@ -190,8 +284,28 @@ const SessionsPage: React.FC = () => {
       <SessionFormDialog
         mode={formMode}
         todayKey={todayKey}
+        sessions={sessions ?? []}
+        skips={skips}
         onClose={() => setFormMode(null)}
         onSaved={handleSaved}
+        onSkipAdded={handleSkipsChanged}
+      />
+
+      {dayMenuProps && (
+        <CalendarDayMenu
+          key={dayMenu?.dateKey}
+          heading={dayMenuProps.heading}
+          position={dayMenuProps.position}
+          items={dayMenuProps.items}
+          onClose={() => setDayMenu(null)}
+        />
+      )}
+
+      <SkipAutoRegularDialog
+        session={skipTarget}
+        participantCount={skipTarget?.participantIds.length ?? 0}
+        onClose={() => setSkipTarget(null)}
+        onDone={handleAutoRegularSkipped}
       />
     </>
   );

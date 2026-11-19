@@ -62,6 +62,7 @@ const makeSession = (
   participantIds: [],
   matchCount: 0,
   kind: "custom",
+  autoCreated: false,
   startTime: "19:00",
   endTime: "21:00",
   createdAt: thursdayMorning,

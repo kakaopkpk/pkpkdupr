@@ -273,7 +273,9 @@ export interface ExpiredCleanupResult {
 }
 
 export const REGULAR_SESSION_EXISTS_MESSAGE = "그 날짜에는 이미 정기 세션이 있어요.";
-const REGULAR_SESSION_SKIPPED_MESSAGE = "쉬는 날에는 정기 세션을 둘 수 없어요.";
+const REGULAR_SESSION_HOLIDAY_MESSAGE = "공휴일에는 정기 세션을 둘 수 없어요.";
+const AUTO_REGULAR_SESSION_KIND_LOCKED_MESSAGE =
+  "자동으로 만든 정기 세션은 종류를 바꿀 수 없어요.";
 
 const toDateOrNull = (value: Date | string | number | null | undefined) =>
   value == null ? null : new Date(value);
@@ -522,6 +524,7 @@ export class MatchRepository {
       ),
       matchCount: sessionMatches.length,
       kind,
+      autoCreated: kind === "regular" && stored.autoCreated === true,
       // 정기 세션 시각은 저장하지 않고 정해진 18:00~22:00으로 채운다
       startTime:
         kind === "regular" ? REGULAR_SESSION_START_TIME : stored.startTime,
@@ -561,7 +564,8 @@ export class MatchRepository {
   /**
    * 그 KST 날짜의 정기 세션을 찾거나 만든다.
    * 날짜당 하나는 regular_date_key 유니크 제약이 보장하므로, 동시 호출은 ON CONFLICT DO NOTHING 후 재조회로 같은 행을 받는다.
-   * 세션이 없고 그 날짜가 regular_session_skips(공휴일·취소)에 있으면 만들지 않고 null을 돌려준다.
+   * 세션이 없고 그 날짜가 regular_session_skips(공휴일·정기 쉬는 날)에 있으면 만들지 않고 null을 돌려준다.
+   * 새로 만든 세션은 자동 정기 세션(auto_created)이다. 그날 직접 만든 정기 세션이 있으면 그 세션을 돌려준다.
    */
   async findOrCreateRegularSession(
     dateKey: string,
@@ -601,6 +605,7 @@ export class MatchRepository {
           location: REGULAR_SESSION_LOCATION,
           kind: "regular",
           regularDateKey: dateKey,
+          autoCreated: true,
           createdAt: now,
           updatedAt: now,
         })
@@ -2198,7 +2203,8 @@ export class MatchRepository {
 
   /**
    * 경기가 없는 세션을 참여자와 함께 지운다. 없으면 false.
-   * cancelRegularFromDateKey를 주면 그 날짜 이후(포함)의 정기 세션을 지울 때 그 날짜를 취소(canceled)로 남겨 다시 만들지 않는다.
+   * cancelRegularFromDateKey를 주면 그 날짜 이후(포함)의 자동 정기 세션을 지울 때 그 날짜를 정기 쉬는 날(canceled)로 남겨 다시 만들지 않는다.
+   * 직접 만든 정기 세션은 지워도 쉬는 날을 남기지 않는다.
    */
   async deleteSession(
     sessionId: string,
@@ -2212,7 +2218,7 @@ export class MatchRepository {
     let committed = false;
     try {
       const session = await transaction.execute({
-        sql: "SELECT id, regular_date_key FROM match_sessions WHERE id = $1",
+        sql: "SELECT id, regular_date_key, auto_created FROM match_sessions WHERE id = $1",
         args: [sessionId],
       });
       if (!session.rows.length) {
@@ -2241,6 +2247,7 @@ export class MatchRepository {
       // YYYY-MM-DD 날짜 키는 문자열 비교가 날짜 순서와 같다. 이미 공휴일로 있으면 그대로 둔다
       if (
         typeof regularDateKey === "string" &&
+        session.rows[0]?.auto_created === true &&
         options.cancelRegularFromDateKey &&
         regularDateKey >= options.cancelRegularFromDateKey
       ) {
@@ -2263,11 +2270,20 @@ export class MatchRepository {
     }
   }
 
-  private async isRegularSessionSkipped(dateKey: string): Promise<boolean> {
+  /** 그 날짜가 쉬는 날인지. reason을 주면 그 사유인 쉬는 날만 본다 */
+  private async isRegularSessionSkipped(
+    dateKey: string,
+    reason?: RegularSessionSkipReason,
+  ): Promise<boolean> {
     const row = await this.db
       .select({ dateKey: regularSessionSkips.dateKey })
       .from(regularSessionSkips)
-      .where(eq(regularSessionSkips.dateKey, dateKey))
+      .where(
+        and(
+          eq(regularSessionSkips.dateKey, dateKey),
+          reason ? eq(regularSessionSkips.reason, reason) : undefined,
+        ),
+      )
       .limit(1)
       .then(firstRow);
     return row !== undefined;
@@ -2369,8 +2385,9 @@ export class MatchRepository {
   }
 
   /**
-   * 관리자가 고른 이름·장소로 그 KST 날짜의 정기 세션을 만든다(시각은 18:00~22:00 고정).
-   * 이미 그날 정기 세션이 있거나 쉬는 날이면 RegularSessionConflictError. (name, date) 유니크 위반은 그대로 던진다
+   * 관리자가 고른 이름·장소로 그 KST 날짜의 직접 만든 정기 세션을 만든다(시각은 18:00~22:00 고정).
+   * 정기 쉬는 날에도 만들고 쉬는 날 기록은 남긴다(지워도 자동 생성이 다시 만들지 않게).
+   * 이미 그날 정기 세션이 있거나 공휴일이면 RegularSessionConflictError. (name, date) 유니크 위반은 그대로 던진다
    */
   async createRegularSession(
     dateKey: string,
@@ -2379,8 +2396,8 @@ export class MatchRepository {
     if (!REGULAR_DATE_KEY_PATTERN.test(dateKey)) {
       throw new Error("유효한 정기 세션 날짜가 필요합니다.");
     }
-    if (await this.isRegularSessionSkipped(dateKey)) {
-      throw new RegularSessionConflictError(REGULAR_SESSION_SKIPPED_MESSAGE);
+    if (await this.isRegularSessionSkipped(dateKey, "holiday")) {
+      throw new RegularSessionConflictError(REGULAR_SESSION_HOLIDAY_MESSAGE);
     }
     const existing = await this.db
       .select({ id: matchSessions.id })
@@ -2401,6 +2418,7 @@ export class MatchRepository {
       location: input.location,
       kind: "regular",
       regularDateKey: dateKey,
+      autoCreated: false,
       createdAt: now,
       updatedAt: now,
     });
@@ -2413,8 +2431,9 @@ export class MatchRepository {
 
   /**
    * 세션 종류를 바꾸고 data의 필드도 같이 고친다(트랜잭션 하나). 없으면 false.
-   * - 정기로 바꾸면 그 날짜의 정기 세션(18:00 KST, 시각은 정기 시각)이 된다. 이미 그날 정기 세션이 있거나 쉬는 날이면 RegularSessionConflictError
-   * - 정기에서 바꾸면 그날 00:00 KST·18:00~22:00 세션이 되고, 날짜가 cancelRegularFromDateKey 이후(포함)면 그 날짜를 취소로 남겨 다시 만들지 않는다
+   * - 정기로 바꾸면 그 날짜의 직접 만든 정기 세션(18:00 KST, 시각은 정기 시각)이 된다. 이미 그날 정기 세션이 있거나 공휴일이면 RegularSessionConflictError
+   * - 직접 만든 정기에서 바꾸면 그날 00:00 KST·18:00~22:00 세션이 되고 정기 쉬는 날은 남기지 않는다
+   * - 자동 정기 세션은 다른 종류로 바꿀 수 없다(RegularSessionConflictError)
    * - data는 종류를 바꾼 뒤 적용한다
    * (name, date) 유니크 위반은 그대로 던진다
    */
@@ -2422,7 +2441,6 @@ export class MatchRepository {
     sessionId: string,
     kind: MatchSessionKind,
     data: UpdateSessionInput = {},
-    options: { cancelRegularFromDateKey?: string } = {},
   ): Promise<boolean> {
     if (!isEntityId(sessionId, "session")) {
       throw new Error("유효한 세션 ID가 필요합니다.");
@@ -2432,7 +2450,7 @@ export class MatchRepository {
     let committed = false;
     try {
       const session = await transaction.execute({
-        sql: `SELECT kind, regular_date_key, "date" FROM match_sessions WHERE id = $1 FOR UPDATE`,
+        sql: `SELECT kind, regular_date_key, auto_created, "date" FROM match_sessions WHERE id = $1 FOR UPDATE`,
         args: [sessionId],
       });
       const row = session.rows[0];
@@ -2454,13 +2472,17 @@ export class MatchRepository {
 
       if (currentKind === kind) {
         // 종류는 그대로 두고 data만 적용한다
+      } else if (currentKind === "regular" && row.auto_created === true) {
+        throw new RegularSessionConflictError(
+          AUTO_REGULAR_SESSION_KIND_LOCKED_MESSAGE,
+        );
       } else if (kind === "regular") {
-        const skip = await transaction.execute({
-          sql: "SELECT 1 FROM regular_session_skips WHERE date_key = $1",
+        const holiday = await transaction.execute({
+          sql: "SELECT 1 FROM regular_session_skips WHERE date_key = $1 AND reason = 'holiday'",
           args: [dateKey],
         });
-        if (skip.rows.length) {
-          throw new RegularSessionConflictError(REGULAR_SESSION_SKIPPED_MESSAGE);
+        if (holiday.rows.length) {
+          throw new RegularSessionConflictError(REGULAR_SESSION_HOLIDAY_MESSAGE);
         }
         const existing = await transaction.execute({
           sql: "SELECT 1 FROM match_sessions WHERE regular_date_key = $1",
@@ -2472,8 +2494,8 @@ export class MatchRepository {
         await transaction.execute({
           sql: `
             UPDATE match_sessions
-            SET kind = 'regular', regular_date_key = $2, "date" = $3,
-                start_time = NULL, end_time = NULL, updated_at = $4
+            SET kind = 'regular', regular_date_key = $2, auto_created = false,
+                "date" = $3, start_time = NULL, end_time = NULL, updated_at = $4
             WHERE id = $1
           `,
           args: [
@@ -2503,20 +2525,6 @@ export class MatchRepository {
             updatedAt,
           ],
         });
-        // YYYY-MM-DD 날짜 키는 문자열 비교가 날짜 순서와 같다. 이미 공휴일로 있으면 그대로 둔다
-        if (
-          options.cancelRegularFromDateKey &&
-          dateKey >= options.cancelRegularFromDateKey
-        ) {
-          await transaction.execute({
-            sql: `
-              INSERT INTO regular_session_skips (date_key, reason, created_at)
-              VALUES ($1, 'canceled', $2)
-              ON CONFLICT (date_key) DO NOTHING
-            `,
-            args: [dateKey, updatedAt],
-          });
-        }
       } else {
         await transaction.execute({
           sql: "UPDATE match_sessions SET kind = $2, updated_at = $3 WHERE id = $1",
@@ -2746,8 +2754,9 @@ export class MatchRepository {
   }
 
   /**
-   * 그 날짜를 취소(canceled) 쉬는 날로 남기고, 그날 정기 세션이 있으면 참여자와 함께 지운다(트랜잭션 하나).
-   * 이미 쉬는 날이면 RegularSessionSkipExistsError, 정기 세션에 경기가 있으면 SessionHasMatchesError를 던지고 아무것도 남기지 않는다.
+   * 그 날짜를 정기 쉬는 날(canceled)로 남기고, 그날 자동 정기 세션이 있으면 참여자와 함께 지운다(트랜잭션 하나).
+   * 직접 만든 정기 세션은 그대로 둔다.
+   * 이미 쉬는 날이면 RegularSessionSkipExistsError, 자동 정기 세션에 경기가 있으면 SessionHasMatchesError를 던지고 아무것도 남기지 않는다.
    * 지운 정기 세션 id를 돌려준다(없었으면 null).
    */
   async addRegularSessionCancellation(
@@ -2774,7 +2783,7 @@ export class MatchRepository {
       }
 
       const session = await transaction.execute({
-        sql: "SELECT id FROM match_sessions WHERE regular_date_key = $1",
+        sql: "SELECT id FROM match_sessions WHERE regular_date_key = $1 AND auto_created",
         args: [dateKey],
       });
       const sessionId = session.rows[0]?.id;
@@ -2805,7 +2814,7 @@ export class MatchRepository {
     }
   }
 
-  /** 취소(canceled) 쉬는 날을 지운다. 공휴일은 지우지 않는다. 지웠으면 true */
+  /** 정기 쉬는 날(canceled)을 지운다. 공휴일은 지우지 않는다. 지웠으면 true */
   async deleteRegularSessionCancellation(dateKey: string): Promise<boolean> {
     const result: RawQueryResult = await this.client.execute({
       sql: `

@@ -341,6 +341,7 @@ export const buildImportPlan = (
         ...pick(session, ["id", "name", "date", "location", "created_at", "updated_at"]),
         kind: "custom",
         regular_date_key: null,
+        auto_created: false,
         start_time: null,
         end_time: null,
       })),
@@ -353,6 +354,8 @@ export const buildImportPlan = (
       updated_at: session.updatedAt,
       kind: "regular",
       regular_date_key: dateKey,
+      // 이관한 정기 세션은 예약 작업이 만든 회차와 같이 자동 정기 세션으로 둔다
+      auto_created: true,
       start_time: null,
       end_time: null,
     })),

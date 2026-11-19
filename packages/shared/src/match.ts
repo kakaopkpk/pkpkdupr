@@ -139,6 +139,11 @@ export interface ManagedMatchSession {
   matchCount: number;
   /** 정기·회원·대회. 정기 세션만 날짜당 하나다 */
   kind: MatchSessionKind;
+  /**
+   * 서버가 자동으로 만든 정기 세션(매일 예약 작업·다가오는 세션 조회·경기 기록·정기 쉬는 날 해제)이면 true.
+   * 관리자가 직접 만든 정기 세션과 다른 종류는 false다. 자동 정기 세션은 종류를 바꿀 수 없고, 지우면 그 날짜가 정기 쉬는 날이 된다
+   */
+  autoCreated: boolean;
   /** 시작·종료 시각("HH:MM", KST). 정기 세션은 18:00~22:00, 시각 없이 만든 세션은 null */
   startTime: string | null;
   endTime: string | null;

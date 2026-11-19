@@ -136,6 +136,7 @@ const buildManagedSession = (
   participantIds: [],
   matchCount: 0,
   kind: "regular",
+  autoCreated: true,
   startTime: null,
   endTime: null,
   createdAt: now,
