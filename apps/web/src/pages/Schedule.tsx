@@ -146,6 +146,10 @@ const Schedule: React.FC = () => {
   );
   const neededMonthKeysRef = useRef(neededMonthKeys);
   neededMonthKeysRef.current = neededMonthKeys;
+  const monthKeyRef = useRef(monthKey);
+  monthKeyRef.current = monthKey;
+  const selectedMonthKeyRef = useRef(selectedMonthKey);
+  selectedMonthKeyRef.current = selectedMonthKey;
 
   useEffect(() => {
     const stamp = `${dataVersion}:${todayKey}`;
@@ -159,23 +163,26 @@ const Schedule: React.FC = () => {
   useEffect(
     () =>
       registerPullToRefresh("schedule", () =>
+        // 보는 달과 고른 날의 달만 기다리고, 옆 달은 뒤에서 받는다
         Promise.all(
-          neededMonthKeysRef.current.map((month) => loadMonth(month, true)),
+          neededMonthKeysRef.current.map((month) =>
+            loadMonth(
+              month,
+              month === monthKeyRef.current || month === selectedMonthKeyRef.current,
+            ),
+          ),
         ).then(() => undefined),
       ),
     [loadMonth, registerPullToRefresh],
   );
 
   /** 그 날을 고르고, 다른 달이면 그 달을 보인다 */
-  const selectDate = (dateKey: string) => {
+  const selectDate = useCallback((dateKey: string) => {
     setSelectedDateKey(dateKey);
     setMonthKey(toMonthKey(dateKey));
-  };
+  }, []);
 
-  const goToday = useCallback(() => {
-    setMonthKey(toMonthKey(todayKey));
-    setSelectedDateKey(todayKey);
-  }, [todayKey]);
+  const goToday = useCallback(() => selectDate(todayKey), [selectDate, todayKey]);
 
   // 일정 탭을 다시 누르면 이번 달·오늘로 되돌린다
   useEffect(
@@ -335,8 +342,7 @@ const Schedule: React.FC = () => {
           selectedDateKey={selectedDateKey}
           marks={marks}
           onSelectDate={selectDate}
-          onPrevMonth={() => setMonthKey(addScheduleMonths(monthKey, -1))}
-          onNextMonth={() => setMonthKey(addScheduleMonths(monthKey, 1))}
+          onChangeMonth={(step) => setMonthKey(addScheduleMonths(monthKey, step))}
           onGoToday={goToday}
         />
         <Section title={formatKstLongDate(kstDateKeyToDate(selectedDateKey))}>

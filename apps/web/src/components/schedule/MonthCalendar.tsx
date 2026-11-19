@@ -1,5 +1,4 @@
 import React, { useRef, useState } from "react";
-import { prefersReducedMotion } from "@/hooks/useSheetDrag";
 import { kstDateKeyToDate, WEEKDAY_LABELS } from "@pkpkdupr/shared/session";
 import { addScheduleMonths, parseScheduleMonth } from "@pkpkdupr/shared/schedule";
 import { ChevronRightIcon } from "@/components/ui/Icons";
@@ -158,8 +157,8 @@ const MonthCalendar: React.FC<{
   marks: ReadonlyMap<string, ScheduleDayMark>;
   /** 날짜를 고른다. 다른 달 날짜면 부모가 그 달로 옮긴다 */
   onSelectDate: (dateKey: string) => void;
-  onPrevMonth: () => void;
-  onNextMonth: () => void;
+  /** 보는 달을 step(1 다음 달, -1 이전 달)만큼 옮긴다 */
+  onChangeMonth: (step: 1 | -1) => void;
   onGoToday: () => void;
 }> = ({
   monthKey,
@@ -167,40 +166,25 @@ const MonthCalendar: React.FC<{
   selectedDateKey,
   marks,
   onSelectDate,
-  onPrevMonth,
-  onNextMonth,
+  onChangeMonth,
   onGoToday,
 }) => {
   const areaRef = useRef<HTMLElement>(null);
   const trackRef = useRef<HTMLDivElement>(null);
-  // 슬라이드가 멈출 때까지 머리 제목은 옮기기 전 달에 둔다. null이면 보는 달을 따른다
-  const [heldTitleMonthKey, setHeldTitleMonthKey] = useState<string | null>(null);
-  const titleMonthKey = heldTitleMonthKey ?? monthKey;
-
-  const holdTitle = () => {
-    if (!prefersReducedMotion()) {
-      setHeldTitleMonthKey((held) => held ?? monthKey);
-    }
-  };
-  const changeMonth = (step: 1 | -1) => {
-    holdTitle();
-    if (step === 1) onNextMonth();
-    else onPrevMonth();
-  };
-  const slideIn = useMonthSwipe(areaRef, trackRef, changeMonth, () =>
-    setHeldTitleMonthKey(null),
-  );
+  const { slideIn, isSliding } = useMonthSwipe(areaRef, trackRef, onChangeMonth);
+  // 머리 제목은 슬라이드가 멈출 때까지 옮기기 전 달에 둔다
+  const [titleMonthKey, setTitleMonthKey] = useState(monthKey);
+  if (!isSliding && titleMonthKey !== monthKey) setTitleMonthKey(monthKey);
 
   const moveMonth = (step: 1 | -1) => {
     slideIn(step);
-    changeMonth(step);
+    onChangeMonth(step);
   };
 
   const pressDate = (dateKey: string) => {
     const dateMonthKey = toMonthKey(dateKey);
     if (dateMonthKey !== monthKey) {
       slideIn(dateMonthKey > monthKey ? 1 : -1);
-      holdTitle();
     }
     onSelectDate(dateKey);
   };

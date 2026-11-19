@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { prefersReducedMotion } from "@/hooks/useSheetDrag";
 import { getMonthSwipeStep } from "./monthSwipe";
 
@@ -19,6 +19,8 @@ interface SwipeState {
   startY: number;
   /** 끌기를 시작할 때 트랙의 위치. 정착 연출 중에 다시 끌면 그 자리에서 이어 간다 */
   baseOffset: number;
+  /** 끌기를 시작할 때 잰 판 한 장 폭. 끄는 동안 레이아웃을 다시 읽지 않는다 */
+  panelWidth: number;
   /** 움직임 줄이기면 판을 옮기지 않고 달만 바꾼다. 끌기를 시작할 때 한 번 읽는다 */
   reduceMotion: boolean;
   samples: { x: number; time: number }[];
@@ -29,20 +31,18 @@ interface SwipeState {
  * 이어 붙이고 CSS로 가운데 판을 보이게 둔 트랙이며, 여기서는 그 위에 transform으로 끈 거리만 더한다.
  * 처음 움직임이 가로면 세 판이 손가락을 따라오고, 놓을 때 거리·속도로 옮길지 정해 onSwipe(1 다음 달, -1 이전 달)를 부른다.
  * 옮기면 새 달이 렌더된 뒤에도 보던 자리에서 이어 가운데로 들어오고, 아니면 제자리로 돌아온다. 세로 움직임은 브라우저 스크롤에 맡긴다.
- * 돌려주는 slideIn(step)은 버튼·다른 달 날짜로 달을 옮기기 직전에 불러 같은 슬라이드로 넘긴다.
- * onSettled는 트랙이 가운데 판 자리에 멈출 때(연출이 없으면 바로) 불린다
+ * 돌려주는 slideIn(step)은 버튼·다른 달 날짜로 달을 옮기기 직전에 불러 같은 슬라이드로 넘기고,
+ * isSliding은 옮기는 슬라이드가 시작돼 가운데 판 자리에 멈출 때까지 true다(움직임 줄이기면 늘 false)
  */
 export const useMonthSwipe = (
   areaRef: React.RefObject<HTMLElement | null>,
   trackRef: React.RefObject<HTMLElement | null>,
   onSwipe: (step: 1 | -1) => void,
-  onSettled: () => void,
 ) => {
   const onSwipeRef = useRef(onSwipe);
   onSwipeRef.current = onSwipe;
-  const onSettledRef = useRef(onSettled);
-  onSettledRef.current = onSettled;
   const slideInRef = useRef<(step: 1 | -1) => void>(() => {});
+  const [isSliding, setIsSliding] = useState(false);
 
   useEffect(() => {
     const area = areaRef.current;
@@ -56,8 +56,13 @@ export const useMonthSwipe = (
 
     const getPanelWidth = () => track.offsetWidth / PANEL_COUNT;
 
-    const setOffset = (offset: number) => {
-      track.style.transform = offset === 0 ? "" : `translate3d(${offset}px, 0, 0)`;
+    const getOffset = () =>
+      new DOMMatrixReadOnly(getComputedStyle(track).transform).m41;
+
+    /** 옆 달 판 너머(빈 자리)가 보이지 않게 판 한 칸 안에서 옮긴다 */
+    const setOffset = (offset: number, panelWidth = getPanelWidth()) => {
+      const clamped = Math.max(-panelWidth, Math.min(panelWidth, offset));
+      track.style.transform = clamped === 0 ? "" : `translate3d(${clamped}px, 0, 0)`;
     };
 
     /** 트랙을 가운데 판 자리로 보낸다 */
@@ -68,9 +73,9 @@ export const useMonthSwipe = (
       setOffset(0);
       clearTimeout(settleTimer);
       if (animate) {
-        settleTimer = setTimeout(() => onSettledRef.current(), SETTLE_DURATION_MS);
+        settleTimer = setTimeout(() => setIsSliding(false), SETTLE_DURATION_MS);
       } else {
-        onSettledRef.current();
+        setIsSliding(false);
       }
     };
 
@@ -79,18 +84,18 @@ export const useMonthSwipe = (
      * 판 한 칸만큼 반대로 옮겨 두고 가운데로 정착시킨다. 새 달은 이 이벤트가 끝나고 그리기 전에 렌더된다
      */
     const slideFrom = (offset: number, step: 1 | -1) => {
-      const width = getPanelWidth();
+      const panelWidth = getPanelWidth();
       track.style.transition = "";
-      // 정착 중에 또 옮기면 한 칸을 넘을 수 있어, 판이 채운 범위 안에서 시작한다
-      setOffset(Math.max(-width, Math.min(width, offset + step * width)));
+      setOffset(offset + step * panelWidth, panelWidth);
       track.getBoundingClientRect();
+      setIsSliding(true);
       settle(true);
     };
 
     slideInRef.current = (step) => {
       state = null;
       if (prefersReducedMotion()) return;
-      slideFrom(new DOMMatrixReadOnly(getComputedStyle(track).transform).m41, step);
+      slideFrom(getOffset(), step);
     };
 
     const handleTouchStart = (event: TouchEvent) => {
@@ -106,6 +111,7 @@ export const useMonthSwipe = (
         startX: touch.clientX,
         startY: touch.clientY,
         baseOffset: 0,
+        panelWidth: 0,
         reduceMotion: false,
         samples: [{ x: touch.clientX, time: event.timeStamp }],
       };
@@ -130,16 +136,13 @@ export const useMonthSwipe = (
         }
         state.mode = "drag";
         state.reduceMotion = prefersReducedMotion();
-        state.baseOffset = new DOMMatrixReadOnly(getComputedStyle(track).transform).m41;
+        state.baseOffset = getOffset();
+        state.panelWidth = getPanelWidth();
         track.style.transition = "";
       }
 
       if (event.cancelable) event.preventDefault();
-      if (!state.reduceMotion) {
-        // 옆 달 판 너머(빈 자리)까지는 끌리지 않게 한 칸으로 막는다
-        const width = getPanelWidth();
-        setOffset(Math.max(-width, Math.min(width, state.baseOffset + deltaX)));
-      }
+      if (!state.reduceMotion) setOffset(state.baseOffset + deltaX, state.panelWidth);
       state.samples.push({ x: touch.clientX, time: event.timeStamp });
       const cutoff = event.timeStamp - VELOCITY_WINDOW_MS;
       while (state.samples.length > 2 && state.samples[0].time < cutoff) {
@@ -171,7 +174,7 @@ export const useMonthSwipe = (
         settle(!reduceMotion);
         return;
       }
-      const offset = new DOMMatrixReadOnly(getComputedStyle(track).transform).m41;
+      const offset = getOffset();
       onSwipeRef.current(step);
       if (reduceMotion) {
         settle(false);
@@ -211,5 +214,6 @@ export const useMonthSwipe = (
     };
   }, [areaRef, trackRef]);
 
-  return useCallback((step: 1 | -1) => slideInRef.current(step), []);
+  const slideIn = useCallback((step: 1 | -1) => slideInRef.current(step), []);
+  return { slideIn, isSliding };
 };
