@@ -377,8 +377,15 @@ describe("buildNewsFeedPage 세션 항목", () => {
 
   it("업적 줄은 세션 리포트 achievements 중 활성 정회원 것이고, 줄 순서는 랭킹 → 연승 → 업적이다", () => {
     const item = sessionItem(alice.id);
+    const isTopRiserFirstDominator = (earned: {
+      playerId: string;
+      achievementId: string;
+    }) => earned.playerId === nina.id && earned.achievementId === "dominator-1";
     const expected = report()
-      .achievements.filter((earned) => earned.playerId !== xavier.id)
+      .achievements.filter(
+        (earned) =>
+          earned.playerId !== xavier.id && !isTopRiserFirstDominator(earned),
+      )
       .map((earned) => ({
         kind: "achievement",
         playerId: earned.playerId,
@@ -409,5 +416,22 @@ describe("buildNewsFeedPage 세션 항목", () => {
     expect(kinds).toEqual(
       [...kinds].sort((left, right) => order[left] - order[right]),
     );
+  });
+
+  it("지배자가 이 세션으로 받은 첫 세션 지배자 업적은 지배자 줄과 겹쳐 업적 줄에서 뺀다", () => {
+    const item = sessionItem(alice.id);
+    expect(item.topRiser?.player.id).toBe(nina.id);
+    expect(
+      report().achievements.some(
+        (earned) =>
+          earned.playerId === nina.id && earned.achievementId === "dominator-1",
+      ),
+    ).toBe(true);
+    expect(
+      item.lines.some(
+        (line) =>
+          line.kind === "achievement" && line.achievementId === "dominator-1",
+      ),
+    ).toBe(false);
   });
 });
