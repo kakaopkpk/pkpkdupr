@@ -8,8 +8,7 @@ import { buttonPressClassName } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { Section, TextLink } from "@/components/ui/Section";
 import { cx } from "@/components/ui/cx";
-import { formatRating } from "@/utils/dupr";
-import { TeamsVersus } from "./TeamBlock";
+import { TeamsVersusWithAverages } from "./TeamBlock";
 import type { SessionRecommendationsState } from "./useSessionRecommendations";
 
 const rowDividerClassName =
@@ -30,13 +29,10 @@ const RecommendationRow: React.FC<{
   <div className={cx("flex flex-col gap-2.5 py-3", rowDividerClassName)}>
     {/* 왼쪽: 팀별 평균 위에 팀 vs 팀, 오른쪽: 두 줄 높이 가운데의 시작 버튼 */}
     <div className="flex items-center gap-3">
-      <div className="flex min-w-0 flex-1 flex-col gap-1">
-        <div className="flex justify-between gap-2 text-pk-12 text-pk-muted tabular-nums">
-          <span>평균 {formatRating(court.teams[0].averageRating)}</span>
-          <span>평균 {formatRating(court.teams[1].averageRating)}</span>
-        </div>
-        <TeamsVersus teams={[court.teams[0].players, court.teams[1].players]} />
-      </div>
+      <TeamsVersusWithAverages
+        teams={[court.teams[0].players, court.teams[1].players]}
+        averages={[court.teams[0].averageRating, court.teams[1].averageRating]}
+      />
       {/* 연한 파랑 36px·둥글기 12px·13/800. PkButton sm(알약·700)과 모양이 달라 직접 그린다 */}
       <button
         type="button"
