@@ -1,13 +1,20 @@
 import React from "react";
 import { Link, useNavigate } from "react-router-dom";
-import type { AdminMatchDeletionLog } from "@pkpkdupr/shared/match";
+import type {
+  AdminMatchDeletionLog,
+  AdminMatchEditLog,
+} from "@pkpkdupr/shared/match";
 import type { AdminPlayer } from "@pkpkdupr/shared/player";
 import {
   IN_PROGRESS_MATCH_TIMEOUT_MS,
   type AdminRegularSessionSkip,
   type MatchSessionDetail,
 } from "@pkpkdupr/shared/session";
-import { fetchAdminMatches, fetchMatchDeletionLogs } from "../../api/matches";
+import {
+  fetchAdminMatches,
+  fetchMatchDeletionLogs,
+  fetchMatchEditLogs,
+} from "../../api/matches";
 import { fetchAdminPlayers } from "../../api/players";
 import {
   fetchRegularSessionSkips,
@@ -27,6 +34,7 @@ import {
 import { formatKstDateWithWeekday } from "../../lib/format";
 import {
   RECENT_DELETION_DAYS,
+  countMemberEditedMatches,
   dateKeyBlock,
   formatDateKeyShort,
   formatSessionTimePlace,
@@ -43,10 +51,18 @@ import { SESSION_KIND_LABELS } from "../sessions/sessionKind";
 const UPCOMING_SESSION_LIMIT = 3;
 const IN_PROGRESS_TIMEOUT_HOURS = IN_PROGRESS_MATCH_TIMEOUT_MS / (60 * 60 * 1000);
 
-type NoticeData = [AdminMatchDeletionLog[], AdminRegularSessionSkip[]];
+type NoticeData = [
+  AdminMatchDeletionLog[],
+  AdminMatchEditLog[],
+  AdminRegularSessionSkip[],
+];
 
 const loadNotices = (): Promise<NoticeData> =>
-  Promise.all([fetchMatchDeletionLogs(), fetchRegularSessionSkips()]);
+  Promise.all([
+    fetchMatchDeletionLogs(),
+    fetchMatchEditLogs(),
+    fetchRegularSessionSkips(),
+  ]);
 
 const Placeholder: React.FC<{ className?: string }> = ({ className }) => (
   <div className={cx("h-4 animate-pulse rounded-full bg-pk-divider", className)} />
@@ -437,10 +453,11 @@ const NoticeCard: React.FC<{
   <Card>
     <CardTitle title="알아 둘 것" />
     <Loaded state={state} onRetry={onRetry} placeholder={<ListPlaceholder rows={2} />}>
-      {([deletionLogs, skips]) => {
+      {([deletionLogs, editLogs, skips]) => {
         const deletions = summarizeMemberDeletions(deletionLogs);
+        const editedCount = countMemberEditedMatches(editLogs);
         const restDays = upcomingSkips(skips);
-        if (deletions.count === 0 && restDays.length === 0) {
+        if (deletions.count === 0 && editedCount === 0 && restDays.length === 0) {
           return <EmptyText>알아 둘 것이 없어요</EmptyText>;
         }
         return (
@@ -454,6 +471,15 @@ const NoticeCard: React.FC<{
                     " · 완료 경기라 평점이 다시 계산됐어요"}
                 </p>
                 <TextLink to={matchesPath({ tab: "deleted" })}>삭제된 경기 ›</TextLink>
+              </Row>
+            )}
+            {editedCount > 0 && (
+              <Row>
+                <Chip>경기 수정</Chip>
+                <p className="min-w-0 flex-1 text-pk-13 text-pk-ink">
+                  최근 {RECENT_DELETION_DAYS}일 회원이 고친 경기 {editedCount}건
+                </p>
+                <TextLink to={matchesPath({ tab: "edited" })}>수정된 경기 ›</TextLink>
               </Row>
             )}
             {restDays.length > 0 && (

@@ -1,19 +1,9 @@
 import React from "react";
-import type { AdminMatchDeletionLog, Match, Team } from "@pkpkdupr/shared/match";
+import type { AdminMatchDeletionLog, Match } from "@pkpkdupr/shared/match";
 import { Card } from "../../components/ui/Card";
 import { Chip } from "../../components/ui/Chip";
 import { formatKstDateTime } from "../../lib/format";
-import { DELETED_PLAYER_LABEL } from "./matchView";
-
-const formatTeam = (team: Team | undefined) =>
-  team?.players.length
-    ? team.players.map((player) => player.username || DELETED_PLAYER_LABEL).join(" · ")
-    : DELETED_PLAYER_LABEL;
-
-const formatScore = (match: Match) => {
-  const score = match.scores?.[0];
-  return score ? `${score.scoreA} : ${score.scoreB}` : "점수 없음(진행 중)";
-};
+import { DELETED_PLAYER_LABEL, formatScore, formatTeam } from "./matchView";
 
 /** 지운 경기가 평점에 준 영향. 스냅샷에 ratingExcluded가 없으면 false로 본다 */
 const describeRatingEffect = (match: Match) => {

@@ -3,6 +3,8 @@ import type {
   AdminBatchMatchResponse,
   AdminMatchDeletionLog,
   AdminMatchDeletionLogsResponse,
+  AdminMatchEditLog,
+  AdminMatchEditLogsResponse,
   Match,
   RecordedMatchResponse,
   RecordMatchRequest,
@@ -33,6 +35,13 @@ export const fetchMatchDeletionLogs = async (): Promise<
 > => {
   const data = await apiJson<AdminMatchDeletionLogsResponse>(
     "/api/admin/match-deletion-logs",
+  );
+  return data.logs;
+};
+
+export const fetchMatchEditLogs = async (): Promise<AdminMatchEditLog[]> => {
+  const data = await apiJson<AdminMatchEditLogsResponse>(
+    "/api/admin/match-edit-logs",
   );
   return data.logs;
 };

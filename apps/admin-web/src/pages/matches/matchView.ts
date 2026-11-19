@@ -1,10 +1,21 @@
-import type { Match } from "@pkpkdupr/shared/match";
+import type { Match, Team } from "@pkpkdupr/shared/match";
 import type { AdminPlayer } from "@pkpkdupr/shared/player";
 import { toKstDateKey } from "@pkpkdupr/shared/session";
 
 export const DELETED_PLAYER_LABEL = "(지운 회원)";
 
 const KST_OFFSET_MS = 9 * 60 * 60 * 1000;
+
+/** 스냅샷 팀 표시. 아이디가 비면 지운 회원이다 */
+export const formatTeam = (team: Team | undefined): string =>
+  team?.players.length
+    ? team.players.map((player) => player.username || DELETED_PLAYER_LABEL).join(" · ")
+    : DELETED_PLAYER_LABEL;
+
+export const formatScore = (match: Match): string => {
+  const score = match.scores?.[0];
+  return score ? `${score.scoreA} : ${score.scoreB}` : "점수 없음(진행 중)";
+};
 
 // API JSON의 날짜는 문자열로 오므로 표시·비교 전에 Date로 바꾼다
 export const toDate = (value: Date | string): Date =>
