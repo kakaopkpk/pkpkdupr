@@ -76,7 +76,8 @@
   - 오늘 세션의 시작 시각이 지금보다 이르면 400.
   - 세션 날짜는 시작 시각의 날짜이고 세션 시각(`date`)은 시작 시각과 상관없이 그날 00:00 KST라, 같은 날 같은 이름은 409.
 - 세션 응답의 `startTime`·`endTime`은 정기 세션이면 18:00~22:00, 시각 없이 만든 회원 세션이면 null
-- 세션 응답 `MatchSessionDetail`(상세·일정·오늘·다가오는 세션)에는 대회 세션만 최종 순위 `placements`(1~3위, 순위마다 고른 순서의 선수, 첫 선수가 대표)가 붙는다.
+- 세션 응답 `MatchSessionDetail`(상세·일정·오늘·다가오는 세션·참여자 변경)에는 대회 세션만 최종 순위 `placements`가 붙는다.
+  - 1~3위 오름차순이고 입력 전이면 빈 배열이다. 순위마다 고른 순서의 선수(첫 선수가 대표, 비활성 회원 포함)와 대진 승패 `record`(`countTournamentUnitRecord`, 셀 경기가 없으면 null).
 - 상세 `GET /api/match-sessions/:sessionId`
 - 세션 경기 `GET /api/match-sessions/:sessionId/matches`: 대진 예정 경기(`scheduled`, `round` 포함)도 포함
 - 점수 없이 진행 중 경기 시작 `POST /api/match-sessions/:sessionId/matches`: `POST /api/matches/start`와 같은 처리, 오늘 세션만, 이미 진행 중인 선수 포함 시 409, 선수 자동 참여
@@ -214,7 +215,7 @@
   - 세션 없음 404, 대회 세션이 아니거나 끝난 세션이면 409, 라운드·팀 오류 400.
 - 최종 순위 바꾸기 `PUT /api/admin/match-sessions/:sessionId/placements` `{ placements: [{ place, playerIds }] }`: 200 `MatchSessionDetail`
   - 통째로 바꾼다(빈 배열이면 순위 없음). `playerIds` 순서를 저장하고 첫 선수가 대표다.
-  - 세션 없음 404, 대회 세션이 아니면 409.
+  - 세션 없음 404, 대회 세션이 아니면 409. 게스트 참여자도 넣을 수 있고 시각 제한은 없다.
   - 400: 1~3위 밖, 같은 순위 중복, 빈 선수, 세션 참여자 아님, 한 사람이 두 순위.
 
 ### 쉬는 날
