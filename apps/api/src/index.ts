@@ -37,6 +37,7 @@ import {
   canOpenRegularSession,
   DEFAULT_MATCH_LOCATION,
   getEmptySessionExpiresAt,
+  getSessionEndsAt,
   getKstWeekday,
   getRegularSessionDateKeys,
   isInProgressMatchExpired,
@@ -927,8 +928,8 @@ const loadMatchSessionDetail = async (
 };
 
 /**
- * 다가오는 세션(만료 전 오늘·미래 세션)을 시각 오름차순으로 돌려준다.
- * 전날 시작해 자정을 넘긴 회원 세션도 끝나기 전까지 들어가도록 전날부터 읽고 만료로 거른다.
+ * 다가오는 세션(끝나기 전 오늘·미래 세션, getSessionEndsAt 기준)을 시각 오름차순으로 돌려준다.
+ * 전날 시작해 자정을 넘긴 회원 세션도 끝나기 전까지 들어가도록 전날부터 읽고 끝 시각으로 거른다.
  * 정리가 best-effort라 만료됐지만 아직 남은 빈 세션도 빼고, 경기가 있어 만료 후에도 남은 세션도 넣지 않는다.
  */
 const findUpcomingSessions = async (now: Date) =>
@@ -937,8 +938,7 @@ const findUpcomingSessions = async (now: Date) =>
       addKstDays(toKstDateKey(now), -1),
     )
   ).filter(
-    (session) =>
-      getEmptySessionExpiresAt(session.kind, session.date, session) > now,
+    (session) => getSessionEndsAt(session.kind, session.date, session) > now,
   );
 
 /**
@@ -3718,8 +3718,7 @@ app.get("/api/schedule", async (req, res) => {
       monthSessions
         .map((session): ScheduleSession => {
           const isEnded =
-            getEmptySessionExpiresAt(session.kind, session.date, session) <=
-            now;
+            getSessionEndsAt(session.kind, session.date, session) <= now;
           return {
             ...toMatchSessionDetail(session, activePlayersById, now),
             isEnded,
