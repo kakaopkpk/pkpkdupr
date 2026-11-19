@@ -1,30 +1,26 @@
 import React, { useLayoutEffect, useRef, useState } from "react";
+import { addScheduleMonths, parseScheduleMonth } from "@pkpkdupr/shared/schedule";
 import {
-  addKstDays,
   kstDateKeyToDate,
   minutesToSessionTime,
   REGULAR_SESSION_WEEKDAYS,
   sessionTimeToMinutes,
   WEEKDAY_LABELS,
 } from "@pkpkdupr/shared/session";
+import { getMonthGridDateKeys, toMonthKey } from "@/components/schedule/monthGrid";
 import { ChevronRightIcon } from "@/components/ui/Icons";
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { cx } from "@/components/ui/cx";
 import { formatKstLongDate } from "@/lib/format";
 
-/** 오늘부터 고를 수 있는 날 수(3주) */
-export const SESSION_DATE_OPTION_DAYS = 21;
-
-/** 세션 만들기 달력에서 고를 수 있는 마지막 날 */
-const getLastSelectableDateKey = (todayKey: string) =>
-  addKstDays(todayKey, SESSION_DATE_OPTION_DAYS - 1);
+const DAYS_PER_WEEK = 7;
 const SESSION_TIME_STEP_MINUTES = 30;
 /** 길이 1~6시간 */
 const SESSION_DURATION_OPTIONS_MINUTES = [60, 120, 180, 240, 300, 360];
 
-/** 세션 만들기 달력에서 고를 수 있는 날짜인지(오늘부터 3주) */
+/** 세션 만들기 달력에서 고를 수 있는 날짜인지(오늘 이후) */
 export const isSessionDateSelectable = (dateKey: string, todayKey: string) =>
-  dateKey >= todayKey && dateKey <= getLastSelectableDateKey(todayKey);
+  dateKey >= todayKey;
 
 /** "2시간" */
 export const formatDurationHours = (minutes: number) => `${minutes / 60}시간`;
@@ -81,23 +77,55 @@ const RegularDot: React.FC<{ className?: string }> = ({ className }) => (
   />
 );
 
+/** "2026년 11월" */
+const formatMonthTitle = (monthKey: string) => {
+  const parsed = parseScheduleMonth(monthKey);
+  return parsed ? `${parsed.year}년 ${parsed.month}월` : monthKey;
+};
+
+/** 그 달 날짜가 하나라도 든 주만 남긴 달력 칸. 다른 달 날은 null(빈 칸) */
+const getSessionMonthCells = (monthKey: string): (string | null)[] => {
+  const cells = getMonthGridDateKeys(monthKey).map((dateKey) =>
+    toMonthKey(dateKey) === monthKey ? dateKey : null,
+  );
+  const weeks = Array.from({ length: cells.length / DAYS_PER_WEEK }, (_, index) =>
+    cells.slice(index * DAYS_PER_WEEK, (index + 1) * DAYS_PER_WEEK),
+  );
+  return weeks.filter((week) => week.some(Boolean)).flat();
+};
+
+const CalendarMonthButton: React.FC<{
+  label: string;
+  direction: "prev" | "next";
+  disabled?: boolean;
+  onPress: () => void;
+}> = ({ label, direction, disabled, onPress }) => (
+  <button
+    type="button"
+    aria-label={label}
+    disabled={disabled}
+    onClick={onPress}
+    className="flex size-11 items-center justify-center rounded-full text-pk-primary active:bg-pk-primary-soft disabled:text-pk-quiet disabled:active:bg-transparent"
+  >
+    <ChevronRightIcon
+      className={cx("size-5 shrink-0", direction === "prev" && "rotate-180")}
+    />
+  </button>
+);
+
 /**
- * 오늘부터 3주를 고르는 달력. 오늘이 든 주 일요일부터 마지막 날이 든 주 토요일까지 7열로 그리고,
- * 범위 밖 날은 누를 수 없다. 숫자 아래 줄에 정기 운동일 점과 '오늘'·달이 바뀌는 날의 'N월'을 쓴다
+ * 세션 날짜를 고르는 월 달력. 처음에는 고른 날(없으면 오늘)이 든 달을 보이고 ‹ › 로 달을 넘긴다.
+ * 지난 날만 누를 수 없고 오늘이 든 달보다 앞으로는 넘기지 않는다. 숫자 아래 줄에 정기 운동일 점과 '오늘'을 쓴다
  */
 export const SessionCalendar: React.FC<{
   todayKey: string;
   value: string | null;
   onChange: (dateKey: string) => void;
 }> = ({ todayKey, value, onChange }) => {
-  const lastKey = getLastSelectableDateKey(todayKey);
-  const firstCellKey = addKstDays(todayKey, -getDateParts(todayKey).weekday);
-  const lastCellKey = addKstDays(lastKey, 6 - getDateParts(lastKey).weekday);
-  const cellKeys: string[] = [];
-  // YYYY-MM-DD 문자열은 사전순이 날짜순이다
-  for (let key = firstCellKey; key <= lastCellKey; key = addKstDays(key, 1)) {
-    cellKeys.push(key);
-  }
+  const todayMonthKey = toMonthKey(todayKey);
+  const [monthKey, setMonthKey] = useState(() =>
+    toMonthKey(value ?? todayKey),
+  );
 
   return (
     <div className="flex flex-col gap-2">
@@ -111,6 +139,25 @@ export const SessionCalendar: React.FC<{
           </span>
         }
       />
+      <div className="flex items-center justify-between">
+        <CalendarMonthButton
+          label="이전 달"
+          direction="prev"
+          disabled={monthKey <= todayMonthKey}
+          onPress={() => setMonthKey(addScheduleMonths(monthKey, -1))}
+        />
+        <span
+          aria-live="polite"
+          className="text-pk-15 font-extrabold text-pk-ink"
+        >
+          {formatMonthTitle(monthKey)}
+        </span>
+        <CalendarMonthButton
+          label="다음 달"
+          direction="next"
+          onPress={() => setMonthKey(addScheduleMonths(monthKey, 1))}
+        />
+      </div>
       <div
         role="radiogroup"
         aria-labelledby="session-date-label"
@@ -128,13 +175,14 @@ export const SessionCalendar: React.FC<{
             {label}
           </span>
         ))}
-        {cellKeys.map((dateKey) => {
-          const { month, day, weekday } = getDateParts(dateKey);
-          const isDisabled = dateKey < todayKey || dateKey > lastKey;
+        {getSessionMonthCells(monthKey).map((dateKey, index) => {
+          if (!dateKey) {
+            return <span key={`blank-${index}`} aria-hidden="true" />;
+          }
+          const { day, weekday } = getDateParts(dateKey);
+          const isDisabled = dateKey < todayKey;
           const isSelected = dateKey === value;
           const isRegular = REGULAR_SESSION_WEEKDAYS.includes(weekday);
-          const note =
-            dateKey === todayKey ? "오늘" : day === 1 ? `${month}월` : null;
           return (
             <button
               key={dateKey}
@@ -157,7 +205,7 @@ export const SessionCalendar: React.FC<{
             >
               <span
                 className={cx(
-                  "text-pk-15 leading-tight font-bold tabular-nums",
+                  "text-pk-15 leading-tight font-bold",
                   isDisabled
                     ? "text-pk-quiet"
                     : !isSelected && weekday === 0 && "text-pk-down",
@@ -182,7 +230,7 @@ export const SessionCalendar: React.FC<{
                     }
                   />
                 ) : null}
-                {note}
+                {dateKey === todayKey ? "오늘" : null}
               </span>
             </button>
           );

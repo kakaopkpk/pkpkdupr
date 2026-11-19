@@ -10,12 +10,10 @@ import MonthCalendar from "@/components/schedule/MonthCalendar";
 import { toMonthKey } from "@/components/schedule/monthGrid";
 import {
   EmptyDayCard,
-  type EmptyDayKind,
   UpcomingSessionCard,
 } from "@/components/schedule/ScheduleCards";
 import ParticipantsSheet from "@/components/session/ParticipantsSheet";
 import { LiveSessionCard } from "@/components/session/SessionBlueCard";
-import { isSessionDateSelectable } from "@/components/session/SessionSchedulePicker";
 import { useSessionParticipation } from "@/components/session/useSessionParticipation";
 import { TournamentRankCard } from "@/components/tournament/TournamentRankCard";
 import { Section } from "@/components/ui/Section";
@@ -57,11 +55,6 @@ interface ParticipantsTarget {
   session: MatchSessionDetailInfo;
   lockedPlayerIds: readonly string[];
 }
-
-const getEmptyDayKind = (dateKey: string, todayKey: string): EmptyDayKind => {
-  if (dateKey < todayKey) return "past";
-  return isSessionDateSelectable(dateKey, todayKey) ? "creatable" : "out-of-range";
-};
 
 /**
  * 일정 탭: 위는 월 달력, 아래는 고른 날의 세션·기록 카드.
@@ -336,7 +329,7 @@ const Schedule: React.FC = () => {
           entries.map(renderEntry)
         ) : (
           <EmptyDayCard
-            kind={getEmptyDayKind(selectedDateKey, todayKey)}
+            isPast={selectedDateKey < todayKey}
             onCreateSession={handleCreateSession}
           />
         )}
