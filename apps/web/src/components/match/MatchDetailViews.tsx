@@ -125,6 +125,9 @@ export const LiveMatchDetail: React.FC<LiveMatchDetailProps> = ({
   const isScheduled = isMatchScheduled(match, now);
   // 대진 예정 경기는 시각이 정해져 있지 않아 시각·시작한 사람을 보이지 않는다
   const isBracketScheduled = match.status === "scheduled";
+  const showStartRows = !isBracketScheduled;
+  // 보일 행이 하나도 없으면 빈 카드를 그리지 않는다
+  const showInfoCard = !!match.session || showStartRows;
   const getPillLabel = () => {
     if (isBracketScheduled) {
       return match.round != null
@@ -163,19 +166,19 @@ export const LiveMatchDetail: React.FC<LiveMatchDetailProps> = ({
           <TeamNames team={team} tone="strong" onOpenPlayer={onOpenPlayer} />
         )}
       />
-      {match.session || !isBracketScheduled ? (
+      {showInfoCard ? (
         <Card>
           {match.session ? (
             <InfoRow label="세션">
               <SessionLink session={match.session} onOpen={onOpenSession} />
             </InfoRow>
           ) : null}
-          {isBracketScheduled ? null : (
+          {showStartRows ? (
             <>
               <InfoRow label="시작">{formatKstTime(match.matchStartsAt)}</InfoRow>
               <InfoRow label="시작한 사람">{creatorUsername ?? "–"}</InfoRow>
             </>
-          )}
+          ) : null}
         </Card>
       ) : null}
     </div>

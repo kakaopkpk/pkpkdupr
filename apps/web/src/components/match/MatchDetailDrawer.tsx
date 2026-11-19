@@ -266,6 +266,8 @@ export default function MatchDetailDrawer({
     if (isStartingScheduled) return;
     const run = async () => {
       const startedMatch = await startScheduledMatch(match.id);
+      // 시작 전에 보낸 재조회 응답(아직 예정)이 늦게 와서 덮어쓰지 않게 무효화한다
+      requestIdRef.current += 1;
       setLoadState({ kind: "ready", match: startedMatch });
       notifyDataChanged();
     };
