@@ -21,6 +21,13 @@ export interface AchievementDetailRequest {
   achievementId: string;
 }
 
+export interface AchievementsScreenRequest {
+  /** 업적 주인 */
+  playerId: string;
+  /** 주면 그 업적 줄로 스크롤해 잠깐 강조한다 */
+  focusAchievementId?: string;
+}
+
 export interface AppNavigationContextValue {
   selectTab: (tab: TabKey) => void;
   openMatchDetail: (matchId: string) => void;
@@ -32,6 +39,8 @@ export interface AppNavigationContextValue {
   openSettings: () => void;
   /** 업적 상세 바텀시트. 열린 화면·경기 기록 시트 위에 뜬다 */
   openAchievementDetail: (params: AchievementDetailRequest) => void;
+  /** 업적 전체 보기 전역 화면. 내 id여도 나 탭으로 바꾸지 않는다 */
+  openAchievements: (request: AchievementsScreenRequest) => void;
   /** 지금 탭 위에 세션 상세 화면을 쌓는다 */
   openSessionReport: (sessionId: string) => void;
   /** 경기 기록·수정·시작, 세션 생성, 참여 변경 뒤 호출 */

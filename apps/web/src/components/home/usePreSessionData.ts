@@ -5,36 +5,18 @@ import {
   fetchUpcomingMatchSessions,
   type UpcomingMatchSessionsInfo,
 } from "@/lib/matchSessions";
-import {
-  fetchSessionHistory,
-  fetchSessionReport,
-  type MatchSessionReportInfo,
-} from "@/lib/rankings";
 
 export interface PreSessionData {
   upcoming: UpcomingMatchSessionsInfo;
-  /** 완료 경기가 있는 가장 최근 세션의 리포트. 없거나 받지 못하면 null */
-  lastSessionReport: MatchSessionReportInfo | null;
 }
 
 /** 시작 시각 최신순 정렬 비교 함수 */
 export const byLatestStart = (a: MatchInfo, b: MatchInfo) =>
   new Date(b.matchStartsAt).getTime() - new Date(a.matchStartsAt).getTime();
 
-const loadLastSessionReport =
-  async (): Promise<MatchSessionReportInfo | null> => {
-    const [session] = await fetchSessionHistory({ limit: 1 });
-    return session ? fetchSessionReport(session.id) : null;
-  };
-
-const loadPreSessionData = async (): Promise<PreSessionData> => {
-  const [upcoming, lastSessionReport] = await Promise.all([
-    fetchUpcomingMatchSessions(),
-    // 지난 세션 요약은 보조 카드라 실패해도 화면 전체를 오류로 만들지 않고 숨긴다
-    loadLastSessionReport().catch(() => null),
-  ]);
-  return { upcoming, lastSessionReport };
-};
+const loadPreSessionData = async (): Promise<PreSessionData> => ({
+  upcoming: await fetchUpcomingMatchSessions(),
+});
 
 export interface PreSessionState {
   data: PreSessionData | null;
@@ -46,9 +28,9 @@ export interface PreSessionState {
 }
 
 /**
- * 진행 중 세션이 없을 때의 홈 데이터(다음 세션·지난 세션).
+ * 진행 중 세션이 없을 때의 홈 다음 세션 데이터. 소식 피드는 useNewsFeed가 따로 받는다.
  * enabled일 때만 받고, dataVersion이나 오늘 날짜 키(KST)가 바뀌면 보이는 내용을 둔 채 다시 받는다.
- * 날짜 키가 바뀌면 서버가 고르는 다음 세션·지난 세션도 달라지므로 앱을 켜 둔 채 자정을 넘기면 한 번 다시 받는다.
+ * 날짜 키가 바뀌면 서버가 고르는 다음 세션도 달라지므로 앱을 켜 둔 채 자정을 넘기면 한 번 다시 받는다.
  */
 export const usePreSessionData = ({
   enabled,

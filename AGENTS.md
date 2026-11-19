@@ -98,6 +98,8 @@ pnpm lint
   - `status`는 active이고 Auth 계정이 없으며(`authUserId` null) 성별이 없을 수 있습니다. `gender` null은 게스트만이고, 정회원 만들기·수정은 성별 필수입니다.
   - 참여자 추가·삭제·경기 시작·기록·추천 매칭에서는 회원처럼 고를 수 있고, 추천 매칭에서는 NR로 다룹니다.
   - 랭킹에는 나오지 않습니다.
+  - 정회원으로 승급하면 승급 시각을 `players.promoted_at`(`Player.promotedAt`)에 저장합니다. 승급 기록 전 회원·일반 가입 회원·게스트는 null이며 채우지 않습니다.
+  - 정회원이 된 시각은 `getPlayerJoinedAt`(`promotedAt ?? createdAt`)으로 읽습니다.
 
 ### 평점 미반영 경기(게스트 참가)
 
