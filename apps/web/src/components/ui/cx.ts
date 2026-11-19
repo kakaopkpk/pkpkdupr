@@ -23,6 +23,7 @@ const twMerge = extendTailwindMerge({
         "pk-primary",
         "pk-primary-soft",
         "pk-primary-line",
+        "pk-deep",
         "pk-hl",
         "pk-gold",
         "pk-silver",

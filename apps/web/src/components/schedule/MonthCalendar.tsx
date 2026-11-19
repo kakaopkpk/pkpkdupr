@@ -54,9 +54,13 @@ const MonthNavButton: React.FC<{
   </button>
 );
 
-/** 날짜 아래 점(+ 숫자). 내 것이면 속이 찬 점, 아니면 1.5px 테두리 원 */
+/**
+ * 날짜 아래 점(+ 숫자). 내 것이면 속이 찬 점, 아니면 1.5px 테두리 원.
+ * 대회 세션이 있는 날은 점 색만 하이라이트(pk-hl)이고 인원 글자색은 그대로다
+ */
 const DayMark: React.FC<{ mark: ScheduleDayMark }> = ({ mark }) => {
   const isSession = mark.kind === "session";
+  const isTournament = mark.kind === "session" && mark.isTournament;
   return (
     <span
       aria-hidden="true"
@@ -69,12 +73,18 @@ const DayMark: React.FC<{ mark: ScheduleDayMark }> = ({ mark }) => {
         className={cx(
           "size-2 shrink-0 rounded-full",
           mark.isMine
-            ? isSession
-              ? "bg-pk-primary"
-              : "bg-pk-sub"
+            ? isTournament
+              ? "bg-pk-hl"
+              : isSession
+                ? "bg-pk-primary"
+                : "bg-pk-sub"
             : cx(
                 "border-[1.5px]",
-                isSession ? "border-pk-primary" : "border-pk-sub",
+                isTournament
+                  ? "border-pk-hl"
+                  : isSession
+                    ? "border-pk-primary"
+                    : "border-pk-sub",
               ),
         )}
       />
@@ -92,7 +102,8 @@ const getDayLabel = (
   [
     formatKstLongDate(kstDateKeyToDate(dateKey)),
     isToday && "오늘",
-    mark?.kind === "session" && `세션 ${mark.participantCount}명 참여`,
+    mark?.kind === "session" &&
+      `${mark.isTournament ? "대회" : "세션"} ${mark.participantCount}명 참여`,
     mark?.kind === "match" && "경기 기록",
     mark?.isMine && (mark.kind === "session" ? "참여 중" : "내 경기"),
   ]
