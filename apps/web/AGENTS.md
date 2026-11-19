@@ -53,6 +53,7 @@
         - 진행 중 세션 `LiveSessionCard`: 버튼은 진행 화면 보기 → 홈 탭뿐, 참여·참여 취소는 진행 화면에서.
         - 끝나지 않은 세션 `UpcomingSessionCard`: 참여하기·참여 취소.
         - 끝난 세션 `RecordSessionCard`: `openSessionReport`.
+        - 끝난 대회 세션은 `RecordSessionCard` 대신 대회 순위 카드 `tournament/TournamentRankCard`: `openSessionReport`. 일정 항목은 세션과 기록 줄을 함께 담은 `tournament-result`다.
         - 세션 없는 경기 `RecordMatchCard`: 경기 상세.
         - 아무것도 없으면 `EmptyDayCard`: 세션 만들기 달력 범위(오늘부터 3주) 안이면 그 날짜로 `openCreateSession`, 지난 날·범위 밖은 문구만.
     - `Ranking.tsx`(랭킹)
@@ -76,9 +77,13 @@
     - `session.kind`가 대회면 카드 안에서 남색 바탕·금색 "트로피 + 대회" 칩·연한 트로피 장식 `session/TrophyIllustration`으로 그린다.
     - 선택 `onPress`는 카드 빈 곳(안의 버튼 제외) 누르기다.
     - `onOpenParticipants`를 생략하면 참여자 줄은 누를 수 없다.
-  - `tournament/`: 대회 대진 조각. 세션 상세와 홈이 같이 쓴다.
+  - `tournament/`: 대회 대진·순위 조각. 세션 상세·홈·일정 탭이 같이 쓴다.
     - `TournamentBracketSection`: "대진" 섹션. 라운드마다 흰 카드(첫 줄 라운드 이름), 제목 줄 오른쪽 전체/내 경기 전환(`showFilter`).
     - `BracketMatchRow`: 끝난 경기는 `MatchRow` 그대로, 예정·진행 중은 추천 매칭 줄 모양(위 팀 평균, 아래 `home/TeamBlock`의 vs). 진행 중은 오른쪽 앰버 점 + "진행 중".
+    - `TournamentRankCard`: 끝난 대회 순위 카드. 대회 카드 틀(D-day 자리 "종료", 참여 줄은 누를 수 없음)에 구분선(흰색 14%) → 1~3위 줄 → 구분선 → 내 기록 줄.
+      - 순위 줄은 금·은·동 원 + 참가 단위 아바타(최대 4개)·이름(1명 아이디, 2명 "a · b", 3명 이상 "대표 외 N명") + 오른쪽 승패(`record`가 있을 때만)이고, 줄 높이는 같다.
+      - 내 기록 줄은 "내 기록" + 승패 + 평점 변화(`pk-up-on-deep`·`pk-down-on-deep`, 0은 흐린 흰색, 세션 후 평점이 없으면 승패만).
+      - 순위가 없으면 순위 줄, `mine`이 없으면 내 기록 줄을 그 위 구분선과 함께 뺀다. 카드 전체가 `onPress` 하나다.
     - 묶기·라운드 이름·내 다음 경기·팀 평균은 `lib/tournament.ts`.
   - `ui/`: 새 디자인 공통 컴포넌트. 새 화면은 여기 것을 먼저 씁니다.
     - `Button.tsx`(`PkButton`, variant `primary`·`soft`·`outline`·`ghost`), `Card.tsx`, `SegmentedControl.tsx`, `Headers.tsx`(`TabHeader`·`DetailHeader`), `Form.tsx`(`TextField`·`ListRow`), `Section.tsx`(`Section`·`PreviewSection`·`TextLink`. 섹션 제목이 붙는 묶음은 `Section`으로 만든다), `SheetTitle.tsx`, `ConfirmDialog.tsx`(시트 위 가운데 확인 창. 바텀시트를 겹쳐 쌓지 않을 때 쓰고, 연 쪽이 `useLayerDepth` kind `dialog`로 뒤로가기에 묶는다)

@@ -20,6 +20,8 @@ const twMerge = extendTailwindMerge({
         "pk-neutral",
         "pk-up",
         "pk-down",
+        "pk-up-on-deep",
+        "pk-down-on-deep",
         "pk-primary",
         "pk-primary-soft",
         "pk-primary-line",

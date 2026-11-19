@@ -172,7 +172,44 @@ describe("getScheduleDayEntries", () => {
       },
       ME,
     );
-    expect(marks.get("2026-11-16")).toEqual({ kind: "session", participantCount: 0, isMine: true });
+    expect(marks.get("2026-11-16")).toEqual({
+      kind: "session",
+      participantCount: 0,
+      isMine: true,
+      isTournament: false,
+    });
+  });
+
+  it("끝난 대회 세션은 기록 줄이 있으면 세션과 기록 줄을 함께 담은 순위 카드다", () => {
+    const tournament = makeSession({
+      id: "Stour001",
+      dateKey: "2026-11-21",
+      kind: "tournament",
+      isEnded: true,
+    });
+    const tournamentItem = makeSessionItem(tournament);
+    const regular = makeSession({ id: "Sreg0001", dateKey: "2026-11-21", isEnded: true });
+    const regularItem = makeSessionItem(regular);
+    const tournamentEmpty = makeSession({
+      id: "Stour002",
+      dateKey: "2026-11-21",
+      kind: "tournament",
+      isEnded: true,
+    });
+
+    const entries = getScheduleDayEntries(
+      {
+        sessions: [tournament, regular, tournamentEmpty],
+        records: [tournamentItem, regularItem],
+      },
+      "2026-11-21",
+      null,
+    );
+
+    expect(entries).toEqual([
+      { kind: "tournament-result", session: tournament, item: tournamentItem },
+      { kind: "record-session", item: regularItem },
+    ]);
   });
 
   it("아무것도 없는 날은 빈 목록", () => {
