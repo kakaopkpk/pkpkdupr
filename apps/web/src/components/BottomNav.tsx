@@ -120,7 +120,7 @@ const NAV_BAR_HEIGHT_PX = 66;
 const DOCK_BAR_HEIGHT_PX = 60;
 const DOCK_BAR_GAP_PX = 10;
 const NAV_BOTTOM_GAP_PX = 8;
-/** 하단 바 줄 좌우 여백(px-4)과 알약·+ 버튼 사이 간격(gap-2.5, 미니바 간격과 같음) */
+/** 하단 바 줄 좌우 여백(px-4). 알약·+ 버튼 사이 간격(gap-2.5)은 DOCK_BAR_GAP_PX와 같다 */
 const DOCK_SIDE_PADDING_PX = 16;
 
 const HISTORY_DEPTH_STATE_KEY = "__pkpkduprTabDepth";
