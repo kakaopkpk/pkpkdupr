@@ -15,24 +15,42 @@ describe("getStartTimeSegment", () => {
   });
 });
 
+const getDayCells = (markup: string) => [
+  ...markup.matchAll(/<button[^>]*role="radio"[^>]*aria-label="([^"]+)"[^>]*>/g),
+];
+
 describe("SessionCalendar", () => {
-  it("오늘이 든 주 일요일부터 3주 뒤가 든 주 토요일까지 그리고 범위 밖 날은 막는다", () => {
+  it("오늘이 든 달을 그리고 지난 날만 막는다", () => {
     const markup = renderToStaticMarkup(
       <SessionCalendar todayKey="2026-11-13" value={null} onChange={() => {}} />,
     );
-    const cells = [...markup.matchAll(/<button[^>]*aria-label="([^"]+)"[^>]*>/g)];
+    const cells = getDayCells(markup);
 
-    // 11월 8일(일) ~ 12월 5일(토) 4주
+    expect(markup).toContain("2026년 11월");
+    // 11월 1일부터 30일까지만 날짜 칸이고 다른 달 날은 빈 칸이다
+    expect(cells).toHaveLength(30);
+    expect(cells[0][1]).toContain("11월 1일");
+    expect(cells[11][0]).toContain('disabled=""');
+    expect(cells[12][1]).toContain("오늘");
+    expect(cells[12][0]).not.toContain('disabled=""');
+    expect(cells[29][0]).not.toContain('disabled=""');
+    // 오늘이 든 달보다 앞으로는 넘기지 않는다
+    expect(markup).toMatch(/aria-label="이전 달"[^>]*disabled=""/);
+  });
+
+  it("고른 날이 있으면 그 날이 든 달로 연다(3주보다 먼 날도 고를 수 있다)", () => {
+    const markup = renderToStaticMarkup(
+      <SessionCalendar
+        todayKey="2026-11-13"
+        value="2027-02-10"
+        onChange={() => {}}
+      />,
+    );
+    const cells = getDayCells(markup);
+
+    expect(markup).toContain("2027년 2월");
     expect(cells).toHaveLength(28);
-    expect(cells[0][1]).toContain("11월 8일");
-    expect(cells[0][0]).toContain("disabled");
-    expect(cells[5][1]).toContain("오늘");
-    expect(cells[5][0]).not.toContain("disabled");
-    // 오늘부터 21일째인 12월 3일까지만 고를 수 있다
-    expect(cells[25][1]).toContain("12월 3일");
-    expect(cells[25][0]).not.toContain("disabled");
-    expect(cells[26][0]).toContain("disabled");
-    // 달이 바뀌는 날 아래 줄에 'N월'을 쓴다
-    expect(markup).toContain("12월</span>");
+    expect(cells.every((cell) => !cell[0].includes('disabled=""'))).toBe(true);
+    expect(markup).not.toMatch(/aria-label="이전 달"[^>]*disabled=""/);
   });
 });
