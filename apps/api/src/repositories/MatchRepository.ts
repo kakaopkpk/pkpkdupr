@@ -134,7 +134,8 @@ const hydrateSession = (record: any): Session | undefined => {
       typeof record.session.location === "string" && record.session.location.trim()
         ? record.session.location.trim()
         : "Court TBD",
-    kind: record.session.kind,
+    // kind가 없는 옛 수정·삭제 기록 스냅샷은 회원 세션으로 본다
+    kind: isMatchSessionKind(record.session.kind) ? record.session.kind : "custom",
     startTime: record.session.startTime ?? null,
     endTime: record.session.endTime ?? null,
   };
