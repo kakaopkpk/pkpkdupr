@@ -64,8 +64,8 @@ const getStatusLabel = (match: Match): string => {
 export const TournamentBracketSection: React.FC<{
   sessionId: string;
   players: AdminPlayer[];
-  /** 세션 참여자 id. 대진 후보다 */
-  participantIds: string[];
+  /** 세션 참여자 id. 대진 후보다. 세션 상세를 아직 읽지 못했으면 null이고 대진 추가를 막는다 */
+  participantIds: string[] | null;
   /** 대진을 만들거나 지우면 세션(참여자·경기 수)을 다시 읽으려고 부른다 */
   onChanged: () => void;
 }> = ({ sessionId, players, participantIds, onChanged }) => {
@@ -123,7 +123,12 @@ export const TournamentBracketSection: React.FC<{
         <h3 className="text-pk-12 font-bold text-pk-muted">
           대진{matches ? ` ${matches.length}` : ""}
         </h3>
-        <Button size="sm" variant="soft" onClick={() => setDialogOpen(true)}>
+        <Button
+          size="sm"
+          variant="soft"
+          disabled={participantIds === null}
+          onClick={() => setDialogOpen(true)}
+        >
           + 대진 추가
         </Button>
       </div>
@@ -161,7 +166,7 @@ export const TournamentBracketSection: React.FC<{
         </div>
       )}
 
-      {dialogOpen && (
+      {dialogOpen && participantIds && (
         <AddBracketMatchDialog
           sessionId={sessionId}
           players={players}

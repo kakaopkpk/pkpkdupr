@@ -71,7 +71,7 @@ export const UpcomingSessionPanel: React.FC<{
   }, [onParticipantsChanged]);
 
   const participantIds = useMemo(
-    () => detail?.participants.map((participant) => participant.id) ?? [],
+    () => detail?.participants.map((participant) => participant.id) ?? null,
     [detail],
   );
 
