@@ -26,6 +26,7 @@ import { LinkChevron, Section } from "@/components/ui/Section";
 import { cx } from "@/components/ui/cx";
 import { useMinuteClock } from "@/hooks/useMinuteClock";
 import { pickMatchEarnedAchievements } from "@/lib/achievements";
+import { formatBracketRoundLabel } from "@/lib/tournament";
 import {
   formatElapsed,
   formatKstShortDate,
@@ -112,7 +113,7 @@ export interface LiveMatchDetailProps {
   onOpenPlayer: (playerId: string) => void;
 }
 
-/** 진행 중(또는 시작 전 예정) 경기 본문. 참가자가 아니어도 같은 화면을 보며, 점수 입력 버튼은 LiveMatchActions로 하단 고정 바에 둔다 */
+/** 진행 중(또는 시작 전 예정·대진 예정) 경기 본문. 참가자가 아니어도 같은 화면을 보며, 점수 입력 버튼은 LiveMatchActions로 하단 고정 바에 둔다 */
 export const LiveMatchDetail: React.FC<LiveMatchDetailProps> = ({
   match,
   creatorUsername,
@@ -122,6 +123,18 @@ export const LiveMatchDetail: React.FC<LiveMatchDetailProps> = ({
   const now = useMinuteClock();
   const startsAt = new Date(match.matchStartsAt);
   const isScheduled = isMatchScheduled(match, now);
+  // 대진 예정 경기는 시각이 정해져 있지 않아 시각·시작한 사람을 보이지 않는다
+  const isBracketScheduled = match.status === "scheduled";
+  const getPillLabel = () => {
+    if (isBracketScheduled) {
+      return match.round != null
+        ? `${formatBracketRoundLabel(match.round)} · 예정`
+        : "예정";
+    }
+    return isScheduled
+      ? `예정 · ${formatKstWeekdayTime(startsAt)}`
+      : `진행 중 · ${formatElapsed(startsAt, now)}`;
+  };
 
   return (
     <div className="flex flex-col gap-4 px-4 pt-1">
@@ -138,9 +151,7 @@ export const LiveMatchDetail: React.FC<LiveMatchDetailProps> = ({
             isScheduled ? "bg-pk-muted" : "bg-pk-primary",
           )}
         />
-        {isScheduled
-          ? `예정 · ${formatKstWeekdayTime(startsAt)}`
-          : `진행 중 · ${formatElapsed(startsAt, now)}`}
+        {getPillLabel()}
       </span>
       {/* 진행 중이면 vs 자리에 네트를 두고 두 팀 사이로 공이 오간다. 예정 경기는 vs 글자만 */}
       <RallyTeamRow
@@ -152,15 +163,21 @@ export const LiveMatchDetail: React.FC<LiveMatchDetailProps> = ({
           <TeamNames team={team} tone="strong" onOpenPlayer={onOpenPlayer} />
         )}
       />
-      <Card>
-        {match.session ? (
-          <InfoRow label="세션">
-            <SessionLink session={match.session} onOpen={onOpenSession} />
-          </InfoRow>
-        ) : null}
-        <InfoRow label="시작">{formatKstTime(match.matchStartsAt)}</InfoRow>
-        <InfoRow label="시작한 사람">{creatorUsername ?? "–"}</InfoRow>
-      </Card>
+      {match.session || !isBracketScheduled ? (
+        <Card>
+          {match.session ? (
+            <InfoRow label="세션">
+              <SessionLink session={match.session} onOpen={onOpenSession} />
+            </InfoRow>
+          ) : null}
+          {isBracketScheduled ? null : (
+            <>
+              <InfoRow label="시작">{formatKstTime(match.matchStartsAt)}</InfoRow>
+              <InfoRow label="시작한 사람">{creatorUsername ?? "–"}</InfoRow>
+            </>
+          )}
+        </Card>
+      ) : null}
     </div>
   );
 };
@@ -172,6 +189,26 @@ export const LiveMatchActions: React.FC<{ onEnterScore: () => void }> = ({
   <PkButton size="lg" fullWidth className="h-14" onClick={onEnterScore}>
     점수 입력
   </PkButton>
+);
+
+/** 대진 예정 경기 하단 고정 바 내용. 시작이 거절되면 버튼 위에 서버 문구를 보인다 */
+export const ScheduledMatchActions: React.FC<{
+  isBusy: boolean;
+  error: string | null;
+  onStart: () => void;
+}> = ({ isBusy, error, onStart }) => (
+  <>
+    <FooterError message={error} />
+    <PkButton
+      size="lg"
+      fullWidth
+      className="h-14"
+      disabled={isBusy}
+      onClick={onStart}
+    >
+      {isBusy ? "시작하는 중…" : "경기 시작"}
+    </PkButton>
+  </>
 );
 
 /** 큰 점수 블록. 이긴 쪽 점수는 블루, 진 쪽은 회색. 점수는 0부터 센다(평점 변화보다 한 박자 먼저) */

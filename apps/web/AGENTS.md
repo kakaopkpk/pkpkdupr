@@ -60,6 +60,7 @@
       - 진행 중 경기 랠리 팀 줄 `RallyTeamRow`(`LiveMatchRally.tsx`): 아바타 쌍·네트 칸·랠리를 그리고 이름은 호출부가 그린다. 홈 내 경기 카드도 쓴다.
       - 예정 경기면 vs 글자만, 화면이 안 보이면 멈춘다. 공·패들·충격선은 `index.css`의 `pk-rally-*`, 움직임 줄이기면 공이 네트 위에 멈춘다.
       - 완료 경기는 평점 변화 아래 '이 경기로 받은 업적'(응답 `achievements`)을 기록 완료 띠와 같은 줄 `MatchAchievementRow`로 보인다.
+      - 대진 예정 경기(`status: "scheduled"`)는 vs 글자만·시각 없이 보이고 점수 입력·수정·삭제·한 판 더가 없다. 세션 날짜가 오늘(KST)이면 하단 "경기 시작"(`startScheduledMatch`)만 있다.
     - `profile/`: 회원 프로필·경기 목록, 나 탭과 같이 쓰는 머리 `ProfileHeader`. 사진을 불러온 아바타를 누르면 그 자리에서 가운데 240px 원으로 커지는 확대 보기 `AvatarZoomViewer`(누르기·아래로 끌기·Escape·뒤로가기로 닫힘)
     - `records/`: 세션 상세 `SessionReportDrawer`와 그 위 평점 변화 전체 `SessionRatingChangesScreen`
     - `record/`: 경기 기록 시트. 완료 단계는 이 경기로 참가자 전원이 받은 업적을 띠(`match/MatchAchievementRow`)로 보이고, 그중 내 새 업적만 화면 전체 축하 연출 `AchievementCelebration`으로 띄우고 닫으면 확인 처리
@@ -70,6 +71,10 @@
     - `session.kind`가 대회면 카드 안에서 남색 바탕·금색 "트로피 + 대회" 칩·연한 트로피 장식 `session/TrophyIllustration`으로 그린다.
     - 선택 `onPress`는 카드 빈 곳(안의 버튼 제외) 누르기다.
     - `onOpenParticipants`를 생략하면 참여자 줄은 누를 수 없다.
+  - `tournament/`: 대회 대진 조각. 세션 상세와 홈이 같이 쓴다.
+    - `TournamentBracketSection`: "대진" 섹션. 라운드마다 흰 카드(첫 줄 라운드 이름), 제목 줄 오른쪽 전체/내 경기 전환(`showFilter`).
+    - `BracketMatchRow`: 끝난 경기는 `MatchRow` 그대로, 예정·진행 중은 추천 매칭 줄 모양(위 팀 평균, 아래 `home/TeamBlock`의 vs). 진행 중은 오른쪽 앰버 점 + "진행 중".
+    - 묶기·라운드 이름·내 다음 경기·팀 평균은 `lib/tournament.ts`.
   - `ui/`: 새 디자인 공통 컴포넌트. 새 화면은 여기 것을 먼저 씁니다.
     - `Button.tsx`(`PkButton`, variant `primary`·`soft`·`outline`·`ghost`), `Card.tsx`, `SegmentedControl.tsx`, `Headers.tsx`(`TabHeader`·`DetailHeader`), `Form.tsx`(`TextField`·`ListRow`), `Section.tsx`(`Section`·`PreviewSection`·`TextLink`. 섹션 제목이 붙는 묶음은 `Section`으로 만든다), `SheetTitle.tsx`, `ConfirmDialog.tsx`(시트 위 가운데 확인 창. 바텀시트를 겹쳐 쌓지 않을 때 쓰고, 연 쪽이 `useLayerDepth` kind `dialog`로 뒤로가기에 묶는다)
     - `MatchRow.tsx`(`MatchRow`), `PlayerAvatar.tsx`(`PlayerAvatar`·`TeamAvatars`), `Delta.tsx`(`RatingDelta`·`RankChange`), `RankBadge.tsx`, `Badges.tsx`(`LivePill`·`HighlightBadge`), `StatusMessageChip.tsx`, `StateMessage.tsx`(빈 상태 `empty`·불러오기 실패 `error`(항상 "다시 시도") 문구, size `panel` 탭·화면 전체·`inline` 카드·목록·시트 안), `CountUpText.tsx`(카운트업 숫자의 자리 폭을 최종 내용으로 고정), `SheenOverlay.tsx`(한 번 지나가는 흰 빛, 부모 `relative`·`overflow-hidden` 필요), `Icons.tsx`, `cx.ts`

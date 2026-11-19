@@ -3,6 +3,7 @@ import {
   isMatchRecordDeletable,
   isMatchRecordEditable,
 } from "@pkpkdupr/shared/match";
+import { toKstDateKey } from "@pkpkdupr/shared/session";
 import type { MatchInfo } from "@/types/match";
 import PushScreen from "@/components/PushScreen";
 import { getErrorMessage } from "@/components/record/recordMatch.utils";
@@ -24,6 +25,7 @@ import {
   deleteMatch,
   getMatchTeamPlayerIds,
   startMatch,
+  startScheduledMatch,
   toTeamRequests,
 } from "@/lib/matches";
 import DeleteMatchSheet from "./DeleteMatchSheet";
@@ -34,6 +36,7 @@ import {
   LiveMatchActions,
   LiveMatchDetail,
   MatchDetailSkeleton,
+  ScheduledMatchActions,
 } from "./MatchDetailViews";
 
 export interface MatchDetailDrawerProps {
@@ -54,6 +57,11 @@ type LoadState =
   | { kind: "error"; message: string };
 
 class MatchNotFoundError extends Error {}
+
+/** 세션 날짜가 오늘(KST)이면 true. 자정을 넘긴 세션 등 그 밖의 경우는 서버 거절 문구로 처리한다 */
+const isSessionToday = (match: MatchInfo, now: Date) =>
+  !!match.session &&
+  toKstDateKey(new Date(match.session.date)) === toKstDateKey(now);
 
 const fetchMatch = async (matchId: string): Promise<MatchInfo> => {
   const res = await apiFetch(`/api/matches/${encodeURIComponent(matchId)}`);
@@ -106,6 +114,12 @@ export default function MatchDetailDrawer({
   // 한 판 더 요청 상태. 거절 문구는 하단 버튼 위에 보인다
   const [isStartingRematch, setIsStartingRematch] = useState(false);
   const [rematchError, setRematchError] = useState<string | null>(null);
+
+  // 대진 예정 경기 시작 요청 상태. 거절 문구는 하단 버튼 위에 보인다
+  const [isStartingScheduled, setIsStartingScheduled] = useState(false);
+  const [scheduledStartError, setScheduledStartError] = useState<string | null>(
+    null,
+  );
 
   // 삭제 확인 시트. 지운 뒤에는 닫히는 동안 다시 받지 않는다(이미 없는 경기라 404다)
   const deleteDepthId = `${depthId}:delete`;
@@ -247,6 +261,38 @@ export default function MatchDetailDrawer({
     }
   };
 
+  /** 대진 예정 경기를 진행 중으로 바꾸고 같은 화면을 진행 중 경기로 다시 그린다 */
+  const startScheduled = async (match: MatchInfo) => {
+    if (isStartingScheduled) return;
+    const run = async () => {
+      const startedMatch = await startScheduledMatch(match.id);
+      setLoadState({ kind: "ready", match: startedMatch });
+      notifyDataChanged();
+    };
+
+    setIsStartingScheduled(true);
+    setScheduledStartError(null);
+    try {
+      await run();
+    } catch (err) {
+      if (isNetworkError(err)) {
+        showSaveFailure({
+          onRetry: withRejectionMessage(run, (retryError) =>
+            setScheduledStartError(
+              getErrorMessage(retryError, "경기를 시작하지 못했어요."),
+            ),
+          ),
+        });
+      } else {
+        setScheduledStartError(
+          getErrorMessage(err, "경기를 시작하지 못했어요."),
+        );
+      }
+    } finally {
+      setIsStartingScheduled(false);
+    }
+  };
+
   const openDeleteSheet = () => {
     setDeleteError(null);
     setIsDeleteRequested(true);
@@ -321,6 +367,7 @@ export default function MatchDetailDrawer({
   const canDelete =
     isOnline &&
     !!loadedMatch &&
+    loadedMatch.status !== "scheduled" &&
     isMatchRecordDeletable({
       ...loadedMatch,
       matchStartsAt: new Date(loadedMatch.matchStartsAt),
@@ -345,7 +392,26 @@ export default function MatchDetailDrawer({
     );
   } else {
     const { match } = loadState;
-    if (match.status === "created") {
+    if (match.status === "scheduled") {
+      // 대진 예정 경기는 점수 입력·수정·삭제·한 판 더가 없고, 세션 날에만 "경기 시작"이 있다
+      content = (
+        <LiveMatchDetail
+          match={match}
+          creatorUsername={null}
+          onOpenSession={openSessionReport}
+          onOpenPlayer={openMemberProfile}
+        />
+      );
+      if (isSessionToday(match, new Date())) {
+        actions = (
+          <ScheduledMatchActions
+            isBusy={isStartingScheduled}
+            error={scheduledStartError}
+            onStart={() => void startScheduled(match)}
+          />
+        );
+      }
+    } else if (match.status === "created") {
       content = (
         <LiveMatchDetail
           match={match}
