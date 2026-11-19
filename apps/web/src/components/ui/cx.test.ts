@@ -18,6 +18,7 @@ describe("cx", () => {
     expect(cx("text-pk-muted", "text-pk-up")).toBe("text-pk-up");
     expect(cx("bg-pk-neutral", "bg-error")).toBe("bg-error");
     expect(cx("border-pk-line", "border-divider")).toBe("border-divider");
+    expect(cx("bg-pk-primary", "bg-pk-deep")).toBe("bg-pk-deep");
   });
 
   it("px·py 뒤의 p는 둘 다 덮는다", () => {

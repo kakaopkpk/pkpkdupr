@@ -46,18 +46,8 @@ export const formatSessionTimePlace = (
   session: Pick<SessionMetaSource, "startTime" | "endTime" | "location">,
 ) => joinMetaParts([formatSessionTimeRange(session), session.location]);
 
-/**
- * 다음 세션 카드 이름 아래 메타 줄. 세션 상세 머리와 같은 "날짜 시각 · 장소" 형식이다.
- * - 미래: "11월 17일 월 18:00~22:00 · 야탑초등학교", 시각 없으면 "11월 17일 월 · 야탑초등학교"
- * - 오늘: 날짜를 빼 "18:00~22:00 · 야탑초등학교", 시각 없으면 장소만
- */
-export const getSessionMetaLabel = (
-  session: SessionMetaSource,
-  todayKey: string,
-) => {
-  if (getDayDiff(session.dateKey, todayKey) <= 0) {
-    return formatSessionTimePlace(session);
-  }
+/** "11월 17일 월 18:00~22:00 · 야탑초등학교", 시각 없으면 "11월 17일 월 · 야탑초등학교" */
+export const formatSessionDateTimePlace = (session: SessionMetaSource) => {
   const timeRange = formatSessionTimeRange(session);
   const date = formatKstShortDate(new Date(session.date));
   return joinMetaParts([
@@ -65,3 +55,16 @@ export const getSessionMetaLabel = (
     session.location,
   ]);
 };
+
+/**
+ * 다음 세션 카드·세션 상세 카드 이름 아래 메타 줄.
+ * - 미래: 날짜까지 `formatSessionDateTimePlace`
+ * - 오늘: 날짜를 빼 "18:00~22:00 · 야탑초등학교", 시각 없으면 장소만
+ */
+export const getSessionMetaLabel = (
+  session: SessionMetaSource,
+  todayKey: string,
+) =>
+  getDayDiff(session.dateKey, todayKey) <= 0
+    ? formatSessionTimePlace(session)
+    : formatSessionDateTimePlace(session);

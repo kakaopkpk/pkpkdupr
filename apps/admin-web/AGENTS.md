@@ -10,6 +10,14 @@
 - 다른 화면으로 보내는 링크는 `lib/adminRoutes.ts`의 `membersPath`·`matchesPath`·`sessionsPath`·`ratingsPath`로 만들고, 받는 화면은 `parse*Params`로 읽는다. 쿼리 키를 직접 쓰지 않는다.
 - 날짜·시각·평점 표시는 `lib/format.ts`(KST 기준)를 쓴다.
 - 세션 종류 이름·색(정기 블루 채움, 회원 세션 흰 바탕 블루 테두리, 대회 `pk-ink` 채움)은 `pages/sessions/sessionKind.ts`에서만 정한다. 세션 만들기·수정(`SessionFormDialog`)에서 종류를 고른다.
+- 대회 세션 상세 패널에는 "대진" 칸이 있다.
+  - 라운드별로 예정·진행 중·끝난 경기를 보이고, 라운드와 두 팀(세션 참여자 중)을 골라 예정 경기를 만든다(`POST /api/admin/match-sessions/:sessionId/bracket-matches`). 끝난 세션에서는 만들지 않는다.
+  - 대진 경기 삭제는 경기 삭제(`DELETE /api/admin/matches/:matchId`)를 쓴다.
+  - 오늘·미래 대회 세션 패널(`UpcomingSessionPanel`)의 `TournamentBracketSection`이 맡는다. 예정 경기만 지우고, 만들기는 `AddBracketMatchDialog`(점수 칸 없는 `MatchLineupEditor`, 후보는 세션 참여자)다.
+- 끝난 대회 세션 상세 패널에는 "최종 순위" 칸이 있다.
+  - 1~3위마다 그 대회 참여자 중 1명 이상을 `PlayerPicker`로 고른다(개인·2인·4인 팀 모두). 한 사람은 한 순위에만 넣는다.
+  - 저장은 통째로 바꾸는 `PUT /api/admin/match-sessions/:sessionId/placements`이고, 고른 순서가 저장되어 첫 사람이 대표다.
+  - 지난 대회 세션 패널(`PastSessionPanel`)의 `TournamentPlacementsSection`이 맡고, 초기값은 세션 상세(`MatchSessionDetail.placements`)에서 읽는다.
 - API는 `src/api/`의 도메인별 클라이언트 함수(`players`·`matches`·`sessions`·`ratings`, 공통 처리 `client.ts`)로 부른다. 화면에서 `apiFetch`(`lib/api.ts`)·`fetch`를 직접 부르지 않는다.
 
 ## 디자인 규칙

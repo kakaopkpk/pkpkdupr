@@ -41,8 +41,16 @@ export const fetchScheduleMonth = async (
 
 /** 달력 날짜 아래 표시 */
 export type ScheduleDayMark =
-  /** 세션이 있는 날: 참여 인원(그날 세션 참여자 합, 중복 제외), 내가 참여자이거나 그 세션 경기를 뛰었는지 */
-  | { kind: "session"; participantCount: number; isMine: boolean }
+  /**
+   * 세션이 있는 날: 참여 인원(그날 세션 참여자 합, 중복 제외), 내가 참여자이거나 그 세션 경기를 뛰었는지,
+   * 그날 대회 세션이 하나라도 있는지
+   */
+  | {
+      kind: "session";
+      participantCount: number;
+      isMine: boolean;
+      isTournament: boolean;
+    }
   /** 세션 없이 경기 기록만 있는 날: 내가 뛴 경기가 있는지 */
   | { kind: "match"; isMine: boolean };
 
@@ -53,7 +61,9 @@ export const buildScheduleDayMarks = (
 ): Map<string, ScheduleDayMark> => {
   const marks = new Map<string, ScheduleDayMark>();
   const participantsByDate = new Map<string, Set<string>>();
+  const tournamentDateKeys = new Set<string>();
   for (const session of data.sessions) {
+    if (session.kind === "tournament") tournamentDateKeys.add(session.dateKey);
     const ids = participantsByDate.get(session.dateKey) ?? new Set<string>();
     session.participants.forEach((participant) => ids.add(participant.id));
     participantsByDate.set(session.dateKey, ids);
@@ -71,6 +81,7 @@ export const buildScheduleDayMarks = (
       kind: "session",
       participantCount: ids.size,
       isMine: (!!playerId && ids.has(playerId)) || playedDateKeys.has(dateKey),
+      isTournament: tournamentDateKeys.has(dateKey),
     });
   }
   for (const item of data.records) {
@@ -94,6 +105,14 @@ export type ScheduleDayEntry =
   | { kind: "live"; session: ScheduleSessionInfo }
   /** 아직 끝나지 않은 세션(참여·참여 취소 가능) */
   | { kind: "upcoming"; session: ScheduleSessionInfo }
+  /** 끝난 대회 세션(순위 카드). 기록 줄이 있을 때만 */
+  | {
+      kind: "tournament-result";
+      /** 일정 응답의 세션(순위 placements 포함) */
+      session: ScheduleSessionInfo;
+      /** 같은 세션의 기록 줄(내 기록 mine) */
+      item: RecordSessionItemInfo;
+    }
   /** 끝난 세션(세션 카드와 내 기록 띠) */
   | { kind: "record-session"; item: RecordSessionItemInfo }
   /** 세션 없는 경기 */
@@ -102,7 +121,8 @@ export type ScheduleDayEntry =
 /**
  * 고른 날의 카드. 세션 카드(정기 먼저)를 먼저, 세션 없는 경기(최신순)를 뒤에 둔다.
  * 끝나지 않은 세션은 진행 중(liveSessionId)이면 live, 아니면 upcoming이고,
- * 끝난 세션은 기록 줄이 있을 때만 record-session이다(완료 경기 없이 끝난 세션은 정리 대기라 뺀다).
+ * 끝난 세션은 기록 줄이 있을 때만 대회면 tournament-result, 아니면 record-session이다
+ * (완료 경기 없이 끝난 세션은 정리 대기라 뺀다).
  */
 export const getScheduleDayEntries = (
   data: Pick<ScheduleMonthInfo, "sessions" | "records">,
@@ -132,7 +152,11 @@ export const getScheduleDayEntries = (
     }
     const record = sessionRecords.get(session.id);
     if (record) {
-      entries.push({ kind: "record-session", item: record });
+      entries.push(
+        session.kind === "tournament"
+          ? { kind: "tournament-result", session, item: record }
+          : { kind: "record-session", item: record },
+      );
       shownSessionIds.add(session.id);
     }
   }

@@ -32,6 +32,7 @@ describe("MatchRepository.deleteExpiredInProgressMatchesAndEmptySessions", () =>
       repository.deleteExpiredInProgressMatchesAndEmptySessions(now),
     ).resolves.toEqual({
       deletedMatchCount: 0,
+      revertedMatchCount: 0,
       deletedSessionCount: 0,
       deletedSessionIds: [],
     });
@@ -43,6 +44,7 @@ describe("MatchRepository.deleteExpiredInProgressMatchesAndEmptySessions", () =>
     const { repository, execute, transaction } = createRepository([
       {
         deleted_match_count: "2",
+        reverted_match_count: "1",
         deleted_session_count: "2",
         deleted_session_ids: "Sfirst,Ssecond",
       },
@@ -52,6 +54,7 @@ describe("MatchRepository.deleteExpiredInProgressMatchesAndEmptySessions", () =>
       repository.deleteExpiredInProgressMatchesAndEmptySessions(now),
     ).resolves.toEqual({
       deletedMatchCount: 2,
+      revertedMatchCount: 1,
       deletedSessionCount: 2,
       deletedSessionIds: ["Sfirst", "Ssecond"],
     });
@@ -82,6 +85,42 @@ describe("MatchRepository.deleteExpiredInProgressMatchesAndEmptySessions", () =>
     expect(sql).toMatch(/NOT EXISTS \(SELECT 1 FROM deleted_matches d/);
   });
 
+  it("라운드 없는 진행 중 경기만 지우고, 시작한 대진 경기(라운드 있는 created)는 scheduled로 되돌린다", async () => {
+    const { repository, execute } = createRepository([]);
+
+    await repository.deleteExpiredInProgressMatchesAndEmptySessions(now);
+
+    const { sql, args } = executedStatement(execute);
+    const expiredMatches = sql.match(/expired_matches AS \(([\s\S]*?)\),\n/)?.[1];
+    expect(expiredMatches).toMatch(/m\.status = 'created'/);
+    expect(expiredMatches).toMatch(/m\.round IS NULL/);
+
+    const revertedMatches = sql.match(/reverted_matches AS \(([\s\S]*?)\),\n/)?.[1];
+    expect(revertedMatches).toMatch(/UPDATE matches m/);
+    expect(revertedMatches).toMatch(/SET status = 'scheduled'/);
+    expect(revertedMatches).toMatch(/m\.status = 'created'/);
+    expect(revertedMatches).toMatch(/m\.round IS NOT NULL/);
+    expect(revertedMatches).toMatch(/m\.match_starts_at <= \$1/);
+    expect(revertedMatches).toMatch(/NOT EXISTS \(SELECT 1 FROM match_scores/);
+    // 되돌린 경기의 updated_at은 지금(epoch 초) 이후로 올린다
+    expect(revertedMatches).toMatch(/GREATEST\(\$4, m\.updated_at \+ 1\)/);
+    expect(args[3]).toBe(toSeconds(now));
+  });
+
+  it("scheduled 경기는 지우지도 되돌리지도 않고, 남아 있는 경기로 세어 그 세션을 빈 세션으로 지우지 않는다", async () => {
+    const { repository, execute } = createRepository([]);
+
+    await repository.deleteExpiredInProgressMatchesAndEmptySessions(now);
+
+    const { sql } = executedStatement(execute);
+    expect(sql).not.toMatch(/status = 'scheduled'\s*\n\s*AND/);
+    expect(sql).not.toMatch(/m\.status IN/);
+    // 빈 세션 판정은 지운 경기만 빼고 상태와 상관없이 남은 경기를 센다
+    expect(sql).toMatch(
+      /FROM matches m\s+WHERE m\.session_id = s\.id\s+AND NOT EXISTS \(SELECT 1 FROM deleted_matches d WHERE d\.id = m\.id\)/,
+    );
+  });
+
   it("진행 중 경기 만료 기준은 now - IN_PROGRESS_MATCH_TIMEOUT_MS(epoch 초)다", async () => {
     const { repository, execute } = createRepository([]);
 
@@ -89,6 +128,7 @@ describe("MatchRepository.deleteExpiredInProgressMatchesAndEmptySessions", () =>
       repository.deleteExpiredInProgressMatchesAndEmptySessions(now),
     ).resolves.toEqual({
       deletedMatchCount: 0,
+      revertedMatchCount: 0,
       deletedSessionCount: 0,
       deletedSessionIds: [],
     });

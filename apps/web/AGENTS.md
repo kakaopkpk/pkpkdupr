@@ -36,6 +36,11 @@
         - 어느 카드에서든 참여하기·참여 취소.
       - 진행 중 세션이 없으면 캐러셀(과 진행 중 경기) 아래 "소식" 피드 `home/NewsFeed`(`GET /api/news-feed`, 무한 스크롤, 데이터는 `home/useNewsFeed`)를 둔다. 카드 모양·누르면 가는 곳은 `docs/design.md` "홈"을 따른다.
       - 진행 중 경기는 경기마다 가로 vs 카드로 둔다. `home/LiveMatchCard`의 내 경기 `MyLiveMatchCard`는 테두리·"내 경기" 칩·점수 입력 버튼과 경기 상세 같은 랠리 팀 줄(`RallyTeamRow`)이 있고, 남의 경기 `LiveMatchCard`는 없다.
+      - 진행 중 세션이 대회 세션이면 진행 화면이 대회 카드(`LiveSessionCard`) → "내 경기" 섹션 → 라운드별 대진(`TournamentBracketSection`, `showFilter` false)이다.
+        - 세션 지배자·"진행 중" 섹션·추천 매칭·"오늘 기록"은 없고, 남의 진행 중 경기는 대진 안 제자리에만 있다.
+        - "내 경기"는 내 진행 중 경기(대진 밖 경기여도)면 `MyLiveMatchCard`(`isTournament`, 칩 대신 "진행 중 · N라운드" 글자 머리)다.
+        - 내 진행 중 경기가 없으면 내 다음 대진 경기(`findMyNextBracketMatch`)를 `MyNextBracketMatchCard`("다음 경기 · N라운드", "경기 시작" → `startScheduledMatch` → `notifyDataChanged()`)로 보인다. 4xx 문구는 카드 아래, 네트워크 오류는 `showSaveFailure`다.
+        - 둘 다 없으면 섹션이 없다.
     - `Schedule.tsx`(일정)
       - 탭 머리 없이 월 달력 `schedule/MonthCalendar`와 고른 날 카드를 둔다.
       - 달력 머리는 이전 달·"2026년 11월"(누르면 이번 달·오늘)·다음 달.
@@ -53,8 +58,9 @@
         - 아래 카드는 고른 날이 속한 달 응답으로 그린다.
       - 카드는 세션 먼저, 그 뒤 세션 없는 경기 순서다.
         - 진행 중 세션 `LiveSessionCard`: 버튼은 진행 화면 보기 → 홈 탭뿐, 참여·참여 취소는 진행 화면에서.
-        - 끝나지 않은 세션 `UpcomingSessionCard`: 참여하기·참여 취소.
+        - 끝나지 않은 세션 `UpcomingSessionCard`(대회 포함): 참여하기·참여 취소, 카드 빈 곳을 누르면 `openSessionReport`.
         - 끝난 세션 `RecordSessionCard`: `openSessionReport`.
+        - 끝난 대회 세션은 `RecordSessionCard` 대신 대회 순위 카드 `tournament/TournamentRankCard`: `openSessionReport`. 일정 항목은 세션과 기록 줄을 함께 담은 `tournament-result`다.
         - 세션 없는 경기 `RecordMatchCard`: 경기 상세.
         - 아무것도 없으면 `EmptyDayCard`: 세션 만들기 달력 범위(오늘부터 3주) 안이면 그 날짜로 `openCreateSession`, 지난 날·범위 밖은 문구만.
     - `Ranking.tsx`(랭킹)
@@ -67,13 +73,32 @@
       - 진행 중 경기 랠리 팀 줄 `RallyTeamRow`(`LiveMatchRally.tsx`): 아바타 쌍·네트 칸·랠리를 그리고 이름은 호출부가 그린다. 홈 내 경기 카드도 쓴다.
       - 예정 경기면 vs 글자만, 화면이 안 보이면 멈춘다. 공·패들·충격선은 `index.css`의 `pk-rally-*`, 움직임 줄이기면 공이 네트 위에 멈춘다.
       - 완료 경기는 평점 변화 아래 '이 경기로 받은 업적'(응답 `achievements`)을 기록 완료 띠와 같은 줄 `MatchAchievementRow`로 보인다.
+      - 대진 예정 경기(`status: "scheduled"`)는 vs 글자만·시각 없이 보이고 점수 입력·수정·삭제·한 판 더가 없다. 세션 날짜가 오늘(KST)이면 하단 "경기 시작"(`startScheduledMatch`)만 있다.
     - `profile/`: 회원 프로필·경기 목록, 나 탭과 같이 쓰는 머리 `ProfileHeader`. 사진을 불러온 아바타를 누르면 그 자리에서 가운데 240px 원으로 커지는 확대 보기 `AvatarZoomViewer`(누르기·아래로 끌기·Escape·뒤로가기로 닫힘)
     - `records/`: 세션 상세 `SessionReportDrawer`와 그 위 평점 변화 전체 `SessionRatingChangesScreen`
+      - 다가오는·진행 중·끝난 세션 모두 연다. 세션 단건·경기는 항상, 끝난 세션(`getEmptySessionExpiresAt` ≤ 지금)만 세션 리포트를 더 읽고, 리포트 404면 리포트 조각 없이 그린다.
+      - 머리는 글자가 아니라 카드다(불러오는 중 스켈레톤도 카드 자리).
+      - 끝나기 전: 일정 탭 `UpcomingSessionCard`(참여자 시트·참여 버튼) → 대회면 `TournamentBracketSection`, 아니면 "경기" 섹션(빈 상태 "아직 경기가 없어요"). 참여자 목록 섹션은 없다.
+        - 진행 중(`useLiveSession().liveSession?.id`가 이 세션)이면 D-day 대신 LIVE다. 대회도 진행 중에 모양이 같다.
+        - 메타 줄은 홈 다음 세션 카드와 같은 `getSessionMetaLabel`(미래면 날짜까지).
+      - 끝난 대회: `TournamentRankCard`(누를 수 없음, `mine`은 리포트 `players`의 내 줄) → 세션 지배자·내 평점·내 새 업적·평점 변화 → `TournamentBracketSection`.
+      - 끝난 일반 세션: `RecordSessionCard`(`onPress` 없이 누를 수 없음, 메타 줄 앞에 날짜) → 세션 지배자·내 평점·내 새 업적·평점 변화 → "경기" 섹션. 리포트가 없으면 버튼 없는 블루 카드("종료").
     - `record/`: 경기 기록 시트. 완료 단계는 이 경기로 참가자 전원이 받은 업적을 띠(`match/MatchAchievementRow`)로 보이고, 그중 내 새 업적만 화면 전체 축하 연출 `AchievementCelebration`으로 띄우고 닫으면 확인 처리
     - `session/`: 세션 만들기(날짜 칩·시작·종료 시각 칩 `SessionSchedulePicker`)·참여자 시트 `ParticipantsSheet`(열면 참여자 보기, 오른쪽 위 "수정"으로 같은 시트에서 전체 회원 체크·게스트 추가 수정 모드, 완료·취소·뒤로가기는 보기로 돌아감)
     - `settings/`: 설정·비밀번호 변경·상태메시지 편집·프로필 사진 조정 `AvatarCropScreen`
       - 고른 사진을 끌어 옮기고 핀치로 1~4배, 두 번 탭 2배↔1배, 원 안을 512px JPEG로 잘라 저장. 좌표 계산은 `utils/avatarCrop.ts`
-  - 탭 전용 조각: `home/`, `schedule/`, `records/`(세션 리포트 조각 `SessionReportParts`는 일정 탭·세션 상세·홈이 같이 씀, 끝난 세션·세션 없는 경기 카드 `RecordCards`, 세션 상세 내 새 업적 카드 `MyNewAchievementsCard`), `ranking/`. 세션 블루 카드 틀·참여 버튼 `session/SessionBlueCard`(오른쪽 위 피클볼 장식 `session/PickleballIllustration`, 첫 줄은 종류 칩 "정기"/"회원"과 남은 날 `getSessionDDayLabel`("D-1"·오늘이면 "D-Day"), 참여 중이면 "✓ 참여 중 … 취소" 버튼 하나, 진행 중 세션 카드 `LiveSessionCard`)는 홈 다음 세션·진행 중 세션 카드와 일정 탭 세션 카드가 같이 씀
+  - 탭 전용 조각: `home/`, `schedule/`, `records/`(세션 리포트 조각 `SessionReportParts`는 일정 탭·세션 상세·홈이 같이 씀, 끝난 세션·세션 없는 경기 카드 `RecordCards`, 세션 상세 내 새 업적 카드 `MyNewAchievementsCard`), `ranking/`. 세션 블루 카드 틀·참여 버튼 `session/SessionBlueCard`(오른쪽 위 피클볼 장식 `session/PickleballIllustration`, 첫 줄은 종류 칩 "정기"/"회원"/"대회"와 남은 날 `getSessionDDayLabel`("D-1"·오늘이면 "D-Day"), 참여 중이면 "✓ 참여 중 … 취소" 버튼 하나, 진행 중 세션 카드 `LiveSessionCard`)는 홈 다음 세션·진행 중 세션 카드와 일정 탭 세션 카드가 같이 씀
+    - `session.kind`가 대회면 카드 안에서 남색 바탕·금색 "트로피 + 대회" 칩·연한 트로피 장식 `session/TrophyIllustration`으로 그린다.
+    - 선택 `onPress`는 카드 빈 곳(안의 버튼 제외) 누르기다.
+    - `onOpenParticipants`를 생략하면 참여자 줄은 누를 수 없다.
+  - `tournament/`: 대회 대진·순위 조각. 세션 상세·홈·일정 탭이 같이 쓴다.
+    - `TournamentBracketSection`: "대진" 섹션. 라운드마다 흰 카드(첫 줄 라운드 이름), 제목 줄 오른쪽 전체/내 경기 전환(`showFilter`).
+    - `BracketMatchRow`: 끝난 경기는 `MatchRow` 그대로, 예정·진행 중은 추천 매칭 줄 모양(위 팀 평균, 아래 `home/TeamBlock`의 vs). 진행 중은 오른쪽 앰버 점 + "진행 중".
+    - `TournamentRankCard`: 끝난 대회 순위 카드. 대회 카드 틀(D-day 자리 "종료", 참여 줄은 누를 수 없음)에 구분선(흰색 14%) → 1~3위 줄 → 구분선 → 내 기록 줄.
+      - 순위 줄은 금·은·동 원 + 참가 단위 아바타(최대 4개)·이름(1명 아이디, 2명 "a · b", 3명 이상 "대표 외 N명") + 오른쪽 승패(`record`가 있을 때만)이고, 줄 높이는 같다.
+      - 내 기록 줄은 "내 기록" + 승패 + 평점 변화(`pk-up-on-deep`·`pk-down-on-deep`, 0은 흐린 흰색, 세션 후 평점이 없으면 승패만).
+      - 순위가 없으면 순위 줄, `mine`이 없으면 내 기록 줄을 그 위 구분선과 함께 뺀다. 카드 전체가 `onPress` 하나다.
+    - 묶기·라운드 이름·내 다음 경기·팀 평균은 `lib/tournament.ts`.
   - `ui/`: 새 디자인 공통 컴포넌트. 새 화면은 여기 것을 먼저 씁니다.
     - `Button.tsx`(`PkButton`, variant `primary`·`soft`·`outline`·`ghost`), `Card.tsx`, `SegmentedControl.tsx`, `Headers.tsx`(`TabHeader`·`DetailHeader`), `Form.tsx`(`TextField`·`ListRow`), `Section.tsx`(`Section`·`PreviewSection`·`TextLink`. 섹션 제목이 붙는 묶음은 `Section`으로 만든다), `SheetTitle.tsx`, `ConfirmDialog.tsx`(시트 위 가운데 확인 창. 바텀시트를 겹쳐 쌓지 않을 때 쓰고, 연 쪽이 `useLayerDepth` kind `dialog`로 뒤로가기에 묶는다)
     - `MatchRow.tsx`(`MatchRow`), `PlayerAvatar.tsx`(`PlayerAvatar`·`TeamAvatars`), `Delta.tsx`(`RatingDelta`·`RankChange`), `RankBadge.tsx`, `Badges.tsx`(`LivePill`·`HighlightBadge`), `StatusMessageChip.tsx`, `StateMessage.tsx`(빈 상태 `empty`·불러오기 실패 `error`(항상 "다시 시도") 문구, size `panel` 탭·화면 전체·`inline` 카드·목록·시트 안), `CountUpText.tsx`(카운트업 숫자의 자리 폭을 최종 내용으로 고정), `SheenOverlay.tsx`(한 번 지나가는 흰 빛, 부모 `relative`·`overflow-hidden` 필요), `Icons.tsx`, `cx.ts`
@@ -84,6 +109,7 @@
   - `TabNavigationContext.tsx`: 탭(`TabKey`: `home`·`schedule`·`ranking`·`me`)·깊이 스택(`pushDepth`/`closeDepth`, 브라우저 뒤로가기 연동)·스크롤 복원·당겨서 새로고침 등록
   - `AppNavigationContext.tsx`: `useAppNavigation()`으로 전역 화면 열기(`openMatchDetail`, `openMemberProfile`(내 id면 나 탭), `openRecordMatch`, `openCreateSession`(`dateKey`로 날짜를 골라 둔 채 열고, 만든 뒤 `onCreated`를 부름. + 메뉴는 홈 탭으로, 일정 탭은 만든 날로 옮김), `openSettings`, `openSessionReport`(지금 탭 위에 세션 상세 화면), `openAchievementDetail`(업적 상세 시트, 경기 기록 시트보다 위 레이어), `openAchievements`(지금 탭 위에 업적 전체 보기 화면, 내 id여도 나 탭으로 바꾸지 않음. `focusAchievementId`를 주면 진행도 준비 뒤 그 업적 줄 위쪽 끝을 스크롤 영역 높이 40%에 두고 카드 폭 가득 `pk-primary-soft` 바탕을 한 번 반짝임, 움직임 줄이기면 스크롤만)), `notifyDataChanged`·`dataVersion`, 전역 화면 레이어 번호 `GLOBAL_LAYER`
   - `LiveSessionContext.tsx`: `useLiveSession()`으로 오늘 진행 중 세션·그 경기, 세션과 상관없는 진행 중 경기(`GET /api/matches/in-progress`)와 그중 내 경기
+    - 진행 중 세션은 `getLiveSessionStartsAt` ≤ 지금 < 빈 세션 만료 시각인 세션(정기 우선)이다. 대회 세션만 시작 시각(`startTime`이 있으면 그날 그 시각)부터이고, 다음 재조회 시각(`getNextLiveSessionBoundary`)도 같은 기준이다.
   - `SystemNoticeContext.tsx`: `useSystemNotice().showSaveFailure({ onRetry })`로 저장 실패 토스트(네트워크 오류에만, 서버 4xx·5xx는 화면 인라인), `showToast({ message, actionLabel?, onAction?, durationMs? })`로 하단 바 위 알약 토스트(기본 5초, 동작 글자 하나)
   - `AppUpdateContext.tsx`: `useAppUpdate()`로 PWA 업데이트 확인·적용 상태
   - `ScreenVisibilityContext.tsx`: `useIsScreenVisible()`로 안쪽 화면이 지금 보이는지. 탭 패널(선택됨 && 탭 셸이 PushScreen에 덮이지 않음)과 PushScreen 본문(열림 && 활성 && 덮이지 않음)이 제공하고, 제공자 밖(바텀시트 등)은 언제나 보임
@@ -169,6 +195,14 @@
 - 기본색은 블루 `pk-primary`(#2346a8)입니다. 버튼은 모두 블루 계열(채움, 연한 `pk-primary-soft` 바탕, `pk-primary-line` 테두리)이며 하이라이트 색을 버튼에 쓰지 않습니다. 시트 하단 왼쪽의 글자 너비만 한 작은 보조 버튼(취소·이전·다시 고르기·경기 시작)은 `soft`(`pk-primary-soft` 바탕·`pk-primary` 글자)입니다. 색 있는 버튼은 누를 수 있고 회색(`pk-neutral`)은 비활성이라는 구분을 지키기 위해, 보조 버튼에 회색 바탕을 쓰지 않습니다.
 - 테두리가 필요한 곳(진행 중인 내 경기 카드, 테두리 버튼)은 옅은 파랑 `pk-primary-line`입니다.
 - 하이라이트 `pk-hl`(앰버 #ffb627)은 테두리 없이 LIVE 표시, 오늘의 급상승, 업적 축하 연출(`AchievementCelebration`)과 받은 업적 시트 머리의 배지 빛줄기·후광에만 씁니다. 예외로 경기 삭제 버튼의 길게 누르기 채움 앞 끝 선, 축하 연출·받은 업적 시트에서 한 번 퍼지는 고리, 연승 아바타(`WinStreakAvatarFrame`, `.pk-streak-ring`)의 링·태그에 씁니다. 평점 추세선 끝점은 블루 점입니다.
+  - 대회 세션 예외로 달력의 대회 날 점과 대진 진행 중 경기의 앰버 점("진행 중" 앞)에도 씁니다.
+- 대회 세션 카드(대회 카드·순위 카드)는 짙은 남색 `pk-deep` 바탕입니다.
+  - "트로피 + 대회" 칩은 `pk-gold` 바탕에 글자·트로피 아이콘 `pk-ink`이고, 오른쪽 위 원에 연한 금색 트로피 장식을 둡니다.
+  - 남색 바탕 위 평점 상승은 `pk-up-on-deep`, 하락은 `pk-down-on-deep`입니다(`pk-up`·`pk-down`은 남색 위에서 읽히지 않음).
+- LIVE(진행 중 세션) 판정에서 대회 세션만 세션 시작 시각부터 LIVE입니다.
+  - 시작 시각이 있으면 그날 그 시각, 없으면 세션 시각(`date`)이 기준입니다.
+  - 홈 대회 대진도 이 기준 전에는 보이지 않습니다.
+  - 정기·회원 세션의 LIVE 판정은 그대로입니다.
 - 랭킹 1~3위는 금·은·동(`pk-gold`·`pk-silver`·`pk-bronze`) 원입니다. 상승은 `pk-up`, 하락은 모두 `pk-down`, 보합은 회색입니다. 빨강(`pk-down`) 채움 버튼은 경기 삭제 확인 시트의 "길게 눌러 삭제"(`HoldToConfirmButton` `danger`, 1초)뿐입니다.
 - 평점 없음은 "–"로 표기하고 NR 글자·알약을 쓰지 않습니다(`formatRating`도 값이 없으면 "–"). 랭킹의 평점 없는 회원 줄은 순위·평점 모두 "–", 세션 평점 변화 줄은 세션 후 평점이 없으면 평점 부분 없이 승패만, 내 변동 카드는 큰 "–" 하나만(변화 표시 없음) 보입니다. 처음 평점을 받은 회원도 다른 회원처럼 시작 평점 3.000 → 새 평점과 3.000 기준 변화량으로 보이며 NEW 같은 별도 표시는 붙이지 않습니다(평점 로그·세션 리포트의 이전 평점에 3.0이 들어 있음). 세션 전 평점이 없는 경우(첫 평점이 공식 DUPR 조정)만 새 평점만 보이고 변화는 "–"입니다. 팀 평균 등 평균 표시는 NR을 3.0으로 칩니다.
 - 카드에는 테두리가 없습니다. 둥글기는 12/20/999만, 글자 크기는 12/13/15/17/22/26만 씁니다.

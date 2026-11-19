@@ -167,6 +167,8 @@ export const matches = pgTable("matches", {
   resultSubmittedAt: unixTimestamp("result_submitted_at"),
   /** completed가 될 때 게스트가 낀 경기. 평점·통계에서 빠진다 */
   ratingExcluded: boolean("rating_excluded").notNull().default(false),
+  /** 대회 대진 라운드(1부터). 대진 경기만 값이 있고, status가 scheduled면 반드시 있다 */
+  round: integer("round"),
   createdAt: unixTimestamp("created_at").notNull(),
   updatedAt: unixTimestamp("updated_at").notNull(),
 }, (table) => ({
@@ -257,6 +259,29 @@ export const officialDuprAdjustmentLogs = pgTable(
   },
   (table) => ({
     playerIdIndex: index("official_dupr_adjustment_logs_player_id_idx").on(
+      table.playerId,
+    ),
+  }),
+);
+
+/**
+ * 대회 최종 순위. 한 순위에 참가 단위의 선수 여러 명이 들어가고 position은 관리자가 고른 순서(0이 대표)다.
+ * 한 세션에서 한 회원은 한 줄만 있고, 세션·회원이 지워지면 FK cascade로 함께 지워진다.
+ */
+export const matchSessionPlacements = pgTable(
+  "match_session_placements",
+  {
+    sessionId: id("session_id").notNull(),
+    playerId: id("player_id").notNull(),
+    place: integer("place").notNull(),
+    position: integer("position").notNull(),
+  },
+  (table) => ({
+    pk: primaryKey({
+      name: "match_session_placements_pkey",
+      columns: [table.sessionId, table.playerId],
+    }),
+    playerIdIndex: index("match_session_placements_player_id_idx").on(
       table.playerId,
     ),
   }),

@@ -3,7 +3,7 @@ import {
   isMatchRecordDeletable,
   isMatchRecordEditable,
 } from "@pkpkdupr/shared/match";
-import type { MatchInfo } from "@/types/match";
+import { isMatchSessionToday, type MatchInfo } from "@/types/match";
 import PushScreen from "@/components/PushScreen";
 import { getErrorMessage } from "@/components/record/recordMatch.utils";
 import { StateMessage } from "@/components/ui/StateMessage";
@@ -15,6 +15,7 @@ import {
   useTabNavigation,
 } from "@/context/TabNavigationContext";
 import { useLayerDepth } from "@/hooks/useLayerDepth";
+import { useMinuteClock } from "@/hooks/useMinuteClock";
 import { useOnlineStatus } from "@/hooks/useOnlineStatus";
 import { usePlayers } from "@/hooks/usePlayers";
 import { useStartedMatchToast } from "@/hooks/useStartedMatchToast";
@@ -24,6 +25,7 @@ import {
   deleteMatch,
   getMatchTeamPlayerIds,
   startMatch,
+  startScheduledMatch,
   toTeamRequests,
 } from "@/lib/matches";
 import DeleteMatchSheet from "./DeleteMatchSheet";
@@ -34,6 +36,7 @@ import {
   LiveMatchActions,
   LiveMatchDetail,
   MatchDetailSkeleton,
+  ScheduledMatchActions,
 } from "./MatchDetailViews";
 
 export interface MatchDetailDrawerProps {
@@ -91,6 +94,8 @@ export default function MatchDetailDrawer({
   const showStartedMatchToast = useStartedMatchToast();
   const { players } = usePlayers();
   const isOnline = useOnlineStatus();
+  // 자정·세션 종료 시각을 지나면 "경기 시작" 노출이 따라 바뀐다
+  const now = useMinuteClock();
   const [loadState, setLoadState] = useState<LoadState>({ kind: "loading" });
   const requestIdRef = useRef(0);
   const isOpen = useLayerDepth({
@@ -106,6 +111,12 @@ export default function MatchDetailDrawer({
   // 한 판 더 요청 상태. 거절 문구는 하단 버튼 위에 보인다
   const [isStartingRematch, setIsStartingRematch] = useState(false);
   const [rematchError, setRematchError] = useState<string | null>(null);
+
+  // 대진 예정 경기 시작 요청 상태. 거절 문구는 하단 버튼 위에 보인다
+  const [isStartingScheduled, setIsStartingScheduled] = useState(false);
+  const [scheduledStartError, setScheduledStartError] = useState<string | null>(
+    null,
+  );
 
   // 삭제 확인 시트. 지운 뒤에는 닫히는 동안 다시 받지 않는다(이미 없는 경기라 404다)
   const deleteDepthId = `${depthId}:delete`;
@@ -247,6 +258,40 @@ export default function MatchDetailDrawer({
     }
   };
 
+  /** 대진 예정 경기를 진행 중으로 바꾸고 같은 화면을 진행 중 경기로 다시 그린다 */
+  const startScheduled = async (match: MatchInfo) => {
+    if (isStartingScheduled) return;
+    const run = async () => {
+      const startedMatch = await startScheduledMatch(match.id);
+      // 시작 전에 보낸 재조회 응답(아직 예정)이 늦게 와서 덮어쓰지 않게 무효화한다
+      requestIdRef.current += 1;
+      setLoadState({ kind: "ready", match: startedMatch });
+      notifyDataChanged();
+    };
+
+    setIsStartingScheduled(true);
+    setScheduledStartError(null);
+    try {
+      await run();
+    } catch (err) {
+      if (isNetworkError(err)) {
+        showSaveFailure({
+          onRetry: withRejectionMessage(run, (retryError) =>
+            setScheduledStartError(
+              getErrorMessage(retryError, "경기를 시작하지 못했어요."),
+            ),
+          ),
+        });
+      } else {
+        setScheduledStartError(
+          getErrorMessage(err, "경기를 시작하지 못했어요."),
+        );
+      }
+    } finally {
+      setIsStartingScheduled(false);
+    }
+  };
+
   const openDeleteSheet = () => {
     setDeleteError(null);
     setIsDeleteRequested(true);
@@ -321,6 +366,7 @@ export default function MatchDetailDrawer({
   const canDelete =
     isOnline &&
     !!loadedMatch &&
+    loadedMatch.status !== "scheduled" &&
     isMatchRecordDeletable({
       ...loadedMatch,
       matchStartsAt: new Date(loadedMatch.matchStartsAt),
@@ -345,7 +391,26 @@ export default function MatchDetailDrawer({
     );
   } else {
     const { match } = loadState;
-    if (match.status === "created") {
+    if (match.status === "scheduled") {
+      // 대진 예정 경기는 점수 입력·수정·삭제·한 판 더가 없고, 세션 날에만 "경기 시작"이 있다
+      content = (
+        <LiveMatchDetail
+          match={match}
+          creatorUsername={null}
+          onOpenSession={openSessionReport}
+          onOpenPlayer={openMemberProfile}
+        />
+      );
+      if (isMatchSessionToday(match, now)) {
+        actions = (
+          <ScheduledMatchActions
+            isBusy={isStartingScheduled}
+            error={scheduledStartError}
+            onStart={() => void startScheduled(match)}
+          />
+        );
+      }
+    } else if (match.status === "created") {
       content = (
         <LiveMatchDetail
           match={match}

@@ -330,6 +330,7 @@ describe("세션 변경의 구글 캘린더 반영", () => {
       "deleteExpiredInProgressMatchesAndEmptySessions",
     ).mockResolvedValue({
       deletedMatchCount: 0,
+      revertedMatchCount: 0,
       deletedSessionCount: 2,
       deletedSessionIds: ["Sold0001", "Sold0002"],
     });

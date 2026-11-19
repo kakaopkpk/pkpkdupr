@@ -403,6 +403,108 @@ describe("PUT /api/matches/:matchId", () => {
     expect(applyMatchResult).not.toHaveBeenCalled();
   });
 
+  // 예정 경기에 바로 점수를 넣는 것은 관리자 정정뿐이다.
+  const signInAsAdmin = () =>
+    vi
+      .spyOn(AuthService.prototype, "authenticateAccessToken")
+      .mockResolvedValue({
+        ...buildSession(requester),
+        payload: { playerId: requester.id, isAdmin: true },
+      });
+
+  it("회원은 대진 예정 경기(scheduled)에 바로 점수를 넣을 수 없다(409)", async () => {
+    existing = buildExistingMatch({
+      status: "scheduled",
+      source: "admin_created",
+      round: 1,
+      scores: [],
+      completedAt: null,
+      resultSubmittedByPlayerId: null,
+      resultSubmittedAt: null,
+      matchStartsAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+    });
+
+    const response = await putMatch();
+
+    expect(response.status).toBe(409);
+    expect(updateRecordedMatch).not.toHaveBeenCalled();
+    expect(applyMatchResult).not.toHaveBeenCalled();
+  });
+
+  it("관리자가 대진 예정 경기(scheduled)에 점수를 넣으면 첫 점수와 같이 입력 시각에 completed가 되고 증분 반영한다", async () => {
+    signInAsAdmin();
+    existing = buildExistingMatch({
+      status: "scheduled",
+      source: "admin_created",
+      round: 1,
+      scores: [],
+      completedAt: null,
+      resultSubmittedByPlayerId: null,
+      resultSubmittedAt: null,
+      matchStartsAt: new Date(Date.now() - 3 * 60 * 60 * 1000),
+    });
+
+    const response = await putMatch();
+
+    expect(response.status).toBe(200);
+    const [, input] = updateRecordedMatch.mock.calls[0]!;
+    expect(input.ratingExcluded).toBe(false);
+    expect(response.body.status).toBe("completed");
+    expect(new Date(response.body.completedAt).getTime()).toBe(
+      input.resultSubmittedAt.getTime(),
+    );
+    expect(applyMatchResult).toHaveBeenCalledTimes(1);
+    expect(recalculate).not.toHaveBeenCalled();
+  });
+
+  it("관리자가 넣은 대진 예정 경기에 게스트가 끼면 평점 미반영으로 저장한다", async () => {
+    signInAsAdmin();
+    const guest = { ...buildPlayer("player-guest", "M"), isGuest: true };
+    vi.mocked(AuthService.prototype.getPublicPlayers).mockResolvedValue([
+      ...publicPlayers,
+      guest,
+    ]);
+    existing = buildExistingMatch({
+      status: "scheduled",
+      source: "admin_created",
+      round: 1,
+      scores: [],
+      completedAt: null,
+      resultSubmittedByPlayerId: null,
+      resultSubmittedAt: null,
+    });
+
+    const response = await putMatch({
+      ...validBody,
+      teams: [
+        { name: "Team A", playerIds: [requester.id, partner.id] },
+        { name: "Team B", playerIds: [guest.id, opponentF.id] },
+      ],
+    });
+
+    expect(response.status).toBe(200);
+    expect(updateRecordedMatch.mock.calls[0]![1].ratingExcluded).toBe(true);
+  });
+
+  it("시작 2시간이 지난 점수 없는 대진 경기(라운드 있는 created)는 404가 아니라 점수를 받는다", async () => {
+    existing = buildExistingMatch({
+      status: "created",
+      source: "admin_created",
+      round: 2,
+      scores: [],
+      completedAt: null,
+      resultSubmittedByPlayerId: null,
+      resultSubmittedAt: null,
+      matchStartsAt: new Date(Date.now() - 2 * 60 * 60 * 1000 - 1000),
+    });
+
+    const response = await putMatch();
+
+    expect(response.status).toBe(200);
+    expect(updateRecordedMatch).toHaveBeenCalledTimes(1);
+    expect(applyMatchResult).toHaveBeenCalledTimes(1);
+  });
+
   it("처리 전에 만료 정리를 먼저 호출한다", async () => {
     const findById = vi.mocked(MatchRepository.prototype.findById);
 

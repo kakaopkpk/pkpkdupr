@@ -17,6 +17,9 @@
   --color-pk-neutral: #e3e7f0; /* 세그먼트 바탕·비활성 버튼·스켈레톤 */
   --color-pk-up: #0a7a52;
   --color-pk-down: #c2253d;
+  /* 남색(pk-deep) 바탕 위 평점 상승·하락 */
+  --color-pk-up-on-deep: #7ee2b0;
+  --color-pk-down-on-deep: #ffa3a3;
   --color-pk-primary: #2346a8;
   --color-pk-primary-soft: #e6ebf8;
   --color-pk-primary-line: #bccaf0;

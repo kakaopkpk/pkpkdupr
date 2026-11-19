@@ -17,6 +17,11 @@ import {
   toKstDateKey,
   type MatchSessionKind,
 } from "@pkpkdupr/shared/session";
+import {
+  countTournamentUnitRecord,
+  type TournamentPlace,
+  type TournamentPlacement,
+} from "@pkpkdupr/shared/tournament";
 import type {
   PlayerRatingChangeLog,
   PlayerRatingHistory,
@@ -41,6 +46,7 @@ import {
 import { db } from "../db";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
+export const MATCH_ALREADY_STARTED_MESSAGE = "이미 시작한 경기예요.";
 const SESSION_CONFLICT_MESSAGE = "같은 이름의 세션이 이미 있습니다.";
 
 /** 세션 유니크 위반을 409로 바꾼다. 정기 날짜 키 위반(동시에 만든 그날 정기 세션)은 그 안내로 */
@@ -128,6 +134,10 @@ const hydrateSession = (record: any): Session | undefined => {
       typeof record.session.location === "string" && record.session.location.trim()
         ? record.session.location.trim()
         : "Court TBD",
+    // kind가 없는 옛 수정·삭제 기록 스냅샷은 회원 세션으로 본다
+    kind: isMatchSessionKind(record.session.kind) ? record.session.kind : "custom",
+    startTime: record.session.startTime ?? null,
+    endTime: record.session.endTime ?? null,
   };
 };
 
@@ -221,6 +231,7 @@ export const hydrateMatch = (record: any): Match => ({
   createdAt: new Date(record.createdAt),
   updatedAt: new Date(record.updatedAt),
   ratingExcluded: record.ratingExcluded === true,
+  round: typeof record.round === "number" ? record.round : null,
 });
 
 const hydrateSessionSummary = (record: any): MatchSessionSummary => ({
@@ -575,6 +586,64 @@ export class MatchRepository {
     return updated;
   }
 
+  /**
+   * 세션별 대회 최종 순위(순위 오름차순). 순위 없는 세션은 결과에 없다.
+   * record는 그 세션의 라운드 있는 완료 경기로 센 참가 단위 승패다
+   */
+  async findTournamentPlacements(
+    sessionIds: string[],
+  ): Promise<Map<string, TournamentPlacement[]>> {
+    const result = new Map<string, TournamentPlacement[]>();
+    if (!sessionIds.length) return result;
+    const placements = await this.run(
+      () => db.matches.findSessionPlacements(sessionIds),
+      500,
+    );
+    if (!placements.length) return result;
+
+    const placedSessionIds = [
+      ...new Set(placements.map((placement) => placement.sessionId)),
+    ];
+    const roundMatches = await this.run(
+      () => db.matches.findCompletedRoundMatches(placedSessionIds),
+      500,
+    );
+    const matchesBySession = new Map<string, typeof roundMatches>();
+    for (const match of roundMatches) {
+      const list = matchesBySession.get(match.sessionId) ?? [];
+      list.push(match);
+      matchesBySession.set(match.sessionId, list);
+    }
+    for (const placement of placements) {
+      const sessionMatches = matchesBySession.get(placement.sessionId) ?? [];
+      const list = result.get(placement.sessionId) ?? [];
+      list.push({
+        place: placement.place as TournamentPlace,
+        players: placement.players,
+        record: countTournamentUnitRecord(
+          placement.players.map((player) => player.id),
+          sessionMatches,
+        ),
+      });
+      result.set(placement.sessionId, list);
+    }
+    return result;
+  }
+
+  /** 세션의 대회 최종 순위를 통째로 바꾼다. 세션이 없으면 404 */
+  async replaceSessionPlacements(
+    sessionId: string,
+    placements: { place: TournamentPlace; playerIds: string[] }[],
+  ): Promise<void> {
+    const replaced = await this.run(
+      () => db.matches.replaceSessionPlacements(sessionId, placements),
+      500,
+    );
+    if (!replaced) {
+      throw new MatchRepositoryError("세션을 찾을 수 없습니다.", 404);
+    }
+  }
+
   /** 모든 정기 회차 제외 날짜(날짜 내림차순) */
   async findAllRegularSessionSkips(): Promise<RegularSessionSkip[]> {
     return await this.run(() => db.matches.findAllRegularSessionSkips(), 500);
@@ -735,6 +804,29 @@ export class MatchRepository {
     }
 
     throw new MatchRepositoryError("매치 ID 생성에 실패했습니다.", 500);
+  }
+
+  /**
+   * 대진 예정 경기를 진행 중(created, matchStartsAt=now)으로 바꾼다. 진행 중 경기 시작과 같은 잠금 안에서 확인한다.
+   * 경기 없음 404, 예정 경기가 아니면 409. 선수가 이미 진행 중 경기에 있으면 바꾸지 않고 그 선수 id를 돌려준다.
+   */
+  async startScheduled(
+    matchId: string,
+    now: Date,
+  ): Promise<{ match: Match } | { conflictPlayerId: string }> {
+    const result = await this.run(
+      () => db.matches.startScheduledMatch(matchId, now),
+      500,
+    );
+    if ("match" in result) {
+      return { match: hydrateMatch(result.match) };
+    }
+    if (result.reason === "player_busy") {
+      return { conflictPlayerId: result.conflictPlayerId };
+    }
+    throw result.reason === "not_found"
+      ? new MatchRepositoryError("매치를 찾을 수 없습니다.", 404)
+      : new MatchRepositoryError(MATCH_ALREADY_STARTED_MESSAGE, 409);
   }
 
   /** 세션과 상관없이 지금 진행 중인(만료 전, 시작한, 점수 없는) 경기 */
@@ -977,14 +1069,15 @@ export class MatchRepository {
     return await this.run(() => db.matches.getTimestampUnitAudit(), 500);
   }
 
-  /** 모든 경기 목록 */
+  /** 모든 경기 목록. 대진 예정 경기(scheduled)는 includeScheduled일 때만(관리자 경기 목록) 넣는다 */
   async findAll(
     page: number = 0,
     limit: number = 20,
     playerId?: string,
+    options: { includeScheduled?: boolean } = {},
   ): Promise<{ matches: Match[]; total: number }> {
     const result = await this.run(
-      () => db.matches.findAll(page, limit, playerId || undefined),
+      () => db.matches.findAll(page, limit, playerId || undefined, options),
       500,
     );
 

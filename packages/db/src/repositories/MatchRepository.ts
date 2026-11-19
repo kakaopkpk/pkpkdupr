@@ -31,12 +31,14 @@ import {
   isNotNull,
   lt,
   max,
+  ne,
 } from "drizzle-orm";
 import {
   matchParticipants,
   matches,
   matchScores,
   matchSessionParticipants,
+  matchSessionPlacements,
   matchSessions,
   players,
   regularSessionSkips,
@@ -118,6 +120,22 @@ export class RegularSessionConflictError extends Error {
   }
 }
 
+/** 대회 최종 순위 한 칸의 저장 값. players는 관리자가 고른 순서다 */
+export interface StoredSessionPlacement {
+  sessionId: string;
+  place: number;
+  players: { id: string; username: string; avatarUrl?: string }[];
+}
+
+/** 대회 승패 계산에 쓰는 라운드 있는 완료 경기 */
+export interface StoredRoundMatch {
+  sessionId: string;
+  status: MatchStatus;
+  round: number;
+  teams: [{ players: { id: string }[] }, { players: { id: string }[] }];
+  scores: MatchScore[];
+}
+
 /** 정기가 아닌 세션의 종류 */
 export type NonRegularSessionKind = Exclude<MatchSessionKind, "regular">;
 
@@ -176,6 +194,8 @@ export interface CreateMatchInput {
   resultSubmittedAt?: Date | null;
   /** 완료 경기의 평점 미반영 여부. 생략하면 false */
   ratingExcluded?: boolean;
+  /** 대회 대진 라운드(1부터). status가 scheduled면 필수, 생략하면 null */
+  round?: number | null;
 }
 
 /** 경기 기록 수정 입력. 코트·생성자는 바꾸지 않고, 세션·시작 시각은 주었을 때만 바꾼다. */
@@ -245,6 +265,8 @@ export interface TimestampUnitAudit {
 
 export interface ExpiredCleanupResult {
   deletedMatchCount: number;
+  /** 시작 2시간이 지나도록 점수가 없어 예정(scheduled)으로 되돌린 대진 경기 수 */
+  revertedMatchCount: number;
   deletedSessionCount: number;
   /** 이번 정리로 지운 세션 id */
   deletedSessionIds: string[];
@@ -266,6 +288,28 @@ const toSessionKind = (
     : stored.regularDateKey
       ? "regular"
       : "custom";
+
+/** 세션 종류와 시작·종료 시각. 정기 세션 시각은 저장하지 않고 정해진 18:00~22:00으로 채운다 */
+const toSessionKindAndTimes = (
+  stored: Pick<
+    StoredMatchSession,
+    "kind" | "regularDateKey" | "startTime" | "endTime"
+  >,
+): {
+  kind: MatchSessionKind;
+  startTime: string | null;
+  endTime: string | null;
+} => {
+  const kind = toSessionKind(stored);
+  const isRegular = kind === "regular";
+  return {
+    kind,
+    startTime: isRegular
+      ? REGULAR_SESSION_START_TIME
+      : (stored.startTime ?? null),
+    endTime: isRegular ? REGULAR_SESSION_END_TIME : (stored.endTime ?? null),
+  };
+};
 
 // schema의 unixTimestamp 컬럼은 Unix 초로 저장한다. raw SQL은 그 변환을
 // 거치지 않으므로 경기 변경 타임스탬프를 여기서 직접 초로 바꾼다.
@@ -363,6 +407,47 @@ const toRecordedMatchWriteError = (
     return new MatchStaleUpdateError();
   }
   return new MatchRecordUpdateConflictError();
+};
+
+/** 진행 중 경기를 만들거나(createInProgressMatch) 예정 경기를 시작할 때(startScheduledMatch) 함께 쓰는 잠금 */
+const START_IN_PROGRESS_MATCH_LOCK_SQL =
+  "SELECT pg_advisory_xact_lock(hashtext('pkpkdupr:start-in-progress-match'))";
+
+/**
+ * playerIds 중 이미 진행 중 경기(findInProgressPlayerIds와 같은 조건)에 있는 첫 선수 id. 없으면 undefined.
+ * START_IN_PROGRESS_MATCH_LOCK_SQL을 잡은 트랜잭션 안에서 부른다.
+ */
+const findFirstBusyPlayerId = async (
+  transaction: {
+    execute: (statement: { sql: string; args: unknown[] }) => Promise<RawQueryResult>;
+  },
+  playerIds: string[],
+  now: Date,
+): Promise<string | undefined> => {
+  if (playerIds.length === 0) {
+    return undefined;
+  }
+  const busy = await transaction.execute({
+    sql: `
+      SELECT DISTINCT p.player_id
+      FROM match_participants p
+      INNER JOIN matches m ON m.id = p.match_id
+      WHERE m.status = 'created'
+        AND m.match_starts_at > $1
+        AND m.match_starts_at <= $2
+        AND NOT EXISTS (SELECT 1 FROM match_scores s WHERE s.match_id = m.id)
+        AND p.player_id IN (${placeholders(playerIds.length, 3)})
+    `,
+    args: [
+      inProgressExpiryCutoff(now),
+      toUnixTimestampSeconds(now),
+      ...playerIds,
+    ],
+  });
+  const busyPlayerIds = new Set(
+    busy.rows.map((row: Record<string, unknown>) => String(row.player_id)),
+  );
+  return playerIds.find((id) => busyPlayerIds.has(id));
 };
 
 /** 회원 세션 종료 시각("HH:MM")이 시작보다 이르거나 같아 다음 날 끝나는 행 */
@@ -681,7 +766,8 @@ export class MatchRepository {
 
   /**
    * 조회 시점 만료 정리를 단일 SQL 문(data-modifying CTE) 한 번으로 실행한다.
-   * - 점수 없는 created 경기 중 isInProgressMatchExpired인 경기(관리자 예정 경기 포함)를 참가자·점수 행과 함께 삭제한다.
+   * - 라운드 없는 점수 없는 created 경기 중 isInProgressMatchExpired인 경기(관리자 예정 경기 포함)를 참가자·점수 행과 함께 삭제한다.
+   * - 라운드 있는(대진) 점수 없는 created 경기는 같은 조건이면 지우지 않고 scheduled로 되돌린다. scheduled 경기는 건드리지 않는다.
    * - 경기가 하나도 없고 getEmptySessionExpiresAt이 지난 세션을 참여자 행과 함께 삭제한다.
    *   한 문장 안의 CTE는 같은 스냅샷을 보므로, 같은 문장이 지우는 경기는 빼고 빈 세션을 판정한다.
    *   그래서 만료된 진행 중 경기만 있던 세션도 같은 호출에서 빈 세션으로 지워진다.
@@ -702,9 +788,20 @@ export class MatchRepository {
           SELECT m.id
           FROM matches m
           WHERE m.status = 'created'
+            AND m.round IS NULL
             AND m.match_starts_at <= $1
             AND NOT EXISTS (SELECT 1 FROM match_scores sc WHERE sc.match_id = m.id)
           FOR UPDATE
+        ),
+        reverted_matches AS (
+          -- UPDATE도 행을 잠그고, 먼저 첫 점수로 completed가 된 행은 status 조건을 다시 평가해 건너뛴다.
+          UPDATE matches m
+          SET status = 'scheduled', updated_at = GREATEST($4, m.updated_at + 1)
+          WHERE m.status = 'created'
+            AND m.round IS NOT NULL
+            AND m.match_starts_at <= $1
+            AND NOT EXISTS (SELECT 1 FROM match_scores sc WHERE sc.match_id = m.id)
+          RETURNING m.id
         ),
         deleted_matches AS (
           DELETE FROM matches m
@@ -748,6 +845,7 @@ export class MatchRepository {
         )
         SELECT
           (SELECT count(*) FROM deleted_matches) AS deleted_match_count,
+          (SELECT count(*) FROM reverted_matches) AS reverted_match_count,
           (SELECT count(*) FROM deleted_sessions) AS deleted_session_count,
           (SELECT string_agg(id, ',') FROM deleted_sessions) AS deleted_session_ids
       `,
@@ -766,6 +864,7 @@ export class MatchRepository {
         : [];
     return {
       deletedMatchCount: Number(row?.deleted_match_count ?? 0),
+      revertedMatchCount: Number(row?.reverted_match_count ?? 0),
       deletedSessionCount: Number(row?.deleted_session_count ?? 0),
       deletedSessionIds,
     };
@@ -816,11 +915,18 @@ export class MatchRepository {
     return hydrated;
   }
 
+  /**
+   * 경기 목록(시작 시각 최신순). 대진 예정 경기(scheduled)는 includeScheduled일 때만 넣는다.
+   */
   async findAll(
     page: number = 0,
     limit: number = 20,
     playerId?: string,
+    options: { includeScheduled?: boolean } = {},
   ): Promise<{ matches: Match[]; total: number }> {
+    const statusFilter = options.includeScheduled
+      ? undefined
+      : ne(matches.status, "scheduled");
     // 플레이어별 조회는 참가자 인덱스로 DB에서 먼저 대상을 줄이고,
     // hydrate는 요청한 페이지의 경기만 한다.
     const allMatches = playerId
@@ -831,7 +937,7 @@ export class MatchRepository {
             matchParticipants,
             eq(matchParticipants.matchId, matches.id),
           )
-          .where(eq(matchParticipants.playerId, playerId))
+          .where(and(eq(matchParticipants.playerId, playerId), statusFilter))
           .orderBy(
             desc(matches.matchStartsAt),
             desc(matches.createdAt),
@@ -840,6 +946,7 @@ export class MatchRepository {
       : await this.db
           .select()
           .from(matches)
+          .where(statusFilter)
           .orderBy(
             desc(matches.matchStartsAt),
             desc(matches.createdAt),
@@ -1099,20 +1206,12 @@ export class MatchRepository {
 
     return (sessionRows as StoredMatchSession[]).map(
       (session): SessionWithParticipantIds => {
-        const kind = toSessionKind(session);
-        const isRegular = kind === "regular";
         return {
           id: session.id,
           name: session.name,
           date: toDate(session.date),
           location: session.location,
-          kind,
-          startTime: isRegular
-            ? REGULAR_SESSION_START_TIME
-            : (session.startTime ?? null),
-          endTime: isRegular
-            ? REGULAR_SESSION_END_TIME
-            : (session.endTime ?? null),
+          ...toSessionKindAndTimes(session),
           participantIds: participantIdsBySessionId.get(session.id) ?? [],
         };
       },
@@ -1177,7 +1276,10 @@ export class MatchRepository {
     limit: number = 20,
     playerId?: string,
   ): Promise<{ items: MatchFeedItem[]; total: number }> {
-    const allMatches = await this.loadAllMatches();
+    // 대진 예정 경기는 피드에 넣지 않는다(예정 경기만 있는 세션도 피드에 나오지 않는다)
+    const allMatches = (await this.loadAllMatches()).filter(
+      (match) => match.status !== "scheduled",
+    );
     const sessionSummaries = this.buildSessionSummaries(allMatches);
     const registeredParticipants = await this.db
       .select()
@@ -1306,6 +1408,7 @@ export class MatchRepository {
       resultSubmittedByPlayerId: data.resultSubmittedByPlayerId ?? null,
       resultSubmittedAt: toDateOrNull(data.resultSubmittedAt),
       ratingExcluded: data.ratingExcluded ?? false,
+      round: data.round ?? null,
       createdAt: now,
       updatedAt: now,
     });
@@ -1537,31 +1640,13 @@ export class MatchRepository {
     let committed = false;
     let sessionParticipantsAdded = false;
     try {
-      await transaction.execute(
-        "SELECT pg_advisory_xact_lock(hashtext('pkpkdupr:start-in-progress-match'))",
-      );
+      await transaction.execute(START_IN_PROGRESS_MATCH_LOCK_SQL);
 
-      const busy = await transaction.execute({
-        sql: `
-          SELECT DISTINCT p.player_id
-          FROM match_participants p
-          INNER JOIN matches m ON m.id = p.match_id
-          WHERE m.status = 'created'
-            AND m.match_starts_at > $1
-            AND m.match_starts_at <= $2
-            AND NOT EXISTS (SELECT 1 FROM match_scores s WHERE s.match_id = m.id)
-            AND p.player_id IN (${placeholders(playerIds.length, 3)})
-        `,
-        args: [
-          inProgressExpiryCutoff(now),
-          toUnixTimestampSeconds(now),
-          ...playerIds,
-        ],
-      });
-      const busyPlayerIds = new Set(
-        busy.rows.map((row: Record<string, unknown>) => String(row.player_id)),
+      const conflictPlayerId = await findFirstBusyPlayerId(
+        transaction,
+        playerIds,
+        now,
       );
-      const conflictPlayerId = playerIds.find((id) => busyPlayerIds.has(id));
       if (conflictPlayerId) {
         return { conflictPlayerId };
       }
@@ -1680,6 +1765,87 @@ export class MatchRepository {
   }
 
   /**
+   * 대진 예정 경기(scheduled)를 진행 중(created, match_starts_at=now)으로 바꾼다.
+   * 경기가 없거나 scheduled가 아니면, 또는 선수 중 누구든 이미 진행 중 경기에 있으면 아무것도 바꾸지 않고 그 사유를 돌려준다.
+   * createInProgressMatch와 같은 advisory 잠금 안에서 확인·전환해, 같은 선수로 동시에 시작해도 하나만 진행 중이 된다.
+   */
+  async startScheduledMatch(
+    matchId: string,
+    now: Date,
+  ): Promise<
+    | { match: Match; reason?: undefined }
+    | { reason: "not_found" | "not_scheduled" }
+    | { reason: "player_busy"; conflictPlayerId: string }
+  > {
+    if (!isEntityId(matchId, "match")) {
+      return { reason: "not_found" };
+    }
+
+    const transaction = await this.client.transaction("write");
+    let committed = false;
+    try {
+      await transaction.execute(START_IN_PROGRESS_MATCH_LOCK_SQL);
+
+      const locked = await transaction.execute({
+        sql: `SELECT status FROM matches WHERE id = $1 FOR UPDATE`,
+        args: [matchId],
+      });
+      const status = locked.rows[0]?.status;
+      if (status === undefined) {
+        return { reason: "not_found" };
+      }
+      if (status !== "scheduled") {
+        return { reason: "not_scheduled" };
+      }
+
+      const participants = await transaction.execute({
+        sql: `SELECT player_id FROM match_participants WHERE match_id = $1 ORDER BY id`,
+        args: [matchId],
+      });
+      const playerIds = [
+        ...new Set<string>(
+          participants.rows.map((row: Record<string, unknown>) =>
+            String(row.player_id),
+          ),
+        ),
+      ];
+      const conflictPlayerId = await findFirstBusyPlayerId(
+        transaction,
+        playerIds,
+        now,
+      );
+      if (conflictPlayerId) {
+        return { reason: "player_busy", conflictPlayerId };
+      }
+
+      const nowSeconds = toUnixTimestampSeconds(now);
+      await transaction.execute({
+        sql: `
+          UPDATE matches
+          SET status = 'created',
+            match_starts_at = $1,
+            updated_at = GREATEST($1, updated_at + 1)
+          WHERE id = $2
+        `,
+        args: [nowSeconds, matchId],
+      });
+
+      await transaction.commit();
+      committed = true;
+    } finally {
+      if (!committed) {
+        transaction.close();
+      }
+    }
+
+    const started = await this.findById(matchId);
+    if (!started) {
+      throw new Error("경기 시작에 실패했습니다.");
+    }
+    return { match: started };
+  }
+
+  /**
    * 진행 중(점수 없는 created, 이미 시작했고 만료 전) 경기 전부를 시작 시각 최신순으로 돌려준다.
    * 조건은 findInProgressPlayerIds와 같아 시작 시각이 아직 오지 않은 관리자 예정 경기는 빠진다.
    */
@@ -1756,7 +1922,7 @@ export class MatchRepository {
   }
 
   /**
-   * created·completed 경기의 기록(종류·이름·장소·참가자·점수)을 한 트랜잭션으로 교체하고
+   * scheduled·created·completed 경기의 기록(종류·이름·장소·참가자·점수)을 한 트랜잭션으로 교체하고
    * completed로 만든다. completed_at은 기존 값을 유지하고 없을 때만 resultSubmittedAt으로 채운다.
    * 세션·시작 시각(관리자 정정)도 주면 같은 UPDATE·같은 updated_at 조건으로 바꾼다.
    * 옮길 세션이 없으면 아무것도 바꾸지 않고 예외를 던진다.
@@ -1866,7 +2032,7 @@ export class MatchRepository {
               .map((assignment) => `,\n            ${assignment}`)
               .join("")}
           WHERE id = $6
-            AND status IN ('created', 'completed')
+            AND status IN ('scheduled', 'created', 'completed')
             AND ($7::bigint IS NULL OR updated_at = $7)
         `,
         args,
@@ -2392,6 +2558,178 @@ export class MatchRepository {
     }
   }
 
+  /** 세션들의 대회 최종 순위(세션·순위 오름차순, 순위 안은 고른 순서) */
+  async findSessionPlacements(
+    sessionIds: string[],
+  ): Promise<StoredSessionPlacement[]> {
+    if (!sessionIds.length) return [];
+    const rows: Array<{
+      sessionId: string;
+      place: number;
+      playerId: string;
+      username: string;
+      avatarUrl: string | null;
+    }> = await this.db
+      .select({
+        sessionId: matchSessionPlacements.sessionId,
+        place: matchSessionPlacements.place,
+        playerId: players.id,
+        username: players.username,
+        avatarUrl: players.avatarUrl,
+      })
+      .from(matchSessionPlacements)
+      .innerJoin(players, eq(players.id, matchSessionPlacements.playerId))
+      .where(inArray(matchSessionPlacements.sessionId, sessionIds))
+      .orderBy(
+        asc(matchSessionPlacements.sessionId),
+        asc(matchSessionPlacements.place),
+        asc(matchSessionPlacements.position),
+      );
+
+    const placements: StoredSessionPlacement[] = [];
+    for (const row of rows) {
+      let last = placements.at(-1);
+      if (!last || last.sessionId !== row.sessionId || last.place !== row.place) {
+        last = { sessionId: row.sessionId, place: Number(row.place), players: [] };
+        placements.push(last);
+      }
+      last.players.push({
+        id: row.playerId,
+        username: row.username,
+        avatarUrl: row.avatarUrl ?? undefined,
+      });
+    }
+    return placements;
+  }
+
+  /** 세션들의 라운드 있는 완료 경기(팀 선수 id·점수만) */
+  async findCompletedRoundMatches(
+    sessionIds: string[],
+  ): Promise<StoredRoundMatch[]> {
+    if (!sessionIds.length) return [];
+    const matchRows: Array<{ id: string; sessionId: string; round: number }> =
+      await this.db
+        .select({
+          id: matches.id,
+          sessionId: matches.sessionId,
+          round: matches.round,
+        })
+        .from(matches)
+        .where(
+          and(
+            inArray(matches.sessionId, sessionIds),
+            eq(matches.status, "completed"),
+            isNotNull(matches.round),
+          ),
+        );
+    if (!matchRows.length) return [];
+
+    const matchIds = matchRows.map((row) => row.id);
+    const [participantRows, scoreRows]: [
+      Array<{ matchId: string; teamIndex: number; playerId: string }>,
+      Array<{ matchId: string; scoreA: number; scoreB: number }>,
+    ] = await Promise.all([
+      this.db
+        .select({
+          matchId: matchParticipants.matchId,
+          teamIndex: matchParticipants.teamIndex,
+          playerId: matchParticipants.playerId,
+        })
+        .from(matchParticipants)
+        .where(inArray(matchParticipants.matchId, matchIds)),
+      this.db
+        .select({
+          matchId: matchScores.matchId,
+          scoreA: matchScores.scoreA,
+          scoreB: matchScores.scoreB,
+        })
+        .from(matchScores)
+        .where(inArray(matchScores.matchId, matchIds))
+        .orderBy(asc(matchScores.id)),
+    ]);
+    const participantsByMatch = groupByMatchId(participantRows);
+    const scoresByMatch = groupByMatchId(scoreRows);
+
+    return matchRows.map((row) => {
+      const teams: StoredRoundMatch["teams"] = [
+        { players: [] },
+        { players: [] },
+      ];
+      for (const participant of participantsByMatch.get(row.id) ?? []) {
+        if (participant.teamIndex !== 0 && participant.teamIndex !== 1) continue;
+        teams[participant.teamIndex].players.push({
+          id: participant.playerId,
+        });
+      }
+      return {
+        sessionId: row.sessionId,
+        status: "completed",
+        round: Number(row.round),
+        teams,
+        scores: (scoresByMatch.get(row.id) ?? []).map(({ scoreA, scoreB }) => ({
+          scoreA: Number(scoreA),
+          scoreB: Number(scoreB),
+        })),
+      };
+    });
+  }
+
+  /**
+   * 세션의 대회 최종 순위를 통째로 바꾼다(한 트랜잭션). 세션이 없으면 false.
+   * 검증(대회 세션·참여자·중복)은 호출부가 한다
+   */
+  async replaceSessionPlacements(
+    sessionId: string,
+    placements: { place: number; playerIds: string[] }[],
+  ): Promise<boolean> {
+    if (!isEntityId(sessionId, "session")) {
+      throw new Error("유효한 세션 ID가 필요합니다.");
+    }
+
+    const transaction = await this.client.transaction("write");
+    let committed = false;
+    try {
+      const session = await transaction.execute({
+        sql: "SELECT id FROM match_sessions WHERE id = $1 FOR UPDATE",
+        args: [sessionId],
+      });
+      if (!session.rows.length) {
+        await transaction.commit();
+        committed = true;
+        return false;
+      }
+
+      await transaction.execute({
+        sql: "DELETE FROM match_session_placements WHERE session_id = $1",
+        args: [sessionId],
+      });
+      const rows = placements.flatMap(({ place, playerIds }) =>
+        playerIds.map((playerId, position) => [
+          sessionId,
+          playerId,
+          place,
+          position,
+        ]),
+      );
+      if (rows.length) {
+        await transaction.execute({
+          sql: `
+            INSERT INTO match_session_placements (session_id, player_id, place, position)
+            VALUES ${rows.map((_, index) => `(${placeholders(4, index * 4 + 1)})`).join(", ")}
+          `,
+          args: rows.flat(),
+        });
+      }
+      await transaction.commit();
+      committed = true;
+      return true;
+    } finally {
+      if (!committed) {
+        transaction.close();
+      }
+    }
+  }
+
   /** 모든 정기 회차 제외 날짜(날짜 내림차순) */
   async findAllRegularSessionSkips(): Promise<RegularSessionSkip[]> {
     const rows: Array<{ dateKey: string; reason: string }> = await this.db
@@ -2637,6 +2975,7 @@ export class MatchRepository {
               name: session.name,
               date: toDate(session.date),
               location: session.location,
+              ...toSessionKindAndTimes(session),
             }
           : undefined,
         status: match.status as Match["status"],
@@ -2651,6 +2990,7 @@ export class MatchRepository {
         completedAt: toDateOrNull(match.completedAt),
         updatedAt: toDate(match.updatedAt),
         ratingExcluded: match.ratingExcluded === true,
+        round: match.round ?? null,
       } as Match & { sessionName?: string };
     });
   }

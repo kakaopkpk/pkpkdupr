@@ -1,5 +1,4 @@
 import React from "react";
-import { formatSessionTimeRange } from "@pkpkdupr/shared/session";
 import type { SessionPlayerReport } from "@pkpkdupr/shared/ranking";
 import SkeletonBlock from "@/components/SkeletonBlock";
 import { SessionDominatorBadge } from "@/components/ui/Badges";
@@ -17,8 +16,6 @@ import { RankChange, RatingDelta } from "@/components/ui/Delta";
 import { PlayerAvatar } from "@/components/ui/PlayerAvatar";
 import { cx } from "@/components/ui/cx";
 import { usePlayOnShow } from "@/hooks/usePlayOnShow";
-import { formatKstShortDate } from "@/lib/format";
-import type { MatchSessionHistoryInfo } from "@/lib/rankings";
 import { formatRating } from "@/utils/dupr";
 
 /** 세션 전후 복식 순위 변동(rankBefore - rankAfter, 양수=상승). 둘 중 하나라도 null이면 null */
@@ -36,37 +33,6 @@ export const getSessionRankChange = (
 export const hasRatingBeforeAndAfter = (
   report: Pick<SessionPlayerReport, "ratingBefore" | "ratingAfter">,
 ): boolean => report.ratingBefore !== null && report.ratingAfter !== null;
-
-/**
- * 세션 상세 머리. 메타 줄은 "11월 13일 목 18:00~22:00 · 장소".
- * 종료 시각을 모르면 시작 시각만, 시작 시각도 없으면 날짜만 보인다.
- */
-export const SessionSummary: React.FC<{
-  session: MatchSessionHistoryInfo;
-  /** 세션 상세 조회로 얻은 종료 시각("HH:MM"). 리포트 응답에는 없다 */
-  endTime?: string | null;
-}> = ({ session, endTime = null }) => {
-  const time =
-    formatSessionTimeRange({ startTime: session.startTime, endTime }) ??
-    session.startTime;
-  return (
-    <div className="flex flex-col gap-0.5 px-1 pb-1">
-      <h2 className="text-pk-22 font-extrabold tracking-[-0.02em] text-pk-ink">
-        {session.name}
-      </h2>
-      <span className="text-pk-13 text-pk-sub tabular-nums">
-        {[
-          time
-            ? `${formatKstShortDate(session.date)} ${time}`
-            : formatKstShortDate(session.date),
-          session.location,
-        ]
-          .filter(Boolean)
-          .join(" · ")}
-      </span>
-    </div>
-  );
-};
 
 /**
  * 세션 후 평점. 후 평점이 없으면 "–".
@@ -234,13 +200,10 @@ export const SessionPlayerRatingRow: React.FC<{
   );
 };
 
+/** 세션 상세 불러오는 중. 머리는 세션 카드 자리, 그 아래 섹션 제목과 목록 자리 */
 export const SessionReportSkeleton: React.FC = () => (
   <div aria-hidden="true" className="flex flex-col gap-2.5">
-    <div className="flex flex-col gap-1.5 px-1 pb-1">
-      <SkeletonBlock className="h-7 w-40 rounded-pk-sm" />
-      <SkeletonBlock className="h-4 w-48" />
-    </div>
-    <SkeletonBlock className="h-[76px] w-full rounded-pk-lg" />
+    <SkeletonBlock className="h-[200px] w-full rounded-pk-lg" />
     <SkeletonBlock className="mt-3 h-4 w-14" />
     <SkeletonBlock className="h-56 w-full rounded-pk-lg" />
   </div>

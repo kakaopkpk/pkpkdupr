@@ -81,6 +81,22 @@ describe("LiveMatchDetail 랠리 연출", () => {
     expect(markup).not.toContain("pk-rally");
     expect(markup).toMatch(/text-pk-muted">vs<\/span>/);
   });
+
+  it("대진 예정 경기는 vs 글자만 보이고 시각·시작한 사람이 없다", () => {
+    // 21:15 KST. 시작 시각이 지났어도 대진 예정 경기는 예정으로 본다
+    const match: MatchInfo = {
+      ...makeLiveMatch("2026-11-19T12:15:00.000Z"),
+      status: "scheduled",
+      source: "admin_created",
+      round: 2,
+    };
+    const markup = render(match);
+    expect(markup).not.toContain("pk-rally");
+    expect(markup).toMatch(/text-pk-muted">vs<\/span>/);
+    expect(markup).toContain("2라운드 · 예정");
+    expect(markup).not.toContain("21:15");
+    expect(markup).not.toContain("시작한 사람");
+  });
 });
 
 describe("홈 진행 중 경기 카드 랠리", () => {

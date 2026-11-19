@@ -17,6 +17,7 @@ import ParticipantsSheet from "@/components/session/ParticipantsSheet";
 import { LiveSessionCard } from "@/components/session/SessionBlueCard";
 import { isSessionDateSelectable } from "@/components/session/SessionSchedulePicker";
 import { useSessionParticipation } from "@/components/session/useSessionParticipation";
+import { TournamentRankCard } from "@/components/tournament/TournamentRankCard";
 import { Section } from "@/components/ui/Section";
 import { StateMessage } from "@/components/ui/StateMessage";
 import { useAppNavigation } from "@/context/AppNavigationContext";
@@ -276,6 +277,7 @@ const Schedule: React.FC = () => {
             {...getParticipationProps(entry.session)}
             todayKey={todayKey}
             onOpenParticipants={() => openParticipants(entry.session, EMPTY_IDS)}
+            onPress={() => openSessionReport(entry.session.id)}
           />
         );
       case "record-session":
@@ -285,6 +287,15 @@ const Schedule: React.FC = () => {
             session={entry.item.session}
             mine={entry.item.mine}
             onPress={() => openSessionReport(entry.item.session.id)}
+          />
+        );
+      case "tournament-result":
+        return (
+          <TournamentRankCard
+            key={getRecordItemKey(entry.item)}
+            session={entry.session}
+            mine={entry.item.mine}
+            onPress={() => openSessionReport(entry.session.id)}
           />
         );
       case "record-match":

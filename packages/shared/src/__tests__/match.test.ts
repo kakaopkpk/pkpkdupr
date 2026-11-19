@@ -4,6 +4,7 @@ import {
   getMatchSessionStatus,
   isMatchRecordDeletable,
   isMatchRecordEditable,
+  isValidBracketRound,
   isWithinMatchEditWindow,
   MATCH_EDIT_WINDOW_MS,
   resolveRatingExcludedAfterEdit,
@@ -17,6 +18,7 @@ describe("getMatchSessionStatus", () => {
     );
     expect(getMatchSessionStatus(["completed", "created"])).toBe("created");
     expect(getMatchSessionStatus(["cancelled"])).toBe("created");
+    expect(getMatchSessionStatus(["completed", "scheduled"])).toBe("created");
   });
 });
 
@@ -110,6 +112,17 @@ describe("isMatchRecordDeletable", () => {
     ).toBe(true);
   });
 
+  it("대진 경기(admin_created)는 예정·진행 중이면 false, 완료면 true를 반환한다", () => {
+    const bracket = { ...match, source: "admin_created" as const };
+    expect(
+      isMatchRecordDeletable({ ...bracket, status: "scheduled" }, now),
+    ).toBe(false);
+    expect(
+      isMatchRecordDeletable({ ...bracket, status: "created" }, now),
+    ).toBe(false);
+    expect(isMatchRecordDeletable(bracket, now)).toBe(true);
+  });
+
   it("아직 시작하지 않은 경기는 false를 반환한다", () => {
     expect(
       isMatchRecordDeletable(match, new Date(startsAt.getTime() - 1)),
@@ -194,5 +207,15 @@ describe("getMatchEditFields", () => {
       session: { id: "Ssess001" },
     } as unknown as Match;
     expect(getMatchEditFields(base, after)).toEqual(["scores", "players", "session"]);
+  });
+});
+
+describe("isValidBracketRound", () => {
+  it("1 이상 정수만 true를 반환한다", () => {
+    expect(isValidBracketRound(1)).toBe(true);
+    expect(isValidBracketRound(12)).toBe(true);
+    for (const value of [0, -1, 1.5, Number.NaN, "1", null, undefined]) {
+      expect(isValidBracketRound(value)).toBe(false);
+    }
   });
 });
