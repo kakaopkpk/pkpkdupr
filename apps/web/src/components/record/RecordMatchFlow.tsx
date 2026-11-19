@@ -105,7 +105,7 @@ export default function RecordMatchFlow({
 }: RecordMatchFlowProps): React.ReactElement {
   const { notifyDataChanged, selectTab } = useAppNavigation();
   const { player: currentPlayer } = useAuth();
-  const { liveSession, inProgressMatches } = useLiveSession();
+  const { recordingSession, inProgressMatches } = useLiveSession();
   const { showSaveFailure } = useSystemNotice();
   const showStartedMatchToast = useStartedMatchToast();
   const { closeDepth } = useTabNavigation();
@@ -147,7 +147,7 @@ export default function RecordMatchFlow({
       if (!map.has(player.id)) map.set(player.id, player);
     };
     players.forEach(add);
-    liveSession?.participants.forEach(add);
+    recordingSession?.participants.forEach(add);
     initial.editMatch?.teams.forEach((team) => team.players.forEach(add));
     // 처음부터 자리에 넣는 나는 회원 목록을 받기 전에도 그린다
     if (currentPlayer?.username) {
@@ -158,11 +158,13 @@ export default function RecordMatchFlow({
       });
     }
     return map;
-  }, [currentPlayer, initial.editMatch, liveSession, players]);
+  }, [currentPlayer, initial.editMatch, recordingSession, players]);
 
   const participantIds = useMemo(
-    () => liveSession?.participants.map((participant) => participant.id) ?? [],
-    [liveSession],
+    () =>
+      recordingSession?.participants.map((participant) => participant.id) ??
+      [],
+    [recordingSession],
   );
   const busyIds = useMemo(
     () =>
@@ -270,8 +272,10 @@ export default function RecordMatchFlow({
       location: trimmedLocation,
       scores: [decidedScore],
       // 정기 세션은 서버가 시작 시각 규칙으로 정하므로 회원·대회 세션만 지정한다
-      ...(!matchId && liveSession && liveSession.kind !== "regular"
-        ? { sessionId: liveSession.id }
+      ...(!matchId &&
+      recordingSession &&
+      recordingSession.kind !== "regular"
+        ? { sessionId: recordingSession.id }
         : {}),
       // 마지막으로 본 경기와 그사이 다른 회원이 고쳤으면 서버가 409로 막는다
       ...(editMatch ? { expectedUpdatedAt: editMatch.updatedAt } : {}),
@@ -379,7 +383,7 @@ export default function RecordMatchFlow({
         if (!slotTeams) return;
         startInProgressMatch({
           teams: toTeamRequests(slotTeams),
-          sessionId: liveSession?.id,
+          sessionId: recordingSession?.id,
         });
       }}
     />

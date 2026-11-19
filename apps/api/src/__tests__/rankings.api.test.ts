@@ -676,6 +676,39 @@ describe("랭킹·세션 리포트 API", () => {
       expect(tournament.placements).toEqual([placement]);
     });
 
+    it("회원 세션은 종료 시각이 지나면 자정 전이어도 끝난 세션이다", async () => {
+      // 11-12 00:00 KST 세션. 지금(21:00 KST)은 오전 세션 종료 뒤, 밤 세션 종료 전이다
+      const todayDate = new Date("2026-11-11T15:00:00.000Z");
+      const morningSession: SessionWithParticipantIds = {
+        ...upcomingSession,
+        id: "Smornin1",
+        kind: "custom",
+        date: todayDate,
+        startTime: "10:00",
+        endTime: "12:00",
+      };
+      const nightSession: SessionWithParticipantIds = {
+        ...morningSession,
+        id: "Snight01",
+        startTime: "20:00",
+        endTime: "23:00",
+      };
+      findSessionsInDateKeyRange.mockResolvedValue([
+        toManaged(morningSession, 0),
+        toManaged(nightSession, 0),
+      ]);
+
+      const response = await authorized("/api/schedule?month=2026-11");
+
+      expect(response.status).toBe(200);
+      // 완료 경기 없이 끝난 오전 세션은 빠진다
+      expect(
+        response.body.sessions.map(
+          (item: { id: string; isEnded: boolean }) => [item.id, item.isEnded],
+        ),
+      ).toEqual([[nightSession.id, false]]);
+    });
+
     it.each(["", "?month=2026-13", "?month=2026-1", "?month=abc"])(
       "month%s가 YYYY-MM이 아니면 400이다",
       async (query) => {

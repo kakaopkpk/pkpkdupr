@@ -234,6 +234,27 @@ export const getEmptySessionExpiresAt = (
 };
 
 /**
+ * 세션이 끝나는 시각. 회원·대회 세션에 종료 시각이 있으면 그 시각(자정을 넘기면 다음 날 그 시각)이고,
+ * 그 밖에는 빈 세션 만료 시각(getEmptySessionExpiresAt)과 같다.
+ * 진행 중(LIVE)·다가오는 세션·일정의 끝남 표시가 이 기준을 쓰고,
+ * 경기 기록·참여자 변경(isSessionOnToday)과 빈 세션 정리는 만료 시각까지 된다
+ */
+export const getSessionEndsAt = (
+  kind: MatchSessionKind,
+  sessionDate: Date,
+  timeRange?: SessionTimeRange | null,
+): Date => {
+  if (kind === "regular" || !timeRange?.endTime) {
+    return getEmptySessionExpiresAt(kind, sessionDate, timeRange);
+  }
+  const dateKey = toKstDateKey(sessionDate);
+  const endDateKey = isOvernightSessionTimeRange(timeRange)
+    ? addKstDays(dateKey, 1)
+    : dateKey;
+  return kstDateKeyTimeToDate(endDateKey, timeRange.endTime);
+};
+
+/**
  * 지금 그 세션이 '오늘 세션'이면 true. 그날(KST) 세션이거나, 전날 시작해 자정을 넘긴 회원 세션이
  * 아직 끝나지 않았을 때다. 세션 경기 기록·시작·추천과 오늘 세션 목록이 이 기준을 쓴다
  */

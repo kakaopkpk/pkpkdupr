@@ -6,7 +6,10 @@ const SCHEDULE_MONTH_PATTERN = /^(\d{4})-(0[1-9]|1[0-2])$/;
 
 /** 일정 탭 세션: 세션 단건 응답 + 끝났는지 */
 export interface ScheduleSession extends MatchSessionDetail {
-  /** 세션 만료 시각(getEmptySessionExpiresAt)이 지났으면 true. 끝난 세션은 참여자를 바꿀 수 없다 */
+  /**
+   * 세션이 끝나는 시각(getSessionEndsAt)이 지났으면 true. 끝난 세션은 화면에서 참여자를 바꾸지 않는다
+   * (서버는 그날 자정까지 참여자 변경을 받는다)
+   */
   isEnded: boolean;
 }
 

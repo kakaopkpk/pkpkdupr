@@ -76,7 +76,7 @@
       - 대진 예정 경기(`status: "scheduled"`)는 vs 글자만·시각 없이 보이고 점수 입력·수정·삭제·한 판 더가 없다. 세션 날짜가 오늘(KST)이면 하단 "경기 시작"(`startScheduledMatch`)만 있다.
     - `profile/`: 회원 프로필·경기 목록, 나 탭과 같이 쓰는 머리 `ProfileHeader`. 사진을 불러온 아바타를 누르면 그 자리에서 가운데 240px 원으로 커지는 확대 보기 `AvatarZoomViewer`(누르기·아래로 끌기·Escape·뒤로가기로 닫힘)
     - `records/`: 세션 상세 `SessionReportDrawer`와 그 위 평점 변화 전체 `SessionRatingChangesScreen`
-      - 다가오는·진행 중·끝난 세션 모두 연다. 세션 단건·경기는 항상, 끝난 세션(`getEmptySessionExpiresAt` ≤ 지금)만 세션 리포트를 더 읽고, 리포트 404면 리포트 조각 없이 그린다.
+      - 다가오는·진행 중·끝난 세션 모두 연다. 세션 단건·경기는 항상, 끝난 세션(`getSessionEndsAt` ≤ 지금)만 세션 리포트를 더 읽고, 리포트 404면 리포트 조각 없이 그린다.
       - 머리는 글자가 아니라 카드다(불러오는 중 스켈레톤도 카드 자리).
       - 끝나기 전: 일정 탭 `UpcomingSessionCard`(참여자 시트·참여 버튼) → 대회면 `TournamentBracketSection`, 아니면 "경기" 섹션(빈 상태 "아직 경기가 없어요"). 참여자 목록 섹션은 없다.
         - 진행 중(`useLiveSession().liveSession?.id`가 이 세션)이면 D-day 대신 LIVE다. 대회도 진행 중에 모양이 같다.
@@ -109,7 +109,9 @@
   - `TabNavigationContext.tsx`: 탭(`TabKey`: `home`·`schedule`·`ranking`·`me`)·깊이 스택(`pushDepth`/`closeDepth`, 브라우저 뒤로가기 연동)·스크롤 복원·당겨서 새로고침 등록
   - `AppNavigationContext.tsx`: `useAppNavigation()`으로 전역 화면 열기(`openMatchDetail`, `openMemberProfile`(내 id면 나 탭), `openRecordMatch`, `openCreateSession`(`dateKey`로 날짜를 골라 둔 채 열고, 만든 뒤 `onCreated`를 부름. + 메뉴는 홈 탭으로, 일정 탭은 만든 날로 옮김), `openSettings`, `openSessionReport`(지금 탭 위에 세션 상세 화면), `openAchievementDetail`(업적 상세 시트, 경기 기록 시트보다 위 레이어), `openAchievements`(지금 탭 위에 업적 전체 보기 화면, 내 id여도 나 탭으로 바꾸지 않음. `focusAchievementId`를 주면 진행도 준비 뒤 그 업적 줄 위쪽 끝을 스크롤 영역 높이 40%에 두고 카드 폭 가득 `pk-primary-soft` 바탕을 한 번 반짝임, 움직임 줄이기면 스크롤만)), `notifyDataChanged`·`dataVersion`, 전역 화면 레이어 번호 `GLOBAL_LAYER`
   - `LiveSessionContext.tsx`: `useLiveSession()`으로 오늘 진행 중 세션·그 경기, 세션과 상관없는 진행 중 경기(`GET /api/matches/in-progress`)와 그중 내 경기
-    - 진행 중 세션은 `getLiveSessionStartsAt` ≤ 지금 < 빈 세션 만료 시각인 세션(정기 우선)이다. 대회 세션만 시작 시각(`startTime`이 있으면 그날 그 시각)부터이고, 다음 재조회 시각(`getNextLiveSessionBoundary`)도 같은 기준이다.
+    - 진행 중 세션 `liveSession`은 `getLiveSessionStartsAt` ≤ 지금 < 세션 끝 시각(`getSessionEndsAt`)인 세션(정기 우선)이다. 대회 세션만 시작 시각(`startTime`이 있으면 그날 그 시각)부터다.
+    - 경기 기록 시트는 `recordingSession`(같은 고르기, 끝은 빈 세션 만료 시각)으로 새 경기를 세션에 붙여, 종료 시각이 지난 회원·대회 세션도 그날 자정까지 기록이 그 세션에 들어간다.
+    - 다음 재조회 시각(`getNextLiveSessionBoundary`)은 세션 시작·끝·만료 시각 중 가장 이른 것이다.
   - `SystemNoticeContext.tsx`: `useSystemNotice().showSaveFailure({ onRetry })`로 저장 실패 토스트(네트워크 오류에만, 서버 4xx·5xx는 화면 인라인), `showToast({ message, actionLabel?, onAction?, durationMs? })`로 하단 바 위 알약 토스트(기본 5초, 동작 글자 하나)
   - `AppUpdateContext.tsx`: `useAppUpdate()`로 PWA 업데이트 확인·적용 상태
   - `ScreenVisibilityContext.tsx`: `useIsScreenVisible()`로 안쪽 화면이 지금 보이는지. 탭 패널(선택됨 && 탭 셸이 PushScreen에 덮이지 않음)과 PushScreen 본문(열림 && 활성 && 덮이지 않음)이 제공하고, 제공자 밖(바텀시트 등)은 언제나 보임
@@ -202,7 +204,8 @@
 - LIVE(진행 중 세션) 판정에서 대회 세션만 세션 시작 시각부터 LIVE입니다.
   - 시작 시각이 있으면 그날 그 시각, 없으면 세션 시각(`date`)이 기준입니다.
   - 홈 대회 대진도 이 기준 전에는 보이지 않습니다.
-  - 정기·회원 세션의 LIVE 판정은 그대로입니다.
+  - 정기·회원 세션은 세션 시각(`date`)부터 LIVE입니다.
+  - LIVE는 세션 끝 시각(`getSessionEndsAt`)에 끝납니다. 회원·대회 세션은 종료 시각, 정기 세션과 시각 없는 세션은 빈 세션 만료 시각입니다.
 - 랭킹 1~3위는 금·은·동(`pk-gold`·`pk-silver`·`pk-bronze`) 원입니다. 상승은 `pk-up`, 하락은 모두 `pk-down`, 보합은 회색입니다. 빨강(`pk-down`) 채움 버튼은 경기 삭제 확인 시트의 "길게 눌러 삭제"(`HoldToConfirmButton` `danger`, 1초)뿐입니다.
 - 평점 없음은 "–"로 표기하고 NR 글자·알약을 쓰지 않습니다(`formatRating`도 값이 없으면 "–"). 랭킹의 평점 없는 회원 줄은 순위·평점 모두 "–", 세션 평점 변화 줄은 세션 후 평점이 없으면 평점 부분 없이 승패만, 내 변동 카드는 큰 "–" 하나만(변화 표시 없음) 보입니다. 처음 평점을 받은 회원도 다른 회원처럼 시작 평점 3.000 → 새 평점과 3.000 기준 변화량으로 보이며 NEW 같은 별도 표시는 붙이지 않습니다(평점 로그·세션 리포트의 이전 평점에 3.0이 들어 있음). 세션 전 평점이 없는 경우(첫 평점이 공식 DUPR 조정)만 새 평점만 보이고 변화는 "–"입니다. 팀 평균 등 평균 표시는 NR을 3.0으로 칩니다.
 - 카드에는 테두리가 없습니다. 둥글기는 12/20/999만, 글자 크기는 12/13/15/17/22/26만 씁니다.

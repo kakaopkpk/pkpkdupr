@@ -4,6 +4,7 @@ import {
   canOpenRegularSession,
   getEmptySessionExpiresAt,
   getEmptySessionExpiryCutoff,
+  getSessionEndsAt,
   getNextRegularSessionDateKey,
   addKstDays,
   isOvernightSessionTimeRange,
@@ -406,6 +407,44 @@ describe("세션 시각", () => {
     expect(isOvernightSessionTimeRange({ startTime: null, endTime: null })).toBe(false);
   });
 
+});
+
+describe("getSessionEndsAt", () => {
+  const sessionDate = new Date("2026-11-09T00:00:00+09:00");
+
+  it("회원·대회 세션은 종료 시각에 끝난다", () => {
+    const range = { startTime: "10:00", endTime: "12:00" };
+    expect(getSessionEndsAt("custom", sessionDate, range)).toEqual(
+      new Date("2026-11-09T12:00:00+09:00"),
+    );
+    expect(getSessionEndsAt("tournament", sessionDate, range)).toEqual(
+      new Date("2026-11-09T12:00:00+09:00"),
+    );
+  });
+
+  it("자정을 넘기면 다음 날 종료 시각에 끝난다", () => {
+    expect(
+      getSessionEndsAt("custom", sessionDate, {
+        startTime: "23:30",
+        endTime: "01:30",
+      }),
+    ).toEqual(new Date("2026-11-10T01:30:00+09:00"));
+  });
+
+  it("종료 시각이 없거나 정기 세션이면 만료 시각과 같다", () => {
+    expect(getSessionEndsAt("custom", sessionDate)).toEqual(
+      new Date("2026-11-10T00:00:00+09:00"),
+    );
+    expect(
+      getSessionEndsAt("custom", sessionDate, { startTime: null, endTime: null }),
+    ).toEqual(new Date("2026-11-10T00:00:00+09:00"));
+    expect(
+      getSessionEndsAt("regular", new Date("2026-11-09T18:00:00+09:00"), {
+        startTime: "18:00",
+        endTime: "21:00",
+      }),
+    ).toEqual(new Date("2026-11-09T22:00:00+09:00"));
+  });
 });
 
 describe("isSessionOnToday", () => {

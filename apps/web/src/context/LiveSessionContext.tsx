@@ -10,6 +10,7 @@ import React, {
 import {
   canOpenRegularSession,
   getEmptySessionExpiresAt,
+  getSessionEndsAt,
   kstDateKeyTimeToDate,
   kstDateKeyToDate,
   REGULAR_SESSION_START_HOUR,
@@ -28,9 +29,14 @@ export interface LiveSessionState {
   status: "loading" | "ready" | "error";
   /**
    * 진행 중 세션. GET /api/match-sessions/today의 세션 중
-   * getLiveSessionStartsAt ≤ 지금 < getEmptySessionExpiresAt(kind, date)인 첫 세션(정기 우선). 없으면 null
+   * getLiveSessionStartsAt ≤ 지금 < getSessionEndsAt인 첫 세션(정기 우선). 없으면 null
    */
   liveSession: MatchSessionDetailInfo | null;
+  /**
+   * 경기 기록 시트가 새 경기를 붙이는 세션. liveSession과 같은 고르기지만 끝을 빈 세션 만료 시각으로 잡아,
+   * 종료 시각이 지난 회원·대회 세션도 그날 자정까지 기록이 그 세션에 붙는다
+   */
+  recordingSession: MatchSessionDetailInfo | null;
   isParticipant: boolean;
   /** liveSession의 모든 경기(GET /api/match-sessions/:id/matches) */
   matches: MatchInfo[];
@@ -55,31 +61,42 @@ export const getLiveSessionStartsAt = (
   return kstDateKeyTimeToDate(toKstDateKey(sessionDate), session.startTime);
 };
 
-export const pickLiveSession = (
+type SessionEndGetter = typeof getSessionEndsAt;
+
+/** 시작 시각 ≤ now < getEndsAt인 첫 세션(정기 우선) */
+const pickSessionBetween = (
   sessions: MatchSessionDetailInfo[],
-  now: Date = new Date(),
+  now: Date,
+  getEndsAt: SessionEndGetter,
 ): MatchSessionDetailInfo | null => {
-  const liveSessions = sessions.filter((session) => {
-    const expiresAt = getEmptySessionExpiresAt(
-      session.kind,
-      new Date(session.date),
-      session,
-    );
-    return (
+  const candidates = sessions.filter(
+    (session) =>
       getLiveSessionStartsAt(session).getTime() <= now.getTime() &&
-      now.getTime() < expiresAt.getTime()
-    );
-  });
+      now.getTime() <
+        getEndsAt(session.kind, new Date(session.date), session).getTime(),
+  );
 
   return (
-    liveSessions.find((session) => session.kind === "regular") ??
-    liveSessions[0] ??
+    candidates.find((session) => session.kind === "regular") ??
+    candidates[0] ??
     null
   );
 };
 
+export const pickLiveSession = (
+  sessions: MatchSessionDetailInfo[],
+  now: Date = new Date(),
+): MatchSessionDetailInfo | null =>
+  pickSessionBetween(sessions, now, getSessionEndsAt);
+
+export const pickRecordingSession = (
+  sessions: MatchSessionDetailInfo[],
+  now: Date = new Date(),
+): MatchSessionDetailInfo | null =>
+  pickSessionBetween(sessions, now, getEmptySessionExpiresAt);
+
 /**
- * 진행 중 세션이 바뀔 수 있는 다음 시각. 오늘 세션들의 시작·만료 시각, 오늘 정기 회차 시작(18:00),
+ * 진행 중·기록 세션이 바뀔 수 있는 다음 시각. 오늘 세션들의 시작·종료·만료 시각, 오늘 정기 회차 시작(18:00),
  * 다음 날 KST 0시 중 now보다 늦은 가장 이른 시각이다.
  * 0시를 넣어 날짜가 바뀌면 새 날의 오늘 세션을 다시 읽고 그날 경계를 다시 잡는다.
  */
@@ -88,10 +105,14 @@ export const getNextLiveSessionBoundary = (
   now: Date = new Date(),
 ): Date => {
   const todayKey = toKstDateKey(now);
-  const candidates = sessions.flatMap((session) => [
-    getLiveSessionStartsAt(session),
-    getEmptySessionExpiresAt(session.kind, new Date(session.date), session),
-  ]);
+  const candidates = sessions.flatMap((session) => {
+    const sessionDate = new Date(session.date);
+    return [
+      getLiveSessionStartsAt(session),
+      getSessionEndsAt(session.kind, sessionDate, session),
+      getEmptySessionExpiresAt(session.kind, sessionDate, session),
+    ];
+  });
   // 24시는 다음 날 0시다
   candidates.push(kstDateKeyToDate(todayKey, 24));
 
@@ -123,7 +144,7 @@ const fetchSessionMatches = async (sessionId: string) => {
 };
 
 /**
- * 셸이 진행 중 세션 상태를 만든다. 첫 로드, 앱이 다시 보일 때, 다음 세션 시작·만료 시각에 스스로 다시 읽고,
+ * 셸이 진행 중 세션 상태를 만든다. 첫 로드, 앱이 다시 보일 때, 다음 세션 시작·종료·만료 시각에 스스로 다시 읽고,
  * 그 밖의 갱신(데이터 변경·당겨서 새로고침)은 셸이 reload를 부른다. 주기 폴링은 하지 않는다.
  */
 export const useLiveSessionState = (
@@ -131,6 +152,8 @@ export const useLiveSessionState = (
 ): LiveSessionState => {
   const [status, setStatus] = useState<LiveSessionState["status"]>("loading");
   const [liveSession, setLiveSession] =
+    useState<MatchSessionDetailInfo | null>(null);
+  const [recordingSession, setRecordingSession] =
     useState<MatchSessionDetailInfo | null>(null);
   const [matches, setMatches] = useState<MatchInfo[]>([]);
   const [inProgressMatches, setInProgressMatches] = useState<MatchInfo[]>([]);
@@ -146,6 +169,7 @@ export const useLiveSessionState = (
 
     if (!playerId) {
       setLiveSession(null);
+      setRecordingSession(null);
       setMatches([]);
       setInProgressMatches([]);
       setTodaySessions([]);
@@ -166,6 +190,7 @@ export const useLiveSessionState = (
       if (requestIdRef.current !== requestId) return;
 
       setLiveSession(nextLiveSession);
+      setRecordingSession(pickRecordingSession(today.sessions));
       setMatches(nextMatches);
       if (nextInProgressMatches) setInProgressMatches(nextInProgressMatches);
       setTodaySessions(today.sessions);
@@ -226,13 +251,22 @@ export const useLiveSessionState = (
     return {
       status,
       liveSession,
+      recordingSession,
       isParticipant: !!liveSession && isSessionParticipant(liveSession, playerId),
       matches,
       inProgressMatches,
       myInProgressMatch,
       reload,
     };
-  }, [inProgressMatches, liveSession, matches, playerId, reload, status]);
+  }, [
+    inProgressMatches,
+    liveSession,
+    matches,
+    playerId,
+    recordingSession,
+    reload,
+    status,
+  ]);
 };
 
 export const LiveSessionProvider: React.FC<{

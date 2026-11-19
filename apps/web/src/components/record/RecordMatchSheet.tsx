@@ -64,7 +64,7 @@ export default function RecordMatchSheet({
   tabKey,
   onClose,
 }: RecordMatchSheetProps): React.ReactElement {
-  const { liveSession } = useLiveSession();
+  const { recordingSession } = useLiveSession();
   const { player } = useAuth();
   const { closeDepth, selectedTab } = useTabNavigation();
   // 열 때마다 올려서 입력을 초기 상태로 리마운트한다
@@ -176,7 +176,7 @@ export default function RecordMatchSheet({
                   ? [player.id, null, null, null]
                   : EMPTY_SLOTS,
             score: EMPTY_SCORE,
-            location: liveSession?.location || DEFAULT_MATCH_LOCATION,
+            location: recordingSession?.location || DEFAULT_MATCH_LOCATION,
             editMatch: null,
           };
     content = (

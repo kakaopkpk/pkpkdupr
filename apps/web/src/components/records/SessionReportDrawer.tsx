@@ -5,7 +5,7 @@ import React, {
   useRef,
   useState,
 } from "react";
-import { getEmptySessionExpiresAt, toKstDateKey } from "@pkpkdupr/shared/session";
+import { getSessionEndsAt, toKstDateKey } from "@pkpkdupr/shared/session";
 import { getMatchPlayerIds, type MatchInfo } from "@/types/match";
 import PushScreen from "@/components/PushScreen";
 import LastSessionMeCard from "@/components/home/LastSessionMeCard";
@@ -78,7 +78,7 @@ type LoadState =
       matches: MatchInfo[];
       /** 끝난 세션의 리포트. 끝나기 전이거나 완료 경기가 없으면(404) null */
       report: MatchSessionReportInfo | null;
-      /** 불러올 때 세션이 끝났는지(getEmptySessionExpiresAt <= 지금). 끝난 세션만 리포트를 읽는다 */
+      /** 불러올 때 세션이 끝났는지(getSessionEndsAt <= 지금). 끝난 세션만 리포트를 읽는다 */
       isEnded: boolean;
     }
   | { kind: "error"; message: string };
@@ -88,8 +88,8 @@ const isPlayerInMatch = (match: MatchInfo, playerId: string) =>
     team.players.some((player) => player.id === playerId),
   );
 
-const getSessionExpiresAt = (session: MatchSessionDetailInfo) =>
-  getEmptySessionExpiresAt(session.kind, new Date(session.date), session).getTime();
+const getSessionEndTime = (session: MatchSessionDetailInfo) =>
+  getSessionEndsAt(session.kind, new Date(session.date), session).getTime();
 
 /** 끝난 세션의 리포트. 완료 경기가 없으면 서버가 404라 리포트 없이 그린다 */
 const fetchEndedSessionReport = async (sessionId: string) => {
@@ -173,7 +173,7 @@ export default function SessionReportDrawer({
           fetchMatchSession(targetSessionId),
           fetchSessionMatches(targetSessionId),
         ]);
-        const isEnded = getSessionExpiresAt(session) <= Date.now();
+        const isEnded = getSessionEndTime(session) <= Date.now();
         const report = isEnded
           ? await fetchEndedSessionReport(targetSessionId)
           : null;
@@ -215,7 +215,7 @@ export default function SessionReportDrawer({
   const hasEndedSinceLoad =
     isLoadedBeforeEnd &&
     !!readySession &&
-    getSessionExpiresAt(readySession) <= now.getTime();
+    getSessionEndTime(readySession) <= now.getTime();
   useEffect(() => {
     if (hasEndedSinceLoad) void loadSession(sessionId, true);
   }, [hasEndedSinceLoad, loadSession, sessionId]);

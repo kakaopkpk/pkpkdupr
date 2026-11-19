@@ -67,7 +67,7 @@
 
 - 오늘 세션 `GET /api/match-sessions/today`: 전날 시작해 자정을 넘긴 회원 세션도 끝나기 전까지 오늘 세션이다(`isSessionOnToday`).
 - 다가오는 세션 `GET /api/match-sessions/upcoming`
-  - 만료 전 오늘·미래 세션, 날짜 키 오름차순·같은 날은 정기 세션 먼저.
+  - 끝나기 전(`getSessionEndsAt`, 회원·대회 세션은 종료 시각) 오늘·미래 세션, 날짜 키 오름차순·같은 날은 정기 세션 먼저.
   - 조회 때 공휴일·취소 날짜를 건너뛴 다음 정기 회차를 find-or-create.
 - 오늘 정기 세션 열기 `POST /api/match-sessions/regular/today`: 정기 요일 22시 전만, 오늘이 공휴일·취소 날짜면 409
 - 회원 세션 생성 `POST /api/match-sessions`
@@ -116,7 +116,7 @@
   - 공개 Match hydrate는 페이지 경기만.
 - 일정 탭 월별 조회 `GET /api/schedule?month=YYYY-MM`
   - 응답 `ScheduleMonthResponse`, month 형식 오류 400.
-  - `sessions`: 세션 날짜 키가 그 달(KST)인 세션. 참여자·끝남 여부 `isEnded`(만료 시각 지남) 포함, 끝난 세션은 완료 경기가 있는 세션만, 날짜 키 오름차순·같은 날 정기 먼저.
+  - `sessions`: 세션 날짜 키가 그 달(KST)인 세션. 참여자·끝남 여부 `isEnded`(`getSessionEndsAt` 지남) 포함, 끝난 세션은 완료 경기가 있는 세션만, 날짜 키 오름차순·같은 날 정기 먼저.
   - `records`: 정렬 시각이 그 달인 기록 줄. 기록 목록 항목과 같은 형태·순서, 요청자 기준 `mine`.
 - 홈 소식 피드 `GET /api/news-feed?cursor=`
   - 홈(진행 중 세션이 없을 때)의 "소식" 피드가 사용.
