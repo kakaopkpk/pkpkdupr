@@ -1,9 +1,10 @@
 import React from "react";
-import { isMatchScheduled, type MatchInfo } from "@/types/match";
+import type { MatchInfo } from "@/types/match";
 import { RallyTeamRow } from "@/components/match/LiveMatchRally";
 import { PkButton, rowPressClassName } from "@/components/ui/Button";
 import { ChevronRightIcon } from "@/components/ui/Icons";
 import { cx } from "@/components/ui/cx";
+import { useIsMatchScheduled } from "@/hooks/useIsMatchScheduled";
 import { formatElapsed } from "@/lib/format";
 import { formatBracketRoundLabel } from "@/lib/tournament";
 import { TeamsVersus } from "./TeamBlock";
@@ -45,33 +46,36 @@ const MyMatchCardFrame: React.FC<{
   header: React.ReactNode;
   onOpenDetail: () => void;
   footer: React.ReactNode;
-}> = ({ match, now, header, onOpenDetail, footer }) => (
-  <article className="flex flex-col gap-3 rounded-pk-lg border-2 border-pk-primary-line bg-white p-3.5">
-    <button
-      type="button"
-      onClick={onOpenDetail}
-      className="flex flex-col gap-1 text-left active:opacity-80"
-    >
-      {header}
-      <RallyTeamRow
-        teams={match.teams}
-        isScheduled={isMatchScheduled(match, now)}
-        ringColor="#ffffff"
-        vsClassName="text-pk-12 font-bold text-pk-muted"
-        renderNames={(team) => (
-          <span className="flex max-w-full min-w-0 flex-col items-center text-pk-15 font-bold leading-[1.35] text-pk-ink">
-            {team.players.map((player) => (
-              <span key={player.id} className="max-w-full truncate">
-                {player.username}
-              </span>
-            ))}
-          </span>
-        )}
-      />
-    </button>
-    {footer}
-  </article>
-);
+}> = ({ match, now, header, onOpenDetail, footer }) => {
+  const isScheduled = useIsMatchScheduled(match, now);
+  return (
+    <article className="flex flex-col gap-3 rounded-pk-lg border-2 border-pk-primary-line bg-white p-3.5">
+      <button
+        type="button"
+        onClick={onOpenDetail}
+        className="flex flex-col gap-1 text-left active:opacity-80"
+      >
+        {header}
+        <RallyTeamRow
+          teams={match.teams}
+          isScheduled={isScheduled}
+          ringColor="#ffffff"
+          vsClassName="text-pk-12 font-bold text-pk-muted"
+          renderNames={(team) => (
+            <span className="flex max-w-full min-w-0 flex-col items-center text-pk-15 font-bold leading-[1.35] text-pk-ink">
+              {team.players.map((player) => (
+                <span key={player.id} className="max-w-full truncate">
+                  {player.username}
+                </span>
+              ))}
+            </span>
+          )}
+        />
+      </button>
+      {footer}
+    </article>
+  );
+};
 
 /**
  * 진행 중인 내 경기. 2px 연한 블루 테두리와 "점수 입력" 버튼. 버튼 위 본문을 누르면 경기 상세를 연다.

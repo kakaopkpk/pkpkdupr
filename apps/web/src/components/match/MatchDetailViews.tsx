@@ -2,7 +2,6 @@ import React, { useMemo } from "react";
 import { getMatchTopLevelType } from "@pkpkdupr/shared/match";
 import {
   getTeamResultScores,
-  isMatchScheduled,
   type MatchInfo,
   RATING_EXCLUDED_NOTICE,
 } from "@/types/match";
@@ -24,6 +23,7 @@ import { rowDividerClassName } from "@/components/ui/MatchRow";
 import { PlayerAvatar, TeamAvatars } from "@/components/ui/PlayerAvatar";
 import { LinkChevron, Section } from "@/components/ui/Section";
 import { cx } from "@/components/ui/cx";
+import { useIsMatchScheduled } from "@/hooks/useIsMatchScheduled";
 import { useMinuteClock } from "@/hooks/useMinuteClock";
 import { pickMatchEarnedAchievements } from "@/lib/achievements";
 import { formatBracketRoundLabel } from "@/lib/tournament";
@@ -122,7 +122,7 @@ export const LiveMatchDetail: React.FC<LiveMatchDetailProps> = ({
 }) => {
   const now = useMinuteClock();
   const startsAt = new Date(match.matchStartsAt);
-  const isScheduled = isMatchScheduled(match, now);
+  const isScheduled = useIsMatchScheduled(match, now);
   // 대진 예정 경기는 시각이 정해져 있지 않아 시각·시작한 사람을 보이지 않는다
   const isBracketScheduled = match.status === "scheduled";
   const showStartRows = !isBracketScheduled;
