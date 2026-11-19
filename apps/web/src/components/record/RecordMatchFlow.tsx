@@ -63,6 +63,8 @@ export interface RecordMatchFlowProps {
   isOpen: boolean;
   /** 시트가 깊이를 쌓은 탭. 점수 단계 깊이도 같은 탭에 쌓는다 */
   tabKey: TabKey;
+  /** 시트 전체를 닫는 중인지. 이때 점수 단계 깊이가 닫혀도 플레이어 선택으로 돌아가지 않는다 */
+  isClosingRef: React.RefObject<boolean>;
   onClose: () => void;
 }
 
@@ -101,6 +103,7 @@ export default function RecordMatchFlow({
   initial,
   isOpen,
   tabKey,
+  isClosingRef,
   onClose,
 }: RecordMatchFlowProps): React.ReactElement {
   const { notifyDataChanged, selectTab } = useAppNavigation();
@@ -295,16 +298,17 @@ export default function RecordMatchFlow({
     setStep(nextStep);
   };
 
-  // 깊이가 닫힐 때 아직 점수 단계면 플레이어 선택으로 간다. 저장 완료로 단계가 바뀌어 닫힐 때는 그대로 둔다
+  // 깊이가 닫힐 때 아직 점수 단계면 플레이어 선택으로 간다.
+  // 저장 완료로 단계가 바뀌어 닫힐 때와 시트 전체를 닫는 중일 때(닫히는 동안 내용이 바뀌지 않게)는 그대로 둔다
   const stepRef = useRef(step);
   useEffect(() => {
     stepRef.current = step;
   }, [step]);
   const backToPick = useCallback(() => {
-    if (stepRef.current !== "score") return;
+    if (stepRef.current !== "score" || isClosingRef.current) return;
     setError(null);
     setStep("pick");
-  }, []);
+  }, [isClosingRef]);
   useLayerDepth({
     isOpen: isOpen && step === "score",
     tabKey,
