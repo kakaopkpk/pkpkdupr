@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { prefersReducedMotion } from "@/hooks/useSheetDrag";
 import { getMonthSwipeStep } from "./monthSwipe";
 
@@ -6,53 +6,96 @@ import { getMonthSwipeStep } from "./monthSwipe";
 const AXIS_LOCK_PX = 8;
 /** 속도는 최근 이 시간 안의 이동으로 잰다 */
 const VELOCITY_WINDOW_MS = 100;
-/** 손가락을 뗀 뒤 날짜 칸이 제자리로 오거나 새 달이 들어오는 시간 */
-const SETTLE_DURATION_MS = 240;
+/** 손가락을 뗀 뒤 판이 제자리로 오거나 옆 달이 들어오는 시간 */
+const SETTLE_DURATION_MS = 280;
 /** 끌어서 넘긴 손가락을 뗀 뒤 이 시간 안의 클릭은 날짜 버튼에 닿지 않게 막는다 */
 const CLICK_SUPPRESS_MS = 400;
+/** 트랙에 이어 붙인 달 판 수(이전·이번·다음) */
+const PANEL_COUNT = 3;
 
 interface SwipeState {
   mode: "pending" | "drag" | "ignore";
   startX: number;
   startY: number;
-  /** 끌기를 시작할 때 날짜 칸의 위치. 정착 연출 중에 다시 끌면 그 자리에서 이어 간다 */
+  /** 끌기를 시작할 때 트랙의 위치. 정착 연출 중에 다시 끌면 그 자리에서 이어 간다 */
   baseOffset: number;
-  /** 움직임 줄이기면 날짜 칸을 옮기지 않고 달만 바꾼다. 끌기를 시작할 때 한 번 읽는다 */
+  /** 끌기를 시작할 때 잰 판 한 장 폭. 끄는 동안 레이아웃을 다시 읽지 않는다 */
+  panelWidth: number;
+  /** 움직임 줄이기면 판을 옮기지 않고 달만 바꾼다. 끌기를 시작할 때 한 번 읽는다 */
   reduceMotion: boolean;
   samples: { x: number; time: number }[];
 }
 
 /**
- * 달력 영역(touch-action: pan-y)의 좌우 밀기로 달을 옮긴다. 처음 움직임이 가로면 날짜 칸(content)이
- * 손가락을 따라오고, 놓을 때 거리·속도로 옮길지 정해 onSwipe(1 다음 달, -1 이전 달)를 부른다.
- * 옮기면 새 달이 민 쪽 반대편에서 들어오고, 아니면 제자리로 돌아온다. 세로 움직임은 브라우저 스크롤에 맡긴다
+ * 달력 영역(touch-action: pan-y)의 좌우 밀기로 달을 옮긴다. trackRef는 이전·이번·다음 달 판을 가로로
+ * 이어 붙이고 CSS로 가운데 판을 보이게 둔 트랙이며, 여기서는 그 위에 transform으로 끈 거리만 더한다.
+ * 처음 움직임이 가로면 세 판이 손가락을 따라오고, 놓을 때 거리·속도로 옮길지 정해 onSwipe(1 다음 달, -1 이전 달)를 부른다.
+ * 옮기면 새 달이 렌더된 뒤에도 보던 자리에서 이어 가운데로 들어오고, 아니면 제자리로 돌아온다. 세로 움직임은 브라우저 스크롤에 맡긴다.
+ * 돌려주는 slideIn(step)은 버튼·다른 달 날짜로 달을 옮기기 직전에 불러 같은 슬라이드로 넘기고,
+ * isSliding은 옮기는 슬라이드가 시작돼 가운데 판 자리에 멈출 때까지 true다(움직임 줄이기면 늘 false)
  */
 export const useMonthSwipe = (
   areaRef: React.RefObject<HTMLElement | null>,
-  contentRef: React.RefObject<HTMLElement | null>,
+  trackRef: React.RefObject<HTMLElement | null>,
   onSwipe: (step: 1 | -1) => void,
 ) => {
   const onSwipeRef = useRef(onSwipe);
   onSwipeRef.current = onSwipe;
+  const slideInRef = useRef<(step: 1 | -1) => void>(() => {});
+  const [isSliding, setIsSliding] = useState(false);
 
   useEffect(() => {
     const area = areaRef.current;
-    const content = contentRef.current;
-    if (!area || !content) return;
+    const track = trackRef.current;
+    if (!area || !track) return;
 
     let state: SwipeState | null = null;
     let suppressClickUntil = -Infinity;
+    // 끝난 전환은 transitionend가 오지 않을 수 있어(움직일 거리가 없거나 끊김) 시간으로 정착을 알린다
+    let settleTimer: ReturnType<typeof setTimeout> | undefined;
 
-    const setOffset = (offset: number) => {
-      content.style.transform = offset === 0 ? "" : `translate3d(${offset}px, 0, 0)`;
+    const getPanelWidth = () => track.offsetWidth / PANEL_COUNT;
+
+    const getOffset = () =>
+      new DOMMatrixReadOnly(getComputedStyle(track).transform).m41;
+
+    /** 옆 달 판 너머(빈 자리)가 보이지 않게 판 한 칸 안에서 옮긴다 */
+    const setOffset = (offset: number, panelWidth = getPanelWidth()) => {
+      const clamped = Math.max(-panelWidth, Math.min(panelWidth, offset));
+      track.style.transform = clamped === 0 ? "" : `translate3d(${clamped}px, 0, 0)`;
     };
 
-    /** 날짜 칸을 제자리로 보낸다 */
+    /** 트랙을 가운데 판 자리로 보낸다 */
     const settle = (animate: boolean) => {
-      content.style.transition = animate
+      track.style.transition = animate
         ? `transform ${SETTLE_DURATION_MS}ms var(--ease-pk-move)`
         : "";
       setOffset(0);
+      clearTimeout(settleTimer);
+      if (animate) {
+        settleTimer = setTimeout(() => setIsSliding(false), SETTLE_DURATION_MS);
+      } else {
+        setIsSliding(false);
+      }
+    };
+
+    /**
+     * 달이 step만큼 바뀌어 판이 한 칸씩 밀려 렌더되기 전에 부른다. 보던 화면이 그대로 남도록
+     * 판 한 칸만큼 반대로 옮겨 두고 가운데로 정착시킨다. 새 달은 이 이벤트가 끝나고 그리기 전에 렌더된다
+     */
+    const slideFrom = (offset: number, step: 1 | -1) => {
+      const panelWidth = getPanelWidth();
+      track.style.transition = "";
+      setOffset(offset + step * panelWidth, panelWidth);
+      track.getBoundingClientRect();
+      setIsSliding(true);
+      settle(true);
+    };
+
+    slideInRef.current = (step) => {
+      state = null;
+      if (prefersReducedMotion()) return;
+      slideFrom(getOffset(), step);
     };
 
     const handleTouchStart = (event: TouchEvent) => {
@@ -68,6 +111,7 @@ export const useMonthSwipe = (
         startX: touch.clientX,
         startY: touch.clientY,
         baseOffset: 0,
+        panelWidth: 0,
         reduceMotion: false,
         samples: [{ x: touch.clientX, time: event.timeStamp }],
       };
@@ -92,12 +136,13 @@ export const useMonthSwipe = (
         }
         state.mode = "drag";
         state.reduceMotion = prefersReducedMotion();
-        state.baseOffset = new DOMMatrixReadOnly(getComputedStyle(content).transform).m41;
-        content.style.transition = "";
+        state.baseOffset = getOffset();
+        state.panelWidth = getPanelWidth();
+        track.style.transition = "";
       }
 
       if (event.cancelable) event.preventDefault();
-      if (!state.reduceMotion) setOffset(state.baseOffset + deltaX);
+      if (!state.reduceMotion) setOffset(state.baseOffset + deltaX, state.panelWidth);
       state.samples.push({ x: touch.clientX, time: event.timeStamp });
       const cutoff = event.timeStamp - VELOCITY_WINDOW_MS;
       while (state.samples.length > 2 && state.samples[0].time < cutoff) {
@@ -117,24 +162,25 @@ export const useMonthSwipe = (
       // 손가락을 멈췄다 떼면 touchmove가 더 오지 않으므로, 마지막 이동이 오래됐으면 멈춘 것으로 본다
       const isPaused = event.timeStamp - last.time > VELOCITY_WINDOW_MS;
       const deltaX = last.x - state.startX;
-      const width = area.clientWidth;
       const step = getMonthSwipeStep({
         deltaX,
         velocityX: !isPaused && elapsed > 0 ? (last.x - first.x) / elapsed : 0,
-        width,
+        width: area.clientWidth,
       });
-      const { baseOffset, reduceMotion } = state;
+      const { reduceMotion } = state;
       state = null;
 
-      if (step !== 0) {
-        onSwipeRef.current(step);
-        if (!reduceMotion) {
-          // 새 달은 이 핸들러가 끝난 뒤 그리기 전에 렌더되므로, 반대편에서 시작해 제자리로 들어오게 한다
-          setOffset(step * Math.min(Math.abs(baseOffset + deltaX), width));
-          content.getBoundingClientRect();
-        }
+      if (step === 0) {
+        settle(!reduceMotion);
+        return;
       }
-      settle(!reduceMotion);
+      const offset = getOffset();
+      onSwipeRef.current(step);
+      if (reduceMotion) {
+        settle(false);
+      } else {
+        slideFrom(offset, step);
+      }
     };
 
     const handleTouchCancel = () => {
@@ -161,7 +207,13 @@ export const useMonthSwipe = (
       area.removeEventListener("touchend", handleTouchEnd);
       area.removeEventListener("touchcancel", handleTouchCancel);
       area.removeEventListener("click", handleClickCapture, true);
-      settle(false);
+      slideInRef.current = () => {};
+      clearTimeout(settleTimer);
+      track.style.transition = "";
+      setOffset(0);
     };
-  }, [areaRef, contentRef]);
+  }, [areaRef, trackRef]);
+
+  const slideIn = useCallback((step: 1 | -1) => slideInRef.current(step), []);
+  return { slideIn, isSliding };
 };

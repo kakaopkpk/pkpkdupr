@@ -1,8 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import {
-  addScheduleMonths,
-  getScheduleMonthDateKeyRange,
-} from "@pkpkdupr/shared/schedule";
+import { addScheduleMonths } from "@pkpkdupr/shared/schedule";
 import { kstDateKeyToDate, toKstDateKey } from "@pkpkdupr/shared/session";
 import {
   RecordCardSkeleton,
@@ -10,6 +7,7 @@ import {
   RecordSessionCard,
 } from "@/components/records/RecordCards";
 import MonthCalendar from "@/components/schedule/MonthCalendar";
+import { toMonthKey } from "@/components/schedule/monthGrid";
 import {
   EmptyDayCard,
   type EmptyDayKind,
@@ -44,7 +42,6 @@ import {
 import { getMatchPlayerIds } from "@/types/match";
 
 const EMPTY_IDS: readonly string[] = [];
-const EMPTY_MARKS: ReadonlyMap<string, ScheduleDayMark> = new Map();
 const LOAD_ERROR_MESSAGE = "일정을 불러오지 못했어요";
 
 interface MonthState {
@@ -59,15 +56,6 @@ interface ParticipantsTarget {
   session: MatchSessionDetailInfo;
   lockedPlayerIds: readonly string[];
 }
-
-/** "2026-11-17" → "2026-11" */
-const toMonthKey = (dateKey: string) => dateKey.slice(0, 7);
-
-/** 달을 옮기면 오늘이 든 달은 오늘을, 아니면 그 달 1일을 고른다 */
-const getDefaultDateKey = (monthKey: string, todayKey: string) =>
-  toMonthKey(todayKey) === monthKey
-    ? todayKey
-    : getScheduleMonthDateKeyRange(monthKey).fromDateKey;
 
 const getEmptyDayKind = (dateKey: string, todayKey: string): EmptyDayKind => {
   if (dateKey < todayKey) return "past";
@@ -101,11 +89,11 @@ const Schedule: React.FC = () => {
   // 비동기 요청이 끝난 시점에 최신 값을 읽기 위한 ref
   const dataVersionRef = useRef(dataVersion);
   dataVersionRef.current = dataVersion;
-  const monthKeyRef = useRef(monthKey);
-  monthKeyRef.current = monthKey;
   // 달마다 마지막 요청 번호. 응답 때 다르면 버린다
   const requestIdsRef = useRef(new Map<string, number>());
   const requestSequenceRef = useRef(0);
+  // 달마다 마지막으로 받기 시작한 기준(dataVersion·오늘). 같은 기준으로 받아 둔 달은 다시 받지 않는다
+  const loadStampsRef = useRef(new Map<string, string>());
 
   /** 그 달을 다시 받는다. 받아 둔 내용은 둔 채 바꾼다. rethrow면 실패를 던진다(당겨서 새로고침) */
   const loadMonth = useCallback(async (month: string, rethrow = false) => {
@@ -130,6 +118,8 @@ const Schedule: React.FC = () => {
       }));
     } catch (error) {
       if (!isLatest()) return;
+      // 실패한 달은 다시 보일 때 또 받는다
+      loadStampsRef.current.delete(month);
       setMonths((current) => ({
         ...current,
         [month]: {
@@ -143,28 +133,56 @@ const Schedule: React.FC = () => {
     }
   }, []);
 
-  // 보는 달이 바뀌거나 데이터가 바뀌거나 날짜가 넘어가면 다시 받는다
+  const selectedMonthKey = toMonthKey(selectedDateKey);
+  // 달력은 앞뒤 달 판(그 판의 6주에 걸치는 ±2달 날짜까지)도 그리고, 아래 카드는 고른 날의 달로 그린다
+  const neededMonthKeys = useMemo(
+    () => [
+      ...new Set([
+        ...[-2, -1, 0, 1, 2].map((offset) => addScheduleMonths(monthKey, offset)),
+        selectedMonthKey,
+      ]),
+    ],
+    [monthKey, selectedMonthKey],
+  );
+  const neededMonthKeysRef = useRef(neededMonthKeys);
+  neededMonthKeysRef.current = neededMonthKeys;
+  const monthKeyRef = useRef(monthKey);
+  monthKeyRef.current = monthKey;
+  const selectedMonthKeyRef = useRef(selectedMonthKey);
+  selectedMonthKeyRef.current = selectedMonthKey;
+
   useEffect(() => {
-    void loadMonth(monthKey);
-  }, [loadMonth, monthKey, dataVersion, todayKey]);
+    const stamp = `${dataVersion}:${todayKey}`;
+    for (const month of neededMonthKeys) {
+      if (loadStampsRef.current.get(month) === stamp) continue;
+      loadStampsRef.current.set(month, stamp);
+      void loadMonth(month);
+    }
+  }, [loadMonth, neededMonthKeys, dataVersion, todayKey]);
 
   useEffect(
     () =>
       registerPullToRefresh("schedule", () =>
-        loadMonth(monthKeyRef.current, true),
+        // 보는 달과 고른 날의 달만 기다리고, 옆 달은 뒤에서 받는다
+        Promise.all(
+          neededMonthKeysRef.current.map((month) =>
+            loadMonth(
+              month,
+              month === monthKeyRef.current || month === selectedMonthKeyRef.current,
+            ),
+          ),
+        ).then(() => undefined),
       ),
     [loadMonth, registerPullToRefresh],
   );
 
-  const showMonth = (nextMonthKey: string, dateKey?: string) => {
-    setMonthKey(nextMonthKey);
-    setSelectedDateKey(dateKey ?? getDefaultDateKey(nextMonthKey, todayKey));
-  };
+  /** 그 날을 고르고, 다른 달이면 그 달을 보인다 */
+  const selectDate = useCallback((dateKey: string) => {
+    setSelectedDateKey(dateKey);
+    setMonthKey(toMonthKey(dateKey));
+  }, []);
 
-  const goToday = useCallback(() => {
-    setMonthKey(toMonthKey(todayKey));
-    setSelectedDateKey(todayKey);
-  }, [todayKey]);
+  const goToday = useCallback(() => selectDate(todayKey), [selectDate, todayKey]);
 
   // 일정 탭을 다시 누르면 이번 달·오늘로 되돌린다
   useEffect(
@@ -172,12 +190,19 @@ const Schedule: React.FC = () => {
     [goToday, registerTabReset],
   );
 
-  const monthState = months[monthKey];
+  const marks = useMemo(() => {
+    const merged = new Map<string, ScheduleDayMark>();
+    for (const month of neededMonthKeys) {
+      const monthData = months[month]?.data;
+      if (!monthData) continue;
+      for (const [dateKey, mark] of buildScheduleDayMarks(monthData, playerId)) {
+        merged.set(dateKey, mark);
+      }
+    }
+    return merged;
+  }, [months, neededMonthKeys, playerId]);
+  const monthState = months[selectedMonthKey];
   const data = monthState?.data ?? null;
-  const marks = useMemo(
-    () => (data ? buildScheduleDayMarks(data, playerId) : EMPTY_MARKS),
-    [data, playerId],
-  );
   const liveSessionId = live.liveSession?.id ?? null;
   const entries = useMemo(
     () =>
@@ -228,7 +253,7 @@ const Schedule: React.FC = () => {
     openCreateSession({
       dateKey: selectedDateKey,
       // 만든 세션의 날을 보여 준다
-      onCreated: (session) => showMonth(toMonthKey(session.dateKey), session.dateKey),
+      onCreated: (session) => selectDate(session.dateKey),
     });
 
   const renderEntry = (entry: ScheduleDayEntry) => {
@@ -280,7 +305,7 @@ const Schedule: React.FC = () => {
         <StateMessage
           kind="error"
           message={monthState.error ?? LOAD_ERROR_MESSAGE}
-          onRetry={() => void loadMonth(monthKey)}
+          onRetry={() => void loadMonth(selectedMonthKey)}
         />
       ) : (
         <div aria-busy="true" aria-label="불러오는 중">
@@ -316,9 +341,8 @@ const Schedule: React.FC = () => {
           todayKey={todayKey}
           selectedDateKey={selectedDateKey}
           marks={marks}
-          onSelectDate={setSelectedDateKey}
-          onPrevMonth={() => showMonth(addScheduleMonths(monthKey, -1))}
-          onNextMonth={() => showMonth(addScheduleMonths(monthKey, 1))}
+          onSelectDate={selectDate}
+          onChangeMonth={(step) => setMonthKey(addScheduleMonths(monthKey, step))}
           onGoToday={goToday}
         />
         <Section title={formatKstLongDate(kstDateKeyToDate(selectedDateKey))}>
