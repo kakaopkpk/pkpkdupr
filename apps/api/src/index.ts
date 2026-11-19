@@ -2348,7 +2348,13 @@ const prepareBracketTeams = async (teams: unknown) => {
     throw new MatchSessionRequestError("두 팀 구성이 필요합니다.", 400);
   }
   const requestedTeams = teams as [MatchTeamRequest, MatchTeamRequest];
-  if (normalizeRequestedTeamPlayerIds(requestedTeams).length === 0) {
+  let requestedPlayerIds: string[];
+  try {
+    requestedPlayerIds = normalizeRequestedTeamPlayerIds(requestedTeams);
+  } catch (error) {
+    throw new MatchSessionRequestError((error as Error).message, 400);
+  }
+  if (requestedPlayerIds.length === 0) {
     throw new MatchSessionRequestError("참가자를 선택해주세요.", 400);
   }
   // 회원 조회 실패는 팀 구성 오류(400)가 아니라 서버 오류로 남긴다.
