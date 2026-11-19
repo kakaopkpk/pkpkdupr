@@ -18,7 +18,7 @@ const RING_RADIUS = 9.4;
 const RING_CIRCUMFERENCE = 2 * Math.PI * RING_RADIUS;
 // 끝까지 당겼을 때 호 길이이자, 임계 거리만큼 당겼을 때 링 회전 각도
 const RING_FULL_DEGREES = 270;
-// animate-spin 한 바퀴 시간(ms)
+// 놓은 뒤 한 바퀴 도는 시간(ms)
 const SPIN_DURATION_MS = 1000;
 
 const PullToRefreshIndicator: React.FC<PullToRefreshIndicatorProps> = ({
@@ -29,12 +29,10 @@ const PullToRefreshIndicator: React.FC<PullToRefreshIndicatorProps> = ({
   const isVisible = status !== "idle";
   const isPullGestureActive = status === "pulling" || status === "armed";
   const progress = Math.min(distance / threshold, 1);
-  const isSpinning = status === "refreshing";
+  // 놓은 뒤(새로고침 중·오류 표시)
+  const isReleased = status === "refreshing" || status === "error";
   const isArmed = status === "armed";
-  const translateY =
-    status === "refreshing" || status === "error"
-      ? 117
-      : -70.2 + progress * 187.2;
+  const translateY = isReleased ? 117 : -70.2 + progress * 187.2;
 
   // 놓으면 distance가 0으로 돌아가므로, 마지막 제스처 각도·호 길이를 기억해 그 자리에서 이어서 돈다.
   const lastGestureRef = useRef({ angle: 0, arcDegrees: 0 });
@@ -45,10 +43,9 @@ const PullToRefreshIndicator: React.FC<PullToRefreshIndicatorProps> = ({
     };
   }
   const { angle } = lastGestureRef.current;
-  const arcDegrees =
-    status === "refreshing" || status === "error"
-      ? RING_FULL_DEGREES
-      : lastGestureRef.current.arcDegrees;
+  const arcDegrees = isReleased
+    ? RING_FULL_DEGREES
+    : lastGestureRef.current.arcDegrees;
   const arcLength = (arcDegrees / 360) * RING_CIRCUMFERENCE;
 
   return (
@@ -82,12 +79,15 @@ const PullToRefreshIndicator: React.FC<PullToRefreshIndicatorProps> = ({
       >
         <span
           aria-hidden="true"
-          className={`block size-[20.8px] ${isSpinning ? "animate-spin" : ""}`}
+          className={`block size-[20.8px] ${isReleased ? "animate-spin" : ""}`}
           style={
-            isSpinning
+            isReleased
               ? {
+                  animationDuration: `${SPIN_DURATION_MS}ms`,
                   // 음수 지연으로 회전 위상을 놓는 순간의 각도에 맞춘다.
                   animationDelay: `${-((angle % 360) / 360) * SPIN_DURATION_MS}ms`,
+                  // 오류 표시 동안은 돌던 자리에서 멈춘다.
+                  animationPlayState: status === "error" ? "paused" : "running",
                 }
               : { transform: `rotate(${angle}deg)` }
           }
