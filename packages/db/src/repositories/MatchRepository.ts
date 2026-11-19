@@ -11,6 +11,7 @@ import type {
   Team,
 } from "@pkpkdupr/shared/match";
 import {
+  getMatchEditFields,
   getMatchSessionStatus,
   validateMatchScores,
 } from "@pkpkdupr/shared/match";
@@ -57,10 +58,7 @@ import {
 } from "@pkpkdupr/shared/session";
 import { firstRow, placeholders, type RawQueryResult } from "../db/client";
 import { buildMatchDeletionLogInsert } from "./MatchDeletionLogRepository";
-import {
-  buildMatchEditLogInsert,
-  hasRecordedMatchChanged,
-} from "./MatchEditLogRepository";
+import { buildMatchEditLogInsert } from "./MatchEditLogRepository";
 import {
   PlayerRepository,
   type CreateStoredPlayerInput,
@@ -1777,6 +1775,8 @@ export class MatchRepository {
     const scoreColumns = await this.getMatchScoreColumns();
     const transaction = await this.client.transaction("write");
     let committed = false;
+    // 수정 기록용으로 트랜잭션 안에서 읽은 수정 후 경기. 있으면 커밋 뒤 다시 읽지 않고 돌려준다
+    let after: Match | undefined;
 
     try {
       // 수정 기록용 수정 전 스냅샷. 행을 잠그고 읽어 아래 UPDATE와 사이에 다른 수정이 끼지 않게 한다.
@@ -1927,8 +1927,8 @@ export class MatchRepository {
       );
 
       if (data.editLog && before) {
-        const after = await this.findByIdWith(transaction.db, matchId);
-        if (after && hasRecordedMatchChanged(before, after)) {
+        after = await this.findByIdWith(transaction.db, matchId);
+        if (after && getMatchEditFields(before, after).length > 0) {
           await transaction.execute(
             buildMatchEditLogInsert({
               id: data.editLog.id,
@@ -1951,7 +1951,7 @@ export class MatchRepository {
       }
     }
 
-    const updated = await this.findById(matchId);
+    const updated = after ?? (await this.findById(matchId));
     if (!updated) {
       throw new Error("매치 기록 저장에 실패했습니다.");
     }

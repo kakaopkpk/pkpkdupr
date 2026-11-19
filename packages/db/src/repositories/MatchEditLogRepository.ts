@@ -54,28 +54,6 @@ export const buildMatchEditLogInsert = (
   ],
 });
 
-const toTime = (value: Date | string | undefined) =>
-  value === undefined ? undefined : new Date(value).getTime();
-
-/** 수정 기록에 남길 만한 차이(종류·이름·장소·팀·점수·세션·경기 시각)가 있는지 */
-export const hasRecordedMatchChanged = (before: Match, after: Match): boolean => {
-  const teamPlayerIds = (match: Match) =>
-    match.teams.map((team) => team.players.map((player) => player.id));
-  const scores = (match: Match) =>
-    (match.scores ?? []).map((score) => [score.scoreA, score.scoreB]);
-  const summary = (match: Match) =>
-    JSON.stringify([
-      match.type,
-      match.name || null,
-      match.location,
-      teamPlayerIds(match),
-      scores(match),
-      match.session?.id ?? null,
-      toTime(match.matchStartsAt),
-    ]);
-  return summary(before) !== summary(after);
-};
-
 /** 경기 수정 감사 로그 조회. 기록은 MatchRepository.updateRecordedMatch가 수정과 함께 남긴다 */
 export class MatchEditLogRepository {
   constructor(private db: any) {}

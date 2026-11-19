@@ -33,7 +33,7 @@ import {
 } from "../../lib/adminRoutes";
 import { formatKstDateWithWeekday } from "../../lib/format";
 import {
-  RECENT_DELETION_DAYS,
+  RECENT_NOTICE_DAYS,
   countMemberEditedMatches,
   dateKeyBlock,
   formatDateKeyShort,
@@ -466,7 +466,7 @@ const NoticeCard: React.FC<{
               <Row>
                 <Chip>경기 삭제</Chip>
                 <p className="min-w-0 flex-1 text-pk-13 text-pk-ink">
-                  최근 {RECENT_DELETION_DAYS}일 회원이 지운 경기 {deletions.count}건
+                  최근 {RECENT_NOTICE_DAYS}일 회원이 지운 경기 {deletions.count}건
                   {deletions.hasCompleted &&
                     " · 완료 경기라 평점이 다시 계산됐어요"}
                 </p>
@@ -477,7 +477,7 @@ const NoticeCard: React.FC<{
               <Row>
                 <Chip>경기 수정</Chip>
                 <p className="min-w-0 flex-1 text-pk-13 text-pk-ink">
-                  최근 {RECENT_DELETION_DAYS}일 회원이 고친 경기 {editedCount}건
+                  최근 {RECENT_NOTICE_DAYS}일 회원이 고친 경기 {editedCount}건
                 </p>
                 <TextLink to={matchesPath({ tab: "edited" })}>수정된 경기 ›</TextLink>
               </Row>

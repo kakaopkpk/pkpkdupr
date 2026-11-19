@@ -1,6 +1,11 @@
 import React from "react";
 import { Link } from "react-router-dom";
-import type { AdminMatchEditLog, Match } from "@pkpkdupr/shared/match";
+import {
+  getMatchEditFields,
+  type AdminMatchEditLog,
+  type Match,
+  type MatchEditField,
+} from "@pkpkdupr/shared/match";
 import { Card } from "../../components/ui/Card";
 import { Chip } from "../../components/ui/Chip";
 import { matchesPath } from "../../lib/adminRoutes";
@@ -9,24 +14,17 @@ import {
   DELETED_PLAYER_LABEL,
   formatScore,
   formatTeam,
-  toDate,
 } from "./matchView";
 
-const teamPlayerIds = (match: Match) =>
-  match.teams.map((team) => team.players.map((player) => player.id).join(",")).join("|");
-
-/** 수정 전·후 스냅샷에서 바뀐 항목 이름 */
-const describeChanges = (before: Match, after: Match): string[] =>
-  [
-    formatScore(before) !== formatScore(after) && "점수",
-    teamPlayerIds(before) !== teamPlayerIds(after) && "선수",
-    before.type !== after.type && "종류",
-    (before.session?.id ?? null) !== (after.session?.id ?? null) && "세션",
-    toDate(before.matchStartsAt).getTime() !== toDate(after.matchStartsAt).getTime() &&
-      "경기 시각",
-    before.location !== after.location && "장소",
-    (before.name || null) !== (after.name || null) && "이름",
-  ].filter((label): label is string => Boolean(label));
+const EDIT_FIELD_LABELS: Record<MatchEditField, string> = {
+  scores: "점수",
+  players: "선수",
+  type: "종류",
+  session: "세션",
+  matchStartsAt: "경기 시각",
+  location: "장소",
+  name: "이름",
+};
 
 const MatchLine: React.FC<{ match: Match }> = ({ match }) => (
   <>
@@ -68,7 +66,7 @@ export const EditedMatchesTable: React.FC<{
           <tbody>
             {logs.map((log) => {
               const { before, after } = log;
-              const changes = describeChanges(before, after);
+              const changes = getMatchEditFields(before, after);
               return (
                 <tr key={log.id} className="border-b border-pk-divider last:border-b-0">
                   <td className={`${cellClassName} whitespace-nowrap tabular-nums`}>
@@ -82,8 +80,8 @@ export const EditedMatchesTable: React.FC<{
                   </td>
                   <td className={cellClassName}>
                     <span className="flex flex-wrap gap-1">
-                      {changes.map((label) => (
-                        <Chip key={label}>{label}</Chip>
+                      {changes.map((field) => (
+                        <Chip key={field}>{EDIT_FIELD_LABELS[field]}</Chip>
                       ))}
                     </span>
                   </td>

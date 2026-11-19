@@ -60,7 +60,6 @@ export {
 export {
   MatchEditLogRepository,
   buildMatchEditLogInsert,
-  hasRecordedMatchChanged,
   type CreateMatchEditLogInput,
   type MatchEditLog,
 } from "./repositories/MatchEditLogRepository";
