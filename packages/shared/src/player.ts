@@ -466,9 +466,16 @@ export interface Player {
   affiliations?: PlayerAffiliation[];
   statusMessage?: string;
   statusMessageBackgroundColor?: string;
+  /** 게스트가 정회원으로 승급된 시각. 승급 기록 이전 회원·일반 가입 회원·게스트는 null이거나 없다 */
+  promotedAt?: Date | null;
   createdAt: Date;
   updatedAt: Date;
 }
+
+/** 정회원이 된 시각. 게스트에서 승급했으면 승급 시각, 아니면 가입 시각이다 */
+export const getPlayerJoinedAt = (
+  player: Pick<Player, "createdAt" | "promotedAt">,
+): Date => player.promotedAt ?? player.createdAt;
 
 /** 관리자 회원 목록(GET /api/admin/players) 항목에만 붙는 게스트 추가 정보 */
 export interface GuestAddedInfo {
