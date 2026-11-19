@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  getMatchEditFields,
   getMatchSessionStatus,
   isMatchRecordDeletable,
   isMatchRecordEditable,
@@ -164,5 +165,34 @@ describe("resolveRatingExcludedAfterEdit", () => {
     const included = { status: "completed", ratingExcluded: false } as const;
     expect(resolveRatingExcludedAfterEdit(included, members)).toBe(false);
     expect(resolveRatingExcludedAfterEdit(included, withGuest)).toBe(true);
+  });
+});
+
+describe("getMatchEditFields", () => {
+  const player = (id: string) => ({ id }) as Match["teams"][0]["players"][0];
+  const base = {
+    type: "singles",
+    location: "야탑초등학교",
+    teams: [
+      { id: "a", name: "Team A", players: [player("p1")] },
+      { id: "b", name: "Team B", players: [player("p2")] },
+    ],
+    scores: [{ scoreA: 11, scoreB: 7 }],
+    matchStartsAt: new Date("2026-11-19T10:00:00.000Z"),
+  } as unknown as Match;
+
+  it("JSON 스냅샷 날짜·빈 이름만 다르면 바뀐 것이 없다", () => {
+    const json = JSON.parse(JSON.stringify({ ...base, name: "" })) as Match;
+    expect(getMatchEditFields(base, json)).toEqual([]);
+  });
+
+  it("점수·선수·세션이 바뀌면 그 항목을 돌려준다", () => {
+    const after = {
+      ...base,
+      teams: [base.teams[0], { ...base.teams[1], players: [player("p3")] }],
+      scores: [{ scoreA: 7, scoreB: 11 }],
+      session: { id: "Ssess001" },
+    } as unknown as Match;
+    expect(getMatchEditFields(base, after)).toEqual(["scores", "players", "session"]);
   });
 });

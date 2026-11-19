@@ -1,4 +1,8 @@
-import type { AdminMatchDeletionLog, Match } from "@pkpkdupr/shared/match";
+import type {
+  AdminMatchDeletionLog,
+  AdminMatchEditLog,
+  Match,
+} from "@pkpkdupr/shared/match";
 import type { AdminPlayer } from "@pkpkdupr/shared/player";
 import {
   REGULAR_SESSION_LOOKAHEAD_DAYS,
@@ -13,7 +17,8 @@ import {
 } from "@pkpkdupr/shared/session";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
-export const RECENT_DELETION_DAYS = 7;
+/** 홈에 알리는 회원 삭제·수정 기간 */
+export const RECENT_NOTICE_DAYS = 7;
 
 /** JSON 응답의 날짜는 문자열로 오므로 Date로 바꿔 쓴다 */
 const toTime = (value: Date | string) => new Date(value).getTime();
@@ -87,12 +92,12 @@ export interface DeletionSummary {
   hasCompleted: boolean;
 }
 
-/** 최근 RECENT_DELETION_DAYS일 회원이 지운 경기. 관리자가 지운 것은 세지 않는다 */
+/** 최근 RECENT_NOTICE_DAYS일 회원이 지운 경기. 관리자가 지운 것은 세지 않는다 */
 export const summarizeMemberDeletions = (
   logs: AdminMatchDeletionLog[],
   now: Date = new Date(),
 ): DeletionSummary => {
-  const since = now.getTime() - RECENT_DELETION_DAYS * DAY_MS;
+  const since = now.getTime() - RECENT_NOTICE_DAYS * DAY_MS;
   const recent = logs.filter(
     (log) => !log.deletedByAdmin && toTime(log.deletedAt) >= since,
   );
@@ -100,6 +105,19 @@ export const summarizeMemberDeletions = (
     count: recent.length,
     hasCompleted: recent.some((log) => log.match.status === "completed"),
   };
+};
+
+/** 최근 RECENT_NOTICE_DAYS일 회원이 고친 경기 수(같은 경기를 여러 번 고쳐도 하나). 관리자가 고친 것은 세지 않는다 */
+export const countMemberEditedMatches = (
+  logs: AdminMatchEditLog[],
+  now: Date = new Date(),
+): number => {
+  const since = now.getTime() - RECENT_NOTICE_DAYS * DAY_MS;
+  return new Set(
+    logs
+      .filter((log) => !log.editedByAdmin && toTime(log.editedAt) >= since)
+      .map((log) => log.matchId),
+  ).size;
 };
 
 /** 오늘부터 REGULAR_SESSION_LOOKAHEAD_DAYS일 안의 쉬는 날(날짜 오름차순) */

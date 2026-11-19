@@ -3,12 +3,17 @@ import { useLocation, useNavigate } from "react-router-dom";
 import {
   getMatchTopLevelType,
   type AdminMatchDeletionLog,
+  type AdminMatchEditLog,
   type ManagedMatchSession,
   type Match,
   type MatchTopLevelType,
 } from "@pkpkdupr/shared/match";
 import type { AdminPlayer } from "@pkpkdupr/shared/player";
-import { fetchAdminMatches, fetchMatchDeletionLogs } from "../../api/matches";
+import {
+  fetchAdminMatches,
+  fetchMatchDeletionLogs,
+  fetchMatchEditLogs,
+} from "../../api/matches";
 import { fetchAdminPlayers } from "../../api/players";
 import { fetchAdminSessions } from "../../api/sessions";
 import { Button } from "../../components/ui/Button";
@@ -29,6 +34,7 @@ import {
 import { formatKstMonthDay } from "../../lib/format";
 import { AddMatchDialog } from "./AddMatchDialog";
 import { DeletedMatchesTable } from "./DeletedMatchesTable";
+import { EditedMatchesTable } from "./EditedMatchesTable";
 import { MatchCorrectionPanel } from "./MatchCorrectionPanel";
 import { MatchList } from "./MatchList";
 import { compareMatchesLatestFirst, normalizeMatch, toDate } from "./matchView";
@@ -65,27 +71,34 @@ interface MatchesData {
   sessions: ManagedMatchSession[];
   /** 지운 시각 내림차순 */
   deletionLogs: AdminMatchDeletionLog[];
+  /** 고친 시각 내림차순 */
+  editLogs: AdminMatchEditLog[];
 }
 
 const loadMatchesData = async (): Promise<MatchesData> => {
-  const [matches, players, sessions, deletionLogs] = await Promise.all([
+  const [matches, players, sessions, deletionLogs, editLogs] = await Promise.all([
     fetchAdminMatches(),
     fetchAdminPlayers(),
     fetchAdminSessions(),
     fetchMatchDeletionLogs(),
+    fetchMatchEditLogs(),
   ]);
   return {
     matches: matches.map(normalizeMatch).sort(compareMatchesLatestFirst),
     players,
     sessions,
     deletionLogs,
+    editLogs,
   };
 };
 
 type OpenDialog = "add" | "sheet" | null;
 
-const TABS: Array<{ value: "list" | "deleted"; label: string }> = [
+type MatchesTab = NonNullable<MatchesRouteParams["tab"]>;
+
+const TABS: Array<{ value: MatchesTab; label: string }> = [
   { value: "list", label: "경기 목록" },
+  { value: "edited", label: "수정된 경기" },
   { value: "deleted", label: "삭제된 경기" },
 ];
 
@@ -345,6 +358,18 @@ const MatchesPage: React.FC = () => {
     return <DeletedMatchesTable logs={data.deletionLogs} />;
   };
 
+  const renderEditedTab = () => {
+    if (!data) {
+      return renderList();
+    }
+    return (
+      <EditedMatchesTable
+        logs={data.editLogs}
+        existingMatchIds={new Set(data.matches.map((match) => match.id))}
+      />
+    );
+  };
+
   return (
     <>
       <PageHeader
@@ -375,9 +400,9 @@ const MatchesPage: React.FC = () => {
               aria-selected={selected}
               onClick={() =>
                 updateRoute(
-                  tab.value === "deleted"
-                    ? { tab: "deleted", matchId: undefined }
-                    : { tab: undefined },
+                  tab.value === "list"
+                    ? { tab: undefined }
+                    : { tab: tab.value, matchId: undefined },
                 )
               }
               className={cx(
@@ -389,12 +414,15 @@ const MatchesPage: React.FC = () => {
             >
               {tab.label}
               {tab.value === "deleted" && data && ` ${data.deletionLogs.length}`}
+              {tab.value === "edited" && data && ` ${data.editLogs.length}`}
             </button>
           );
         })}
       </div>
       {activeTab === "deleted" ? (
         renderDeletedTab()
+      ) : activeTab === "edited" ? (
+        renderEditedTab()
       ) : (
         <>
           {filterBar}

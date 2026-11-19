@@ -34,6 +34,7 @@ type DbClient = ReturnType<typeof getDbClient>;
 /** 지금 스키마의 public 테이블 전체. 다르면 스크립트를 스키마에 맞게 고친 뒤 실행한다 */
 const EXPECTED_PUBLIC_TABLES = [
   "match_deletion_logs",
+  "match_edit_logs",
   "match_participants",
   "match_scores",
   "match_session_participants",

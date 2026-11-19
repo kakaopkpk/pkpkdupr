@@ -11,6 +11,7 @@ import type {
   Team,
 } from "@pkpkdupr/shared/match";
 import {
+  getMatchEditFields,
   getMatchSessionStatus,
   validateMatchScores,
 } from "@pkpkdupr/shared/match";
@@ -57,6 +58,7 @@ import {
 } from "@pkpkdupr/shared/session";
 import { firstRow, placeholders, type RawQueryResult } from "../db/client";
 import { buildMatchDeletionLogInsert } from "./MatchDeletionLogRepository";
+import { buildMatchEditLogInsert } from "./MatchEditLogRepository";
 import {
   PlayerRepository,
   type CreateStoredPlayerInput,
@@ -193,6 +195,11 @@ export interface UpdateRecordedMatchInput {
   ratingExcluded: boolean;
   /** 주면 저장된 updated_at(초 단위)과 같을 때만 고치고, 다르면 MatchStaleUpdateError */
   expectedUpdatedAt?: Date;
+  /**
+   * 주면 이미 completed였던 경기를 고칠 때 같은 트랜잭션에서 match_edit_logs를 남긴다.
+   * 수정한 회원·시각은 resultSubmittedByPlayerId·resultSubmittedAt이다. 바뀐 내용이 없으면 남기지 않는다.
+   */
+  editLog?: { id: string; editedByAdmin: boolean };
 }
 
 export interface DeleteRecordedMatchInput {
@@ -1768,8 +1775,22 @@ export class MatchRepository {
     const scoreColumns = await this.getMatchScoreColumns();
     const transaction = await this.client.transaction("write");
     let committed = false;
+    // 수정 기록용으로 트랜잭션 안에서 읽은 수정 후 경기. 있으면 커밋 뒤 다시 읽지 않고 돌려준다
+    let after: Match | undefined;
 
     try {
+      // 수정 기록용 수정 전 스냅샷. 행을 잠그고 읽어 아래 UPDATE와 사이에 다른 수정이 끼지 않게 한다.
+      let before: Match | undefined;
+      if (data.editLog) {
+        const locked = await transaction.execute({
+          sql: `SELECT status FROM matches WHERE id = $1 FOR UPDATE`,
+          args: [matchId],
+        });
+        if (locked.rows[0]?.status === "completed") {
+          before = await this.findByIdWith(transaction.db, matchId);
+        }
+      }
+
       const submittedAtSeconds = toUnixTimestampSeconds(data.resultSubmittedAt);
       const args: unknown[] = [
         data.type,
@@ -1905,6 +1926,23 @@ export class MatchRepository {
         transaction,
       );
 
+      if (data.editLog && before) {
+        after = await this.findByIdWith(transaction.db, matchId);
+        if (after && getMatchEditFields(before, after).length > 0) {
+          await transaction.execute(
+            buildMatchEditLogInsert({
+              id: data.editLog.id,
+              matchId,
+              editedByPlayerId: data.resultSubmittedByPlayerId,
+              editedByAdmin: data.editLog.editedByAdmin,
+              before,
+              after,
+              editedAt: data.resultSubmittedAt,
+            }),
+          );
+        }
+      }
+
       await transaction.commit();
       committed = true;
     } finally {
@@ -1913,7 +1951,7 @@ export class MatchRepository {
       }
     }
 
-    const updated = await this.findById(matchId);
+    const updated = after ?? (await this.findById(matchId));
     if (!updated) {
       throw new Error("매치 기록 저장에 실패했습니다.");
     }

@@ -263,6 +263,38 @@ export const resolveRatingExcludedAfterEdit = (
   return existing.ratingExcluded || hasGuestPlayer(nextTeams);
 };
 
+/** 수정 기록에서 비교하는 경기 항목 */
+export type MatchEditField =
+  | "scores"
+  | "players"
+  | "type"
+  | "session"
+  | "matchStartsAt"
+  | "location"
+  | "name";
+
+/**
+ * 수정 전·후 경기에서 바뀐 항목. 서버는 빈 배열이면 수정 기록을 남기지 않고, 어드민은 "바뀐 것"으로 보인다.
+ * JSON 스냅샷도 받도록 날짜는 문자열이어도 된다.
+ */
+export const getMatchEditFields = (before: Match, after: Match): MatchEditField[] => {
+  const teamPlayerIds = (match: Match) =>
+    match.teams.map((team) => team.players.map((player) => player.id).join(",")).join("|");
+  const scores = (match: Match) =>
+    (match.scores ?? []).map((score) => `${score.scoreA}:${score.scoreB}`).join(",");
+  const changed: Record<MatchEditField, boolean> = {
+    scores: scores(before) !== scores(after),
+    players: teamPlayerIds(before) !== teamPlayerIds(after),
+    type: before.type !== after.type,
+    session: (before.session?.id ?? null) !== (after.session?.id ?? null),
+    matchStartsAt:
+      new Date(before.matchStartsAt).getTime() !== new Date(after.matchStartsAt).getTime(),
+    location: before.location !== after.location,
+    name: (before.name || null) !== (after.name || null),
+  };
+  return (Object.keys(changed) as MatchEditField[]).filter((field) => changed[field]);
+};
+
 /** 경기 기록(POST /api/matches)·수정(PUT /api/matches/:matchId) 요청의 한 팀 */
 export interface RecordMatchTeamRequest {
   /** "Team A" | "Team B" 표시용. 생략 가능 */
@@ -307,6 +339,26 @@ export interface AdminMatchDeletionLog {
 /** GET /api/admin/match-deletion-logs 응답. 지운 시각 내림차순 */
 export interface AdminMatchDeletionLogsResponse {
   logs: AdminMatchDeletionLog[];
+}
+
+/** GET /api/admin/match-edit-logs 항목. 이미 완료된 경기를 PUT /api/matches/:matchId로 고친 기록이다 */
+export interface AdminMatchEditLog {
+  id: string;
+  matchId: string;
+  editedAt: Date;
+  editedByPlayerId: string;
+  /** 고친 회원의 지금 아이디. 회원이 없어졌으면 null */
+  editedByUsername: string | null;
+  editedByAdmin: boolean;
+  /** 고치기 전 경기 전체(스냅샷) */
+  before: Match;
+  /** 고친 직후 경기 전체(스냅샷). 그 뒤 또 고쳤거나 지웠으면 지금 경기와 다를 수 있다 */
+  after: Match;
+}
+
+/** GET /api/admin/match-edit-logs 응답. 고친 시각 내림차순 */
+export interface AdminMatchEditLogsResponse {
+  logs: AdminMatchEditLog[];
 }
 
 /** POST /api/admin/matches/batch의 경기 한 개 */

@@ -119,6 +119,7 @@ pnpm lint
   - 활성 회원이면 참가자·생성자 여부와 상관없이 누구나 경기 시작 후 24시간 이내(`isWithinMatchEditWindow`)에만 수정할 수 있습니다(`isMatchRecordEditable`, 취소 경기는 제외, 웹 버튼 노출 기준).
   - 이후 정정은 관리자가 어드민 경기 화면에서 같은 `PUT /api/matches/:matchId`로 합니다(24시간 제한 없음).
   - 마지막으로 입력·수정한 회원은 `resultSubmittedByPlayerId`에 기록됩니다.
+  - completed 경기를 고치면 수정 전·후 스냅샷이 `match_edit_logs`에 남고, 어드민 경기 화면 "수정된 경기" 탭과 홈 "알아 둘 것"(최근 7일 회원 수정 건수)에 보입니다.
 - 회원 삭제
   - 수정 가능 조건에 더해, 이미 시작했고(시작 시각 ≤ 지금) 완료되지 않은 관리자 예정 경기(이미 저장된 `source: "admin_created"` 경기)가 아닐 때만(`isMatchRecordDeletable`) 된다.
   - 실제로 지운 행이 completed였으면 평점을 처음부터 다시 계산한다.

@@ -276,6 +276,23 @@ export const matchDeletionLogs = pgTable(
   }),
 );
 
+/** 완료 경기 수정 감사 로그. 두 스냅샷은 고치기 전·후의 경기 전체(shared Match를 JSON으로 직렬화한 값)다. */
+export const matchEditLogs = pgTable(
+  "match_edit_logs",
+  {
+    id: id("id").primaryKey(),
+    matchId: id("match_id").notNull(),
+    editedByPlayerId: id("edited_by_player_id").notNull(),
+    editedByAdmin: boolean("edited_by_admin").notNull().default(false),
+    beforeSnapshot: jsonb("before_snapshot").notNull(),
+    afterSnapshot: jsonb("after_snapshot").notNull(),
+    editedAt: unixTimestamp("edited_at").notNull(),
+  },
+  (table) => ({
+    matchIdIndex: index("match_edit_logs_match_id_idx").on(table.matchId),
+  }),
+);
+
 /** 회원이 확인한 업적. 업적별로 확인할 때의 획득 경기(earnedMatchId)를 남긴다 */
 export const playerSeenAchievements = pgTable(
   "player_seen_achievements",

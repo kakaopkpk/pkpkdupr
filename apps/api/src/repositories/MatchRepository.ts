@@ -1,5 +1,6 @@
 import type {
   AdminMatchDeletionLog,
+  AdminMatchEditLog,
   Match,
   MatchFeedItem,
   MatchScore,
@@ -802,6 +803,22 @@ export class MatchRepository {
       deletedByPlayerId: log.deletedByPlayerId,
       deletedByAdmin: log.deletedByAdmin,
       match: hydrateMatch(log.matchSnapshot),
+    }));
+  }
+
+  /** 완료 경기 수정 감사 로그. 고친 시각 내림차순이고 before·after는 고치기 전·후 경기 스냅샷이다 */
+  async findEditLogs(): Promise<
+    Array<Omit<AdminMatchEditLog, "editedByUsername">>
+  > {
+    const logs = await this.run(() => db.matchEditLogs.findAll(), 500);
+    return logs.map((log) => ({
+      id: log.id,
+      matchId: log.matchId,
+      editedAt: new Date(log.editedAt),
+      editedByPlayerId: log.editedByPlayerId,
+      editedByAdmin: log.editedByAdmin,
+      before: hydrateMatch(log.beforeSnapshot),
+      after: hydrateMatch(log.afterSnapshot),
     }));
   }
 

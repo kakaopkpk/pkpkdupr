@@ -1,7 +1,7 @@
 // 화면끼리 필터·선택을 넘기는 링크는 반드시 이 함수로 만들고, 받는 화면은 parse*로 읽는다.
 // 쿼리 키(고정):
 //   /members  kind, firstLogin=1, player, add=1
-//   /matches  tab=deleted, session, noSession=1, match
+//   /matches  tab=deleted|edited, session, noSession=1, match
 //   /sessions session, month
 //   /ratings  player
 
@@ -15,7 +15,7 @@ export interface MembersRouteParams {
 }
 
 export interface MatchesRouteParams {
-  tab?: "list" | "deleted";
+  tab?: "list" | "deleted" | "edited";
   sessionId?: string;
   noSession?: boolean;
   matchId?: string;
@@ -70,7 +70,7 @@ export const membersPath = (params: MembersRouteParams = {}): string =>
 
 export const matchesPath = (params: MatchesRouteParams = {}): string =>
   buildPath("/matches", [
-    ["tab", params.tab === "deleted" && "deleted"],
+    ["tab", params.tab !== "list" && params.tab],
     ["session", params.sessionId],
     ["noSession", params.noSession && "1"],
     ["match", params.matchId],
@@ -99,10 +99,12 @@ export const parseMembersParams = (
   };
 };
 
+const MATCHES_TABS = ["deleted", "edited"] as const;
+
 export const parseMatchesParams = (
   search: URLSearchParams,
 ): MatchesRouteParams => ({
-  tab: search.get("tab") === "deleted" ? "deleted" : undefined,
+  tab: MATCHES_TABS.find((tab) => tab === search.get("tab")),
   sessionId: readString(search, "session"),
   noSession: readFlag(search, "noSession"),
   matchId: readString(search, "match"),
