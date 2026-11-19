@@ -39,6 +39,9 @@ import {
 /** 한 페이지 창: 남은 세션 중 가장 최근 세션 date부터 이 기간 전까지(그 시각 포함) */
 export const NEWS_FEED_WINDOW_MS = 28 * 24 * 60 * 60 * 1000;
 
+/** 지배자 줄과 겹쳐 소식 줄에서 빼는 업적(세션 지배자 1회) */
+const FIRST_DOMINATOR_ACHIEVEMENT_ID = "dominator-1";
+
 /** 복식 순위가 이 안에 든 회원만 랭킹 줄을 만든다 */
 const NEWS_FEED_RANK_LIMIT = 3;
 
@@ -154,11 +157,20 @@ const buildSessionItem = ({
       winStreak,
     }));
 
-  // 세션 리포트 achievements와 같은 집합(참가자 전원으로 고른 뒤 활성 정회원만 남긴다)
+  const topRiser = pickTopRiser(players);
+
+  // 세션 리포트 achievements와 같은 집합(참가자 전원으로 고른 뒤 활성 정회원만 남긴다).
+  // 지배자가 이 세션으로 받은 첫 '세션 지배자' 업적은 카드의 지배자 줄과 같은 소식이라 뺀다
   const achievementLines: NewsFeedLine[] = selectAchievementsEarnedByMatches(
     players.flatMap((report) => earnedByPlayerId(report.player.id)),
     new Set(sessionMatches.map((match) => match.id)),
   ).flatMap((earned) => {
+    if (
+      earned.achievementId === FIRST_DOMINATOR_ACHIEVEMENT_ID &&
+      earned.playerId === topRiser?.player.id
+    ) {
+      return [];
+    }
     const player = lineMembers.get(earned.playerId);
     return player
       ? [
@@ -181,7 +193,7 @@ const buildSessionItem = ({
       activePlayerIds,
     ),
     mine: players.find((report) => report.player.id === requesterId) ?? null,
-    topRiser: pickTopRiser(players),
+    topRiser,
     lines: [...rankLines, ...winStreakLines, ...achievementLines],
   };
 };

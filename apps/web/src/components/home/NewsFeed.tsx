@@ -10,16 +10,13 @@ import {
   SessionRatingDeltaCount,
 } from "@/components/records/SessionReportParts";
 import SkeletonBlock from "@/components/SkeletonBlock";
-import { SessionDominatorBadge } from "@/components/ui/Badges";
 import { rowPressClassName } from "@/components/ui/Button";
-import { COUNT_UP, CountUpRatingDelta } from "@/components/ui/CountUpNumber";
-import { RankChange } from "@/components/ui/Delta";
+import { RankChange, RatingDelta } from "@/components/ui/Delta";
 import { PlayerAvatar } from "@/components/ui/PlayerAvatar";
 import { Section, TextLink } from "@/components/ui/Section";
 import { StateMessage } from "@/components/ui/StateMessage";
 import { cx } from "@/components/ui/cx";
 import { useAppNavigation } from "@/context/AppNavigationContext";
-import { usePlayOnShow } from "@/hooks/usePlayOnShow";
 import { getAchievementDefinition } from "@/lib/achievements";
 import { formatKstMonthDay, formatKstShortDate } from "@/lib/format";
 import { getObjectParticle } from "@/lib/korean";
@@ -81,7 +78,9 @@ const FeedLineButton: React.FC<{
   onPress: () => void;
   children: React.ReactNode;
   right?: React.ReactNode;
-}> = ({ player, onPress, children, right }) => (
+  /** 아바타에 세션 지배자 불꽃 후광을 두른다 */
+  hasFlameAura?: boolean;
+}> = ({ player, onPress, children, right, hasFlameAura = false }) => (
   <button
     type="button"
     onClick={onPress}
@@ -90,7 +89,9 @@ const FeedLineButton: React.FC<{
       rowPressClassName,
     )}
   >
-    <PlayerAvatar player={player} size={36} />
+    <span className={cx("inline-flex shrink-0", hasFlameAura && "pk-flame-aura")}>
+      <PlayerAvatar player={player} size={36} />
+    </span>
     <span className="flex min-w-0 flex-1 flex-col gap-0.5">{children}</span>
     {right}
   </button>
@@ -194,56 +195,41 @@ const FeedMineStats: React.FC<{ mine: SessionPlayerReport }> = ({ mine }) => (
   </div>
 );
 
-/**
- * 세션 지배자 줄: 불꽃 후광 아바타 48, 앰버 알약, 아이디, 이전 → 이후 평점, 오른쪽 끝 상승폭.
- * 보일 때마다 왕관 까딱임·칩 흰 빛·상승폭 카운트업을 한 번 재생한다(TopRiserCard와 같은 연출)
- */
-const FeedTopRiser: React.FC<{ report: SessionPlayerReport }> = ({ report }) => {
+/** 세션 지배자 줄: 소식 줄 맨 앞, 불꽃 후광 아바타와 오른쪽 끝 상승폭. 누르면 그 회원 프로필 */
+const FeedTopRiserLine: React.FC<{ report: SessionPlayerReport }> = ({
+  report,
+}) => {
   const { openMemberProfile } = useAppNavigation();
-  const { isPlaying, finish } = usePlayOnShow();
+  const { player } = report;
 
   return (
-    <button
-      type="button"
-      onClick={() => openMemberProfile(report.player.id)}
-      className={cx(
-        "flex w-full items-center gap-4 py-3.5 text-left active:opacity-80",
-        rowPressClassName,
-      )}
+    <FeedLineButton
+      player={player}
+      hasFlameAura
+      onPress={() => openMemberProfile(player.id)}
+      right={
+        <RatingDelta
+          value={report.ratingDelta}
+          className="shrink-0 text-pk-15 font-extrabold"
+        />
+      }
     >
-      <span className="pk-flame-aura shrink-0">
-        <PlayerAvatar player={report.player} size={48} />
+      <span className={lineTextClassName}>
+        <Strong>{player.username}</Strong>님이 <Strong>세션 지배자</Strong>가
+        됐어요
       </span>
-      <span className="flex min-w-0 flex-1 flex-col items-start gap-1">
-        <span
-          className="flex"
-          onAnimationEnd={(event) => {
-            // 칩 흰 빛이 가장 늦게 끝나는 CSS 연출이다
-            if (event.animationName === "pk-sheen") finish();
-          }}
-        >
-          <SessionDominatorBadge isPlaying={isPlaying} />
-        </span>
-        <span className="max-w-full truncate text-pk-22 font-extrabold text-pk-ink">
-          {report.player.username}
-        </span>
-        <span className="text-pk-13 text-pk-sub tabular-nums">
-          {hasRatingBeforeAndAfter(report)
-            ? `${formatRating(report.ratingBefore)} → `
-            : null}
-          {formatRating(report.ratingAfter)}
-        </span>
+      <span className="text-pk-13 text-pk-sub tabular-nums">
+        복식 평점{" "}
+        {hasRatingBeforeAndAfter(report)
+          ? `${formatRating(report.ratingBefore)} → `
+          : null}
+        {formatRating(report.ratingAfter)}
       </span>
-      <CountUpRatingDelta
-        value={report.ratingDelta}
-        className="shrink-0 text-pk-26 font-extrabold"
-        {...COUNT_UP}
-      />
-    </button>
+    </FeedLineButton>
   );
 };
 
-/** 세션 하나의 소식 카드: 머리, 내 칸, 세션 지배자, 소식 줄. 머리 다음 묶음부터 사이에 구분선을 둔다 */
+/** 세션 하나의 소식 카드: 머리, 내 칸, 소식 줄(세션 지배자 줄이 맨 앞). 머리 다음 묶음부터 사이에 구분선을 둔다 */
 const NewsSessionCard: React.FC<{ item: NewsFeedSessionItemInfo }> = ({
   item,
 }) => {
@@ -257,9 +243,9 @@ const NewsSessionCard: React.FC<{ item: NewsFeedSessionItemInfo }> = ({
   });
   const blocks = [
     mine ? <FeedMineStats key="mine" mine={mine} /> : null,
-    topRiser ? <FeedTopRiser key="riser" report={topRiser} /> : null,
-    lines.length > 0 ? (
+    topRiser || lines.length > 0 ? (
       <div key="lines" className="flex flex-col">
+        {topRiser ? <FeedTopRiserLine report={topRiser} /> : null}
         {lines.map((entry, index) => (
           <FeedLine
             key={`${entry.line.kind}:${entry.line.player.id}:${index}`}
