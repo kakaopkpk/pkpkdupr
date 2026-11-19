@@ -12,23 +12,25 @@ export const useIsMatchScheduled = (
   match: Pick<MatchInfo, "matchStartsAt" | "status" | "source">,
   now: Date,
 ): boolean => {
-  // 타이머가 닿았다고 알린 시작 시각. 시작 시각이 바뀌면 다시 기다린다
-  const [reachedStartsAt, setReachedStartsAt] = useState<string | null>(null);
-  const isScheduledByNow = isMatchScheduled(match, now);
+  // 시작 시각 타이머가 울린 시각. now보다 늦으면 이 시각으로 판정한다
+  const [timerNow, setTimerNow] = useState<Date | null>(null);
+  const effectiveNow = timerNow && timerNow > now ? timerNow : now;
+  const isScheduled = isMatchScheduled(match, effectiveNow);
   // 대진 예정 경기는 시각과 상관없이 예정이라 기다리지 않는다
-  const isWaitingForStart = isScheduledByNow && match.status !== "scheduled";
-  const hasReachedStart = reachedStartsAt === match.matchStartsAt;
+  const isWaitingForStart = isScheduled && match.status !== "scheduled";
 
   useEffect(() => {
-    if (!isWaitingForStart || hasReachedStart) return undefined;
-    const delay = new Date(match.matchStartsAt).getTime() - Date.now();
+    if (!isWaitingForStart) return undefined;
+    const startsAtMs = new Date(match.matchStartsAt).getTime();
+    const delay = startsAtMs - Date.now();
     if (delay > MAX_TIMEOUT_MS) return undefined;
     const timeoutId = window.setTimeout(
-      () => setReachedStartsAt(match.matchStartsAt),
+      // 타이머가 조금 일찍 울려도 시작 시각 이후로 판정되게 한다
+      () => setTimerNow(new Date(Math.max(Date.now(), startsAtMs))),
       Math.max(0, delay),
     );
     return () => window.clearTimeout(timeoutId);
-  }, [isWaitingForStart, hasReachedStart, match.matchStartsAt]);
+  }, [isWaitingForStart, match.matchStartsAt]);
 
-  return isScheduledByNow && !(isWaitingForStart && hasReachedStart);
+  return isScheduled;
 };
