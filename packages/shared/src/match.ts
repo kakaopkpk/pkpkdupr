@@ -78,7 +78,10 @@ export const matchSourceLabels: Record<MatchSource, string> = {
 /** 경기 하나에 기록하는 점수 개수. 경기는 단판만 지원한다 */
 export const MATCH_SCORE_COUNT = 1;
 
-export type MatchStatus = "created" | "completed" | "cancelled";
+/**
+ * 경기 상태. scheduled는 대회 대진 예정 경기(점수 없음, 시작 전), created는 점수 없는 진행 중 경기다
+ */
+export type MatchStatus = "scheduled" | "created" | "completed" | "cancelled";
 
 /** 회원이 기록을 고칠 수 있는 기간(경기 시작 시각 기준) */
 export const MATCH_EDIT_WINDOW_MS = 24 * 60 * 60 * 1000;
@@ -240,6 +243,8 @@ export interface Match {
    * 수정(회원·관리자)으로 참가자가 바뀌어도 유지되고, 수정으로 게스트가 새로 들어오면 true가 된다.
    */
   ratingExcluded: boolean;
+  /** 대회 대진 라운드(1부터). 관리자가 대진으로 만든 경기만 숫자이고 그 밖은 null(오래된 픽스처는 생략될 수 있음) */
+  round?: number | null;
 }
 
 /** 팀에 게스트가 한 명이라도 있으면 true. 경기가 completed가 될 때 ratingExcluded 판정에 쓴다 */
@@ -322,6 +327,18 @@ export interface RecordMatchRequest {
   /** PUT /api/matches/:matchId 전용. 마지막으로 본 updatedAt(ISO). 서버 값과 다르면 409 */
   expectedUpdatedAt?: string;
 }
+
+/** POST /api/admin/match-sessions/:sessionId/bracket-matches 요청. 대회 세션에 점수 없는 예정 경기(대진) 하나를 만든다 */
+export interface AdminCreateBracketMatchRequest {
+  /** 1 이상 정수 */
+  round: number;
+  /** 1:1이면 단식, 2:2면 복식(유형은 서버가 추론) */
+  teams: [RecordMatchTeamRequest, RecordMatchTeamRequest];
+}
+
+/** 대진 라운드로 쓸 수 있는 값(1 이상 정수)이면 true */
+export const isValidBracketRound = (value: unknown): value is number =>
+  typeof value === "number" && Number.isInteger(value) && value >= 1;
 
 /** GET /api/admin/match-deletion-logs 항목 */
 export interface AdminMatchDeletionLog {

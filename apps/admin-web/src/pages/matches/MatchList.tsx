@@ -112,6 +112,7 @@ const MatchRowContent: React.FC<{
   const chips = [
     match.ratingExcluded && "평점 미반영 · 게스트",
     !isWithinMatchEditWindow(startsAt, now) && "24시간 지남 · 관리자만 수정",
+    match.status === "scheduled" && "예정",
     match.status === "created" && "진행 중",
     match.status === "cancelled" && "취소됨",
   ].filter((chip): chip is string => Boolean(chip));
