@@ -1,22 +1,17 @@
 import React, { useLayoutEffect, useRef, useState } from "react";
+import { addScheduleMonths } from "@pkpkdupr/shared/schedule";
 import {
-  addScheduleMonths,
-  getScheduleMonthDateKeyRange,
-} from "@pkpkdupr/shared/schedule";
-import {
-  addKstDays,
-  getKstWeekday,
-  kstDateKeyToDate,
   minutesToSessionTime,
-  REGULAR_SESSION_WEEKDAYS,
   sessionTimeToMinutes,
-  WEEKDAY_LABELS,
 } from "@pkpkdupr/shared/session";
-import { formatMonthTitle, toMonthKey } from "@/components/schedule/monthGrid";
+import MonthCalendar, {
+  DayMarkLegend,
+} from "@/components/schedule/MonthCalendar";
+import { toMonthKey } from "@/components/schedule/monthGrid";
+import { useScheduleMonthMarks } from "@/components/schedule/useScheduleMonthMarks";
 import { ChevronRightIcon } from "@/components/ui/Icons";
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { cx } from "@/components/ui/cx";
-import { formatKstLongDate } from "@/lib/format";
 
 const SESSION_TIME_STEP_MINUTES = 30;
 /** 길이 1~6시간 */
@@ -64,169 +59,39 @@ const FieldLabel: React.FC<{
   </div>
 );
 
-const RegularDot: React.FC<{ className?: string }> = ({ className }) => (
-  <span
-    aria-hidden="true"
-    className={cx("size-1 shrink-0 rounded-full bg-pk-primary", className)}
-  />
-);
-
-/** 그 달 날짜 칸. 1일 앞의 요일 수만큼 빈 칸(null)을 두면 7열 그리드에서 요일이 맞는다 */
-const getSessionMonthCells = (monthKey: string): (string | null)[] => {
-  const { fromDateKey, toDateKey } = getScheduleMonthDateKeyRange(monthKey);
-  const cells: (string | null)[] = Array.from(
-    { length: getKstWeekday(fromDateKey) },
-    () => null,
-  );
-  // YYYY-MM-DD 문자열은 사전순이 날짜순이다
-  for (let key = fromDateKey; key < toDateKey; key = addKstDays(key, 1)) {
-    cells.push(key);
-  }
-  return cells;
-};
-
-const CalendarMonthButton: React.FC<{
-  label: string;
-  direction: "prev" | "next";
-  disabled?: boolean;
-  onPress: () => void;
-}> = ({ label, direction, disabled, onPress }) => (
-  <button
-    type="button"
-    aria-label={label}
-    disabled={disabled}
-    onClick={onPress}
-    className="flex size-11 items-center justify-center rounded-full text-pk-primary active:bg-pk-primary-soft disabled:text-pk-quiet disabled:active:bg-transparent"
-  >
-    <ChevronRightIcon
-      className={cx("size-5 shrink-0", direction === "prev" && "rotate-180")}
-    />
-  </button>
-);
-
 /**
- * 세션 날짜를 고르는 월 달력. 처음에는 고른 날(없으면 오늘)이 든 달을 보이고 ‹ › 로 달을 넘긴다.
- * 지난 날만 누를 수 없고 오늘이 든 달보다 앞으로는 넘기지 않는다. 숫자 아래 줄에 정기 운동일 점과 '오늘'을 쓴다
+ * 세션 날짜를 고르는 달력. 일정 탭 달력(`MonthCalendar`)과 같은 모양·동작이고 위에 같은 점 범례를 둔다.
+ * 처음에는 고른 날(없으면 오늘)이 든 달을 보이고, 지난 날만 누를 수 없으며 오늘이 든 달보다 앞으로는 넘기지 않는다
  */
 export const SessionCalendar: React.FC<{
   todayKey: string;
   value: string | null;
+  playerId: string | undefined;
   onChange: (dateKey: string) => void;
-}> = ({ todayKey, value, onChange }) => {
+}> = ({ todayKey, value, playerId, onChange }) => {
   const todayMonthKey = toMonthKey(todayKey);
   const [monthKey, setMonthKey] = useState(() =>
     toMonthKey(value ?? todayKey),
   );
+  const marks = useScheduleMonthMarks(monthKey, playerId);
 
   return (
-    <div className="flex flex-col gap-2">
-      <FieldLabel
-        id="session-date-label"
-        label="날짜"
-        detail={
-          <span className="flex items-center gap-1.5">
-            <RegularDot />
-            정기 운동일
-          </span>
-        }
+    <div className="flex flex-col gap-1.5">
+      <DayMarkLegend />
+      <MonthCalendar
+        monthKey={monthKey}
+        todayKey={todayKey}
+        selectedDateKey={value}
+        marks={marks}
+        onSelectDate={(dateKey) => {
+          setMonthKey(toMonthKey(dateKey));
+          onChange(dateKey);
+        }}
+        onChangeMonth={(step) => setMonthKey(addScheduleMonths(monthKey, step))}
+        onGoToday={() => setMonthKey(todayMonthKey)}
+        isDateDisabled={(dateKey) => !isSessionDateSelectable(dateKey, todayKey)}
+        minMonthKey={todayMonthKey}
       />
-      <div className="flex items-center justify-between">
-        <CalendarMonthButton
-          label="이전 달"
-          direction="prev"
-          disabled={monthKey <= todayMonthKey}
-          onPress={() => setMonthKey(addScheduleMonths(monthKey, -1))}
-        />
-        <span
-          aria-live="polite"
-          className="text-pk-15 font-extrabold text-pk-ink"
-        >
-          {formatMonthTitle(monthKey)}
-        </span>
-        <CalendarMonthButton
-          label="다음 달"
-          direction="next"
-          onPress={() => setMonthKey(addScheduleMonths(monthKey, 1))}
-        />
-      </div>
-      <div
-        role="radiogroup"
-        aria-labelledby="session-date-label"
-        className="grid grid-cols-7 gap-x-1 gap-y-0.5"
-      >
-        {WEEKDAY_LABELS.map((label, weekday) => (
-          <span
-            key={label}
-            aria-hidden="true"
-            className={cx(
-              "pb-0.5 text-center text-pk-12 font-bold",
-              weekday === 0 ? "text-pk-down" : "text-pk-muted",
-            )}
-          >
-            {label}
-          </span>
-        ))}
-        {getSessionMonthCells(monthKey).map((dateKey, index) => {
-          if (!dateKey) {
-            return <span key={`blank-${index}`} aria-hidden="true" />;
-          }
-          const weekday = getKstWeekday(dateKey);
-          const isDisabled = !isSessionDateSelectable(dateKey, todayKey);
-          const isSelected = dateKey === value;
-          const isRegular = REGULAR_SESSION_WEEKDAYS.includes(weekday);
-          return (
-            <button
-              key={dateKey}
-              type="button"
-              role="radio"
-              aria-checked={isSelected}
-              aria-label={[
-                formatKstLongDate(kstDateKeyToDate(dateKey)),
-                dateKey === todayKey && "오늘",
-                isRegular && "정기 운동일",
-              ]
-                .filter(Boolean)
-                .join(", ")}
-              disabled={isDisabled}
-              onClick={() => onChange(dateKey)}
-              className={cx(
-                "flex h-[46px] flex-col items-center justify-center gap-0.5 rounded-pk-sm transition-colors duration-150 motion-reduce:transition-none",
-                isSelected ? "bg-pk-primary text-white" : "text-pk-ink",
-              )}
-            >
-              <span
-                className={cx(
-                  "text-pk-15 leading-tight font-bold",
-                  isDisabled
-                    ? "text-pk-quiet"
-                    : !isSelected && weekday === 0 && "text-pk-down",
-                )}
-              >
-                {Number(dateKey.slice(-2))}
-              </span>
-              <span
-                className={cx(
-                  "flex h-3 items-center gap-[3px] text-pk-12 leading-none font-bold",
-                  isSelected
-                    ? "text-white"
-                    : isDisabled
-                      ? "text-pk-quiet"
-                      : "text-pk-primary",
-                )}
-              >
-                {isRegular ? (
-                  <RegularDot
-                    className={
-                      isSelected ? "bg-white" : isDisabled ? "bg-pk-line" : ""
-                    }
-                  />
-                ) : null}
-                {dateKey === todayKey ? "오늘" : null}
-              </span>
-            </button>
-          );
-        })}
-      </div>
     </div>
   );
 };

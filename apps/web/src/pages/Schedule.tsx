@@ -6,7 +6,7 @@ import {
   RecordMatchCard,
   RecordSessionCard,
 } from "@/components/records/RecordCards";
-import MonthCalendar from "@/components/schedule/MonthCalendar";
+import MonthCalendar, { DayMarkLegend } from "@/components/schedule/MonthCalendar";
 import { toMonthKey } from "@/components/schedule/monthGrid";
 import {
   EmptyDayCard,
@@ -341,15 +341,18 @@ const Schedule: React.FC = () => {
   return (
     <>
       <div className="flex flex-col gap-2.5 px-4 pt-4 pb-6">
-        <MonthCalendar
-          monthKey={monthKey}
-          todayKey={todayKey}
-          selectedDateKey={selectedDateKey}
-          marks={marks}
-          onSelectDate={selectDate}
-          onChangeMonth={(step) => setMonthKey(addScheduleMonths(monthKey, step))}
-          onGoToday={goToday}
-        />
+        <div className="flex flex-col gap-1.5">
+          <DayMarkLegend />
+          <MonthCalendar
+            monthKey={monthKey}
+            todayKey={todayKey}
+            selectedDateKey={selectedDateKey}
+            marks={marks}
+            onSelectDate={selectDate}
+            onChangeMonth={(step) => setMonthKey(addScheduleMonths(monthKey, step))}
+            onGoToday={goToday}
+          />
+        </div>
         <Section title={formatKstLongDate(kstDateKeyToDate(selectedDateKey))}>
           {renderDay()}
         </Section>

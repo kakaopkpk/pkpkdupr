@@ -17,6 +17,7 @@ import { PkButton } from "@/components/ui/Button";
 import { TextField } from "@/components/ui/Form";
 import { SheetTitle } from "@/components/ui/SheetTitle";
 import { GLOBAL_LAYER } from "@/context/AppNavigationContext";
+import { useAuth } from "@/context/AuthContext";
 import { useSystemNotice } from "@/context/SystemNoticeContext";
 import {
   type TabKey,
@@ -81,6 +82,7 @@ const CreateSessionForm: React.FC<CreateSessionFormProps> = ({
   onCreated,
 }) => {
   const { showSaveFailure } = useSystemNotice();
+  const { player } = useAuth();
   // 시트를 여는 순간의 오늘(KST). 열 때마다 폼이 새로 마운트된다
   const [todayKey] = useState(() => toKstDateKey(new Date()));
   // 날짜를 정해 연 경우 말고는 기본값 없이 시작한다. 고른 값만 칸에 칠해진다
@@ -180,6 +182,7 @@ const CreateSessionForm: React.FC<CreateSessionFormProps> = ({
       <SessionCalendar
         todayKey={todayKey}
         value={dateKey}
+        playerId={player?.id}
         onChange={(nextDateKey) => {
           setDateKey(nextDateKey);
           // 오늘로 바꿔 이미 고른 시작 시각이 지났으면 시작을 다시 고르게 한다
