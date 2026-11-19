@@ -403,7 +403,36 @@ describe("PUT /api/matches/:matchId", () => {
     expect(applyMatchResult).not.toHaveBeenCalled();
   });
 
-  it("대진 예정 경기(scheduled)에 점수를 넣으면 첫 점수와 같이 입력 시각에 completed가 되고 증분 반영한다", async () => {
+  // 예정 경기에 바로 점수를 넣는 것은 관리자 정정뿐이다.
+  const signInAsAdmin = () =>
+    vi
+      .spyOn(AuthService.prototype, "authenticateAccessToken")
+      .mockResolvedValue({
+        ...buildSession(requester),
+        payload: { playerId: requester.id, isAdmin: true },
+      });
+
+  it("회원은 대진 예정 경기(scheduled)에 바로 점수를 넣을 수 없다(409)", async () => {
+    existing = buildExistingMatch({
+      status: "scheduled",
+      source: "admin_created",
+      round: 1,
+      scores: [],
+      completedAt: null,
+      resultSubmittedByPlayerId: null,
+      resultSubmittedAt: null,
+      matchStartsAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+    });
+
+    const response = await putMatch();
+
+    expect(response.status).toBe(409);
+    expect(updateRecordedMatch).not.toHaveBeenCalled();
+    expect(applyMatchResult).not.toHaveBeenCalled();
+  });
+
+  it("관리자가 대진 예정 경기(scheduled)에 점수를 넣으면 첫 점수와 같이 입력 시각에 completed가 되고 증분 반영한다", async () => {
+    signInAsAdmin();
     existing = buildExistingMatch({
       status: "scheduled",
       source: "admin_created",
@@ -428,7 +457,8 @@ describe("PUT /api/matches/:matchId", () => {
     expect(recalculate).not.toHaveBeenCalled();
   });
 
-  it("대진 예정 경기에 게스트가 끼면 평점 미반영으로 저장한다", async () => {
+  it("관리자가 넣은 대진 예정 경기에 게스트가 끼면 평점 미반영으로 저장한다", async () => {
+    signInAsAdmin();
     const guest = { ...buildPlayer("player-guest", "M"), isGuest: true };
     vi.mocked(AuthService.prototype.getPublicPlayers).mockResolvedValue([
       ...publicPlayers,

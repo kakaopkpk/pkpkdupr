@@ -2317,13 +2317,14 @@ const prepareBracketTeams = async (teams: unknown) => {
     throw new MatchSessionRequestError("두 팀 구성이 필요합니다.", 400);
   }
   const requestedTeams = teams as [MatchTeamRequest, MatchTeamRequest];
+  if (normalizeRequestedTeamPlayerIds(requestedTeams).length === 0) {
+    throw new MatchSessionRequestError("참가자를 선택해주세요.", 400);
+  }
+  // 회원 조회 실패는 팀 구성 오류(400)가 아니라 서버 오류로 남긴다.
+  const activePlayers = (await authService.getAllPlayers()).filter(
+    (player) => player.status === "active",
+  );
   try {
-    if (normalizeRequestedTeamPlayerIds(requestedTeams).length === 0) {
-      throw new Error("참가자를 선택해주세요.");
-    }
-    const activePlayers = (await authService.getAllPlayers()).filter(
-      (player) => player.status === "active",
-    );
     const matchTeams = buildMatchTeamsFromRequests(
       requestedTeams,
       new Map(activePlayers.map((player) => [player.id, player])),
@@ -3078,6 +3079,13 @@ app.put("/api/matches/:matchId", async (req, res) => {
       return res
         .status(409)
         .json({ error: "취소된 경기는 기록을 수정할 수 없습니다." });
+    }
+    // 회원은 대진 예정 경기를 POST /api/matches/:matchId/start로 시작한 뒤에만 점수를 넣는다(오늘 세션·다른 경기 중 검사).
+    // 예정 경기에 바로 점수를 넣는 것은 관리자 정정뿐이다.
+    if (existing.status === "scheduled" && !decoded.isAdmin) {
+      return res
+        .status(409)
+        .json({ error: "경기를 시작한 뒤에 점수를 넣어 주세요." });
     }
 
     const prepared = await prepareRecordedMatch(
