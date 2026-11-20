@@ -1,8 +1,8 @@
-import React, { useMemo, useState } from "react";
+import React, { useMemo } from "react";
 import { Card } from "@/components/ui/Card";
 import {
-  type MatchFilter,
   MatchFilterControl,
+  useMatchFilter,
 } from "@/components/ui/MatchFilterControl";
 import { Section } from "@/components/ui/Section";
 import { SegmentSwitchFade } from "@/components/ui/SegmentedControl";
@@ -15,6 +15,10 @@ import {
 import { getMatchPlayerIds, type MatchInfo } from "@/types/match";
 import { BracketMatchRow } from "./BracketMatchRow";
 
+/** 전환 라벨 개수. 대진에 보이는 줄 수(예정·진행 중·끝난 경기)다 */
+const countMatches = (groups: readonly { matches: readonly MatchInfo[] }[]) =>
+  groups.reduce((sum, group) => sum + group.matches.length, 0);
+
 /** 대회 세션의 "대진" 섹션. 라운드마다 흰 카드 하나이고 라운드 이름은 카드 안 첫 줄이다 */
 export const TournamentBracketSection: React.FC<{
   /** 그 세션의 경기 전부(GET /api/match-sessions/:sessionId/matches) */
@@ -24,8 +28,8 @@ export const TournamentBracketSection: React.FC<{
   showFilter?: boolean;
 }> = ({ matches, currentPlayerId, showFilter = true }) => {
   const { openMatchDetail } = useAppNavigation();
-  const [filter, setFilter] = useState<MatchFilter>("all");
-  const [isListFading, setIsListFading] = useState(false);
+  const { filter, changeFilter, isListFading, finishListFade } =
+    useMatchFilter();
   const isMineOnly = showFilter && filter === "mine";
 
   const allGroups = useMemo(() => groupBracketRounds(matches), [matches]);
@@ -44,14 +48,6 @@ export const TournamentBracketSection: React.FC<{
     [allGroups, currentPlayerId],
   );
   const groups = isMineOnly ? myGroups : allGroups;
-  // 전환 라벨 개수는 대진에 보이는 줄 수(예정·진행 중·끝난 경기)다
-  const countMatches = (list: typeof allGroups) =>
-    list.reduce((sum, group) => sum + group.matches.length, 0);
-
-  const changeFilter = (nextFilter: MatchFilter) => {
-    setFilter(nextFilter);
-    setIsListFading(true);
-  };
 
   return (
     <Section
@@ -70,7 +66,7 @@ export const TournamentBracketSection: React.FC<{
     >
       <SegmentSwitchFade
         isPlaying={isListFading}
-        onFinish={() => setIsListFading(false)}
+        onFinish={finishListFade}
       >
         {groups.length > 0 ? (
           <div className="flex flex-col gap-3">

@@ -37,8 +37,8 @@ import { Card } from "@/components/ui/Card";
 import { MatchRow } from "@/components/ui/MatchRow";
 import { PreviewSection, Section } from "@/components/ui/Section";
 import {
-  type MatchFilter,
   MatchFilterControl,
+  useMatchFilter,
 } from "@/components/ui/MatchFilterControl";
 import { StateMessage } from "@/components/ui/StateMessage";
 import { SegmentSwitchFade } from "@/components/ui/SegmentedControl";
@@ -79,11 +79,6 @@ type LoadState =
       isEnded: boolean;
     }
   | { kind: "error"; message: string };
-
-const isPlayerInMatch = (match: MatchInfo, playerId: string) =>
-  match.teams.some((team) =>
-    team.players.some((player) => player.id === playerId),
-  );
 
 const getSessionEndTime = (session: MatchSessionDetailInfo) =>
   getSessionEndsAt(session.kind, new Date(session.date), session).getTime();
@@ -136,8 +131,12 @@ export default function SessionReportDrawer({
   const [loadState, setLoadState] = useState<LoadState>({ kind: "loading" });
   // 마지막으로 끝난 로드가 시작될 때의 dataVersion. 참여 변경 뒤 버튼을 풀 때 쓴다
   const [loadedVersion, setLoadedVersion] = useState(-1);
-  const [matchFilter, setMatchFilter] = useState<MatchFilter>("all");
-  const [isListFading, setIsListFading] = useState(false);
+  const {
+    filter: matchFilter,
+    changeFilter: changeMatchFilter,
+    isListFading,
+    finishListFade,
+  } = useMatchFilter();
   const [isPlayersRequested, setIsPlayersRequested] = useState(false);
   const [isParticipantsOpen, setIsParticipantsOpen] = useState(false);
   const requestIdRef = useRef(0);
@@ -252,11 +251,6 @@ export default function SessionReportDrawer({
     [isLive, live.inProgressMatches],
   );
 
-  const changeMatchFilter = (nextFilter: MatchFilter) => {
-    setMatchFilter(nextFilter);
-    setIsListFading(true);
-  };
-
   const report = loadState.kind === "ready" ? loadState.report : null;
   const matches = loadState.kind === "ready" ? loadState.matches : null;
 
@@ -284,7 +278,9 @@ export default function SessionReportDrawer({
   const myCompletedMatches = useMemo(
     () =>
       playerId
-        ? completedMatches.filter((match) => isPlayerInMatch(match, playerId))
+        ? completedMatches.filter((match) =>
+            getMatchPlayerIds(match).includes(playerId),
+          )
         : [],
     [completedMatches, playerId],
   );
@@ -378,7 +374,7 @@ export default function SessionReportDrawer({
     >
       <SegmentSwitchFade
         isPlaying={isListFading}
-        onFinish={() => setIsListFading(false)}
+        onFinish={finishListFade}
       >
         {visibleMatches.length > 0 ? (
           <Card>

@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useCallback, useState } from "react";
 import { SegmentedControl, type SegmentedOption } from "./SegmentedControl";
 
 export type MatchFilter = "all" | "mine";
@@ -11,6 +11,18 @@ export const getMatchFilterOptions = (
   { value: "all", label: `전체 ${allCount}` },
   { value: "mine", label: `내 경기 ${mineCount}` },
 ];
+
+/** 전체/내 경기 전환 상태. 바꿀 때만 목록 페이드(SegmentSwitchFade)를 켠다 */
+export const useMatchFilter = () => {
+  const [filter, setFilter] = useState<MatchFilter>("all");
+  const [isListFading, setIsListFading] = useState(false);
+  const changeFilter = useCallback((nextFilter: MatchFilter) => {
+    setFilter(nextFilter);
+    setIsListFading(true);
+  }, []);
+  const finishListFade = useCallback(() => setIsListFading(false), []);
+  return { filter, changeFilter, isListFading, finishListFade };
+};
 
 /** 섹션 제목 줄 오른쪽에 두는 작은 전체/내 경기 전환 */
 export const MatchFilterControl: React.FC<{

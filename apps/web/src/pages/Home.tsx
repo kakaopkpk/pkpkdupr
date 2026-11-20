@@ -31,8 +31,8 @@ import { Card } from "@/components/ui/Card";
 import { StateMessage } from "@/components/ui/StateMessage";
 import { MatchRow } from "@/components/ui/MatchRow";
 import {
-  type MatchFilter,
   MatchFilterControl,
+  useMatchFilter,
 } from "@/components/ui/MatchFilterControl";
 import { Section } from "@/components/ui/Section";
 import { SegmentSwitchFade } from "@/components/ui/SegmentedControl";
@@ -213,14 +213,9 @@ const Home: React.FC = () => {
         : [],
     [completedMatches, playerId],
   );
-  const [recordFilter, setRecordFilter] = useState<MatchFilter>("all");
-  const [isRecordListFading, setIsRecordListFading] = useState(false);
-  const changeRecordFilter = (nextFilter: MatchFilter) => {
-    setRecordFilter(nextFilter);
-    setIsRecordListFading(true);
-  };
+  const recordFilter = useMatchFilter();
   const visibleCompletedMatches =
-    recordFilter === "mine" ? myCompletedMatches : completedMatches;
+    recordFilter.filter === "mine" ? myCompletedMatches : completedMatches;
   const waitingCount = useMemo(() => {
     if (!liveSession) return 0;
     const busy = new Set(busyPlayerIds);
@@ -432,8 +427,8 @@ const Home: React.FC = () => {
         title="경기 기록"
         right={
           <MatchFilterControl
-            value={recordFilter}
-            onChange={changeRecordFilter}
+            value={recordFilter.filter}
+            onChange={recordFilter.changeFilter}
             allCount={completedMatches.length}
             mineCount={myCompletedMatches.length}
             ariaLabel="경기 기록 보기"
@@ -441,8 +436,8 @@ const Home: React.FC = () => {
         }
       >
         <SegmentSwitchFade
-          isPlaying={isRecordListFading}
-          onFinish={() => setIsRecordListFading(false)}
+          isPlaying={recordFilter.isListFading}
+          onFinish={recordFilter.finishListFade}
         >
           {visibleCompletedMatches.length > 0 ? (
             <MatchListCard
@@ -453,7 +448,7 @@ const Home: React.FC = () => {
           ) : (
             <EmptyCard
               message={
-                recordFilter === "mine"
+                recordFilter.filter === "mine"
                   ? "아직 내 경기 기록이 없어요"
                   : "아직 기록된 경기가 없어요"
               }
