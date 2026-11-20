@@ -7,7 +7,7 @@ import {
   LineStrong,
   lineTextClassName,
   PlayerLineButton,
-  SessionRankChangePop,
+  SessionRankChangeCount,
   SessionRankCount,
   SessionRatingCount,
   SessionRatingDeltaCount,
@@ -158,7 +158,7 @@ const FeedMineStats: React.FC<{ mine: SessionPlayerReport }> = ({ mine }) => (
         <span className="text-pk-22 font-extrabold text-pk-ink tabular-nums">
           <SessionRankCount report={mine} />
         </span>
-        <SessionRankChangePop
+        <SessionRankChangeCount
           report={mine}
           className="text-pk-15 font-extrabold"
         />

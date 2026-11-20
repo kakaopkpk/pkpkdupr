@@ -2,7 +2,7 @@ import React from "react";
 import type { SessionPlayerReport } from "@pkpkdupr/shared/ranking";
 import SkeletonBlock from "@/components/SkeletonBlock";
 import {
-  SessionRankChangePop,
+  SessionRankChangeCount,
   SessionRankCount,
   SessionRatingDeltaCount,
 } from "@/components/records/SessionReportParts";
@@ -42,7 +42,7 @@ const SessionMineStrip: React.FC<{ mine: SessionPlayerReport }> = ({ mine }) => 
       </MineStat>
       <MineStat label="랭킹">
         <SessionRankCount report={mine} />
-        <SessionRankChangePop report={mine} className="text-pk-13" />
+        <SessionRankChangeCount report={mine} className="text-pk-13" />
       </MineStat>
     </div>
   );

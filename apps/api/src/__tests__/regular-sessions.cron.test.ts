@@ -100,6 +100,7 @@ const createFakeStore = () => {
       autoCreated: true,
       startTime: "18:00",
       endTime: "22:00",
+      completedAt: null,
       createdAt: thursdayMorning,
       updatedAt: thursdayMorning,
       ...overrides,

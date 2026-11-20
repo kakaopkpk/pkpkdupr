@@ -73,11 +73,13 @@ export interface RankingSession {
   kind: MatchSessionKind;
   date: Date;
   /**
-   * 시작·종료 시각("HH:MM", KST). 정기 세션은 18:00~22:00, 시각 없는 회원 세션은 null.
+   * 시작·종료 시각("HH:MM", KST). 정기 세션은 18:00~21:00, 시각 없는 회원 세션은 null.
    * 종료 ≤ 시작이면 자정을 넘겨 만료가 다음 날 종료 시각으로 늦춰진다
    */
   startTime: string | null;
   endTime: string | null;
+  /** 회원이 정기 세션을 완료한 시각. 있으면 그 시각에 만료된다(세션 지배자·무패 세션 확정) */
+  completedAt?: Date | null;
   location: string;
   participantIds: string[];
 }

@@ -144,9 +144,11 @@ export interface ManagedMatchSession {
    * 관리자가 직접 만든 정기 세션과 다른 종류는 false다. 자동 정기 세션은 종류를 바꿀 수 없고, 지우면 그 날짜가 정기 쉬는 날이 된다
    */
   autoCreated: boolean;
-  /** 시작·종료 시각("HH:MM", KST). 정기 세션은 18:00~22:00, 시각 없이 만든 세션은 null */
+  /** 시작·종료 시각("HH:MM", KST). 정기 세션은 18:00~21:00, 시각 없이 만든 세션은 null */
   startTime: string | null;
   endTime: string | null;
+  /** 회원이 정기 세션을 완료한 시각. 완료 전이거나 정기 세션이 아니면 null */
+  completedAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
 }

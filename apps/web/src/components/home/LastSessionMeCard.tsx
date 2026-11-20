@@ -1,7 +1,7 @@
 import React from "react";
 import type { SessionPlayerReport } from "@pkpkdupr/shared/ranking";
 import {
-  SessionRankChangePop,
+  SessionRankChangeCount,
   SessionRankCount,
   SessionRatingCount,
   SessionRatingDeltaCount,
@@ -31,7 +31,7 @@ const Stat: React.FC<{
 
 /**
  * 세션 리포트의 내 변동 카드: 복식 평점·세션 후 순위와 변화, 경기 수·승패·승률.
- * 순위는 세션 전 값에서, 평점과 나머지 숫자는 0부터 세션 지배자 카드와 함께 센다. 순위 변동은 다 센 뒤 튀어나온다
+ * 순위는 세션 전 값에서, 평점과 나머지 숫자는 0부터 세션 지배자 카드와 함께 센다. 순위 변동은 순위와 함께 센다
  */
 const LastSessionMeCard: React.FC<{ report: SessionPlayerReport }> = ({
   report,
@@ -62,7 +62,7 @@ const LastSessionMeCard: React.FC<{ report: SessionPlayerReport }> = ({
             <span className="text-pk-26 font-extrabold text-pk-ink tabular-nums">
               <SessionRankCount report={report} />
             </span>
-            <SessionRankChangePop
+            <SessionRankChangeCount
               report={report}
               className="text-pk-15 font-extrabold"
             />

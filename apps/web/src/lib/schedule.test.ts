@@ -26,6 +26,7 @@ const makeSession = (
   location: "야탑초등학교",
   startTime: "18:00",
   endTime: "22:00",
+  completedAt: null,
   isToday: false,
   participants: [],
   matchCount: 0,

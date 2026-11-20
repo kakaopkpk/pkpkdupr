@@ -4,6 +4,7 @@ vi.mock("@/lib/api", () => ({ apiFetch: vi.fn() }));
 
 import {
   getNextLiveSessionBoundary,
+  pickCompletableSession,
   pickLiveSession,
   pickRecordingSession,
 } from "@/context/LiveSessionContext";
@@ -83,13 +84,13 @@ describe("pickLiveSession", () => {
     expect(pickLiveSession([untimed], at("23:59"))?.id).toBe("U");
   });
 
-  it("정기 세션은 세션 시각(18:00)부터 22:00 전까지 진행 중이다", () => {
+  it("완료하지 않은 정기 세션은 세션 시각(18:00)부터 자동 완료 22:00 전까지 진행 중이다", () => {
     const regular = makeSession({
       id: "R",
       kind: "regular",
       date: at("18:00").toISOString(),
       startTime: "18:00",
-      endTime: "22:00",
+      endTime: "21:00",
     });
 
     expect(pickLiveSession([regular], at("17:59"))).toBeNull();
@@ -163,6 +164,38 @@ describe("getNextLiveSessionBoundary", () => {
     // 종료 뒤 회원 세션 만료(다음 날 0시) 전 가장 이른 경계는 정기 회차 시작(목요일 18:00)이다
     expect(getNextLiveSessionBoundary([custom], at("12:00"))).toEqual(
       at("18:00"),
+    );
+  });
+});
+
+describe("정기 세션 완료", () => {
+  const regular = makeSession({
+    id: "R",
+    kind: "regular",
+    date: at("18:00").toISOString(),
+    startTime: "18:00",
+    endTime: "21:00",
+    completedAt: null,
+  });
+
+  it("종료 21:00부터 22:00 전까지 완료할 수 있고, 그동안 LIVE는 이어진다", () => {
+    expect(pickCompletableSession([regular], at("20:59"))).toBeNull();
+    expect(pickCompletableSession([regular], at("21:00"))?.id).toBe("R");
+    expect(pickLiveSession([regular], at("21:30"))?.id).toBe("R");
+    expect(pickCompletableSession([regular], at("22:00"))).toBeNull();
+  });
+
+  it("완료한 정기 세션은 완료 시각부터 진행 중·기록 세션이 아니다", () => {
+    const completed = { ...regular, completedAt: at("21:10").toISOString() };
+
+    expect(pickCompletableSession([completed], at("21:20"))).toBeNull();
+    expect(pickLiveSession([completed], at("21:20"))).toBeNull();
+    expect(pickRecordingSession([completed], at("21:20"))).toBeNull();
+  });
+
+  it("정기 세션 종료 시각(21:00)을 다음 경계로 쓴다", () => {
+    expect(getNextLiveSessionBoundary([regular], at("20:00"))).toEqual(
+      at("21:00"),
     );
   });
 });
