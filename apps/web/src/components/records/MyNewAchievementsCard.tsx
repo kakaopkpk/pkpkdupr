@@ -37,7 +37,11 @@ export const MyNewAchievementsCard: React.FC<{
           key={definition.id}
           type="button"
           onClick={() =>
-            openAchievementDetail({ playerId, achievementId: definition.id })
+            openAchievementDetail({
+              playerId,
+              achievementId: definition.id,
+              earned: true,
+            })
           }
           className="flex min-h-14 w-full items-center gap-3 py-2 text-left not-last:border-b not-last:border-pk-divider active:opacity-80"
         >

@@ -161,6 +161,7 @@ export default function RecordDoneStep({
                   openAchievementDetail({
                     playerId: achievement.player.id,
                     achievementId: achievement.definition.id,
+                    earned: true,
                   })
                 }
                 // 연출 전에도 자리는 차지한다(fill-mode both로 지연 동안 투명)
