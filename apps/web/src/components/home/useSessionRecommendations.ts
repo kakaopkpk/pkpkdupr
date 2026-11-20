@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   MATCHMAKING_DEFAULT_COURTS,
+  MATCHMAKING_PLAYERS_PER_COURT,
   type MatchSessionRecommendationResponse,
 } from "@pkpkdupr/shared/matchmaking";
 import { useDataVersion } from "@/context/DataSyncContext";
@@ -40,6 +41,38 @@ export const getStaleRecommendedPlayerIds = (
     .sort();
 };
 
+/**
+ * 대기 인원(세션 참여자 중 진행 중 경기에 들지 않은 사람)으로 지금 보이는 추천보다 코트를 더 채울 수 있으면
+ * 채울 수 있는 코트 수(min(요청 코트 수, floor(대기 인원 / 4))), 아니면 0.
+ * 추천이 없거나 다른 세션 것이면 0이다
+ */
+export const getExpandableCourtCount = (
+  recommendation: Pick<
+    MatchSessionRecommendationResponse,
+    "sessionId" | "courts"
+  > | null,
+  session: Pick<MatchSessionDetailInfo, "id" | "participants"> | null,
+  inProgressMatches: readonly Pick<MatchInfo, "teams">[],
+  requestedCourts: number,
+): number => {
+  if (!recommendation || !session || recommendation.sessionId !== session.id) {
+    return 0;
+  }
+  const busyPlayerIds = new Set(
+    inProgressMatches.flatMap((match) =>
+      match.teams.flatMap((team) => team.players.map((player) => player.id)),
+    ),
+  );
+  const waitingCount = session.participants.filter(
+    (participant) => !busyPlayerIds.has(participant.id),
+  ).length;
+  const fillableCourts = Math.min(
+    requestedCourts,
+    Math.floor(waitingCount / MATCHMAKING_PLAYERS_PER_COURT),
+  );
+  return fillableCourts > recommendation.courts.length ? fillableCourts : 0;
+};
+
 export interface SessionRecommendationsState {
   recommendation: MatchSessionRecommendationResponse | null;
   status: "idle" | "loading" | "ready" | "error";
@@ -56,6 +89,8 @@ export interface SessionRecommendationsState {
  * 추천이 바뀌면 보던 매칭이 흔들리므로 TTL·남의 변경으로는 다시 받지 않는다(localOnly).
  * 예외로 추천 코트의 선수가 진행 중 경기(useLiveSession().inProgressMatches)에 들어가거나 세션 참여자에서 빠지면
  * 지금 순번 그대로 다시 받는다.
+ * 또 대기 인원으로 채울 수 있는 코트 수(getExpandableCourtCount)가 보이는 추천 코트 수보다 많아지면 지금 순번 그대로 다시 받는다.
+ * 코트가 늘지 않는 변경(남의 경기 완료 등)으로는 보던 추천을 바꾸지 않는다.
  */
 export const useSessionRecommendations = (
   sessionId: string | null,
@@ -151,6 +186,31 @@ export const useSessionRecommendations = (
     handledStaleKeyRef.current = staleKey;
     void load(shownRankRef.current);
   }, [load, recommendation, staleKey]);
+
+  const expandableCourts = useMemo(
+    () =>
+      getExpandableCourtCount(
+        recommendation,
+        liveSession,
+        inProgressMatches,
+        MATCHMAKING_DEFAULT_COURTS,
+      ),
+    [inProgressMatches, liveSession, recommendation],
+  );
+  // 같은 코트 수로는 한 번만 다시 받는다. 서버가 그만큼 채우지 못해도(진행 중 경기 목록이 늦음 등) 되풀이하지 않는다.
+  // 늘어날 코트가 없어지면 잊어서, 나중에 다시 늘 수 있게 되면 또 받는다
+  const handledExpandableCourtsRef = useRef(0);
+  useEffect(() => {
+    if (!expandableCourts) {
+      handledExpandableCourtsRef.current = 0;
+      return;
+    }
+    // 받는 중이면 건너뛰고, 응답으로 recommendation이 바뀌면 이 effect가 다시 판정한다
+    if (isLoadingRef.current) return;
+    if (handledExpandableCourtsRef.current === expandableCourts) return;
+    handledExpandableCourtsRef.current = expandableCourts;
+    void load(shownRankRef.current);
+  }, [expandableCourts, load, recommendation]);
 
   const recommendAgain = useCallback(() => {
     setStatus("loading");

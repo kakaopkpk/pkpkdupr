@@ -161,6 +161,9 @@
   - 화면 보임은 `useIsScreenVisible()`입니다. 자기 `PushScreen` 본문 밖(래퍼 최상단)에서 받는 화면은 `PushScreen`의 `onVisibleChange` 값을 `isScreenVisible`로 넘깁니다. 셸(진행 중 세션·업적 축하)은 늘 보이는 것으로 봅니다.
   - `localOnly`면 내 변경 무효화에만 커지고 TTL·남의 변경에는 커지지 않습니다. 추천 매칭(`useSessionRecommendations`)이 씁니다.
   - 추천 매칭은 예외로 추천 코트의 선수가 진행 중 경기(`useLiveSession().inProgressMatches`)에 들어가거나 세션 참여자에서 빠지면 지금 순번(`rank`) 그대로 다시 받습니다. 같은 선수 조합이 이어서 걸려 있는 동안은 한 번만 다시 받고, 풀린 뒤 다시 걸리면 또 받습니다.
+  - 추천 매칭은 또 대기 인원(진행 중 세션 참여자 중 진행 중 경기에 들지 않은 사람)으로 채울 수 있는 코트 수 `min(요청 코트 수, floor(대기 인원 / 4))`가 보이는 추천 코트 수보다 많아지면 지금 순번(`rank`) 그대로 다시 받습니다(`getExpandableCourtCount`).
+    - `useLiveSession()` 실시간 데이터만으로 판정해 추가 요청이 없고, 같은 코트 수로는 한 번만 받으며, 받는 중이면 건너뜁니다.
+    - 늘어날 코트가 없으면 남의 경기 완료로 추천이 바뀌지 않습니다.
 - 남의 변경은 Supabase Realtime 변경 신호로 받습니다(`context/useDataSyncRealtime.ts`, 셸이 한 번 부름).
   - 로그인 상태이고 문서가 보일 때만 private 채널 `data-sync`를 구독하고, 숨으면 해제합니다. 구독 전에 `supabase.realtime.setAuth()`를 부릅니다.
   - `changed` 신호를 받으면 0~1.5초 무작위 지연 뒤 `invalidate(kinds, { remote: true })`합니다. 지연 중 온 신호는 종류를 합쳐 한 번에 무효화합니다(`lib/dataSyncSignal.ts`).
@@ -169,7 +172,7 @@
   - `CHANNEL_ERROR`·`TIMED_OUT`은 콘솔에 남깁니다. 끊김 대비 주기 폴링은 하지 않습니다.
 - 화면별 종류
   - 진행 중 세션(`LiveSessionContext`)·추천 매칭·일정: `sessions`·`matches`
-  - 세션 지배자(`useSessionTopRiser`): `matches`·`ratings`
+  - 세션 지배자(`useSessionTopRiser`): `ratings`(경기 완료·수정·삭제만 지배자를 바꾸므로 경기 시작 `matches` 신호로는 받지 않습니다)
   - 홈 다가오는 세션(`usePreSessionData`): `sessions`·`matches`·`ratings`
   - 소식(`useNewsFeed`)·세션 상세: `sessions`·`matches`·`ratings`·`achievements`
   - 경기 상세: `matches`·`ratings`·`achievements`
