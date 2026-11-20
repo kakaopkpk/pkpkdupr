@@ -36,11 +36,12 @@ import { TournamentRankCard } from "@/components/tournament/TournamentRankCard";
 import { Card } from "@/components/ui/Card";
 import { MatchRow } from "@/components/ui/MatchRow";
 import { PreviewSection, Section } from "@/components/ui/Section";
-import { StateMessage } from "@/components/ui/StateMessage";
 import {
-  SegmentedControl,
-  SegmentSwitchFade,
-} from "@/components/ui/SegmentedControl";
+  MatchFilterControl,
+  useMatchFilter,
+} from "@/components/ui/MatchFilterControl";
+import { StateMessage } from "@/components/ui/StateMessage";
+import { SegmentSwitchFade } from "@/components/ui/SegmentedControl";
 import { useAppNavigation } from "@/context/AppNavigationContext";
 import { useAuth } from "@/context/AuthContext";
 import { useLiveSession } from "@/context/LiveSessionContext";
@@ -63,13 +64,6 @@ import {
   RequestError,
 } from "@/lib/rankings";
 
-type MatchFilter = "all" | "mine";
-
-const MATCH_FILTER_OPTIONS = [
-  { value: "all", label: "전체" },
-  { value: "mine", label: "내 경기" },
-] as const;
-
 const EMPTY_IDS: readonly string[] = [];
 const LOAD_ERROR_MESSAGE = "세션을 불러오지 못했어요.";
 
@@ -85,11 +79,6 @@ type LoadState =
       isEnded: boolean;
     }
   | { kind: "error"; message: string };
-
-const isPlayerInMatch = (match: MatchInfo, playerId: string) =>
-  match.teams.some((team) =>
-    team.players.some((player) => player.id === playerId),
-  );
 
 const getSessionEndTime = (session: MatchSessionDetailInfo) =>
   getSessionEndsAt(session.kind, new Date(session.date), session).getTime();
@@ -142,8 +131,12 @@ export default function SessionReportDrawer({
   const [loadState, setLoadState] = useState<LoadState>({ kind: "loading" });
   // 마지막으로 끝난 로드가 시작될 때의 dataVersion. 참여 변경 뒤 버튼을 풀 때 쓴다
   const [loadedVersion, setLoadedVersion] = useState(-1);
-  const [matchFilter, setMatchFilter] = useState<MatchFilter>("all");
-  const [isListFading, setIsListFading] = useState(false);
+  const {
+    filter: matchFilter,
+    changeFilter: changeMatchFilter,
+    isListFading,
+    finishListFade,
+  } = useMatchFilter();
   const [isPlayersRequested, setIsPlayersRequested] = useState(false);
   const [isParticipantsOpen, setIsParticipantsOpen] = useState(false);
   const requestIdRef = useRef(0);
@@ -258,11 +251,6 @@ export default function SessionReportDrawer({
     [isLive, live.inProgressMatches],
   );
 
-  const changeMatchFilter = (nextFilter: MatchFilter) => {
-    setMatchFilter(nextFilter);
-    setIsListFading(true);
-  };
-
   const report = loadState.kind === "ready" ? loadState.report : null;
   const matches = loadState.kind === "ready" ? loadState.matches : null;
 
@@ -280,18 +268,24 @@ export default function SessionReportDrawer({
     [playerId, report],
   );
 
-  const visibleMatches = useMemo(
+  const completedMatches = useMemo(
     () =>
       (matches ?? [])
         .filter((match) => match.status === "completed")
-        .filter(
-          (match) =>
-            matchFilter === "all" ||
-            (!!playerId && isPlayerInMatch(match, playerId)),
-        )
         .sort(compareMatchesByRecordedAtDesc),
-    [matchFilter, matches, playerId],
+    [matches],
   );
+  const myCompletedMatches = useMemo(
+    () =>
+      playerId
+        ? completedMatches.filter((match) =>
+            getMatchPlayerIds(match).includes(playerId),
+          )
+        : [],
+    [completedMatches, playerId],
+  );
+  const visibleMatches =
+    matchFilter === "mine" ? myCompletedMatches : completedMatches;
 
   const renderHeaderCard = (
     session: MatchSessionDetailInfo,
@@ -369,18 +363,18 @@ export default function SessionReportDrawer({
     <Section
       title="경기"
       right={
-        <SegmentedControl
-          options={MATCH_FILTER_OPTIONS}
+        <MatchFilterControl
           value={matchFilter}
           onChange={changeMatchFilter}
+          allCount={completedMatches.length}
+          mineCount={myCompletedMatches.length}
           ariaLabel="경기 보기"
-          size="sm"
         />
       }
     >
       <SegmentSwitchFade
         isPlaying={isListFading}
-        onFinish={() => setIsListFading(false)}
+        onFinish={finishListFade}
       >
         {visibleMatches.length > 0 ? (
           <Card>
