@@ -26,10 +26,7 @@ import {
   usePushScreenCoverStyle,
   usePushScreenStackState,
 } from "@/components/PushScreen";
-import PullToRefreshIndicator, {
-  createPullDistanceStore,
-  type PullToRefreshStatus,
-} from "@/components/PullToRefreshIndicator";
+import PullToRefreshIndicator from "@/components/PullToRefreshIndicator";
 import MatchDetailDrawer from "@/components/match/MatchDetailDrawer";
 import AchievementDetailSheet from "@/components/profile/AchievementDetailSheet";
 import MemberProfileDrawer from "@/components/profile/MemberProfileDrawer";
@@ -68,6 +65,10 @@ import {
   PULL_TO_REFRESH_MIN_RESISTANCE,
   PULL_TO_REFRESH_THRESHOLD,
 } from "@/hooks/usePullToRefresh";
+import {
+  createPullToRefreshStore,
+  type PullToRefreshStatus,
+} from "@/lib/pullToRefreshStore";
 import { triggerHapticFeedback } from "@/lib/haptics";
 import {
   addMatchSessionParticipant,
@@ -80,11 +81,12 @@ import Ranking from "@/pages/Ranking";
 import Schedule from "@/pages/Schedule";
 
 const TAB_KEYS: TabKey[] = TAB_ITEMS.map((item) => item.key);
-const TAB_PAGES: Record<TabKey, React.FC> = {
-  home: Home,
-  schedule: Schedule,
-  ranking: Ranking,
-  me: Me,
+// 탭 페이지는 props가 없으므로 memo로 감싸 셸 state가 바뀔 때 숨은 탭까지 다시 렌더링되지 않게 한다.
+const TAB_PAGES: Record<TabKey, React.ComponentType> = {
+  home: React.memo(Home),
+  schedule: React.memo(Schedule),
+  ranking: React.memo(Ranking),
+  me: React.memo(Me),
 };
 
 const emptyDepthStacks = (): TabDepthStacks => ({
@@ -284,9 +286,7 @@ const BottomNav: React.FC = () => {
     useState<GlobalLayerState<AchievementDetailRequest>>(closedLayer);
   const [isJoiningLiveSession, setIsJoiningLiveSession] = useState(false);
   const [joinLiveSessionError, setJoinLiveSessionError] = useState(false);
-  const [pullDistanceStore] = useState(createPullDistanceStore);
-  const [pullToRefreshStatus, setPullToRefreshStatus] =
-    useState<PullToRefreshStatus>("idle");
+  const [pullToRefreshStore] = useState(createPullToRefreshStore);
   const [isPullRefreshSlow, setIsPullRefreshSlow] = useState(false);
   const handledDeepLinkRef = useRef(false);
   const globalScreenSequenceRef = useRef(0);
@@ -314,7 +314,6 @@ const BottomNav: React.FC = () => {
     lastX: number;
     lastY: number;
   } | null>(null);
-  const pullDistanceRef = useRef(0);
   const isPullToRefreshArmedRef = useRef(false);
   const isPullGestureActiveRef = useRef(false);
   const pullGestureAxisRef = useRef<"undecided" | "vertical" | "horizontal">(
@@ -891,17 +890,15 @@ const BottomNav: React.FC = () => {
   const resetPullToRefresh = useCallback(
     (status: PullToRefreshStatus = "idle") => {
       pullStartRef.current = null;
-      pullDistanceRef.current = 0;
       isPullToRefreshArmedRef.current = false;
       isPullGestureActiveRef.current = false;
       pullGestureAxisRef.current = "undecided";
       if (scrollContainerRef.current) {
         scrollContainerRef.current.style.overflow = "";
       }
-      pullDistanceStore.set(0);
-      setPullToRefreshStatus(status);
+      pullToRefreshStore.set({ distance: 0, status });
     },
-    [pullDistanceStore],
+    [pullToRefreshStore],
   );
 
   const schedulePullToRefreshReset = useCallback(
@@ -914,9 +911,9 @@ const BottomNav: React.FC = () => {
         isPullRefreshingRef.current = false;
         resetPullToRefresh();
       }, delay);
-      setPullToRefreshStatus(status);
+      pullToRefreshStore.set({ status });
     },
-    [resetPullToRefresh],
+    [pullToRefreshStore, resetPullToRefresh],
   );
 
   const clearPullRefreshSlowWarning = useCallback(() => {
@@ -976,7 +973,7 @@ const BottomNav: React.FC = () => {
         lastX: touch.clientX,
         lastY: touch.clientY,
       };
-      pullDistanceRef.current = 0;
+      pullToRefreshStore.set({ distance: 0 });
       isPullToRefreshArmedRef.current = false;
       isPullGestureActiveRef.current = false;
       pullGestureAxisRef.current = "undecided";
@@ -1006,7 +1003,7 @@ const BottomNav: React.FC = () => {
         preventScrollWhilePullIndicatorVisible,
       );
     };
-  }, [hasBlockingLayer, selectedTab]);
+  }, [hasBlockingLayer, pullToRefreshStore, selectedTab]);
 
   const updatePullDistance = useCallback(
     (touch: React.Touch) => {
@@ -1055,8 +1052,9 @@ const BottomNav: React.FC = () => {
         }
       }
 
+      const currentDistance = pullToRefreshStore.get().distance;
       const pullProgress = Math.min(
-        pullDistanceRef.current / PULL_TO_REFRESH_THRESHOLD,
+        currentDistance / PULL_TO_REFRESH_THRESHOLD,
         1,
       );
       const downwardResistance =
@@ -1068,35 +1066,30 @@ const BottomNav: React.FC = () => {
           ? pullDeltaY * downwardResistance
           : pullDeltaY * PULL_TO_REFRESH_BASE_RESISTANCE;
       const distance = Math.min(
-        Math.max(0, pullDistanceRef.current + adjustedDeltaY),
+        Math.max(0, currentDistance + adjustedDeltaY),
         PULL_TO_REFRESH_THRESHOLD * 1.25,
       );
-      pullDistanceRef.current = distance;
       const isArmed = distance >= PULL_TO_REFRESH_THRESHOLD;
       if (isArmed && !isPullToRefreshArmedRef.current) {
         triggerHapticFeedback(15);
       }
       isPullToRefreshArmedRef.current = isArmed;
-      if (distance > 0) {
-        isPullGestureActiveRef.current = true;
-        if (scrollContainerRef.current) {
-          scrollContainerRef.current.style.overflow = "hidden";
+      const isGestureActive = distance > 0;
+      if (isGestureActive !== isPullGestureActiveRef.current) {
+        isPullGestureActiveRef.current = isGestureActive;
+        if (isGestureActive) {
+          scrollContainerRef.current?.style.setProperty("overflow", "hidden");
+        } else {
+          scrollContainerRef.current?.style.removeProperty("overflow");
         }
-      } else {
-        isPullGestureActiveRef.current = false;
-        scrollContainerRef.current?.style.removeProperty("overflow");
       }
-      pullDistanceStore.set(distance);
-      setPullToRefreshStatus(
-        distance === 0
-          ? "idle"
-          : isArmed
-            ? "armed"
-            : "pulling",
-      );
+      pullToRefreshStore.set({
+        distance,
+        status: distance === 0 ? "idle" : isArmed ? "armed" : "pulling",
+      });
       return true;
     },
-    [hasBlockingLayer, pullDistanceStore, resetPullToRefresh],
+    [hasBlockingLayer, pullToRefreshStore, resetPullToRefresh],
   );
 
   const handlePullTouchMove = useCallback(
@@ -1125,7 +1118,7 @@ const BottomNav: React.FC = () => {
   const handlePullTouchRefresh = useCallback(async () => {
     const shouldRefresh =
       !hasBlockingLayer &&
-      pullDistanceRef.current >= PULL_TO_REFRESH_THRESHOLD &&
+      pullToRefreshStore.get().distance >= PULL_TO_REFRESH_THRESHOLD &&
       !isPullRefreshingRef.current;
     const refreshHandler = pullToRefreshHandlersRef.current[selectedTab];
 
@@ -1135,8 +1128,6 @@ const BottomNav: React.FC = () => {
     }
 
     pullStartRef.current = null;
-    pullDistanceRef.current = 0;
-    pullDistanceStore.set(0);
     isPullRefreshingRef.current = true;
     const requestId = pullRefreshRequestIdRef.current + 1;
     pullRefreshRequestIdRef.current = requestId;
@@ -1149,7 +1140,7 @@ const BottomNav: React.FC = () => {
         setIsPullRefreshSlow(true);
       }
     }, PULL_TO_REFRESH_SLOW_REQUEST_MS);
-    setPullToRefreshStatus("refreshing");
+    pullToRefreshStore.set({ distance: 0, status: "refreshing" });
 
     try {
       // 진행 중 세션(미니바·참여 알림 바)도 함께 새로 읽는다. reload는 실패해도 throw하지 않는다
@@ -1166,7 +1157,7 @@ const BottomNav: React.FC = () => {
     hasBlockingLayer,
     clearPullRefreshSlowWarning,
     liveSessionState,
-    pullDistanceStore,
+    pullToRefreshStore,
     resetPullToRefresh,
     schedulePullToRefreshReset,
     selectedTab,
@@ -1265,8 +1256,7 @@ const BottomNav: React.FC = () => {
                 onTouchCancel={() => resetPullToRefresh()}
               >
                 <PullToRefreshIndicator
-                  distanceStore={pullDistanceStore}
-                  status={pullToRefreshStatus}
+                  store={pullToRefreshStore}
                   threshold={PULL_TO_REFRESH_THRESHOLD}
                 />
                 {isPullRefreshSlow ? (

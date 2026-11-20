@@ -297,7 +297,7 @@ export const PushScreen: React.FC<PushScreenProps> = ({
     [],
   );
   const refreshHandler = registeredPullToRefresh ?? onPullToRefresh;
-  const { distanceStore, status } = usePullToRefresh({
+  const pullToRefreshStore = usePullToRefresh({
     container: scrollContainer,
     onRefresh: refreshHandler ?? undefined,
     isEnabled: isInteractive,
@@ -344,8 +344,7 @@ export const PushScreen: React.FC<PushScreenProps> = ({
           >
             {refreshHandler ? (
               <PullToRefreshIndicator
-                distanceStore={distanceStore}
-                status={status}
+                store={pullToRefreshStore}
                 threshold={PULL_TO_REFRESH_THRESHOLD}
               />
             ) : null}
