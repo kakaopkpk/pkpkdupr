@@ -1,7 +1,8 @@
-import type {
-  AdminMatchDeletionLog,
-  AdminMatchEditLog,
-  Match,
+import {
+  getMatchRecordedAt,
+  type AdminMatchDeletionLog,
+  type AdminMatchEditLog,
+  type Match,
 } from "@pkpkdupr/shared/match";
 import type { AdminPlayer } from "@pkpkdupr/shared/player";
 import {
@@ -69,8 +70,8 @@ export const summarizeMatches = (
   const nowTime = now.getTime();
   const weekCompleted = matches.filter((match) => {
     if (match.status !== "completed") return false;
-    const startsAt = toTime(match.matchStartsAt);
-    return startsAt >= weekStart && startsAt <= nowTime;
+    const recordedAt = toTime(getMatchRecordedAt(match));
+    return recordedAt >= weekStart && recordedAt <= nowTime;
   });
   return {
     weekCompletedCount: weekCompleted.length,
