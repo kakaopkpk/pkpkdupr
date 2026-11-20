@@ -4,7 +4,11 @@ import {
   isLowRatingAchievement,
   type AchievementDefinition,
 } from "@pkpkdupr/shared/achievements";
-import { AchievementBadge } from "@/components/profile/AchievementBadge";
+import {
+  AchievementBadgeIconPaths,
+  BADGE_HEX_POINTS,
+  BADGE_ICON_RATIO,
+} from "@/components/profile/AchievementBadge";
 import { getAchievementShareFileName, wrapText } from "@/lib/achievementShare";
 import { formatKstFullDate } from "@/lib/format";
 
@@ -31,40 +35,64 @@ const GLOW_FADE_END = 150 * Math.SQRT2 * 0.62;
 const FONT_FAMILY = '"Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont, sans-serif';
 const LINE_HEIGHT = 1.5;
 
-const FALLBACK_COLORS = {
-  "--color-pk-ink": "#0f1726",
-  "--color-pk-hl": "#ffb627",
-  "--color-pk-primary": "#2346a8",
-  "--color-pk-deep": "#152a5e",
-  "--color-white": "#fff",
+const COLOR_VARS = {
+  ink: "--color-pk-ink",
+  amber: "--color-pk-hl",
+  primary: "--color-pk-primary",
+  deep: "--color-pk-deep",
+  white: "--color-white",
 } as const;
 
-type ColorVar = keyof typeof FALLBACK_COLORS;
+type ShareColors = Record<keyof typeof COLOR_VARS, string>;
 
-const readColor = (name: ColorVar) =>
-  getComputedStyle(document.documentElement).getPropertyValue(name).trim() ||
-  FALLBACK_COLORS[name];
+/** 그릴 때 쓰는 pk 토큰 색을 한 번에 읽는다 */
+const readColors = (): ShareColors => {
+  const style = getComputedStyle(document.documentElement);
+  return Object.fromEntries(
+    Object.entries(COLOR_VARS).map(([key, name]) => [key, style.getPropertyValue(name).trim()]),
+  ) as ShareColors;
+};
 
-/** CSS 변수를 실제 색으로 바꾼다. 이미지로 그리는 SVG에서는 변수가 풀리지 않는다 */
-const resolveColorVars = (markup: string) =>
-  markup.replace(/var\((--[a-z0-9-]+)\)/g, (match, name: string) =>
-    name in FALLBACK_COLORS ? readColor(name as ColorVar) : match,
-  );
-
-/** 화면과 같은 AchievementBadge를 떼어 낸 곳에 그려 육각형·아이콘 SVG를 문자열로 얻는다 */
-const renderBadgeSvgs = (definition: AchievementDefinition) => {
+/**
+ * 화면 배지와 같은 육각형·아이콘을 한 장의 SVG 문자열로 만든다. 숫자 꼬리표는 웹폰트가 필요해 캔버스에 따로 그린다.
+ * 이미지로 그리는 SVG에서는 CSS 변수가 풀리지 않아 색을 직접 넣는다
+ */
+const renderBadgeSvg = (definition: AchievementDefinition, color: string, iconColor: string) => {
+  const iconSize = 48 * BADGE_ICON_RATIO;
+  const iconOffset = (48 - iconSize) / 2;
   const container = document.createElement("div");
   const root = createRoot(container);
   flushSync(() => {
-    root.render(<AchievementBadge achievement={definition} earned size={BADGE_SIZE} />);
+    root.render(
+      <svg xmlns="http://www.w3.org/2000/svg" width={BADGE_SIZE} height={BADGE_SIZE} viewBox="0 0 48 48">
+        <polygon
+          points={BADGE_HEX_POINTS}
+          fill={color}
+          stroke={color}
+          strokeWidth={5}
+          strokeLinejoin="round"
+        />
+        <svg
+          x={iconOffset}
+          y={iconOffset}
+          width={iconSize}
+          height={iconSize}
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke={iconColor}
+          color={iconColor}
+          strokeWidth={2}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <AchievementBadgeIconPaths achievement={definition} />
+        </svg>
+      </svg>,
+    );
   });
-  const serializer = new XMLSerializer();
-  const [hex, icon] = Array.from(container.querySelectorAll("svg")).map((svg) =>
-    resolveColorVars(serializer.serializeToString(svg)),
-  );
+  const markup = container.innerHTML;
   root.unmount();
-  if (!hex || !icon) throw new Error("업적 배지를 그리지 못했어요");
-  return { hex, icon };
+  return markup;
 };
 
 const loadSvgImage = (markup: string) =>
@@ -115,7 +143,7 @@ const drawGlow = (ctx: CanvasRenderingContext2D, cx: number, cy: number, color: 
   ctx.restore();
 };
 
-/** AchievementBadge의 큰 숫자 꼬리표(높이 28, 최소 너비 36, 배지 아래로 9px 걸침)와 같다 */
+/** AchievementBadge의 큰 숫자 꼬리표(높이 28, 최소 너비 36, 좌우 9px, 테두리 2.5, 배지 아래로 9px 걸침, 17 굵게)와 같다 */
 const drawBadgeTag = (
   ctx: CanvasRenderingContext2D,
   label: string,
@@ -169,11 +197,11 @@ const fitLine = (ctx: CanvasRenderingContext2D, text: string, maxWidth: number) 
   return `${chars.join("")}…`;
 };
 
-export interface AchievementShareImageInput {
+export interface AchievementShareTarget {
   definition: AchievementDefinition;
   username: string;
   /** 받은 시각. 없으면 지금 */
-  earnedAt: Date | string | null;
+  earnedAt: string | null;
 }
 
 const loadFonts = async (texts: string[]) => {
@@ -189,16 +217,15 @@ export const createAchievementShareImage = async ({
   definition,
   username,
   earnedAt,
-}: AchievementShareImageInput): Promise<File> => {
+}: AchievementShareTarget): Promise<File> => {
   const dateLabel = `${formatKstFullDate(earnedAt ?? new Date())} 달성`;
   const headline = "업적 달성";
   const brand = "pkpkdupr";
-  await loadFonts([headline, definition.name, definition.condition, username, dateLabel, brand]);
-
-  const svgs = renderBadgeSvgs(definition);
-  const [hexImage, iconImage] = await Promise.all([
-    loadSvgImage(svgs.hex),
-    loadSvgImage(svgs.icon),
+  const colors = readColors();
+  const badgeColor = isLowRatingAchievement(definition.id) ? colors.deep : colors.primary;
+  const [badgeImage] = await Promise.all([
+    loadSvgImage(renderBadgeSvg(definition, badgeColor, colors.white)),
+    loadFonts([headline, definition.name, definition.condition, username, dateLabel, brand]),
   ]);
 
   const canvas = document.createElement("canvas");
@@ -208,23 +235,17 @@ export const createAchievementShareImage = async ({
   if (!ctx) throw new Error("이미지를 만들지 못했어요");
   ctx.scale(SCALE, SCALE);
 
-  const white = readColor("--color-white");
-  const amber = readColor("--color-pk-hl");
-  const badgeColor = readColor(
-    isLowRatingAchievement(definition.id) ? "--color-pk-deep" : "--color-pk-primary",
-  );
+  const { white, amber } = colors;
   const cx = WIDTH / 2;
   const badgeCenterY = BADGE_TOP + BADGE_SIZE / 2;
   const badgeBottom = BADGE_TOP + BADGE_SIZE;
 
-  ctx.fillStyle = readColor("--color-pk-ink");
+  ctx.fillStyle = colors.ink;
   ctx.fillRect(0, 0, WIDTH, HEIGHT);
   drawRays(ctx, cx, badgeCenterY, amber);
   drawGlow(ctx, cx, badgeCenterY, amber);
 
-  ctx.drawImage(hexImage, cx - BADGE_SIZE / 2, BADGE_TOP, BADGE_SIZE, BADGE_SIZE);
-  const iconSize = Math.round(BADGE_SIZE * 0.46);
-  ctx.drawImage(iconImage, cx - iconSize / 2, badgeCenterY - iconSize / 2, iconSize, iconSize);
+  ctx.drawImage(badgeImage, cx - BADGE_SIZE / 2, BADGE_TOP, BADGE_SIZE, BADGE_SIZE);
   if (definition.badgeNumber != null) {
     drawBadgeTag(ctx, definition.badgeNumber, cx, badgeBottom, badgeColor);
   }

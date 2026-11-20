@@ -9,6 +9,7 @@ import { cx } from "@/components/ui/cx";
 import { GLOBAL_LAYER } from "@/context/AppNavigationContext";
 import { useAuth } from "@/context/AuthContext";
 import { useAchievementShare } from "@/hooks/useAchievementShare";
+import { cycleFocusWithin } from "@/lib/focus";
 import { getCelebrationPointSteps } from "@/lib/achievements";
 import { formatAchievementPoints } from "@/lib/format";
 import { useDimmedThemeColor } from "@/lib/themeColor";
@@ -72,13 +73,14 @@ export default function AchievementCelebration({
   const frontCanvasRef = useRef<HTMLCanvasElement>(null);
   const badgeRef = useRef<HTMLDivElement>(null);
   const actionsRef = useRef<HTMLDivElement>(null);
+  const confirmRef = useRef<HTMLButtonElement>(null);
   const engineRef = useRef<ConfettiEngine | null>(null);
 
   const current = achievements[index];
   const { player } = useAuth();
-  // 지금 보는 장의 업적만 공유한다
+  // 지금 보는 장의 업적만 공유한다. 이미지는 버튼이 나타날 때(입력을 받기 시작할 때) 만들어 등장 연출과 겹치지 않게 한다
   const shareState = useAchievementShare(
-    isOpen && current && player?.username
+    isAcceptingInput && current && player?.username
       ? { definition: current, username: player.username, earnedAt: earnedAts?.[index] ?? null }
       : null,
   );
@@ -91,10 +93,9 @@ export default function AchievementCelebration({
   // index.css `.pk-celebration-dim`의 딤 투명도와 같다
   useDimmedThemeColor(isOpen && current != null && phase !== "closing", 0.62);
 
-  // 확인(다음) 버튼은 버튼 묶음의 마지막이다. 공유 버튼은 이미지가 준비되기 전에 비활성이라 처음 포커스를 주지 않는다
+  // 처음 포커스는 확인(다음) 버튼이다. 공유 버튼은 이미지가 준비되기 전에 비활성이다
   const focusButton = useCallback(() => {
-    const buttons = actionsRef.current?.querySelectorAll("button");
-    buttons?.[buttons.length - 1]?.focus({ preventScroll: true });
+    confirmRef.current?.focus({ preventScroll: true });
   }, []);
 
   useEffect(() => {
@@ -181,19 +182,7 @@ export default function AchievementCelebration({
       // Tab으로 뒤 시트에 가지 않게 공유·확인 버튼 사이에서만 돈다
       if (event.key === "Tab") {
         event.preventDefault();
-        const buttons = Array.from(
-          actionsRef.current?.querySelectorAll<HTMLButtonElement>("button:not(:disabled)") ?? [],
-        );
-        if (buttons.length === 0) return;
-        const currentIndex = buttons.indexOf(document.activeElement as HTMLButtonElement);
-        const step = event.shiftKey ? -1 : 1;
-        const nextIndex =
-          currentIndex < 0
-            ? event.shiftKey
-              ? buttons.length - 1
-              : 0
-            : (currentIndex + step + buttons.length) % buttons.length;
-        buttons[nextIndex]?.focus({ preventScroll: true });
+        cycleFocusWithin(actionsRef.current, "button:not(:disabled)", event.shiftKey);
       }
     };
     window.addEventListener("keydown", handleKeyDown);
@@ -350,7 +339,7 @@ export default function AchievementCelebration({
                 이미지로 공유
               </button>
             ) : null}
-            <PkButton size="lg" fullWidth onClick={advance}>
+            <PkButton ref={confirmRef} size="lg" fullWidth onClick={advance}>
               {isLast ? "확인" : "다음"}
             </PkButton>
           </div>

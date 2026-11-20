@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
-import type { AchievementDefinition } from "@pkpkdupr/shared/achievements";
-import { createAchievementShareImage } from "@/components/profile/achievementShareImage";
+import {
+  type AchievementShareTarget,
+  createAchievementShareImage,
+} from "@/components/profile/achievementShareImage";
 import { getAchievementShareText, shareAchievementImage } from "@/lib/achievementShare";
 
 type PreparedState =
@@ -8,13 +10,7 @@ type PreparedState =
   | { status: "ready"; key: string; file: File }
   | { status: "failed"; key: string };
 
-export interface AchievementShareTarget {
-  definition: AchievementDefinition;
-  username: string;
-  earnedAt: string | null;
-}
-
-export interface AchievementShareState {
+interface AchievementShareState {
   /** 이미지를 만들지 못했으면 false. 공유 버튼을 숨긴다 */
   isAvailable: boolean;
   /** 이미지가 준비됐고 공유 중이 아닐 때만 true */
@@ -35,7 +31,11 @@ export function useAchievementShare(target: AchievementShareTarget | null): Achi
     : null;
 
   useEffect(() => {
-    if (!target || !key) return undefined;
+    // 대상이 없어지면 만든 이미지를 놓아 준다
+    if (!target || !key) {
+      setPrepared(null);
+      return undefined;
+    }
     let isCancelled = false;
     setPrepared({ status: "preparing", key });
     createAchievementShareImage(target).then(

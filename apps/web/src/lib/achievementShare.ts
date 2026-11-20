@@ -44,31 +44,25 @@ export const wrapText = (
   return lines;
 };
 
-export type AchievementShareResult = "shared" | "downloaded" | "canceled";
-
 /**
- * 기기 공유 시트로 이미지를 보낸다. 파일 공유를 못 하는 브라우저(PC 등)는 내려받는다.
- * 사용자가 공유 시트를 닫은 것은 "canceled"다.
+ * 기기 공유 시트로 이미지를 보낸다. 파일 공유를 못 하는 브라우저(PC 등)는 내려받고, 사용자가 공유 시트를 닫은 것은 무시한다.
  * 사용자 동작 직후에만 공유 시트가 열리는 브라우저(iOS Safari)가 있어, 파일은 미리 만들어 넘긴다
  */
 export const shareAchievementImage = async (
   file: File,
   text: string,
-): Promise<AchievementShareResult> => {
+): Promise<void> => {
   const shareData: ShareData = { files: [file], text };
   if (typeof navigator.canShare === "function" && navigator.canShare(shareData)) {
     try {
       await navigator.share(shareData);
-      return "shared";
+      return;
     } catch (error) {
-      if (error instanceof DOMException && error.name === "AbortError") {
-        return "canceled";
-      }
+      if (error instanceof DOMException && error.name === "AbortError") return;
       // 공유가 거절되면(권한·사용자 동작 만료 등) 내려받기로 넘어간다
     }
   }
   downloadFile(file);
-  return "downloaded";
 };
 
 const downloadFile = (file: File) => {

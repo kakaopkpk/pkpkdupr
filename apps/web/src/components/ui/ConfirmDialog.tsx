@@ -1,5 +1,6 @@
 import React, { useEffect, useId, useRef } from "react";
 import { createPortal } from "react-dom";
+import { cycleFocusWithin } from "@/lib/focus";
 import { useDimmedThemeColor } from "@/lib/themeColor";
 import { PkButton } from "./Button";
 import { cx } from "./cx";
@@ -76,18 +77,7 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
       if (event.key !== "Tab") return;
       // 뒤 시트로 포커스가 빠지지 않게 창 안의 누를 수 있는 요소 사이에서만 돈다
       event.preventDefault();
-      const focusables = Array.from(
-        sectionRef.current?.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR) ??
-          [],
-      );
-      if (focusables.length === 0) return;
-      const index = focusables.indexOf(document.activeElement as HTMLElement);
-      const step = event.shiftKey ? -1 : 1;
-      const nextIndex =
-        index === -1
-          ? 0
-          : (index + step + focusables.length) % focusables.length;
-      focusables[nextIndex].focus({ preventScroll: true });
+      cycleFocusWithin(sectionRef.current, FOCUSABLE_SELECTOR, event.shiftKey);
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);

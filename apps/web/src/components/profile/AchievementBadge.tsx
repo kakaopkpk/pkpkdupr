@@ -276,6 +276,19 @@ const BADGE_ICON_BY_CATEGORY: Record<
   session: "calendar",
 };
 
+const getBadgeIconKind = (achievement: AchievementDefinition): BadgeIconKind =>
+  BADGE_ICON_BY_ID[achievement.id] ?? BADGE_ICON_BY_CATEGORY[achievement.category];
+
+/** 48 viewBox 육각형 꼭짓점. 업적 공유 이미지도 같은 모양을 그린다 */
+export const BADGE_HEX_POINTS = "24,4 41.5,14 41.5,34 24,44 6.5,34 6.5,14";
+/** 배지 크기 대비 아이콘 크기 */
+export const BADGE_ICON_RATIO = 0.46;
+
+/** 업적 아이콘의 24 viewBox 선 모양(바깥 svg의 stroke·color를 따른다) */
+export const AchievementBadgeIconPaths: React.FC<{
+  achievement: AchievementDefinition;
+}> = ({ achievement }) => <>{BADGE_ICON_PATHS[getBadgeIconKind(achievement)]}</>;
+
 export interface AchievementBadgeProps {
   achievement: AchievementDefinition;
   earned: boolean;
@@ -295,10 +308,7 @@ export const AchievementBadge: React.FC<AchievementBadgeProps> = ({
   const earnedColor = isDeep ? EARNED_DEEP_COLOR : EARNED_COLOR;
   const earnedTextClass = isDeep ? "text-pk-deep" : "text-pk-primary";
   const hexColor = earned ? earnedColor : UNEARNED_FILL;
-  const iconSize = Math.round(size * 0.46);
-  const iconKind =
-    BADGE_ICON_BY_ID[achievement.id] ??
-    BADGE_ICON_BY_CATEGORY[achievement.category];
+  const iconSize = Math.round(size * BADGE_ICON_RATIO);
   const isLarge = size >= LARGE_BADGE_MIN_SIZE;
   const tagBorder = earned ? earnedColor : UNEARNED_TAG_BORDER;
 
@@ -310,7 +320,7 @@ export const AchievementBadge: React.FC<AchievementBadgeProps> = ({
     >
       <svg width={size} height={size} viewBox="0 0 48 48" className="block">
         <polygon
-          points="24,4 41.5,14 41.5,34 24,44 6.5,34 6.5,14"
+          points={BADGE_HEX_POINTS}
           fill={hexColor}
           stroke={hexColor}
           strokeWidth={5}
@@ -329,7 +339,7 @@ export const AchievementBadge: React.FC<AchievementBadgeProps> = ({
         strokeLinejoin="round"
         className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2"
       >
-        {BADGE_ICON_PATHS[iconKind]}
+        <AchievementBadgeIconPaths achievement={achievement} />
       </svg>
       {achievement.badgeNumber != null ? (
         <span
