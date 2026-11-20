@@ -8,6 +8,7 @@ import React, {
 import { createPortal } from "react-dom";
 import { GLOBAL_LAYER } from "@/context/AppNavigationContext";
 import { prefersReducedMotion } from "@/hooks/useSheetDrag";
+import { useDimmedThemeColor } from "@/lib/themeColor";
 
 /** 확대한 사진 원의 지름(px) */
 export const AVATAR_ZOOM_SIZE = 240;
@@ -90,6 +91,9 @@ const AvatarZoomViewer: React.FC<AvatarZoomViewerProps> = ({
     onRequestCloseRef.current = onRequestClose;
     onExitedRef.current = onExited;
   }, [onExited, onRequestClose]);
+
+  // 딤(bg-pk-ink/42)과 같은 투명도. 닫히며 줄어드는 동안은 바로 걷는다
+  useDimmedThemeColor(phase === "opening" || phase === "open", 0.42);
 
   const finishClose = useCallback(() => {
     setPhase("hidden");

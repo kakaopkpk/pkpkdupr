@@ -8,6 +8,7 @@ import { cx } from "@/components/ui/cx";
 import { GLOBAL_LAYER } from "@/context/AppNavigationContext";
 import { getCelebrationPointSteps } from "@/lib/achievements";
 import { formatAchievementPoints } from "@/lib/format";
+import { useDimmedThemeColor } from "@/lib/themeColor";
 import { prefersReducedMotion } from "@/hooks/useSheetDrag";
 import { createConfettiEngine, type ConfettiEngine } from "./confettiEngine";
 
@@ -74,6 +75,8 @@ export default function AchievementCelebration({
   const isFirst = index === 0;
   const isLast = index >= achievements.length - 1;
   const badgeDelayMs = isFirst ? FIRST_CARD_DELAY_MS : 0;
+  // index.css `.pk-celebration-dim`의 딤 투명도와 같다
+  useDimmedThemeColor(isOpen && current != null && phase !== "closing", 0.62);
 
   const focusButton = useCallback(() => {
     actionsRef.current?.querySelector("button")?.focus({ preventScroll: true });
