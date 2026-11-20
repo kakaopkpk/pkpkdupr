@@ -156,7 +156,7 @@
   - 화면이 보이게 될 때(탭 전환·덮인 화면 드러남·앱 복귀) 마지막으로 커진 뒤(처음은 마운트 뒤) `DATA_TTL_MS`(5분, 모든 데이터 공통)가 지났으면 커집니다.
   - 화면 보임은 `useIsScreenVisible()`입니다. 자기 `PushScreen` 본문 밖(래퍼 최상단)에서 받는 화면은 `PushScreen`의 `onVisibleChange` 값을 `isScreenVisible`로 넘깁니다. 셸(진행 중 세션·업적 축하)은 늘 보이는 것으로 봅니다.
   - `localOnly`면 내 변경 무효화에만 커지고 TTL·남의 변경에는 커지지 않습니다. 추천 매칭(`useSessionRecommendations`)이 씁니다.
-  - 추천 매칭은 예외로 추천 코트의 선수가 진행 중 경기(`useLiveSession().inProgressMatches`)에 들어가거나 세션 참여자에서 빠지면 같은 seed로 다시 받습니다. 같은 선수 조합으로는 한 번만 다시 받습니다.
+  - 추천 매칭은 예외로 추천 코트의 선수가 진행 중 경기(`useLiveSession().inProgressMatches`)에 들어가거나 세션 참여자에서 빠지면 같은 seed로 다시 받습니다. 같은 선수 조합이 이어서 걸려 있는 동안은 한 번만 다시 받고, 풀린 뒤 다시 걸리면 또 받습니다.
 - 남의 변경은 Supabase Realtime 변경 신호로 받습니다(`context/useDataSyncRealtime.ts`, 셸이 한 번 부름).
   - 로그인 상태이고 문서가 보일 때만 private 채널 `data-sync`를 구독하고, 숨으면 해제합니다. 구독 전에 `supabase.realtime.setAuth()`를 부릅니다.
   - `changed` 신호를 받으면 0~1.5초 무작위 지연 뒤 `invalidate(kinds, { remote: true })`합니다. 지연 중 온 신호는 종류를 합쳐 한 번에 무효화합니다(`lib/dataSyncSignal.ts`).

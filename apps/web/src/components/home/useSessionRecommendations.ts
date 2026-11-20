@@ -131,15 +131,20 @@ export const useSessionRecommendations = (
       ).join(","),
     [inProgressMatches, liveSession, recommendation],
   );
-  // 같은 선수 조합으로는 한 번만 다시 받는다. 서버가 아직 그 선수를 추천하면(진행 중 경기 목록이 늦음 등) 되풀이하지 않는다
+  // 같은 선수 조합이 이어서 stale인 동안은 한 번만 다시 받는다. 서버가 아직 그 선수를 추천하면(진행 중 경기 목록이 늦음 등) 되풀이하지 않는다.
+  // stale이 풀리면 잊어서, 나중에 같은 조합이 다시 stale이 되면 또 받는다
   const handledStaleKeyRef = useRef("");
   useEffect(() => {
-    // 받는 중이면 그 응답이 최신 상태를 반영하므로 기다렸다가 다시 본다
-    if (!staleKey || isLoadingRef.current) return;
+    if (!staleKey) {
+      handledStaleKeyRef.current = "";
+      return;
+    }
+    // 받는 중이면 건너뛰고, 응답으로 recommendation이 바뀌면 이 effect가 다시 판정한다
+    if (isLoadingRef.current) return;
     if (handledStaleKeyRef.current === staleKey) return;
     handledStaleKeyRef.current = staleKey;
     void load();
-  }, [load, staleKey]);
+  }, [load, recommendation, staleKey]);
 
   const recommendAgain = useCallback(() => {
     setStatus("loading");

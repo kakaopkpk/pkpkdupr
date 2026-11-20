@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   createRemoteInvalidationBatcher,
   parseDataSyncKinds,
+  REMOTE_INVALIDATE_MAX_DELAY_MS,
 } from "@/lib/dataSyncSignal";
 
 describe("parseDataSyncKinds", () => {
@@ -31,7 +32,7 @@ describe("createRemoteInvalidationBatcher", () => {
   it("무작위 지연 뒤 지연 중 온 종류를 합쳐 한 번 무효화한다", () => {
     const invalidate = vi.fn();
     const batcher = createRemoteInvalidationBatcher(invalidate, {
-      maxDelayMs: 1_500,
+      maxDelayMs: REMOTE_INVALIDATE_MAX_DELAY_MS,
       random: () => 0.5,
     });
 
