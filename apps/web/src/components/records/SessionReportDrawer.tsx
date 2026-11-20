@@ -188,9 +188,11 @@ export default function SessionReportDrawer({
         const hasStartedRegular =
           session.kind !== "tournament" &&
           getLiveSessionStartsAt(session).getTime() <= Date.now();
-        const report =
-          isEnded || hasStartedRegular
-            ? await fetchSessionReportOrNull(targetSessionId)
+        // 진행 중 세션의 리포트는 지배자 카드에만 쓰는 보조 데이터라, 실패해도 카드 없이 그린다
+        const report = isEnded
+          ? await fetchSessionReportOrNull(targetSessionId)
+          : hasStartedRegular
+            ? await fetchSessionReportOrNull(targetSessionId).catch(() => null)
             : null;
         if (requestIdRef.current !== requestId) return;
         setLoadState({ kind: "ready", session, matches, report, isEnded });
