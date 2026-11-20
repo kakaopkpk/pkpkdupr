@@ -1,4 +1,10 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 import type {
   AchievementRankingEntry,
   AchievementRankingResponse,
@@ -218,9 +224,12 @@ const Ranking: React.FC = () => {
   const [rankings, setRankings] = useState<RankingByCategory>({});
   const [errors, setErrors] = useState<ErrorByCategory>({});
   const categoryRef = useRef(category);
-  categoryRef.current = category;
   const dataVersionRef = useRef(dataVersion);
-  dataVersionRef.current = dataVersion;
+  // 커밋된 값만 담는다. 받기 effect보다 먼저 실행돼 loadCategory가 이번 렌더의 dataVersion을 읽는다
+  useLayoutEffect(() => {
+    categoryRef.current = category;
+    dataVersionRef.current = dataVersion;
+  }, [category, dataVersion]);
   // 분류마다 가장 최근 요청 번호. 늦게 끝난 이전 요청이 최신 결과를 덮지 않게 한다
   const requestIdsRef = useRef(new Map<RankingCategory, number>());
   const requestSequenceRef = useRef(0);
