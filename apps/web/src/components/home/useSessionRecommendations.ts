@@ -198,11 +198,12 @@ export const useSessionRecommendations = (
     [inProgressMatches, liveSession, recommendation],
   );
   // 같은 코트 수로는 한 번만 다시 받는다. 서버가 그만큼 채우지 못해도(진행 중 경기 목록이 늦음 등) 되풀이하지 않는다.
-  // 늘어날 코트가 없어지면 잊어서, 나중에 다시 늘 수 있게 되면 또 받는다
+  // 추천이 있는데 늘어날 코트가 없어지면 잊어서, 나중에 다시 늘 수 있게 되면 또 받는다.
+  // 추천을 비운 동안(다시 추천·세션 바뀜)은 잊지 않아, 응답이 같은 코트 수에 못 미쳐도 또 받지 않는다
   const handledExpandableCourtsRef = useRef(0);
   useEffect(() => {
     if (!expandableCourts) {
-      handledExpandableCourtsRef.current = 0;
+      if (recommendation) handledExpandableCourtsRef.current = 0;
       return;
     }
     // 받는 중이면 건너뛰고, 응답으로 recommendation이 바뀌면 이 effect가 다시 판정한다
