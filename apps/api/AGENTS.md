@@ -83,9 +83,11 @@
 - 상세 `GET /api/match-sessions/:sessionId`
 - 세션 경기 `GET /api/match-sessions/:sessionId/matches`: 대진 예정 경기(`scheduled`, `round` 포함)도 포함
 - 점수 없이 진행 중 경기 시작 `POST /api/match-sessions/:sessionId/matches`: `POST /api/matches/start`와 같은 처리, 오늘 세션만, 이미 진행 중인 선수 포함 시 409, 선수 자동 참여
-- 복식 추천 매칭 `GET /api/match-sessions/:sessionId/recommendations?courts=N&seed=S`
+- 복식 추천 매칭 `GET /api/match-sessions/:sessionId/recommendations?courts=N&rank=R`
   - 오늘 세션만, courts 기본 3·1~4로 자름.
-  - seed 생략 시 서버가 정해 응답에 포함하고, 같은 seed면 같은 결과.
+  - 탐색 난수는 세션 id와 완료 경기 수로 서버가 정해, 같은 상황이면 누구에게나 같은 결과.
+  - 후보는 감점순으로 최저 + 5(`MATCHMAKING_CANDIDATE_PENALTY_MARGIN`) 이내 대진 전부이고, 5개(`MATCHMAKING_MIN_CANDIDATES`)보다 적으면 감점순으로 5개까지 채운다.
+  - rank(0부터, 기본 0)번째 후보를 돌려주고 후보 수를 넘으면 나머지로 순환한다. 0 이상 정수가 아니면 400. 응답 `rank`·`candidateCount`.
   - 진행 중 경기 선수 제외.
   - 팀 나누기는 NR을 참여자 평점 중앙값으로 대체하고, 응답 팀 `averageRating`은 NR(게스트 포함)을 3.0으로 친 표시용 평균.
 - 참여자 한 명씩 추가 `POST /api/match-sessions/:sessionId/participants`·삭제 `DELETE /api/match-sessions/:sessionId/participants/:playerId`

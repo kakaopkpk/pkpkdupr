@@ -139,7 +139,15 @@ const RecommendationSection: React.FC<{
       title={`추천 매칭 · 대기 ${waitingCount}명`}
       right={
         startingKey === null ? (
-          <TextLink onPress={recommendAgain}>다시 추천</TextLink>
+          <>
+            {/* 감점순 몇 번째 후보인지. 후보가 하나뿐이면 다시 추천해도 같아 숨긴다 */}
+            {status === "ready" && recommendation && recommendation.candidateCount > 1 ? (
+              <span className="mr-2 text-pk-13 font-medium text-pk-sub tabular-nums">
+                {`${recommendation.rank + 1}/${recommendation.candidateCount}`}
+              </span>
+            ) : null}
+            <TextLink onPress={recommendAgain}>다시 추천</TextLink>
+          </>
         ) : null
       }
     >

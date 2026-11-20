@@ -6,17 +6,19 @@ export const MATCHMAKING_PLAYERS_PER_COURT = 4;
 export const MATCHMAKING_SELECTION_JITTER = 2;
 export const MATCHMAKING_PENALTY_WEIGHTS = {
   /** 두 팀 평균 평점 차 1.0당 */
-  teamAverageGap: 20,
+  teamAverageGap: 30,
   /** 오늘 같은 팀이었던 두 사람이 다시 한 팀, 1회당 */
   repeatedPartner: 6,
   /** 오늘 맞붙었던 두 사람이 다시 맞붙음, 그 쌍의 맞대결 1회당 */
   repeatedOpponent: 3,
   /** 한 코트 최고·최저 평점 차 1.0당 */
-  courtRatingSpread: 1,
+  courtRatingSpread: 5,
 } as const;
 export const MATCHMAKING_RANDOM_STARTS = 40;
-/** 최저 감점 + 이 값 이하 배치를 후보로 모은다 */
-export const MATCHMAKING_CANDIDATE_PENALTY_MARGIN = 2;
+/** 최저 감점 + 이 값 이하 대진을 후보로 모은다 */
+export const MATCHMAKING_CANDIDATE_PENALTY_MARGIN = 5;
+/** 여유폭 안 후보가 이보다 적으면 감점순으로 이만큼까지 채운다 */
+export const MATCHMAKING_MIN_CANDIDATES = 5;
 /** 참여자 전원이 NR일 때 쓰는 복식 평점 */
 export const MATCHMAKING_ALL_NR_FALLBACK_RATING = 3.5;
 
@@ -40,8 +42,10 @@ export interface RecommendDoublesMatchesInput {
   completedMatches: MatchmakingPlayedMatch[];
   /** 요청 코트 수. 정수로 내리고 1~4로 자른다 */
   courts: number;
-  /** 같은 입력·같은 seed면 같은 결과 */
+  /** 선발 동점 깨기·탐색 출발점용 난수 seed. 같은 입력·같은 seed면 같은 결과 */
   seed: number;
+  /** 감점순 후보 중 몇 번째(0부터)를 고를지. 후보 수로 나눈 나머지로 순환한다 */
+  rank: number;
 }
 
 export interface RecommendedCourtPlan {
@@ -56,8 +60,12 @@ export interface DoublesRecommendationPlan {
   courts: RecommendedCourtPlan[];
   /** 추천 대상 중 이번에 선발되지 않은 선수 id */
   restingPlayerIds: string[];
-  /** 고른 배치의 총 감점 */
+  /** 고른 대진의 총 감점 */
   penalty: number;
+  /** 고른 대진의 후보 순번(0부터, 후보 수 미만) */
+  rank: number;
+  /** 감점순 후보 수. 대진을 만들 수 없으면 0 */
+  candidateCount: number;
 }
 
 /** 추천 API 응답의 선수 */
@@ -81,12 +89,15 @@ export interface RecommendedCourt {
   repeatedOpponentPairs: Array<[string, string]>;
 }
 
-/** GET /api/match-sessions/:sessionId/recommendations?courts=N&seed=S 응답 */
+/** GET /api/match-sessions/:sessionId/recommendations?courts=N&rank=R 응답 */
 export interface MatchSessionRecommendationResponse {
   sessionId: string;
   /** 1~4로 자른 요청 코트 수 */
   requestedCourts: number;
-  seed: number;
+  /** 보여 주는 대진의 감점순 순번(0부터). 요청 rank를 후보 수로 나눈 나머지다 */
+  rank: number;
+  /** 감점순 후보 수. 대진이 없으면 0 */
+  candidateCount: number;
   courts: RecommendedCourt[];
   restingPlayers: RecommendationPlayer[];
 }
@@ -105,6 +116,10 @@ const createRandom = (seed: number): (() => number) => {
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
 };
+
+/** 0 이상 정수로 내린다. 유한한 수가 아니면 0 */
+const normalizeRank = (rank: number): number =>
+  Number.isFinite(rank) ? Math.max(0, Math.floor(rank)) : 0;
 
 /** 정수로 내리고 1~4로 자른다. NaN만 기본값이고 ±Infinity는 상·하한으로 잘린다 */
 export const clampMatchmakingCourts = (courts: number): number => {
@@ -242,6 +257,8 @@ export const recommendDoublesMatches = (
       courts: [],
       restingPlayerIds: eligible.map((participant) => participant.id),
       penalty: 0,
+      rank: 0,
+      candidateCount: 0,
     };
   }
 
@@ -302,23 +319,35 @@ export const recommendDoublesMatches = (
     Math.floor(slot / MATCHMAKING_PLAYERS_PER_COURT);
   const teamOf = (slot: number): number => Math.floor(slot / 2);
 
-  // 평가한 배치 중 (지금까지의 최저 + 여유) 이하만 대진 키로 모아 두고 마지막에 다시 거른다
+  // 평가한 배치를 대진 키로 모아 두고 마지막에 감점순으로 줄 세운다.
+  // 대진이 같으면 감점도 같으므로 키마다 처음 본 배치 하나만 둔다.
+  // (지금까지의 최저 + 여유폭)을 넘고 이미 모은 대진 중 MIN_CANDIDATES개보다 나쁘면 최종 후보가 될 수 없어 건너뛴다.
   const candidates = new Map<
     string,
     { arrangement: Arrangement; penalty: number }
   >();
   let bestPenalty = Number.POSITIVE_INFINITY;
+  /** 모은 대진의 감점 중 작은 것부터 최대 MIN_CANDIDATES개(오름차순) */
+  const lowestPenalties: number[] = [];
   const record = (arrangement: Arrangement, penalty: number): void => {
     bestPenalty = Math.min(bestPenalty, penalty);
     if (
       penalty >
-      bestPenalty + MATCHMAKING_CANDIDATE_PENALTY_MARGIN + PENALTY_EPSILON
+        bestPenalty + MATCHMAKING_CANDIDATE_PENALTY_MARGIN + PENALTY_EPSILON &&
+      lowestPenalties.length === MATCHMAKING_MIN_CANDIDATES &&
+      penalty > lowestPenalties[lowestPenalties.length - 1] + PENALTY_EPSILON
     ) {
       return;
     }
     const key = canonicalKey(arrangement, courtCount);
-    if (!candidates.has(key)) {
-      candidates.set(key, { arrangement: [...arrangement], penalty });
+    if (candidates.has(key)) {
+      return;
+    }
+    candidates.set(key, { arrangement: [...arrangement], penalty });
+    lowestPenalties.push(penalty);
+    lowestPenalties.sort((a, b) => a - b);
+    if (lowestPenalties.length > MATCHMAKING_MIN_CANDIDATES) {
+      lowestPenalties.pop();
     }
   };
 
@@ -370,14 +399,24 @@ export const recommendDoublesMatches = (
     }
   }
 
-  const finalists = [...candidates.entries()]
-    .filter(
-      ([, candidate]) =>
-        candidate.penalty <=
-        bestPenalty + MATCHMAKING_CANDIDATE_PENALTY_MARGIN + PENALTY_EPSILON,
-    )
-    .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
-  const [, chosen] = finalists[Math.floor(random() * finalists.length)];
+  // 감점 오름차순, 감점이 같으면 대진 키 순. 최저 + 여유폭 이내 전부를 후보로 하되 최소 개수는 채운다
+  const ranked = [...candidates.entries()].sort(([keyA, a], [keyB, b]) => {
+    if (Math.abs(a.penalty - b.penalty) > PENALTY_EPSILON) {
+      return a.penalty - b.penalty;
+    }
+    return keyA < keyB ? -1 : keyA > keyB ? 1 : 0;
+  });
+  const withinMargin = ranked.filter(
+    ([, candidate]) =>
+      candidate.penalty <=
+      bestPenalty + MATCHMAKING_CANDIDATE_PENALTY_MARGIN + PENALTY_EPSILON,
+  ).length;
+  const candidateCount = Math.min(
+    ranked.length,
+    Math.max(withinMargin, MATCHMAKING_MIN_CANDIDATES),
+  );
+  const rank = normalizeRank(input.rank) % candidateCount;
+  const [, chosen] = ranked[rank];
 
   const courts: RecommendedCourtPlan[] = [];
   for (let court = 0; court < courtCount; court += 1) {
@@ -413,5 +452,11 @@ export const recommendDoublesMatches = (
     });
   }
 
-  return { courts, restingPlayerIds, penalty: chosen.penalty };
+  return {
+    courts,
+    restingPlayerIds,
+    penalty: chosen.penalty,
+    rank,
+    candidateCount,
+  };
 };

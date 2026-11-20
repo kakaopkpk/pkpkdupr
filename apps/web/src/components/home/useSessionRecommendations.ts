@@ -5,29 +5,24 @@ import {
 } from "@pkpkdupr/shared/matchmaking";
 import { fetchSessionRecommendations } from "@/lib/matchSessions";
 
-const SEED_RANGE = 2 ** 31;
-
-const createSeed = () => Math.floor(Math.random() * SEED_RANGE);
-
 export interface SessionRecommendationsState {
   recommendation: MatchSessionRecommendationResponse | null;
   status: "idle" | "loading" | "ready" | "error";
   error: string | null;
-  /** 새 seed로 다시 추천한다 */
+  /** 감점순 다음 후보를 받는다. 마지막 후보 다음은 서버가 1등으로 돌린다 */
   recommendAgain: () => void;
-  /** 같은 seed로 다시 받는다(당겨서 새로고침) */
+  /** 지금 순번 그대로 다시 받는다(당겨서 새로고침) */
   reload: () => Promise<void>;
 }
 
 /**
  * 진행 중 세션의 복식 추천. sessionId가 null이면 받지 않는다.
- * 코트 수는 API 기본값이고, dataVersion이 바뀌면(경기 시작·참여자 변경) 같은 seed로 다시 받는다.
+ * 코트 수는 API 기본값이고, 세션이나 dataVersion이 바뀌면(경기 시작·참여자 변경) 1등부터 다시 받는다.
  */
 export const useSessionRecommendations = (
   sessionId: string | null,
   dataVersion: number,
 ): SessionRecommendationsState => {
-  const [seed, setSeed] = useState(createSeed);
   const [recommendation, setRecommendation] =
     useState<MatchSessionRecommendationResponse | null>(null);
   const [status, setStatus] =
@@ -35,6 +30,8 @@ export const useSessionRecommendations = (
   const [error, setError] = useState<string | null>(null);
   const requestIdRef = useRef(0);
   const loadedSessionIdRef = useRef<string | null>(null);
+  /** 다음 요청에 보낼 후보 순번 */
+  const rankRef = useRef(0);
 
   const load = useCallback(async () => {
     const requestId = ++requestIdRef.current;
@@ -56,9 +53,10 @@ export const useSessionRecommendations = (
       const data = await fetchSessionRecommendations(
         sessionId,
         MATCHMAKING_DEFAULT_COURTS,
-        seed,
+        rankRef.current,
       );
       if (requestIdRef.current !== requestId) return;
+      rankRef.current = data.rank;
       setRecommendation(data);
       setStatus("ready");
       setError(null);
@@ -71,17 +69,19 @@ export const useSessionRecommendations = (
       );
       setStatus("error");
     }
-  }, [seed, sessionId]);
+  }, [sessionId]);
 
   useEffect(() => {
+    rankRef.current = 0;
     void load();
   }, [load, dataVersion]);
 
   const recommendAgain = useCallback(() => {
+    rankRef.current += 1;
     setStatus("loading");
     setRecommendation(null);
-    setSeed(createSeed());
-  }, []);
+    void load();
+  }, [load]);
 
   return { recommendation, status, error, recommendAgain, reload: load };
 };

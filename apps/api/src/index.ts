@@ -1686,22 +1686,32 @@ const parseRecommendationCourts = (value: unknown): number => {
   return clampMatchmakingCourts(courts);
 };
 
-/** 서버가 정하는 seed 범위 상한(미포함). 32비트 부호 있는 정수 양수 범위에 맞춘다 */
-const GENERATED_SEED_MAX_EXCLUSIVE = 2 ** 31;
-
-/** seed 쿼리: 생략이면 서버가 무작위 정수를 정하고, 정수가 아니면 400 */
-const parseRecommendationSeed = (value: unknown): number => {
+/** rank 쿼리: 생략이면 0(1등), 0 이상 정수가 아니면 400. 후보 수를 넘으면 추천 함수가 나머지로 순환한다 */
+const parseRecommendationRank = (value: unknown): number => {
   if (value === undefined) {
-    return Math.floor(Math.random() * GENERATED_SEED_MAX_EXCLUSIVE);
+    return 0;
   }
-  const seed =
-    typeof value === "string" && /^-?\d+$/.test(value.trim())
+  const rank =
+    typeof value === "string" && /^\d+$/.test(value.trim())
       ? Number(value)
       : NaN;
-  if (!Number.isSafeInteger(seed)) {
-    throw new MatchSessionRequestError("seed는 정수여야 합니다.", 400);
+  if (!Number.isSafeInteger(rank)) {
+    throw new MatchSessionRequestError("rank는 0 이상 정수여야 합니다.", 400);
   }
-  return seed;
+  return rank;
+};
+
+/**
+ * 추천 탐색 seed. 세션과 완료 경기 수로 정해 같은 상황이면 누구에게나 같은 추천이 보이고,
+ * 경기가 끝날 때마다 바뀌어 선발 동점 깨기가 한 사람에게 계속 유리하지 않다(FNV-1a 32비트).
+ */
+const getRecommendationSeed = (sessionId: string, completedCount: number) => {
+  let hash = 0x811c9dc5;
+  for (const char of `${sessionId}:${completedCount}`) {
+    hash ^= char.charCodeAt(0);
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return hash >>> 0;
 };
 
 /** 추천 매칭의 복식 평점. 게스트는 평점이 없는(NR) 선수로 다룬다 */
@@ -1728,7 +1738,7 @@ app.get("/api/match-sessions/:sessionId/recommendations", async (req, res) => {
       throw new MatchSessionRequestError("유효한 세션 ID가 필요합니다.", 400);
     }
     const courts = parseRecommendationCourts(req.query.courts);
-    const seed = parseRecommendationSeed(req.query.seed);
+    const rank = parseRecommendationRank(req.query.rank);
 
     const now = new Date();
     await matchRepository.cleanupExpired(now);
@@ -1744,22 +1754,24 @@ app.get("/api/match-sessions/:sessionId/recommendations", async (req, res) => {
       matchRepository.findInProgressPlayerIds(now),
       matchRepository.findBySession(sessionId),
     ]);
+    const completedMatches = sessionMatches
+      .filter((match) => match.status === "completed")
+      .map((match) => ({
+        teams: [
+          match.teams[0].players.map((player) => player.id),
+          match.teams[1].players.map((player) => player.id),
+        ] as [string[], string[]],
+      }));
     const plan = recommendDoublesMatches({
       participants: session.participants.map((member) => ({
         id: member.id,
         doublesRating: getRecommendationDoublesRating(member),
       })),
       busyPlayerIds,
-      completedMatches: sessionMatches
-        .filter((match) => match.status === "completed")
-        .map((match) => ({
-          teams: [
-            match.teams[0].players.map((player) => player.id),
-            match.teams[1].players.map((player) => player.id),
-          ],
-        })),
+      completedMatches,
       courts,
-      seed,
+      seed: getRecommendationSeed(sessionId, completedMatches.length),
+      rank,
     });
 
     // 알고리즘은 participants 안의 id만 돌려주므로 조회가 항상 성공한다.
@@ -1790,7 +1802,8 @@ app.get("/api/match-sessions/:sessionId/recommendations", async (req, res) => {
     const response: MatchSessionRecommendationResponse = {
       sessionId,
       requestedCourts: courts,
-      seed,
+      rank: plan.rank,
+      candidateCount: plan.candidateCount,
       courts: plan.courts.map((court) => ({
         teams: [
           toTeam(court.teams[0]),
