@@ -11,26 +11,18 @@ import { WinLossCount } from "@/components/profile/ProfileStatTile";
 import {
   COUNT_UP,
   CountUpNumber,
-  CountUpPop,
-  COUNT_UP_SECOND,
   CountUpRatingDelta,
 } from "@/components/ui/CountUpNumber";
+import { CountUpText } from "@/components/ui/CountUpText";
 import { RankChange, RatingDelta } from "@/components/ui/Delta";
 import { PlayerAvatar } from "@/components/ui/PlayerAvatar";
 import { SessionWinStreakFrame } from "@/components/ui/WinStreakAvatarFrame";
 import { cx } from "@/components/ui/cx";
 import { useAppNavigation } from "@/context/AppNavigationContext";
+import { useCountUp } from "@/hooks/useCountUp";
 import { usePlayOnShow } from "@/hooks/usePlayOnShow";
 import type { SessionWinStreak } from "@/lib/sessionWinStreak";
 import { formatRating } from "@/utils/dupr";
-
-/** 세션 전후 복식 순위 변동(rankBefore - rankAfter, 양수=상승). 둘 중 하나라도 null이면 null */
-export const getSessionRankChange = (
-  report: Pick<SessionPlayerReport, "rankBefore" | "rankAfter">,
-): number | null =>
-  report.rankBefore !== null && report.rankAfter !== null
-    ? report.rankBefore - report.rankAfter
-    : null;
 
 /**
  * 세션 전후 평점이 모두 있는지. 세션 전 NR이던 회원도 ratingBefore에 첫 경기 시작 평점(3.0)이 들어 있어
@@ -76,18 +68,43 @@ export const SessionRankCount: React.FC<{
     </span>
   );
 
-/** 세션 전후 순위 변동 ▲▼. 순위를 다 센 뒤 튀어나온다. 변동이 없거나 모르면 그리지 않는다 */
-export const SessionRankChangePop: React.FC<{
+/**
+ * 세는 중인 순위 기준 변동. SessionRankCount와 같은 박자로 세어 "6위 –" → "5위 ▲1" → "4위 ▲2"처럼
+ * 옆 순위와 늘 맞는 값을 보인다. 폭은 최종 변동으로 고정하고 순위 쪽에 붙인다
+ */
+const RankChangeCount: React.FC<{
+  rankBefore: number;
+  rankAfter: number;
+  className?: string;
+}> = ({ rankBefore, rankAfter, className }) => {
+  const rank = useCountUp(rankAfter, { from: rankBefore, ...COUNT_UP });
+  return (
+    <CountUpText
+      align="start"
+      finalContent={
+        <RankChange value={rankBefore - rankAfter} className={className} />
+      }
+    >
+      <RankChange
+        value={rankBefore - Math.round(rank.value)}
+        className={className}
+      />
+    </CountUpText>
+  );
+};
+
+/** 세션 전후 순위 변동 ▲▼. 순위와 함께 센다. 변동이 없거나 모르면 그리지 않는다 */
+export const SessionRankChangeCount: React.FC<{
   report: Pick<SessionPlayerReport, "rankBefore" | "rankAfter">;
   className?: string;
-}> = ({ report, className }) => {
-  const rankChange = getSessionRankChange(report);
-  return rankChange !== null && rankChange !== 0 ? (
-    <CountUpPop delayMs={COUNT_UP_SECOND.delayMs}>
-      <RankChange value={rankChange} className={className} />
-    </CountUpPop>
+}> = ({ report: { rankBefore, rankAfter }, className }) =>
+  rankBefore !== null && rankAfter !== null && rankBefore !== rankAfter ? (
+    <RankChangeCount
+      rankBefore={rankBefore}
+      rankAfter={rankAfter}
+      className={className}
+    />
   ) : null;
-};
 
 /** 세션 평점 변화량. 0부터 세며, 전후 평점 중 하나라도 없으면 "–" */
 export const SessionRatingDeltaCount: React.FC<{
@@ -320,7 +337,7 @@ export const SessionPlayerRatingRow: React.FC<{
         <SessionRatingDeltaCount report={report} />
         <span className="flex items-baseline gap-1 text-pk-12 font-bold text-pk-sub tabular-nums">
           <SessionRankCount report={report} />
-          <SessionRankChangePop report={report} />
+          <SessionRankChangeCount report={report} />
         </span>
       </span>
     </button>
