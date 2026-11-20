@@ -40,6 +40,7 @@ const session: SessionWithParticipantIds = {
   kind: "regular",
   startTime: "18:00",
   endTime: "22:00",
+  completedAt: null,
   participantIds: [alice.id, bob.id],
 };
 const completedAt = new Date("2026-11-09T10:00:00.000Z");

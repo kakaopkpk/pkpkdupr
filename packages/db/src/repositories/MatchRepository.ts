@@ -53,6 +53,7 @@ import {
   REGULAR_SESSION_START_HOUR,
   REGULAR_SESSION_START_TIME,
   getEmptySessionExpiryCutoff,
+  isSessionCompletable,
   isMatchSessionKind,
   kstDateKeyToDate,
   toKstDateKey,
@@ -171,9 +172,11 @@ export interface SessionWithParticipantIds {
   date: Date;
   location: string;
   kind: ManagedMatchSession["kind"];
-  /** 시작·종료 시각("HH:MM", KST). 정기 세션은 18:00~22:00, 시각 없는 회원 세션은 null. 종료 ≤ 시작이면 다음 날 종료 */
+  /** 시작·종료 시각("HH:MM", KST). 정기 세션은 18:00~21:00, 시각 없는 회원 세션은 null. 종료 ≤ 시작이면 다음 날 종료 */
   startTime: string | null;
   endTime: string | null;
+  /** 회원이 정기 세션을 완료한 시각. 완료 전이거나 정기 세션이 아니면 null */
+  completedAt: Date | null;
   participantIds: string[];
 }
 
@@ -295,16 +298,17 @@ const toSessionKind = (
       ? "regular"
       : "custom";
 
-/** 세션 종류와 시작·종료 시각. 정기 세션 시각은 저장하지 않고 정해진 18:00~22:00으로 채운다 */
+/** 세션 종류·시작/종료 시각·완료 시각. 정기 세션 시각은 저장하지 않고 정해진 18:00~21:00으로 채운다 */
 const toSessionKindAndTimes = (
   stored: Pick<
     StoredMatchSession,
-    "kind" | "regularDateKey" | "startTime" | "endTime"
+    "kind" | "regularDateKey" | "startTime" | "endTime" | "completedAt"
   >,
 ): {
   kind: MatchSessionKind;
   startTime: string | null;
   endTime: string | null;
+  completedAt: Date | null;
 } => {
   const kind = toSessionKind(stored);
   const isRegular = kind === "regular";
@@ -314,6 +318,7 @@ const toSessionKindAndTimes = (
       ? REGULAR_SESSION_START_TIME
       : (stored.startTime ?? null),
     endTime: isRegular ? REGULAR_SESSION_END_TIME : (stored.endTime ?? null),
+    completedAt: isRegular ? toDateOrNull(stored.completedAt) : null,
   };
 };
 
@@ -515,7 +520,8 @@ export class MatchRepository {
         .from(matches)
         .where(eq(matches.sessionId, stored.id)),
     ]);
-    const kind = toSessionKind(stored);
+    const { kind, startTime, endTime, completedAt } =
+      toSessionKindAndTimes(stored);
 
     return {
       id: stored.id,
@@ -529,10 +535,9 @@ export class MatchRepository {
       matchCount: sessionMatches.length,
       kind,
       autoCreated: kind === "regular" && stored.autoCreated === true,
-      // 정기 세션 시각은 저장하지 않고 정해진 18:00~22:00으로 채운다
-      startTime:
-        kind === "regular" ? REGULAR_SESSION_START_TIME : stored.startTime,
-      endTime: kind === "regular" ? REGULAR_SESSION_END_TIME : stored.endTime,
+      startTime,
+      endTime,
+      completedAt,
       createdAt: toDate(stored.createdAt),
       updatedAt: toDate(stored.updatedAt),
     };
@@ -2389,7 +2394,36 @@ export class MatchRepository {
   }
 
   /**
-   * 관리자가 고른 이름·장소로 그 KST 날짜의 직접 만든 정기 세션을 만든다(시각은 18:00~22:00 고정).
+   * 정기 세션을 완료한다. 완료 전이고 종료 시각(21:00) ≤ now < 자동 완료(22:00)인 정기 세션일 때만 completed_at을 now로 쓴다.
+   * 조건은 UPDATE 한 문장의 WHERE로 확인하므로 동시에 눌러도 한 번만 쓰인다.
+   * 반환: 세션이 없으면 undefined, 있으면 이번에 완료했는지(updated)와 세션
+   */
+  async completeRegularSession(
+    sessionId: string,
+    now: Date,
+  ): Promise<
+    { updated: boolean; session: ManagedMatchSession } | undefined
+  > {
+    const session = await this.findSessionById(sessionId);
+    if (!session || !isSessionCompletable(session, now)) {
+      return session ? { updated: false, session } : undefined;
+    }
+    const result = await this.client.execute({
+      sql: `
+        UPDATE match_sessions
+        SET completed_at = $2, updated_at = $2
+        WHERE id = $1 AND kind = 'regular' AND completed_at IS NULL
+        RETURNING id
+      `,
+      args: [sessionId, toUnixTimestampSeconds(now)],
+    });
+    const updatedSession = await this.findSessionById(sessionId);
+    if (!updatedSession) return undefined;
+    return { updated: result.rows.length > 0, session: updatedSession };
+  }
+
+  /**
+   * 관리자가 고른 이름·장소로 그 KST 날짜의 직접 만든 정기 세션을 만든다(시각은 18:00~21:00 고정).
    * 정기 쉬는 날에도 만들고 쉬는 날 기록은 남긴다(지워도 자동 생성이 다시 만들지 않게).
    * 이미 그날 정기 세션이 있거나 공휴일이면 RegularSessionConflictError. (name, date) 유니크 위반은 그대로 던진다
    */
@@ -2436,7 +2470,7 @@ export class MatchRepository {
   /**
    * 세션 종류를 바꾸고 data의 필드도 같이 고친다(트랜잭션 하나). 없으면 false.
    * - 정기로 바꾸면 그 날짜의 직접 만든 정기 세션(18:00 KST, 시각은 정기 시각)이 된다. 이미 그날 정기 세션이 있거나 공휴일이면 RegularSessionConflictError
-   * - 직접 만든 정기에서 바꾸면 그날 00:00 KST·18:00~22:00 세션이 되고 정기 쉬는 날은 남기지 않는다
+   * - 직접 만든 정기에서 바꾸면 그날 00:00 KST·18:00~21:00 세션이 되고 완료 시각은 지우며, 정기 쉬는 날은 남기지 않는다
    * - 자동 정기 세션은 다른 종류로 바꿀 수 없다(RegularSessionConflictError)
    * - data는 종류를 바꾼 뒤 적용한다
    * (name, date) 유니크 위반은 그대로 던진다
@@ -2517,7 +2551,7 @@ export class MatchRepository {
           sql: `
             UPDATE match_sessions
             SET kind = $2, regular_date_key = NULL, "date" = $3,
-                start_time = $4, end_time = $5, updated_at = $6
+                start_time = $4, end_time = $5, completed_at = NULL, updated_at = $6
             WHERE id = $1
           `,
           args: [

@@ -161,6 +161,7 @@ const hydrateManagedSession = (record: any): ManagedMatchSession => ({
   autoCreated: record.autoCreated === true,
   startTime: record.startTime ?? null,
   endTime: record.endTime ?? null,
+  completedAt: record.completedAt ? new Date(record.completedAt) : null,
   createdAt: new Date(record.createdAt),
   updatedAt: new Date(record.updatedAt),
 });
@@ -457,6 +458,28 @@ export class MatchRepository {
     dateKey: string,
   ): Promise<ManagedMatchSession | undefined> {
     return (await this.ensureRegularSession(dateKey))?.session;
+  }
+
+  /**
+   * 정기 세션을 완료한다. 완료할 수 없는 세션(정기 세션이 아니거나 종료 전·자동 완료 뒤)이면 409,
+   * 이미 완료된 세션이면 그대로 돌려준다(동시에 눌러도 처음 완료 시각이 남는다). 없으면 404
+   */
+  async completeRegularSession(
+    sessionId: string,
+    now: Date,
+  ): Promise<ManagedMatchSession> {
+    const result = await this.run(
+      () => db.matches.completeRegularSession(sessionId, now),
+      500,
+    );
+    if (!result) {
+      throw new MatchRepositoryError("세션을 찾을 수 없습니다.", 404);
+    }
+    const session = hydrateManagedSession(result.session);
+    if (!result.updated && !session.completedAt) {
+      throw new MatchRepositoryError("지금은 세션을 완료할 수 없어요.", 409);
+    }
+    return session;
   }
 
   /** findOrCreateRegularSession과 같고, 이 호출이 새로 만들었는지(created)도 돌려준다 */

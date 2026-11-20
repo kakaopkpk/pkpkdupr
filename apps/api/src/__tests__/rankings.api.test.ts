@@ -61,6 +61,7 @@ const session: SessionWithParticipantIds = {
   kind: "regular",
   startTime: "18:00",
   endTime: "22:00",
+  completedAt: null,
   participantIds: [alice.id, bob.id],
 };
 const emptySession: SessionWithParticipantIds = {

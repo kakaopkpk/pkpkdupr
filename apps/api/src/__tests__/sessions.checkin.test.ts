@@ -57,6 +57,7 @@ const makeSession = (
   autoCreated: false,
   startTime: null,
   endTime: null,
+  completedAt: null,
   createdAt: thursdayMorning,
   updatedAt: thursdayMorning,
   ...overrides,
@@ -828,6 +829,72 @@ describe("public match sessions", () => {
       expect(
         MatchRepository.prototype.addSessionParticipants,
       ).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("정기 세션 완료", () => {
+    // 2026-11-12(목) 21:30 KST
+    const completeNow = new Date("2026-11-12T21:30:00+09:00");
+    const completedAt = completeNow;
+    const completeSession = () =>
+      request(app)
+        .post(`/api/match-sessions/${regularSession.id}/complete`)
+        .set("Authorization", "Bearer token");
+
+    it("완료하면 완료 시각을 담은 세션을 돌려주고 오늘 세션이 아니게 된다", async () => {
+      useNow(completeNow);
+      const complete = vi
+        .spyOn(db.matches, "completeRegularSession")
+        .mockResolvedValue({
+          updated: true,
+          session: { ...regularSession, completedAt },
+        });
+      vi.spyOn(MatchRepository.prototype, "findSessionById").mockResolvedValue({
+        ...regularSession,
+        completedAt,
+      });
+
+      const response = await completeSession();
+
+      expect(response.status).toBe(200);
+      expect(complete).toHaveBeenCalledWith(regularSession.id, completeNow);
+      expect(response.body).toMatchObject({
+        id: regularSession.id,
+        completedAt: completedAt.toISOString(),
+        isToday: false,
+      });
+    });
+
+    it("이미 완료된 세션이면 그대로 200", async () => {
+      useNow(completeNow);
+      vi.spyOn(db.matches, "completeRegularSession").mockResolvedValue({
+        updated: false,
+        session: { ...regularSession, completedAt },
+      });
+      vi.spyOn(MatchRepository.prototype, "findSessionById").mockResolvedValue({
+        ...regularSession,
+        completedAt,
+      });
+
+      const response = await completeSession();
+
+      expect(response.status).toBe(200);
+    });
+
+    it("완료할 수 없는 세션이면 409, 없으면 404, 형식 오류면 400", async () => {
+      useNow(thursdayMorning);
+      const complete = vi
+        .spyOn(db.matches, "completeRegularSession")
+        .mockResolvedValueOnce({ updated: false, session: regularSession })
+        .mockResolvedValueOnce(undefined);
+
+      expect((await completeSession()).status).toBe(409);
+      expect((await completeSession()).status).toBe(404);
+      const invalid = await request(app)
+        .post("/api/match-sessions/bad/complete")
+        .set("Authorization", "Bearer token");
+      expect(invalid.status).toBe(400);
+      expect(complete).toHaveBeenCalledTimes(2);
     });
   });
 });

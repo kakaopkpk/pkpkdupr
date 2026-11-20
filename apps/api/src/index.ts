@@ -686,9 +686,13 @@ const resolveSessionForNewMatch = async (
   if (!isRegularSessionTime(matchStartsAt)) {
     return undefined;
   }
-  return await matchRepository.findOrCreateRegularSession(
+  const regular = await matchRepository.findOrCreateRegularSession(
     toKstDateKey(matchStartsAt),
   );
+  // 회원이 완료한 정기 세션에는 그 뒤 경기를 붙이지 않고 세션 없이 저장한다
+  return regular && isSessionOnToday(regular, matchStartsAt)
+    ? regular
+    : undefined;
 };
 
 /**
@@ -879,6 +883,7 @@ const toMatchSessionDetail = (
     dateKey,
     startTime: session.startTime,
     endTime: session.endTime,
+    completedAt: session.completedAt,
     isToday: isSessionOnToday(session, now),
     participants,
     matchCount: session.matchCount,
@@ -1841,6 +1846,24 @@ app.post("/api/match-sessions/:sessionId/participants", async (req, res) => {
   }
 });
 
+// 정기 세션 완료: 종료(21:00)부터 자동 완료(22:00) 전까지 활성 회원 누구나, 이미 완료됐으면 그대로 돌려준다
+app.post("/api/match-sessions/:sessionId/complete", async (req, res) => {
+  try {
+    if (!(await getAuthPayload(req, res))) {
+      return;
+    }
+    const sessionId = req.params.sessionId;
+    if (!isEntityId(sessionId, "session")) {
+      throw new MatchSessionRequestError("유효한 세션 ID가 필요합니다.", 400);
+    }
+    const now = new Date();
+    await matchRepository.completeRegularSession(sessionId, now);
+    res.json(await requireMatchSessionDetail(sessionId, now));
+  } catch (err) {
+    sendMatchSessionFailure(res, err);
+  }
+});
+
 app.post("/api/match-sessions/:sessionId/guests", async (req, res) => {
   try {
     const decoded = await getAuthPayload(req, res);
@@ -2123,7 +2146,7 @@ const assertRegularSessionWeekday = (dateKey: string) => {
 
 /**
  * 관리자 세션 만들기. 종류(kind)를 고른다.
- * 회원·대회 세션은 회원 세션 만들기와 같은 규칙이고, 정기 세션은 그 날짜의 정기 세션(18:00~22:00)이 된다
+ * 회원·대회 세션은 회원 세션 만들기와 같은 규칙이고, 정기 세션은 그 날짜의 정기 세션(18:00~21:00)이 된다
  */
 app.post("/api/admin/match-sessions", requireAdmin, async (req, res) => {
   try {

@@ -48,6 +48,7 @@ const customSession = (
   autoCreated: false,
   startTime: null,
   endTime: null,
+  completedAt: null,
   createdAt: thursdayMorning,
   updatedAt: thursdayMorning,
   ...overrides,
@@ -67,6 +68,7 @@ const regularSession = (
   autoCreated,
   startTime: "18:00",
   endTime: "22:00",
+  completedAt: null,
   createdAt: thursdayMorning,
   updatedAt: thursdayMorning,
 });
