@@ -2,6 +2,7 @@ import React from "react";
 import type { MatchInfo } from "@/types/match";
 import { RallyTeamRow } from "@/components/match/LiveMatchRally";
 import { PkButton, rowPressClassName } from "@/components/ui/Button";
+import type { SessionWinStreakByPlayer } from "@/components/ui/PlayerAvatar";
 import { ChevronRightIcon } from "@/components/ui/Icons";
 import { cx } from "@/components/ui/cx";
 import { useIsMatchScheduled } from "@/hooks/useIsMatchScheduled";
@@ -46,7 +47,8 @@ const MyMatchCardFrame: React.FC<{
   header: React.ReactNode;
   onOpenDetail: () => void;
   footer: React.ReactNode;
-}> = ({ match, now, header, onOpenDetail, footer }) => {
+  sessionWinStreaks?: SessionWinStreakByPlayer;
+}> = ({ match, now, header, onOpenDetail, footer, sessionWinStreaks }) => {
   const isScheduled = useIsMatchScheduled(match, now);
   return (
     <article className="flex flex-col gap-3 rounded-pk-lg border-2 border-pk-primary-line bg-white p-3.5">
@@ -61,6 +63,7 @@ const MyMatchCardFrame: React.FC<{
           isScheduled={isScheduled}
           ringColor="#ffffff"
           vsClassName="text-pk-12 font-bold text-pk-muted"
+          sessionWinStreaks={sessionWinStreaks}
           renderNames={(team) => (
             <span className="flex max-w-full min-w-0 flex-col items-center text-pk-15 font-bold leading-[1.35] text-pk-ink">
               {team.players.map((player) => (
@@ -86,13 +89,23 @@ export const MyLiveMatchCard: React.FC<{
   match: MatchInfo;
   now: Date;
   isTournament?: boolean;
+  /** 든 회원 아바타에 세션 연승 링을 두른다(홈 진행 중 세션) */
+  sessionWinStreaks?: SessionWinStreakByPlayer;
   onOpenDetail: () => void;
   onEnterScore: () => void;
-}> = ({ match, now, isTournament = false, onOpenDetail, onEnterScore }) => (
+}> = ({
+  match,
+  now,
+  isTournament = false,
+  sessionWinStreaks,
+  onOpenDetail,
+  onEnterScore,
+}) => (
   <MyMatchCardFrame
     match={match}
     now={now}
     onOpenDetail={onOpenDetail}
+    sessionWinStreaks={sessionWinStreaks}
     header={
       <LiveMatchHeader
         match={match}
@@ -163,8 +176,10 @@ export const MyNextBracketMatchCard: React.FC<{
 export const LiveMatchCard: React.FC<{
   match: MatchInfo;
   now: Date;
+  /** 든 회원 아바타에 세션 연승 링을 두른다(홈 진행 중 세션) */
+  sessionWinStreaks?: SessionWinStreakByPlayer;
   onOpenDetail: () => void;
-}> = ({ match, now, onOpenDetail }) => (
+}> = ({ match, now, sessionWinStreaks, onOpenDetail }) => (
   <button
     type="button"
     onClick={onOpenDetail}
@@ -174,6 +189,9 @@ export const LiveMatchCard: React.FC<{
     )}
   >
     <LiveMatchHeader match={match} now={now} />
-    <TeamsVersus teams={[match.teams[0].players, match.teams[1].players]} />
+    <TeamsVersus
+      teams={[match.teams[0].players, match.teams[1].players]}
+      sessionWinStreaks={sessionWinStreaks}
+    />
   </button>
 );

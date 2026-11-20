@@ -17,8 +17,8 @@ import RecommendationSection, {
 import { useNewsFeed } from "@/components/home/useNewsFeed";
 import { usePreSessionData } from "@/components/home/usePreSessionData";
 import { useSessionRecommendations } from "@/components/home/useSessionRecommendations";
-import { useSessionTopRiser } from "@/components/home/useSessionTopRiser";
-import { TopRiserCard } from "@/components/records/SessionReportParts";
+import { useLiveSessionHighlight } from "@/components/home/useLiveSessionHighlight";
+import { LiveSessionHighlightCard } from "@/components/records/SessionReportParts";
 import ParticipantsSheet from "@/components/session/ParticipantsSheet";
 import { LiveSessionCard } from "@/components/session/SessionBlueCard";
 import { useSessionParticipation } from "@/components/session/useSessionParticipation";
@@ -135,8 +135,10 @@ const Home: React.FC = () => {
     todayKey,
   });
   const newsFeed = useNewsFeed({ enabled: isPreSession, dataVersion });
-  const liveTopRiser = useSessionTopRiser(
-    liveSession && !isTournamentLive ? liveSession.id : null,
+  // 세션 지배자 카드와 경기·추천 매칭 아바타의 세션 연승 링
+  const highlight = useLiveSessionHighlight(
+    liveSession,
+    live.matches,
     dataVersion,
   );
   const recommendations = useSessionRecommendations(
@@ -344,13 +346,17 @@ const Home: React.FC = () => {
   );
 
   // ── 그리기 ─────────────────────────────────────────
-  /** 진행 중 머리·내 경기 카드·남의 진행 중 경기 카드. 내 경기는 세션 밖 경기여도 맨 위에 온다 */
+  /**
+   * 진행 중 머리·내 경기 카드·남의 진행 중 경기 카드. 내 경기는 세션 밖 경기여도 맨 위에 온다.
+   * 진행 중 세션이면 세션 연승 중인 회원 아바타에 링을 두른다(진행 중 세션이 없으면 연승도 없다)
+   */
   const renderInProgress = (otherMatches: MatchInfo[]) => (
     <Section title="진행 중">
       {myInProgressMatch ? (
         <MyLiveMatchCard
           match={myInProgressMatch}
           now={now}
+          sessionWinStreaks={highlight.streakByPlayer}
           onOpenDetail={() => openMatchDetail(myInProgressMatch.id)}
           onEnterScore={() =>
             openRecordMatch({ kind: "score", matchId: myInProgressMatch.id })
@@ -363,6 +369,7 @@ const Home: React.FC = () => {
             key={match.id}
             match={match}
             now={now}
+            sessionWinStreaks={highlight.streakByPlayer}
             onOpenDetail={() => openMatchDetail(match.id)}
           />
         ))
@@ -380,7 +387,10 @@ const Home: React.FC = () => {
         onOpenParticipants={() => openParticipants(session, busyPlayerIds)}
         onPress={() => openSessionReport(session.id)}
       />
-      {liveTopRiser ? <TopRiserCard report={liveTopRiser} /> : null}
+      <LiveSessionHighlightCard
+        topRiser={highlight.topRiser}
+        streaks={highlight.streaks}
+      />
       {renderInProgress(
         sessionInProgressMatches.filter(
           (match) => match.id !== myInProgressMatch?.id,
@@ -392,6 +402,7 @@ const Home: React.FC = () => {
           waitingCount={waitingCount}
           startingKey={startState.startingKey}
           startError={startState.error}
+          sessionWinStreaks={highlight.streakByPlayer}
           onStart={(court) => void startRecommendedMatch(court)}
         />
       ) : null}

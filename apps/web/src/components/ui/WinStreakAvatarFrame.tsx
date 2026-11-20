@@ -3,6 +3,9 @@ import { WIN_STREAK_DISPLAY_MIN } from "@pkpkdupr/shared/streak";
 import { FlameIcon } from "./Icons";
 import { cx } from "./cx";
 
+type FrameSize = "sm" | "lg";
+type StreakTier = 1 | 2 | 3;
+
 const TAG_CLASS_NAME = {
   // 랭킹 줄 아바타 32: 숫자만
   sm: "-bottom-[7px] h-[15px] pr-1 pl-[3px]",
@@ -15,7 +18,7 @@ const isWinStreakShown = (
 ): winStreak is number => !!winStreak && winStreak >= WIN_STREAK_DISPLAY_MIN;
 
 /** 연승 단계: 5~9 → 1, 10~19 → 2, 20 이상 → 3. 단계가 오를수록 링이 굵어지고 3단계는 앰버 빛이 붙는다 */
-const getStreakTier = (winStreak: number): 1 | 2 | 3 =>
+const getStreakTier = (winStreak: number): StreakTier =>
   winStreak >= 20 ? 3 : winStreak >= 10 ? 2 : 1;
 
 /** 크기별 흰 틈과 단계별 링 굵기(px) */
@@ -25,16 +28,15 @@ const RING_SIZE = {
 } as const;
 
 /**
- * 연승 중(WIN_STREAK_DISPLAY_MIN 이상)인 회원 아바타를 단계별 굵기의 하이라이트(앰버) 링(움직임 없음)으로 감싸고,
- * 아바타 아래 가운데에 앰버 바탕·잉크 글자의 불꽃 + 연승 태그를 붙인다. 연승이 모자라면 아바타만 그린다.
+ * 아바타를 하이라이트(앰버) 링(움직임 없음)으로 감싼다. winStreak을 주면 아바타 아래 가운데에
+ * 앰버 바탕·잉크 글자의 불꽃 + 연승 태그를 붙이고, 없으면 링만 그린다
  */
-export const WinStreakAvatarFrame: React.FC<{
-  winStreak: number | null | undefined;
-  size: "sm" | "lg";
+const StreakRing: React.FC<{
+  size: FrameSize;
+  tier: StreakTier;
+  winStreak?: number;
   children: React.ReactNode;
-}> = ({ winStreak, size, children }) => {
-  if (!isWinStreakShown(winStreak)) return <>{children}</>;
-  const tier = getStreakTier(winStreak);
+}> = ({ size, tier, winStreak, children }) => {
   const { gap, ring } = RING_SIZE[size];
   return (
     <span
@@ -48,18 +50,54 @@ export const WinStreakAvatarFrame: React.FC<{
       }
     >
       {children}
-      <span
-        className={cx(
-          "absolute left-1/2 inline-flex -translate-x-1/2 items-center gap-px rounded-full bg-pk-hl text-pk-12 leading-none font-extrabold whitespace-nowrap text-pk-ink tabular-nums shadow-[0_0_0_2px_var(--color-white)]",
-          TAG_CLASS_NAME[size],
-        )}
-      >
-        <span aria-hidden="true" className="inline-flex items-center gap-px">
-          <FlameIcon size={size === "sm" ? 10 : 12} />
-          {size === "sm" ? winStreak : `${winStreak}연승`}
+      {winStreak !== undefined ? (
+        <span
+          className={cx(
+            "absolute left-1/2 inline-flex -translate-x-1/2 items-center gap-px rounded-full bg-pk-hl text-pk-12 leading-none font-extrabold whitespace-nowrap text-pk-ink tabular-nums shadow-[0_0_0_2px_var(--color-white)]",
+            TAG_CLASS_NAME[size],
+          )}
+        >
+          <span aria-hidden="true" className="inline-flex items-center gap-px">
+            <FlameIcon size={size === "sm" ? 10 : 12} />
+            {size === "sm" ? winStreak : `${winStreak}연승`}
+          </span>
+          <span className="sr-only">{winStreak}연승 중</span>
         </span>
-        <span className="sr-only">{winStreak}연승 중</span>
-      </span>
+      ) : null}
     </span>
+  );
+};
+
+/**
+ * 연승 중(WIN_STREAK_DISPLAY_MIN 이상)인 회원 아바타를 단계별 굵기의 하이라이트(앰버) 링(움직임 없음)으로 감싸고,
+ * 아바타 아래 가운데에 앰버 바탕·잉크 글자의 불꽃 + 연승 태그를 붙인다. 연승이 모자라면 아바타만 그린다.
+ */
+export const WinStreakAvatarFrame: React.FC<{
+  winStreak: number | null | undefined;
+  size: FrameSize;
+  children: React.ReactNode;
+}> = ({ winStreak, size, children }) => {
+  if (!isWinStreakShown(winStreak)) return <>{children}</>;
+  return (
+    <StreakRing size={size} tier={getStreakTier(winStreak)} winStreak={winStreak}>
+      {children}
+    </StreakRing>
+  );
+};
+
+/**
+ * 진행 중 세션에서 세션 연승 중인 회원(getSessionWinStreaks가 고른 회원) 아바타의 앰버 링. winStreak이 없으면 아바타만 그린다.
+ * 굵기는 랭킹 줄 링(sm 1단계)이고, showTag면 숫자 태그를 붙인다(세션 지배자 카드 연승 줄). 경기 아바타는 링만이다
+ */
+export const SessionWinStreakFrame: React.FC<{
+  winStreak: number | undefined;
+  showTag?: boolean;
+  children: React.ReactNode;
+}> = ({ winStreak, showTag = false, children }) => {
+  if (winStreak === undefined) return <>{children}</>;
+  return (
+    <StreakRing size="sm" tier={1} winStreak={showTag ? winStreak : undefined}>
+      {children}
+    </StreakRing>
   );
 };

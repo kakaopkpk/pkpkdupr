@@ -10,6 +10,7 @@ import { getSessionEndsAt, toKstDateKey } from "@pkpkdupr/shared/session";
 import { getMatchPlayerIds, type MatchInfo } from "@/types/match";
 import PushScreen from "@/components/PushScreen";
 import LastSessionMeCard from "@/components/home/LastSessionMeCard";
+import { useLiveSessionHighlight } from "@/components/home/useLiveSessionHighlight";
 import {
   getPlayerSessionAchievements,
   MyNewAchievementsCard,
@@ -17,6 +18,7 @@ import {
 import { RecordSessionCard } from "@/components/records/RecordCards";
 import SessionRatingChangesScreen from "@/components/records/SessionRatingChangesScreen";
 import {
+  LiveSessionHighlightCard,
   SessionPlayerRatingRow,
   SessionReportSkeleton,
   TopRiserCard,
@@ -115,7 +117,8 @@ export interface SessionReportDrawerProps {
 
 /**
  * 전역 세션 상세 화면. 다가오는·진행 중·끝난 세션 모두 열리고, 머리는 세션 카드다.
- * - 끝나기 전: 일정 탭 블루 카드(D-day 또는 LIVE, 참여자 시트, 참여 버튼) → 대회면 "대진", 아니면 "경기"
+ * - 끝나기 전: 일정 탭 블루 카드(D-day 또는 LIVE, 참여자 시트, 참여 버튼) → 대회면 "대진", 아니면 "경기".
+ *   진행 중 일반 세션이면 카드와 "경기" 사이에 홈과 같은 세션 지배자·세션 연승 카드
  * - 끝난 대회: 순위 카드 → 리포트(세션 지배자·내 평점·내 새 업적·평점 변화) → "대진"
  * - 끝난 일반 세션: 일정 탭 지난 세션 카드(누를 수 없음) → 리포트 → "경기".
  *   리포트가 없으면(완료 경기 없이 끝남) 버튼 없는 블루 카드
@@ -242,6 +245,12 @@ export default function SessionReportDrawer({
   const participation = useSessionParticipation({ playerId, loadedVersion });
 
   const isLive = live.liveSession?.id === sessionId;
+  // 진행 중 세션이면 홈과 같은 지배자·연승 데이터(셸의 세션 경기)를 쓴다
+  const liveHighlight = useLiveSessionHighlight(
+    isLive ? live.liveSession : null,
+    live.matches,
+    dataVersion,
+  );
   // 진행 중 경기에 든 선수는 참여자 시트에서 뺄 수 없다
   const busyPlayerIds = useMemo(
     () =>
@@ -411,6 +420,12 @@ export default function SessionReportDrawer({
       <>
         {renderHeaderCard(session, isEnded)}
         {report ? renderReport(report) : null}
+        {isLive && !isEnded ? (
+          <LiveSessionHighlightCard
+            topRiser={liveHighlight.topRiser}
+            streaks={liveHighlight.streaks}
+          />
+        ) : null}
         {session.kind === "tournament" ? (
           <TournamentBracketSection
             matches={loadState.matches}

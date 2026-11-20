@@ -4,6 +4,9 @@ import { getWinningTeamIndex, type MatchScore } from "./match.js";
 /** 이 연승부터 랭킹·프로필 아바타에 앰버 링과 연승 태그를 붙인다 */
 export const WIN_STREAK_DISPLAY_MIN = 5;
 
+/** 진행 중 세션에서 그 세션 경기만으로 센 연승이 이 수부터 세션 지배자 카드·경기 아바타에 강조된다 */
+export const SESSION_WIN_STREAK_DISPLAY_MIN = 3;
+
 export interface WinStreakMatch {
   id: string;
   completedAt: Date;

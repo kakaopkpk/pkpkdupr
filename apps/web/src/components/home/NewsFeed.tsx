@@ -4,10 +4,14 @@ import type { SessionPlayerReport } from "@pkpkdupr/shared/ranking";
 import AchievementBadge from "@/components/profile/AchievementBadge";
 import {
   hasRatingBeforeAndAfter,
+  LineStrong,
+  lineTextClassName,
+  PlayerLineButton,
   SessionRankChangePop,
   SessionRankCount,
   SessionRatingCount,
   SessionRatingDeltaCount,
+  WinStreakLineText,
 } from "@/components/records/SessionReportParts";
 import SkeletonBlock from "@/components/SkeletonBlock";
 import { rowPressClassName } from "@/components/ui/Button";
@@ -33,13 +37,6 @@ import type { NewsFeedState } from "@/components/home/useNewsFeed";
 // 바닥에 닿기 전 이만큼 남았을 때 다음 페이지를 미리 불러온다
 const PREFETCH_MARGIN_PX = 240;
 const TAB_SCROLL_AREA_SELECTOR = ".app-tab-panel-scroll-area";
-
-/** 소식 문장 안 아이디·핵심 단어. 검정 굵게만 하고 색은 바꾸지 않는다 */
-const Strong: React.FC<{ children: React.ReactNode }> = ({ children }) => (
-  <b className="font-extrabold">{children}</b>
-);
-
-const lineTextClassName = "text-pk-15 text-pk-ink break-keep";
 
 /** 탭 본문 스크롤 영역 바닥에 다가가면 onReach를 부른다 */
 const InfiniteScrollTrigger: React.FC<{
@@ -72,31 +69,6 @@ const InfiniteScrollTrigger: React.FC<{
   return <div ref={targetRef} aria-hidden="true" className="h-px" />;
 };
 
-/** 세션 카드 안 소식 줄 하나의 틀: 아바타 36 + 문장, 최소 높이 60, 줄 사이 구분선 */
-const FeedLineButton: React.FC<{
-  player: SessionPlayerReport["player"];
-  onPress: () => void;
-  children: React.ReactNode;
-  right?: React.ReactNode;
-  /** 아바타에 세션 지배자 불꽃 후광을 두른다 */
-  hasFlameAura?: boolean;
-}> = ({ player, onPress, children, right, hasFlameAura = false }) => (
-  <button
-    type="button"
-    onClick={onPress}
-    className={cx(
-      "flex min-h-[60px] w-full items-center gap-3 py-3 text-left not-last:border-b not-last:border-pk-divider active:opacity-80",
-      rowPressClassName,
-    )}
-  >
-    <span className={cx("inline-flex shrink-0", hasFlameAura && "pk-flame-aura")}>
-      <PlayerAvatar player={player} size={36} />
-    </span>
-    <span className="flex min-w-0 flex-1 flex-col gap-0.5">{children}</span>
-    {right}
-  </button>
-);
-
 /** 그릴 소식 줄. 업적 줄은 찾은 업적 정의를 함께 싣는다 */
 type FeedLineEntry =
   | { line: NewsFeedAchievementLineInfo; definition: AchievementDefinition }
@@ -112,7 +84,7 @@ const FeedLine: React.FC<{ entry: FeedLineEntry }> = ({ entry }) => {
   if (entry.definition) {
     const { line, definition } = entry;
     return (
-      <FeedLineButton
+      <PlayerLineButton
         player={player}
         onPress={() =>
           openAchievements({
@@ -128,31 +100,31 @@ const FeedLine: React.FC<{ entry: FeedLineEntry }> = ({ entry }) => {
         }
       >
         <span className={lineTextClassName}>
-          <Strong>{player.username}</Strong>님이 업적{" "}
-          <Strong>{definition.name}</Strong>
+          <LineStrong>{player.username}</LineStrong>님이 업적{" "}
+          <LineStrong>{definition.name}</LineStrong>
           {getObjectParticle(definition.name)} 달성했어요
         </span>
         <span className="text-pk-13 text-pk-sub">{definition.condition}</span>
-      </FeedLineButton>
+      </PlayerLineButton>
     );
   }
 
   const { line } = entry;
   if (line.kind === "winStreak") {
     return (
-      <FeedLineButton player={player} onPress={() => openMemberProfile(player.id)}>
-        <span className={lineTextClassName}>
-          <Strong>{player.username}</Strong>님이{" "}
-          <Strong>{line.winStreak}연승</Strong> 중이에요
-        </span>
-      </FeedLineButton>
+      <PlayerLineButton player={player} onPress={() => openMemberProfile(player.id)}>
+        <WinStreakLineText
+          username={player.username}
+          winStreak={line.winStreak}
+        />
+      </PlayerLineButton>
     );
   }
 
   return (
-    <FeedLineButton player={player} onPress={() => selectTab("ranking")}>
+    <PlayerLineButton player={player} onPress={() => selectTab("ranking")}>
       <span className={lineTextClassName}>
-        <Strong>{player.username}</Strong>님이 랭킹 <Strong>{line.rank}위</Strong>
+        <LineStrong>{player.username}</LineStrong>님이 랭킹 <LineStrong>{line.rank}위</LineStrong>
         {line.rankChange !== null && line.rankChange > 0 ? (
           <RankChange
             value={line.rankChange}
@@ -161,7 +133,7 @@ const FeedLine: React.FC<{ entry: FeedLineEntry }> = ({ entry }) => {
         ) : null}
         에 올랐어요
       </span>
-    </FeedLineButton>
+    </PlayerLineButton>
   );
 };
 
@@ -203,7 +175,7 @@ const FeedTopRiserLine: React.FC<{ report: SessionPlayerReport }> = ({
   const { player } = report;
 
   return (
-    <FeedLineButton
+    <PlayerLineButton
       player={player}
       hasFlameAura
       onPress={() => openMemberProfile(player.id)}
@@ -215,7 +187,7 @@ const FeedTopRiserLine: React.FC<{ report: SessionPlayerReport }> = ({
       }
     >
       <span className={lineTextClassName}>
-        <Strong>{player.username}</Strong>님이 <Strong>세션 지배자</Strong>가
+        <LineStrong>{player.username}</LineStrong>님이 <LineStrong>세션 지배자</LineStrong>가
         됐어요
       </span>
       <span className="text-pk-13 text-pk-sub tabular-nums">
@@ -225,7 +197,7 @@ const FeedTopRiserLine: React.FC<{ report: SessionPlayerReport }> = ({
           : null}
         {formatRating(report.ratingAfter)}
       </span>
-    </FeedLineButton>
+    </PlayerLineButton>
   );
 };
 
@@ -307,7 +279,7 @@ const NewMemberCard: React.FC<{ item: NewsFeedNewMemberItemInfo }> = ({
     >
       <PlayerAvatar player={item.player} size={32} />
       <span className={cx("min-w-0 flex-1", lineTextClassName)}>
-        <Strong>{item.player.username}</Strong>님이 새로 가입했어요
+        <LineStrong>{item.player.username}</LineStrong>님이 새로 가입했어요
       </span>
       <span className="shrink-0 text-pk-13 text-pk-muted">
         {formatKstMonthDay(item.joinedAt)}

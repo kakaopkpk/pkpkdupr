@@ -36,6 +36,9 @@
         - 아래 위치 점은 10개까지, 넘으면 "n / N".
         - 어느 카드에서든 참여하기·참여 취소.
       - 진행 중 세션이 없으면 캐러셀(과 진행 중 경기) 아래 "소식" 피드 `home/NewsFeed`(`GET /api/news-feed`, 무한 스크롤, 데이터는 `home/useNewsFeed`)를 둔다. 카드 모양·누르면 가는 곳은 `docs/design.md` "홈"을 따른다.
+      - 진행 중 일반 세션이면 블루 카드 아래 `records/SessionReportParts`의 `LiveSessionHighlightCard`(세션 지배자 줄 + 세션 연승 줄)를 둔다. 모양은 `docs/design.md` "홈".
+        - 데이터는 `home/useLiveSessionHighlight`다. 지배자는 `home/useSessionTopRiser`, 연승은 셸의 세션 경기로 `lib/sessionWinStreak`의 `getSessionWinStreaks`가 센다.
+        - 같은 연승을 진행 중 경기 카드·추천 매칭에 `sessionWinStreaks` prop으로 넘겨 `TeamAvatars`가 아바타 링을 두른다.
       - 진행 중 경기는 경기마다 가로 vs 카드로 둔다. `home/LiveMatchCard`의 내 경기 `MyLiveMatchCard`는 테두리·"내 경기" 칩·점수 입력 버튼과 경기 상세 같은 랠리 팀 줄(`RallyTeamRow`)이 있고, 남의 경기 `LiveMatchCard`는 없다.
       - 진행 중 세션이 대회 세션이면 진행 화면이 대회 카드(`LiveSessionCard`) → "내 경기" 섹션 → 라운드별 대진(`TournamentBracketSection`, `showFilter` false)이다.
         - 세션 지배자·"진행 중" 섹션·추천 매칭·"오늘 기록"은 없고, 남의 진행 중 경기는 대진 안 제자리에만 있다.
@@ -81,6 +84,7 @@
       - 머리는 글자가 아니라 카드다(불러오는 중 스켈레톤도 카드 자리).
       - 끝나기 전: 일정 탭 `UpcomingSessionCard`(참여자 시트·참여 버튼) → 대회면 `TournamentBracketSection`, 아니면 "경기" 섹션(빈 상태 "아직 경기가 없어요"). 참여자 목록 섹션은 없다.
         - 진행 중(`useLiveSession().liveSession?.id`가 이 세션)이면 D-day 대신 LIVE다. 대회도 진행 중에 모양이 같다.
+        - 진행 중 일반 세션이면 카드와 "경기" 사이에 홈과 같은 `LiveSessionHighlightCard`(데이터도 홈과 같은 `home/useLiveSessionHighlight`)를 둔다.
         - 메타 줄은 홈 다음 세션 카드와 같은 `getSessionMetaLabel`(미래면 날짜까지).
       - 끝난 대회: `TournamentRankCard`(누를 수 없음, `mine`은 리포트 `players`의 내 줄) → 세션 지배자·내 평점·내 새 업적·평점 변화 → `TournamentBracketSection`.
       - 끝난 일반 세션: `RecordSessionCard`(`onPress` 없이 누를 수 없음, 메타 줄 앞에 날짜) → 세션 지배자·내 평점·내 새 업적·평점 변화 → "경기" 섹션. 리포트가 없으면 버튼 없는 블루 카드("종료").
@@ -198,7 +202,7 @@
 - 아래는 구현 규칙이고, 화면별 결정·다시 제안하지 않는 안·시안 작업 방식은 `docs/design.md`(루트 기준)를 함께 따릅니다.
 - 기본색은 블루 `pk-primary`(#2346a8)입니다. 버튼은 모두 블루 계열(채움, 연한 `pk-primary-soft` 바탕, `pk-primary-line` 테두리)이며 하이라이트 색을 버튼에 쓰지 않습니다. 시트 하단 왼쪽의 글자 너비만 한 작은 보조 버튼(취소·이전·다시 고르기·경기 시작)은 `soft`(`pk-primary-soft` 바탕·`pk-primary` 글자)입니다. 색 있는 버튼은 누를 수 있고 회색(`pk-neutral`)은 비활성이라는 구분을 지키기 위해, 보조 버튼에 회색 바탕을 쓰지 않습니다.
 - 테두리가 필요한 곳(진행 중인 내 경기 카드, 테두리 버튼)은 옅은 파랑 `pk-primary-line`입니다.
-- 하이라이트 `pk-hl`(앰버 #ffb627)은 테두리 없이 LIVE 표시, 오늘의 급상승, 업적 축하 연출(`AchievementCelebration`)과 받은 업적 시트 머리의 배지 빛줄기·후광에만 씁니다. 예외로 경기 삭제 버튼의 길게 누르기 채움 앞 끝 선, 축하 연출·받은 업적 시트에서 한 번 퍼지는 고리, 연승 아바타(`WinStreakAvatarFrame`, `.pk-streak-ring`)의 링·태그에 씁니다. 평점 추세선 끝점은 블루 점입니다.
+- 하이라이트 `pk-hl`(앰버 #ffb627)은 테두리 없이 LIVE 표시, 오늘의 급상승, 업적 축하 연출(`AchievementCelebration`)과 받은 업적 시트 머리의 배지 빛줄기·후광에만 씁니다. 예외로 경기 삭제 버튼의 길게 누르기 채움 앞 끝 선, 축하 연출·받은 업적 시트에서 한 번 퍼지는 고리, 연승 아바타(`WinStreakAvatarFrame`, `.pk-streak-ring`)의 링·태그, 진행 중 세션 연승 아바타(`SessionWinStreakFrame`)의 링·태그와 "N연승" 칩(`SessionWinStreakBadge`)에 씁니다. 평점 추세선 끝점은 블루 점입니다.
   - 대회 세션 예외로 달력의 대회 날 점과 대진 진행 중 경기의 앰버 점("진행 중" 앞)에도 씁니다.
 - 대회 세션 카드(대회 카드·순위 카드)는 짙은 남색 `pk-deep` 바탕입니다.
   - "트로피 + 대회" 칩은 `pk-gold` 바탕에 글자·트로피 아이콘 `pk-ink`이고, 오른쪽 위 원에 연한 금색 트로피 장식을 둡니다.
