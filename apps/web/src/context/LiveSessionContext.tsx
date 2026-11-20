@@ -10,7 +10,9 @@ import React, {
 import {
   canOpenRegularSession,
   getEmptySessionExpiresAt,
+  getRegularSessionEndAt,
   getSessionEndsAt,
+  isSessionCompletable,
   kstDateKeyTimeToDate,
   kstDateKeyToDate,
   REGULAR_SESSION_START_HOUR,
@@ -37,6 +39,11 @@ export interface LiveSessionState {
    * 종료 시각이 지난 회원·대회 세션도 그날 자정까지 기록이 그 세션에 붙는다
    */
   recordingSession: MatchSessionDetailInfo | null;
+  /**
+   * 지금 회원이 완료할 수 있는 오늘 정기 세션(`isSessionCompletable`, 종료 21:00 ≤ 지금 < 자동 완료 22:00, 완료 전). 없으면 null.
+   * 셸이 이 세션으로 하단 세션 완료 바를 띄운다
+   */
+  completableSession: MatchSessionDetailInfo | null;
   isParticipant: boolean;
   /** liveSession의 모든 경기(GET /api/match-sessions/:id/matches) */
   matches: MatchInfo[];
@@ -95,8 +102,18 @@ export const pickRecordingSession = (
   pickLiveSession(sessions, now) ??
   pickSessionBetween(sessions, now, getEmptySessionExpiresAt);
 
+/** 지금 완료할 수 있는 첫 세션 */
+export const pickCompletableSession = (
+  sessions: MatchSessionDetailInfo[],
+  now: Date = new Date(),
+): MatchSessionDetailInfo | null =>
+  sessions.find((session) =>
+    isSessionCompletable({ ...session, date: new Date(session.date) }, now),
+  ) ?? null;
+
 /**
- * 진행 중·기록 세션이 바뀔 수 있는 다음 시각. 오늘 세션들의 시작·종료·만료 시각, 오늘 정기 회차 시작(18:00),
+ * 진행 중·기록·완료 가능 세션이 바뀔 수 있는 다음 시각. 오늘 세션들의 시작·종료·만료 시각과 정기 세션 종료 시각(21:00),
+ * 오늘 정기 회차 시작(18:00),
  * 다음 날 KST 0시 중 now보다 늦은 가장 이른 시각이다.
  * 0시를 넣어 날짜가 바뀌면 새 날의 오늘 세션을 다시 읽고 그날 경계를 다시 잡는다.
  */
@@ -111,6 +128,8 @@ export const getNextLiveSessionBoundary = (
       getLiveSessionStartsAt(session),
       getSessionEndsAt(session.kind, sessionDate, session),
       getEmptySessionExpiresAt(session.kind, sessionDate, session),
+      // 정기 세션은 종료 시각부터 완료할 수 있다
+      ...(session.kind === "regular" ? [getRegularSessionEndAt(sessionDate)] : []),
     ];
   });
   // 24시는 다음 날 0시다
@@ -248,6 +267,8 @@ export const useLiveSessionState = (
       status,
       liveSession,
       recordingSession: liveSession ?? pickRecordingSession(todaySessions),
+      // todaySessions는 완료 가능 구간의 시작(21:00)·끝(22:00) 경계마다 다시 받아 새 배열이 된다
+      completableSession: pickCompletableSession(todaySessions),
       isParticipant: !!liveSession && isSessionParticipant(liveSession, playerId),
       matches,
       inProgressMatches,

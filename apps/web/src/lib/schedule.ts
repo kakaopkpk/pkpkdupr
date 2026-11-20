@@ -11,8 +11,12 @@ import {
 import { getMatchPlayerIds } from "@/types/match";
 
 /** JSON 응답 형태(날짜는 문자열) */
-export type ScheduleSessionInfo = Omit<ScheduleSession, "date"> & {
+export type ScheduleSessionInfo = Omit<
+  ScheduleSession,
+  "date" | "completedAt"
+> & {
   date: string;
+  completedAt: string | null;
 };
 
 export interface ScheduleMonthInfo {

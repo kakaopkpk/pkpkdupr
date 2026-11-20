@@ -80,7 +80,7 @@ describe("MatchRepository.changeSessionKind", () => {
       "tournament",
       toSeconds(kstDateKeyToDate("2026-11-16")),
       "18:00",
-      "22:00",
+      "21:00",
     ]);
     expect(
       statements.some((s) => s.sql.includes("INSERT INTO regular_session_skips")),

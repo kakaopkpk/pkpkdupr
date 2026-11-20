@@ -88,7 +88,7 @@ describe("buildSessionCalendarEvent", () => {
     );
   });
 
-  it("정기 세션은 18:00~22:00(Asia/Seoul) 시각 일정이다", () => {
+  it("정기 세션은 18:00~21:00(Asia/Seoul) 시각 일정이다", () => {
     const event = buildSessionCalendarEvent(
       makeSnapshot({ startTime: null, endTime: null }),
     );
@@ -98,7 +98,7 @@ describe("buildSessionCalendarEvent", () => {
       timeZone: "Asia/Seoul",
     });
     expect(event.end).toEqual({
-      dateTime: "2026-11-12T22:00:00",
+      dateTime: "2026-11-12T21:00:00",
       timeZone: "Asia/Seoul",
     });
   });

@@ -5,6 +5,8 @@ import {
   getEmptySessionExpiresAt,
   getEmptySessionExpiryCutoff,
   getSessionEndsAt,
+  getRegularSessionEndAt,
+  isSessionCompletable,
   getNextRegularSessionDateKey,
   addKstDays,
   isOvernightSessionTimeRange,
@@ -392,7 +394,7 @@ describe("세션 시각", () => {
         startTime: REGULAR_SESSION_START_TIME,
         endTime: REGULAR_SESSION_END_TIME,
       }),
-    ).toBe("18:00~22:00");
+    ).toBe("18:00~21:00");
     expect(formatSessionTimeRange({ startTime: null, endTime: null })).toBe(
       null,
     );
@@ -490,5 +492,69 @@ describe("isPastSessionStart", () => {
 
   it("미래 날짜는 이른 시각도 지난 시각이 아니다", () => {
     expect(isPastSessionStart("2026-11-14", "06:00", now)).toBe(false);
+  });
+});
+
+describe("정기 세션 완료", () => {
+  const sessionDate = new Date("2026-11-12T18:00:00+09:00");
+  const completedAt = new Date("2026-11-12T21:10:00+09:00");
+  const regular = {
+    kind: "regular" as const,
+    date: sessionDate,
+    startTime: REGULAR_SESSION_START_TIME,
+    endTime: REGULAR_SESSION_END_TIME,
+    completedAt: null,
+  };
+
+  it("종료 21:00부터 자동 완료 22:00 전까지 완료 전 정기 세션만 완료할 수 있다", () => {
+    expect(getRegularSessionEndAt(sessionDate)).toEqual(
+      new Date("2026-11-12T21:00:00+09:00"),
+    );
+    expect(
+      isSessionCompletable(regular, new Date("2026-11-12T20:59:59+09:00")),
+    ).toBe(false);
+    expect(
+      isSessionCompletable(regular, new Date("2026-11-12T21:00:00+09:00")),
+    ).toBe(true);
+    expect(
+      isSessionCompletable(regular, new Date("2026-11-12T22:00:00+09:00")),
+    ).toBe(false);
+    expect(
+      isSessionCompletable(
+        { ...regular, completedAt },
+        new Date("2026-11-12T21:30:00+09:00"),
+      ),
+    ).toBe(false);
+    expect(
+      isSessionCompletable(
+        { ...regular, kind: "custom" },
+        new Date("2026-11-12T21:30:00+09:00"),
+      ),
+    ).toBe(false);
+  });
+
+  it("완료한 정기 세션은 완료 시각에 끝나고 오늘 세션이 아니게 된다", () => {
+    const completed = { ...regular, completedAt: completedAt.toISOString() };
+    expect(getEmptySessionExpiresAt("regular", sessionDate, completed)).toEqual(
+      completedAt,
+    );
+    expect(getSessionEndsAt("regular", sessionDate, completed)).toEqual(
+      completedAt,
+    );
+    expect(
+      isSessionOnToday(
+        { ...completed, date: sessionDate },
+        new Date("2026-11-12T21:09:59+09:00"),
+      ),
+    ).toBe(true);
+    expect(isSessionOnToday({ ...completed, date: sessionDate }, completedAt)).toBe(
+      false,
+    );
+  });
+
+  it("완료하지 않으면 22:00에 끝난다", () => {
+    expect(getSessionEndsAt("regular", sessionDate, regular)).toEqual(
+      new Date("2026-11-12T22:00:00+09:00"),
+    );
   });
 });

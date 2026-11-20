@@ -51,6 +51,7 @@ const managedSession: ManagedMatchSession = {
   autoCreated: false,
   startTime: null,
   endTime: null,
+  completedAt: null,
   createdAt: now,
   updatedAt: now,
 };

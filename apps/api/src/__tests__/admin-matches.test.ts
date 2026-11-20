@@ -234,6 +234,7 @@ describe("관리자 경기 API", () => {
       autoCreated: true,
       startTime: "18:00",
       endTime: "22:00",
+      completedAt: null,
       createdAt: now,
       updatedAt: now,
     };
