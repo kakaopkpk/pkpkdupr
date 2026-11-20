@@ -46,7 +46,12 @@ import {
   type RecordMatchSheetRequest,
 } from "@/context/AppNavigationContext";
 import { useAuth } from "@/context/AuthContext";
+import {
+  DataSyncProvider,
+  useInvalidateData,
+} from "@/context/DataSyncContext";
 import { ScreenVisibilityProvider } from "@/context/ScreenVisibilityContext";
+import { useDataSyncRealtime } from "@/context/useDataSyncRealtime";
 import {
   LiveSessionProvider,
   useLiveSessionState,
@@ -271,10 +276,13 @@ const BottomDockTint = React.memo<{ dockBarCount: number }>(
   ),
 );
 
-const BottomNav: React.FC = () => {
+const BottomNavShell: React.FC = () => {
   const { player } = useAuth();
+  const invalidateData = useInvalidateData();
   const isOnline = useOnlineStatus();
   const liveSessionState = useLiveSessionState(player?.id);
+  // 남의 변경 신호를 받아 무효화한다
+  useDataSyncRealtime(!!player);
   const [selectedTab, setSelectedTab] = useState<TabKey>("home");
   const [visitedTabs, setVisitedTabs] =
     useState<Record<TabKey, boolean>>(initiallyVisitedTabs);
@@ -282,7 +290,6 @@ const BottomNav: React.FC = () => {
     useState<TabDepthStacks>(emptyDepthStacks);
   const [isGlobalMenuOpen, setIsGlobalMenuOpen] = useState(false);
   const [globalMenuTabKey, setGlobalMenuTabKey] = useState<TabKey>("home");
-  const [dataVersion, setDataVersion] = useState(0);
   const [globalScreens, setGlobalScreens] = useState<GlobalScreenEntry[]>([]);
   const [recordMatchLayer, setRecordMatchLayer] =
     useState<GlobalLayerState<RecordMatchSheetRequest>>(closedLayer);
@@ -716,10 +723,6 @@ const BottomNav: React.FC = () => {
   );
 
   const reloadLiveSession = liveSessionState.reload;
-  const notifyDataChanged = useCallback(() => {
-    setDataVersion((version) => version + 1);
-    void reloadLiveSession();
-  }, [reloadLiveSession]);
 
   const closeGlobalScreen = useCallback((id: string) => {
     setGlobalScreens((current) =>
@@ -749,7 +752,7 @@ const BottomNav: React.FC = () => {
   );
 
   const handleSessionCreated = (session: MatchSessionDetailInfo) => {
-    notifyDataChanged();
+    invalidateData(["sessions"]);
     createSessionLayer.value?.onCreated?.(session);
   };
 
@@ -778,15 +781,16 @@ const BottomNav: React.FC = () => {
     setJoinLiveSessionError(false);
     try {
       await addMatchSessionParticipant(sessionId, player.id);
-      setDataVersion((version) => version + 1);
-      // 참여자 목록이 바뀐 세션을 받아야 알림 바가 사라진다
+      // 참여자 목록이 바뀐 세션을 받아야 알림 바가 사라진다. 받은 뒤 다른 화면도 다시 받게 한다
       await reloadLiveSession();
+      invalidateData(["sessions"]);
     } catch {
       setJoinLiveSessionError(true);
     } finally {
       setIsJoiningLiveSession(false);
     }
   }, [
+    invalidateData,
     isJoiningLiveSession,
     liveSessionState.liveSession?.id,
     player?.id,
@@ -801,15 +805,16 @@ const BottomNav: React.FC = () => {
     setCompleteSessionError(false);
     try {
       await completeMatchSession(sessionId);
-      setDataVersion((version) => version + 1);
-      // 완료된 세션을 받아야 완료 바와 LIVE가 사라진다
+      // 완료된 세션을 받아야 완료 바와 LIVE가 사라진다. 받은 뒤 다른 화면도 다시 받게 한다(세션 지배자·무패 세션 업적 확정)
       await reloadLiveSession();
+      invalidateData(["sessions", "achievements"]);
     } catch {
       setCompleteSessionError(true);
     } finally {
       setIsCompletingSession(false);
     }
   }, [
+    invalidateData,
     isCompletingSession,
     liveSessionState.completableSession?.id,
     reloadLiveSession,
@@ -1259,12 +1264,8 @@ const BottomNav: React.FC = () => {
       openAchievementDetail,
       openAchievements,
       openSessionReport,
-      notifyDataChanged,
-      dataVersion,
     }),
     [
-      dataVersion,
-      notifyDataChanged,
       openAchievementDetail,
       openAchievements,
       openCreateSession,
@@ -1419,7 +1420,6 @@ const BottomNav: React.FC = () => {
             <UnseenAchievementCelebration
               playerId={player?.id ?? null}
               isActive={isEveryTabUncovered && !isGlobalMenuOpen}
-              dataVersion={dataVersion}
             />
 
             {globalScreens.map((screen) => {
@@ -1548,5 +1548,12 @@ const BottomNav: React.FC = () => {
     </TabNavigationProvider>
   );
 };
+
+/** 탭 셸. 진행 중 세션 상태(셸)도 데이터 무효화를 따르므로 셸 바깥에서 DataSyncProvider로 감싼다 */
+const BottomNav: React.FC = () => (
+  <DataSyncProvider>
+    <BottomNavShell />
+  </DataSyncProvider>
+);
 
 export default BottomNav;

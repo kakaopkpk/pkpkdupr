@@ -18,6 +18,7 @@ import {
   SegmentSwitchFade,
 } from "@/components/ui/SegmentedControl";
 import { useAppNavigation } from "@/context/AppNavigationContext";
+import { useDataVersion } from "@/context/DataSyncContext";
 import {
   type TabKey,
   useTabNavigation,
@@ -27,6 +28,7 @@ import { formatKstShortDate } from "@/lib/format";
 import { fetchPlayerMatches } from "@/lib/playerProfile";
 
 const PAGE_SIZE = 20;
+const PLAYER_MATCHES_DATA_KINDS = ["matches"] as const;
 // 바닥에 닿기 전 이만큼 남았을 때 다음 페이지를 미리 불러온다
 const PREFETCH_MARGIN_PX = 240;
 
@@ -123,7 +125,12 @@ export default function PlayerMatchesDrawer({
   depthId,
   onClose,
 }: PlayerMatchesDrawerProps): React.ReactElement {
-  const { openMatchDetail, dataVersion } = useAppNavigation();
+  const { openMatchDetail } = useAppNavigation();
+  // 데이터는 PushScreen 본문 밖에서 받으므로 보임은 PushScreen이 알려 준 값을 쓴다
+  const [isScreenVisible, setIsScreenVisible] = useState(false);
+  const dataVersion = useDataVersion(PLAYER_MATCHES_DATA_KINDS, {
+    isScreenVisible,
+  });
   const { closeDepth, restoreScrollTop, selectedTab } = useTabNavigation();
   const [category, setCategory] = useState(initialCategory);
   const [matches, setMatches] = useState<MatchInfo[]>([]);
@@ -221,7 +228,7 @@ export default function PlayerMatchesDrawer({
     resetAndLoad(initialCategoryRef.current);
   }, [isOpen, playerId, resetAndLoad]);
 
-  // 경기 기록·수정 뒤에는 스켈레톤 없이 첫 페이지부터 다시 받는다. 뒤쪽 페이지는 스크롤하면 이어서 받는다
+  // 경기 무효화·TTL 뒤에는 스켈레톤 없이 첫 페이지부터 다시 받는다. 뒤쪽 페이지는 스크롤하면 이어서 받는다
   const dataVersionRef = useRef(dataVersion);
   useEffect(() => {
     if (dataVersionRef.current === dataVersion) return;
@@ -267,6 +274,7 @@ export default function PlayerMatchesDrawer({
     <PushScreen
       isOpen={isLayerOpen}
       isActive={tabKey === selectedTab}
+      onVisibleChange={setIsScreenVisible}
       ariaLabel={title}
       title={title}
       onBack={close}

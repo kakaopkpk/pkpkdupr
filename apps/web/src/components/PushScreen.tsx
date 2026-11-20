@@ -182,6 +182,11 @@ export interface PushScreenProps {
   layer?: number;
   onExited?: () => void;
   onPullToRefresh?: () => Promise<void>;
+  /**
+   * 본문이 보이는지(ScreenVisibilityProvider에 주는 값)가 바뀔 때 부른다.
+   * 래퍼가 본문 밖에서 데이터를 받을 때 useDataVersion의 isScreenVisible로 넘긴다
+   */
+  onVisibleChange?: (isVisible: boolean) => void;
   children: React.ReactNode;
 }
 
@@ -200,6 +205,7 @@ export const PushScreen: React.FC<PushScreenProps> = ({
   layer = GLOBAL_LAYER.pushScreen,
   onExited,
   onPullToRefresh,
+  onVisibleChange,
   children,
 }) => {
   const id = useId();
@@ -289,6 +295,10 @@ export const PushScreen: React.FC<PushScreenProps> = ({
   const zIndex = layer + Math.min(Math.max(stackIndex, 0), MAX_STACK_OFFSET);
   // 조작할 수 있을 때만 본문을 '보임'으로 본다(다른 탭에 연 화면·덮인 화면·닫히는 화면은 보이지 않음으로 본다)
   const isInteractive = isOpen && isActive && !isCovered;
+
+  useEffect(() => {
+    onVisibleChange?.(isInteractive);
+  }, [isInteractive, onVisibleChange]);
 
   const registerPullToRefreshHandler = useCallback(
     (handler: (() => Promise<void>) | null) => {

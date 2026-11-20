@@ -7,6 +7,7 @@ import {
   type AuthenticatedSession,
 } from "../services/AuthService";
 import { getOwnedAvatarObjectPath } from "../services/AvatarStorage";
+import { dataChangeSignal } from "../services/DataChangeSignal";
 
 const SUPABASE_URL = "http://storage.test";
 const PUBLIC_PREFIX = `${SUPABASE_URL}/storage/v1/object/public/avatars/`;
@@ -45,6 +46,8 @@ describe("/api/me/avatar (Supabase Storage)", () => {
     vi.stubEnv("STORAGE_PUBLIC_URL", "");
     fetchMock = createFetchMock();
     vi.stubGlobal("fetch", fetchMock);
+    // 변경 신호도 같은 SUPABASE_URL로 fetch하므로 Storage 호출만 세도록 막는다
+    vi.spyOn(dataChangeSignal, "send").mockImplementation(() => undefined);
     vi.spyOn(AuthService.prototype, "authenticateAccessToken").mockResolvedValue(
       session,
     );

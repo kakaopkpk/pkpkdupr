@@ -21,6 +21,7 @@ import { Section } from "@/components/ui/Section";
 import { StateMessage } from "@/components/ui/StateMessage";
 import { useAppNavigation } from "@/context/AppNavigationContext";
 import { useAuth } from "@/context/AuthContext";
+import { useDataVersion, useInvalidateData } from "@/context/DataSyncContext";
 import { useLiveSession } from "@/context/LiveSessionContext";
 import { useTabNavigation } from "@/context/TabNavigationContext";
 import { useMinuteClock } from "@/hooks/useMinuteClock";
@@ -42,6 +43,7 @@ import { getMatchPlayerIds } from "@/types/match";
 
 const EMPTY_IDS: readonly string[] = [];
 const LOAD_ERROR_MESSAGE = "일정을 불러오지 못했어요";
+const SCHEDULE_DATA_KINDS = ["sessions", "matches"] as const;
 
 interface MonthState {
   status: "loading" | "ready" | "error";
@@ -69,9 +71,13 @@ const Schedule: React.FC = () => {
     openSessionReport,
     openCreateSession,
     selectTab,
-    notifyDataChanged,
-    dataVersion,
   } = useAppNavigation();
+  const dataVersion = useDataVersion(SCHEDULE_DATA_KINDS);
+  const invalidateData = useInvalidateData();
+  const invalidateSessions = useCallback(
+    () => invalidateData(["sessions"]),
+    [invalidateData],
+  );
   const { registerPullToRefresh, registerTabReset } = useTabNavigation();
   const now = useMinuteClock();
   const todayKey = toKstDateKey(now);
@@ -222,6 +228,7 @@ const Schedule: React.FC = () => {
   // ── 참여·참여 취소 ─────────────────────────────────
   const participation = useSessionParticipation({
     playerId,
+    dataVersion,
     loadedVersion: monthState?.loadedVersion ?? -1,
   });
   const { clearError: clearParticipationError } = participation;
@@ -357,7 +364,7 @@ const Schedule: React.FC = () => {
           session={participantsTarget.session}
           lockedPlayerIds={participantsTarget.lockedPlayerIds}
           onClose={closeParticipants}
-          onChanged={notifyDataChanged}
+          onChanged={invalidateSessions}
         />
       ) : null}
     </>

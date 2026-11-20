@@ -22,6 +22,7 @@ import { Section } from "@/components/ui/Section";
 import { StateMessage } from "@/components/ui/StateMessage";
 import { cx } from "@/components/ui/cx";
 import { useAppNavigation } from "@/context/AppNavigationContext";
+import { useDataVersion } from "@/context/DataSyncContext";
 import {
   type TabKey,
   useTabNavigation,
@@ -202,6 +203,8 @@ const AchievementsSkeleton: React.FC = () => (
   </div>
 );
 
+const ACHIEVEMENT_DATA_KINDS = ["achievements"] as const;
+
 export interface AchievementsScreenProps {
   /** 열어 달라는 요청 */
   isOpen: boolean;
@@ -220,6 +223,8 @@ export interface AchievementsScreenProps {
   onClose: () => void;
   /** 닫히는 움직임이 끝난 뒤 */
   onExited?: () => void;
+  /** 화면이 보이는지 바뀔 때. 진행도를 대신 받는 쪽이 useDataVersion의 isScreenVisible로 쓴다 */
+  onVisibleChange?: (isVisible: boolean) => void;
 }
 
 /**
@@ -239,8 +244,21 @@ export default function AchievementsScreen({
   focusAchievementId,
   onClose,
   onExited,
+  onVisibleChange,
 }: AchievementsScreenProps): React.ReactElement {
-  const { openAchievementDetail, dataVersion } = useAppNavigation();
+  const { openAchievementDetail } = useAppNavigation();
+  // 순위는 PushScreen 본문 밖에서 받으므로 보임은 PushScreen이 알려 준 값을 쓴다
+  const [isScreenVisible, setIsScreenVisible] = useState(false);
+  const handleVisibleChange = useCallback(
+    (isVisible: boolean) => {
+      setIsScreenVisible(isVisible);
+      onVisibleChange?.(isVisible);
+    },
+    [onVisibleChange],
+  );
+  const dataVersion = useDataVersion(ACHIEVEMENT_DATA_KINDS, {
+    isScreenVisible,
+  });
   const { closeDepth, restoreScrollTop, selectedTab } = useTabNavigation();
   const [achievementRank, setAchievementRank] = useState<{
     playerId: string;
@@ -335,6 +353,7 @@ export default function AchievementsScreen({
       title={title}
       onBack={close}
       onExited={handleExited}
+      onVisibleChange={handleVisibleChange}
     >
       {pendingFocusId ? (
         <FocusRowScroller

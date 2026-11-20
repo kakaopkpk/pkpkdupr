@@ -38,6 +38,7 @@ import { Section } from "@/components/ui/Section";
 import { SegmentSwitchFade } from "@/components/ui/SegmentedControl";
 import { useAppNavigation } from "@/context/AppNavigationContext";
 import { useAuth } from "@/context/AuthContext";
+import { useInvalidateData } from "@/context/DataSyncContext";
 import { useLiveSession } from "@/context/LiveSessionContext";
 import { useSystemNotice } from "@/context/SystemNoticeContext";
 import { useTabNavigation } from "@/context/TabNavigationContext";
@@ -119,9 +120,12 @@ const Home: React.FC = () => {
     openRecordMatch,
     openMatchDetail,
     openSessionReport,
-    notifyDataChanged,
-    dataVersion,
   } = useAppNavigation();
+  const invalidateData = useInvalidateData();
+  const invalidateSessions = useCallback(
+    () => invalidateData(["sessions"]),
+    [invalidateData],
+  );
   const { registerPullToRefresh } = useTabNavigation();
   const { showSaveFailure } = useSystemNotice();
   const now = useMinuteClock();
@@ -136,21 +140,15 @@ const Home: React.FC = () => {
 
   const preSession = usePreSessionData({
     enabled: isPreSession,
-    dataVersion,
     todayKey,
   });
-  const newsFeed = useNewsFeed({ enabled: isPreSession, dataVersion });
+  const newsFeed = useNewsFeed({ enabled: isPreSession });
   // 세션 지배자 카드와 경기·추천 매칭 아바타의 세션 연승 링
-  const highlight = useLiveSessionHighlight(
-    liveSession,
-    live.matches,
-    dataVersion,
-  );
+  const highlight = useLiveSessionHighlight(liveSession, live.matches);
   const recommendations = useSessionRecommendations(
     isLiveParticipant && liveSession && !isTournamentLive
       ? liveSession.id
       : null,
-    dataVersion,
   );
 
   // ── 참여자 시트 ─────────────────────────────────────
@@ -171,6 +169,7 @@ const Home: React.FC = () => {
   const upcomingSessions = preSession.data?.upcoming.sessions ?? [];
   const participation = useSessionParticipation({
     playerId,
+    dataVersion: preSession.dataVersion,
     loadedVersion: preSession.loadedVersion,
   });
   const { reset: resetParticipation } = participation;
@@ -252,7 +251,7 @@ const Home: React.FC = () => {
           },
         ],
       });
-      notifyDataChanged();
+      invalidateData(["matches"]);
     };
 
     setStartState((state) => ({ ...state, startingKey: key, error: null }));
@@ -317,7 +316,7 @@ const Home: React.FC = () => {
     const matchId = match.id;
     const run = async () => {
       await startScheduledMatch(matchId);
-      notifyDataChanged();
+      invalidateData(["matches"]);
     };
 
     setBracketStartState((state) => ({
@@ -592,7 +591,7 @@ const Home: React.FC = () => {
           session={participantsTarget.session}
           lockedPlayerIds={participantsTarget.lockedPlayerIds}
           onClose={closeParticipants}
-          onChanged={notifyDataChanged}
+          onChanged={invalidateSessions}
         />
       ) : null}
     </>

@@ -72,7 +72,7 @@ pnpm lint
 - 로그인 뒤의 홈 / 일정 / 랭킹 / 나 4탭(`TabKey` `home`·`schedule`·`ranking`·`me`, 시작 탭 홈)은 `BottomNav.tsx`의 keep-alive 탭 셸이 소유합니다. 탭 상태와 URL 라우트를 무분별하게 중복하지 않습니다. 회원 탭은 없고 회원 찾기는 랭킹 목록이 맡습니다.
 - 하단 바는 유리 알약 4탭과 원형 + 버튼이며, + 메뉴는 경기 기록·세션 만들기만 엽니다(설정·로그아웃은 나 탭의 설정에서).
 - 경기 상세·회원 프로필·세션 상세·경기 기록 시트·세션 만들기·설정 같은 전역 화면은 `useAppNavigation()`(`context/AppNavigationContext.tsx`)으로 열고, 진행 중 세션 상태는 `useLiveSession()`(`context/LiveSessionContext.tsx`)으로 읽습니다.
-- 데이터를 바꾼 화면은 `notifyDataChanged()`를 부르고, 탭 페이지는 `dataVersion`을 재조회 의존성으로 씁니다.
+- 데이터를 바꾼 화면은 `useInvalidateData()`로 실제로 바뀐 데이터 종류(`DataKind`)만 무효화하고, 데이터를 받는 화면은 쓰는 종류의 `useDataVersion(kinds)`을 재조회 의존성으로 씁니다(`context/DataSyncContext.tsx`, 규칙은 `apps/web/AGENTS.md`).
 - 저장 실패(네트워크 오류) 알림은 `useSystemNotice()`(`context/SystemNoticeContext.tsx`)의 `showSaveFailure`로 띄웁니다.
 - 공통 UI는 `apps/web/src/components/ui/`, 색·둥글기·글자 크기는 `index.css`의 `pk-*` 토큰을 씁니다. 하드코딩 색을 쓰지 않습니다.
 - `apps/web/AGENTS.md`의 모바일·PWA·UI 세부 규칙(디자인 규칙 포함)을 함께 따릅니다. `apps/web/CLAUDE.md`가 그 문서를 불러오므로 web 파일을 다루면 자동으로 읽힙니다.
@@ -199,6 +199,7 @@ pnpm lint
 
 - 운영은 Supabase(DB·Auth·Storage·Edge Functions)와 GitHub Pages(web·admin)로 합니다.
 - DB는 Supabase Postgres입니다. 모든 테이블은 RLS on·정책 없음(기본 거부)이며, DB 접근은 서버만 합니다. Docker는 로컬 Supabase 스택에만 씁니다.
+  - 예외로 `realtime.messages`에는 authenticated가 private 채널 `data-sync` broadcast를 받는 select 정책 하나만 둡니다. 보내기(insert) 정책은 없어 회원은 신호를 보낼 수 없습니다.
 - GitHub Actions `ci.yml`은 PR과 main push에서 설치·빌드·api/shared/web 테스트를 실행합니다.
 - api는 Supabase Edge Function `api`로 배포합니다(base URL `https://<project-ref>.supabase.co/functions/v1`, 경로 `/api/...`).
 - 운영 배포는 GitHub Release 발행 때만 합니다.
@@ -212,6 +213,10 @@ pnpm lint
   - 반영이 빠진 일정은 매일 예약 작업이 다가오는 세션을 다시 써서 맞춥니다.
   - 일정 id는 세션 id에서 만들어 DB 매핑이 없습니다.
   - env `GOOGLE_CALENDAR_SERVICE_ACCOUNT_JSON`·`GOOGLE_CALENDAR_ID`가 없거나 `ENABLE_DEV_MOCK_DATA=true`(로컬 `pnpm dev`)면 꺼지며, 준비 절차는 `docs/deploy.md`를 따릅니다.
+- 다른 사람의 변경은 Supabase Realtime Broadcast 변경 신호로 웹에 바로 반영합니다.
+  - api 미들웨어가 쓰기 요청이 2xx로 끝나면 바뀐 데이터 종류(`DataKind[]`)만 private 채널 `data-sync`의 `changed` 이벤트(payload `{ kinds }`)로 보냅니다. 데이터·id는 싣지 않습니다(경로 표는 `apps/api/AGENTS.md` "데이터 변경 신호").
+  - 전송은 서비스 키 REST broadcast(`POST /realtime/v1/api/broadcast`)이고, 웹은 받은 종류를 남의 변경 무효화(`remote: true`)로 넘겨 기존 API로 다시 받습니다(구독 규칙은 `apps/web/AGENTS.md` "데이터 재조회").
+  - 거절한 안: `postgres_changes`(정책을 열어야 하고 원시 행이 나감), DB 트리거 `realtime.send`(도메인 의미가 흐려짐), public 채널(누구나 가짜 신호로 전원 재조회 유발), 끊김 대비 주기 폴링(재연결 무효화와 TTL로 충분).
 
 ## 작업 및 커밋 규칙
 

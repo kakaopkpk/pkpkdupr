@@ -193,6 +193,8 @@ import {
   uploadAvatarObject,
 } from "./services/AvatarStorage";
 import { sensitiveResponseHeaders } from "./middleware/sensitiveResponseHeaders";
+import { createDataChangeSignalMiddleware } from "./middleware/dataChangeSignal";
+import { dataChangeSignal } from "./services/DataChangeSignal";
 import { getRuntimeWaitUntil, isEdgeRuntime } from "./runtime";
 import {
   createSessionCalendarSync,
@@ -234,6 +236,8 @@ app.use(
 );
 app.use(express.json({ limit: "2mb" }));
 app.use(sensitiveResponseHeaders);
+// 쓰기 요청이 2xx로 끝나면 Realtime으로 바뀐 데이터 종류 신호를 보낸다(웹이 받아 다시 조회)
+app.use(createDataChangeSignalMiddleware(dataChangeSignal));
 
 app.get("/api/health", (_req, res) => {
   res.json({

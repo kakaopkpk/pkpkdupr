@@ -1,13 +1,23 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { MatchTopLevelType } from "@pkpkdupr/shared/match";
 import type { RankingResponse } from "@pkpkdupr/shared/ranking";
-import { useAppNavigation } from "@/context/AppNavigationContext";
+import {
+  type DataVersionOptions,
+  useDataVersion,
+} from "@/context/DataSyncContext";
 import { getUserErrorMessage } from "@/lib/errors";
 import {
   fetchPlayerProfileSummary,
   type PlayerProfileSummaryInfo,
 } from "@/lib/playerProfile";
 import { fetchRankings } from "@/lib/rankings";
+
+const PROFILE_DATA_KINDS = [
+  "matches",
+  "ratings",
+  "achievements",
+  "players",
+] as const;
 
 export interface ProfileOverview {
   playerId: string;
@@ -18,14 +28,17 @@ export interface ProfileOverview {
 
 /**
  * 프로필 요약과 복식·단식 랭킹을 함께 불러온다.
- * playerId가 바뀌면 화면을 비우고(스켈레톤), dataVersion이 바뀌면 보이는 내용을 유지한 채 다시 불러온다.
+ * playerId가 바뀌면 화면을 비우고(스켈레톤), 데이터 버전이 바뀌면 보이는 내용을 유지한 채 다시 불러온다.
+ * dataVersionOptions는 useDataVersion에 넘긴다(자기 PushScreen 밖에서 쓰는 화면은 보임을 직접 준다)
  */
-export const useProfileOverview = (playerId: string | null) => {
-  const { dataVersion } = useAppNavigation();
+export const useProfileOverview = (
+  playerId: string | null,
+  dataVersionOptions?: DataVersionOptions,
+) => {
+  const dataVersion = useDataVersion(PROFILE_DATA_KINDS, dataVersionOptions);
   const [overview, setOverview] = useState<ProfileOverview | null>(null);
   /** 보일 프로필 없이 불러오기에 실패했을 때 화면에 보일 문구. 실패가 아니면 null */
   const [loadErrorMessage, setLoadErrorMessage] = useState<string | null>(null);
-  const [lastLoadedAt, setLastLoadedAt] = useState<number | null>(null);
   const requestIdRef = useRef(0);
   const loadedPlayerIdRef = useRef<string | null>(null);
 
@@ -55,7 +68,6 @@ export const useProfileOverview = (playerId: string | null) => {
         loadedPlayerIdRef.current = playerId;
         setOverview({ playerId, summary, rankings });
         setLoadErrorMessage(null);
-        setLastLoadedAt(Date.now());
       } catch (err) {
         if (requestIdRef.current !== requestId) return;
         if (loadedPlayerIdRef.current !== playerId) {
@@ -75,7 +87,6 @@ export const useProfileOverview = (playerId: string | null) => {
       loadedPlayerIdRef.current = null;
       setOverview(null);
       setLoadErrorMessage(null);
-      setLastLoadedAt(null);
       return;
     }
     void load();
@@ -86,7 +97,6 @@ export const useProfileOverview = (playerId: string | null) => {
     overview: overview?.playerId === playerId ? overview : null,
     hasError: loadErrorMessage !== null,
     loadErrorMessage: loadErrorMessage ?? "",
-    lastLoadedAt,
     reload: load,
   };
 };
