@@ -1,9 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useDataVersion } from "@/context/DataSyncContext";
 import { getUserErrorMessage } from "@/lib/errors";
 import {
   fetchUpcomingMatchSessions,
   type UpcomingMatchSessionsInfo,
 } from "@/lib/matchSessions";
+
+const PRE_SESSION_DATA_KINDS = ["sessions", "matches", "ratings"] as const;
 
 export interface PreSessionData {
   upcoming: UpcomingMatchSessionsInfo;
@@ -17,6 +20,8 @@ export interface PreSessionState {
   data: PreSessionData | null;
   status: "loading" | "ready" | "error";
   error: string | null;
+  /** 이 데이터의 지금 버전(useDataVersion). 참여 변경 뒤 기다릴 버전을 정한다 */
+  dataVersion: number;
   /** 마지막으로 끝난 로드가 시작될 때의 dataVersion. 참여 변경 뒤 새 데이터 도착을 판단한다 */
   loadedVersion: number;
   reload: () => Promise<void>;
@@ -24,18 +29,17 @@ export interface PreSessionState {
 
 /**
  * 진행 중 세션이 없을 때의 홈 다음 세션 데이터. 소식 피드는 useNewsFeed가 따로 받는다.
- * enabled일 때만 받고, dataVersion이나 오늘 날짜 키(KST)가 바뀌면 보이는 내용을 둔 채 다시 받는다.
+ * enabled일 때만 받고, 세션·경기·평점 데이터 버전이나 오늘 날짜 키(KST)가 바뀌면 보이는 내용을 둔 채 다시 받는다.
  * 날짜 키가 바뀌면 서버가 고르는 다음 세션도 달라지므로 앱을 켜 둔 채 자정을 넘기면 한 번 다시 받는다.
  */
 export const usePreSessionData = ({
   enabled,
-  dataVersion,
   todayKey,
 }: {
   enabled: boolean;
-  dataVersion: number;
   todayKey: string;
 }): PreSessionState => {
+  const dataVersion = useDataVersion(PRE_SESSION_DATA_KINDS);
   const [data, setData] = useState<PreSessionData | null>(null);
   const [status, setStatus] = useState<PreSessionState["status"]>("loading");
   const [error, setError] = useState<string | null>(null);
@@ -67,5 +71,5 @@ export const usePreSessionData = ({
     void load();
   }, [dataVersion, enabled, load, todayKey]);
 
-  return { data, status, error, loadedVersion, reload: load };
+  return { data, status, error, dataVersion, loadedVersion, reload: load };
 };

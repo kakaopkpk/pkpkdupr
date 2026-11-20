@@ -9,6 +9,7 @@ import { Section } from "@/components/ui/Section";
 import { GLOBAL_LAYER } from "@/context/AppNavigationContext";
 import { useAppUpdate } from "@/context/AppUpdateContext";
 import { useAuth } from "@/context/AuthContext";
+import { useInvalidateData } from "@/context/DataSyncContext";
 import { useSystemNotice } from "@/context/SystemNoticeContext";
 import {
   type TabKey,
@@ -48,6 +49,7 @@ export default function SettingsDrawer({
   onClose,
 }: SettingsDrawerProps): React.ReactElement {
   const { player, updateProfile, uploadAvatar, logout } = useAuth();
+  const invalidateData = useInvalidateData();
   const { showSaveFailure } = useSystemNotice();
   const {
     appVersion,
@@ -139,20 +141,30 @@ export default function SettingsDrawer({
     }
   };
 
+  // 내 사진·상태메시지는 랭킹·프로필 같은 회원 정보 화면에도 보이므로 회원을 무효화한다
+  const saveAvatar = async (dataUrl: string) => {
+    await uploadAvatar(dataUrl);
+    invalidateData(["players"]);
+  };
+  const saveProfile = async (input: StatusEditInput) => {
+    await updateProfile(input);
+    invalidateData(["players"]);
+  };
+
   const confirmAvatar = async (dataUrl: string) => {
     if (isAvatarSaving) return;
 
     setAvatarError(null);
     setIsAvatarSaving(true);
     try {
-      await uploadAvatar(dataUrl);
+      await saveAvatar(dataUrl);
       closeLayer(AVATAR_DEPTH_ID, closeAvatar);
     } catch (error) {
       if (isNetworkError(error)) {
         // 다시 시도는 저장 실패 알림이 맡는다
         showSaveFailure({
           onRetry: async () => {
-            await uploadAvatar(dataUrl);
+            await saveAvatar(dataUrl);
           },
         });
         closeLayer(AVATAR_DEPTH_ID, closeAvatar);
@@ -178,13 +190,13 @@ export default function SettingsDrawer({
     setStatusError(null);
     setIsStatusSaving(true);
     try {
-      await updateProfile(input);
+      await saveProfile(input);
       closeLayer(STATUS_DEPTH_ID, closeStatus);
     } catch (error) {
       if (isNetworkError(error)) {
         showSaveFailure({
           onRetry: async () => {
-            await updateProfile(input);
+            await saveProfile(input);
           },
         });
         closeLayer(STATUS_DEPTH_ID, closeStatus);

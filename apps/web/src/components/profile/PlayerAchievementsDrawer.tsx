@@ -1,11 +1,13 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import AchievementsScreen from "@/components/profile/AchievementsScreen";
-import { useAppNavigation } from "@/context/AppNavigationContext";
 import { useAuth } from "@/context/AuthContext";
+import { useDataVersion } from "@/context/DataSyncContext";
 import type { TabKey } from "@/context/TabNavigationContext";
 import type { AchievementProgressInfo } from "@/lib/achievements";
 import { getUserErrorMessage } from "@/lib/errors";
 import { fetchPlayerProfileSummary } from "@/lib/playerProfile";
+
+const ACHIEVEMENT_DATA_KINDS = ["achievements"] as const;
 
 export interface PlayerAchievementsDrawerProps {
   playerId: string;
@@ -27,7 +29,7 @@ interface LoadedAchievements {
 
 /**
  * 전역 업적 전체 보기 화면. 회원 업적 진행도를 스스로 불러온다.
- * dataVersion이 바뀌면 보이는 내용을 유지한 채 다시 불러온다.
+ * 업적 데이터 버전이 바뀌면 보이는 내용을 유지한 채 다시 불러온다.
  */
 export default function PlayerAchievementsDrawer({
   playerId,
@@ -38,7 +40,11 @@ export default function PlayerAchievementsDrawer({
   onClose,
   onExited,
 }: PlayerAchievementsDrawerProps): React.ReactElement {
-  const { dataVersion } = useAppNavigation();
+  // 진행도는 AchievementsScreen의 PushScreen 밖에서 받으므로 보임은 그 화면이 알려 준 값을 쓴다
+  const [isScreenVisible, setIsScreenVisible] = useState(false);
+  const dataVersion = useDataVersion(ACHIEVEMENT_DATA_KINDS, {
+    isScreenVisible,
+  });
   const { player: viewer } = useAuth();
   const [loaded, setLoaded] = useState<LoadedAchievements | null>(null);
   /** 보일 진행도 없이 불러오기에 실패했을 때 문구. 실패가 아니면 null */
@@ -104,6 +110,7 @@ export default function PlayerAchievementsDrawer({
       focusAchievementId={focusAchievementId}
       onClose={onClose}
       onExited={onExited}
+      onVisibleChange={setIsScreenVisible}
     />
   );
 }

@@ -9,6 +9,10 @@ import { getErrorMessage } from "@/components/record/recordMatch.utils";
 import { StateMessage } from "@/components/ui/StateMessage";
 import { useAppNavigation } from "@/context/AppNavigationContext";
 import { useAuth } from "@/context/AuthContext";
+import {
+  useDataVersion,
+  useInvalidateData,
+} from "@/context/DataSyncContext";
 import { useSystemNotice } from "@/context/SystemNoticeContext";
 import {
   type TabKey,
@@ -38,6 +42,8 @@ import {
   MatchDetailSkeleton,
   ScheduledMatchActions,
 } from "./MatchDetailViews";
+
+const MATCH_DETAIL_DATA_KINDS = ["matches", "ratings", "achievements"] as const;
 
 export interface MatchDetailDrawerProps {
   matchId: string;
@@ -85,10 +91,14 @@ export default function MatchDetailDrawer({
     openMemberProfile,
     openRecordMatch,
     openSessionReport,
-    notifyDataChanged,
     selectTab,
-    dataVersion,
   } = useAppNavigation();
+  const invalidateData = useInvalidateData();
+  // 데이터는 PushScreen 본문 밖에서 받으므로 보임은 PushScreen이 알려 준 값을 쓴다
+  const [isScreenVisible, setIsScreenVisible] = useState(false);
+  const dataVersion = useDataVersion(MATCH_DETAIL_DATA_KINDS, {
+    isScreenVisible,
+  });
   const { closeDepth, restoreScrollTop, selectedTab } = useTabNavigation();
   const { showSaveFailure, showToast } = useSystemNotice();
   const showStartedMatchToast = useStartedMatchToast();
@@ -174,7 +184,7 @@ export default function MatchDetailDrawer({
     void loadMatch(matchId, false);
   }, [loadMatch, matchId]);
 
-  // 점수 입력·수정 뒤(dataVersion 변경) 같은 경기를 다시 받는다. 진행 중이던 경기는 완료 화면으로 바뀐다
+  // 점수 입력·수정 등으로 데이터 버전이 바뀌면 같은 경기를 다시 받는다. 진행 중이던 경기는 완료 화면으로 바뀐다
   const lastDataVersionRef = useRef(dataVersion);
   useEffect(() => {
     if (lastDataVersionRef.current === dataVersion) return;
@@ -230,7 +240,7 @@ export default function MatchDetailDrawer({
         sessionId: match.session?.id,
         location: match.location,
       });
-      notifyDataChanged();
+      invalidateData(["matches"]);
       closeThen(() => {
         selectTab("home");
         showStartedMatchToast(startedMatch);
@@ -266,7 +276,7 @@ export default function MatchDetailDrawer({
       // 시작 전에 보낸 재조회 응답(아직 예정)이 늦게 와서 덮어쓰지 않게 무효화한다
       requestIdRef.current += 1;
       setLoadState({ kind: "ready", match: startedMatch });
-      notifyDataChanged();
+      invalidateData(["matches"]);
     };
 
     setIsStartingScheduled(true);
@@ -312,7 +322,7 @@ export default function MatchDetailDrawer({
       const closeScreen = () =>
         closeThen(() => {
           showToast({ message: "경기를 지웠어요" });
-          notifyDataChanged();
+          invalidateData(["matches", "ratings", "achievements"]);
         });
       if (!closeDepth(tabKey, deleteDepthId, closeScreen)) {
         closeDeleteSheet();
@@ -467,6 +477,7 @@ export default function MatchDetailDrawer({
       <PushScreen
         isOpen={isOpen}
         isActive={isActive}
+        onVisibleChange={setIsScreenVisible}
         ariaLabel="경기 상세"
         title="경기"
         onBack={close}

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import type { MatchTopLevelType } from "@pkpkdupr/shared/match";
 import { IoSettingsOutline } from "react-icons/io5";
 import ListPushScreen from "@/components/ListPushScreen";
@@ -21,7 +21,6 @@ import { PreviewSection } from "@/components/ui/Section";
 import { useAppNavigation } from "@/context/AppNavigationContext";
 import { useAuth } from "@/context/AuthContext";
 import { useTabNavigation } from "@/context/TabNavigationContext";
-import { isTabRefreshDue } from "@/lib/tabRefresh";
 
 const MATCH_HISTORY_DEPTH_ID = "me-match-history";
 const ACHIEVEMENTS_DEPTH_ID = "me-achievements";
@@ -31,16 +30,15 @@ const RIVALS_DEPTH_ID = "me-rivals";
 const Me: React.FC = () => {
   const { player, isAuthenticated, refreshMe } = useAuth();
   const { openSettings } = useAppNavigation();
-  const { registerPullToRefresh, selectedTab } = useTabNavigation();
+  const { registerPullToRefresh } = useTabNavigation();
   const playerId = isAuthenticated ? (player?.id ?? null) : null;
-  const { overview, hasError, loadErrorMessage, lastLoadedAt, reload } =
+  const { overview, hasError, loadErrorMessage, reload } =
     useProfileOverview(playerId);
   const [category, setCategory] = useState<MatchTopLevelType>("doubles");
   const [isMatchHistoryRequested, setIsMatchHistoryRequested] = useState(false);
   const [isAchievementsRequested, setIsAchievementsRequested] = useState(false);
   const [isPartnersRequested, setIsPartnersRequested] = useState(false);
   const [isRivalsRequested, setIsRivalsRequested] = useState(false);
-  const wasTabActiveRef = useRef(false);
 
   useEffect(
     () =>
@@ -49,18 +47,6 @@ const Me: React.FC = () => {
       }),
     [refreshMe, registerPullToRefresh, reload],
   );
-
-  // 오래 지난 뒤 나 탭으로 돌아오면 보이는 내용을 유지한 채 새로 받는다
-  useEffect(() => {
-    const isTabActive = selectedTab === "me";
-    if (!isTabActive) {
-      wasTabActiveRef.current = false;
-      return;
-    }
-    if (wasTabActiveRef.current) return;
-    wasTabActiveRef.current = true;
-    if (lastLoadedAt !== null && isTabRefreshDue(lastLoadedAt)) void reload();
-  }, [lastLoadedAt, reload, selectedTab]);
 
   const closeMatchHistory = useCallback(
     () => setIsMatchHistoryRequested(false),

@@ -119,8 +119,12 @@ export default function MemberProfileDrawer({
   const [category, setCategory] = useState<MatchTopLevelType>("doubles");
   const [isMatchHistoryRequested, setIsMatchHistoryRequested] = useState(false);
   const [isAchievementsRequested, setIsAchievementsRequested] = useState(false);
-  const { overview, hasError, loadErrorMessage, reload } =
-    useProfileOverview(playerId);
+  // 데이터는 PushScreen 본문 밖에서 받으므로 보임은 PushScreen이 알려 준 값을 쓴다
+  const [isScreenVisible, setIsScreenVisible] = useState(false);
+  const { overview, hasError, loadErrorMessage, reload } = useProfileOverview(
+    playerId,
+    { isScreenVisible },
+  );
 
   const isOpen = useLayerDepth({
     isOpen: isRequested,
@@ -174,6 +178,7 @@ export default function MemberProfileDrawer({
         onBack={close}
         onExited={handleProfileExited}
         onPullToRefresh={refreshProfile}
+        onVisibleChange={setIsScreenVisible}
       >
         <div
           className={cx(

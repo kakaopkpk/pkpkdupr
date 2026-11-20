@@ -17,6 +17,7 @@ import {
   toKstDateKey,
 } from "@pkpkdupr/shared/session";
 import type { MatchInfo } from "@/types/match";
+import { useDataVersion } from "@/context/DataSyncContext";
 import { apiFetch } from "@/lib/api";
 import { fetchInProgressMatches } from "@/lib/matches";
 import {
@@ -143,9 +144,11 @@ const fetchSessionMatches = async (sessionId: string) => {
   return (await res.json()) as MatchInfo[];
 };
 
+const LIVE_SESSION_DATA_KINDS = ["sessions", "matches"] as const;
+
 /**
- * 셸이 진행 중 세션 상태를 만든다. 첫 로드, 앱이 다시 보일 때, 다음 세션 시작·종료·만료 시각에 스스로 다시 읽고,
- * 그 밖의 갱신(데이터 변경·당겨서 새로고침)은 셸이 reload를 부른다. 주기 폴링은 하지 않는다.
+ * 셸이 진행 중 세션 상태를 만든다. 첫 로드, 세션·경기 무효화와 TTL(useDataVersion), 다음 세션 시작·종료·만료 시각에
+ * 스스로 다시 읽고, 당겨서 새로고침은 셸이 reload를 부른다. 주기 폴링은 하지 않는다.
  */
 export const useLiveSessionState = (
   playerId: string | undefined,
@@ -160,6 +163,10 @@ export const useLiveSessionState = (
     [],
   );
   const requestIdRef = useRef(0);
+  // 셸은 탭·화면 보임과 상관없이 늘 보이는 것으로 보고, 문서가 숨은 동안만 미룬다
+  const dataVersion = useDataVersion(LIVE_SESSION_DATA_KINDS);
+  // 숨은 동안 경계 시각이 지났으면 다시 보일 때 읽는다
+  const isBoundaryReloadPendingRef = useRef(false);
 
   const reload = useCallback(async () => {
     const requestId = requestIdRef.current + 1;
@@ -200,11 +207,18 @@ export const useLiveSessionState = (
 
   useEffect(() => {
     void reload();
-  }, [reload]);
+  }, [reload, dataVersion]);
 
   useEffect(() => {
     const handleVisibilityChange = () => {
-      if (document.visibilityState === "visible") void reload();
+      if (
+        document.visibilityState !== "visible" ||
+        !isBoundaryReloadPendingRef.current
+      ) {
+        return;
+      }
+      isBoundaryReloadPendingRef.current = false;
+      void reload();
     };
 
     document.addEventListener("visibilitychange", handleVisibilityChange);
@@ -215,13 +229,17 @@ export const useLiveSessionState = (
 
   // 다음 경계 시각 하나만 예약한다. 다시 읽기에 성공하면 todaySessions가 새 배열로 바뀌어
   // 재시도 타이머를 지우고 그다음 경계를 예약한다. 실패하면 재시도 타이머가 한 번 더 읽는다.
-  // 숨은 상태면 건너뛴다(다시 보일 때 visibilitychange가 읽는다)
+  // 숨은 상태면 미뤄 두고 다시 보일 때 읽는다
   useEffect(() => {
     if (!playerId) return;
     const boundary = getNextLiveSessionBoundary(todaySessions);
     const delay = boundary.getTime() - Date.now() + BOUNDARY_RELOAD_DELAY_MS;
     const reloadIfVisible = () => {
-      if (document.visibilityState === "visible") void reload();
+      if (document.visibilityState === "visible") {
+        void reload();
+      } else {
+        isBoundaryReloadPendingRef.current = true;
+      }
     };
 
     const timeoutId = window.setTimeout(reloadIfVisible, delay);

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useDataVersion } from "@/context/DataSyncContext";
 import { getUserErrorMessage } from "@/lib/errors";
 import {
   fetchNewsFeed,
@@ -7,6 +8,12 @@ import {
 } from "@/lib/newsFeed";
 
 const FIRST_PAGE_FALLBACK = "소식을 불러오지 못했어요";
+const NEWS_FEED_DATA_KINDS = [
+  "sessions",
+  "matches",
+  "ratings",
+  "achievements",
+] as const;
 
 export interface NewsFeedState {
   items: NewsFeedItemInfo[];
@@ -23,16 +30,15 @@ export interface NewsFeedState {
 }
 
 /**
- * 홈 소식 피드(GET /api/news-feed). enabled일 때만 받고, dataVersion이 바뀌면 보이는 목록을 둔 채 첫 페이지부터 다시 받는다.
+ * 홈 소식 피드(GET /api/news-feed). enabled일 때만 받고, 데이터 버전이 바뀌면 보이는 목록을 둔 채 첫 페이지부터 다시 받는다.
  * 다음 페이지는 loadMore로 nextCursor를 이어 붙이고, 첫 페이지를 다시 받으면 진행 중인 다음 페이지 응답은 버린다
  */
 export const useNewsFeed = ({
   enabled,
-  dataVersion,
 }: {
   enabled: boolean;
-  dataVersion: number;
 }): NewsFeedState => {
+  const dataVersion = useDataVersion(NEWS_FEED_DATA_KINDS);
   const [items, setItems] = useState<NewsFeedItemInfo[]>([]);
   const [status, setStatus] = useState<NewsFeedState["status"]>("loading");
   const [error, setError] = useState<string | null>(null);

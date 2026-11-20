@@ -43,7 +43,7 @@
       - 진행 중 세션이 대회 세션이면 진행 화면이 대회 카드(`LiveSessionCard`) → "내 경기" 섹션 → 라운드별 대진(`TournamentBracketSection`, `showFilter` false)이다.
         - 세션 지배자·"진행 중" 섹션·추천 매칭·"오늘 기록"은 없고, 남의 진행 중 경기는 대진 안 제자리에만 있다.
         - "내 경기"는 내 진행 중 경기(대진 밖 경기여도)면 `MyLiveMatchCard`(`isTournament`, 칩 대신 "진행 중 · N라운드" 글자 머리)다.
-        - 내 진행 중 경기가 없으면 내 다음 대진 경기(`findMyNextBracketMatch`)를 `MyNextBracketMatchCard`("다음 경기 · N라운드", "경기 시작" → `startScheduledMatch` → `notifyDataChanged()`)로 보인다. 4xx 문구는 카드 아래, 네트워크 오류는 `showSaveFailure`다.
+        - 내 진행 중 경기가 없으면 내 다음 대진 경기(`findMyNextBracketMatch`)를 `MyNextBracketMatchCard`("다음 경기 · N라운드", "경기 시작" → `startScheduledMatch` → 경기 무효화)로 보인다. 4xx 문구는 카드 아래, 네트워크 오류는 `showSaveFailure`다.
         - 둘 다 없으면 섹션이 없다.
     - `Schedule.tsx`(일정)
       - 탭 머리 없이 월 달력 `schedule/MonthCalendar`(카드 위 오른쪽에 점 범례 세션·대회·경기 기록)와 고른 날 카드를 둔다.
@@ -58,7 +58,7 @@
       - 달을 옮겨도 고른 날은 그대로다. 다른 달 날짜를 누르면 그 날을 고르고 그 달로 옮긴다. 제목·탭 다시 누르기만 이번 달·오늘로 되돌린다.
       - 오늘은 `pk-hl` 바탕, 고른 날은 블루 원, 세션 날은 블루 점+참여 인원, 기록만 있는 날은 회색 점, 내 것이면 속 찬 점. 다른 달 날짜는 숫자 `pk-quiet`, 점 45% 투명도.
       - `GET /api/schedule` 한 달 응답으로 `lib/schedule.ts`의 `buildScheduleDayMarks`·`getScheduleDayEntries`가 표시·카드를 정한다.
-        - 보는 달 ±2달(옆 판의 6주에 걸치는 날짜까지)과 고른 날의 달을 받고, 같은 `dataVersion`·오늘로 받아 둔 달은 다시 받지 않는다.
+        - 보는 달 ±2달(옆 판의 6주에 걸치는 날짜까지)과 고른 날의 달을 받고, 같은 데이터 버전(세션·경기)·오늘로 받아 둔 달은 다시 받지 않는다.
         - 아래 카드는 고른 날이 속한 달 응답으로 그린다.
       - 카드는 세션 먼저, 그 뒤 세션 없는 경기 순서다.
         - 진행 중 세션 `LiveSessionCard`: 버튼은 진행 화면 보기 → 홈 탭뿐, 참여·참여 취소는 진행 화면에서.
@@ -107,12 +107,13 @@
   - `ui/`: 새 디자인 공통 컴포넌트. 새 화면은 여기 것을 먼저 씁니다.
     - `Button.tsx`(`PkButton`, variant `primary`·`soft`·`outline`·`ghost`), `Card.tsx`, `SegmentedControl.tsx`, `Headers.tsx`(`TabHeader`·`DetailHeader`), `Form.tsx`(`TextField`·`ListRow`), `Section.tsx`(`Section`·`PreviewSection`·`TextLink`. 섹션 제목이 붙는 묶음은 `Section`으로 만든다), `SheetTitle.tsx`, `ConfirmDialog.tsx`(시트 위 가운데 확인 창. 바텀시트를 겹쳐 쌓지 않을 때 쓰고, 연 쪽이 `useLayerDepth` kind `dialog`로 뒤로가기에 묶는다)
     - `MatchRow.tsx`(`MatchRow`), `PlayerAvatar.tsx`(`PlayerAvatar`·`TeamAvatars`), `Delta.tsx`(`RatingDelta`·`RankChange`), `RankBadge.tsx`, `Badges.tsx`(`LivePill`·`HighlightBadge`), `StatusMessageChip.tsx`, `StateMessage.tsx`(빈 상태 `empty`·불러오기 실패 `error`(항상 "다시 시도") 문구, size `panel` 탭·화면 전체·`inline` 카드·목록·시트 안), `CountUpText.tsx`(카운트업 숫자의 자리 폭을 최종 내용으로 고정), `SheenOverlay.tsx`(한 번 지나가는 흰 빛, 부모 `relative`·`overflow-hidden` 필요), `Icons.tsx`, `cx.ts`
-  - `profile/UnseenAchievementCelebration.tsx`: `BottomNav`가 렌더. 전역 화면·바텀시트·+ 메뉴가 하나도 열려 있지 않을 때 앱 진입·`dataVersion` 변경·앱 복귀(visibilitychange)·열린 화면이 모두 닫힐 때 `GET /api/me/achievements/unseen`을 조회해, 아직 보지 않은 내 업적(남이 입력한 경기·세션 지배자·관리자 정정 포함)을 `AchievementCelebration`으로 한 장씩 띄우고 닫으면 `POST /api/me/achievements/seen`. 미확인 조회(`fetchUnseenAchievements`)는 진행 중인 확인 처리 요청이 끝난 뒤 보내 방금 본 업적이 다시 뜨지 않는다
+  - `profile/UnseenAchievementCelebration.tsx`: `BottomNav`가 렌더. 전역 화면·바텀시트·+ 메뉴가 하나도 열려 있지 않을 때 앱 진입·업적 데이터 버전 변경(무효화·앱 복귀 TTL)·열린 화면이 모두 닫힐 때 `GET /api/me/achievements/unseen`을 조회해, 아직 보지 않은 내 업적(남이 입력한 경기·세션 지배자·관리자 정정 포함)을 `AchievementCelebration`으로 한 장씩 띄우고 닫으면 `POST /api/me/achievements/seen`. 미확인 조회(`fetchUnseenAchievements`)는 진행 중인 확인 처리 요청이 끝난 뒤 보내 방금 본 업적이 다시 뜨지 않는다
   - 공용 레이어·상태: `BottomSheet.tsx`, `PushScreen.tsx`, `SkeletonBlock.tsx`, `TabPanelStatus.tsx`, `HoldToConfirmButton.tsx`, `SystemToast.tsx`, `OfflineBanner.tsx`, `PwaInstallPrompt.tsx`, `PwaUpdatePrompt.tsx`
 - `src/context/`
   - `AuthContext.tsx`: Supabase 세션 구독, `/api/me` 검증, `status`·`player`, 비밀번호 변경, `logout`
   - `TabNavigationContext.tsx`: 탭(`TabKey`: `home`·`schedule`·`ranking`·`me`)·깊이 스택(`pushDepth`/`closeDepth`, 브라우저 뒤로가기 연동)·스크롤 복원·당겨서 새로고침 등록
-  - `AppNavigationContext.tsx`: `useAppNavigation()`으로 전역 화면 열기(`openMatchDetail`, `openMemberProfile`(내 id면 나 탭), `openRecordMatch`, `openCreateSession`(`dateKey`로 날짜를 골라 둔 채 열고, 만든 뒤 `onCreated`를 부름. + 메뉴는 홈 탭으로, 일정 탭은 만든 날로 옮김), `openSettings`, `openSessionReport`(지금 탭 위에 세션 상세 화면), `openAchievementDetail`(업적 상세 시트, 경기 기록 시트보다 위 레이어), `openAchievements`(지금 탭 위에 업적 전체 보기 화면, 내 id여도 나 탭으로 바꾸지 않음. `focusAchievementId`를 주면 진행도 준비 뒤 그 업적 줄 위쪽 끝을 스크롤 영역 높이 40%에 두고 카드 폭 가득 `pk-primary-soft` 바탕을 한 번 반짝임, 움직임 줄이기면 스크롤만)), `notifyDataChanged`·`dataVersion`, 전역 화면 레이어 번호 `GLOBAL_LAYER`
+  - `AppNavigationContext.tsx`: `useAppNavigation()`으로 전역 화면 열기(`openMatchDetail`, `openMemberProfile`(내 id면 나 탭), `openRecordMatch`, `openCreateSession`(`dateKey`로 날짜를 골라 둔 채 열고, 만든 뒤 `onCreated`를 부름. + 메뉴는 홈 탭으로, 일정 탭은 만든 날로 옮김), `openSettings`, `openSessionReport`(지금 탭 위에 세션 상세 화면), `openAchievementDetail`(업적 상세 시트, 경기 기록 시트보다 위 레이어), `openAchievements`(지금 탭 위에 업적 전체 보기 화면, 내 id여도 나 탭으로 바꾸지 않음. `focusAchievementId`를 주면 진행도 준비 뒤 그 업적 줄 위쪽 끝을 스크롤 영역 높이 40%에 두고 카드 폭 가득 `pk-primary-soft` 바탕을 한 번 반짝임, 움직임 줄이기면 스크롤만)), 전역 화면 레이어 번호 `GLOBAL_LAYER`
+  - `DataSyncContext.tsx`: 데이터 종류별 무효화와 재조회 신호. 셸(`BottomNav`)이 `DataSyncProvider`로 감싼다(아래 "데이터 재조회")
   - `LiveSessionContext.tsx`: `useLiveSession()`으로 오늘 진행 중 세션·그 경기, 세션과 상관없는 진행 중 경기(`GET /api/matches/in-progress`)와 그중 내 경기
     - 진행 중 세션 `liveSession`은 `getLiveSessionStartsAt` ≤ 지금 < 세션 끝 시각(`getSessionEndsAt`)인 세션(정기 우선)이다. 대회 세션만 시작 시각(`startTime`이 있으면 그날 그 시각)부터다.
     - 경기 기록 시트는 `recordingSession`(진행 중 세션이 있으면 그 세션, 없으면 빈 세션 만료 시각 전 세션)으로 새 경기를 세션에 붙여, 종료 시각이 지난 회원·대회 세션도 그날 자정까지 기록이 그 세션에 들어간다.
@@ -140,6 +141,32 @@
   - 경기 상세·회원 프로필·세션 상세·업적 전체 보기(`profile/PlayerAchievementsDrawer`)는 화면 위에 계속 쌓을 수 있습니다(`BottomNav`의 화면 스택).
 - 짧은 입력은 바텀시트로 하며, 화면에서 연 시트는 `GLOBAL_LAYER.sheet` 이상 레이어로 그 화면 위에 뜹니다.
 - `?matchId=` 딥링크는 시작할 때 `openMatchDetail`로 경기 상세를 엽니다.
+
+## 데이터 재조회
+
+- 데이터 종류는 `@pkpkdupr/shared/dataSync`의 `DataKind`(`sessions`·`matches`·`ratings`·`achievements`·`players`) 다섯 개이고, 화면이 아니라 데이터 기준으로 무효화합니다. 캐시 라이브러리는 쓰지 않습니다.
+- 데이터를 바꾼 호출부는 `useInvalidateData()(kinds)`로 실제로 바뀐 종류만 무효화합니다.
+  - 세션 만들기·참여 변경: `sessions`
+  - 진행 중 경기 시작·한 판 더·시작 취소(지우기): `matches`
+  - 점수 저장(기록·수정·첫 점수)·경기 삭제: `matches`·`ratings`·`achievements`
+  - 내 사진·상태메시지 저장: `players`
+  - 남의 변경으로 무효화할 때는 `{ remote: true }`를 줍니다.
+- 데이터를 받는 화면은 쓰는 종류로 `useDataVersion(kinds)`을 부르고 그 값을 재조회 effect 의존성으로 씁니다. 값이 커지면 보이던 내용을 둔 채 다시 받습니다.
+  - 보이는 화면(화면 보임 && 문서 visible)은 무효화되면 바로, 숨은 화면은 보이게 될 때 한 번 커집니다.
+  - 화면이 보이게 될 때(탭 전환·덮인 화면 드러남·앱 복귀) 마지막으로 커진 뒤(처음은 마운트 뒤) `DATA_TTL_MS`(5분, 모든 데이터 공통)가 지났으면 커집니다.
+  - 화면 보임은 `useIsScreenVisible()`입니다. 자기 `PushScreen` 본문 밖(래퍼 최상단)에서 받는 화면은 `PushScreen`의 `onVisibleChange` 값을 `isScreenVisible`로 넘깁니다. 셸(진행 중 세션·업적 축하)은 늘 보이는 것으로 봅니다.
+  - `localOnly`면 내 변경 무효화에만 커지고 TTL·남의 변경에는 커지지 않습니다. 추천 매칭(`useSessionRecommendations`)이 씁니다.
+- 화면별 종류
+  - 진행 중 세션(`LiveSessionContext`)·추천 매칭·일정: `sessions`·`matches`
+  - 세션 지배자(`useSessionTopRiser`): `matches`·`ratings`
+  - 홈 다가오는 세션(`usePreSessionData`): `sessions`·`matches`·`ratings`
+  - 소식(`useNewsFeed`)·세션 상세: `sessions`·`matches`·`ratings`·`achievements`
+  - 경기 상세: `matches`·`ratings`·`achievements`
+  - 나 탭·회원 프로필(`useProfileOverview`): `matches`·`ratings`·`achievements`·`players`
+  - 랭킹 복식·단식: `ratings`·`players`, 업적 랭킹: `achievements`·`players`. 보고 있는 분류만 다시 받고 나머지는 볼 때 받습니다.
+  - 회원 경기 전체: `matches`, 업적 전체 보기·업적 축하: `achievements`
+- 참여 버튼은 무효화 뒤 그 화면의 `dataVersion`이 오른 값 이상으로 새로 받은 데이터가 올 때 풀립니다(`useSessionParticipation`의 `dataVersion`·`loadedVersion`).
+- 진행 중 세션은 이와 별개로 세션 시작·끝·만료 시각에 다시 읽고, 숨은 동안 그 시각이 지났으면 다시 보일 때 읽습니다.
 - 홈 화면 추가 안내(`PwaInstallPrompt`)는 `BottomNav`가 렌더하며, 설치 안 된 모바일 브라우저에서 홈 탭이 보이고 전역 화면·메뉴가 하나도 열려 있지 않을 때만 뜹니다. 업데이트 감지와 무관하게 유지하고 저장 실패 알림이 떠 있는 동안만 숨깁니다. 닫으면 KST 날짜를 `pkpkdupr:install-prompt-dismissed-date`에 저장해 그날만 숨깁니다.
 
 ## 라우팅 규칙
@@ -190,7 +217,7 @@
 - 여러 요소가 맞물려 끝없이 도는 장식(`pk-flame-aura`, 진행 중 경기 랠리 `pk-rally-*`)은 예외로 `index.css` utilities의 컴포넌트 클래스와 파일 끝 keyframes로 두고, 움직임 줄이기도 그 클래스의 `@media (prefers-reduced-motion: reduce)`에서 처리합니다.
 - 움직임 줄이기는 소비처에서 `motion-reduce:`(`motion-reduce:animate-none`, `motion-reduce:transition-none`, 장식 요소는 `motion-reduce:hidden`)로 끄고 최종 상태를 바로 보입니다.
 - 화면 등장 연출(CSS 애니메이션·숫자 카운트업)은 화면이 보이게 될 때마다(처음 마운트 포함) 처음부터 한 번 재생합니다.
-  - 보임은 `context/ScreenVisibilityContext.tsx` 기준입니다. 같은 보임 안의 `dataVersion` 재조회·리렌더·바텀시트 열고 닫기로는 다시 재생하지 않으며, 숨김 중이나 콘텐츠 준비 전(`isReady` false)에는 진행하지 않습니다.
+  - 보임은 `context/ScreenVisibilityContext.tsx` 기준입니다. 같은 보임 안의 데이터 재조회(`useDataVersion`)·리렌더·바텀시트 열고 닫기로는 다시 재생하지 않으며, 숨김 중이나 콘텐츠 준비 전(`isReady` false)에는 진행하지 않습니다.
   - CSS 애니메이션은 `hooks/usePlayOnShow.ts`의 `isPlaying`일 때만 클래스를 붙이고, 가장 늦게 끝나는 요소(자식에 다른 애니메이션이 없는 요소)의 `onAnimationEnd`에 `finish`를 겁니다.
   - 무한 반복(`ping`·`spin-slow`)은 끝나지 않으므로 `usePlayOnShow`에 쓰지 않습니다.
   - 숫자 카운트업은 `hooks/useCountUp.ts`의 `useCountUp`(움직임 줄이기면 바로 최종 값)을 쓰고, 세는 동안 자릿수가 바뀌어 주변이 흔들리면 `ui/CountUpText.tsx`로 폭을 최종 값에 고정합니다.

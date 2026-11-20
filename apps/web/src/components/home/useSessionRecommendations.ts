@@ -3,9 +3,11 @@ import {
   MATCHMAKING_DEFAULT_COURTS,
   type MatchSessionRecommendationResponse,
 } from "@pkpkdupr/shared/matchmaking";
+import { useDataVersion } from "@/context/DataSyncContext";
 import { fetchSessionRecommendations } from "@/lib/matchSessions";
 
 const SEED_RANGE = 2 ** 31;
+const RECOMMENDATION_DATA_KINDS = ["sessions", "matches"] as const;
 
 const createSeed = () => Math.floor(Math.random() * SEED_RANGE);
 
@@ -21,12 +23,15 @@ export interface SessionRecommendationsState {
 
 /**
  * 진행 중 세션의 복식 추천. sessionId가 null이면 받지 않는다.
- * 코트 수는 API 기본값이고, dataVersion이 바뀌면(경기 시작·참여자 변경) 같은 seed로 다시 받는다.
+ * 코트 수는 API 기본값이고, 내 세션·경기 변경(경기 시작·참여자 변경) 무효화에만 같은 seed로 다시 받는다.
+ * 추천이 바뀌면 보던 매칭이 흔들리므로 TTL·남의 변경으로는 다시 받지 않는다(localOnly).
  */
 export const useSessionRecommendations = (
   sessionId: string | null,
-  dataVersion: number,
 ): SessionRecommendationsState => {
+  const dataVersion = useDataVersion(RECOMMENDATION_DATA_KINDS, {
+    localOnly: true,
+  });
   const [seed, setSeed] = useState(createSeed);
   const [recommendation, setRecommendation] =
     useState<MatchSessionRecommendationResponse | null>(null);

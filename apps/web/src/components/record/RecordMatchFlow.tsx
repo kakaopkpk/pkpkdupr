@@ -10,10 +10,12 @@ import {
   type RecordMatchRequest,
   type StartMatchRequest,
 } from "@pkpkdupr/shared/match";
+import type { DataKind } from "@pkpkdupr/shared/dataSync";
 import type { MatchInfo } from "@/types/match";
 import type { AvatarPlayer } from "@/components/ui/PlayerAvatar";
 import { useAppNavigation } from "@/context/AppNavigationContext";
 import { useAuth } from "@/context/AuthContext";
+import { useInvalidateData } from "@/context/DataSyncContext";
 import { useLiveSession } from "@/context/LiveSessionContext";
 import { useSystemNotice } from "@/context/SystemNoticeContext";
 import {
@@ -45,6 +47,13 @@ import ScoreStep from "./ScoreStep";
 const SAVE_ERROR_FALLBACK = "기록을 저장하지 못했어요.";
 const START_ERROR_FALLBACK = "경기를 시작하지 못했어요.";
 const NOT_EDITABLE_MESSAGE = "고칠 수 없는 경기예요";
+// 진행 중 경기를 시작하면 경기만, 점수를 저장하면(완료) 평점·업적까지 바뀐다
+const STARTED_MATCH_DATA_KINDS: readonly DataKind[] = ["matches"];
+const SAVED_MATCH_DATA_KINDS: readonly DataKind[] = [
+  "matches",
+  "ratings",
+  "achievements",
+];
 /** 점수 단계에서 기기 뒤로가기로 플레이어 선택에 돌아가도록 쌓는 깊이 */
 export const SCORE_STEP_DEPTH_ID = "global-record-match-score-step";
 
@@ -106,7 +115,8 @@ export default function RecordMatchFlow({
   isClosingRef,
   onClose,
 }: RecordMatchFlowProps): React.ReactElement {
-  const { notifyDataChanged, selectTab } = useAppNavigation();
+  const { selectTab } = useAppNavigation();
+  const invalidateData = useInvalidateData();
   const { player: currentPlayer } = useAuth();
   const { recordingSession, inProgressMatches } = useLiveSession();
   const { showSaveFailure } = useSystemNotice();
@@ -217,11 +227,12 @@ export default function RecordMatchFlow({
    */
   const attempt = async <T,>(
     action: () => Promise<T>,
+    changedKinds: readonly DataKind[],
     onSuccess: (result: T) => void,
     fallbackMessage: string,
   ) => {
     const succeed = (result: T) => {
-      notifyDataChanged();
+      invalidateData(changedKinds);
       if (isActiveRef.current) onSuccess(result);
     };
 
@@ -259,6 +270,7 @@ export default function RecordMatchFlow({
     if (isBusy) return;
     void attempt(
       () => startMatch(body),
+      STARTED_MATCH_DATA_KINDS,
       (startedMatch) => {
         goHome();
         onStarted?.(startedMatch);
@@ -285,6 +297,7 @@ export default function RecordMatchFlow({
     };
     void attempt(
       () => saveMatch(matchId, body),
+      SAVED_MATCH_DATA_KINDS,
       (savedMatch) => {
         setRecordedMatch(savedMatch);
         setStep("done");

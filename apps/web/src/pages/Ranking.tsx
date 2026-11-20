@@ -37,11 +37,16 @@ import { StatusMessageChip } from "@/components/ui/StatusMessageChip";
 import { WinStreakAvatarFrame } from "@/components/ui/WinStreakAvatarFrame";
 import { cx } from "@/components/ui/cx";
 import { useAppNavigation } from "@/context/AppNavigationContext";
+import { useDataVersion } from "@/context/DataSyncContext";
 import { useTabNavigation } from "@/context/TabNavigationContext";
 import { getUserErrorMessage } from "@/lib/errors";
 import { formatAchievementPoints } from "@/lib/format";
 import { fetchRankings } from "@/lib/rankings";
 import { formatRating } from "@/utils/dupr";
+
+// 분류마다 쓰는 데이터 종류. 복식·단식은 같은 종류라 버전을 함께 쓴다
+const RATING_RANKING_DATA_KINDS = ["ratings", "players"] as const;
+const ACHIEVEMENT_RANKING_DATA_KINDS = ["achievements", "players"] as const;
 
 const CATEGORY_OPTIONS: readonly SegmentedOption<RankingCategory>[] = [
   { value: "doubles", label: "복식" },
@@ -216,9 +221,14 @@ const RankingSkeleton: React.FC = () => (
 
 /** 랭킹 탭. 순위·변동은 서버가 계산한 값을 그대로 보인다 */
 const Ranking: React.FC = () => {
-  const { openMemberProfile, dataVersion } = useAppNavigation();
+  const { openMemberProfile } = useAppNavigation();
   const { registerPullToRefresh } = useTabNavigation();
   const [category, setCategory] = useState<RankingCategory>("doubles");
+  const ratingDataVersion = useDataVersion(RATING_RANKING_DATA_KINDS);
+  const achievementDataVersion = useDataVersion(ACHIEVEMENT_RANKING_DATA_KINDS);
+  // 보고 있는 분류의 데이터 버전. 다른 분류는 이 값이 달라도 볼 때까지 받지 않는다
+  const dataVersion =
+    category === "achievements" ? achievementDataVersion : ratingDataVersion;
   const [isListFading, setIsListFading] = useState(false);
   // 분류마다 한 번 받은 결과를 메모리에 보관해 이미 본 분류로 돌아오면 바로 보인다
   const [rankings, setRankings] = useState<RankingByCategory>({});
@@ -233,7 +243,7 @@ const Ranking: React.FC = () => {
   // 분류마다 가장 최근 요청 번호. 늦게 끝난 이전 요청이 최신 결과를 덮지 않게 한다
   const requestIdsRef = useRef(new Map<RankingCategory, number>());
   const requestSequenceRef = useRef(0);
-  // 분류마다 마지막으로 받기 시작한 dataVersion. 같은 기준으로 받아 둔 분류는 다시 받지 않고, 다르면 오래된 것으로 보고 그 분류를 볼 때 받는다
+  // 분류마다 마지막으로 받기 시작한 그 분류의 dataVersion. 같은 기준으로 받아 둔 분류는 다시 받지 않고, 다르면 오래된 것으로 보고 그 분류를 볼 때 받는다
   const loadStampsRef = useRef(new Map<RankingCategory, number>());
 
   /** 그 분류를 다시 받는다. 받아 둔 내용은 새 결과가 올 때까지 그대로 둔다 */
