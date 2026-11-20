@@ -136,7 +136,8 @@ export const SessionBlueCard: React.FC<{
       className={cx(
         "relative overflow-hidden rounded-pk-lg text-white",
         isTournament ? "bg-pk-deep" : "bg-pk-primary",
-        onPress && cx("cursor-pointer", rowPressClassName),
+        onPress && "cursor-pointer",
+        onPress && rowPressClassName,
         className,
       )}
     >

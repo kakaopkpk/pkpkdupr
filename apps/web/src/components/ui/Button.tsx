@@ -16,14 +16,16 @@ export interface PkButtonProps
 /*
  * 누름 피드백은 축소 + 투명도 0.8 하나다(바탕색은 누름 영역 모양이 드러나서 쓰지 않는다).
  * 120ms 이동 곡선, 비활성은 반응하지 않고, 움직임 줄이기면 축소 없이 투명도만 바뀐다.
- * 안의 버튼을 누르는 동안은 바깥(누를 수 있는 카드)이 함께 반응하지 않는다.
  */
 
 /** 버튼·아이콘 버튼·글자 버튼 누름 피드백: scale 0.97 */
 export const buttonPressClassName =
-  "transition-[scale,opacity] duration-[120ms] ease-pk-move not-disabled:active:not-has-[button:active]:opacity-80 motion-safe:not-disabled:active:not-has-[button:active]:scale-[0.97]";
+  "transition-[scale,opacity] duration-[120ms] ease-pk-move not-disabled:active:opacity-80 motion-safe:not-disabled:active:scale-[0.97]";
 
-/** 목록 줄·카드 누름 피드백: 큰 요소라 scale 0.985로 덜 줄어든다 */
+/**
+ * 목록 줄·카드 누름 피드백: 큰 요소라 scale 0.985로 덜 줄어든다.
+ * 버튼을 품은 카드(세션 블루 카드 등)도 쓰므로 안의 버튼을 누르는 동안은 반응하지 않는다.
+ */
 export const rowPressClassName =
   "transition-[scale,opacity] duration-[120ms] ease-pk-move not-disabled:active:not-has-[button:active]:opacity-80 motion-safe:not-disabled:active:not-has-[button:active]:scale-[0.985]";
 
@@ -51,7 +53,7 @@ export const PkButton: React.FC<PkButtonProps> = ({
   <button
     type={type}
     className={cx(
-      "inline-flex shrink-0 select-none items-center justify-center gap-1.5 whitespace-nowrap touch-manipulation",
+      "inline-flex shrink-0 items-center justify-center gap-1.5 whitespace-nowrap touch-manipulation",
       buttonPressClassName,
       "disabled:cursor-not-allowed",
       variantClassName[variant],

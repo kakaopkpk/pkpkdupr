@@ -347,7 +347,6 @@ const MatchAchievementsCard: React.FC<{
             className={cx(
               "py-3",
               rowDividerClassName,
-              rowPressClassName,
             )}
           />
         ))}

@@ -310,7 +310,7 @@ const AvatarCropScreen: React.FC<AvatarCropScreenProps> = ({
 
         <div
           ref={areaRef}
-          className="relative min-h-0 flex-1 touch-none select-none overflow-hidden"
+          className="relative min-h-0 flex-1 touch-none overflow-hidden"
           onPointerDown={handlePointerDown}
           onPointerMove={handlePointerMove}
           onPointerUp={handlePointerEnd}
