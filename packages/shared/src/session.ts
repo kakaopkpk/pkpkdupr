@@ -9,9 +9,15 @@ import type { TournamentPlacement } from "./tournament.js";
 
 /** 정기 세션 요일(KST, 0=일요일). 월·목 */
 export const REGULAR_SESSION_WEEKDAYS: readonly number[] = [1, 4];
-/** 정기 세션에 묶이는 경기 시작 시각 범위(KST 시). 시작 포함, 끝 미포함 */
+/** 정기 세션 시작 시각(KST 시) */
 export const REGULAR_SESSION_START_HOUR = 18;
-export const REGULAR_SESSION_END_HOUR = 22;
+/** 정기 세션 종료 시각(KST 시). 화면·캘린더의 끝 시각이고, 이때부터 자동 완료 전까지 회원이 세션을 완료할 수 있다 */
+export const REGULAR_SESSION_END_HOUR = 21;
+/**
+ * 정기 세션이 자동 완료되는 시각(KST 시). 종료 1시간 뒤다.
+ * 정기 시간대 경기 묶기(isRegularSessionTime)와 오늘 정기 세션 만들기(canOpenRegularSession)도 이 시각 전까지다
+ */
+export const REGULAR_SESSION_AUTO_COMPLETE_HOUR = REGULAR_SESSION_END_HOUR + 1;
 export const REGULAR_SESSION_LOCATION = "야탑초등학교";
 /** 경기 기록·세션 만들기의 장소 기본값 */
 export const DEFAULT_MATCH_LOCATION = REGULAR_SESSION_LOCATION;
@@ -53,14 +59,14 @@ export const kstDateKeyToDate = (dateKey: string, hour = 0): Date => {
   return new Date(Date.UTC(year, month - 1, day, hour) - KST_OFFSET_MS);
 };
 
-/** 경기 시작 시각이 월·목 18:00 이상 22:00 미만(KST)이면 true */
+/** 경기 시작 시각이 월·목 18:00 이상 22:00(자동 완료) 미만(KST)이면 true */
 export const isRegularSessionTime = (date: Date): boolean => {
   const kst = toKstShifted(date);
   const hour = kst.getUTCHours();
   return (
     REGULAR_SESSION_WEEKDAYS.includes(kst.getUTCDay()) &&
     hour >= REGULAR_SESSION_START_HOUR &&
-    hour < REGULAR_SESSION_END_HOUR
+    hour < REGULAR_SESSION_AUTO_COMPLETE_HOUR
   );
 };
 
@@ -69,7 +75,7 @@ export const canOpenRegularSession = (now: Date): boolean => {
   const kst = toKstShifted(now);
   return (
     REGULAR_SESSION_WEEKDAYS.includes(kst.getUTCDay()) &&
-    kst.getUTCHours() < REGULAR_SESSION_END_HOUR
+    kst.getUTCHours() < REGULAR_SESSION_AUTO_COMPLETE_HOUR
   );
 };
 
@@ -146,7 +152,7 @@ export const sessionTimeToMinutes = (time: string): number => {
 export const minutesToSessionTime = (minutes: number): string =>
   `${String(Math.floor(minutes / 60)).padStart(2, "0")}:${String(minutes % 60).padStart(2, "0")}`;
 
-/** 정기 세션 시각("HH:MM", KST). 18:00~22:00 */
+/** 정기 세션 시각("HH:MM", KST). 18:00~21:00 */
 export const REGULAR_SESSION_START_TIME = minutesToSessionTime(
   REGULAR_SESSION_START_HOUR * 60,
 );
@@ -159,6 +165,15 @@ export interface SessionTimeRange {
   startTime: string | null;
   endTime: string | null;
 }
+
+/** 세션이 끝나는 시각을 정하는 값. 시각 범위와 회원이 정기 세션을 완료한 시각 */
+export interface SessionEndSource extends SessionTimeRange {
+  /** 회원이 정기 세션을 완료한 시각. 완료 전이거나 정기 세션이 아니면 null(또는 생략) */
+  completedAt?: Date | string | null;
+}
+
+const toCompletedAt = (source?: Pick<SessionEndSource, "completedAt"> | null) =>
+  source?.completedAt ? new Date(source.completedAt) : null;
 
 /** 둘 다 "HH:MM"이고 시각이 서로 다르면 true. 종료가 시작보다 이르면 다음 날 종료다 */
 export const isValidSessionTimeRange = (
@@ -184,7 +199,7 @@ export const formatSessionEndTime = (
     ? `다음 날 ${range.endTime}`
     : range.endTime;
 
-/** "18:00~22:00" | "23:30~다음 날 01:30". 시각 없는 세션이면 null */
+/** "18:00~21:00" | "23:30~다음 날 01:30". 시각 없는 세션이면 null */
 export const formatSessionTimeRange = (
   range: SessionTimeRange,
 ): string | null => {
@@ -218,17 +233,24 @@ export const isValidKstDateKey = (value: string): boolean =>
   toKstDateKey(kstDateKeyToDate(value)) === value;
 
 /**
- * 경기가 하나도 없는 세션이 사라지는 시각. 정기=그날 22:00 KST, 그 외(회원·대회)=다음 날 00:00 KST.
- * 회원·대회 세션이 자정을 넘겨 끝나면 다음 날 종료 시각까지 남긴다
+ * 세션이 만료되는 시각. 정기=그날 22:00 KST(자동 완료, 그 전에 회원이 완료했으면 완료 시각), 그 외(회원·대회)=다음 날 00:00 KST.
+ * 회원·대회 세션이 자정을 넘겨 끝나면 다음 날 종료 시각까지 남긴다.
+ * 경기가 하나도 없는 세션은 이 시각이 지나면 정리되고, 세션 지배자·무패 세션도 이 시각이 지난 세션에서만 정한다
  */
 export const getEmptySessionExpiresAt = (
   kind: MatchSessionKind,
   sessionDate: Date,
-  timeRange?: SessionTimeRange | null,
+  timeRange?: SessionEndSource | null,
 ): Date => {
   const dayStart = kstDateKeyToDate(toKstDateKey(sessionDate));
   if (kind === "regular") {
-    return new Date(dayStart.getTime() + REGULAR_SESSION_END_HOUR * HOUR_MS);
+    const autoCompleteAt = new Date(
+      dayStart.getTime() + REGULAR_SESSION_AUTO_COMPLETE_HOUR * HOUR_MS,
+    );
+    const completedAt = toCompletedAt(timeRange);
+    return completedAt && completedAt < autoCompleteAt
+      ? completedAt
+      : autoCompleteAt;
   }
   const nextDayStart = dayStart.getTime() + DAY_MS;
   return timeRange?.endTime && isOvernightSessionTimeRange(timeRange)
@@ -238,14 +260,14 @@ export const getEmptySessionExpiresAt = (
 
 /**
  * 세션이 끝나는 시각. 회원·대회 세션에 종료 시각이 있으면 그 시각(자정을 넘기면 다음 날 그 시각)이고,
- * 그 밖에는 빈 세션 만료 시각(getEmptySessionExpiresAt)과 같다.
+ * 그 밖에는 빈 세션 만료 시각(getEmptySessionExpiresAt)과 같다. 정기 세션은 완료(회원 완료 또는 22:00 자동 완료)까지다.
  * 진행 중(LIVE)·다가오는 세션·일정의 끝남 표시가 이 기준을 쓰고,
  * 경기 기록·참여자 변경(isSessionOnToday)과 빈 세션 정리는 만료 시각까지 된다
  */
 export const getSessionEndsAt = (
   kind: MatchSessionKind,
   sessionDate: Date,
-  timeRange?: SessionTimeRange | null,
+  timeRange?: SessionEndSource | null,
 ): Date => {
   // 자정을 넘기는 세션은 만료 시각이 곧 다음 날 종료 시각이다
   if (
@@ -260,12 +282,15 @@ export const getSessionEndsAt = (
 
 /**
  * 지금 그 세션이 '오늘 세션'이면 true. 그날(KST) 세션이거나, 전날 시작해 자정을 넘긴 회원 세션이
- * 아직 끝나지 않았을 때다. 세션 경기 기록·시작·추천과 오늘 세션 목록이 이 기준을 쓴다
+ * 아직 끝나지 않았을 때다. 회원이 완료한 정기 세션은 완료 시각부터 false다.
+ * 세션 경기 기록·시작·추천과 오늘 세션 목록이 이 기준을 쓴다
  */
 export const isSessionOnToday = (
-  session: { kind: MatchSessionKind; date: Date } & SessionTimeRange,
+  session: { kind: MatchSessionKind; date: Date } & SessionEndSource,
   now: Date,
 ): boolean => {
+  const completedAt = toCompletedAt(session);
+  if (completedAt && completedAt.getTime() <= now.getTime()) return false;
   const dateKey = toKstDateKey(session.date);
   const todayKey = toKstDateKey(now);
   // 지난 날 세션은 만료 시각이 다음 날로 넘어가는 자정 넘김 회원 세션만 아직 남아 있을 수 있다
@@ -288,12 +313,32 @@ export const getEmptySessionExpiryCutoff = (
   now: Date,
 ): Date => {
   const lifetimeMs =
-    kind === "regular" ? REGULAR_SESSION_END_HOUR * HOUR_MS : DAY_MS;
+    kind === "regular" ? REGULAR_SESSION_AUTO_COMPLETE_HOUR * HOUR_MS : DAY_MS;
   const latestExpiredDayStart = kstDateKeyToDate(
     toKstDateKey(new Date(now.getTime() - lifetimeMs)),
   );
   return new Date(latestExpiredDayStart.getTime() + DAY_MS);
 };
+
+/** 정기 세션 종료 시각(그날 21:00 KST). 이때부터 자동 완료(22:00) 전까지 회원이 세션을 완료할 수 있다 */
+export const getRegularSessionEndAt = (sessionDate: Date): Date =>
+  kstDateKeyToDate(toKstDateKey(sessionDate), REGULAR_SESSION_END_HOUR);
+
+/**
+ * 지금 회원이 그 세션을 완료할 수 있으면 true.
+ * 정기 세션이고 아직 완료 전이며 종료 시각(21:00) ≤ now < 자동 완료(22:00)일 때다
+ */
+export const isSessionCompletable = (
+  session: { kind: MatchSessionKind; date: Date } & Pick<
+    SessionEndSource,
+    "completedAt"
+  >,
+  now: Date,
+): boolean =>
+  session.kind === "regular" &&
+  !session.completedAt &&
+  getRegularSessionEndAt(session.date).getTime() <= now.getTime() &&
+  now.getTime() < getEmptySessionExpiresAt("regular", session.date).getTime();
 
 /** 점수 없는 진행 중 경기가 시작 2시간을 넘겨 무효(삭제 대상)면 true */
 export const isInProgressMatchExpired = (
@@ -320,9 +365,11 @@ export interface MatchSessionDetail {
   location: string;
   /** date의 KST 날짜 키 */
   dateKey: string;
-  /** 시작·종료 시각("HH:MM", KST). 정기 세션은 18:00~22:00, 시각 없이 만든 회원 세션은 null. 종료 ≤ 시작이면 다음 날 종료 */
+  /** 시작·종료 시각("HH:MM", KST). 정기 세션은 18:00~21:00, 시각 없이 만든 회원 세션은 null. 종료 ≤ 시작이면 다음 날 종료 */
   startTime: string | null;
   endTime: string | null;
+  /** 회원이 정기 세션을 완료한 시각(`POST /api/match-sessions/:sessionId/complete`). 완료 전이거나 정기 세션이 아니면 null */
+  completedAt: Date | null;
   /**
    * 오늘(KST) 세션이면 true(`isSessionOnToday`, 전날 시작해 자정을 넘긴 회원 세션은 끝나기 전까지 포함).
    * 세션 경기 기록/시작·추천은 오늘 세션에서만 되고, 참여자 추가·삭제는 오늘·미래 세션에서 된다
@@ -405,8 +452,8 @@ export interface AdminUpdateMatchSessionRequest {
   name?: string;
   location?: string;
   /**
-   * 정기로 바꾸면 그 날짜의 직접 만든 정기 세션(18:00~22:00)이 된다(이미 있거나 공휴일이면 409).
-   * 직접 만든 정기에서 바꾸면 18:00~22:00 시각을 가진 세션이 되고 정기 쉬는 날은 생기지 않는다.
+   * 정기로 바꾸면 그 날짜의 직접 만든 정기 세션(18:00~21:00)이 된다(이미 있거나 공휴일이면 409).
+   * 직접 만든 정기에서 바꾸면 18:00~21:00 시각을 가진 세션이 되고 정기 쉬는 날은 생기지 않는다.
    * 자동 정기 세션(autoCreated)은 종류를 바꿀 수 없다(409)
    */
   kind?: MatchSessionKind;

@@ -49,6 +49,7 @@ const makeSession = (
   autoCreated: true,
   startTime: null,
   endTime: null,
+  completedAt: null,
   createdAt: thursdayEvening,
   updatedAt: thursdayEvening,
   ...overrides,
@@ -129,14 +130,15 @@ describe("GET /api/match-sessions/:sessionId/recommendations", () => {
     vi.restoreAllMocks();
   });
 
-  it("courts 생략 시 기본 3코트를 요청하고 서버가 정한 seed를 돌려준다", async () => {
+  it("courts·rank 생략 시 기본 3코트의 1등 후보를 돌려준다", async () => {
     const response = await recommend("Stoday00");
 
     expect(response.status).toBe(200);
     const body = response.body as MatchSessionRecommendationResponse;
     expect(body.sessionId).toBe("Stoday00");
     expect(body.requestedCourts).toBe(3);
-    expect(Number.isInteger(body.seed)).toBe(true);
+    expect(body.rank).toBe(0);
+    expect(body.candidateCount).toBeGreaterThan(1);
     // 10명이라 2코트만 채워지고 2명이 쉰다
     expect(body.courts).toHaveLength(2);
     expect(body.restingPlayers).toHaveLength(2);
@@ -161,7 +163,7 @@ describe("GET /api/match-sessions/:sessionId/recommendations", () => {
       }),
     ];
 
-    const response = await recommend("Stoday00", "?courts=1&seed=7");
+    const response = await recommend("Stoday00", "?courts=1");
 
     expect(response.status).toBe(200);
     const body = response.body as MatchSessionRecommendationResponse;
@@ -178,20 +180,35 @@ describe("GET /api/match-sessions/:sessionId/recommendations", () => {
     );
   });
 
-  it("같은 courts·seed면 같은 결과를 낸다", async () => {
-    const first = await recommend("Stoday00", "?courts=2&seed=42");
-    const second = await recommend("Stoday00", "?courts=2&seed=42");
+  it("같은 상황이면 누가 요청해도 같은 결과를 낸다", async () => {
+    const first = await recommend("Stoday00", "?courts=2");
+    const second = await recommend("Stoday00", "?courts=2&rank=0");
 
     expect(first.status).toBe(200);
-    expect(first.body.seed).toBe(42);
     expect(second.body).toEqual(first.body);
+  });
+
+  it("rank번째 후보를 돌려주고 후보 수를 넘으면 처음으로 돌아간다", async () => {
+    const first = await recommend("Stoday00", "?courts=2");
+    const next = await recommend("Stoday00", "?courts=2&rank=1");
+    const { candidateCount } = first.body as MatchSessionRecommendationResponse;
+    const wrapped = await recommend(
+      "Stoday00",
+      `?courts=2&rank=${candidateCount}`,
+    );
+
+    expect(next.status).toBe(200);
+    expect(next.body.rank).toBe(1);
+    expect(next.body.candidateCount).toBe(candidateCount);
+    expect(next.body.courts).not.toEqual(first.body.courts);
+    expect(wrapped.body).toEqual(first.body);
   });
 
   it("진행 중 경기에 들어간 선수는 코트와 쉬는 사람 모두에서 뺀다", async () => {
     const busy = [playerIds[4], playerIds[5]];
     findInProgressPlayerIds.mockResolvedValue(busy);
 
-    const response = await recommend("Stoday00", "?courts=4&seed=7");
+    const response = await recommend("Stoday00", "?courts=4");
 
     expect(response.status).toBe(200);
     const { courtIds, restingIds } = collectIds(response.body);
@@ -205,8 +222,8 @@ describe("GET /api/match-sessions/:sessionId/recommendations", () => {
   });
 
   it("범위 밖 courts는 1~4로 자른다", async () => {
-    const low = await recommend("Stoday00", "?courts=0&seed=1");
-    const high = await recommend("Stoday00", "?courts=9&seed=1");
+    const low = await recommend("Stoday00", "?courts=0");
+    const high = await recommend("Stoday00", "?courts=9");
 
     expect(low.status).toBe(200);
     expect(low.body.requestedCourts).toBe(1);
@@ -219,8 +236,9 @@ describe("GET /api/match-sessions/:sessionId/recommendations", () => {
   it.each([
     ["courts가 숫자가 아니면", "?courts=abc"],
     ["courts가 비어 있으면", "?courts="],
-    ["seed가 정수가 아니면", "?seed=1.5"],
-    ["seed가 숫자가 아니면", "?seed=abc"],
+    ["rank가 정수가 아니면", "?rank=1.5"],
+    ["rank가 음수면", "?rank=-1"],
+    ["rank가 숫자가 아니면", "?rank=abc"],
   ])("%s 400", async (_label, query) => {
     const response = await recommend("Stoday00", query);
     expect(response.status).toBe(400);

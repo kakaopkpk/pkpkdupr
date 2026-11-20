@@ -14,8 +14,12 @@ import { apiFetch } from "@/lib/api";
 import type { MatchInfo } from "@/types/match";
 
 /** JSON 응답 형태(날짜는 문자열) */
-export type MatchSessionDetailInfo = Omit<MatchSessionDetail, "date"> & {
+export type MatchSessionDetailInfo = Omit<
+  MatchSessionDetail,
+  "date" | "completedAt"
+> & {
   date: string;
+  completedAt: string | null;
 };
 
 export type TodayMatchSessionsInfo = Omit<
@@ -104,6 +108,14 @@ export const addMatchSessionParticipant = async (
   );
 };
 
+/** 정기 세션을 완료한다(POST /api/match-sessions/:sessionId/complete). 응답은 완료 시각을 담은 세션 */
+export const completeMatchSession = (sessionId: string) =>
+  requestJson<MatchSessionDetailInfo>(
+    `${sessionPath(sessionId)}/complete`,
+    "세션을 완료하지 못했어요.",
+    jsonInit("POST"),
+  );
+
 /** JSON 응답 형태의 게스트(날짜는 문자열) */
 export type GuestPlayerInfo = PlayerInfo;
 
@@ -140,14 +152,15 @@ export const removeMatchSessionParticipant = async (
   );
 };
 
+/** rank는 감점순 후보 순번(0부터). 후보 수를 넘으면 서버가 1등으로 돌린다 */
 export const fetchSessionRecommendations = (
   sessionId: string,
   courts: number,
-  seed: number,
+  rank: number,
 ) => {
   const searchParams = new URLSearchParams({
     courts: String(courts),
-    seed: String(seed),
+    rank: String(rank),
   });
   return requestJson<MatchSessionRecommendationResponse>(
     `${sessionPath(sessionId)}/recommendations?${searchParams.toString()}`,

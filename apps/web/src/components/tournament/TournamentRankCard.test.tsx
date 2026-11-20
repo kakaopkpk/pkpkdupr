@@ -25,6 +25,7 @@ const makeSession = (
   location: "야탑초등학교",
   startTime: "10:00",
   endTime: "18:00",
+  completedAt: null,
   isToday: false,
   participants: [member("alice"), member("bob"), member("carol")] as MatchSessionDetailInfo["participants"],
   matchCount: 6,

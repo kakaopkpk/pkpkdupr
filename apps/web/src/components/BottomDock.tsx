@@ -3,7 +3,7 @@ import type { MatchInfo } from "@/types/match";
 import type { TabKey } from "@/context/TabNavigationContext";
 import { useMinuteClock } from "@/hooks/useMinuteClock";
 import { PlusIcon } from "@/components/ui/Icons";
-import { formatElapsed } from "@/lib/format";
+import { formatElapsed, MINUTE_MS } from "@/lib/format";
 import {
   PRESENCE_ENTER_CLASS,
   PRESENCE_EXIT_CLASS,
@@ -211,7 +211,7 @@ export const PlusMenu: React.FC<{
 };
 
 /**
- * 하단 바 위 알림 알약(높이 60). 하이라이트 점, 두 줄 문구, 블루 버튼.
+ * 하단 바 위 알림 알약(높이 60). 점(진행 중 알림은 깜빡이는 하이라이트, 세션 완료는 블루), 두 줄 문구, 블루 버튼.
  * 마운트되면 하단 바 뒤에서 올라오고, isExiting이면 가라앉으며 사라진다. 유리 재질이 흐림을 유지하도록 애니메이션은 이 루트에 건다
  */
 const DockBar: React.FC<{
@@ -224,6 +224,7 @@ const DockBar: React.FC<{
   /** 주면 점·제목·설명 부분을 눌러 연다 */
   onPressContent?: () => void;
   role?: string;
+  dotTone?: "highlight" | "primary";
 }> = ({
   title,
   description,
@@ -233,12 +234,19 @@ const DockBar: React.FC<{
   onAction,
   onPressContent,
   role,
+  dotTone = "highlight",
 }) => {
   const content = (
     <>
       <span aria-hidden="true" className="relative size-2.5 shrink-0">
-        <span className="absolute inset-0 animate-pk-ping rounded-full bg-pk-hl motion-reduce:hidden" />
-        <span className="absolute inset-0 rounded-full bg-pk-hl" />
+        {dotTone === "highlight" ? (
+          <>
+            <span className="absolute inset-0 animate-pk-ping rounded-full bg-pk-hl motion-reduce:hidden" />
+            <span className="absolute inset-0 rounded-full bg-pk-hl" />
+          </>
+        ) : (
+          <span className="absolute inset-0 rounded-full bg-pk-primary" />
+        )}
       </span>
       <span className="flex min-w-0 flex-col">
         <span className="truncate text-pk-15 font-bold text-pk-ink">{title}</span>
@@ -355,3 +363,48 @@ export const JoinSessionBar: React.FC<{
     onAction={onJoin}
   />
 );
+
+/**
+ * 정기 세션 종료 시각(21:00)부터 자동 완료(22:00) 전까지 어느 탭에서나 보이는 세션 완료 바.
+ * 누구든 "세션 완료"를 누르면 확인 없이 바로 완료한다
+ */
+export const CompleteSessionBar: React.FC<{
+  /** 자동 완료 시각 */
+  autoCompleteAt: Date;
+  isPending: boolean;
+  hasError: boolean;
+  isActionDisabled: boolean;
+  isExiting?: boolean;
+  onComplete: () => void;
+}> = ({
+  autoCompleteAt,
+  isPending,
+  hasError,
+  isActionDisabled,
+  isExiting,
+  onComplete,
+}) => {
+  const now = useMinuteClock();
+  // 남은 분은 올려 센다(21:59:30이면 "1분 뒤")
+  const minutesLeft = Math.max(
+    1,
+    Math.ceil((autoCompleteAt.getTime() - now.getTime()) / MINUTE_MS),
+  );
+
+  return (
+    <DockBar
+      role="status"
+      dotTone="primary"
+      title="세션 종료 시간이에요"
+      description={
+        hasError
+          ? "완료하지 못했어요. 다시 시도해 주세요"
+          : `${minutesLeft}분 뒤 자동 완료`
+      }
+      actionLabel={isPending ? "완료 중…" : "세션 완료"}
+      isActionDisabled={isActionDisabled || isPending}
+      isExiting={isExiting}
+      onAction={onComplete}
+    />
+  );
+};

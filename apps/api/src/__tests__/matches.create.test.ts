@@ -139,6 +139,7 @@ const buildManagedSession = (
   autoCreated: true,
   startTime: null,
   endTime: null,
+  completedAt: null,
   createdAt: now,
   updatedAt: now,
   ...overrides,
@@ -693,6 +694,22 @@ describe("POST /api/matches", () => {
         date: regularSession.date,
         location: regularSession.location,
       });
+    });
+
+    it("회원이 완료한 정기 세션에는 완료 뒤 기록한 경기를 붙이지 않는다", async () => {
+      // 2026-11-12(목) 21:30 KST, 정기 세션은 21:10에 완료
+      setNow("2026-11-12T12:30:00.000Z");
+      findOrCreateRegularSession.mockResolvedValue(
+        buildManagedSession({
+          completedAt: new Date("2026-11-12T12:10:00.000Z"),
+        }),
+      );
+
+      const response = await postDoublesMatch();
+
+      expect(response.status).toBe(201);
+      expect(addSessionParticipants).not.toHaveBeenCalled();
+      expect(capturedCreatePayload?.session).toBeUndefined();
     });
 
     it("22:00에 시작한 경기는 세션 없이 저장한다", async () => {

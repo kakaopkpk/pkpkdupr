@@ -11,10 +11,7 @@ import {
 } from "@/lib/matchSessions";
 import type { MatchInfo } from "@/types/match";
 
-const SEED_RANGE = 2 ** 31;
 const RECOMMENDATION_DATA_KINDS = ["sessions", "matches"] as const;
-
-const createSeed = () => Math.floor(Math.random() * SEED_RANGE);
 
 /**
  * 추천 코트에 든 선수 중 지금 진행 중 경기에 있거나 세션 참여자에서 빠진 선수 id(정렬).
@@ -47,18 +44,18 @@ export interface SessionRecommendationsState {
   recommendation: MatchSessionRecommendationResponse | null;
   status: "idle" | "loading" | "ready" | "error";
   error: string | null;
-  /** 새 seed로 다시 추천한다 */
+  /** 감점순 다음 후보를 받는다. 마지막 후보 다음은 서버가 1등으로 돌린다 */
   recommendAgain: () => void;
-  /** 같은 seed로 다시 받는다(당겨서 새로고침) */
+  /** 지금 순번 그대로 다시 받는다(당겨서 새로고침) */
   reload: () => Promise<void>;
 }
 
 /**
  * 진행 중 세션의 복식 추천. sessionId가 null이면 받지 않는다.
- * 코트 수는 API 기본값이고, 내 세션·경기 변경(경기 시작·참여자 변경) 무효화에만 같은 seed로 다시 받는다.
+ * 코트 수는 API 기본값이고, 세션이 바뀌거나 내 세션·경기 변경(경기 시작·참여자 변경) 무효화가 오면 1등부터 다시 받는다.
  * 추천이 바뀌면 보던 매칭이 흔들리므로 TTL·남의 변경으로는 다시 받지 않는다(localOnly).
  * 예외로 추천 코트의 선수가 진행 중 경기(useLiveSession().inProgressMatches)에 들어가거나 세션 참여자에서 빠지면
- * 같은 seed로 다시 받는다.
+ * 지금 순번 그대로 다시 받는다.
  */
 export const useSessionRecommendations = (
   sessionId: string | null,
@@ -66,7 +63,6 @@ export const useSessionRecommendations = (
   const dataVersion = useDataVersion(RECOMMENDATION_DATA_KINDS, {
     localOnly: true,
   });
-  const [seed, setSeed] = useState(createSeed);
   const [recommendation, setRecommendation] =
     useState<MatchSessionRecommendationResponse | null>(null);
   const [status, setStatus] =
@@ -75,51 +71,61 @@ export const useSessionRecommendations = (
   const requestIdRef = useRef(0);
   const loadedSessionIdRef = useRef<string | null>(null);
   const isLoadingRef = useRef(false);
+  /**
+   * 마지막으로 받은 후보 순번. 다시 추천은 이 다음 순번을 요청하므로,
+   * 받는 중에 또 누르거나 요청이 실패해도 순번이 건너뛰지 않는다(늦은 응답은 requestId로 버린다).
+   */
+  const shownRankRef = useRef(0);
   const { liveSession, inProgressMatches } = useLiveSession();
 
-  const load = useCallback(async () => {
-    const requestId = ++requestIdRef.current;
-    if (!sessionId) {
-      loadedSessionIdRef.current = null;
-      isLoadingRef.current = false;
-      setRecommendation(null);
-      setStatus("idle");
-      setError(null);
-      return;
-    }
-    isLoadingRef.current = true;
+  const load = useCallback(
+    async (rank: number) => {
+      const requestId = ++requestIdRef.current;
+      if (!sessionId) {
+        loadedSessionIdRef.current = null;
+        isLoadingRef.current = false;
+        setRecommendation(null);
+        setStatus("idle");
+        setError(null);
+        return;
+      }
+      isLoadingRef.current = true;
 
-    // 다른 세션이면 이전 추천을 지우고 스켈레톤부터 보인다
-    if (loadedSessionIdRef.current !== sessionId) {
-      loadedSessionIdRef.current = sessionId;
-      setRecommendation(null);
-      setStatus("loading");
-    }
-    try {
-      const data = await fetchSessionRecommendations(
-        sessionId,
-        MATCHMAKING_DEFAULT_COURTS,
-        seed,
-      );
-      if (requestIdRef.current !== requestId) return;
-      isLoadingRef.current = false;
-      setRecommendation(data);
-      setStatus("ready");
-      setError(null);
-    } catch (err) {
-      if (requestIdRef.current !== requestId) return;
-      isLoadingRef.current = false;
-      setError(
-        err instanceof Error && err.message
-          ? err.message
-          : "추천 매칭을 불러오지 못했어요.",
-      );
-      setStatus("error");
-    }
-  }, [seed, sessionId]);
+      // 다른 세션이면 이전 추천을 지우고 스켈레톤부터 보인다
+      if (loadedSessionIdRef.current !== sessionId) {
+        loadedSessionIdRef.current = sessionId;
+        setRecommendation(null);
+        setStatus("loading");
+      }
+      try {
+        const data = await fetchSessionRecommendations(
+          sessionId,
+          MATCHMAKING_DEFAULT_COURTS,
+          rank,
+        );
+        if (requestIdRef.current !== requestId) return;
+        isLoadingRef.current = false;
+        shownRankRef.current = data.rank;
+        setRecommendation(data);
+        setStatus("ready");
+        setError(null);
+      } catch (err) {
+        if (requestIdRef.current !== requestId) return;
+        isLoadingRef.current = false;
+        setError(
+          err instanceof Error && err.message
+            ? err.message
+            : "추천 매칭을 불러오지 못했어요.",
+        );
+        setStatus("error");
+      }
+    },
+    [sessionId],
+  );
 
   useEffect(() => {
-    void load();
+    shownRankRef.current = 0;
+    void load(0);
   }, [load, dataVersion]);
 
   const staleKey = useMemo(
@@ -143,14 +149,16 @@ export const useSessionRecommendations = (
     if (isLoadingRef.current) return;
     if (handledStaleKeyRef.current === staleKey) return;
     handledStaleKeyRef.current = staleKey;
-    void load();
+    void load(shownRankRef.current);
   }, [load, recommendation, staleKey]);
 
   const recommendAgain = useCallback(() => {
     setStatus("loading");
     setRecommendation(null);
-    setSeed(createSeed());
-  }, []);
+    void load(shownRankRef.current + 1);
+  }, [load]);
 
-  return { recommendation, status, error, recommendAgain, reload: load };
+  const reload = useCallback(() => load(shownRankRef.current), [load]);
+
+  return { recommendation, status, error, recommendAgain, reload };
 };

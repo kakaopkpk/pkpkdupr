@@ -77,15 +77,22 @@
   - 종료 < 시작이면 다음 날 종료.
   - 오늘 세션의 시작 시각이 지금보다 이르면 400.
   - 세션 날짜는 시작 시각의 날짜이고 세션 시각(`date`)은 시작 시각과 상관없이 그날 00:00 KST라, 같은 날 같은 이름은 409.
-- 세션 응답의 `startTime`·`endTime`은 정기 세션이면 18:00~22:00, 시각 없이 만든 회원 세션이면 null
+- 세션 응답의 `startTime`·`endTime`은 정기 세션이면 18:00~21:00, 시각 없이 만든 회원 세션이면 null
+- 세션 응답의 `completedAt`은 회원이 정기 세션을 완료한 시각이고, 완료 전이거나 정기 세션이 아니면 null
+- 정기 세션 완료 `POST /api/match-sessions/:sessionId/complete`: 200 `MatchSessionDetail`
+  - 활성 회원 누구나, 종료(21:00)부터 자동 완료(22:00) 전까지 완료 전 정기 세션만 `completed_at`을 지금으로 쓴다.
+  - 이미 완료된 세션이면 처음 완료 시각 그대로 200(동시에 눌러도 한 번만 쓴다).
+  - 정기 세션이 아니거나 그 시간이 아니면 409, 없으면 404, id 형식 오류 400.
 - 세션 응답 `MatchSessionDetail`(상세·일정·오늘·다가오는 세션·참여자 변경)에는 대회 세션만 최종 순위 `placements`가 붙는다.
   - 1~3위 오름차순이고 입력 전이면 빈 배열이다. 순위마다 고른 순서의 선수(첫 선수가 대표, 비활성 회원 포함)와 대진 승패 `record`(`countTournamentUnitRecord`, 셀 경기가 없으면 null).
 - 상세 `GET /api/match-sessions/:sessionId`
 - 세션 경기 `GET /api/match-sessions/:sessionId/matches`: 대진 예정 경기(`scheduled`, `round` 포함)도 포함
 - 점수 없이 진행 중 경기 시작 `POST /api/match-sessions/:sessionId/matches`: `POST /api/matches/start`와 같은 처리, 오늘 세션만, 이미 진행 중인 선수 포함 시 409, 선수 자동 참여
-- 복식 추천 매칭 `GET /api/match-sessions/:sessionId/recommendations?courts=N&seed=S`
+- 복식 추천 매칭 `GET /api/match-sessions/:sessionId/recommendations?courts=N&rank=R`
   - 오늘 세션만, courts 기본 3·1~4로 자름.
-  - seed 생략 시 서버가 정해 응답에 포함하고, 같은 seed면 같은 결과.
+  - 탐색 난수는 세션 id와 완료 경기 수로 서버가 정해, 같은 상황이면 누구에게나 같은 결과.
+  - 후보는 감점순으로 최저 + 5(`MATCHMAKING_CANDIDATE_PENALTY_MARGIN`) 이내 대진 전부이고, 5개(`MATCHMAKING_MIN_CANDIDATES`)보다 적으면 감점순으로 5개까지 채운다.
+  - rank(0부터, 기본 0)번째 후보를 돌려주고 후보 수를 넘으면 나머지로 순환한다. 0 이상 정수가 아니면 400. 응답 `rank`·`candidateCount`.
   - 진행 중 경기 선수 제외.
   - 팀 나누기는 NR을 참여자 평점 중앙값으로 대체하고, 응답 팀 `averageRating`은 NR(게스트 포함)을 3.0으로 친 표시용 평균.
 - 참여자 한 명씩 추가 `POST /api/match-sessions/:sessionId/participants`·삭제 `DELETE /api/match-sessions/:sessionId/participants/:playerId`
@@ -164,7 +171,7 @@
   - 미확인 업적 `GET /api/me/achievements/unseen`: 응답에 요청자 업적 점수 합 `points`, 확인 기록이 없거나 기록의 획득 경기가 지금과 다르면 미확인, 받은 시각 → 업적 정의 순서.
   - 확인 처리 `POST /api/me/achievements/seen` `{ achievements: [{ achievementId, earnedMatchId }] }`: 멱등, 204.
   - 업적을 잃었다가 다른 경기로 다시 받으면 다시 미확인이 된다.
-- 무패 세션·세션 지배자는 만료된 세션(종료 시각이 아니라 빈 세션 만료 시각이 지난 세션, `findEndedSessions`)에서만 받는다.
+- 무패 세션·세션 지배자는 만료된 세션(종료 시각이 아니라 빈 세션 만료 시각이 지난 세션, 정기 세션은 회원이 완료했으면 완료 시각, `findEndedSessions`)에서만 받는다.
   - 진행 중이거나 아직 만료되지 않은 세션은 이후 경기로 결과가 바뀔 수 있어 세지 않는다.
   - `newAchievements`에는 나오지 않고, 세션이 만료된 뒤 미확인 업적으로 축하한다.
 - 무패 세션은 만료된 세션의 모든 경기가 전승이고 4경기 이상일 때 받으며, 받은 경기는 전승 4번째 경기다.
@@ -197,6 +204,7 @@
   - `players`·`ratings`·`achievements`: `PATCH /api/admin/players/:playerId/status`, `POST /api/admin/players/:playerId/promote`
   - `sessions`·`matches`(경기 시작): `POST /api/matches/start`, `POST /api/matches/:matchId/start`, `POST /api/match-sessions/:sessionId/matches`
   - `sessions`·`players`: `POST /api/match-sessions/:sessionId/guests`
+  - `sessions`·`achievements`(세션 지배자·무패 세션 확정): `POST /api/match-sessions/:sessionId/complete`
   - `sessions`: 그 밖의 `/api/match-sessions*`, `/api/cron/*`, `/api/admin/regular-session-skips*`, `PUT /api/admin/match-sessions/:sessionId/placements`
   - `sessions`·`matches`: `POST /api/admin/match-sessions/:sessionId/bracket-matches`
   - `sessions`·`matches`·`ratings`·`achievements`: 그 밖의 `/api/matches*`, `/api/admin/matches*`, 그 밖의 `/api/admin/match-sessions*`(세션 종류·날짜가 경기 응답의 세션 정보와 개근상·순위 변동 기준에 쓰임)
@@ -243,13 +251,13 @@
 - 목록 `GET /api/admin/match-sessions`
 - 만들기 `POST /api/admin/match-sessions` `{ kind, name, location, dateKey?, startTime?, endTime? }`: 응답 `ManagedMatchSession`
   - 회원·대회 세션은 회원 세션 생성과 같은 규칙이다.
-  - 정기 세션은 그 날짜의 직접 만든 정기 세션(18:00~22:00, 보낸 시각 무시, `autoCreated` false)이 된다. 정기 요일(월·목)이 아니면 400, 이미 그날 정기 세션이 있거나 공휴일이면 409.
+  - 정기 세션은 그 날짜의 직접 만든 정기 세션(18:00~21:00, 보낸 시각 무시, `autoCreated` false)이 된다. 정기 요일(월·목)이 아니면 400, 이미 그날 정기 세션이 있거나 공휴일이면 409.
   - 정기 쉬는 날에도 만들고 쉬는 날 기록은 그대로 둔다.
 - 수정 `PATCH /api/admin/match-sessions/:sessionId` `{ name?, location?, kind?, dateKey?, startTime?, endTime? }`
   - 이름·장소·종류는 지난 세션을 포함한 모든 세션에서 고친다.
   - 날짜·시각은 오늘·미래의 정기가 아닌 세션(바꾼 뒤 종류 기준)만, 아니면 409. 경기가 있는 세션은 날짜 409.
   - 정기로 바꾸면 그날 직접 만든 정기 세션이 된다. 월·목이 아니면 400, 이미 있거나 공휴일이면 409.
-  - 직접 만든 정기에서 바꾸면 18:00~22:00 시각이 남고 정기 쉬는 날은 생기지 않는다.
+  - 직접 만든 정기에서 바꾸면 18:00~21:00 시각이 남고 완료 시각은 지우며, 정기 쉬는 날은 생기지 않는다.
   - 자동 정기 세션(`autoCreated`)의 종류를 바꾸면 409.
   - 종류 변경과 나머지 필드는 한 트랜잭션으로 반영한다.
 - 삭제 `DELETE /api/admin/match-sessions/:sessionId`: 오늘·미래 자동 정기 세션을 지우면 그 날짜가 정기 쉬는 날로 남고, 직접 만든 정기 세션은 남지 않음

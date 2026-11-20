@@ -61,6 +61,7 @@ const makeSession = (
   autoCreated: false,
   startTime: "09:00",
   endTime: "17:00",
+  completedAt: null,
   createdAt: now,
   updatedAt: now,
   ...overrides,

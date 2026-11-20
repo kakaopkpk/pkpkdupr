@@ -91,8 +91,10 @@ import {
 import {
   MATCHMAKING_DEFAULT_COURTS,
   clampMatchmakingCourts,
+  getMatchmakingSeed,
   recommendDoublesMatches,
   type MatchSessionRecommendationResponse,
+  type MatchmakingPlayedMatch,
   type RecommendationPlayer,
   type RecommendedTeam,
 } from "@pkpkdupr/shared/matchmaking";
@@ -690,9 +692,13 @@ const resolveSessionForNewMatch = async (
   if (!isRegularSessionTime(matchStartsAt)) {
     return undefined;
   }
-  return await matchRepository.findOrCreateRegularSession(
+  const regular = await matchRepository.findOrCreateRegularSession(
     toKstDateKey(matchStartsAt),
   );
+  // 회원이 완료한 정기 세션에는 그 뒤 경기를 붙이지 않고 세션 없이 저장한다
+  return regular && isSessionOnToday(regular, matchStartsAt)
+    ? regular
+    : undefined;
 };
 
 /**
@@ -883,6 +889,7 @@ const toMatchSessionDetail = (
     dateKey,
     startTime: session.startTime,
     endTime: session.endTime,
+    completedAt: session.completedAt,
     isToday: isSessionOnToday(session, now),
     participants,
     matchCount: session.matchCount,
@@ -1690,22 +1697,25 @@ const parseRecommendationCourts = (value: unknown): number => {
   return clampMatchmakingCourts(courts);
 };
 
-/** 서버가 정하는 seed 범위 상한(미포함). 32비트 부호 있는 정수 양수 범위에 맞춘다 */
-const GENERATED_SEED_MAX_EXCLUSIVE = 2 ** 31;
-
-/** seed 쿼리: 생략이면 서버가 무작위 정수를 정하고, 정수가 아니면 400 */
-const parseRecommendationSeed = (value: unknown): number => {
-  if (value === undefined) {
-    return Math.floor(Math.random() * GENERATED_SEED_MAX_EXCLUSIVE);
-  }
-  const seed =
-    typeof value === "string" && /^-?\d+$/.test(value.trim())
+/** 0 이상 정수 쿼리 값. 숫자만으로 된 문자열이 아니거나 안전한 정수 범위를 넘으면 NaN */
+const parseUnsignedIntegerQuery = (value: unknown): number => {
+  const parsed =
+    typeof value === "string" && /^\d+$/.test(value.trim())
       ? Number(value)
       : NaN;
-  if (!Number.isSafeInteger(seed)) {
-    throw new MatchSessionRequestError("seed는 정수여야 합니다.", 400);
+  return Number.isSafeInteger(parsed) ? parsed : NaN;
+};
+
+/** rank 쿼리: 생략이면 0(1등), 0 이상 정수가 아니면 400. 후보 수를 넘으면 추천 함수가 나머지로 순환한다 */
+const parseRecommendationRank = (value: unknown): number => {
+  if (value === undefined) {
+    return 0;
   }
-  return seed;
+  const rank = parseUnsignedIntegerQuery(value);
+  if (Number.isNaN(rank)) {
+    throw new MatchSessionRequestError("rank는 0 이상 정수여야 합니다.", 400);
+  }
+  return rank;
 };
 
 /** 추천 매칭의 복식 평점. 게스트는 평점이 없는(NR) 선수로 다룬다 */
@@ -1732,7 +1742,7 @@ app.get("/api/match-sessions/:sessionId/recommendations", async (req, res) => {
       throw new MatchSessionRequestError("유효한 세션 ID가 필요합니다.", 400);
     }
     const courts = parseRecommendationCourts(req.query.courts);
-    const seed = parseRecommendationSeed(req.query.seed);
+    const rank = parseRecommendationRank(req.query.rank);
 
     const now = new Date();
     await matchRepository.cleanupExpired(now);
@@ -1748,22 +1758,24 @@ app.get("/api/match-sessions/:sessionId/recommendations", async (req, res) => {
       matchRepository.findInProgressPlayerIds(now),
       matchRepository.findBySession(sessionId),
     ]);
+    const completedMatches: MatchmakingPlayedMatch[] = sessionMatches
+      .filter((match) => match.status === "completed")
+      .map((match) => ({
+        teams: [
+          match.teams[0].players.map((player) => player.id),
+          match.teams[1].players.map((player) => player.id),
+        ],
+      }));
     const plan = recommendDoublesMatches({
       participants: session.participants.map((member) => ({
         id: member.id,
         doublesRating: getRecommendationDoublesRating(member),
       })),
       busyPlayerIds,
-      completedMatches: sessionMatches
-        .filter((match) => match.status === "completed")
-        .map((match) => ({
-          teams: [
-            match.teams[0].players.map((player) => player.id),
-            match.teams[1].players.map((player) => player.id),
-          ],
-        })),
+      completedMatches,
       courts,
-      seed,
+      seed: getMatchmakingSeed(sessionId, completedMatches.length),
+      rank,
     });
 
     // 알고리즘은 participants 안의 id만 돌려주므로 조회가 항상 성공한다.
@@ -1794,7 +1806,8 @@ app.get("/api/match-sessions/:sessionId/recommendations", async (req, res) => {
     const response: MatchSessionRecommendationResponse = {
       sessionId,
       requestedCourts: courts,
-      seed,
+      rank: plan.rank,
+      candidateCount: plan.candidateCount,
       courts: plan.courts.map((court) => ({
         teams: [
           toTeam(court.teams[0]),
@@ -1840,6 +1853,28 @@ app.post("/api/match-sessions/:sessionId/participants", async (req, res) => {
     // 한 명만 추가(ON CONFLICT DO NOTHING)하므로 동시에 다른 회원을 추가해도 서로 덮어쓰지 않는다.
     await matchRepository.addSessionParticipants(sessionId, [playerId]);
     res.json(await requireMatchSessionDetail(sessionId, now));
+  } catch (err) {
+    sendMatchSessionFailure(res, err);
+  }
+});
+
+// 정기 세션 완료: 종료(21:00)부터 자동 완료(22:00) 전까지 활성 회원 누구나, 이미 완료됐으면 그대로 돌려준다
+app.post("/api/match-sessions/:sessionId/complete", async (req, res) => {
+  try {
+    if (!(await getAuthPayload(req, res))) {
+      return;
+    }
+    const sessionId = req.params.sessionId;
+    if (!isEntityId(sessionId, "session")) {
+      throw new MatchSessionRequestError("유효한 세션 ID가 필요합니다.", 400);
+    }
+    const now = new Date();
+    const [session, activePlayersById] = await Promise.all([
+      matchRepository.completeRegularSession(sessionId, now),
+      loadActivePlayersById(),
+    ]);
+    // 정기 세션이라 대회 순위는 붙이지 않는다
+    res.json(toMatchSessionDetail(session, activePlayersById, now));
   } catch (err) {
     sendMatchSessionFailure(res, err);
   }
@@ -2127,7 +2162,7 @@ const assertRegularSessionWeekday = (dateKey: string) => {
 
 /**
  * 관리자 세션 만들기. 종류(kind)를 고른다.
- * 회원·대회 세션은 회원 세션 만들기와 같은 규칙이고, 정기 세션은 그 날짜의 정기 세션(18:00~22:00)이 된다
+ * 회원·대회 세션은 회원 세션 만들기와 같은 규칙이고, 정기 세션은 그 날짜의 정기 세션(18:00~21:00)이 된다
  */
 app.post("/api/admin/match-sessions", requireAdmin, async (req, res) => {
   try {
@@ -3534,11 +3569,8 @@ const parseSessionHistoryLimit = (value: unknown): number => {
   if (value === undefined) {
     return SESSION_HISTORY_DEFAULT_LIMIT;
   }
-  const limit =
-    typeof value === "string" && /^\d+$/.test(value.trim())
-      ? Number(value)
-      : NaN;
-  if (!Number.isSafeInteger(limit) || limit < 1) {
+  const limit = parseUnsignedIntegerQuery(value);
+  if (Number.isNaN(limit) || limit < 1) {
     throw new RankingRequestError("limit은 1 이상의 정수여야 합니다.", 400);
   }
   return Math.min(limit, SESSION_HISTORY_MAX_LIMIT);

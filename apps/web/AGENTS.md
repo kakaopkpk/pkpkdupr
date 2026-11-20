@@ -9,6 +9,7 @@
 - 하단 바 위 알림
   - 내가 든 진행 중 경기가 있으면(세션 밖 경기 포함) 홈 외 탭에서 하단 바 위에 미니바(본문을 누르면 경기 상세, 버튼은 `점수 입력`)가 뜹니다.
   - 홈 탭에서 진행 중 세션에 참여하지 않았으면 같은 자리에 참여 알림 바가 뜹니다.
+  - 정기 세션 종료(21:00)부터 자동 완료(22:00) 전까지는 어느 탭에서나 세션 완료 바(`CompleteSessionBar`, "세션 완료" → `completeMatchSession`)가 뜨고, 미니바·알림 바와 함께면 그 위에 쌓입니다.
   - `BottomNav`가 이 표시에 맞춰 `--app-bottom-dock-height`를 갱신하므로 하단 고정 UI와 여백은 이 변수를 기준으로 잡습니다.
   - 하단 토스트(`SystemToast`)가 떠 있는 동안은 그 높이를 `--app-bottom-toast-height`로 알리며, 탭 패널 하단 여백이 이 값을 더합니다.
   - 미니바·알림 바·토스트는 아래에서 올라오며 등장하고 가라앉으며 퇴장합니다. 퇴장이 끝날 때까지 마지막 내용을 남기는 처리는 `hooks/usePresence.ts`가 맡습니다.
@@ -40,8 +41,9 @@
         - 데이터는 `home/useLiveSessionHighlight`다. 지배자는 `home/useSessionTopRiser`, 연승은 셸의 세션 경기로 `lib/sessionWinStreak`의 `getSessionWinStreaks`가 센다.
         - 같은 연승을 진행 중 경기 카드·추천 매칭에 `sessionWinStreaks` prop으로 넘겨 `TeamAvatars`가 아바타 링을 두른다.
       - 진행 중 경기는 경기마다 가로 vs 카드로 둔다. `home/LiveMatchCard`의 내 경기 `MyLiveMatchCard`는 테두리·"내 경기" 칩·점수 입력 버튼과 경기 상세 같은 랠리 팀 줄(`RallyTeamRow`)이 있고, 남의 경기 `LiveMatchCard`는 없다.
+      - 진행 중 일반 세션이면 추천 매칭 아래 "경기 기록" 섹션(세션의 끝난 경기, 제목 줄 오른쪽 전체/내 경기 전환 `ui/MatchFilterControl`)을 둔다.
       - 진행 중 세션이 대회 세션이면 진행 화면이 대회 카드(`LiveSessionCard`) → "내 경기" 섹션 → 라운드별 대진(`TournamentBracketSection`, `showFilter` false)이다.
-        - 세션 지배자·"진행 중" 섹션·추천 매칭·"오늘 기록"은 없고, 남의 진행 중 경기는 대진 안 제자리에만 있다.
+        - 세션 지배자·"진행 중" 섹션·추천 매칭·"경기 기록"은 없고, 남의 진행 중 경기는 대진 안 제자리에만 있다.
         - "내 경기"는 내 진행 중 경기(대진 밖 경기여도)면 `MyLiveMatchCard`(`isTournament`, 칩 대신 "진행 중 · N라운드" 글자 머리)다.
         - 내 진행 중 경기가 없으면 내 다음 대진 경기(`findMyNextBracketMatch`)를 `MyNextBracketMatchCard`("다음 경기 · N라운드", "경기 시작" → `startScheduledMatch` → 경기 무효화)로 보인다. 4xx 문구는 카드 아래, 네트워크 오류는 `showSaveFailure`다.
         - 둘 다 없으면 섹션이 없다.
@@ -71,12 +73,13 @@
     - `Me.tsx`(나)
   - 그 밖의 전역 라우트: `Login.tsx`, `ForceChangePassword.tsx`
 - `src/components/`
-  - `BottomNav.tsx`: 4탭 keep-alive 셸, 하단 바(`BottomDock.tsx`)와 + 메뉴, 전역 화면 래퍼 렌더, 진행 중 경기 미니바·참여 알림 바
+  - `BottomNav.tsx`: 4탭 keep-alive 셸, 하단 바(`BottomDock.tsx`)와 + 메뉴, 전역 화면 래퍼 렌더, 진행 중 경기 미니바·참여 알림 바·세션 완료 바
   - 전역 화면 래퍼
     - `match/`: 경기 상세
       - 진행 중 경기 랠리 팀 줄 `RallyTeamRow`(`LiveMatchRally.tsx`): 아바타 쌍·네트 칸·랠리를 그리고 이름은 호출부가 그린다. 홈 내 경기 카드도 쓴다.
       - 예정 경기면 vs 글자만, 화면이 안 보이면 멈춘다. 공·패들·충격선은 `index.css`의 `pk-rally-*`, 움직임 줄이기면 공이 네트 위에 멈춘다.
       - 완료 경기는 평점 변화 아래 '이 경기로 받은 업적'(응답 `achievements`)을 기록 완료 띠와 같은 줄 `MatchAchievementRow`로 보인다.
+      - 완료 경기 하단 "같은 멤버로 한 판 더"는 기록(`completedAt`, 없으면 시작 시각) 1시간 안에만 보인다(`isWithinRematchWindow`). 지나면 수정 버튼만 전체 너비로 남는다.
       - 대진 예정 경기(`status: "scheduled"`)는 vs 글자만·시각 없이 보이고 점수 입력·수정·삭제·한 판 더가 없다. 세션 날짜가 오늘(KST)이면 하단 "경기 시작"(`startScheduledMatch`)만 있다.
     - `profile/`: 회원 프로필·경기 목록, 나 탭과 같이 쓰는 머리 `ProfileHeader`. 사진을 불러온 아바타를 누르면 그 자리에서 가운데 240px 원으로 커지는 확대 보기 `AvatarZoomViewer`(누르기·아래로 끌기·Escape·뒤로가기로 닫힘)
     - `records/`: 세션 상세 `SessionReportDrawer`와 그 위 평점 변화 전체 `SessionRatingChangesScreen`
@@ -105,19 +108,20 @@
       - 순위가 없으면 순위 줄, `mine`이 없으면 내 기록 줄을 그 위 구분선과 함께 뺀다. 카드 전체가 `onPress` 하나다.
     - 묶기·라운드 이름·내 다음 경기·팀 평균은 `lib/tournament.ts`.
   - `ui/`: 새 디자인 공통 컴포넌트. 새 화면은 여기 것을 먼저 씁니다.
-    - `Button.tsx`(`PkButton`, variant `primary`·`soft`·`outline`·`ghost`), `Card.tsx`, `SegmentedControl.tsx`, `Headers.tsx`(`TabHeader`·`DetailHeader`), `Form.tsx`(`TextField`·`ListRow`), `Section.tsx`(`Section`·`PreviewSection`·`TextLink`. 섹션 제목이 붙는 묶음은 `Section`으로 만든다), `SheetTitle.tsx`, `ConfirmDialog.tsx`(시트 위 가운데 확인 창. 바텀시트를 겹쳐 쌓지 않을 때 쓰고, 연 쪽이 `useLayerDepth` kind `dialog`로 뒤로가기에 묶는다)
+    - `Button.tsx`(`PkButton`, variant `primary`·`soft`·`outline`·`ghost`), `Card.tsx`, `SegmentedControl.tsx`, `MatchFilterControl.tsx`(섹션 제목 줄의 전체/내 경기 전환, 라벨에 경기 수), `Headers.tsx`(`TabHeader`·`DetailHeader`), `Form.tsx`(`TextField`·`ListRow`), `Section.tsx`(`Section`·`PreviewSection`·`TextLink`. 섹션 제목이 붙는 묶음은 `Section`으로 만든다), `SheetTitle.tsx`, `ConfirmDialog.tsx`(시트 위 가운데 확인 창. 바텀시트를 겹쳐 쌓지 않을 때 쓰고, 연 쪽이 `useLayerDepth` kind `dialog`로 뒤로가기에 묶는다)
     - `MatchRow.tsx`(`MatchRow`), `PlayerAvatar.tsx`(`PlayerAvatar`·`TeamAvatars`), `Delta.tsx`(`RatingDelta`·`RankChange`), `RankBadge.tsx`, `Badges.tsx`(`LivePill`·`HighlightBadge`), `StatusMessageChip.tsx`, `StateMessage.tsx`(빈 상태 `empty`·불러오기 실패 `error`(항상 "다시 시도") 문구, size `panel` 탭·화면 전체·`inline` 카드·목록·시트 안), `CountUpText.tsx`(카운트업 숫자의 자리 폭을 최종 내용으로 고정), `SheenOverlay.tsx`(한 번 지나가는 흰 빛, 부모 `relative`·`overflow-hidden` 필요), `Icons.tsx`, `cx.ts`
   - `profile/UnseenAchievementCelebration.tsx`: `BottomNav`가 렌더. 전역 화면·바텀시트·+ 메뉴가 하나도 열려 있지 않을 때 앱 진입·업적 데이터 버전 변경(무효화·앱 복귀 TTL)·열린 화면이 모두 닫힐 때 `GET /api/me/achievements/unseen`을 조회해, 아직 보지 않은 내 업적(남이 입력한 경기·세션 지배자·관리자 정정 포함)을 `AchievementCelebration`으로 한 장씩 띄우고 닫으면 `POST /api/me/achievements/seen`. 미확인 조회(`fetchUnseenAchievements`)는 진행 중인 확인 처리 요청이 끝난 뒤 보내 방금 본 업적이 다시 뜨지 않는다
   - 공용 레이어·상태: `BottomSheet.tsx`, `PushScreen.tsx`, `SkeletonBlock.tsx`, `TabPanelStatus.tsx`, `HoldToConfirmButton.tsx`, `SystemToast.tsx`, `OfflineBanner.tsx`, `PwaInstallPrompt.tsx`, `PwaUpdatePrompt.tsx`
 - `src/context/`
   - `AuthContext.tsx`: Supabase 세션 구독, `/api/me` 검증, `status`·`player`, 비밀번호 변경, `logout`
   - `TabNavigationContext.tsx`: 탭(`TabKey`: `home`·`schedule`·`ranking`·`me`)·깊이 스택(`pushDepth`/`closeDepth`, 브라우저 뒤로가기 연동)·스크롤 복원·당겨서 새로고침 등록
-  - `AppNavigationContext.tsx`: `useAppNavigation()`으로 전역 화면 열기(`openMatchDetail`, `openMemberProfile`(내 id면 나 탭), `openRecordMatch`, `openCreateSession`(`dateKey`로 날짜를 골라 둔 채 열고, 만든 뒤 `onCreated`를 부름. + 메뉴는 홈 탭으로, 일정 탭은 만든 날로 옮김), `openSettings`, `openSessionReport`(지금 탭 위에 세션 상세 화면), `openAchievementDetail`(업적 상세 시트, 경기 기록 시트보다 위 레이어), `openAchievements`(지금 탭 위에 업적 전체 보기 화면, 내 id여도 나 탭으로 바꾸지 않음. `focusAchievementId`를 주면 진행도 준비 뒤 그 업적 줄 위쪽 끝을 스크롤 영역 높이 40%에 두고 카드 폭 가득 `pk-primary-soft` 바탕을 한 번 반짝임, 움직임 줄이기면 스크롤만)), 전역 화면 레이어 번호 `GLOBAL_LAYER`
+  - `AppNavigationContext.tsx`: `useAppNavigation()`으로 전역 화면 열기(`openMatchDetail`, `openMemberProfile`(내 id면 나 탭), `openRecordMatch`, `openCreateSession`(`dateKey`로 날짜를 골라 둔 채 열고, 만든 뒤 `onCreated`를 부름. + 메뉴는 홈 탭으로, 일정 탭은 만든 날로 옮김), `openSettings`, `openSessionReport`(지금 탭 위에 세션 상세 화면), `openAchievementDetail`(업적 상세 시트, 경기 기록 시트보다 위 레이어. 여는 곳이 받은 여부 `earned`를 넘겨 배지를 불러오기 전에 바로 그림), `openAchievements`(지금 탭 위에 업적 전체 보기 화면, 내 id여도 나 탭으로 바꾸지 않음. `focusAchievementId`를 주면 진행도 준비 뒤 그 업적 줄 위쪽 끝을 스크롤 영역 높이 40%에 두고 카드 폭 가득 `pk-primary-soft` 바탕을 한 번 반짝임, 움직임 줄이기면 스크롤만)), 전역 화면 레이어 번호 `GLOBAL_LAYER`
   - `DataSyncContext.tsx`: 데이터 종류별 무효화와 재조회 신호. 셸(`BottomNav`)이 `DataSyncProvider`로 감싼다(아래 "데이터 재조회")
   - `LiveSessionContext.tsx`: `useLiveSession()`으로 오늘 진행 중 세션·그 경기, 세션과 상관없는 진행 중 경기(`GET /api/matches/in-progress`)와 그중 내 경기
     - 진행 중 세션 `liveSession`은 `getLiveSessionStartsAt` ≤ 지금 < 세션 끝 시각(`getSessionEndsAt`)인 세션(정기 우선)이다. 대회 세션만 시작 시각(`startTime`이 있으면 그날 그 시각)부터다.
     - 경기 기록 시트는 `recordingSession`(진행 중 세션이 있으면 그 세션, 없으면 빈 세션 만료 시각 전 세션)으로 새 경기를 세션에 붙여, 종료 시각이 지난 회원·대회 세션도 그날 자정까지 기록이 그 세션에 들어간다.
-    - 다음 재조회 시각(`getNextLiveSessionBoundary`)은 세션 시작·끝·만료 시각 중 가장 이른 것이다.
+    - 완료할 수 있는 정기 세션 `completableSession`(`isSessionCompletable`)이 있으면 셸이 세션 완료 바를 띄운다.
+    - 다음 재조회 시각(`getNextLiveSessionBoundary`)은 세션 시작·끝·만료 시각과 정기 세션 종료 시각(21:00) 중 가장 이른 것이다.
   - `SystemNoticeContext.tsx`: `useSystemNotice().showSaveFailure({ onRetry })`로 저장 실패 토스트(네트워크 오류에만, 서버 4xx·5xx는 화면 인라인), `showToast({ message, actionLabel?, onAction?, durationMs? })`로 하단 바 위 알약 토스트(기본 5초, 동작 글자 하나)
   - `AppUpdateContext.tsx`: `useAppUpdate()`로 PWA 업데이트 확인·적용 상태
   - `ScreenVisibilityContext.tsx`: `useIsScreenVisible()`로 안쪽 화면이 지금 보이는지. 탭 패널(선택됨 && 탭 셸이 PushScreen에 덮이지 않음)과 PushScreen 본문(열림 && 활성 && 덮이지 않음)이 제공하고, 제공자 밖(바텀시트 등)은 언제나 보임
@@ -156,7 +160,7 @@
   - 화면이 보이게 될 때(탭 전환·덮인 화면 드러남·앱 복귀) 마지막으로 커진 뒤(처음은 마운트 뒤) `DATA_TTL_MS`(5분, 모든 데이터 공통)가 지났으면 커집니다.
   - 화면 보임은 `useIsScreenVisible()`입니다. 자기 `PushScreen` 본문 밖(래퍼 최상단)에서 받는 화면은 `PushScreen`의 `onVisibleChange` 값을 `isScreenVisible`로 넘깁니다. 셸(진행 중 세션·업적 축하)은 늘 보이는 것으로 봅니다.
   - `localOnly`면 내 변경 무효화에만 커지고 TTL·남의 변경에는 커지지 않습니다. 추천 매칭(`useSessionRecommendations`)이 씁니다.
-  - 추천 매칭은 예외로 추천 코트의 선수가 진행 중 경기(`useLiveSession().inProgressMatches`)에 들어가거나 세션 참여자에서 빠지면 같은 seed로 다시 받습니다. 같은 선수 조합이 이어서 걸려 있는 동안은 한 번만 다시 받고, 풀린 뒤 다시 걸리면 또 받습니다.
+  - 추천 매칭은 예외로 추천 코트의 선수가 진행 중 경기(`useLiveSession().inProgressMatches`)에 들어가거나 세션 참여자에서 빠지면 지금 순번(`rank`) 그대로 다시 받습니다. 같은 선수 조합이 이어서 걸려 있는 동안은 한 번만 다시 받고, 풀린 뒤 다시 걸리면 또 받습니다.
 - 남의 변경은 Supabase Realtime 변경 신호로 받습니다(`context/useDataSyncRealtime.ts`, 셸이 한 번 부름).
   - 로그인 상태이고 문서가 보일 때만 private 채널 `data-sync`를 구독하고, 숨으면 해제합니다. 구독 전에 `supabase.realtime.setAuth()`를 부릅니다.
   - `changed` 신호를 받으면 0~1.5초 무작위 지연 뒤 `invalidate(kinds, { remote: true })`합니다. 지연 중 온 신호는 종류를 합쳐 한 번에 무효화합니다(`lib/dataSyncSignal.ts`).
@@ -246,7 +250,7 @@
   - 시작 시각이 있으면 그날 그 시각, 없으면 세션 시각(`date`)이 기준입니다.
   - 홈 대회 대진도 이 기준 전에는 보이지 않습니다.
   - 정기·회원 세션은 세션 시각(`date`)부터 LIVE입니다.
-  - LIVE는 세션 끝 시각(`getSessionEndsAt`)에 끝납니다. 회원·대회 세션은 종료 시각, 정기 세션과 시각 없는 세션은 빈 세션 만료 시각입니다.
+  - LIVE는 세션 끝 시각(`getSessionEndsAt`)에 끝납니다. 회원·대회 세션은 종료 시각, 정기 세션과 시각 없는 세션은 빈 세션 만료 시각입니다(정기 세션은 회원이 완료한 시각 또는 22:00 자동 완료).
 - 랭킹 1~3위는 금·은·동(`pk-gold`·`pk-silver`·`pk-bronze`) 원입니다. 상승은 `pk-up`, 하락은 모두 `pk-down`, 보합은 회색입니다. 빨강(`pk-down`) 채움 버튼은 경기 삭제 확인 시트의 "길게 눌러 삭제"(`HoldToConfirmButton` `danger`, 1초)뿐입니다.
 - 평점 없음은 "–"로 표기하고 NR 글자·알약을 쓰지 않습니다(`formatRating`도 값이 없으면 "–"). 랭킹의 평점 없는 회원 줄은 순위·평점 모두 "–", 세션 평점 변화 줄은 세션 후 평점이 없으면 평점 부분 없이 승패만, 내 변동 카드는 큰 "–" 하나만(변화 표시 없음) 보입니다. 처음 평점을 받은 회원도 다른 회원처럼 시작 평점 3.000 → 새 평점과 3.000 기준 변화량으로 보이며 NEW 같은 별도 표시는 붙이지 않습니다(평점 로그·세션 리포트의 이전 평점에 3.0이 들어 있음). 세션 전 평점이 없는 경우(첫 평점이 공식 DUPR 조정)만 새 평점만 보이고 변화는 "–"입니다. 팀 평균 등 평균 표시는 NR을 3.0으로 칩니다.
 - 카드에는 테두리가 없습니다. 둥글기는 12/20/999만, 글자 크기는 12/13/15/17/22/26만 씁니다.

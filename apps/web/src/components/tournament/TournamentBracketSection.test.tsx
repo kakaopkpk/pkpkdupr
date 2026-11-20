@@ -123,7 +123,9 @@ describe("TournamentBracketSection", () => {
     expect(second).toBeGreaterThan(first);
     expect(other).toBeGreaterThan(second);
     expect(html).not.toContain("3라운드");
-    expect(html).toContain("내 경기");
+    // 전환 라벨 개수는 보이는 대진 줄 수다(취소 경기 제외)
+    expect(html).toContain("전체 3");
+    expect(html).toContain("내 경기 0");
   });
 
   it("경기가 없으면 빈 상태 문구를 보이고 showFilter가 거짓이면 전환이 없다", () => {

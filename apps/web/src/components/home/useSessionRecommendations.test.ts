@@ -14,7 +14,8 @@ const team = (a: string, b: string) => ({
 const recommendation: MatchSessionRecommendationResponse = {
   sessionId: "S1",
   requestedCourts: 1,
-  seed: 1,
+  rank: 0,
+  candidateCount: 1,
   courts: [
     {
       teams: [team("a", "b"), team("c", "d")],

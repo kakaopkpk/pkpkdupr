@@ -90,7 +90,7 @@ const AchievementRow: React.FC<{
   /** true면 카드 폭 가득 연한 파랑 바탕이 한 번 반짝이고 사라진다 */
   isFlashing: boolean;
   onFlashEnd: () => void;
-  onPress: () => void;
+  onPress: (earned: boolean) => void;
 }> = ({ definition, progress, rowIndex, isFlashing, onFlashEnd, onPress }) => {
   const earned = !!progress?.earned;
   // 받은 업적 줄은 움직이지 않아 세지 않는다
@@ -101,7 +101,7 @@ const AchievementRow: React.FC<{
   return (
     <button
       type="button"
-      onClick={onPress}
+      onClick={() => onPress(earned)}
       data-achievement-id={definition.id}
       className="relative isolate grid w-full grid-cols-[44px_minmax(0,1fr)] items-start gap-x-3 py-3 text-left not-last:border-b not-last:border-pk-divider"
     >
@@ -418,11 +418,12 @@ export default function AchievementsScreen({
                         rowIndex={unearnedIndexById.get(definition.id) ?? 0}
                         isFlashing={flashingAchievementId === definition.id}
                         onFlashEnd={handleFlashEnd}
-                        onPress={() => {
+                        onPress={(earned) => {
                           if (playerId) {
                             openAchievementDetail({
                               playerId,
                               achievementId: definition.id,
+                              earned,
                             });
                           }
                         }}

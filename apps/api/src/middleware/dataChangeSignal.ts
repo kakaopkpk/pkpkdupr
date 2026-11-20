@@ -50,6 +50,12 @@ const SIGNAL_ROUTES: readonly SignalRoute[] = [
     pattern: /^\/api\/match-sessions\/[^/]+\/guests$/i,
     kinds: ["sessions", "players"],
   },
+  // 정기 세션 완료는 세션 지배자·무패 세션 업적을 확정한다
+  {
+    method: "POST",
+    pattern: /^\/api\/match-sessions\/[^/]+\/complete$/i,
+    kinds: ["sessions", "achievements"],
+  },
   { pattern: /^\/api\/match-sessions(\/.*)?$/i, kinds: ["sessions"] },
   // 경기
   { method: "POST", pattern: /^\/api\/matches\/start$/i, kinds: MATCH_START_KINDS },

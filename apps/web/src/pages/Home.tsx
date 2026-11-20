@@ -30,7 +30,12 @@ import { findMyNextBracketMatch } from "@/lib/tournament";
 import { Card } from "@/components/ui/Card";
 import { StateMessage } from "@/components/ui/StateMessage";
 import { MatchRow } from "@/components/ui/MatchRow";
+import {
+  MatchFilterControl,
+  useMatchFilter,
+} from "@/components/ui/MatchFilterControl";
 import { Section } from "@/components/ui/Section";
+import { SegmentSwitchFade } from "@/components/ui/SegmentedControl";
 import { useAppNavigation } from "@/context/AppNavigationContext";
 import { useAuth } from "@/context/AuthContext";
 import { useInvalidateData } from "@/context/DataSyncContext";
@@ -198,6 +203,18 @@ const Home: React.FC = () => {
         .sort(compareMatchesByRecordedAtDesc),
     [live.matches],
   );
+  const myCompletedMatches = useMemo(
+    () =>
+      playerId
+        ? completedMatches.filter((match) =>
+            getMatchPlayerIds(match).includes(playerId),
+          )
+        : [],
+    [completedMatches, playerId],
+  );
+  const recordFilter = useMatchFilter();
+  const visibleCompletedMatches =
+    recordFilter.filter === "mine" ? myCompletedMatches : completedMatches;
   const waitingCount = useMemo(() => {
     if (!liveSession) return 0;
     const busy = new Set(busyPlayerIds);
@@ -405,16 +422,38 @@ const Home: React.FC = () => {
           onStart={(court) => void startRecommendedMatch(court)}
         />
       ) : null}
-      <Section title="오늘 기록">
-        {completedMatches.length > 0 ? (
-          <MatchListCard
-            matches={completedMatches}
-            currentPlayerId={playerId}
-            onOpenMatch={openMatchDetail}
+      <Section
+        title="경기 기록"
+        right={
+          <MatchFilterControl
+            value={recordFilter.filter}
+            onChange={recordFilter.changeFilter}
+            allCount={completedMatches.length}
+            mineCount={myCompletedMatches.length}
+            ariaLabel="경기 기록 보기"
           />
-        ) : (
-          <EmptyCard message="아직 기록된 경기가 없어요" />
-        )}
+        }
+      >
+        <SegmentSwitchFade
+          isPlaying={recordFilter.isListFading}
+          onFinish={recordFilter.finishListFade}
+        >
+          {visibleCompletedMatches.length > 0 ? (
+            <MatchListCard
+              matches={visibleCompletedMatches}
+              currentPlayerId={playerId}
+              onOpenMatch={openMatchDetail}
+            />
+          ) : (
+            <EmptyCard
+              message={
+                recordFilter.filter === "mine"
+                  ? "아직 내 경기 기록이 없어요"
+                  : "아직 기록된 경기가 없어요"
+              }
+            />
+          )}
+        </SegmentSwitchFade>
       </Section>
       {/* 미참여자의 참여하기는 셸의 알림 바가 맡는다. 그 바에 가리지 않게 여백을 둔다 */}
       {!isLiveParticipant ? <div className="h-16" /> : null}
