@@ -1,4 +1,4 @@
-import React, { useRef } from "react";
+import React, { useRef, useSyncExternalStore } from "react";
 import { cx } from "@/components/ui/cx";
 
 export type PullToRefreshStatus =
@@ -8,8 +8,37 @@ export type PullToRefreshStatus =
   | "refreshing"
   | "error";
 
+/**
+ * 당김 거리 저장소. 손가락이 움직일 때마다 바뀌는 값이라 제스처를 가진 컴포넌트의
+ * state에 두지 않고, 구독한 인디케이터만 다시 렌더링되게 한다.
+ */
+export interface PullDistanceStore {
+  get: () => number;
+  set: (distance: number) => void;
+  subscribe: (listener: () => void) => () => void;
+}
+
+export const createPullDistanceStore = (): PullDistanceStore => {
+  let distance = 0;
+  const listeners = new Set<() => void>();
+  return {
+    get: () => distance,
+    set: (nextDistance) => {
+      if (nextDistance === distance) return;
+      distance = nextDistance;
+      listeners.forEach((listener) => listener());
+    },
+    subscribe: (listener) => {
+      listeners.add(listener);
+      return () => {
+        listeners.delete(listener);
+      };
+    },
+  };
+};
+
 interface PullToRefreshIndicatorProps {
-  distance: number;
+  distanceStore: PullDistanceStore;
   status: PullToRefreshStatus;
   threshold: number;
 }
@@ -28,10 +57,15 @@ const RING_FULL_DEGREES = 270;
 const SPIN_DURATION_MS = 1000;
 
 const PullToRefreshIndicator: React.FC<PullToRefreshIndicatorProps> = ({
-  distance,
+  distanceStore,
   status,
   threshold,
 }) => {
+  const distance = useSyncExternalStore(
+    distanceStore.subscribe,
+    distanceStore.get,
+    distanceStore.get,
+  );
   const isVisible = status !== "idle";
   const isPullGestureActive = status === "pulling" || status === "armed";
   const rawProgress = distance / threshold;

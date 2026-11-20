@@ -27,6 +27,7 @@ import {
   usePushScreenStackState,
 } from "@/components/PushScreen";
 import PullToRefreshIndicator, {
+  createPullDistanceStore,
   type PullToRefreshStatus,
 } from "@/components/PullToRefreshIndicator";
 import MatchDetailDrawer from "@/components/match/MatchDetailDrawer";
@@ -283,7 +284,7 @@ const BottomNav: React.FC = () => {
     useState<GlobalLayerState<AchievementDetailRequest>>(closedLayer);
   const [isJoiningLiveSession, setIsJoiningLiveSession] = useState(false);
   const [joinLiveSessionError, setJoinLiveSessionError] = useState(false);
-  const [pullDistance, setPullDistance] = useState(0);
+  const [pullDistanceStore] = useState(createPullDistanceStore);
   const [pullToRefreshStatus, setPullToRefreshStatus] =
     useState<PullToRefreshStatus>("idle");
   const [isPullRefreshSlow, setIsPullRefreshSlow] = useState(false);
@@ -897,10 +898,10 @@ const BottomNav: React.FC = () => {
       if (scrollContainerRef.current) {
         scrollContainerRef.current.style.overflow = "";
       }
-      setPullDistance(0);
+      pullDistanceStore.set(0);
       setPullToRefreshStatus(status);
     },
-    [],
+    [pullDistanceStore],
   );
 
   const schedulePullToRefreshReset = useCallback(
@@ -1085,7 +1086,7 @@ const BottomNav: React.FC = () => {
         isPullGestureActiveRef.current = false;
         scrollContainerRef.current?.style.removeProperty("overflow");
       }
-      setPullDistance(distance);
+      pullDistanceStore.set(distance);
       setPullToRefreshStatus(
         distance === 0
           ? "idle"
@@ -1095,7 +1096,7 @@ const BottomNav: React.FC = () => {
       );
       return true;
     },
-    [hasBlockingLayer, resetPullToRefresh],
+    [hasBlockingLayer, pullDistanceStore, resetPullToRefresh],
   );
 
   const handlePullTouchMove = useCallback(
@@ -1135,7 +1136,7 @@ const BottomNav: React.FC = () => {
 
     pullStartRef.current = null;
     pullDistanceRef.current = 0;
-    setPullDistance(0);
+    pullDistanceStore.set(0);
     isPullRefreshingRef.current = true;
     const requestId = pullRefreshRequestIdRef.current + 1;
     pullRefreshRequestIdRef.current = requestId;
@@ -1165,6 +1166,7 @@ const BottomNav: React.FC = () => {
     hasBlockingLayer,
     clearPullRefreshSlowWarning,
     liveSessionState,
+    pullDistanceStore,
     resetPullToRefresh,
     schedulePullToRefreshReset,
     selectedTab,
@@ -1263,7 +1265,7 @@ const BottomNav: React.FC = () => {
                 onTouchCancel={() => resetPullToRefresh()}
               >
                 <PullToRefreshIndicator
-                  distance={pullDistance}
+                  distanceStore={pullDistanceStore}
                   status={pullToRefreshStatus}
                   threshold={PULL_TO_REFRESH_THRESHOLD}
                 />

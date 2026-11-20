@@ -1,5 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { PullToRefreshStatus } from "@/components/PullToRefreshIndicator";
+import {
+  createPullDistanceStore,
+  type PullToRefreshStatus,
+} from "@/components/PullToRefreshIndicator";
 import { triggerHapticFeedback } from "@/lib/haptics";
 
 export const PULL_TO_REFRESH_THRESHOLD = 129.6;
@@ -19,7 +22,7 @@ export const usePullToRefresh = ({
   onRefresh,
   isEnabled = true,
 }: UsePullToRefreshParams) => {
-  const [distance, setDistance] = useState(0);
+  const [distanceStore] = useState(createPullDistanceStore);
   const [status, setStatus] = useState<PullToRefreshStatus>("idle");
   const startRef = useRef<{
     identifier: number;
@@ -50,10 +53,10 @@ export const usePullToRefresh = ({
       isGestureActiveRef.current = false;
       axisRef.current = "undecided";
       container?.style.removeProperty("overflow");
-      setDistance(0);
+      distanceStore.set(0);
       setStatus(nextStatus);
     },
-    [container],
+    [container, distanceStore],
   );
 
   const updateDistance = useCallback(
@@ -121,11 +124,11 @@ export const usePullToRefresh = ({
         isGestureActiveRef.current = false;
         container?.style.removeProperty("overflow");
       }
-      setDistance(nextDistance);
+      distanceStore.set(nextDistance);
       setStatus(nextDistance === 0 ? "idle" : isArmed ? "armed" : "pulling");
       return true;
     },
-    [container, reset],
+    [container, distanceStore, reset],
   );
 
   useEffect(() => {
@@ -186,7 +189,7 @@ export const usePullToRefresh = ({
       distanceRef.current = 0;
       isGestureActiveRef.current = false;
       container.style.removeProperty("overflow");
-      setDistance(0);
+      distanceStore.set(0);
       isRefreshingRef.current = true;
       setStatus("refreshing");
 
@@ -237,5 +240,5 @@ export const usePullToRefresh = ({
     [],
   );
 
-  return { distance, status };
+  return { distanceStore, status };
 };
