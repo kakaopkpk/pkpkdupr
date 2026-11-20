@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
   DEFAULT_THEME_COLOR,
-  combineDimAlphas,
   getDimmedThemeColor,
 } from "./themeColor";
 
@@ -15,7 +14,6 @@ describe("getDimmedThemeColor", () => {
   });
 
   it("딤을 겹치면 더 어두워진다", () => {
-    expect(combineDimAlphas([0.45, 0.45])).toBeCloseTo(0.6975);
     expect(getDimmedThemeColor([0.45, 0.45])).toBe("#545a66");
   });
 });

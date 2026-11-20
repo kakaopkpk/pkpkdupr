@@ -7,19 +7,19 @@ const DIM_INK_COLOR = "#0f1726";
 const parseHex = (hex: string) =>
   [1, 3, 5].map((index) => Number.parseInt(hex.slice(index, index + 2), 16));
 
+const BASE_RGB = parseHex(DEFAULT_THEME_COLOR);
+const INK_RGB = parseHex(DIM_INK_COLOR);
+
 /** 투명도 alphas인 딤들을 차례로 겹쳤을 때의 전체 투명도 */
-export const combineDimAlphas = (alphas: readonly number[]) =>
+const combineDimAlphas = (alphas: readonly number[]) =>
   1 - alphas.reduce((rest, alpha) => rest * (1 - alpha), 1);
 
 /** DEFAULT_THEME_COLOR 위에 딤들을 겹친 색. 딤이 없으면 기본색이다 */
 export const getDimmedThemeColor = (alphas: readonly number[]) => {
-  if (alphas.length === 0) return DEFAULT_THEME_COLOR;
   const alpha = combineDimAlphas(alphas);
-  const base = parseHex(DEFAULT_THEME_COLOR);
-  const ink = parseHex(DIM_INK_COLOR);
-  return `#${base
+  return `#${BASE_RGB
     .map((channel, index) =>
-      Math.round(channel * (1 - alpha) + ink[index] * alpha)
+      Math.round(channel * (1 - alpha) + INK_RGB[index] * alpha)
         .toString(16)
         .padStart(2, "0"),
     )
