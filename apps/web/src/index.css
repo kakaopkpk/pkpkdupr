@@ -330,6 +330,27 @@
   ) {
     cursor: pointer;
   }
+
+  /*
+   * 앱처럼 동작하도록 탭 하이라이트와 길게 누르기(글자 선택·iOS 콜아웃·이미지 끌기)를 끈다.
+   * 입력칸·편집 영역만 글자를 고르고 붙여 넣을 수 있다.
+   */
+  html {
+    -webkit-tap-highlight-color: transparent;
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+
+  :where(input, textarea, select, [contenteditable]:not([contenteditable="false"])) {
+    -webkit-touch-callout: default;
+    -webkit-user-select: text;
+    user-select: text;
+  }
+
+  img {
+    -webkit-user-drag: none;
+  }
 }
 
 @supports (overflow: clip) {

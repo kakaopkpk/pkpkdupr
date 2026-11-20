@@ -55,7 +55,7 @@ export const BracketMatchRow: React.FC<{
       type="button"
       onClick={onPress}
       className={cx(
-        "w-full text-left active:bg-pk-primary-soft/60",
+        "w-full text-left",
         rowPressClassName,
         className,
       )}

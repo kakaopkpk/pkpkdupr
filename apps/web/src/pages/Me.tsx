@@ -1,6 +1,8 @@
 import React, { useCallback, useEffect, useState } from "react";
 import type { MatchTopLevelType } from "@pkpkdupr/shared/match";
 import { IoSettingsOutline } from "react-icons/io5";
+import { cx } from "@/components/ui/cx";
+import { buttonPressClassName } from "@/components/ui/Button";
 import ListPushScreen from "@/components/ListPushScreen";
 import AchievementsScreen from "@/components/profile/AchievementsScreen";
 import AchievementsSection from "@/components/profile/AchievementsSection";
@@ -82,7 +84,7 @@ const Me: React.FC = () => {
             type="button"
             aria-label="설정"
             onClick={openSettings}
-            className="flex size-11 shrink-0 items-center justify-center rounded-full bg-white text-pk-sub active:bg-pk-neutral"
+            className={cx("flex size-11 shrink-0 items-center justify-center rounded-full bg-white text-pk-sub", buttonPressClassName)}
           >
             <IoSettingsOutline className="size-[22px]" />
           </button>

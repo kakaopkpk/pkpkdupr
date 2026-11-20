@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useId, useRef, useState } from "react";
+import { buttonPressClassName } from "@/components/ui/Button";
 import SkeletonBlock from "@/components/SkeletonBlock";
 import AvatarZoomViewer from "@/components/profile/AvatarZoomViewer";
 import { WinLossCount } from "@/components/profile/ProfileStatTile";
@@ -137,7 +138,8 @@ const ProfileHeader: React.FC<ProfileHeaderProps> = ({
           onClick={openZoom}
           className={cx(
             AVATAR_CELL,
-            "flex rounded-full transition-transform duration-150 ease-pk-move enabled:active:scale-[0.92] motion-reduce:transition-none",
+            "flex rounded-full",
+            buttonPressClassName,
             isZoomVisible && "invisible",
           )}
         >

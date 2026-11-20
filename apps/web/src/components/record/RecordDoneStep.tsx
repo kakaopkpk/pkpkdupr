@@ -167,7 +167,7 @@ export default function RecordDoneStep({
                 // 연출 전에도 자리는 차지한다(fill-mode both로 지연 동안 투명)
                 style={isPlaying ? { animationDelay: `${ACHIEVEMENT_DELAY_MS}ms` } : undefined}
                 className={cx(
-                  "rounded-pk-sm bg-pk-primary-soft px-3.5 py-3 active:opacity-80",
+                  "rounded-pk-sm bg-pk-primary-soft px-3.5 py-3",
                   isPlaying && "animate-pk-fade-up motion-reduce:animate-none",
                 )}
                 badgeStyle={

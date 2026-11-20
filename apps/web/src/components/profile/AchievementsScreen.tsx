@@ -9,6 +9,7 @@ import {
 import PushScreen, {
   usePushScreenScrollContainer,
 } from "@/components/PushScreen";
+import { rowPressClassName } from "@/components/ui/Button";
 import SkeletonBlock from "@/components/SkeletonBlock";
 import { AchievementBadge } from "@/components/profile/AchievementBadge";
 import { AchievementPointsSummary } from "@/components/profile/AchievementPointsSummary";
@@ -103,7 +104,7 @@ const AchievementRow: React.FC<{
       type="button"
       onClick={() => onPress(earned)}
       data-achievement-id={definition.id}
-      className="relative isolate grid w-full grid-cols-[44px_minmax(0,1fr)] items-start gap-x-3 py-3 text-left not-last:border-b not-last:border-pk-divider"
+      className={cx("relative isolate grid w-full grid-cols-[44px_minmax(0,1fr)] items-start gap-x-3 py-3 text-left not-last:border-b not-last:border-pk-divider", rowPressClassName)}
     >
       {isFlashing ? (
         // 카드 안쪽 좌우 여백(px-4)까지 덮는다

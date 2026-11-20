@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { MatchSessionParticipant } from "@pkpkdupr/shared/match";
 import BottomSheet from "@/components/BottomSheet";
-import { PkButton } from "@/components/ui/Button";
+import { PkButton, buttonPressClassName, rowPressClassName } from "@/components/ui/Button";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { GuestLabel } from "@/components/ui/GuestLabel";
 import { PersonAddIcon } from "@/components/ui/Icons";
@@ -444,7 +444,8 @@ const ParticipantsEditForm: React.FC<ParticipantsEditFormProps> = ({
               setPendingGuestUsername(guestAddOption.username);
             }}
             className={cx(
-              "flex min-h-14 w-full shrink-0 items-center gap-3 px-1 text-left text-pk-primary active:opacity-70 disabled:active:opacity-100",
+              "flex min-h-14 w-full shrink-0 items-center gap-3 px-1 text-left text-pk-primary",
+              rowPressClassName,
               rows.length > 0 && "border-t border-pk-divider",
             )}
           >
@@ -576,7 +577,7 @@ const ParticipantsView: React.FC<ParticipantsViewProps> = ({
             <button
               type="button"
               onClick={onEdit}
-              className="inline-flex min-h-11 items-center px-2 text-pk-15 font-bold text-pk-primary active:opacity-70"
+              className={cx("inline-flex min-h-11 items-center px-2 text-pk-15 font-bold text-pk-primary", buttonPressClassName)}
             >
               수정
             </button>

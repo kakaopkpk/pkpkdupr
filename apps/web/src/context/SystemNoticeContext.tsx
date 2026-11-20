@@ -7,8 +7,9 @@ import React, {
   useRef,
   useState,
 } from "react";
+import { cx } from "@/components/ui/cx";
 import SystemToast from "@/components/SystemToast";
-import { PkButton } from "@/components/ui/Button";
+import { PkButton, buttonPressClassName } from "@/components/ui/Button";
 import { usePresence } from "@/hooks/usePresence";
 
 const SAVE_FAILURE_IDLE_DISMISS_MS = 10_000;
@@ -184,7 +185,7 @@ export const SystemNoticeProvider: React.FC<{ children: React.ReactNode }> = ({
                 <button
                   type="button"
                   onClick={handleToastAction}
-                  className="h-11 shrink-0 rounded-full px-3 text-pk-15 font-extrabold text-pk-primary active:opacity-70"
+                  className={cx("h-11 shrink-0 rounded-full px-3 text-pk-15 font-extrabold text-pk-primary", buttonPressClassName)}
                 >
                   {notice.item.toast.actionLabel}
                 </button>

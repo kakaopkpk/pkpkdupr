@@ -67,7 +67,7 @@ export const AchievementsSection: React.FC<AchievementsSectionProps> = ({
                   })
                 }
                 className={cx(
-                  "flex min-w-0 flex-col items-center gap-2.5 rounded-pk-sm py-1 active:bg-pk-bg",
+                  "flex min-w-0 flex-col items-center gap-2.5 rounded-pk-sm py-1",
                   rowPressClassName,
                 )}
               >

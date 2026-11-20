@@ -118,7 +118,7 @@ const RankingRow: React.FC<{
     <button
       type="button"
       onClick={onPress}
-      className={cx(rowGridClassName, rowPressClassName, "active:bg-pk-bg")}
+      className={cx(rowGridClassName, rowPressClassName)}
     >
       <span className="flex justify-center">
         <RankBadge rank={entry.rank} />
@@ -148,7 +148,7 @@ const AchievementRankingRow: React.FC<{
   <button
     type="button"
     onClick={onPress}
-    className={cx(rowGridClassName, rowPressClassName, "active:bg-pk-bg")}
+    className={cx(rowGridClassName, rowPressClassName)}
   >
     <span className="flex justify-center">
       <RankBadge rank={entry.rank} />
@@ -174,7 +174,7 @@ const UnratedRow: React.FC<{
   <button
     type="button"
     onClick={onPress}
-    className={cx(rowGridClassName, rowPressClassName, "active:bg-pk-bg")}
+    className={cx(rowGridClassName, rowPressClassName)}
   >
     <span className="flex justify-center text-pk-13 font-extrabold text-pk-muted">
       –
