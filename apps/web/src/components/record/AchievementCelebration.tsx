@@ -2,10 +2,13 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type { AchievementDefinition } from "@pkpkdupr/shared/achievements";
 import { AchievementBadge } from "@/components/profile/AchievementBadge";
-import { PkButton } from "@/components/ui/Button";
+import { buttonPressClassName, PkButton } from "@/components/ui/Button";
+import { ShareIcon } from "@/components/ui/Icons";
 import { CountUpNumber } from "@/components/ui/CountUpNumber";
 import { cx } from "@/components/ui/cx";
 import { GLOBAL_LAYER } from "@/context/AppNavigationContext";
+import { useAuth } from "@/context/AuthContext";
+import { useAchievementShare } from "@/hooks/useAchievementShare";
 import { getCelebrationPointSteps } from "@/lib/achievements";
 import { formatAchievementPoints } from "@/lib/format";
 import { useDimmedThemeColor } from "@/lib/themeColor";
@@ -40,6 +43,8 @@ export interface AchievementCelebrationProps {
    * 장마다 그 장까지 받은 점수만 더한 값이라, 마지막 장의 새 점수가 이 값이다
    */
   totalPoints?: number | null;
+  /** achievements와 같은 순서의 받은 시각. 공유 이미지의 받은 날이며, 없으면 오늘 */
+  earnedAts?: readonly (string | null)[];
   /** 마운트 후 이만큼 기다렸다가 띄운다 */
   delayMs: number;
   onClose: () => void;
@@ -53,6 +58,7 @@ export interface AchievementCelebrationProps {
 export default function AchievementCelebration({
   achievements,
   totalPoints = null,
+  earnedAts,
   delayMs,
   onClose,
 }: AchievementCelebrationProps): React.ReactElement | null {
@@ -69,6 +75,13 @@ export default function AchievementCelebration({
   const engineRef = useRef<ConfettiEngine | null>(null);
 
   const current = achievements[index];
+  const { player } = useAuth();
+  // 지금 보는 장의 업적만 공유한다
+  const shareState = useAchievementShare(
+    isOpen && current && player?.username
+      ? { definition: current, username: player.username, earnedAt: earnedAts?.[index] ?? null }
+      : null,
+  );
   const pointSteps =
     totalPoints == null ? null : getCelebrationPointSteps(achievements, totalPoints);
   const pointStep = pointSteps?.[index] ?? null;
@@ -78,8 +91,10 @@ export default function AchievementCelebration({
   // index.css `.pk-celebration-dim`의 딤 투명도와 같다
   useDimmedThemeColor(isOpen && current != null && phase !== "closing", 0.62);
 
+  // 확인(다음) 버튼은 버튼 묶음의 마지막이다. 공유 버튼은 이미지가 준비되기 전에 비활성이라 처음 포커스를 주지 않는다
   const focusButton = useCallback(() => {
-    actionsRef.current?.querySelector("button")?.focus({ preventScroll: true });
+    const buttons = actionsRef.current?.querySelectorAll("button");
+    buttons?.[buttons.length - 1]?.focus({ preventScroll: true });
   }, []);
 
   useEffect(() => {
@@ -163,15 +178,23 @@ export default function AchievementCelebration({
     if (!isOpen) return;
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") close();
-      // 버튼 하나뿐이라 Tab으로 뒤 시트에 가지 않게 버튼에 묶어 둔다
+      // Tab으로 뒤 시트에 가지 않게 공유·확인 버튼 사이에서만 돈다
       if (event.key === "Tab") {
         event.preventDefault();
-        focusButton();
+        const buttons = Array.from(
+          actionsRef.current?.querySelectorAll<HTMLButtonElement>("button:not(:disabled)") ?? [],
+        );
+        if (buttons.length === 0) return;
+        const currentIndex = buttons.indexOf(document.activeElement as HTMLButtonElement);
+        const step = event.shiftKey ? -1 : 1;
+        const nextIndex =
+          currentIndex < 0 ? 0 : (currentIndex + step + buttons.length) % buttons.length;
+        buttons[nextIndex]?.focus({ preventScroll: true });
       }
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [close, focusButton, isOpen]);
+  }, [close, isOpen]);
 
   if (!isOpen || !current) return null;
   const isLeaving = phase === "leaving";
@@ -306,9 +329,27 @@ export default function AchievementCelebration({
           className="pointer-events-auto absolute inset-x-4 bottom-[calc(30px+env(safe-area-inset-bottom))] animate-pk-fade-in motion-reduce:animate-none"
           style={{ animationDelay: ms(ACTIONS_DELAY_MS), animationDuration: ms(260) }}
         >
-          <PkButton size="lg" fullWidth onClick={advance}>
-            {isLast ? "확인" : "다음"}
-          </PkButton>
+          <div className="flex flex-col items-center gap-2">
+            {shareState.isAvailable ? (
+              <button
+                type="button"
+                disabled={!shareState.canShare}
+                onClick={() => {
+                  if (isAcceptingInput) shareState.share();
+                }}
+                className={cx(
+                  "inline-flex h-11 items-center gap-1.5 px-4 text-pk-15 font-bold text-white/78 disabled:text-white/40",
+                  buttonPressClassName,
+                )}
+              >
+                <ShareIcon />
+                이미지로 공유
+              </button>
+            ) : null}
+            <PkButton size="lg" fullWidth onClick={advance}>
+              {isLast ? "확인" : "다음"}
+            </PkButton>
+          </div>
         </div>
       </div>
     </div>,

@@ -48,6 +48,14 @@ export const formatRatingDelta = (delta: number) => {
   return "0.000";
 };
 
+/** "2026년 11월 13일" 연도까지 쓰고 요일은 없는 날짜 */
+export const formatKstFullDate = (date: Date | string) => {
+  const parts = kstNumericDateFormatter.formatToParts(toDate(date));
+  const get = (type: Intl.DateTimeFormatPartTypes) =>
+    parts.find((part) => part.type === type)?.value ?? "";
+  return `${get("year")}년 ${get("month")}월 ${get("day")}일`;
+};
+
 /** "11월 13일 목요일" */
 export const formatKstLongDate = (date: Date | string) => {
   const { month, day, weekday } = getKstParts(date);

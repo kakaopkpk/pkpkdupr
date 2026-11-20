@@ -238,6 +238,28 @@ export const PlusIcon: React.FC<{ size?: number; strokeWidth?: number }> = ({
 );
 
 /** 자물쇠. 못 받은 업적 배지에 겹쳐 쓴다 */
+/** 상자에서 위로 나가는 화살표(공유) */
+export const ShareIcon: React.FC<{ size?: number; className?: string }> = ({
+  size = 18,
+  className,
+}) => (
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 24 24"
+    aria-hidden="true"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    className={cx("shrink-0", className)}
+  >
+    <path d="M12 3v12M7.5 7.5 12 3l4.5 4.5" />
+    <path d="M8 11H6.5A1.5 1.5 0 0 0 5 12.5v6A1.5 1.5 0 0 0 6.5 20h11a1.5 1.5 0 0 0 1.5-1.5v-6a1.5 1.5 0 0 0-1.5-1.5H16" />
+  </svg>
+);
+
 export const LockIcon: React.FC<{ size?: number; className?: string }> = ({
   size = 14,
   className,

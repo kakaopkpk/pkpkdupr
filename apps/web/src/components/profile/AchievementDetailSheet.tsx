@@ -7,16 +7,18 @@ import BottomSheet from "@/components/BottomSheet";
 import SkeletonBlock from "@/components/SkeletonBlock";
 import { AchievementBadge } from "@/components/profile/AchievementBadge";
 import { PkButton } from "@/components/ui/Button";
-import { LockIcon } from "@/components/ui/Icons";
+import { LockIcon, ShareIcon } from "@/components/ui/Icons";
 import { ProgressBar } from "@/components/ui/ProgressBar";
 import {
   GLOBAL_LAYER,
   type AchievementDetailRequest,
 } from "@/context/AppNavigationContext";
+import { useAuth } from "@/context/AuthContext";
 import {
   type TabKey,
   useTabNavigation,
 } from "@/context/TabNavigationContext";
+import { useAchievementShare } from "@/hooks/useAchievementShare";
 import { useLayerDepth } from "@/hooks/useLayerDepth";
 import {
   type AchievementProgressInfo,
@@ -206,6 +208,15 @@ export default function AchievementDetailSheet({
   const progress = ready?.progress ?? null;
   // 불러오기 전에는 여는 곳이 넘긴 값을 쓰고, 불러오면 받은 결과를 따른다
   const earned = ready ? !!progress?.earned : !!displayedRequest?.earned;
+  const { player } = useAuth();
+  // 공유는 내가 받은 업적만이다. 버튼은 처음부터 두고(불러오는 동안 비활성), 받은 날을 불러온 뒤 이미지를 만든다
+  const canOfferShare =
+    isOpen && !isError && earned && !!player && displayedRequest?.playerId === player.id;
+  const shareState = useAchievementShare(
+    canOfferShare && ready && definition && player?.username
+      ? { definition, username: player.username, earnedAt: progress?.earnedAt ?? null }
+      : null,
+  );
 
   let content: React.ReactElement;
   if (!definition || !displayedRequest) {
@@ -293,9 +304,22 @@ export default function AchievementDetailSheet({
           </div>
         </BottomSheet.Body>
         <BottomSheet.Footer>
-          <PkButton size="lg" fullWidth onClick={() => close()}>
-            닫기
-          </PkButton>
+          <div className="flex gap-2">
+            {canOfferShare && shareState.isAvailable ? (
+              <PkButton
+                variant="soft"
+                size="lg"
+                disabled={!shareState.canShare}
+                onClick={shareState.share}
+              >
+                <ShareIcon />
+                공유
+              </PkButton>
+            ) : null}
+            <PkButton size="lg" className="flex-1" onClick={() => close()}>
+              닫기
+            </PkButton>
+          </div>
         </BottomSheet.Footer>
       </>
     );
