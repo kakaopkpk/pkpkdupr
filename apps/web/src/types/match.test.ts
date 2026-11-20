@@ -57,29 +57,26 @@ describe("isMatchSessionToday", () => {
 });
 
 describe("isWithinRematchWindow", () => {
-  const startsAt = kst("2026-11-18T19:00:00").toISOString();
-  const completedAt = kst("2026-11-18T19:30:00").toISOString();
+  const matchStartsAt = kst("2026-11-18T19:00:00").toISOString();
+  const recorded = {
+    completedAt: kst("2026-11-18T19:30:00").toISOString(),
+    matchStartsAt,
+  };
 
   it("기록 시각(completedAt)에서 1시간이 안 지났으면 true", () => {
-    expect(
-      isWithinRematchWindow(
-        { completedAt, matchStartsAt: startsAt },
-        kst("2026-11-18T20:29:00"),
-      ),
-    ).toBe(true);
+    expect(isWithinRematchWindow(recorded, kst("2026-11-18T20:29:00"))).toBe(
+      true,
+    );
   });
 
   it("기록 시각에서 1시간이 지나면 false", () => {
-    expect(
-      isWithinRematchWindow(
-        { completedAt, matchStartsAt: startsAt },
-        kst("2026-11-18T20:30:00"),
-      ),
-    ).toBe(false);
+    expect(isWithinRematchWindow(recorded, kst("2026-11-18T20:30:00"))).toBe(
+      false,
+    );
   });
 
   it("completedAt이 없으면 시작 시각 기준이다", () => {
-    const match = { completedAt: null, matchStartsAt: startsAt };
+    const match = { completedAt: null, matchStartsAt };
     expect(isWithinRematchWindow(match, kst("2026-11-18T19:59:00"))).toBe(
       true,
     );
