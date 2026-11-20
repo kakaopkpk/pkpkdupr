@@ -2395,7 +2395,8 @@ export class MatchRepository {
 
   /**
    * 정기 세션을 완료한다. 완료 전이고 종료 시각(21:00) ≤ now < 자동 완료(22:00)인 정기 세션일 때만 completed_at을 now로 쓴다.
-   * 조건은 UPDATE 한 문장의 WHERE로 확인하므로 동시에 눌러도 한 번만 쓰인다.
+   * 시간 조건은 읽은 세션으로 먼저 검사하고(쓰는 값이 그 now라 22:00 뒤 값이 되지 않는다),
+   * UPDATE의 WHERE는 completed_at IS NULL만 다시 확인해 동시에 눌러도 처음 완료 시각만 남긴다.
    * 반환: 세션이 없으면 undefined, 있으면 이번에 완료했는지(updated)와 세션
    */
   async completeRegularSession(
