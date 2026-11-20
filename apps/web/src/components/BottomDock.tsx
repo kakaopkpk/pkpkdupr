@@ -3,7 +3,7 @@ import type { MatchInfo } from "@/types/match";
 import type { TabKey } from "@/context/TabNavigationContext";
 import { useMinuteClock } from "@/hooks/useMinuteClock";
 import { PlusIcon } from "@/components/ui/Icons";
-import { formatElapsed } from "@/lib/format";
+import { formatElapsed, MINUTE_MS } from "@/lib/format";
 import {
   PRESENCE_ENTER_CLASS,
   PRESENCE_EXIT_CLASS,
@@ -363,8 +363,6 @@ export const JoinSessionBar: React.FC<{
     onAction={onJoin}
   />
 );
-
-const MINUTE_MS = 60_000;
 
 /**
  * 정기 세션 종료 시각(21:00)부터 자동 완료(22:00) 전까지 어느 탭에서나 보이는 세션 완료 바.

@@ -1857,8 +1857,12 @@ app.post("/api/match-sessions/:sessionId/complete", async (req, res) => {
       throw new MatchSessionRequestError("유효한 세션 ID가 필요합니다.", 400);
     }
     const now = new Date();
-    await matchRepository.completeRegularSession(sessionId, now);
-    res.json(await requireMatchSessionDetail(sessionId, now));
+    const [session, activePlayersById] = await Promise.all([
+      matchRepository.completeRegularSession(sessionId, now),
+      loadActivePlayersById(),
+    ]);
+    // 정기 세션이라 대회 순위는 붙이지 않는다
+    res.json(toMatchSessionDetail(session, activePlayersById, now));
   } catch (err) {
     sendMatchSessionFailure(res, err);
   }

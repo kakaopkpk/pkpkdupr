@@ -2406,8 +2406,9 @@ export class MatchRepository {
     { updated: boolean; session: ManagedMatchSession } | undefined
   > {
     const session = await this.findSessionById(sessionId);
-    if (!session || !isSessionCompletable(session, now)) {
-      return session ? { updated: false, session } : undefined;
+    if (!session) return undefined;
+    if (!isSessionCompletable(session, now)) {
+      return { updated: false, session };
     }
     const result = await this.client.execute({
       sql: `
@@ -2418,9 +2419,12 @@ export class MatchRepository {
       `,
       args: [sessionId, toUnixTimestampSeconds(now)],
     });
-    const updatedSession = await this.findSessionById(sessionId);
-    if (!updatedSession) return undefined;
-    return { updated: result.rows.length > 0, session: updatedSession };
+    if (result.rows.length > 0) {
+      return { updated: true, session: { ...session, completedAt: now } };
+    }
+    // 동시에 누른 다른 요청이 먼저 완료했으면 그 완료 시각을 읽어 돌려준다
+    const latest = await this.findSessionById(sessionId);
+    return latest ? { updated: false, session: latest } : undefined;
   }
 
   /**

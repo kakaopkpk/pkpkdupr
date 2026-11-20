@@ -161,7 +161,7 @@ const hydrateManagedSession = (record: any): ManagedMatchSession => ({
   autoCreated: record.autoCreated === true,
   startTime: record.startTime ?? null,
   endTime: record.endTime ?? null,
-  completedAt: record.completedAt ? new Date(record.completedAt) : null,
+  completedAt: toDateOrNull(record.completedAt),
   createdAt: new Date(record.createdAt),
   updatedAt: new Date(record.updatedAt),
 });

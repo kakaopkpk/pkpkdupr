@@ -874,10 +874,10 @@ const BottomNav: React.FC = () => {
       completableSession
         ? {
             sessionId: completableSession.id,
+            // 완료 전 세션이라 만료 시각이 곧 자동 완료(22:00)다
             autoCompleteAt: getEmptySessionExpiresAt(
               completableSession.kind,
               new Date(completableSession.date),
-              completableSession,
             ),
           }
         : null,
