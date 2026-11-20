@@ -209,9 +209,10 @@ export default function AchievementDetailSheet({
   // 불러오기 전에는 여는 곳이 넘긴 값을 쓰고, 불러오면 받은 결과를 따른다
   const earned = ready ? !!progress?.earned : !!displayedRequest?.earned;
   const { player } = useAuth();
-  // 공유는 내가 받은 업적만이다. 버튼은 처음부터 두고(불러오는 동안 비활성), 받은 날을 불러온 뒤 이미지를 만든다
+  // 공유는 내가 받은 업적만이다. 버튼은 처음부터 두고(불러오는 동안 비활성), 받은 날을 불러온 뒤 이미지를 만든다.
+  // 닫히는 애니메이션 동안에도 내용(displayedRequest)과 같이 남긴다
   const canOfferShare =
-    isOpen && !isError && earned && !!player && displayedRequest?.playerId === player.id;
+    !isError && earned && !!player && displayedRequest?.playerId === player.id;
   const shareState = useAchievementShare(
     canOfferShare && ready && definition && player?.username
       ? { definition, username: player.username, earnedAt: progress?.earnedAt ?? null }

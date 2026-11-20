@@ -237,7 +237,6 @@ export const PlusIcon: React.FC<{ size?: number; strokeWidth?: number }> = ({
   </svg>
 );
 
-/** 자물쇠. 못 받은 업적 배지에 겹쳐 쓴다 */
 /** 상자에서 위로 나가는 화살표(공유) */
 export const ShareIcon: React.FC<{ size?: number; className?: string }> = ({
   size = 18,
@@ -260,6 +259,7 @@ export const ShareIcon: React.FC<{ size?: number; className?: string }> = ({
   </svg>
 );
 
+/** 자물쇠. 못 받은 업적 배지에 겹쳐 쓴다 */
 export const LockIcon: React.FC<{ size?: number; className?: string }> = ({
   size = 14,
   className,

@@ -188,7 +188,11 @@ export default function AchievementCelebration({
         const currentIndex = buttons.indexOf(document.activeElement as HTMLButtonElement);
         const step = event.shiftKey ? -1 : 1;
         const nextIndex =
-          currentIndex < 0 ? 0 : (currentIndex + step + buttons.length) % buttons.length;
+          currentIndex < 0
+            ? event.shiftKey
+              ? buttons.length - 1
+              : 0
+            : (currentIndex + step + buttons.length) % buttons.length;
         buttons[nextIndex]?.focus({ preventScroll: true });
       }
     };
