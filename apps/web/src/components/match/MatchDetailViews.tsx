@@ -394,16 +394,19 @@ export const CompletedMatchDetail: React.FC<CompletedMatchDetailProps> = ({
   </div>
 );
 
-/** 완료 경기 하단 고정 바 내용. 2칸 같은 너비이며, 한 판 더가 거절되면 버튼 위에 서버 문구를 보인다 */
+/**
+ * 완료 경기 하단 고정 바 내용. 한 판 더가 있으면 2칸 같은 너비, 없으면(onPlayAgain 생략) 수정만 전체 너비다.
+ * 한 판 더가 거절되면 버튼 위에 서버 문구를 보인다
+ */
 export const CompletedMatchActions: React.FC<{
   isBusy: boolean;
   error: string | null;
   onEdit: () => void;
-  onPlayAgain: () => void;
+  onPlayAgain?: () => void;
 }> = ({ isBusy, error, onEdit, onPlayAgain }) => (
   <>
     <FooterError message={error} />
-    <div className="grid grid-cols-2 gap-2">
+    <div className={onPlayAgain ? "grid grid-cols-2 gap-2" : undefined}>
       <PkButton
         variant="soft"
         size="lg"
@@ -413,9 +416,11 @@ export const CompletedMatchActions: React.FC<{
       >
         수정
       </PkButton>
-      <PkButton size="lg" fullWidth disabled={isBusy} onClick={onPlayAgain}>
-        같은 멤버로 한 판 더
-      </PkButton>
+      {onPlayAgain && (
+        <PkButton size="lg" fullWidth disabled={isBusy} onClick={onPlayAgain}>
+          같은 멤버로 한 판 더
+        </PkButton>
+      )}
     </div>
   </>
 );

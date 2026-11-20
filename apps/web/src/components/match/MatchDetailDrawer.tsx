@@ -3,7 +3,11 @@ import {
   isMatchRecordDeletable,
   isMatchRecordEditable,
 } from "@pkpkdupr/shared/match";
-import { isMatchSessionToday, type MatchInfo } from "@/types/match";
+import {
+  isMatchSessionToday,
+  isWithinRematchWindow,
+  type MatchInfo,
+} from "@/types/match";
 import PushScreen from "@/components/PushScreen";
 import { getErrorMessage } from "@/components/record/recordMatch.utils";
 import { StateMessage } from "@/components/ui/StateMessage";
@@ -444,18 +448,22 @@ export default function MatchDetailDrawer({
           onOpenSession={openSessionReport}
           onOpenPlayer={openMemberProfile}
           onOpenAchievement={(playerId, achievementId) =>
-            openAchievementDetail({ playerId, achievementId })
+            openAchievementDetail({ playerId, achievementId, earned: true })
           }
         />
       );
-      // 수정할 수 없으면 버튼만 빠진다(안내 문구 없음)
+      // 수정할 수 없으면 버튼만 빠진다(안내 문구 없음). 한 판 더는 기록 1시간 안에만 보인다
       if (canEdit) {
         actions = (
           <CompletedMatchActions
             isBusy={isStartingRematch}
             error={rematchError}
             onEdit={() => openRecordMatch({ kind: "score", matchId: match.id })}
-            onPlayAgain={() => void playAgain(match)}
+            onPlayAgain={
+              isWithinRematchWindow(match, now)
+                ? () => void playAgain(match)
+                : undefined
+            }
           />
         );
       }

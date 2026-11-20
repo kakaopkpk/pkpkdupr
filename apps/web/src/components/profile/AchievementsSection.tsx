@@ -63,6 +63,7 @@ export const AchievementsSection: React.FC<AchievementsSectionProps> = ({
                   openAchievementDetail({
                     playerId,
                     achievementId: definition.id,
+                    earned: true,
                   })
                 }
                 className={cx(

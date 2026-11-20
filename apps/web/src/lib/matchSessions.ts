@@ -140,14 +140,15 @@ export const removeMatchSessionParticipant = async (
   );
 };
 
+/** rank는 감점순 후보 순번(0부터). 후보 수를 넘으면 서버가 1등으로 돌린다 */
 export const fetchSessionRecommendations = (
   sessionId: string,
   courts: number,
-  seed: number,
+  rank: number,
 ) => {
   const searchParams = new URLSearchParams({
     courts: String(courts),
-    seed: String(seed),
+    rank: String(rank),
   });
   return requestJson<MatchSessionRecommendationResponse>(
     `${sessionPath(sessionId)}/recommendations?${searchParams.toString()}`,
