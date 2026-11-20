@@ -111,6 +111,7 @@ export interface SessionReportDrawerProps {
  * - 끝난 대회: 순위 카드 → 리포트(세션 지배자·내 평점·내 새 업적·평점 변화) → "대진"
  * - 끝난 일반 세션: 일정 탭 지난 세션 카드(누를 수 없음) → 리포트 → "경기".
  *   리포트가 없으면(완료 경기 없이 끝남) 버튼 없는 블루 카드
+ * 끝난 세션 머리 카드에는 내 기록을 넣지 않는다. 내 기록은 리포트의 내 평점 카드에만 있다.
  * 리포트 카드는 데이터가 있는 것만 보인다.
  */
 export default function SessionReportDrawer({
@@ -308,11 +309,11 @@ export default function SessionReportDrawer({
       );
     }
     if (session.kind === "tournament") {
-      return <TournamentRankCard session={session} mine={myReport} />;
+      return <TournamentRankCard session={session} mine={null} />;
     }
     if (report) {
       // 일정 탭과 달리 바깥 날짜 제목이 없어 날짜를 앞에 붙인다
-      return <RecordSessionCard session={report.session} mine={myReport} showDate />;
+      return <RecordSessionCard session={report.session} mine={null} showDate />;
     }
     return (
       <SessionBlueCard

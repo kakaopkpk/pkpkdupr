@@ -89,8 +89,9 @@
         - 진행 중(`useLiveSession().liveSession?.id`가 이 세션)이면 D-day 대신 LIVE다. 대회도 진행 중에 모양이 같다.
         - 진행 중 일반 세션이면 카드와 "경기" 사이에 홈과 같은 `LiveSessionHighlightCard`(데이터도 홈과 같은 `home/useLiveSessionHighlight`)를 둔다.
         - 메타 줄은 홈 다음 세션 카드와 같은 `getSessionMetaLabel`(미래면 날짜까지).
-      - 끝난 대회: `TournamentRankCard`(누를 수 없음, `mine`은 리포트 `players`의 내 줄) → 세션 지배자·내 평점·내 새 업적·평점 변화 → `TournamentBracketSection`.
+      - 끝난 대회: `TournamentRankCard`(누를 수 없음) → 세션 지배자·내 평점·내 새 업적·평점 변화 → `TournamentBracketSection`.
       - 끝난 일반 세션: `RecordSessionCard`(`onPress` 없이 누를 수 없음, 메타 줄 앞에 날짜) → 세션 지배자·내 평점·내 새 업적·평점 변화 → "경기" 섹션. 리포트가 없으면 버튼 없는 블루 카드("종료").
+      - 끝난 세션 머리 카드는 `mine`을 넘기지 않는다(내 기록 띠·줄 없음). 내 기록은 `LastSessionMeCard` 하나만 보인다.
     - `record/`: 경기 기록 시트. 완료 단계는 이 경기로 참가자 전원이 받은 업적을 띠(`match/MatchAchievementRow`)로 보이고, 그중 내 새 업적만 화면 전체 축하 연출 `AchievementCelebration`으로 띄우고 닫으면 확인 처리
       - 축하 연출과 내 받은 업적 상세 시트의 공유는 `hooks/useAchievementShare`가 열 때 공유 이미지(`profile/achievementShareImage`, canvas 2D)를 미리 만들어 두고, 누르면 바로 기기 공유 시트(못 하면 내려받기, `lib/achievementShare`)를 연다. iOS Safari는 사용자 동작 직후에만 공유 시트가 열려 누른 뒤에 만들지 않는다.
     - `session/`: 세션 만들기(일정 탭과 같은 `MonthCalendar`로 고르는 날짜, `minDateKey`로 지난 날·오늘이 든 달 앞은 막음, 표시는 `schedule/useScheduleMonthMarks`·시작·종료 시각 칩 `SessionSchedulePicker`, 오늘 이후 어느 날이든)·참여자 시트 `ParticipantsSheet`(열면 참여자 보기, 오른쪽 위 "수정"으로 같은 시트에서 전체 회원 체크·게스트 추가 수정 모드, 완료·취소·뒤로가기는 보기로 돌아감)
