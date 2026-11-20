@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import {
+  getMatchRecordedAt,
   getMatchTopLevelType,
   type AdminMatchDeletionLog,
   type AdminMatchEditLog,
@@ -185,7 +186,7 @@ const MatchesPage: React.FC = () => {
       if (sessionFilterId !== null && match.session?.id !== sessionFilterId) {
         return false;
       }
-      if (periodStart !== null && toDate(match.matchStartsAt).getTime() < periodStart) {
+      if (periodStart !== null && toDate(getMatchRecordedAt(match)).getTime() < periodStart) {
         return false;
       }
       if (category !== "all" && getMatchTopLevelType(match.type) !== category) {

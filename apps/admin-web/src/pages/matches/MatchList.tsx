@@ -1,5 +1,6 @@
 import React, { useMemo } from "react";
 import {
+  getMatchRecordedAt,
   getWinningTeamIndex,
   isSinglesMatchType,
   isWithinMatchEditWindow,
@@ -7,6 +8,7 @@ import {
   type Team,
 } from "@pkpkdupr/shared/match";
 import type { AdminPlayer } from "@pkpkdupr/shared/player";
+import { toKstDateKey } from "@pkpkdupr/shared/session";
 import { Chip } from "../../components/ui/Chip";
 import { cx } from "../../components/ui/cx";
 import { PlayerAvatar } from "../../components/ui/PlayerAvatar";
@@ -20,7 +22,6 @@ import {
   compareMatchesLatestFirst,
   DELETED_PLAYER_LABEL,
   lookupUsername,
-  matchKstDateKey,
   toDate,
   type PlayerLookup,
 } from "./matchView";
@@ -31,16 +32,17 @@ interface MatchGroup {
   matches: Match[];
 }
 
-/** 날짜(KST) 내림차순 → 같은 날짜 안에서는 세션별(가장 늦은 경기가 먼저인 묶음부터) */
+/**
+ * 기록 시각(완료 경기는 점수 입력 시각) 날짜(KST) 내림차순 → 같은 날짜 안에서는 세션별(가장 늦은 경기가 먼저인 묶음부터)
+ */
 const groupMatches = (matches: readonly Match[], now: Date): MatchGroup[] => {
   const groups = new Map<string, MatchGroup>();
   for (const match of [...matches].sort(compareMatchesLatestFirst)) {
-    const dateKey = matchKstDateKey(match);
-    const key = `${dateKey}:${match.session?.id ?? ""}`;
+    const recordedAt = toDate(getMatchRecordedAt(match));
+    const key = `${toKstDateKey(recordedAt)}:${match.session?.id ?? ""}`;
     let group = groups.get(key);
     if (!group) {
-      const startsAt = toDate(match.matchStartsAt);
-      const relativeDay = formatRelativeDay(startsAt, now);
+      const relativeDay = formatRelativeDay(recordedAt, now);
       const dayPrefix =
         relativeDay === "오늘" || relativeDay === "어제" ? `${relativeDay} · ` : "";
       const sessionLabel = match.session
@@ -48,7 +50,7 @@ const groupMatches = (matches: readonly Match[], now: Date): MatchGroup[] => {
         : "세션 없음";
       group = {
         key,
-        label: `${dayPrefix}${formatKstDateWithWeekday(startsAt)} · ${sessionLabel}`,
+        label: `${dayPrefix}${formatKstDateWithWeekday(recordedAt)} · ${sessionLabel}`,
         matches: [],
       };
       groups.set(key, group);
@@ -92,7 +94,7 @@ const MatchRowContent: React.FC<{
   lookup: PlayerLookup;
   now: Date;
 }> = ({ match, lookup, now }) => {
-  const startsAt = toDate(match.matchStartsAt);
+  const recordedAt = toDate(getMatchRecordedAt(match));
   const creator = lookupUsername(lookup, match.creatorPlayerId);
   const editor =
     match.resultSubmittedByPlayerId &&
@@ -103,7 +105,7 @@ const MatchRowContent: React.FC<{
   const winnerIndex = getWinningTeamIndex(match);
 
   const meta = [
-    formatKstTime(startsAt),
+    formatKstTime(recordedAt),
     isSinglesMatchType(match.type) && "단식",
     `기록 ${creator}`,
     editor && `수정 ${editor}`,
@@ -111,7 +113,7 @@ const MatchRowContent: React.FC<{
 
   const chips = [
     match.ratingExcluded && "평점 미반영 · 게스트",
-    !isWithinMatchEditWindow(startsAt, now) && "24시간 지남 · 관리자만 수정",
+    !isWithinMatchEditWindow(toDate(match.matchStartsAt), now) && "24시간 지남 · 관리자만 수정",
     match.status === "scheduled" && "예정",
     match.status === "created" && "진행 중",
     match.status === "cancelled" && "취소됨",
@@ -184,7 +186,7 @@ export const MatchList: React.FC<{
                   {selection && (
                     <input
                       type="checkbox"
-                      aria-label={`${formatKstTime(toDate(match.matchStartsAt))} 경기 고르기`}
+                      aria-label={`${formatKstTime(toDate(getMatchRecordedAt(match)))} 경기 고르기`}
                       checked={selection.selectedIds.has(match.id)}
                       onChange={() => selection.onToggle(match.id)}
                       className="mt-4 size-4 shrink-0 accent-pk-primary"

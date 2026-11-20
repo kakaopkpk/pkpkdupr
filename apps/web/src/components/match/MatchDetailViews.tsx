@@ -1,5 +1,8 @@
 import React, { useMemo } from "react";
-import { getMatchTopLevelType } from "@pkpkdupr/shared/match";
+import {
+  getMatchRecordedAt,
+  getMatchTopLevelType,
+} from "@pkpkdupr/shared/match";
 import {
   getTeamResultScores,
   type MatchInfo,
@@ -372,8 +375,8 @@ export const CompletedMatchDetail: React.FC<CompletedMatchDetailProps> = ({
   // 제목 없는 요소 사이는 16px(gap 10 + 6)이고, 평점 변화 섹션은 Section 규칙(위 20px)을 따른다
   <div className="flex flex-col gap-2.5 px-4 pt-1">
     <p className="mb-1.5 text-center text-pk-13 text-pk-sub tabular-nums">
-      {formatKstShortDate(match.matchStartsAt)}{" "}
-      {formatKstTime(match.matchStartsAt)}
+      {formatKstShortDate(getMatchRecordedAt(match))}{" "}
+      {formatKstTime(getMatchRecordedAt(match))}
       {match.session ? (
         <>
           {" · "}
