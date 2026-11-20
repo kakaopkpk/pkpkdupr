@@ -32,10 +32,15 @@ export const useSessionRecommendations = (
   const loadedSessionIdRef = useRef<string | null>(null);
   /** 다음 요청에 보낼 후보 순번 */
   const rankRef = useRef(0);
+  /** 마지막으로 받은 후보 순번. 다시 추천은 요청 실패와 상관없이 이 다음 순번을 받는다 */
+  const shownRankRef = useRef(0);
+  /** 받는 중이면 true. 받는 중 다시 추천을 또 누르면 순번이 건너뛰므로 막는 데 쓴다 */
+  const loadingRef = useRef(false);
 
   const load = useCallback(async () => {
     const requestId = ++requestIdRef.current;
     if (!sessionId) {
+      loadingRef.current = false;
       loadedSessionIdRef.current = null;
       setRecommendation(null);
       setStatus("idle");
@@ -49,6 +54,7 @@ export const useSessionRecommendations = (
       setRecommendation(null);
       setStatus("loading");
     }
+    loadingRef.current = true;
     try {
       const data = await fetchSessionRecommendations(
         sessionId,
@@ -57,6 +63,7 @@ export const useSessionRecommendations = (
       );
       if (requestIdRef.current !== requestId) return;
       rankRef.current = data.rank;
+      shownRankRef.current = data.rank;
       setRecommendation(data);
       setStatus("ready");
       setError(null);
@@ -68,16 +75,20 @@ export const useSessionRecommendations = (
           : "추천 매칭을 불러오지 못했어요.",
       );
       setStatus("error");
+    } finally {
+      if (requestIdRef.current === requestId) loadingRef.current = false;
     }
   }, [sessionId]);
 
   useEffect(() => {
     rankRef.current = 0;
+    shownRankRef.current = 0;
     void load();
   }, [load, dataVersion]);
 
   const recommendAgain = useCallback(() => {
-    rankRef.current += 1;
+    if (loadingRef.current) return;
+    rankRef.current = shownRankRef.current + 1;
     setStatus("loading");
     setRecommendation(null);
     void load();
