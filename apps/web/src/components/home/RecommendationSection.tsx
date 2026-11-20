@@ -49,7 +49,7 @@ const RecommendationRow: React.FC<{
         disabled={isStartDisabled}
         onClick={onStart}
         className={cx(
-          "inline-flex h-9 shrink-0 select-none items-center justify-center whitespace-nowrap rounded-pk-sm bg-pk-primary-soft px-4 text-pk-13 font-extrabold text-pk-primary touch-manipulation disabled:cursor-not-allowed disabled:bg-pk-neutral disabled:text-pk-muted",
+          "inline-flex h-9 shrink-0 items-center justify-center whitespace-nowrap rounded-pk-sm bg-pk-primary-soft px-4 text-pk-13 font-extrabold text-pk-primary touch-manipulation disabled:cursor-not-allowed disabled:bg-pk-neutral disabled:text-pk-muted",
           buttonPressClassName,
         )}
       >

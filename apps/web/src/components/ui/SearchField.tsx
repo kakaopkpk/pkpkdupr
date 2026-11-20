@@ -1,4 +1,5 @@
 import React, { useRef } from "react";
+import { buttonPressClassName } from "./Button";
 import { cx } from "./cx";
 import { ClearIcon, SearchIcon } from "./Icons";
 
@@ -52,7 +53,7 @@ export const SearchField: React.FC<SearchFieldProps> = ({
             onValueChange("");
             inputRef.current?.focus();
           }}
-          className="flex h-full w-11 shrink-0 items-center justify-center text-pk-quiet"
+          className={cx("flex h-full w-11 shrink-0 items-center justify-center text-pk-quiet", buttonPressClassName)}
         >
           <ClearIcon />
         </button>

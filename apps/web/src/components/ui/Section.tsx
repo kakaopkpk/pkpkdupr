@@ -1,4 +1,6 @@
 import React from "react";
+import { cx } from "./cx";
+import { buttonPressClassName } from "./Button";
 import { ChevronRightIcon } from "./Icons";
 
 /**
@@ -56,7 +58,7 @@ export const TextLink: React.FC<{
   <button
     type="button"
     onClick={onPress}
-    className="inline-flex min-h-11 items-center gap-0.5 text-pk-13 font-bold text-pk-primary"
+    className={cx("inline-flex min-h-11 items-center gap-0.5 text-pk-13 font-bold text-pk-primary", buttonPressClassName)}
   >
     {children}
     {chevron ? <LinkChevron /> : null}

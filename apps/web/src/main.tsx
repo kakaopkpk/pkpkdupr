@@ -28,6 +28,19 @@ const restorePagesRedirect = () => {
 
 restorePagesRedirect();
 
+// 안드로이드는 이미지·링크를 길게 누르면 저장·복사 메뉴를 띄운다. CSS로는 못 막아 메뉴 이벤트를 끈다.
+// 데스크톱 우클릭 메뉴는 남기도록 터치가 주 입력인 기기에서만 막는다.
+const coarsePointerQuery = window.matchMedia("(pointer: coarse)");
+document.addEventListener("contextmenu", (event) => {
+  if (
+    coarsePointerQuery.matches &&
+    event.target instanceof Element &&
+    event.target.closest("img, a")
+  ) {
+    event.preventDefault();
+  }
+});
+
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
     <BrowserRouter basename={routerBaseName}>

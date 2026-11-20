@@ -1,4 +1,5 @@
 import React, { useId } from "react";
+import { rowPressClassName } from "./Button";
 import { ChevronRightIcon } from "./Icons";
 import { cx } from "./cx";
 
@@ -61,7 +62,7 @@ export const ListRow: React.FC<{
     "flex min-h-[52px] w-full items-center gap-3 text-left not-last:border-b not-last:border-pk-divider";
 
   return onPress ? (
-    <button type="button" onClick={onPress} className={className}>
+    <button type="button" onClick={onPress} className={cx(className, rowPressClassName)}>
       {content}
     </button>
   ) : (
