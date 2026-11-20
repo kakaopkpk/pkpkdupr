@@ -11,27 +11,27 @@ export interface SessionWinStreak {
   player: MatchPlayerInfo;
   /** 그 세션에서 가장 최근 경기부터 이어지는 연승 */
   winStreak: number;
-  /** 그 세션 평점 반영 경기 수와 승 수 */
+  /** 그 세션 완료 경기 수와 승 수. 세션 리포트(세션 지배자 줄)처럼 게스트 참가 경기도 센다 */
   matchCount: number;
   wins: number;
 }
 
-const isRatedCompletedMatch = (
+const isCompletedMatch = (
   match: MatchInfo,
 ): match is MatchInfo & { completedAt: string } =>
-  match.status === "completed" && !match.ratingExcluded && !!match.completedAt;
+  match.status === "completed" && !!match.completedAt;
 
 /**
  * 한 세션 경기 목록으로 센 회원별 세션 연승(SESSION_WIN_STREAK_DISPLAY_MIN 이상만).
- * 평점 미반영 경기(게스트 참가)는 세지 않고, 연승 규칙은 프로필 연승(computeCurrentWinStreaks)과 같다.
+ * 연승 규칙은 프로필 연승(computeCurrentWinStreaks)과 같아 평점 미반영 경기(게스트 참가)는 세지 않는다.
  * 연승이 긴 순, 같으면 아이디 순이다
  */
 export const getSessionWinStreaks = (
   matches: readonly MatchInfo[],
 ): SessionWinStreak[] => {
-  const rated = matches.filter(isRatedCompletedMatch);
+  const completed = matches.filter(isCompletedMatch);
   const streaks = computeCurrentWinStreaks(
-    rated.map((match) => ({
+    completed.map((match) => ({
       id: match.id,
       completedAt: new Date(match.completedAt),
       teamPlayerIds: [
@@ -39,11 +39,12 @@ export const getSessionWinStreaks = (
         match.teams[1].players.map((player) => player.id),
       ],
       scores: match.scores,
+      ratingExcluded: match.ratingExcluded,
     })),
   );
 
   const records = new Map<string, SessionWinStreak>();
-  for (const match of rated) {
+  for (const match of completed) {
     const winningTeamIndex = getWinningTeamIndex(match);
     match.teams.forEach((team, teamIndex) => {
       for (const player of team.players) {

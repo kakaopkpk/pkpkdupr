@@ -66,7 +66,7 @@ describe("getSessionWinStreaks", () => {
     expect(streaks).toEqual([]);
   });
 
-  it("평점 미반영 경기(게스트 참가)는 승패 모두 세지 않는다", () => {
+  it("평점 미반영 경기(게스트 참가)는 연승에서 빼고, 세션 전적에는 센다", () => {
     const streaks = getSessionWinStreaks([
       match(1, ["a"], ["b"], [11, 3]),
       match(2, ["a"], ["c"], [11, 3]),
@@ -75,7 +75,7 @@ describe("getSessionWinStreaks", () => {
     ]);
 
     expect(streaks).toMatchObject([
-      { player: { id: "a" }, winStreak: 3, matchCount: 3, wins: 3 },
+      { player: { id: "a" }, winStreak: 3, matchCount: 4, wins: 3 },
     ]);
   });
 });

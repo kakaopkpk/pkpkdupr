@@ -111,6 +111,17 @@ export const LineStrong: React.FC<{ children: React.ReactNode }> = ({
 
 export const lineTextClassName = "text-pk-15 text-pk-ink break-keep";
 
+/** 연승 소식 문장 "<아이디>님이 N연승 중이에요". 홈 소식 연승 줄과 진행 중 세션 지배자 카드 연승 줄이 같이 쓴다 */
+export const WinStreakLineText: React.FC<{
+  username: string;
+  winStreak: number;
+}> = ({ username, winStreak }) => (
+  <span className={lineTextClassName}>
+    <LineStrong>{username}</LineStrong>님이{" "}
+    <LineStrong>{winStreak}연승</LineStrong> 중이에요
+  </span>
+);
+
 /**
  * 회원 한 명의 소식 줄 틀: 아바타 36 + 문장, 최소 높이 60, 줄 사이 구분선.
  * 홈 소식 피드 줄과 진행 중 세션 지배자 카드의 연승 줄이 같이 쓴다
@@ -243,10 +254,10 @@ export const LiveSessionHighlightCard: React.FC<{
               sessionWinStreak={winStreak}
               onPress={() => openMemberProfile(player.id)}
             >
-              <span className={lineTextClassName}>
-                <LineStrong>{player.username}</LineStrong>님이{" "}
-                <LineStrong>{winStreak}연승</LineStrong> 중이에요
-              </span>
+              <WinStreakLineText
+                username={player.username}
+                winStreak={winStreak}
+              />
               <span className="text-pk-13 text-pk-sub tabular-nums">
                 {matchCount}경기 {wins}승
               </span>

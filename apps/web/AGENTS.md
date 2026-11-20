@@ -37,7 +37,7 @@
         - 어느 카드에서든 참여하기·참여 취소.
       - 진행 중 세션이 없으면 캐러셀(과 진행 중 경기) 아래 "소식" 피드 `home/NewsFeed`(`GET /api/news-feed`, 무한 스크롤, 데이터는 `home/useNewsFeed`)를 둔다. 카드 모양·누르면 가는 곳은 `docs/design.md` "홈"을 따른다.
       - 진행 중 일반 세션이면 블루 카드 아래 `records/SessionReportParts`의 `LiveSessionHighlightCard`(세션 지배자 줄 + 세션 연승 줄)를 둔다. 모양은 `docs/design.md` "홈".
-        - 지배자는 `home/useSessionTopRiser`, 연승은 셸의 세션 경기로 `lib/sessionWinStreak`의 `getSessionWinStreaks`가 센다.
+        - 데이터는 `home/useLiveSessionHighlight`다. 지배자는 `home/useSessionTopRiser`, 연승은 셸의 세션 경기로 `lib/sessionWinStreak`의 `getSessionWinStreaks`가 센다.
         - 같은 연승을 진행 중 경기 카드·추천 매칭에 `sessionWinStreaks` prop으로 넘겨 `TeamAvatars`가 아바타 링을 두른다.
       - 진행 중 경기는 경기마다 가로 vs 카드로 둔다. `home/LiveMatchCard`의 내 경기 `MyLiveMatchCard`는 테두리·"내 경기" 칩·점수 입력 버튼과 경기 상세 같은 랠리 팀 줄(`RallyTeamRow`)이 있고, 남의 경기 `LiveMatchCard`는 없다.
       - 진행 중 세션이 대회 세션이면 진행 화면이 대회 카드(`LiveSessionCard`) → "내 경기" 섹션 → 라운드별 대진(`TournamentBracketSection`, `showFilter` false)이다.
@@ -80,11 +80,11 @@
       - 대진 예정 경기(`status: "scheduled"`)는 vs 글자만·시각 없이 보이고 점수 입력·수정·삭제·한 판 더가 없다. 세션 날짜가 오늘(KST)이면 하단 "경기 시작"(`startScheduledMatch`)만 있다.
     - `profile/`: 회원 프로필·경기 목록, 나 탭과 같이 쓰는 머리 `ProfileHeader`. 사진을 불러온 아바타를 누르면 그 자리에서 가운데 240px 원으로 커지는 확대 보기 `AvatarZoomViewer`(누르기·아래로 끌기·Escape·뒤로가기로 닫힘)
     - `records/`: 세션 상세 `SessionReportDrawer`와 그 위 평점 변화 전체 `SessionRatingChangesScreen`
-      - 다가오는·진행 중·끝난 세션 모두 연다. 세션 단건·경기는 항상, 끝난 세션(`getSessionEndsAt` ≤ 지금)과 시작한 일반 세션만 세션 리포트를 더 읽고, 리포트 404면 리포트 조각 없이 그린다.
+      - 다가오는·진행 중·끝난 세션 모두 연다. 세션 단건·경기는 항상, 끝난 세션(`getSessionEndsAt` ≤ 지금)만 세션 리포트를 더 읽고, 리포트 404면 리포트 조각 없이 그린다.
       - 머리는 글자가 아니라 카드다(불러오는 중 스켈레톤도 카드 자리).
       - 끝나기 전: 일정 탭 `UpcomingSessionCard`(참여자 시트·참여 버튼) → 대회면 `TournamentBracketSection`, 아니면 "경기" 섹션(빈 상태 "아직 경기가 없어요"). 참여자 목록 섹션은 없다.
         - 진행 중(`useLiveSession().liveSession?.id`가 이 세션)이면 D-day 대신 LIVE다. 대회도 진행 중에 모양이 같다.
-        - 진행 중 일반 세션이면 카드와 "경기" 사이에 홈과 같은 `LiveSessionHighlightCard`(리포트 `topRiser` + 세션 경기로 센 연승)를 둔다.
+        - 진행 중 일반 세션이면 카드와 "경기" 사이에 홈과 같은 `LiveSessionHighlightCard`(데이터도 홈과 같은 `home/useLiveSessionHighlight`)를 둔다.
         - 메타 줄은 홈 다음 세션 카드와 같은 `getSessionMetaLabel`(미래면 날짜까지).
       - 끝난 대회: `TournamentRankCard`(누를 수 없음, `mine`은 리포트 `players`의 내 줄) → 세션 지배자·내 평점·내 새 업적·평점 변화 → `TournamentBracketSection`.
       - 끝난 일반 세션: `RecordSessionCard`(`onPress` 없이 누를 수 없음, 메타 줄 앞에 날짜) → 세션 지배자·내 평점·내 새 업적·평점 변화 → "경기" 섹션. 리포트가 없으면 버튼 없는 블루 카드("종료").

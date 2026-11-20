@@ -1,8 +1,5 @@
 import React from "react";
-import {
-  SESSION_WIN_STREAK_DISPLAY_MIN,
-  WIN_STREAK_DISPLAY_MIN,
-} from "@pkpkdupr/shared/streak";
+import { WIN_STREAK_DISPLAY_MIN } from "@pkpkdupr/shared/streak";
 import { FlameIcon } from "./Icons";
 import { cx } from "./cx";
 
@@ -89,17 +86,15 @@ export const WinStreakAvatarFrame: React.FC<{
 };
 
 /**
- * 진행 중 세션에서 세션 연승(SESSION_WIN_STREAK_DISPLAY_MIN 이상) 중인 회원 아바타의 앰버 링.
+ * 진행 중 세션에서 세션 연승 중인 회원(getSessionWinStreaks가 고른 회원) 아바타의 앰버 링. winStreak이 없으면 아바타만 그린다.
  * 굵기는 랭킹 줄 링(sm 1단계)이고, showTag면 숫자 태그를 붙인다(세션 지배자 카드 연승 줄). 경기 아바타는 링만이다
  */
 export const SessionWinStreakFrame: React.FC<{
-  winStreak: number | null | undefined;
+  winStreak: number | undefined;
   showTag?: boolean;
   children: React.ReactNode;
 }> = ({ winStreak, showTag = false, children }) => {
-  if (!winStreak || winStreak < SESSION_WIN_STREAK_DISPLAY_MIN) {
-    return <>{children}</>;
-  }
+  if (winStreak === undefined) return <>{children}</>;
   return (
     <StreakRing size="sm" tier={1} winStreak={showTag ? winStreak : undefined}>
       {children}

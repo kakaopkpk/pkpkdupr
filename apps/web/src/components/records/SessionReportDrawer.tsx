@@ -10,6 +10,7 @@ import { getSessionEndsAt, toKstDateKey } from "@pkpkdupr/shared/session";
 import { getMatchPlayerIds, type MatchInfo } from "@/types/match";
 import PushScreen from "@/components/PushScreen";
 import LastSessionMeCard from "@/components/home/LastSessionMeCard";
+import { useLiveSessionHighlight } from "@/components/home/useLiveSessionHighlight";
 import {
   getPlayerSessionAchievements,
   MyNewAchievementsCard,
@@ -42,10 +43,7 @@ import {
 } from "@/components/ui/SegmentedControl";
 import { useAppNavigation } from "@/context/AppNavigationContext";
 import { useAuth } from "@/context/AuthContext";
-import {
-  getLiveSessionStartsAt,
-  useLiveSession,
-} from "@/context/LiveSessionContext";
+import { useLiveSession } from "@/context/LiveSessionContext";
 import {
   type TabKey,
   useTabNavigation,
@@ -53,7 +51,6 @@ import {
 import { useLayerDepth } from "@/hooks/useLayerDepth";
 import { useMinuteClock } from "@/hooks/useMinuteClock";
 import { getUserErrorMessage } from "@/lib/errors";
-import { getSessionWinStreaks } from "@/lib/sessionWinStreak";
 import {
   fetchMatchSession,
   fetchSessionMatches,
@@ -82,12 +79,9 @@ type LoadState =
       kind: "ready";
       session: MatchSessionDetailInfo;
       matches: MatchInfo[];
-      /**
-       * 세션 리포트. 끝난 세션은 리포트 전체를, 시작한 일반 세션은 세션 지배자 카드에 쓴다.
-       * 시작 전·대회 진행 중이거나 완료 경기가 없으면(404) null
-       */
+      /** 끝난 세션의 리포트. 끝나기 전이거나 완료 경기가 없으면(404) null */
       report: MatchSessionReportInfo | null;
-      /** 불러올 때 세션이 끝났는지(getSessionEndsAt <= 지금) */
+      /** 불러올 때 세션이 끝났는지(getSessionEndsAt <= 지금). 끝난 세션만 리포트를 읽는다 */
       isEnded: boolean;
     }
   | { kind: "error"; message: string };
@@ -100,8 +94,8 @@ const isPlayerInMatch = (match: MatchInfo, playerId: string) =>
 const getSessionEndTime = (session: MatchSessionDetailInfo) =>
   getSessionEndsAt(session.kind, new Date(session.date), session).getTime();
 
-/** 세션 리포트. 완료 경기가 없으면 서버가 404라 리포트 없이 그린다 */
-const fetchSessionReportOrNull = async (sessionId: string) => {
+/** 끝난 세션의 리포트. 완료 경기가 없으면 서버가 404라 리포트 없이 그린다 */
+const fetchEndedSessionReport = async (sessionId: string) => {
   try {
     return await fetchSessionReport(sessionId);
   } catch (err) {
@@ -124,7 +118,7 @@ export interface SessionReportDrawerProps {
 /**
  * 전역 세션 상세 화면. 다가오는·진행 중·끝난 세션 모두 열리고, 머리는 세션 카드다.
  * - 끝나기 전: 일정 탭 블루 카드(D-day 또는 LIVE, 참여자 시트, 참여 버튼) → 대회면 "대진", 아니면 "경기".
- *   진행 중 일반 세션이면 카드와 "경기" 사이에 세션 지배자·세션 연승 카드
+ *   진행 중 일반 세션이면 카드와 "경기" 사이에 홈과 같은 세션 지배자·세션 연승 카드
  * - 끝난 대회: 순위 카드 → 리포트(세션 지배자·내 평점·내 새 업적·평점 변화) → "대진"
  * - 끝난 일반 세션: 일정 탭 지난 세션 카드(누를 수 없음) → 리포트 → "경기".
  *   리포트가 없으면(완료 경기 없이 끝남) 버튼 없는 블루 카드
@@ -184,16 +178,9 @@ export default function SessionReportDrawer({
           fetchSessionMatches(targetSessionId),
         ]);
         const isEnded = getSessionEndTime(session) <= Date.now();
-        // 진행 중 일반 세션도 세션 지배자 카드를 위해 리포트를 읽는다(대회 진행 중에는 지배자가 없다)
-        const hasStartedRegular =
-          session.kind !== "tournament" &&
-          getLiveSessionStartsAt(session).getTime() <= Date.now();
-        // 진행 중 세션의 리포트는 지배자 카드에만 쓰는 보조 데이터라, 실패해도 카드 없이 그린다
         const report = isEnded
-          ? await fetchSessionReportOrNull(targetSessionId)
-          : hasStartedRegular
-            ? await fetchSessionReportOrNull(targetSessionId).catch(() => null)
-            : null;
+          ? await fetchEndedSessionReport(targetSessionId)
+          : null;
         if (requestIdRef.current !== requestId) return;
         setLoadState({ kind: "ready", session, matches, report, isEnded });
         setLoadedVersion(version);
@@ -258,6 +245,12 @@ export default function SessionReportDrawer({
   const participation = useSessionParticipation({ playerId, loadedVersion });
 
   const isLive = live.liveSession?.id === sessionId;
+  // 진행 중 세션이면 홈과 같은 지배자·연승 데이터(셸의 세션 경기)를 쓴다
+  const liveHighlight = useLiveSessionHighlight(
+    isLive ? live.liveSession : null,
+    live.matches,
+    dataVersion,
+  );
   // 진행 중 경기에 든 선수는 참여자 시트에서 뺄 수 없다
   const busyPlayerIds = useMemo(
     () =>
@@ -272,16 +265,6 @@ export default function SessionReportDrawer({
 
   const report = loadState.kind === "ready" ? loadState.report : null;
   const matches = loadState.kind === "ready" ? loadState.matches : null;
-  // 진행 중 일반 세션에서만 세션 지배자 카드에 연승 줄을 보인다
-  const isLiveRegular =
-    isLive &&
-    loadState.kind === "ready" &&
-    !loadState.isEnded &&
-    loadState.session.kind !== "tournament";
-  const sessionWinStreaks = useMemo(
-    () => (isLiveRegular && matches ? getSessionWinStreaks(matches) : []),
-    [isLiveRegular, matches],
-  );
 
   const myReport = useMemo(
     () =>
@@ -436,11 +419,11 @@ export default function SessionReportDrawer({
     return (
       <>
         {renderHeaderCard(session, isEnded)}
-        {isEnded && report ? renderReport(report) : null}
-        {isLiveRegular ? (
+        {report ? renderReport(report) : null}
+        {isLive && !isEnded ? (
           <LiveSessionHighlightCard
-            topRiser={report?.topRiser ?? null}
-            streaks={sessionWinStreaks}
+            topRiser={liveHighlight.topRiser}
+            streaks={liveHighlight.streaks}
           />
         ) : null}
         {session.kind === "tournament" ? (

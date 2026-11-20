@@ -17,7 +17,7 @@ import RecommendationSection, {
 import { useNewsFeed } from "@/components/home/useNewsFeed";
 import { usePreSessionData } from "@/components/home/usePreSessionData";
 import { useSessionRecommendations } from "@/components/home/useSessionRecommendations";
-import { useSessionTopRiser } from "@/components/home/useSessionTopRiser";
+import { useLiveSessionHighlight } from "@/components/home/useLiveSessionHighlight";
 import { LiveSessionHighlightCard } from "@/components/records/SessionReportParts";
 import ParticipantsSheet from "@/components/session/ParticipantsSheet";
 import { LiveSessionCard } from "@/components/session/SessionBlueCard";
@@ -26,7 +26,6 @@ import { TournamentBracketSection } from "@/components/tournament/TournamentBrac
 import { getErrorMessage } from "@/components/session/saveError";
 import { isNetworkError } from "@/lib/errors";
 import { startScheduledMatch } from "@/lib/matches";
-import { getSessionWinStreaks } from "@/lib/sessionWinStreak";
 import { findMyNextBracketMatch } from "@/lib/tournament";
 import { Card } from "@/components/ui/Card";
 import { StateMessage } from "@/components/ui/StateMessage";
@@ -136,8 +135,10 @@ const Home: React.FC = () => {
     todayKey,
   });
   const newsFeed = useNewsFeed({ enabled: isPreSession, dataVersion });
-  const liveTopRiser = useSessionTopRiser(
-    liveSession && !isTournamentLive ? liveSession.id : null,
+  // 세션 지배자 카드와 경기·추천 매칭 아바타의 세션 연승 링
+  const highlight = useLiveSessionHighlight(
+    liveSession,
+    live.matches,
     dataVersion,
   );
   const recommendations = useSessionRecommendations(
@@ -197,19 +198,6 @@ const Home: React.FC = () => {
         .filter((match) => match.status === "completed")
         .sort(compareMatchesByRecordedAtDesc),
     [live.matches],
-  );
-  // 진행 중 일반 세션에서 3연승 이상인 회원. 세션 지배자 카드 연승 줄과 경기·추천 매칭 아바타 링에 쓴다
-  const sessionWinStreaks = useMemo(
-    () =>
-      liveSession && !isTournamentLive ? getSessionWinStreaks(live.matches) : [],
-    [isTournamentLive, live.matches, liveSession],
-  );
-  const sessionWinStreakByPlayer = useMemo(
-    () =>
-      new Map(
-        sessionWinStreaks.map((entry) => [entry.player.id, entry.winStreak]),
-      ),
-    [sessionWinStreaks],
   );
   const waitingCount = useMemo(() => {
     if (!liveSession) return 0;
@@ -360,18 +348,15 @@ const Home: React.FC = () => {
   // ── 그리기 ─────────────────────────────────────────
   /**
    * 진행 중 머리·내 경기 카드·남의 진행 중 경기 카드. 내 경기는 세션 밖 경기여도 맨 위에 온다.
-   * streakByPlayer를 주면(진행 중 세션) 세션 연승 중인 회원 아바타에 링을 두른다
+   * 진행 중 세션이면 세션 연승 중인 회원 아바타에 링을 두른다(진행 중 세션이 없으면 연승도 없다)
    */
-  const renderInProgress = (
-    otherMatches: MatchInfo[],
-    streakByPlayer?: ReadonlyMap<string, number>,
-  ) => (
+  const renderInProgress = (otherMatches: MatchInfo[]) => (
     <Section title="진행 중">
       {myInProgressMatch ? (
         <MyLiveMatchCard
           match={myInProgressMatch}
           now={now}
-          sessionWinStreaks={streakByPlayer}
+          sessionWinStreaks={highlight.streakByPlayer}
           onOpenDetail={() => openMatchDetail(myInProgressMatch.id)}
           onEnterScore={() =>
             openRecordMatch({ kind: "score", matchId: myInProgressMatch.id })
@@ -384,7 +369,7 @@ const Home: React.FC = () => {
             key={match.id}
             match={match}
             now={now}
-            sessionWinStreaks={streakByPlayer}
+            sessionWinStreaks={highlight.streakByPlayer}
             onOpenDetail={() => openMatchDetail(match.id)}
           />
         ))
@@ -403,14 +388,13 @@ const Home: React.FC = () => {
         onPress={() => openSessionReport(session.id)}
       />
       <LiveSessionHighlightCard
-        topRiser={liveTopRiser}
-        streaks={sessionWinStreaks}
+        topRiser={highlight.topRiser}
+        streaks={highlight.streaks}
       />
       {renderInProgress(
         sessionInProgressMatches.filter(
           (match) => match.id !== myInProgressMatch?.id,
         ),
-        sessionWinStreakByPlayer,
       )}
       {isLiveParticipant ? (
         <RecommendationSection
@@ -418,7 +402,7 @@ const Home: React.FC = () => {
           waitingCount={waitingCount}
           startingKey={startState.startingKey}
           startError={startState.error}
-          sessionWinStreaks={sessionWinStreakByPlayer}
+          sessionWinStreaks={highlight.streakByPlayer}
           onStart={(court) => void startRecommendedMatch(court)}
         />
       ) : null}

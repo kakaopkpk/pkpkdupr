@@ -11,6 +11,7 @@ import {
   SessionRankCount,
   SessionRatingCount,
   SessionRatingDeltaCount,
+  WinStreakLineText,
 } from "@/components/records/SessionReportParts";
 import SkeletonBlock from "@/components/SkeletonBlock";
 import { rowPressClassName } from "@/components/ui/Button";
@@ -36,7 +37,6 @@ import type { NewsFeedState } from "@/components/home/useNewsFeed";
 // 바닥에 닿기 전 이만큼 남았을 때 다음 페이지를 미리 불러온다
 const PREFETCH_MARGIN_PX = 240;
 const TAB_SCROLL_AREA_SELECTOR = ".app-tab-panel-scroll-area";
-
 
 /** 탭 본문 스크롤 영역 바닥에 다가가면 onReach를 부른다 */
 const InfiniteScrollTrigger: React.FC<{
@@ -113,10 +113,10 @@ const FeedLine: React.FC<{ entry: FeedLineEntry }> = ({ entry }) => {
   if (line.kind === "winStreak") {
     return (
       <PlayerLineButton player={player} onPress={() => openMemberProfile(player.id)}>
-        <span className={lineTextClassName}>
-          <LineStrong>{player.username}</LineStrong>님이{" "}
-          <LineStrong>{line.winStreak}연승</LineStrong> 중이에요
-        </span>
+        <WinStreakLineText
+          username={player.username}
+          winStreak={line.winStreak}
+        />
       </PlayerLineButton>
     );
   }
