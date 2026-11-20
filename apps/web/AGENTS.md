@@ -156,6 +156,13 @@
   - 화면이 보이게 될 때(탭 전환·덮인 화면 드러남·앱 복귀) 마지막으로 커진 뒤(처음은 마운트 뒤) `DATA_TTL_MS`(5분, 모든 데이터 공통)가 지났으면 커집니다.
   - 화면 보임은 `useIsScreenVisible()`입니다. 자기 `PushScreen` 본문 밖(래퍼 최상단)에서 받는 화면은 `PushScreen`의 `onVisibleChange` 값을 `isScreenVisible`로 넘깁니다. 셸(진행 중 세션·업적 축하)은 늘 보이는 것으로 봅니다.
   - `localOnly`면 내 변경 무효화에만 커지고 TTL·남의 변경에는 커지지 않습니다. 추천 매칭(`useSessionRecommendations`)이 씁니다.
+  - 추천 매칭은 예외로 추천 코트의 선수가 진행 중 경기(`useLiveSession().inProgressMatches`)에 들어가거나 세션 참여자에서 빠지면 같은 seed로 다시 받습니다. 같은 선수 조합으로는 한 번만 다시 받습니다.
+- 남의 변경은 Supabase Realtime 변경 신호로 받습니다(`context/useDataSyncRealtime.ts`, 셸이 한 번 부름).
+  - 로그인 상태이고 문서가 보일 때만 private 채널 `data-sync`를 구독하고, 숨으면 해제합니다. 구독 전에 `supabase.realtime.setAuth()`를 부릅니다.
+  - `changed` 신호를 받으면 0~1.5초 무작위 지연 뒤 `invalidate(kinds, { remote: true })`합니다. 지연 중 온 신호는 종류를 합쳐 한 번에 무효화합니다(`lib/dataSyncSignal.ts`).
+  - 보이는 동안 채널이 다시 `SUBSCRIBED`가 되면(재연결) 끊긴 동안 놓친 변경을 위해 `players`를 뺀 종류를 같은 지연으로 원격 무효화합니다.
+  - 앱 복귀는 숨을 때 구독을 해제하면서 같은 종류를 바로 원격 무효화합니다. 숨은 동안의 무효화는 보이게 될 때 TTL과 합쳐 한 번만 적용되므로, 앱 복귀 첫 `SUBSCRIBED`에는 다시 무효화하지 않습니다.
+  - `CHANNEL_ERROR`·`TIMED_OUT`은 콘솔에 남깁니다. 끊김 대비 주기 폴링은 하지 않습니다.
 - 화면별 종류
   - 진행 중 세션(`LiveSessionContext`)·추천 매칭·일정: `sessions`·`matches`
   - 세션 지배자(`useSessionTopRiser`): `matches`·`ratings`
@@ -167,6 +174,7 @@
   - 회원 경기 전체: `matches`, 업적 전체 보기·업적 축하: `achievements`
 - 참여 버튼은 무효화 뒤 그 화면의 `dataVersion`이 오른 값 이상으로 새로 받은 데이터가 올 때 풀립니다(`useSessionParticipation`의 `dataVersion`·`loadedVersion`).
 - 진행 중 세션은 이와 별개로 세션 시작·끝·만료 시각에 다시 읽고, 숨은 동안 그 시각이 지났으면 다시 보일 때 읽습니다.
+  - 다시 보일 때는 잠깐 기다려 숨은 동안의 무효화·TTL로 이미 다시 읽기 시작했으면 한 번 더 읽지 않습니다.
 - 홈 화면 추가 안내(`PwaInstallPrompt`)는 `BottomNav`가 렌더하며, 설치 안 된 모바일 브라우저에서 홈 탭이 보이고 전역 화면·메뉴가 하나도 열려 있지 않을 때만 뜹니다. 업데이트 감지와 무관하게 유지하고 저장 실패 알림이 떠 있는 동안만 숨깁니다. 닫으면 KST 날짜를 `pkpkdupr:install-prompt-dismissed-date`에 저장해 그날만 숨깁니다.
 
 ## 라우팅 규칙

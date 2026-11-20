@@ -184,6 +184,24 @@
   - 높은 평점은 처음 기준 이상, 낮은 평점은 처음 기준 이하가 된 경기로 받고, 그 뒤 평점이 바뀌어도 유지된다(재계산하면 다시 쓴 로그를 따른다).
   - 평점 업적만은 업적 기준 시각 시점 평점(기준 시각 전 마지막 평점 반영 복식 경기 직후 평점, 그 전 최고치·최저치는 보지 않음)에서 시작해, 그때 이미 10경기와 기준을 채웠으면 그 경기로 받는다. 이 업적은 세션 리포트 `achievements`에 나오지 않는다.
 
+## 데이터 변경 신호
+
+- `/api/` 아래 GET·HEAD·OPTIONS가 아닌 요청이 2xx로 끝나면 `middleware/dataChangeSignal.ts`가 응답 뒤(`finish`) 바뀐 데이터 종류를 보낸다. 저장소 메서드가 아니라 이 미들웨어 한 곳에서 보내며 관리자 쓰기도 포함한다.
+- 전송은 `services/DataChangeSignal.ts`가 Realtime REST broadcast(서비스 키, private 채널 `data-sync`, 이벤트 `changed`, payload `{ kinds }`)로 한다.
+  - 응답을 막지 않고 Edge는 `EdgeRuntime.waitUntil`에 건다. 실패하면 한 번 다시 보낸 뒤 로그만 남긴다.
+  - `SUPABASE_URL`·`SUPABASE_SERVICE_ROLE_KEY`가 없으면(테스트 등) 보내지 않는다.
+  - GET 안에서 일어나는 변경(`cleanupExpired` 등)은 보내지 않는다.
+- 경로 표(`resolveDataChangeKinds`, 위에서 처음 맞는 줄). 표에 없는 쓰기 경로는 모든 종류를 보내므로 새 쓰기 라우트를 추가하면 표에 줄을 넣는다.
+  - 보내지 않음: `POST /api/me/password-changed`, `POST /api/me/achievements/seen`, `POST /api/admin/players/:playerId/official-dupr/preview`
+  - `players`: `PATCH /api/me/profile`, `/api/me/avatar`, `POST /api/admin/register`, 그 밖의 `/api/admin/players*`(성별·아이디·비밀번호 초기화·삭제)
+  - `players`·`ratings`·`achievements`: `PATCH /api/admin/players/:playerId/status`, `POST /api/admin/players/:playerId/promote`
+  - `sessions`·`matches`(경기 시작): `POST /api/matches/start`, `POST /api/matches/:matchId/start`, `POST /api/match-sessions/:sessionId/matches`
+  - `sessions`·`players`: `POST /api/match-sessions/:sessionId/guests`
+  - `sessions`: 그 밖의 `/api/match-sessions*`, `/api/cron/*`, `/api/admin/regular-session-skips*`, `PUT /api/admin/match-sessions/:sessionId/placements`
+  - `sessions`·`matches`: `POST /api/admin/match-sessions/:sessionId/bracket-matches`
+  - `sessions`·`matches`·`ratings`·`achievements`: 그 밖의 `/api/matches*`, `/api/admin/matches*`, 그 밖의 `/api/admin/match-sessions*`(세션 종류·날짜가 경기 응답의 세션 정보와 개근상·순위 변동 기준에 쓰임)
+  - `matches`·`ratings`·`achievements`: `POST /api/admin/ratings/recalculate`, `POST /api/admin/players/:playerId/official-dupr`
+
 ## 관리자
 
 전부 관리자 권한이 필요합니다.

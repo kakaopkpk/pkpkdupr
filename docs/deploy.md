@@ -47,6 +47,21 @@ curl -si -X POST "https://<project-ref>.supabase.co/storage/v1/object/avatars/te
   -H "Content-Type: image/png" --data-binary 'x'
 ```
 
+## 데이터 변경 신호 (Supabase Realtime)
+
+- api가 쓰기 뒤 private 채널 `data-sync`로 바뀐 데이터 종류를 보내고 웹이 구독합니다(루트 `AGENTS.md` "운영과 배포").
+- 함수는 Supabase가 주입하는 `SUPABASE_URL`·`SUPABASE_SERVICE_ROLE_KEY`로 `POST /realtime/v1/api/broadcast`를 부르므로 추가 secret은 필요 없습니다.
+- 받기 권한은 `realtime.messages`의 select 정책(authenticated, topic `data-sync`)이고 `supabase db push`로 적용됩니다. 보내기(insert) 정책은 두지 않습니다.
+- 대시보드 Realtime 설정은 기본값 그대로 둡니다. "Allow public access"를 꺼도(private 채널만 허용) 이 기능은 동작합니다.
+- 운영에서 신호가 오는지 확인합니다(202여야 한다). 웹을 켜 둔 기기는 무작위 지연 안에 홈·랭킹 등을 다시 받습니다.
+
+```bash
+curl -si -X POST "https://<project-ref>.supabase.co/realtime/v1/api/broadcast" \
+  -H "apikey: <service role key>" -H "Authorization: Bearer <service role key>" \
+  -H "Content-Type: application/json" \
+  -d '{"messages":[{"topic":"data-sync","event":"changed","payload":{"kinds":["sessions"]},"private":true}]}'
+```
+
 ## 1. Supabase 프로젝트 준비 (최초 1회)
 
 1. [Supabase 대시보드](https://supabase.com/dashboard)에서 프로젝트를 만들고 DB 비밀번호를 보관합니다.
