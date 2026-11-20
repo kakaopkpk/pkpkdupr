@@ -72,7 +72,7 @@ import {
   addMatchSessionParticipant,
   type MatchSessionDetailInfo,
 } from "@/lib/matchSessions";
-import { DEFAULT_THEME_COLOR, DIMMED_THEME_COLOR } from "@/lib/themeColor";
+import { useDimmedThemeColor } from "@/lib/themeColor";
 import Home from "@/pages/Home";
 import Me from "@/pages/Me";
 import Ranking from "@/pages/Ranking";
@@ -867,25 +867,8 @@ const BottomNav: React.FC = () => {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [closeGlobalMenu, isGlobalMenuVisible]);
 
-  useEffect(() => {
-    if (typeof document === "undefined") {
-      return;
-    }
-
-    const themeColorMeta = document.querySelector<HTMLMetaElement>(
-      'meta[name="theme-color"]',
-    );
-
-    if (!themeColorMeta || !isGlobalMenuVisible) {
-      return;
-    }
-
-    themeColorMeta.setAttribute("content", DIMMED_THEME_COLOR);
-
-    return () => {
-      themeColorMeta.setAttribute("content", DEFAULT_THEME_COLOR);
-    };
-  }, [isGlobalMenuVisible]);
+  // + 메뉴 딤(bg-pk-ink/30)과 같은 투명도
+  useDimmedThemeColor(isGlobalMenuVisible, 0.3);
 
   const resetPullToRefresh = useCallback(
     (status: PullToRefreshStatus = "idle") => {

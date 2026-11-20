@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { PkButton } from "@/components/ui/Button";
 import { cx } from "@/components/ui/cx";
+import { useDimmedThemeColor } from "@/lib/themeColor";
 import { cropAvatarImage } from "@/utils/avatar";
 import {
   type AvatarCropView,
@@ -82,6 +83,8 @@ const AvatarCropScreen: React.FC<AvatarCropScreenProps> = ({
   const gestureRef = useRef<{ mid: PointerPoint; distance: number } | null>(null);
   const lastTapRef = useRef<{ time: number; point: PointerPoint } | null>(null);
   const isVisible = isOpen && isActive;
+  // 화면 전체가 불투명 pk-ink라 상태바도 같은 색으로 맞춘다
+  useDimmedThemeColor(isVisible, 1);
 
   const diameter = Math.max(
     0,

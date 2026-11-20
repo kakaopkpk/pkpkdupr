@@ -1,7 +1,7 @@
 import React from "react";
 import { createPortal } from "react-dom";
 import { prefersReducedMotion, useSheetDrag } from "@/hooks/useSheetDrag";
-import { DIMMED_THEME_COLOR } from "@/lib/themeColor";
+import { useDimmedThemeColor } from "@/lib/themeColor";
 import { cx } from "@/components/ui/cx";
 
 const OPEN_DURATION_MS = 240;
@@ -121,31 +121,8 @@ const BottomSheet: BottomSheetComponent = ({
     onDismiss: () => onOpenChange(false),
   });
 
-  React.useLayoutEffect(() => {
-    if (!shouldRender || !isActive || typeof document === "undefined") {
-      return undefined;
-    }
-
-    const themeColorMeta = document.querySelector<HTMLMetaElement>(
-      'meta[name="theme-color"]',
-    );
-
-    if (!themeColorMeta) {
-      return undefined;
-    }
-
-    const previousThemeColor = themeColorMeta.getAttribute("content");
-    themeColorMeta.setAttribute("content", DIMMED_THEME_COLOR);
-
-    return () => {
-      if (themeColorMeta.getAttribute("content") === DIMMED_THEME_COLOR) {
-        themeColorMeta.setAttribute(
-          "content",
-          previousThemeColor ?? "",
-        );
-      }
-    };
-  }, [isActive, shouldRender]);
+  // index.css `.app-bottom-sheet-backdrop`의 딤 투명도와 같다
+  useDimmedThemeColor(shouldRender && isActive, 0.45);
 
   React.useEffect(() => {
     if (typeof window === "undefined") {

@@ -190,6 +190,7 @@
   - CSS 애니메이션은 `hooks/usePlayOnShow.ts`의 `isPlaying`일 때만 클래스를 붙이고, 가장 늦게 끝나는 요소(자식에 다른 애니메이션이 없는 요소)의 `onAnimationEnd`에 `finish`를 겁니다.
   - 무한 반복(`ping`·`spin-slow`)은 끝나지 않으므로 `usePlayOnShow`에 쓰지 않습니다.
   - 숫자 카운트업은 `hooks/useCountUp.ts`의 `useCountUp`(움직임 줄이기면 바로 최종 값)을 쓰고, 세는 동안 자릿수가 바뀌어 주변이 흔들리면 `ui/CountUpText.tsx`로 폭을 최종 값에 고정합니다.
+- 화면 전체를 덮는 딤(바텀시트·+ 메뉴·확인 창·사진 확대·업적 축하, 불투명한 사진 조정 화면은 1)은 깔린 동안 `lib/themeColor.ts`의 `useDimmedThemeColor(active, 딤 투명도)`로 상단 상태바(`theme-color`)도 같은 투명도로 어둡게 합니다. 겹친 딤은 투명도를 합쳐 계산합니다.
 - Barlow Condensed는 600·700 굵기만 로드하므로 `font-num`에는 `font-bold` 이하만 씁니다.
 
 ## 디자인 규칙

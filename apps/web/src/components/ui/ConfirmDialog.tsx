@@ -1,5 +1,6 @@
 import React, { useEffect, useId, useRef } from "react";
 import { createPortal } from "react-dom";
+import { useDimmedThemeColor } from "@/lib/themeColor";
 import { PkButton } from "./Button";
 import { cx } from "./cx";
 
@@ -45,6 +46,8 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
   // 호출부가 매 렌더 새 콜백을 넘겨도 keydown 리스너를 다시 붙이지 않게 ref로 읽는다
   const onCancelRef = useRef(onCancel);
   const isVisible = isOpen && isActive;
+  // 딤(bg-pk-ink/45)과 같은 투명도
+  useDimmedThemeColor(isVisible, 0.45);
 
   useEffect(() => {
     onCancelRef.current = onCancel;
