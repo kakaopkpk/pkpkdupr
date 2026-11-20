@@ -1,4 +1,5 @@
 import React from "react";
+import { getMatchRecordedAt } from "@pkpkdupr/shared/match";
 import { getTeamResultScores, type MatchInfo } from "@/types/match";
 import {
   formatKstDateTime,
@@ -88,7 +89,7 @@ export const MatchRow: React.FC<{
   /** 이 선수가 든 경기면 메타 줄 시간 뒤에 " · 내 경기"를 붙인다 */
   currentPlayerId?: string;
   onPress?: () => void;
-  /** 기본 "time"("20:01"), "weekday-time"은 "목 20:01", "date-time"은 "11월 13일 목 20:01". 기준은 matchStartsAt */
+  /** 기본 "time"("20:01"), "weekday-time"은 "목 20:01", "date-time"은 "11월 13일 목 20:01". 기준은 기록 시각(getMatchRecordedAt, 완료 경기는 점수 입력 시각) */
   timeLabel?: keyof typeof timeLabelFormatters;
   /** 팀 아바타 테 색. 흰 바탕이 아닌 곳에 놓을 때 바탕색을 넘긴다(기본 흰색) */
   avatarRingColor?: string;
@@ -118,7 +119,7 @@ export const MatchRow: React.FC<{
         { team: teamB, score: scoreB },
         { team: teamA, score: scoreA },
       ];
-  const time = timeLabelFormatters[timeLabel](match.matchStartsAt);
+  const time = timeLabelFormatters[timeLabel](getMatchRecordedAt(match));
 
   return (
     <RowContainer

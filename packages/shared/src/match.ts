@@ -176,6 +176,15 @@ export const validateMatchScores = (scores: MatchScore[]) => {
 };
 
 /**
+ * 경기 기록 시각. 완료 경기는 점수를 입력한 completedAt, 그 밖은 matchStartsAt.
+ * 경기 목록 정렬(최신 입력이 위)과 경기 줄 시각 표시 기준이다.
+ */
+export const getMatchRecordedAt = <T extends Date | string>(match: {
+  matchStartsAt: T;
+  completedAt: T | null;
+}): T => match.completedAt ?? match.matchStartsAt;
+
+/**
  * 점수를 넣거나 고칠 수 있는 경기면 true. 회원 누구나 가능하며
  * 취소 아님 · 시작 후 24시간 이내(isWithinMatchEditWindow)일 때
  */

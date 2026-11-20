@@ -9,6 +9,7 @@ import { getSessionEndsAt, toKstDateKey } from "@pkpkdupr/shared/session";
 import { getMatchPlayerIds, type MatchInfo } from "@/types/match";
 import PushScreen from "@/components/PushScreen";
 import LastSessionMeCard from "@/components/home/LastSessionMeCard";
+import { byLatestRecorded } from "@/components/home/usePreSessionData";
 import {
   getPlayerSessionAchievements,
   MyNewAchievementsCard,
@@ -279,11 +280,7 @@ export default function SessionReportDrawer({
             matchFilter === "all" ||
             (!!playerId && isPlayerInMatch(match, playerId)),
         )
-        .sort(
-          (a, b) =>
-            new Date(b.matchStartsAt).getTime() -
-            new Date(a.matchStartsAt).getTime(),
-        ),
+        .sort(byLatestRecorded),
     [matchFilter, matches, playerId],
   );
 

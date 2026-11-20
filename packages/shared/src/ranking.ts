@@ -130,7 +130,7 @@ export interface RecordMatchItem {
 
 export type RecordItem = RecordSessionItem | RecordMatchItem;
 
-/** GET /api/records 응답. 세션 date·경기 matchStartsAt 내림차순, 같으면 id 내림차순 */
+/** GET /api/records 응답. 세션 date·경기 completedAt 내림차순, 같으면 id 내림차순 */
 export interface RecordsResponse {
   items: RecordItem[];
   /** 다음 페이지 cursor 쿼리 값. 더 없으면 null */

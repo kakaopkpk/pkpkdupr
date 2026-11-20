@@ -33,7 +33,7 @@ const makeMatch = (ratingExcluded: boolean): MatchInfo => ({
   resultSubmittedByPlayerId: "alice",
   resultSubmittedAt: "2026-11-13T12:50:00.000Z",
   location: "야탑초등학교",
-  // 21:40 KST
+  // 시작 21:40 KST, 점수 입력 21:50 KST
   matchStartsAt: "2026-11-13T12:40:00.000Z",
   createdAt: "2026-11-13T12:40:00.000Z",
   completedAt: "2026-11-13T12:50:00.000Z",
@@ -61,23 +61,30 @@ const getMetaText = (
 describe("MatchRow 메타 줄", () => {
   it("게스트가 낀 경기는 끝에 ' · 평점 미반영'을 붙인다", () => {
     expect(getMetaText(makeMatch(true), "alice")).toBe(
-      "21:40 · 내 경기 · 평점 미반영",
+      "21:50 · 내 경기 · 평점 미반영",
     );
-    expect(getMetaText(makeMatch(true))).toBe("21:40 · 평점 미반영");
+    expect(getMetaText(makeMatch(true))).toBe("21:50 · 평점 미반영");
   });
 
   it("정상 경기는 붙이지 않는다", () => {
-    expect(getMetaText(makeMatch(false), "alice")).toBe("21:40 · 내 경기");
+    expect(getMetaText(makeMatch(false), "alice")).toBe("21:50 · 내 경기");
   });
 });
 
 describe("MatchRow 시간 표기", () => {
   it("date-time은 날짜·요일·시각을 보인다", () => {
     expect(getMetaText(makeMatch(false), undefined, "date-time")).toBe(
-      "11월 13일 금 21:40",
+      "11월 13일 금 21:50",
     );
     expect(getMetaText(makeMatch(true), undefined, "date-time")).toBe(
-      "11월 13일 금 21:40 · 평점 미반영",
+      "11월 13일 금 21:50 · 평점 미반영",
     );
+  });
+
+  it("완료 경기는 점수 입력 시각, 진행 중 경기는 시작 시각을 보인다", () => {
+    expect(getMetaText(makeMatch(false))).toBe("21:50");
+    expect(
+      getMetaText({ ...makeMatch(false), status: "created", scores: [], completedAt: null }),
+    ).toBe("21:40");
   });
 });

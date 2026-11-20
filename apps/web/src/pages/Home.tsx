@@ -15,7 +15,7 @@ import RecommendationSection, {
 } from "@/components/home/RecommendationSection";
 import { useNewsFeed } from "@/components/home/useNewsFeed";
 import {
-  byLatestStart,
+  byLatestRecorded,
   usePreSessionData,
 } from "@/components/home/usePreSessionData";
 import { useSessionRecommendations } from "@/components/home/useSessionRecommendations";
@@ -196,7 +196,7 @@ const Home: React.FC = () => {
     () =>
       live.matches
         .filter((match) => match.status === "completed")
-        .sort(byLatestStart),
+        .sort(byLatestRecorded),
     [live.matches],
   );
   const waitingCount = useMemo(() => {
