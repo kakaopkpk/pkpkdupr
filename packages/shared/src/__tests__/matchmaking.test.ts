@@ -5,6 +5,7 @@ import {
   MATCHMAKING_DEFAULT_COURTS,
   MATCHMAKING_MIN_CANDIDATES,
   clampMatchmakingCourts,
+  getMatchmakingSeed,
   recommendDoublesMatches,
   type DoublesRecommendationPlan,
   type MatchmakingParticipant,
@@ -214,14 +215,11 @@ describe("recommendDoublesMatches", () => {
   });
 
   it("rank를 올리면 감점이 줄지 않는 순서로 서로 다른 대진이 나오고, 후보 수를 넘으면 1등으로 돌아간다", () => {
-    const input = {
-      participants: players(12),
-      completedMatches: [
-        { teams: [["p01", "p02"], ["p03", "p04"]] as [string[], string[]] },
-        { teams: [["p05", "p06"], ["p07", "p08"]] as [string[], string[]] },
-      ],
-      courts: 3,
-    };
+    const completedMatches: MatchmakingPlayedMatch[] = [
+      { teams: [["p01", "p02"], ["p03", "p04"]] },
+      { teams: [["p05", "p06"], ["p07", "p08"]] },
+    ];
+    const input = { participants: players(12), completedMatches, courts: 3 };
     const first = recommend({ ...input, rank: 0 });
     expect(first.rank).toBe(0);
     expect(first.candidateCount).toBeGreaterThanOrEqual(
@@ -253,28 +251,17 @@ describe("recommendDoublesMatches", () => {
 
   it("여유폭 안 후보가 적으면 감점순으로 최소 개수까지 채우고, 가능한 대진이 적으면 그만큼만 둔다", () => {
     // 4명 1코트는 팀 나누기가 3가지뿐이다. a+b vs c+d(15점)만 여유폭 안이고 나머지 둘은 60점이다
-    const plan = recommend({
-      participants: [
-        { id: "a", doublesRating: 5 },
-        { id: "b", doublesRating: 2 },
-        { id: "c", doublesRating: 3.5 },
-        { id: "d", doublesRating: 3.5 },
-      ],
-      courts: 1,
-    });
+    const participants = [
+      { id: "a", doublesRating: 5 },
+      { id: "b", doublesRating: 2 },
+      { id: "c", doublesRating: 3.5 },
+      { id: "d", doublesRating: 3.5 },
+    ];
+    const plan = recommend({ participants, courts: 1 });
     expect(plan.candidateCount).toBe(3);
     expect(plan.penalty).toBeCloseTo(15);
 
-    const second = recommend({
-      participants: [
-        { id: "a", doublesRating: 5 },
-        { id: "b", doublesRating: 2 },
-        { id: "c", doublesRating: 3.5 },
-        { id: "d", doublesRating: 3.5 },
-      ],
-      courts: 1,
-      rank: 1,
-    });
+    const second = recommend({ participants, courts: 1, rank: 1 });
     expect(second.penalty).toBeCloseTo(60);
     expect(second.penalty - plan.penalty).toBeGreaterThan(
       MATCHMAKING_CANDIDATE_PENALTY_MARGIN,
@@ -292,6 +279,13 @@ describe("recommendDoublesMatches", () => {
     });
     expect(plan.penalty).toBe(0);
     expect(plan.candidateCount).toBeGreaterThan(MATCHMAKING_MIN_CANDIDATES);
+  });
+
+  it("탐색 seed는 세션과 완료 경기 수가 같으면 같고, 경기가 끝나면 바뀐다", () => {
+    expect(getMatchmakingSeed("Sabc", 3)).toBe(getMatchmakingSeed("Sabc", 3));
+    expect(getMatchmakingSeed("Sabc", 4)).not.toBe(getMatchmakingSeed("Sabc", 3));
+    expect(getMatchmakingSeed("Sxyz", 3)).not.toBe(getMatchmakingSeed("Sabc", 3));
+    expect(Number.isInteger(getMatchmakingSeed("Sabc", 0))).toBe(true);
   });
 
   it("rank가 음수·NaN이면 0, 소수면 내린다", () => {

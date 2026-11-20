@@ -30,69 +30,65 @@ export const useSessionRecommendations = (
   const [error, setError] = useState<string | null>(null);
   const requestIdRef = useRef(0);
   const loadedSessionIdRef = useRef<string | null>(null);
-  /** 다음 요청에 보낼 후보 순번 */
-  const rankRef = useRef(0);
-  /** 마지막으로 받은 후보 순번. 다시 추천은 요청 실패와 상관없이 이 다음 순번을 받는다 */
+  /**
+   * 마지막으로 받은 후보 순번. 다시 추천은 이 다음 순번을 요청하므로,
+   * 받는 중에 또 누르거나 요청이 실패해도 순번이 건너뛰지 않는다(늦은 응답은 requestId로 버린다).
+   */
   const shownRankRef = useRef(0);
-  /** 받는 중이면 true. 받는 중 다시 추천을 또 누르면 순번이 건너뛰므로 막는 데 쓴다 */
-  const loadingRef = useRef(false);
 
-  const load = useCallback(async () => {
-    const requestId = ++requestIdRef.current;
-    if (!sessionId) {
-      loadingRef.current = false;
-      loadedSessionIdRef.current = null;
-      setRecommendation(null);
-      setStatus("idle");
-      setError(null);
-      return;
-    }
+  const load = useCallback(
+    async (rank: number) => {
+      const requestId = ++requestIdRef.current;
+      if (!sessionId) {
+        loadedSessionIdRef.current = null;
+        setRecommendation(null);
+        setStatus("idle");
+        setError(null);
+        return;
+      }
 
-    // 다른 세션이면 이전 추천을 지우고 스켈레톤부터 보인다
-    if (loadedSessionIdRef.current !== sessionId) {
-      loadedSessionIdRef.current = sessionId;
-      setRecommendation(null);
-      setStatus("loading");
-    }
-    loadingRef.current = true;
-    try {
-      const data = await fetchSessionRecommendations(
-        sessionId,
-        MATCHMAKING_DEFAULT_COURTS,
-        rankRef.current,
-      );
-      if (requestIdRef.current !== requestId) return;
-      rankRef.current = data.rank;
-      shownRankRef.current = data.rank;
-      setRecommendation(data);
-      setStatus("ready");
-      setError(null);
-    } catch (err) {
-      if (requestIdRef.current !== requestId) return;
-      setError(
-        err instanceof Error && err.message
-          ? err.message
-          : "추천 매칭을 불러오지 못했어요.",
-      );
-      setStatus("error");
-    } finally {
-      if (requestIdRef.current === requestId) loadingRef.current = false;
-    }
-  }, [sessionId]);
+      // 다른 세션이면 이전 추천을 지우고 스켈레톤부터 보인다
+      if (loadedSessionIdRef.current !== sessionId) {
+        loadedSessionIdRef.current = sessionId;
+        setRecommendation(null);
+        setStatus("loading");
+      }
+      try {
+        const data = await fetchSessionRecommendations(
+          sessionId,
+          MATCHMAKING_DEFAULT_COURTS,
+          rank,
+        );
+        if (requestIdRef.current !== requestId) return;
+        shownRankRef.current = data.rank;
+        setRecommendation(data);
+        setStatus("ready");
+        setError(null);
+      } catch (err) {
+        if (requestIdRef.current !== requestId) return;
+        setError(
+          err instanceof Error && err.message
+            ? err.message
+            : "추천 매칭을 불러오지 못했어요.",
+        );
+        setStatus("error");
+      }
+    },
+    [sessionId],
+  );
 
   useEffect(() => {
-    rankRef.current = 0;
     shownRankRef.current = 0;
-    void load();
+    void load(0);
   }, [load, dataVersion]);
 
   const recommendAgain = useCallback(() => {
-    if (loadingRef.current) return;
-    rankRef.current = shownRankRef.current + 1;
     setStatus("loading");
     setRecommendation(null);
-    void load();
+    void load(shownRankRef.current + 1);
   }, [load]);
 
-  return { recommendation, status, error, recommendAgain, reload: load };
+  const reload = useCallback(() => load(shownRankRef.current), [load]);
+
+  return { recommendation, status, error, recommendAgain, reload };
 };

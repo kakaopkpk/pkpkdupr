@@ -117,6 +117,22 @@ const createRandom = (seed: number): (() => number) => {
   };
 };
 
+/**
+ * 추천 탐색 seed. 세션과 오늘 완료 경기 수로 정해 같은 상황이면 누구에게나 같은 추천이 보이고,
+ * 경기가 끝날 때마다 바뀌어 선발 동점 깨기가 한 사람에게 계속 유리하지 않다(FNV-1a 32비트).
+ */
+export const getMatchmakingSeed = (
+  sessionId: string,
+  completedMatchCount: number,
+): number => {
+  let hash = 0x811c9dc5;
+  for (const char of `${sessionId}:${completedMatchCount}`) {
+    hash ^= char.charCodeAt(0);
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return hash >>> 0;
+};
+
 /** 0 이상 정수로 내린다. 유한한 수가 아니면 0 */
 const normalizeRank = (rank: number): number =>
   Number.isFinite(rank) ? Math.max(0, Math.floor(rank)) : 0;
@@ -327,13 +343,15 @@ export const recommendDoublesMatches = (
     { arrangement: Arrangement; penalty: number }
   >();
   let bestPenalty = Number.POSITIVE_INFINITY;
+  const isWithinMargin = (penalty: number): boolean =>
+    penalty <=
+    bestPenalty + MATCHMAKING_CANDIDATE_PENALTY_MARGIN + PENALTY_EPSILON;
   /** 모은 대진의 감점 중 작은 것부터 최대 MIN_CANDIDATES개(오름차순) */
   const lowestPenalties: number[] = [];
   const record = (arrangement: Arrangement, penalty: number): void => {
     bestPenalty = Math.min(bestPenalty, penalty);
     if (
-      penalty >
-        bestPenalty + MATCHMAKING_CANDIDATE_PENALTY_MARGIN + PENALTY_EPSILON &&
+      !isWithinMargin(penalty) &&
       lowestPenalties.length === MATCHMAKING_MIN_CANDIDATES &&
       penalty > lowestPenalties[lowestPenalties.length - 1] + PENALTY_EPSILON
     ) {
@@ -406,11 +424,10 @@ export const recommendDoublesMatches = (
     }
     return keyA < keyB ? -1 : keyA > keyB ? 1 : 0;
   });
-  const withinMargin = ranked.filter(
-    ([, candidate]) =>
-      candidate.penalty <=
-      bestPenalty + MATCHMAKING_CANDIDATE_PENALTY_MARGIN + PENALTY_EPSILON,
-  ).length;
+  const firstOutside = ranked.findIndex(
+    ([, candidate]) => !isWithinMargin(candidate.penalty),
+  );
+  const withinMargin = firstOutside === -1 ? ranked.length : firstOutside;
   const candidateCount = Math.min(
     ranked.length,
     Math.max(withinMargin, MATCHMAKING_MIN_CANDIDATES),

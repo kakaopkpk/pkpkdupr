@@ -91,8 +91,10 @@ import {
 import {
   MATCHMAKING_DEFAULT_COURTS,
   clampMatchmakingCourts,
+  getMatchmakingSeed,
   recommendDoublesMatches,
   type MatchSessionRecommendationResponse,
+  type MatchmakingPlayedMatch,
   type RecommendationPlayer,
   type RecommendedTeam,
 } from "@pkpkdupr/shared/matchmaking";
@@ -1686,32 +1688,25 @@ const parseRecommendationCourts = (value: unknown): number => {
   return clampMatchmakingCourts(courts);
 };
 
+/** 0 이상 정수 쿼리 값. 숫자만으로 된 문자열이 아니거나 안전한 정수 범위를 넘으면 NaN */
+const parseUnsignedIntegerQuery = (value: unknown): number => {
+  const parsed =
+    typeof value === "string" && /^\d+$/.test(value.trim())
+      ? Number(value)
+      : NaN;
+  return Number.isSafeInteger(parsed) ? parsed : NaN;
+};
+
 /** rank 쿼리: 생략이면 0(1등), 0 이상 정수가 아니면 400. 후보 수를 넘으면 추천 함수가 나머지로 순환한다 */
 const parseRecommendationRank = (value: unknown): number => {
   if (value === undefined) {
     return 0;
   }
-  const rank =
-    typeof value === "string" && /^\d+$/.test(value.trim())
-      ? Number(value)
-      : NaN;
-  if (!Number.isSafeInteger(rank)) {
+  const rank = parseUnsignedIntegerQuery(value);
+  if (Number.isNaN(rank)) {
     throw new MatchSessionRequestError("rank는 0 이상 정수여야 합니다.", 400);
   }
   return rank;
-};
-
-/**
- * 추천 탐색 seed. 세션과 완료 경기 수로 정해 같은 상황이면 누구에게나 같은 추천이 보이고,
- * 경기가 끝날 때마다 바뀌어 선발 동점 깨기가 한 사람에게 계속 유리하지 않다(FNV-1a 32비트).
- */
-const getRecommendationSeed = (sessionId: string, completedCount: number) => {
-  let hash = 0x811c9dc5;
-  for (const char of `${sessionId}:${completedCount}`) {
-    hash ^= char.charCodeAt(0);
-    hash = Math.imul(hash, 0x01000193);
-  }
-  return hash >>> 0;
 };
 
 /** 추천 매칭의 복식 평점. 게스트는 평점이 없는(NR) 선수로 다룬다 */
@@ -1754,13 +1749,13 @@ app.get("/api/match-sessions/:sessionId/recommendations", async (req, res) => {
       matchRepository.findInProgressPlayerIds(now),
       matchRepository.findBySession(sessionId),
     ]);
-    const completedMatches = sessionMatches
+    const completedMatches: MatchmakingPlayedMatch[] = sessionMatches
       .filter((match) => match.status === "completed")
       .map((match) => ({
         teams: [
           match.teams[0].players.map((player) => player.id),
           match.teams[1].players.map((player) => player.id),
-        ] as [string[], string[]],
+        ],
       }));
     const plan = recommendDoublesMatches({
       participants: session.participants.map((member) => ({
@@ -1770,7 +1765,7 @@ app.get("/api/match-sessions/:sessionId/recommendations", async (req, res) => {
       busyPlayerIds,
       completedMatches,
       courts,
-      seed: getRecommendationSeed(sessionId, completedMatches.length),
+      seed: getMatchmakingSeed(sessionId, completedMatches.length),
       rank,
     });
 
@@ -3543,11 +3538,8 @@ const parseSessionHistoryLimit = (value: unknown): number => {
   if (value === undefined) {
     return SESSION_HISTORY_DEFAULT_LIMIT;
   }
-  const limit =
-    typeof value === "string" && /^\d+$/.test(value.trim())
-      ? Number(value)
-      : NaN;
-  if (!Number.isSafeInteger(limit) || limit < 1) {
+  const limit = parseUnsignedIntegerQuery(value);
+  if (Number.isNaN(limit) || limit < 1) {
     throw new RankingRequestError("limit은 1 이상의 정수여야 합니다.", 400);
   }
   return Math.min(limit, SESSION_HISTORY_MAX_LIMIT);

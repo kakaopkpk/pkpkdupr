@@ -140,14 +140,16 @@ export const removeMatchSessionParticipant = async (
   );
 };
 
-/** rank는 감점순 후보 순번(0부터). 0이면 쿼리에서 빼 서버 기본값(1등)을 쓴다 */
+/** rank는 감점순 후보 순번(0부터). 후보 수를 넘으면 서버가 1등으로 돌린다 */
 export const fetchSessionRecommendations = (
   sessionId: string,
   courts: number,
   rank: number,
 ) => {
-  const searchParams = new URLSearchParams({ courts: String(courts) });
-  if (rank > 0) searchParams.set("rank", String(rank));
+  const searchParams = new URLSearchParams({
+    courts: String(courts),
+    rank: String(rank),
+  });
   return requestJson<MatchSessionRecommendationResponse>(
     `${sessionPath(sessionId)}/recommendations?${searchParams.toString()}`,
     "추천 매칭을 불러오지 못했어요.",
