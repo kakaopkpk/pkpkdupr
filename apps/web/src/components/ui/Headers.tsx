@@ -1,4 +1,6 @@
 import React from "react";
+import { cx } from "./cx";
+import { buttonPressClassName } from "./Button";
 import { BackIcon } from "./Icons";
 
 /** 탭 화면 머리. 제목 26/800 */
@@ -32,7 +34,7 @@ export const DetailHeader: React.FC<{
       type="button"
       aria-label="뒤로"
       onClick={onBack}
-      className="flex size-11 shrink-0 items-center justify-center rounded-full text-pk-ink active:bg-pk-neutral"
+      className={cx("flex size-11 shrink-0 items-center justify-center rounded-full text-pk-ink", buttonPressClassName)}
     >
       <BackIcon />
     </button>

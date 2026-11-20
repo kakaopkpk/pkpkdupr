@@ -1,8 +1,9 @@
 import React, { useEffect, useMemo, useReducer, useState } from "react";
 import { IoShareOutline } from "react-icons/io5";
 import { toKstDateKey } from "@pkpkdupr/shared/session";
+import { cx } from "@/components/ui/cx";
 import SystemToast from "@/components/SystemToast";
-import { PkButton } from "@/components/ui/Button";
+import { PkButton, buttonPressClassName } from "@/components/ui/Button";
 import { useIsSystemNoticeVisible } from "@/context/SystemNoticeContext";
 import { usePresence } from "@/hooks/usePresence";
 
@@ -190,7 +191,7 @@ const PwaInstallPrompt: React.FC<PwaInstallPromptProps> = ({ isActive }) => {
     <button
       type="button"
       aria-label="닫기"
-      className="flex size-11 shrink-0 items-center justify-center text-xl text-pk-muted touch-manipulation"
+      className={cx("flex size-11 shrink-0 items-center justify-center text-xl text-pk-muted touch-manipulation", buttonPressClassName)}
       onClick={dismiss}
     >
       ×

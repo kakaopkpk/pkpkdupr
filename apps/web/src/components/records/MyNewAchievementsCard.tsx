@@ -1,5 +1,7 @@
 import React from "react";
 import type { AchievementDefinition } from "@pkpkdupr/shared/achievements";
+import { cx } from "@/components/ui/cx";
+import { rowPressClassName } from "@/components/ui/Button";
 import AchievementBadge from "@/components/profile/AchievementBadge";
 import { Card } from "@/components/ui/Card";
 import { ChevronRightIcon } from "@/components/ui/Icons";
@@ -43,7 +45,7 @@ export const MyNewAchievementsCard: React.FC<{
               earned: true,
             })
           }
-          className="flex min-h-14 w-full items-center gap-3 py-2 text-left not-last:border-b not-last:border-pk-divider active:opacity-80"
+          className={cx("flex min-h-14 w-full items-center gap-3 py-2 text-left not-last:border-b not-last:border-pk-divider", rowPressClassName)}
         >
           <AchievementBadge achievement={definition} earned size={36} />
           <span className="flex min-w-0 flex-1 flex-col">

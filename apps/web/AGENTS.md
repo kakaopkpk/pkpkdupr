@@ -185,6 +185,10 @@
 - 색·둥글기·글자 크기는 `src/index.css` `@theme`의 `pk-*` 토큰만 씁니다(예: `bg-pk-primary`, `text-pk-sub`, `rounded-pk-lg`, `text-pk-15`, `font-num`). 16진수 색을 클래스에 직접 쓰지 않습니다.
 - 기본 클래스에 className prop을 합칠 때는 `components/ui/cx.ts`의 `cx`를 씁니다. tailwind-merge 기반이라 충돌하는 클래스는 뒤에 온 것만 남으므로 넘겨받은 className을 뒤에 둡니다. `!` 접두(important)로 우회하지 않습니다.
 - `@theme`에 `pk-*` 토큰(색·둥글기·글자 크기)을 추가하거나 바꾸면 `cx.ts`의 tailwind-merge 토큰 등록도 함께 고칩니다. 빠지면 `text-pk-15`와 `text-pk-ink`처럼 접두가 같은 클래스를 같은 종류로 오인하거나 충돌을 못 정리합니다.
+- 누름 피드백은 `components/ui/Button.tsx`의 `buttonPressClassName`(버튼·아이콘·글자 버튼)·`rowPressClassName`(목록 줄·카드)만 씁니다.
+  - `active:bg-*`·`active:opacity-*`·`active:scale-*`를 직접 쓰지 않습니다(`PkButton`은 이미 붙어 있음).
+  - `rowPressClassName`은 안의 버튼을 누르는 동안 반응하지 않으므로, 버튼을 품은 누를 수 있는 카드에도 그대로 씁니다.
+- 탭 하이라이트·글자 선택·iOS 콜아웃·이미지 끌기는 `index.css` base에서 전역으로 끄고(입력칸은 글자 선택 허용), 이미지·링크 길게 누르기 메뉴는 `main.tsx`가 터치 기기(`pointer: coarse`)에서만 막습니다. 화면별로 `select-none`을 붙이지 않습니다.
 - 모션 곡선은 `@theme`의 `ease-pk-move`(이동·전환)와 `ease-pk-pop`(튀어나오는 등장) 두 개를 씁니다. arbitrary `ease-[cubic-bezier(...)]`를 새로 쓰지 않습니다.
 - 공용 애니메이션은 `index.css`의 `animate-pk-*`(`fade-in`·`fade-up`·`fade-out`·`pop`·`draw`·`sheen`·`ping`·`spin-slow`·`rise-in`·`sink-out`·`wobble`·`flash`(한 번 나타났다 사라짐), 업적 축하 전용 `celebrate-pop`·`rays-pulse`·`slide-away`)를 재사용합니다.
   - 모두 fill-mode both이고 지연·길이는 inline style `animationDelay`·`animationDuration`으로 덮어씁니다.

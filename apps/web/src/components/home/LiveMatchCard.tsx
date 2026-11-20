@@ -55,7 +55,7 @@ const MyMatchCardFrame: React.FC<{
       <button
         type="button"
         onClick={onOpenDetail}
-        className="flex flex-col gap-1 text-left active:opacity-80"
+        className={cx("flex flex-col gap-1 text-left", rowPressClassName)}
       >
         {header}
         <RallyTeamRow
@@ -184,7 +184,7 @@ export const LiveMatchCard: React.FC<{
     type="button"
     onClick={onOpenDetail}
     className={cx(
-      "flex w-full flex-col gap-2.5 rounded-pk-lg bg-white px-4 py-3.5 text-left active:bg-pk-primary-soft/60",
+      "flex w-full flex-col gap-2.5 rounded-pk-lg bg-white px-4 py-3.5 text-left",
       rowPressClassName,
     )}
   >

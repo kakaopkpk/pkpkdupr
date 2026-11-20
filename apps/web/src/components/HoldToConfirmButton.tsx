@@ -149,11 +149,10 @@ const HoldToConfirmButton: React.FC<HoldToConfirmButtonProps> = ({
       onPointerCancel={stopHold}
       onContextMenu={(event) => event.preventDefault()}
       className={cx(
-        "relative flex w-full select-none items-center overflow-hidden transition-colors touch-manipulation",
+        "relative flex w-full items-center overflow-hidden transition-colors touch-manipulation",
         variantClasses.button,
         className,
       )}
-      style={{ WebkitTouchCallout: "none" }}
     >
       <span
         aria-hidden="true"

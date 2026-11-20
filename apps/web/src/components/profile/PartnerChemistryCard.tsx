@@ -1,5 +1,6 @@
 import React from "react";
 import type { PartnerStat, StatPlayer } from "@pkpkdupr/shared/profileStats";
+import { rowPressClassName } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { PlayerAvatar } from "@/components/ui/PlayerAvatar";
 import { cx } from "@/components/ui/cx";
@@ -29,7 +30,7 @@ export const StatRow: React.FC<{
       <button
         type="button"
         onClick={() => openMemberProfile(player.id)}
-        className="flex min-h-12 w-full items-center gap-2.5 text-left"
+        className={cx("flex min-h-12 w-full items-center gap-2.5 text-left", rowPressClassName)}
       >
         {order !== undefined ? (
           <span className="w-[18px] shrink-0 text-center text-pk-13 font-bold text-pk-muted tabular-nums">

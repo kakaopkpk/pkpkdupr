@@ -1,7 +1,8 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
+import { cx } from "@/components/ui/cx";
 import BottomSheet from "@/components/BottomSheet";
 import PushScreen from "@/components/PushScreen";
-import { PkButton } from "@/components/ui/Button";
+import { PkButton, rowPressClassName } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { ListRow } from "@/components/ui/Form";
 import { PlayerAvatar } from "@/components/ui/PlayerAvatar";
@@ -314,7 +315,7 @@ export default function SettingsDrawer({
               type="button"
               disabled={isLoggingOut}
               onClick={() => void handleLogout()}
-              className="flex min-h-[52px] w-full items-center justify-center text-pk-15 font-bold text-pk-sub disabled:opacity-60"
+              className={cx("flex min-h-[52px] w-full items-center justify-center text-pk-15 font-bold text-pk-sub disabled:opacity-60", rowPressClassName)}
             >
               로그아웃
             </button>
