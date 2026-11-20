@@ -7,6 +7,7 @@ const toDate = (date: Date | string) =>
 
 const kstPartsFormatter = new Intl.DateTimeFormat("ko-KR", {
   timeZone: KST_TIME_ZONE,
+  year: "numeric",
   month: "numeric",
   day: "numeric",
   weekday: "long",
@@ -31,6 +32,7 @@ const getKstParts = (date: Date | string) => {
   const get = (type: Intl.DateTimeFormatPartTypes) =>
     parts.find((part) => part.type === type)?.value ?? "";
   return {
+    year: get("year"),
     month: get("month"),
     day: get("day"),
     weekday: get("weekday"),
@@ -46,6 +48,12 @@ export const formatRatingDelta = (delta: number) => {
   if (rounded > 0) return `+${absolute}`;
   if (rounded < 0) return `−${absolute}`;
   return "0.000";
+};
+
+/** "2026년 11월 13일" 연도까지 쓰고 요일은 없는 날짜 */
+export const formatKstFullDate = (date: Date | string) => {
+  const { year, month, day } = getKstParts(date);
+  return `${year}년 ${month}월 ${day}일`;
 };
 
 /** "11월 13일 목요일" */

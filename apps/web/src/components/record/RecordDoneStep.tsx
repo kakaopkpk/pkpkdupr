@@ -224,6 +224,7 @@ export default function RecordDoneStep({
       {viewer && myNewAchievements.length > 0 && isCelebrationOpen ? (
         <AchievementCelebration
           achievements={myNewAchievements}
+          earnedAts={myNewAchievementItems.map(({ item }) => item.earnedAt)}
           totalPoints={viewer ? match.achievementPoints?.[viewer.id] : null}
           // 움직임 줄이기면 평점 세기가 없으므로 바로 띄운다
           delayMs={prefersReducedMotion() ? 0 : CELEBRATION_DELAY_MS}

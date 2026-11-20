@@ -74,6 +74,7 @@ export default function UnseenAchievementCelebration({
   return (
     <AchievementCelebration
       achievements={unseen.items.map(({ definition }) => definition)}
+      earnedAts={unseen.items.map(({ item }) => item.earnedAt)}
       totalPoints={unseen.points}
       delayMs={0}
       onClose={() => {
