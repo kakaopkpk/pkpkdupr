@@ -84,6 +84,7 @@ import {
   type AchievementHoldersResponse,
   type AchievementMatch,
   type EarnedAchievement,
+  type EndedSessions,
   type SeenAchievementRef,
   type UnseenAchievementsResponse,
 } from "@pkpkdupr/shared/achievements";
@@ -171,9 +172,7 @@ import {
   findAchievementsEarnedByMatches,
   findEndedSessions,
   findPlayerEarnedAchievements,
-  getPlayerEndedSessions,
   parseRecordsCursor,
-  type EndedSessions,
   type RecordsPageEntry,
   toContextAchievementMatches,
 } from "./services/RankingService";
@@ -1314,10 +1313,7 @@ app.get("/api/players/:playerId/profile-summary", async (req, res) => {
       ]);
     const matches = attachMatchRatingChanges(result.matches, ratingChangeLogs);
     const endedSessions = rankingSource
-      ? getPlayerEndedSessions(
-          findEndedSessions(rankingSource.context, rankingSource.sessions, now),
-          playerId,
-        )
+      ? findEndedSessions(rankingSource.context, rankingSource.sessions, now)
       : undefined;
     res.json({
       player,

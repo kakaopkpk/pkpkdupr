@@ -1,4 +1,7 @@
-import type { EarnedAchievement } from "@pkpkdupr/shared/achievements";
+import type {
+  EarnedAchievement,
+  EndedSessions,
+} from "@pkpkdupr/shared/achievements";
 import type {
   NewsFeedItem,
   NewsFeedLine,
@@ -28,7 +31,6 @@ import {
   type RankingMatch,
   type RankingSession,
   type RankingSourcePlayer,
-  type EndedSessions,
 } from "./RankingService";
 
 /**

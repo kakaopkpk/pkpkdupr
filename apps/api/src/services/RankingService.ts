@@ -8,7 +8,7 @@ import {
   toEarnedAchievements,
   type AchievementMatch,
   type EarnedAchievement,
-  type PlayerEndedSessions,
+  type EndedSessions,
 } from "@pkpkdupr/shared/achievements";
 import { isEntityId } from "@pkpkdupr/shared/entityId";
 import {
@@ -643,27 +643,6 @@ export const buildSessionPlayerReports = (
 export const pickTopRiser = <T extends SessionPlayerStats>(players: T[]): T | null =>
   players[0] && players[0].ratingDelta > 0 ? players[0] : null;
 
-/** 만료된 세션으로 정해지는 업적(무패 세션·세션 지배자)의 판정 재료(`findEndedSessions`) */
-export interface EndedSessions {
-  /** 만료된 세션 id */
-  endedSessionIds: ReadonlySet<string>;
-  /** 회원 id → 그 회원이 지배자로 확정된 만료 세션 id */
-  dominatedSessionIdsByPlayerId: ReadonlyMap<string, ReadonlySet<string>>;
-}
-
-const NO_SESSION_IDS: ReadonlySet<string> = new Set();
-
-/** 한 회원의 업적 계산에 넘길 만료 세션 재료 */
-export const getPlayerEndedSessions = (
-  endedSessions: EndedSessions,
-  playerId: string,
-): PlayerEndedSessions => ({
-  endedSessionIds: endedSessions.endedSessionIds,
-  dominatedSessionIds:
-    endedSessions.dominatedSessionIdsByPlayerId.get(playerId) ??
-    NO_SESSION_IDS,
-});
-
 /**
  * 만료된 세션(`getEmptySessionExpiresAt` ≤ now)과 그 세션들의 지배자를 모은다.
  * 진행 중이거나 오늘 아직 끝나지 않은 세션은 무패 여부·지배자가 바뀔 수 있어 넣지 않는다.
@@ -677,24 +656,19 @@ export const findEndedSessions = (
   const matchesBySession = groupMatchesBySession(
     getRatedMatches(context.matches),
   );
-  const endedSessionIds = new Set<string>();
-  const dominatedSessionIdsByPlayerId = new Map<string, Set<string>>();
+  const endedSessions = new Map<string, string | null>();
   for (const session of sessions) {
     if (getEmptySessionExpiresAt(session.kind, session.date, session) > now) {
       continue;
     }
-    endedSessionIds.add(session.id);
     const sessionMatches = matchesBySession.get(session.id);
-    if (!sessionMatches) continue;
-    const stats = buildSessionPlayerStats(context, session, sessionMatches);
-    const topRiser = stats && pickTopRiser(stats.players);
-    if (!topRiser) continue;
-    const sessionIds =
-      dominatedSessionIdsByPlayerId.get(topRiser.player.id) ?? new Set();
-    sessionIds.add(session.id);
-    dominatedSessionIdsByPlayerId.set(topRiser.player.id, sessionIds);
+    const stats =
+      sessionMatches &&
+      buildSessionPlayerStats(context, session, sessionMatches);
+    const topRiser = stats ? pickTopRiser(stats.players) : null;
+    endedSessions.set(session.id, topRiser?.player.id ?? null);
   }
-  return { endedSessionIds, dominatedSessionIdsByPlayerId };
+  return endedSessions;
 };
 
 /**
@@ -839,11 +813,7 @@ export const findPlayerEarnedAchievements = (
 ): EarnedAchievement[] =>
   toEarnedAchievements(
     playerId,
-    computeAchievements(
-      playerId,
-      matches,
-      getPlayerEndedSessions(endedSessions, playerId),
-    ),
+    computeAchievements(playerId, matches, endedSessions),
   );
 
 /**
@@ -903,7 +873,7 @@ export const countAchievementHolders = (
     for (const item of computeAchievements(
       playerId,
       matches,
-      getPlayerEndedSessions(endedSessions, playerId),
+      endedSessions,
     )) {
       if (item.earned) counts[item.id] += 1;
     }

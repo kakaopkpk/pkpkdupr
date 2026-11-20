@@ -14,16 +14,10 @@ import {
   rankPlayersAt,
   selectBaselineSession,
   toAchievementMatches,
-  type EndedSessions,
   type RankingMatch,
   type RankingSession,
   type RankingSourcePlayer,
 } from "../services/RankingService";
-
-const NO_ENDED_SESSIONS: EndedSessions = {
-  endedSessionIds: new Set(),
-  dominatedSessionIdsByPlayerId: new Map(),
-};
 
 // 이 파일의 고정 데이터는 업적 기준 시각(2026-11-17 KST) 전 경기라, 업적은 기준 시각 없이 센다.
 vi.mock("@pkpkdupr/shared/achievementCountStart", () => ({
@@ -450,7 +444,7 @@ describe("buildSessionReport", () => {
     const report = buildSessionReport({
       context: createRankingContext(players, logs, matches),
       session,
-      endedSessions: NO_ENDED_SESSIONS,
+      endedSessions: new Map(),
     });
 
     expect(report?.session).toMatchObject({
@@ -490,7 +484,7 @@ describe("buildSessionReport", () => {
     const report = buildSessionReport({
       context: createRankingContext(players, flatLogs, matches),
       session,
-      endedSessions: NO_ENDED_SESSIONS,
+      endedSessions: new Map(),
     });
     expect(report?.topRiser).toBeNull();
   });
@@ -536,7 +530,7 @@ describe("buildSessionReport", () => {
     const report = buildSessionReport({
       context: createRankingContext(nrPlayers, nrLogs, nrMatches),
       session: nrSession,
-      endedSessions: NO_ENDED_SESSIONS,
+      endedSessions: new Map(),
     });
 
     expect(report?.topRiser?.player.username).toBe("erin");
@@ -563,7 +557,7 @@ describe("buildSessionReport", () => {
       buildSessionReport({
         context: createRankingContext(players, logs, []),
         session,
-        endedSessions: NO_ENDED_SESSIONS,
+        endedSessions: new Map(),
       }),
     ).toBeNull();
   });
@@ -619,19 +613,13 @@ describe("buildSessionReport", () => {
     const endedAt = (now: Date) =>
       findEndedSessions(context, [overnight], now);
 
-    expect(endedAt(at("2026-11-09T15:00:00Z"))).toEqual({
-      endedSessionIds: new Set(),
-      dominatedSessionIdsByPlayerId: new Map(),
-    });
-    expect(endedAt(at("2026-11-09T16:30:00Z"))).toEqual({
-      endedSessionIds: new Set([overnight.id]),
-      dominatedSessionIdsByPlayerId: new Map([
-        ["Palice01", new Set([overnight.id])],
-      ]),
-    });
+    expect(endedAt(at("2026-11-09T15:00:00Z"))).toEqual(new Map());
+    expect(endedAt(at("2026-11-09T16:30:00Z"))).toEqual(
+      new Map([[overnight.id, "Palice01"]]),
+    );
   });
 
-  it("findEndedSessions는 만료된 세션과 그 지배자를 모으고, 오른 사람이 없는 세션은 지배자에서만 뺀다", () => {
+  it("findEndedSessions는 만료된 세션마다 지배자를 모으고, 오른 사람이 없는 세션은 지배자를 null로 둔다", () => {
     const flatSession = makeSession("Sflat001", at("2026-11-05T09:00:00Z"));
     const flatMatch = makeMatch(
       "Mflat001",
@@ -639,15 +627,18 @@ describe("buildSessionReport", () => {
       [["Palice01"], ["Pbob0001"]],
       { type: "unrestricted-singles", sessionId: flatSession.id },
     );
-    const ended = findEndedSessions(
-      createRankingContext(players, logs, [...matches, flatMatch]),
-      [session, flatSession],
-      sessionEndsAt,
+    expect(
+      findEndedSessions(
+        createRankingContext(players, logs, [...matches, flatMatch]),
+        [session, flatSession],
+        sessionEndsAt,
+      ),
+    ).toEqual(
+      new Map([
+        [session.id, "Palice01"],
+        [flatSession.id, null],
+      ]),
     );
-    expect(ended.endedSessionIds).toEqual(new Set([session.id, flatSession.id]));
-    expect([...ended.dominatedSessionIdsByPlayerId.entries()]).toEqual([
-      ["Palice01", new Set([session.id])],
-    ]);
   });
 
   it("무패 세션 업적은 세션이 만료된 뒤에만 전승 4번째 경기로 받는다", () => {
@@ -827,7 +818,7 @@ describe("평점 업적 입력", () => {
     ];
     const counts = countAchievementHolders(
       createRankingContext(players, logs, matches),
-      NO_ENDED_SESSIONS,
+      new Map(),
     );
     expect(counts["rating-3.5"]).toBe(1);
     expect(counts["rating-4.0"]).toBe(0);
@@ -863,7 +854,7 @@ describe("buildAchievementRankingResponse", () => {
 
     const response = buildAchievementRankingResponse(
       createRankingContext(players, [], matches),
-      NO_ENDED_SESSIONS,
+      new Map(),
     );
 
     expect(response.category).toBe("achievements");
@@ -901,7 +892,7 @@ describe("findAchievementsEarnedByMatches", () => {
 
   it("그 경기로 받은 업적만 받은 시각 → 업적 정의 → 회원 id 순으로 돌려준다", () => {
     expect(
-      findAchievementsEarnedByMatches(context, NO_ENDED_SESSIONS, new Set(["M1"]), allPlayerIds).map(
+      findAchievementsEarnedByMatches(context, new Map(), new Set(["M1"]), allPlayerIds).map(
         (item) => [item.playerId, item.achievementId, item.earnedMatchId],
       ),
     ).toEqual([
@@ -916,7 +907,7 @@ describe("findAchievementsEarnedByMatches", () => {
 
   it("앞 경기에서 이미 받은 업적은 다음 경기에 나오지 않는다", () => {
     expect(
-      findAchievementsEarnedByMatches(context, NO_ENDED_SESSIONS, new Set(["M2"]), allPlayerIds).filter(
+      findAchievementsEarnedByMatches(context, new Map(), new Set(["M2"]), allPlayerIds).filter(
         (item) =>
           item.achievementId === "matches-1" || item.achievementId === "wins-1",
       ),
@@ -925,7 +916,7 @@ describe("findAchievementsEarnedByMatches", () => {
 
   it("넘긴 회원의 업적만 센다", () => {
     expect(
-      findAchievementsEarnedByMatches(context, NO_ENDED_SESSIONS, new Set(["M1"]), ["Pc"]).map(
+      findAchievementsEarnedByMatches(context, new Map(), new Set(["M1"]), ["Pc"]).map(
         (item) => item.achievementId,
       ),
     ).toEqual(["matches-1"]);

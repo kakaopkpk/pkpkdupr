@@ -15,7 +15,7 @@ import {
   type AchievementMatch,
   type AchievementProgress,
   type EarnedAchievement,
-  type PlayerEndedSessions,
+  type EndedSessions,
 } from "../achievements";
 import { ACHIEVEMENT_COUNT_START } from "../achievementCountStart";
 import { kstDateKeyTimeToDate } from "../session";
@@ -133,14 +133,15 @@ const progressOf = (
 const compute = (matches: AchievementMatch[]) =>
   computeAchievements(ME, matches);
 
-/** 만료된 세션 id와 그중 내가 지배자인 세션 id로 업적 계산 입력을 만든다 */
+/** 만료된 세션 id로 업적 계산 입력을 만든다. dominatedSessionIds 세션은 내가 지배자다 */
 const endedSessions = (
   endedSessionIds: string[],
   dominatedSessionIds: string[] = [],
-): PlayerEndedSessions => ({
-  endedSessionIds: new Set(endedSessionIds),
-  dominatedSessionIds: new Set(dominatedSessionIds),
-});
+): EndedSessions =>
+  new Map([
+    ...endedSessionIds.map((id) => [id, null] as const),
+    ...dominatedSessionIds.map((id) => [id, ME] as const),
+  ]);
 
 describe("ACHIEVEMENTS", () => {
   it("업적 47개를 표 순서로 정의한다", () => {
@@ -857,10 +858,7 @@ describe("computeAchievements", () => {
     const progress = computeAchievements(
       ME,
       [...before, atStart],
-      endedSessions(
-        ["session-old", "session-new"],
-        ["session-old", "session-new"],
-      ),
+      endedSessions([], ["session-old", "session-new"]),
     );
     // 경기 수·승 수·출석은 기준 시각 전 경기도 세고, 받은 경기도 그 경기다
     expect(progressOf(progress, "matches-1")).toMatchObject({
@@ -932,10 +930,7 @@ describe("computeAchievements", () => {
     const progress = computeAchievements(
       ME,
       matches,
-      endedSessions(
-        ["session-a", "session-b", "session-none"],
-        ["session-b", "session-a", "session-none"],
-      ),
+      endedSessions([], ["session-b", "session-a", "session-none"]),
     );
     expect(progressOf(progress, "dominator-1")).toMatchObject({
       earned: true,
@@ -955,7 +950,7 @@ describe("computeAchievements", () => {
       makeMatch({ sessionId: `session-${index}` }),
     );
     const sessionIds = matches.map((_, index) => `session-${index}`);
-    const dominated = endedSessions(sessionIds, sessionIds);
+    const dominated = endedSessions([], sessionIds);
     expect(
       progressOf(computeAchievements(ME, matches, dominated), "dominator-10"),
     ).toMatchObject({

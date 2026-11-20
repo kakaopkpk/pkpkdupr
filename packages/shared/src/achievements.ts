@@ -1052,20 +1052,13 @@ const isSessionEventMetric = (
   (SESSION_EVENT_METRICS as readonly AchievementMetric[]).includes(metric);
 
 /**
- * 만료된 세션으로 정해지는 업적(무패 세션·세션 지배자)의 판정 재료. 세션 만료는 경기만으로 알 수 없어
- * 서버가 세션 만료 시각으로 정한다. 진행 중이거나 아직 만료되지 않은 세션은 결과가 바뀔 수 있어 넣지 않는다.
+ * 만료된 세션 id → 그 세션 지배자 회원 id(지배자가 없으면 null). 무패 세션·세션 지배자는 이 세션만 센다.
+ * 세션 만료는 경기만으로 알 수 없어 서버가 세션 만료 시각으로 정한다.
+ * 진행 중이거나 아직 만료되지 않은 세션은 결과가 바뀔 수 있어 넣지 않는다.
  */
-export interface PlayerEndedSessions {
-  /** 만료된 세션 id. 무패 세션은 이 세션만 센다 */
-  endedSessionIds: ReadonlySet<string>;
-  /** 이 회원이 지배자로 확정된 만료 세션 id */
-  dominatedSessionIds: ReadonlySet<string>;
-}
+export type EndedSessions = ReadonlyMap<string, string | null>;
 
-export const NO_ENDED_SESSIONS: PlayerEndedSessions = {
-  endedSessionIds: new Set(),
-  dominatedSessionIds: new Set(),
-};
+const NO_ENDED_SESSIONS: EndedSessions = new Map();
 
 /** 평점 진행도에 경기 직후 복식 평점을 반영한다 */
 const applyDoublesRating = (
@@ -1112,7 +1105,7 @@ const computeProgressSince = (
   playerId: string,
   playerMatches: readonly CountedMatch[],
   start: Date | null,
-  { endedSessionIds, dominatedSessionIds }: PlayerEndedSessions,
+  endedSessions: EndedSessions,
   facts: ClubFacts,
 ): AchievementProgress[] => {
   const metrics: Record<AchievementMetric, number> = {
@@ -1323,11 +1316,11 @@ const computeProgressSince = (
     if (
       session.allWon &&
       session.qualifiedMatch &&
-      endedSessionIds.has(sessionId)
+      endedSessions.has(sessionId)
     ) {
       sessionEventMatches.unbeatenSessions.push(session.qualifiedMatch);
     }
-    if (dominatedSessionIds.has(sessionId)) {
+    if (endedSessions.get(sessionId) === playerId) {
       sessionEventMatches.dominatedSessions.push(session.lastMatch);
     }
   }
@@ -1360,9 +1353,9 @@ const computeProgressSince = (
  * computeProgressSince를 따로 돌려, 지표를 추가할 때 시작 시각만 적으면 되게 한다.
  * 승패가 갈리지 않은 경기는 승리에는 세지 않고 연승·콤비 연승·무패 세션·리벤지는 끊는다.
  * 경기 수·단짝·라이벌·세션 진행도에는 센다.
- * 무패 세션·세션 지배자는 서버가 정한 endedSessions(PlayerEndedSessions)의 만료 세션만 센다.
+ * 무패 세션·세션 지배자는 서버가 정한 endedSessions의 만료 세션만 센다.
  * 무패 세션은 만료 세션의 모든 경기가 전승이고 4경기 이상일 때, 전승 4번째 경기를 받은 경기로 정한다.
- * 세션 지배자는 이 회원이 지배자로 확정된 만료 세션에서 이 회원의 마지막 경기를 받은 경기로 정한다.
+ * 세션 지배자는 이 회원이 지배자인 만료 세션에서 이 회원의 마지막 경기를 받은 경기로 정한다.
  * endedSessions를 넘기지 않으면 둘 다 받지 않은 상태다.
  * 평점 업적은 평점 반영 복식 경기가 RATING_ACHIEVEMENT_MIN_DOUBLES_MATCHES개 이상인 뒤의 복식 경기 직후
  * 복식 평점(doublesRatingAfter)의 최고치(낮은 평점 업적은 최저치)로 세므로, 받은 뒤 평점이 바뀌어도 유지된다.
@@ -1377,7 +1370,7 @@ const computeProgressSince = (
 export function computeAchievements(
   playerId: string,
   matches: readonly AchievementMatch[],
-  endedSessions: PlayerEndedSessions = NO_ENDED_SESSIONS,
+  endedSessions: EndedSessions = NO_ENDED_SESSIONS,
   { clubMatches = true }: { clubMatches?: boolean } = {},
 ): AchievementProgress[] {
   const playerMatches = getPlayerCountedMatches(playerId, matches);
