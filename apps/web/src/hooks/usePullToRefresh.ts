@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { PullToRefreshStatus } from "@/components/PullToRefreshIndicator";
 import { triggerHapticFeedback } from "@/lib/haptics";
+import {
+  createPullToRefreshStore,
+  type PullToRefreshStatus,
+} from "@/lib/pullToRefreshStore";
 
 export const PULL_TO_REFRESH_THRESHOLD = 129.6;
 export const PULL_TO_REFRESH_BASE_RESISTANCE = 0.75;
@@ -19,8 +22,7 @@ export const usePullToRefresh = ({
   onRefresh,
   isEnabled = true,
 }: UsePullToRefreshParams) => {
-  const [distance, setDistance] = useState(0);
-  const [status, setStatus] = useState<PullToRefreshStatus>("idle");
+  const [store] = useState(createPullToRefreshStore);
   const startRef = useRef<{
     identifier: number;
     startX: number;
@@ -28,7 +30,6 @@ export const usePullToRefresh = ({
     lastX: number;
     lastY: number;
   } | null>(null);
-  const distanceRef = useRef(0);
   const isArmedRef = useRef(false);
   const isRefreshingRef = useRef(false);
   const isGestureActiveRef = useRef(false);
@@ -45,15 +46,13 @@ export const usePullToRefresh = ({
   const reset = useCallback(
     (nextStatus: PullToRefreshStatus = "idle") => {
       startRef.current = null;
-      distanceRef.current = 0;
       isArmedRef.current = false;
       isGestureActiveRef.current = false;
       axisRef.current = "undecided";
       container?.style.removeProperty("overflow");
-      setDistance(0);
-      setStatus(nextStatus);
+      store.set({ distance: 0, status: nextStatus });
     },
-    [container],
+    [container, store],
   );
 
   const updateDistance = useCallback(
@@ -96,7 +95,8 @@ export const usePullToRefresh = ({
         }
       }
 
-      const progress = Math.min(distanceRef.current / PULL_TO_REFRESH_THRESHOLD, 1);
+      const currentDistance = store.get().distance;
+      const progress = Math.min(currentDistance / PULL_TO_REFRESH_THRESHOLD, 1);
       const resistance =
         PULL_TO_REFRESH_BASE_RESISTANCE -
         (PULL_TO_REFRESH_BASE_RESISTANCE - PULL_TO_REFRESH_MIN_RESISTANCE) *
@@ -106,26 +106,26 @@ export const usePullToRefresh = ({
           ? pullDeltaY * resistance
           : pullDeltaY * PULL_TO_REFRESH_BASE_RESISTANCE;
       const nextDistance = Math.min(
-        Math.max(0, distanceRef.current + adjustedDeltaY),
+        Math.max(0, currentDistance + adjustedDeltaY),
         PULL_TO_REFRESH_THRESHOLD * 1.25,
       );
 
-      distanceRef.current = nextDistance;
       const isArmed = nextDistance >= PULL_TO_REFRESH_THRESHOLD;
       if (isArmed && !isArmedRef.current) triggerHapticFeedback(15);
       isArmedRef.current = isArmed;
-      if (nextDistance > 0) {
-        isGestureActiveRef.current = true;
-        container?.style.setProperty("overflow", "hidden");
-      } else {
-        isGestureActiveRef.current = false;
-        container?.style.removeProperty("overflow");
+      const isGestureActive = nextDistance > 0;
+      if (isGestureActive !== isGestureActiveRef.current) {
+        isGestureActiveRef.current = isGestureActive;
+        if (isGestureActive) container?.style.setProperty("overflow", "hidden");
+        else container?.style.removeProperty("overflow");
       }
-      setDistance(nextDistance);
-      setStatus(nextDistance === 0 ? "idle" : isArmed ? "armed" : "pulling");
+      store.set({
+        distance: nextDistance,
+        status: nextDistance === 0 ? "idle" : isArmed ? "armed" : "pulling",
+      });
       return true;
     },
-    [container, reset],
+    [container, reset, store],
   );
 
   useEffect(() => {
@@ -150,7 +150,7 @@ export const usePullToRefresh = ({
         lastX: touch.clientX,
         lastY: touch.clientY,
       };
-      distanceRef.current = 0;
+      store.set({ distance: 0 });
       isArmedRef.current = false;
       isGestureActiveRef.current = false;
       axisRef.current = "undecided";
@@ -183,12 +183,10 @@ export const usePullToRefresh = ({
       }
 
       startRef.current = null;
-      distanceRef.current = 0;
       isGestureActiveRef.current = false;
       container.style.removeProperty("overflow");
-      setDistance(0);
       isRefreshingRef.current = true;
-      setStatus("refreshing");
+      store.set({ distance: 0, status: "refreshing" });
 
       const refresh = handlerRef.current;
       if (!refresh) {
@@ -201,10 +199,9 @@ export const usePullToRefresh = ({
         let delay = 350;
         try {
           await refresh();
-          setStatus("refreshing");
         } catch {
           delay = 1600;
-          setStatus("error");
+          store.set({ status: "error" });
         } finally {
           resetTimeoutRef.current = window.setTimeout(() => {
             isRefreshingRef.current = false;
@@ -228,7 +225,7 @@ export const usePullToRefresh = ({
       container.removeEventListener("touchend", handleTouchEnd);
       container.removeEventListener("touchcancel", handleTouchCancel);
     };
-  }, [container, isEnabled, onRefresh, reset, updateDistance]);
+  }, [container, isEnabled, onRefresh, reset, store, updateDistance]);
 
   useEffect(
     () => () => {
@@ -237,5 +234,5 @@ export const usePullToRefresh = ({
     [],
   );
 
-  return { distance, status };
+  return store;
 };

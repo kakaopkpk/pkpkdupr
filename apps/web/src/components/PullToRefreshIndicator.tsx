@@ -1,16 +1,9 @@
-import React, { useRef } from "react";
+import React, { useRef, useSyncExternalStore } from "react";
 import { cx } from "@/components/ui/cx";
-
-export type PullToRefreshStatus =
-  | "idle"
-  | "pulling"
-  | "armed"
-  | "refreshing"
-  | "error";
+import type { PullToRefreshStore } from "@/lib/pullToRefreshStore";
 
 interface PullToRefreshIndicatorProps {
-  distance: number;
-  status: PullToRefreshStatus;
+  store: PullToRefreshStore;
   threshold: number;
 }
 
@@ -28,10 +21,14 @@ const RING_FULL_DEGREES = 270;
 const SPIN_DURATION_MS = 1000;
 
 const PullToRefreshIndicator: React.FC<PullToRefreshIndicatorProps> = ({
-  distance,
-  status,
+  store,
   threshold,
 }) => {
+  const { distance, status } = useSyncExternalStore(
+    store.subscribe,
+    store.get,
+    store.get,
+  );
   const isVisible = status !== "idle";
   const isPullGestureActive = status === "pulling" || status === "armed";
   const rawProgress = distance / threshold;
