@@ -17,6 +17,7 @@ import {
 import { RecordSessionCard } from "@/components/records/RecordCards";
 import SessionRatingChangesScreen from "@/components/records/SessionRatingChangesScreen";
 import {
+  LiveSessionHighlightCard,
   SessionPlayerRatingRow,
   SessionReportSkeleton,
   TopRiserCard,
@@ -41,7 +42,10 @@ import {
 } from "@/components/ui/SegmentedControl";
 import { useAppNavigation } from "@/context/AppNavigationContext";
 import { useAuth } from "@/context/AuthContext";
-import { useLiveSession } from "@/context/LiveSessionContext";
+import {
+  getLiveSessionStartsAt,
+  useLiveSession,
+} from "@/context/LiveSessionContext";
 import {
   type TabKey,
   useTabNavigation,
@@ -49,6 +53,7 @@ import {
 import { useLayerDepth } from "@/hooks/useLayerDepth";
 import { useMinuteClock } from "@/hooks/useMinuteClock";
 import { getUserErrorMessage } from "@/lib/errors";
+import { getSessionWinStreaks } from "@/lib/sessionWinStreak";
 import {
   fetchMatchSession,
   fetchSessionMatches,
@@ -77,9 +82,12 @@ type LoadState =
       kind: "ready";
       session: MatchSessionDetailInfo;
       matches: MatchInfo[];
-      /** 끝난 세션의 리포트. 끝나기 전이거나 완료 경기가 없으면(404) null */
+      /**
+       * 세션 리포트. 끝난 세션은 리포트 전체를, 시작한 일반 세션은 세션 지배자 카드에 쓴다.
+       * 시작 전·대회 진행 중이거나 완료 경기가 없으면(404) null
+       */
       report: MatchSessionReportInfo | null;
-      /** 불러올 때 세션이 끝났는지(getSessionEndsAt <= 지금). 끝난 세션만 리포트를 읽는다 */
+      /** 불러올 때 세션이 끝났는지(getSessionEndsAt <= 지금) */
       isEnded: boolean;
     }
   | { kind: "error"; message: string };
@@ -92,8 +100,8 @@ const isPlayerInMatch = (match: MatchInfo, playerId: string) =>
 const getSessionEndTime = (session: MatchSessionDetailInfo) =>
   getSessionEndsAt(session.kind, new Date(session.date), session).getTime();
 
-/** 끝난 세션의 리포트. 완료 경기가 없으면 서버가 404라 리포트 없이 그린다 */
-const fetchEndedSessionReport = async (sessionId: string) => {
+/** 세션 리포트. 완료 경기가 없으면 서버가 404라 리포트 없이 그린다 */
+const fetchSessionReportOrNull = async (sessionId: string) => {
   try {
     return await fetchSessionReport(sessionId);
   } catch (err) {
@@ -115,7 +123,8 @@ export interface SessionReportDrawerProps {
 
 /**
  * 전역 세션 상세 화면. 다가오는·진행 중·끝난 세션 모두 열리고, 머리는 세션 카드다.
- * - 끝나기 전: 일정 탭 블루 카드(D-day 또는 LIVE, 참여자 시트, 참여 버튼) → 대회면 "대진", 아니면 "경기"
+ * - 끝나기 전: 일정 탭 블루 카드(D-day 또는 LIVE, 참여자 시트, 참여 버튼) → 대회면 "대진", 아니면 "경기".
+ *   진행 중 일반 세션이면 카드와 "경기" 사이에 세션 지배자·세션 연승 카드
  * - 끝난 대회: 순위 카드 → 리포트(세션 지배자·내 평점·내 새 업적·평점 변화) → "대진"
  * - 끝난 일반 세션: 일정 탭 지난 세션 카드(누를 수 없음) → 리포트 → "경기".
  *   리포트가 없으면(완료 경기 없이 끝남) 버튼 없는 블루 카드
@@ -175,9 +184,14 @@ export default function SessionReportDrawer({
           fetchSessionMatches(targetSessionId),
         ]);
         const isEnded = getSessionEndTime(session) <= Date.now();
-        const report = isEnded
-          ? await fetchEndedSessionReport(targetSessionId)
-          : null;
+        // 진행 중 일반 세션도 세션 지배자 카드를 위해 리포트를 읽는다(대회 진행 중에는 지배자가 없다)
+        const hasStartedRegular =
+          session.kind !== "tournament" &&
+          getLiveSessionStartsAt(session).getTime() <= Date.now();
+        const report =
+          isEnded || hasStartedRegular
+            ? await fetchSessionReportOrNull(targetSessionId)
+            : null;
         if (requestIdRef.current !== requestId) return;
         setLoadState({ kind: "ready", session, matches, report, isEnded });
         setLoadedVersion(version);
@@ -256,6 +270,16 @@ export default function SessionReportDrawer({
 
   const report = loadState.kind === "ready" ? loadState.report : null;
   const matches = loadState.kind === "ready" ? loadState.matches : null;
+  // 진행 중 일반 세션에서만 세션 지배자 카드에 연승 줄을 보인다
+  const isLiveRegular =
+    isLive &&
+    loadState.kind === "ready" &&
+    !loadState.isEnded &&
+    loadState.session.kind !== "tournament";
+  const sessionWinStreaks = useMemo(
+    () => (isLiveRegular && matches ? getSessionWinStreaks(matches) : []),
+    [isLiveRegular, matches],
+  );
 
   const myReport = useMemo(
     () =>
@@ -410,7 +434,13 @@ export default function SessionReportDrawer({
     return (
       <>
         {renderHeaderCard(session, isEnded)}
-        {report ? renderReport(report) : null}
+        {isEnded && report ? renderReport(report) : null}
+        {isLiveRegular ? (
+          <LiveSessionHighlightCard
+            topRiser={report?.topRiser ?? null}
+            streaks={sessionWinStreaks}
+          />
+        ) : null}
         {session.kind === "tournament" ? (
           <TournamentBracketSection
             matches={loadState.matches}

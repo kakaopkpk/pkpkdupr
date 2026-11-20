@@ -1,6 +1,10 @@
 import React from "react";
 import { cx } from "@/components/ui/cx";
-import { TEAM_AVATAR_OVERLAP, TeamAvatars } from "@/components/ui/PlayerAvatar";
+import {
+  type SessionWinStreakByPlayer,
+  TEAM_AVATAR_OVERLAP,
+  TeamAvatars,
+} from "@/components/ui/PlayerAvatar";
 import { useIsScreenVisible } from "@/context/ScreenVisibilityContext";
 import type { MatchInfo } from "@/types/match";
 
@@ -146,7 +150,16 @@ export const RallyTeamRow: React.FC<{
   ringColor: string;
   vsClassName: string;
   renderNames: (team: MatchInfo["teams"][number]) => React.ReactNode;
-}> = ({ teams, isScheduled, ringColor, vsClassName, renderNames }) => {
+  /** 든 회원 아바타에 세션 연승 링을 두른다(홈 진행 중 세션) */
+  sessionWinStreaks?: SessionWinStreakByPlayer;
+}> = ({
+  teams,
+  isScheduled,
+  ringColor,
+  vsClassName,
+  renderNames,
+  sessionWinStreaks,
+}) => {
   const isVisible = useIsScreenVisible();
   // 홈 카드처럼 버튼 안에도 들어가므로 span으로 쌓는다
   const renderTeam = (side: 0 | 1) => (
@@ -159,7 +172,12 @@ export const RallyTeamRow: React.FC<{
           !isScheduled && side === 1 && "pk-rally-lunge-reverse",
         )}
       >
-        <TeamAvatars players={teams[side].players} size={AVATAR_SIZE} ringColor={ringColor} />
+        <TeamAvatars
+          players={teams[side].players}
+          size={AVATAR_SIZE}
+          ringColor={ringColor}
+          sessionWinStreaks={sessionWinStreaks}
+        />
       </span>
       {renderNames(teams[side])}
     </span>

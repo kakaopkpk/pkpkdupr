@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { resolveAssetUrl } from "@/lib/api";
 import { cx } from "./cx";
+import { SessionWinStreakFrame } from "./WinStreakAvatarFrame";
 
 export interface AvatarPlayer {
   id: string;
@@ -75,13 +76,17 @@ export const PlayerAvatar: React.FC<{
 /** 팀 아바타 쌍에서 뒤 아바타가 앞 아바타와 겹치는 폭(px) */
 export const TEAM_AVATAR_OVERLAP = 6;
 
+/** 회원 id → 진행 중 세션 연승. 들어 있는 회원 아바타에 세션 연승 링(태그 없음)을 두른다 */
+export type SessionWinStreakByPlayer = ReadonlyMap<string, number>;
+
 /** 팀 아바타 쌍. 뒤 아바타는 TEAM_AVATAR_OVERLAP만큼 겹치고, 둘레의 2px 테로 구분한다 */
 export const TeamAvatars: React.FC<{
   players: readonly AvatarPlayer[];
   size: number;
   /** 테 색. 아바타가 놓인 바탕색과 맞춘다(기본 흰색) */
   ringColor?: string;
-}> = ({ players, size, ringColor = "#ffffff" }) => (
+  sessionWinStreaks?: SessionWinStreakByPlayer;
+}> = ({ players, size, ringColor = "#ffffff", sessionWinStreaks }) => (
   <span aria-hidden="true" className="inline-flex shrink-0">
     {players.map((player, index) => (
       <span
@@ -92,7 +97,9 @@ export const TeamAvatars: React.FC<{
           marginLeft: index > 0 ? -TEAM_AVATAR_OVERLAP : undefined,
         }}
       >
-        <PlayerAvatar player={player} size={size} />
+        <SessionWinStreakFrame winStreak={sessionWinStreaks?.get(player.id)}>
+          <PlayerAvatar player={player} size={size} />
+        </SessionWinStreakFrame>
       </span>
     ))}
   </span>

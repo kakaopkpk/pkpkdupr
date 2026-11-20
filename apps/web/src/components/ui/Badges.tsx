@@ -1,5 +1,5 @@
 import React from "react";
-import { CrownIcon } from "./Icons";
+import { CrownIcon, FlameIcon } from "./Icons";
 import { SheenOverlay } from "./SheenOverlay";
 import { cx } from "./cx";
 
@@ -46,5 +46,15 @@ export const SessionDominatorBadge: React.FC<{ isPlaying?: boolean }> = ({
     {isPlaying ? (
       <SheenOverlay delayMs={BADGE_SHEEN_DELAY_MS} durationMs={BADGE_SHEEN_DURATION_MS} />
     ) : null}
+  </span>
+);
+
+/** 불꽃 + "N연승" 노랑 칩. 진행 중 세션 지배자가 세션 연승 중일 때 "세션 지배자" 칩 옆에 붙는다 */
+export const SessionWinStreakBadge: React.FC<{ winStreak: number }> = ({
+  winStreak,
+}) => (
+  <span className={cx(highlightClassName, "gap-[3px] tabular-nums")}>
+    <FlameIcon size={14} />
+    {winStreak}연승
   </span>
 );

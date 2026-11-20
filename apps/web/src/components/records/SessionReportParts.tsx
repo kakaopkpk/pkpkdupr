@@ -1,7 +1,10 @@
 import React from "react";
 import type { SessionPlayerReport } from "@pkpkdupr/shared/ranking";
 import SkeletonBlock from "@/components/SkeletonBlock";
-import { SessionDominatorBadge } from "@/components/ui/Badges";
+import {
+  SessionDominatorBadge,
+  SessionWinStreakBadge,
+} from "@/components/ui/Badges";
 import { rowPressClassName } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { WinLossCount } from "@/components/profile/ProfileStatTile";
@@ -14,8 +17,11 @@ import {
 } from "@/components/ui/CountUpNumber";
 import { RankChange, RatingDelta } from "@/components/ui/Delta";
 import { PlayerAvatar } from "@/components/ui/PlayerAvatar";
+import { SessionWinStreakFrame } from "@/components/ui/WinStreakAvatarFrame";
 import { cx } from "@/components/ui/cx";
+import { useAppNavigation } from "@/context/AppNavigationContext";
 import { usePlayOnShow } from "@/hooks/usePlayOnShow";
+import type { SessionWinStreak } from "@/lib/sessionWinStreak";
 import { formatRating } from "@/utils/dupr";
 
 /** 세션 전후 복식 순위 변동(rankBefore - rankAfter, 양수=상승). 둘 중 하나라도 null이면 null */
@@ -98,29 +104,81 @@ export const SessionRatingDeltaCount: React.FC<{
     <RatingDelta value={null} className={className} />
   );
 
+/** 소식 문장 안 아이디·핵심 단어. 검정 굵게만 하고 색은 바꾸지 않는다 */
+export const LineStrong: React.FC<{ children: React.ReactNode }> = ({
+  children,
+}) => <b className="font-extrabold">{children}</b>;
+
+export const lineTextClassName = "text-pk-15 text-pk-ink break-keep";
+
 /**
- * 그 세션에서 평점이 가장 많이 오른 사람(세션 지배자). 아바타에 불꽃 후광을 두른다.
- * 카드가 보일 때마다 왕관 까딱임·칩 흰 빛·평점 상승 카운트업을 한 번 재생한다
+ * 회원 한 명의 소식 줄 틀: 아바타 36 + 문장, 최소 높이 60, 줄 사이 구분선.
+ * 홈 소식 피드 줄과 진행 중 세션 지배자 카드의 연승 줄이 같이 쓴다
  */
-export const TopRiserCard: React.FC<{ report: SessionPlayerReport }> = ({
-  report,
-}) => {
+export const PlayerLineButton: React.FC<{
+  player: SessionPlayerReport["player"];
+  onPress: () => void;
+  children: React.ReactNode;
+  right?: React.ReactNode;
+  /** 아바타에 세션 지배자 불꽃 후광을 두른다 */
+  hasFlameAura?: boolean;
+  /** 세션 연승. 주면 아바타에 앰버 링과 숫자 태그를 붙인다 */
+  sessionWinStreak?: number;
+}> = ({
+  player,
+  onPress,
+  children,
+  right,
+  hasFlameAura = false,
+  sessionWinStreak,
+}) => (
+  <button
+    type="button"
+    onClick={onPress}
+    className={cx(
+      "flex min-h-[60px] w-full items-center gap-3 py-3 text-left not-last:border-b not-last:border-pk-divider active:opacity-80",
+      rowPressClassName,
+    )}
+  >
+    <span className={cx("inline-flex shrink-0", hasFlameAura && "pk-flame-aura")}>
+      <SessionWinStreakFrame winStreak={sessionWinStreak} showTag>
+        <PlayerAvatar player={player} size={36} />
+      </SessionWinStreakFrame>
+    </span>
+    <span className="flex min-w-0 flex-1 flex-col gap-0.5">{children}</span>
+    {right}
+  </button>
+);
+
+/**
+ * 세션 지배자 줄: 불꽃 후광 아바타, 칩·아이디·평점, 오른쪽 끝 평점 상승폭.
+ * 보일 때마다 왕관 까딱임·칩 흰 빛·평점 상승 카운트업을 한 번 재생한다.
+ * sessionWinStreak을 주면(진행 중 세션 연승) "세션 지배자" 칩 옆에 "N연승" 칩을 붙인다
+ */
+const TopRiserRow: React.FC<{
+  report: SessionPlayerReport;
+  sessionWinStreak?: number;
+  className?: string;
+}> = ({ report, sessionWinStreak, className }) => {
   const { isPlaying, finish } = usePlayOnShow();
 
   return (
-    <Card className="flex items-center gap-3 px-4 py-3.5">
+    <div className={cx("flex items-center gap-3", className)}>
       <span className="pk-flame-aura shrink-0">
         <PlayerAvatar player={report.player} size={44} />
       </span>
       <div className="flex min-w-0 flex-1 flex-col items-start gap-0.5">
         <span
-          className="flex"
+          className="flex gap-1"
           onAnimationEnd={(event) => {
             // 칩 흰 빛이 가장 늦게 끝나는 CSS 연출이다
             if (event.animationName === "pk-sheen") finish();
           }}
         >
           <SessionDominatorBadge isPlaying={isPlaying} />
+          {sessionWinStreak !== undefined ? (
+            <SessionWinStreakBadge winStreak={sessionWinStreak} />
+          ) : null}
         </span>
         <span className="max-w-full truncate text-pk-17 font-extrabold text-pk-ink">
           {report.player.username}
@@ -138,6 +196,64 @@ export const TopRiserCard: React.FC<{ report: SessionPlayerReport }> = ({
         className="text-pk-22 font-extrabold leading-none"
         {...COUNT_UP}
       />
+    </div>
+  );
+};
+
+/** 그 세션에서 평점이 가장 많이 오른 사람(세션 지배자). 아바타에 불꽃 후광을 두른다 */
+export const TopRiserCard: React.FC<{ report: SessionPlayerReport }> = ({
+  report,
+}) => (
+  <Card className="px-4 py-3.5">
+    <TopRiserRow report={report} />
+  </Card>
+);
+
+/**
+ * 진행 중 세션의 세션 지배자 카드. 지배자 줄 아래 구분선을 두고 세션 연승(3 이상) 중인 다른 회원을
+ * "<아이디>님이 N연승 중이에요" 줄로 잇는다. 지배자가 연승 중이면 지배자 칩 옆 "N연승" 칩으로 보이고,
+ * 지배자가 없으면 연승 줄만 있다. 둘 다 없으면 그리지 않는다. 연승 줄을 누르면 그 회원 프로필
+ */
+export const LiveSessionHighlightCard: React.FC<{
+  topRiser: SessionPlayerReport | null;
+  streaks: readonly SessionWinStreak[];
+}> = ({ topRiser, streaks }) => {
+  const { openMemberProfile } = useAppNavigation();
+  const topRiserStreak = topRiser
+    ? streaks.find((entry) => entry.player.id === topRiser.player.id)
+    : undefined;
+  const otherStreaks = streaks.filter((entry) => entry !== topRiserStreak);
+  if (!topRiser && otherStreaks.length === 0) return null;
+
+  return (
+    <Card className="px-4">
+      {topRiser ? (
+        <TopRiserRow
+          report={topRiser}
+          sessionWinStreak={topRiserStreak?.winStreak}
+          className="py-3.5"
+        />
+      ) : null}
+      {otherStreaks.length > 0 ? (
+        <div className={cx("flex flex-col", topRiser && "border-t border-pk-divider")}>
+          {otherStreaks.map(({ player, winStreak, matchCount, wins }) => (
+            <PlayerLineButton
+              key={player.id}
+              player={player}
+              sessionWinStreak={winStreak}
+              onPress={() => openMemberProfile(player.id)}
+            >
+              <span className={lineTextClassName}>
+                <LineStrong>{player.username}</LineStrong>님이{" "}
+                <LineStrong>{winStreak}연승</LineStrong> 중이에요
+              </span>
+              <span className="text-pk-13 text-pk-sub tabular-nums">
+                {matchCount}경기 {wins}승
+              </span>
+            </PlayerLineButton>
+          ))}
+        </div>
+      ) : null}
     </Card>
   );
 };

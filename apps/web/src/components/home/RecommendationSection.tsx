@@ -7,6 +7,7 @@ import SkeletonBlock from "@/components/SkeletonBlock";
 import { buttonPressClassName } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { Section, TextLink } from "@/components/ui/Section";
+import type { SessionWinStreakByPlayer } from "@/components/ui/PlayerAvatar";
 import { cx } from "@/components/ui/cx";
 import { TeamsVersusWithAverages } from "./TeamBlock";
 import type { SessionRecommendationsState } from "./useSessionRecommendations";
@@ -24,14 +25,23 @@ const RecommendationRow: React.FC<{
   isStarting: boolean;
   isStartDisabled: boolean;
   error: string | null;
+  sessionWinStreaks?: SessionWinStreakByPlayer;
   onStart: () => void;
-}> = ({ court, isStarting, isStartDisabled, error, onStart }) => (
+}> = ({
+  court,
+  isStarting,
+  isStartDisabled,
+  error,
+  sessionWinStreaks,
+  onStart,
+}) => (
   <div className={cx("flex flex-col gap-2.5 py-3", rowDividerClassName)}>
     {/* 왼쪽: 팀별 평균 위에 팀 vs 팀, 오른쪽: 두 줄 높이 가운데의 시작 버튼 */}
     <div className="flex items-center gap-3">
       <TeamsVersusWithAverages
         teams={[court.teams[0].players, court.teams[1].players]}
         averages={[court.teams[0].averageRating, court.teams[1].averageRating]}
+        sessionWinStreaks={sessionWinStreaks}
       />
       {/* 연한 파랑 36px·둥글기 12px·13/800. PkButton sm(알약·700)과 모양이 달라 직접 그린다 */}
       <button
@@ -69,8 +79,17 @@ const RecommendationSection: React.FC<{
   startingKey: string | null;
   /** 시작에 실패한 행 키와 서버 문구 */
   startError: { key: string; message: string } | null;
+  /** 든 회원 아바타에 세션 연승 링을 두른다 */
+  sessionWinStreaks?: SessionWinStreakByPlayer;
   onStart: (court: RecommendedCourt) => void;
-}> = ({ state, waitingCount, startingKey, startError, onStart }) => {
+}> = ({
+  state,
+  waitingCount,
+  startingKey,
+  startError,
+  sessionWinStreaks,
+  onStart,
+}) => {
   const { recommendation, status, error, recommendAgain } = state;
 
   const renderBody = () => {
@@ -106,6 +125,7 @@ const RecommendationSection: React.FC<{
               // 시작 요청 중에는 다른 추천도 막아 같은 선수가 두 경기에 들어가지 않게 한다
               isStartDisabled={startingKey !== null}
               error={startError?.key === key ? startError.message : null}
+              sessionWinStreaks={sessionWinStreaks}
               onStart={() => onStart(court)}
             />
           );
