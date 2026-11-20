@@ -6,10 +6,16 @@ import {
   createRankingContext,
   findPlayerEarnedAchievements,
   toContextAchievementMatches,
+  type EndedSessions,
   type RankingMatch,
   type RankingSession,
   type RankingSourcePlayer,
 } from "../services/RankingService";
+
+const NO_ENDED_SESSIONS: EndedSessions = {
+  endedSessionIds: new Set(),
+  dominatedSessionIdsByPlayerId: new Map(),
+};
 
 // 실제 업적 기준 시각(2026-11-17 00:00 KST)으로 세션 리포트 업적을 확인한다.
 const makePlayer = (id: string, username: string): RankingSourcePlayer => ({
@@ -77,13 +83,13 @@ describe("세션 리포트 업적과 업적 기준 시각", () => {
     const report = buildSessionReport({
       context,
       session,
-      dominations: new Map(),
+      endedSessions: NO_ENDED_SESSIONS,
     });
 
     // 받은 업적이지만 이 세션에서 받은 것으로 보여 주지 않는다
     const earnedIds = findPlayerEarnedAchievements(
       toContextAchievementMatches(context),
-      new Map(),
+      NO_ENDED_SESSIONS,
       "Palice01",
     ).map((item) => item.achievementId);
     expect(earnedIds).toEqual(

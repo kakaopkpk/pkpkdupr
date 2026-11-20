@@ -10,7 +10,7 @@ import {
 import {
   buildSessionReport,
   createRankingContext,
-  findSessionDominations,
+  findEndedSessions,
   type RankingMatch,
   type RankingSession,
 } from "../services/RankingService";
@@ -109,7 +109,7 @@ const buildPage = ({
     context,
     sessions,
     players,
-    dominations: findSessionDominations(context, sessions, now),
+    endedSessions: findEndedSessions(context, sessions, now),
     requesterId,
     cursor,
   });
@@ -326,7 +326,7 @@ describe("buildNewsFeedPage 세션 항목", () => {
     const result = buildSessionReport({
       context,
       session,
-      dominations: findSessionDominations(context, [session], now),
+      endedSessions: findEndedSessions(context, [session], now),
     });
     if (!result) throw new Error("세션 리포트가 없다");
     return result;
