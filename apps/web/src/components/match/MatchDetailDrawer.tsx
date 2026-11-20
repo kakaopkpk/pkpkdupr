@@ -444,7 +444,7 @@ export default function MatchDetailDrawer({
           onOpenSession={openSessionReport}
           onOpenPlayer={openMemberProfile}
           onOpenAchievement={(playerId, achievementId) =>
-            openAchievementDetail({ playerId, achievementId })
+            openAchievementDetail({ playerId, achievementId, earned: true })
           }
         />
       );

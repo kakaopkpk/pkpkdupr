@@ -204,7 +204,11 @@ export default function AchievementDetailSheet({
   const isLoading = !currentDetail || currentDetail.status === "loading";
   const isError = currentDetail?.status === "error";
   const progress = ready?.progress ?? null;
-  const earned = !!progress?.earned;
+  // 불러오기 전에는 여는 곳이 넘긴 값을 쓰고, 불러오면 받은 결과를 따른다
+  const earned: boolean | undefined = ready
+    ? !!progress?.earned
+    : displayedRequest?.earned;
+  const isBadgePending = isLoading && earned === undefined;
 
   let content: React.ReactElement;
   if (!definition || !displayedRequest) {
@@ -224,7 +228,7 @@ export default function AchievementDetailSheet({
             className="relative"
             style={{ width: BADGE_SIZE, height: BADGE_SIZE }}
           >
-            {isLoading ? (
+            {isBadgePending ? (
               <SkeletonBlock className="size-full rounded-full" />
             ) : earned ? (
               <EarnedBadge definition={definition} />
@@ -235,8 +239,8 @@ export default function AchievementDetailSheet({
                   earned={false}
                   size={BADGE_SIZE}
                 />
-                {/* 불러오지 못하면 받았는지 모르므로 자물쇠를 달지 않는다 */}
-                {ready ? <LockMark /> : null}
+                {/* 받았는지 모르면 자물쇠를 달지 않는다 */}
+                {earned === false ? <LockMark /> : null}
               </>
             )}
           </div>
@@ -254,7 +258,17 @@ export default function AchievementDetailSheet({
           ) : null}
           <div className="divide-y divide-pk-divider">
             {isLoading ? (
-              <DetailRow label={<SkeletonBlock className="h-4 w-12" />}>
+              <DetailRow
+                label={
+                  earned === undefined ? (
+                    <SkeletonBlock className="h-4 w-12" />
+                  ) : earned ? (
+                    "받은 날"
+                  ) : (
+                    "진행"
+                  )
+                }
+              >
                 <ValueSkeleton />
               </DetailRow>
             ) : null}

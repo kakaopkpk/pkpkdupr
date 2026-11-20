@@ -404,6 +404,7 @@ export default function AchievementsScreen({
                             openAchievementDetail({
                               playerId,
                               achievementId: definition.id,
+                              earned: !!progressById.get(definition.id)?.earned,
                             });
                           }
                         }}
