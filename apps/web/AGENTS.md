@@ -77,6 +77,7 @@
       - 진행 중 경기 랠리 팀 줄 `RallyTeamRow`(`LiveMatchRally.tsx`): 아바타 쌍·네트 칸·랠리를 그리고 이름은 호출부가 그린다. 홈 내 경기 카드도 쓴다.
       - 예정 경기면 vs 글자만, 화면이 안 보이면 멈춘다. 공·패들·충격선은 `index.css`의 `pk-rally-*`, 움직임 줄이기면 공이 네트 위에 멈춘다.
       - 완료 경기는 평점 변화 아래 '이 경기로 받은 업적'(응답 `achievements`)을 기록 완료 띠와 같은 줄 `MatchAchievementRow`로 보인다.
+      - 완료 경기 하단 "같은 멤버로 한 판 더"는 기록(`completedAt`, 없으면 시작 시각) 1시간 안에만 보인다(`isWithinRematchWindow`). 지나면 수정 버튼만 전체 너비로 남는다.
       - 대진 예정 경기(`status: "scheduled"`)는 vs 글자만·시각 없이 보이고 점수 입력·수정·삭제·한 판 더가 없다. 세션 날짜가 오늘(KST)이면 하단 "경기 시작"(`startScheduledMatch`)만 있다.
     - `profile/`: 회원 프로필·경기 목록, 나 탭과 같이 쓰는 머리 `ProfileHeader`. 사진을 불러온 아바타를 누르면 그 자리에서 가운데 240px 원으로 커지는 확대 보기 `AvatarZoomViewer`(누르기·아래로 끌기·Escape·뒤로가기로 닫힘)
     - `records/`: 세션 상세 `SessionReportDrawer`와 그 위 평점 변화 전체 `SessionRatingChangesScreen`
