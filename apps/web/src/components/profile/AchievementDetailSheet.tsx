@@ -205,10 +205,7 @@ export default function AchievementDetailSheet({
   const isError = currentDetail?.status === "error";
   const progress = ready?.progress ?? null;
   // 불러오기 전에는 여는 곳이 넘긴 값을 쓰고, 불러오면 받은 결과를 따른다
-  const earned: boolean | undefined = ready
-    ? !!progress?.earned
-    : displayedRequest?.earned;
-  const isBadgePending = isLoading && earned === undefined;
+  const earned = ready ? !!progress?.earned : !!displayedRequest?.earned;
 
   let content: React.ReactElement;
   if (!definition || !displayedRequest) {
@@ -228,9 +225,7 @@ export default function AchievementDetailSheet({
             className="relative"
             style={{ width: BADGE_SIZE, height: BADGE_SIZE }}
           >
-            {isBadgePending ? (
-              <SkeletonBlock className="size-full rounded-full" />
-            ) : earned ? (
+            {earned ? (
               <EarnedBadge definition={definition} />
             ) : (
               <>
@@ -239,8 +234,7 @@ export default function AchievementDetailSheet({
                   earned={false}
                   size={BADGE_SIZE}
                 />
-                {/* 받았는지 모르면 자물쇠를 달지 않는다 */}
-                {earned === false ? <LockMark /> : null}
+                <LockMark />
               </>
             )}
           </div>
@@ -257,33 +251,29 @@ export default function AchievementDetailSheet({
             </p>
           ) : null}
           <div className="divide-y divide-pk-divider">
-            {isLoading ? (
-              <DetailRow
-                label={
-                  earned === undefined ? (
-                    <SkeletonBlock className="h-4 w-12" />
-                  ) : earned ? (
-                    "받은 날"
-                  ) : (
-                    "진행"
-                  )
-                }
-              >
-                <ValueSkeleton />
-              </DetailRow>
-            ) : null}
-            {ready && earned ? (
+            {/* 불러오지 못하면 받은 날·진행 줄은 빼고 나머지만 보인다 */}
+            {!isError && earned ? (
               <DetailRow label="받은 날">
-                {progress?.earnedAt ? formatKstLongDate(progress.earnedAt) : "–"}
+                {ready ? (
+                  progress?.earnedAt ? formatKstLongDate(progress.earnedAt) : "–"
+                ) : (
+                  <ValueSkeleton />
+                )}
               </DetailRow>
             ) : null}
-            {ready && !earned ? (
+            {!isError && !earned ? (
               <div className="flex flex-col pb-4">
                 <DetailRow label="진행">
-                  {formatAchievementProgress(definition, progress)}
+                  {ready ? (
+                    formatAchievementProgress(definition, progress)
+                  ) : (
+                    <ValueSkeleton />
+                  )}
                 </DetailRow>
                 <ProgressBar
-                  ratio={getAchievementProgressRatio(definition, progress)}
+                  ratio={
+                    ready ? getAchievementProgressRatio(definition, progress) : 0
+                  }
                   className="h-1.5"
                 />
               </div>

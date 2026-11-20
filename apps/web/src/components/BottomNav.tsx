@@ -682,11 +682,7 @@ const BottomNav: React.FC = () => {
   const openAchievementDetail = useCallback(
     (request: AchievementDetailRequest) => {
       setAchievementDetailLayer((current) => ({
-        value: {
-          playerId: request.playerId,
-          achievementId: request.achievementId,
-          earned: request.earned,
-        },
+        value: request,
         tabKey: current.value ? current.tabKey : selectedTabRef.current,
       }));
     },

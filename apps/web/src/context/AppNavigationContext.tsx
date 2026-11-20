@@ -19,8 +19,8 @@ export interface AchievementDetailRequest {
   /** 업적 주인 */
   playerId: string;
   achievementId: string;
-  /** 여는 곳이 받은 여부를 알면 넘긴다. 주면 시트가 배지를 불러오기 전에 바로 그린다 */
-  earned?: boolean;
+  /** 여는 곳이 아는 받은 여부. 시트가 배지를 불러오기 전에 바로 그린다 */
+  earned: boolean;
 }
 
 export interface AchievementsScreenRequest {
