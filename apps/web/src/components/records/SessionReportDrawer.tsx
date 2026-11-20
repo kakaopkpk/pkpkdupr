@@ -36,11 +36,12 @@ import { TournamentRankCard } from "@/components/tournament/TournamentRankCard";
 import { Card } from "@/components/ui/Card";
 import { MatchRow } from "@/components/ui/MatchRow";
 import { PreviewSection, Section } from "@/components/ui/Section";
-import { StateMessage } from "@/components/ui/StateMessage";
 import {
-  SegmentedControl,
-  SegmentSwitchFade,
-} from "@/components/ui/SegmentedControl";
+  type MatchFilter,
+  MatchFilterControl,
+} from "@/components/ui/MatchFilterControl";
+import { StateMessage } from "@/components/ui/StateMessage";
+import { SegmentSwitchFade } from "@/components/ui/SegmentedControl";
 import { useAppNavigation } from "@/context/AppNavigationContext";
 import { useAuth } from "@/context/AuthContext";
 import { useLiveSession } from "@/context/LiveSessionContext";
@@ -62,13 +63,6 @@ import {
   type MatchSessionReportInfo,
   RequestError,
 } from "@/lib/rankings";
-
-type MatchFilter = "all" | "mine";
-
-const MATCH_FILTER_OPTIONS = [
-  { value: "all", label: "전체" },
-  { value: "mine", label: "내 경기" },
-] as const;
 
 const EMPTY_IDS: readonly string[] = [];
 const LOAD_ERROR_MESSAGE = "세션을 불러오지 못했어요.";
@@ -280,18 +274,22 @@ export default function SessionReportDrawer({
     [playerId, report],
   );
 
-  const visibleMatches = useMemo(
+  const completedMatches = useMemo(
     () =>
       (matches ?? [])
         .filter((match) => match.status === "completed")
-        .filter(
-          (match) =>
-            matchFilter === "all" ||
-            (!!playerId && isPlayerInMatch(match, playerId)),
-        )
         .sort(compareMatchesByRecordedAtDesc),
-    [matchFilter, matches, playerId],
+    [matches],
   );
+  const myCompletedMatches = useMemo(
+    () =>
+      playerId
+        ? completedMatches.filter((match) => isPlayerInMatch(match, playerId))
+        : [],
+    [completedMatches, playerId],
+  );
+  const visibleMatches =
+    matchFilter === "mine" ? myCompletedMatches : completedMatches;
 
   const renderHeaderCard = (
     session: MatchSessionDetailInfo,
@@ -369,12 +367,12 @@ export default function SessionReportDrawer({
     <Section
       title="경기"
       right={
-        <SegmentedControl
-          options={MATCH_FILTER_OPTIONS}
+        <MatchFilterControl
           value={matchFilter}
           onChange={changeMatchFilter}
+          allCount={completedMatches.length}
+          mineCount={myCompletedMatches.length}
           ariaLabel="경기 보기"
-          size="sm"
         />
       }
     >

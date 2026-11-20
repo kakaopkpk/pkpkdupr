@@ -1,10 +1,11 @@
 import React, { useMemo, useState } from "react";
 import { Card } from "@/components/ui/Card";
-import { Section } from "@/components/ui/Section";
 import {
-  SegmentedControl,
-  SegmentSwitchFade,
-} from "@/components/ui/SegmentedControl";
+  type MatchFilter,
+  MatchFilterControl,
+} from "@/components/ui/MatchFilterControl";
+import { Section } from "@/components/ui/Section";
+import { SegmentSwitchFade } from "@/components/ui/SegmentedControl";
 import { StateMessage } from "@/components/ui/StateMessage";
 import { useAppNavigation } from "@/context/AppNavigationContext";
 import {
@@ -13,13 +14,6 @@ import {
 } from "@/lib/tournament";
 import { getMatchPlayerIds, type MatchInfo } from "@/types/match";
 import { BracketMatchRow } from "./BracketMatchRow";
-
-type BracketFilter = "all" | "mine";
-
-const BRACKET_FILTER_OPTIONS = [
-  { value: "all", label: "전체" },
-  { value: "mine", label: "내 경기" },
-] as const;
 
 /** 대회 세션의 "대진" 섹션. 라운드마다 흰 카드 하나이고 라운드 이름은 카드 안 첫 줄이다 */
 export const TournamentBracketSection: React.FC<{
@@ -30,29 +24,31 @@ export const TournamentBracketSection: React.FC<{
   showFilter?: boolean;
 }> = ({ matches, currentPlayerId, showFilter = true }) => {
   const { openMatchDetail } = useAppNavigation();
-  const [filter, setFilter] = useState<BracketFilter>("all");
+  const [filter, setFilter] = useState<MatchFilter>("all");
   const [isListFading, setIsListFading] = useState(false);
   const isMineOnly = showFilter && filter === "mine";
 
   const allGroups = useMemo(() => groupBracketRounds(matches), [matches]);
-  const groups = useMemo(
+  const myGroups = useMemo(
     () =>
-      isMineOnly
-        ? allGroups
-            .map((group) => ({
-              ...group,
-              matches: group.matches.filter(
-                (match) =>
-                  !!currentPlayerId &&
-                  getMatchPlayerIds(match).includes(currentPlayerId),
-              ),
-            }))
-            .filter((group) => group.matches.length > 0)
-        : allGroups,
-    [allGroups, currentPlayerId, isMineOnly],
+      allGroups
+        .map((group) => ({
+          ...group,
+          matches: group.matches.filter(
+            (match) =>
+              !!currentPlayerId &&
+              getMatchPlayerIds(match).includes(currentPlayerId),
+          ),
+        }))
+        .filter((group) => group.matches.length > 0),
+    [allGroups, currentPlayerId],
   );
+  const groups = isMineOnly ? myGroups : allGroups;
+  // 전환 라벨 개수는 대진에 보이는 줄 수(예정·진행 중·끝난 경기)다
+  const countMatches = (list: typeof allGroups) =>
+    list.reduce((sum, group) => sum + group.matches.length, 0);
 
-  const changeFilter = (nextFilter: BracketFilter) => {
+  const changeFilter = (nextFilter: MatchFilter) => {
     setFilter(nextFilter);
     setIsListFading(true);
   };
@@ -62,12 +58,12 @@ export const TournamentBracketSection: React.FC<{
       title="대진"
       right={
         showFilter ? (
-          <SegmentedControl
-            options={BRACKET_FILTER_OPTIONS}
+          <MatchFilterControl
             value={filter}
             onChange={changeFilter}
+            allCount={countMatches(allGroups)}
+            mineCount={countMatches(myGroups)}
             ariaLabel="대진 보기"
-            size="sm"
           />
         ) : null
       }
