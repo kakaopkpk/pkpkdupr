@@ -9,6 +9,7 @@
 - 하단 바 위 알림
   - 내가 든 진행 중 경기가 있으면(세션 밖 경기 포함) 홈 외 탭에서 하단 바 위에 미니바(본문을 누르면 경기 상세, 버튼은 `점수 입력`)가 뜹니다.
   - 홈 탭에서 진행 중 세션에 참여하지 않았으면 같은 자리에 참여 알림 바가 뜹니다.
+  - 정기 세션 종료(21:00)부터 자동 완료(22:00) 전까지는 어느 탭에서나 세션 완료 바(`CompleteSessionBar`, "세션 완료" → `completeMatchSession`)가 뜨고, 미니바·알림 바와 함께면 그 위에 쌓입니다.
   - `BottomNav`가 이 표시에 맞춰 `--app-bottom-dock-height`를 갱신하므로 하단 고정 UI와 여백은 이 변수를 기준으로 잡습니다.
   - 하단 토스트(`SystemToast`)가 떠 있는 동안은 그 높이를 `--app-bottom-toast-height`로 알리며, 탭 패널 하단 여백이 이 값을 더합니다.
   - 미니바·알림 바·토스트는 아래에서 올라오며 등장하고 가라앉으며 퇴장합니다. 퇴장이 끝날 때까지 마지막 내용을 남기는 처리는 `hooks/usePresence.ts`가 맡습니다.
@@ -71,7 +72,7 @@
     - `Me.tsx`(나)
   - 그 밖의 전역 라우트: `Login.tsx`, `ForceChangePassword.tsx`
 - `src/components/`
-  - `BottomNav.tsx`: 4탭 keep-alive 셸, 하단 바(`BottomDock.tsx`)와 + 메뉴, 전역 화면 래퍼 렌더, 진행 중 경기 미니바·참여 알림 바
+  - `BottomNav.tsx`: 4탭 keep-alive 셸, 하단 바(`BottomDock.tsx`)와 + 메뉴, 전역 화면 래퍼 렌더, 진행 중 경기 미니바·참여 알림 바·세션 완료 바
   - 전역 화면 래퍼
     - `match/`: 경기 상세
       - 진행 중 경기 랠리 팀 줄 `RallyTeamRow`(`LiveMatchRally.tsx`): 아바타 쌍·네트 칸·랠리를 그리고 이름은 호출부가 그린다. 홈 내 경기 카드도 쓴다.
@@ -116,7 +117,8 @@
   - `LiveSessionContext.tsx`: `useLiveSession()`으로 오늘 진행 중 세션·그 경기, 세션과 상관없는 진행 중 경기(`GET /api/matches/in-progress`)와 그중 내 경기
     - 진행 중 세션 `liveSession`은 `getLiveSessionStartsAt` ≤ 지금 < 세션 끝 시각(`getSessionEndsAt`)인 세션(정기 우선)이다. 대회 세션만 시작 시각(`startTime`이 있으면 그날 그 시각)부터다.
     - 경기 기록 시트는 `recordingSession`(진행 중 세션이 있으면 그 세션, 없으면 빈 세션 만료 시각 전 세션)으로 새 경기를 세션에 붙여, 종료 시각이 지난 회원·대회 세션도 그날 자정까지 기록이 그 세션에 들어간다.
-    - 다음 재조회 시각(`getNextLiveSessionBoundary`)은 세션 시작·끝·만료 시각 중 가장 이른 것이다.
+    - 완료할 수 있는 정기 세션 `completableSession`(`isSessionCompletable`)이 있으면 셸이 세션 완료 바를 띄운다.
+    - 다음 재조회 시각(`getNextLiveSessionBoundary`)은 세션 시작·끝·만료 시각과 정기 세션 종료 시각(21:00) 중 가장 이른 것이다.
   - `SystemNoticeContext.tsx`: `useSystemNotice().showSaveFailure({ onRetry })`로 저장 실패 토스트(네트워크 오류에만, 서버 4xx·5xx는 화면 인라인), `showToast({ message, actionLabel?, onAction?, durationMs? })`로 하단 바 위 알약 토스트(기본 5초, 동작 글자 하나)
   - `AppUpdateContext.tsx`: `useAppUpdate()`로 PWA 업데이트 확인·적용 상태
   - `ScreenVisibilityContext.tsx`: `useIsScreenVisible()`로 안쪽 화면이 지금 보이는지. 탭 패널(선택됨 && 탭 셸이 PushScreen에 덮이지 않음)과 PushScreen 본문(열림 && 활성 && 덮이지 않음)이 제공하고, 제공자 밖(바텀시트 등)은 언제나 보임
@@ -211,7 +213,7 @@
   - 시작 시각이 있으면 그날 그 시각, 없으면 세션 시각(`date`)이 기준입니다.
   - 홈 대회 대진도 이 기준 전에는 보이지 않습니다.
   - 정기·회원 세션은 세션 시각(`date`)부터 LIVE입니다.
-  - LIVE는 세션 끝 시각(`getSessionEndsAt`)에 끝납니다. 회원·대회 세션은 종료 시각, 정기 세션과 시각 없는 세션은 빈 세션 만료 시각입니다.
+  - LIVE는 세션 끝 시각(`getSessionEndsAt`)에 끝납니다. 회원·대회 세션은 종료 시각, 정기 세션과 시각 없는 세션은 빈 세션 만료 시각입니다(정기 세션은 회원이 완료한 시각 또는 22:00 자동 완료).
 - 랭킹 1~3위는 금·은·동(`pk-gold`·`pk-silver`·`pk-bronze`) 원입니다. 상승은 `pk-up`, 하락은 모두 `pk-down`, 보합은 회색입니다. 빨강(`pk-down`) 채움 버튼은 경기 삭제 확인 시트의 "길게 눌러 삭제"(`HoldToConfirmButton` `danger`, 1초)뿐입니다.
 - 평점 없음은 "–"로 표기하고 NR 글자·알약을 쓰지 않습니다(`formatRating`도 값이 없으면 "–"). 랭킹의 평점 없는 회원 줄은 순위·평점 모두 "–", 세션 평점 변화 줄은 세션 후 평점이 없으면 평점 부분 없이 승패만, 내 변동 카드는 큰 "–" 하나만(변화 표시 없음) 보입니다. 처음 평점을 받은 회원도 다른 회원처럼 시작 평점 3.000 → 새 평점과 3.000 기준 변화량으로 보이며 NEW 같은 별도 표시는 붙이지 않습니다(평점 로그·세션 리포트의 이전 평점에 3.0이 들어 있음). 세션 전 평점이 없는 경우(첫 평점이 공식 DUPR 조정)만 새 평점만 보이고 변화는 "–"입니다. 팀 평균 등 평균 표시는 NR을 3.0으로 칩니다.
 - 카드에는 테두리가 없습니다. 둥글기는 12/20/999만, 글자 크기는 12/13/15/17/22/26만 씁니다.

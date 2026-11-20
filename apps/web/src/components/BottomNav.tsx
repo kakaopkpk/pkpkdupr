@@ -7,7 +7,9 @@ import React, {
 } from "react";
 import { createPortal } from "react-dom";
 import { Alert, CloseButton } from "@heroui/react";
+import { getEmptySessionExpiresAt } from "@pkpkdupr/shared/session";
 import {
+  CompleteSessionBar,
   JoinSessionBar,
   MyMatchBar,
   NavPill,
@@ -72,6 +74,7 @@ import {
 import { triggerHapticFeedback } from "@/lib/haptics";
 import {
   addMatchSessionParticipant,
+  completeMatchSession,
   type MatchSessionDetailInfo,
 } from "@/lib/matchSessions";
 import { useDimmedThemeColor } from "@/lib/themeColor";
@@ -221,11 +224,12 @@ const TINT_ZONE_SPLIT = `calc(var(--safe-bottom) + ${
 }px)`;
 
 /**
- * 하단 바 주변 흰빛(index.css .app-bottom-tint). 알약과 미니바·알림 바 자리를 비우고 둘레만 칠한다.
- * 구멍 위치는 하단 바 줄 배치(좌우 여백·높이·간격 상수)와 맞춘다. 미니바 구멍은 표시 조건을 따라 바로 생기고 없어진다.
+ * 하단 바 주변 흰빛(index.css .app-bottom-tint). 알약과 미니바·알림 바·세션 완료 바 자리를 비우고 둘레만 칠한다.
+ * 구멍 위치는 하단 바 줄 배치(좌우 여백·높이·간격 상수)와 맞춘다. 위 바 구멍은 표시 조건을 따라 바로 생기고 없어지며,
+ * 바 두 개가 쌓이면 사이 간격까지 한 구멍으로 비운다.
  */
-const BottomDockTint = React.memo<{ isDockBarVisible: boolean }>(
-  ({ isDockBarVisible }) => (
+const BottomDockTint = React.memo<{ dockBarCount: number }>(
+  ({ dockBarCount }) => (
     <div
       aria-hidden="true"
       className={`app-bottom-tint ${BOTTOM_DOCK_OVERLAY_CLASS}`}
@@ -241,7 +245,11 @@ const BottomDockTint = React.memo<{ isDockBarVisible: boolean }>(
             left: DOCK_SIDE_PADDING_PX,
             right: DOCK_SIDE_PADDING_PX,
             bottom: DOCK_BAR_GAP_PX / 2,
-            height: isDockBarVisible ? DOCK_BAR_HEIGHT_PX : 0,
+            height:
+              dockBarCount > 0
+                ? dockBarCount * DOCK_BAR_HEIGHT_PX +
+                  (dockBarCount - 1) * DOCK_BAR_GAP_PX
+                : 0,
           }}
         />
       </div>
@@ -286,6 +294,8 @@ const BottomNav: React.FC = () => {
     useState<GlobalLayerState<AchievementDetailRequest>>(closedLayer);
   const [isJoiningLiveSession, setIsJoiningLiveSession] = useState(false);
   const [joinLiveSessionError, setJoinLiveSessionError] = useState(false);
+  const [isCompletingSession, setIsCompletingSession] = useState(false);
+  const [completeSessionError, setCompleteSessionError] = useState(false);
   const [pullToRefreshStore] = useState(createPullToRefreshStore);
   const [isPullRefreshSlow, setIsPullRefreshSlow] = useState(false);
   const handledDeepLinkRef = useRef(false);
@@ -783,6 +793,28 @@ const BottomNav: React.FC = () => {
     reloadLiveSession,
   ]);
 
+  const completeSession = useCallback(async () => {
+    const sessionId = liveSessionState.completableSession?.id;
+    if (!sessionId || isCompletingSession) return;
+
+    setIsCompletingSession(true);
+    setCompleteSessionError(false);
+    try {
+      await completeMatchSession(sessionId);
+      setDataVersion((version) => version + 1);
+      // 완료된 세션을 받아야 완료 바와 LIVE가 사라진다
+      await reloadLiveSession();
+    } catch {
+      setCompleteSessionError(true);
+    } finally {
+      setIsCompletingSession(false);
+    }
+  }, [
+    isCompletingSession,
+    liveSessionState.completableSession?.id,
+    reloadLiveSession,
+  ]);
+
   const isGlobalMenuVisible =
     isGlobalMenuOpen && globalMenuTabKey === selectedTab;
   const hasBlockingLayer = useMemo(
@@ -835,16 +867,42 @@ const BottomNav: React.FC = () => {
   // 퇴장하는 동안 마지막 내용을 유지한다(경기가 끝나 myInProgressMatch가 null이 되어도)
   const dockBar = usePresence(dockBarItem, { key: dockBarItem?.kind });
 
+  // 세션 완료 바는 어느 탭에서나 위 바와 별도로 뜨고, 함께 뜨면 그 위에 쌓인다
+  const completableSession = liveSessionState.completableSession;
+  const completeBarItem = useMemo(
+    () =>
+      completableSession
+        ? {
+            sessionId: completableSession.id,
+            autoCompleteAt: getEmptySessionExpiresAt(
+              completableSession.kind,
+              new Date(completableSession.date),
+              completableSession,
+            ),
+          }
+        : null,
+    [completableSession],
+  );
+  const completeBar = usePresence(completeBarItem, {
+    key: completeBarItem?.sessionId,
+  });
+  const dockBarCount =
+    (isDockBarVisible ? 1 : 0) + (completeBarItem ? 1 : 0);
+
   useEffect(() => {
     if (!isJoinSessionBarVisible) setJoinLiveSessionError(false);
   }, [isJoinSessionBarVisible]);
+
+  useEffect(() => {
+    if (!completeBarItem) setCompleteSessionError(false);
+  }, [completeBarItem]);
 
   // 페이지·시트가 하단 바에 가리지 않게 화면 아래에서 바(미니바·알림 바 포함) 윗변까지 거리를 알린다
   useEffect(() => {
     const dockHeightPx =
       NAV_BAR_HEIGHT_PX +
       NAV_BOTTOM_GAP_PX +
-      (isDockBarVisible ? DOCK_BAR_HEIGHT_PX + DOCK_BAR_GAP_PX : 0);
+      dockBarCount * (DOCK_BAR_HEIGHT_PX + DOCK_BAR_GAP_PX);
     const rootStyle = document.documentElement.style;
     rootStyle.setProperty(
       "--app-bottom-dock-height",
@@ -854,7 +912,7 @@ const BottomNav: React.FC = () => {
     return () => {
       rootStyle.removeProperty("--app-bottom-dock-height");
     };
-  }, [isDockBarVisible]);
+  }, [dockBarCount]);
 
   useEffect(() => {
     if (!isGlobalMenuVisible) return;
@@ -1301,7 +1359,7 @@ const BottomNav: React.FC = () => {
                 <div />
               </div>
 
-              <BottomDockTint isDockBarVisible={isDockBarVisible} />
+              <BottomDockTint dockBarCount={dockBarCount} />
 
               {/* 바를 살짝 빗나간 터치(바 아래 여백·바 위 가장자리)가 뒤 콘텐츠로 가지 않게 막는다 */}
               <div
@@ -1312,6 +1370,17 @@ const BottomNav: React.FC = () => {
               <div
                 className={`app-keyboard-hidden fixed left-1/2 z-20 flex app-shell-width -translate-x-1/2 flex-col gap-2.5 px-4 ${dockBottom}`}
               >
+                {completeBar ? (
+                  <CompleteSessionBar
+                    key={completeBar.key}
+                    autoCompleteAt={completeBar.item.autoCompleteAt}
+                    isPending={isCompletingSession}
+                    hasError={completeSessionError}
+                    isActionDisabled={!isOnline}
+                    isExiting={completeBar.isExiting}
+                    onComplete={() => void completeSession()}
+                  />
+                ) : null}
                 {dockBar?.item.kind === "my-match" ? (
                   <MyMatchBar
                     key={dockBar.key}
