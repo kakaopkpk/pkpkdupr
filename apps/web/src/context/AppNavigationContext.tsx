@@ -11,7 +11,7 @@ export type RecordMatchSheetRequest =
 export interface CreateSessionRequest {
   /** 처음 골라 둘 날짜(KST 날짜 키) */
   dateKey?: string;
-  /** 만든 뒤(데이터 변경 알림 다음에) 부른다 */
+  /** 만든 뒤(세션 무효화 다음에) 부른다 */
   onCreated?: (session: MatchSessionDetailInfo) => void;
 }
 
@@ -46,10 +46,6 @@ export interface AppNavigationContextValue {
    * 끝난 세션만 세션 리포트를 함께 보인다(완료 경기가 없으면 리포트 없이)
    */
   openSessionReport: (sessionId: string) => void;
-  /** 경기 기록·수정·시작, 세션 생성, 참여 변경 뒤 호출 */
-  notifyDataChanged: () => void;
-  /** notifyDataChanged마다 1 증가. 탭 페이지는 이 값을 데이터 재조회 의존성으로 쓴다 */
-  dataVersion: number;
 }
 
 /**

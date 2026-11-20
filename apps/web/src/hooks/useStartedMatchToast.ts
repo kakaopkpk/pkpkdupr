@@ -1,7 +1,7 @@
 import { useCallback } from "react";
 import type { MatchInfo } from "@/types/match";
 import { getErrorMessage } from "@/components/record/recordMatch.utils";
-import { useAppNavigation } from "@/context/AppNavigationContext";
+import { useInvalidateData } from "@/context/DataSyncContext";
 import { useSystemNotice } from "@/context/SystemNoticeContext";
 import { isNetworkError } from "@/lib/errors";
 import { deleteMatch } from "@/lib/matches";
@@ -12,13 +12,13 @@ import { deleteMatch } from "@/lib/matches";
  */
 export const useStartedMatchToast = () => {
   const { showSaveFailure, showToast } = useSystemNotice();
-  const { notifyDataChanged } = useAppNavigation();
+  const invalidateData = useInvalidateData();
 
   return useCallback(
     (match: Pick<MatchInfo, "id" | "updatedAt">) => {
       const cancel = async () => {
         await deleteMatch(match.id, match.updatedAt);
-        notifyDataChanged();
+        invalidateData(["matches"]);
       };
       // 그사이 누가 점수를 넣었으면(409) 지우지 않고 서버 문구를 알린다
       const showRejection = (err: unknown) =>
@@ -45,6 +45,6 @@ export const useStartedMatchToast = () => {
         },
       });
     },
-    [notifyDataChanged, showSaveFailure, showToast],
+    [invalidateData, showSaveFailure, showToast],
   );
 };

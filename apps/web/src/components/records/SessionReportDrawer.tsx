@@ -43,6 +43,10 @@ import {
 } from "@/components/ui/SegmentedControl";
 import { useAppNavigation } from "@/context/AppNavigationContext";
 import { useAuth } from "@/context/AuthContext";
+import {
+  useDataVersion,
+  useInvalidateData,
+} from "@/context/DataSyncContext";
 import { useLiveSession } from "@/context/LiveSessionContext";
 import {
   type TabKey,
@@ -72,6 +76,12 @@ const MATCH_FILTER_OPTIONS = [
 
 const EMPTY_IDS: readonly string[] = [];
 const LOAD_ERROR_MESSAGE = "세션을 불러오지 못했어요.";
+const SESSION_REPORT_DATA_KINDS = [
+  "sessions",
+  "matches",
+  "ratings",
+  "achievements",
+] as const;
 
 type LoadState =
   | { kind: "loading" }
@@ -135,8 +145,17 @@ export default function SessionReportDrawer({
   const { player } = useAuth();
   const playerId = player?.id;
   const live = useLiveSession();
-  const { openMatchDetail, openMemberProfile, notifyDataChanged, dataVersion } =
-    useAppNavigation();
+  const { openMatchDetail, openMemberProfile } = useAppNavigation();
+  const invalidateData = useInvalidateData();
+  const invalidateSessions = useCallback(
+    () => invalidateData(["sessions"]),
+    [invalidateData],
+  );
+  // 데이터는 PushScreen 본문 밖에서 받으므로 보임은 PushScreen이 알려 준 값을 쓴다
+  const [isScreenVisible, setIsScreenVisible] = useState(false);
+  const dataVersion = useDataVersion(SESSION_REPORT_DATA_KINDS, {
+    isScreenVisible,
+  });
   const { closeDepth, restoreScrollTop, selectedTab } = useTabNavigation();
   const now = useMinuteClock();
   const [loadState, setLoadState] = useState<LoadState>({ kind: "loading" });
@@ -242,14 +261,18 @@ export default function SessionReportDrawer({
   const closePlayers = useCallback(() => setIsPlayersRequested(false), []);
   const closeParticipants = useCallback(() => setIsParticipantsOpen(false), []);
 
-  const participation = useSessionParticipation({ playerId, loadedVersion });
+  const participation = useSessionParticipation({
+    playerId,
+    dataVersion,
+    loadedVersion,
+  });
 
   const isLive = live.liveSession?.id === sessionId;
   // 진행 중 세션이면 홈과 같은 지배자·연승 데이터(셸의 세션 경기)를 쓴다
   const liveHighlight = useLiveSessionHighlight(
     isLive ? live.liveSession : null,
     live.matches,
-    dataVersion,
+    { isScreenVisible },
   );
   // 진행 중 경기에 든 선수는 참여자 시트에서 뺄 수 없다
   const busyPlayerIds = useMemo(
@@ -448,6 +471,7 @@ export default function SessionReportDrawer({
         onBack={close}
         onExited={handleExited}
         onPullToRefresh={handlePullToRefresh}
+        onVisibleChange={setIsScreenVisible}
       >
         <div className="flex flex-col gap-2.5 px-4 pb-8">{renderBody()}</div>
       </PushScreen>
@@ -465,7 +489,7 @@ export default function SessionReportDrawer({
           session={readySession}
           lockedPlayerIds={busyPlayerIds}
           onClose={closeParticipants}
-          onChanged={notifyDataChanged}
+          onChanged={invalidateSessions}
         />
       ) : null}
     </>

@@ -72,7 +72,7 @@ pnpm lint
 - 로그인 뒤의 홈 / 일정 / 랭킹 / 나 4탭(`TabKey` `home`·`schedule`·`ranking`·`me`, 시작 탭 홈)은 `BottomNav.tsx`의 keep-alive 탭 셸이 소유합니다. 탭 상태와 URL 라우트를 무분별하게 중복하지 않습니다. 회원 탭은 없고 회원 찾기는 랭킹 목록이 맡습니다.
 - 하단 바는 유리 알약 4탭과 원형 + 버튼이며, + 메뉴는 경기 기록·세션 만들기만 엽니다(설정·로그아웃은 나 탭의 설정에서).
 - 경기 상세·회원 프로필·세션 상세·경기 기록 시트·세션 만들기·설정 같은 전역 화면은 `useAppNavigation()`(`context/AppNavigationContext.tsx`)으로 열고, 진행 중 세션 상태는 `useLiveSession()`(`context/LiveSessionContext.tsx`)으로 읽습니다.
-- 데이터를 바꾼 화면은 `notifyDataChanged()`를 부르고, 탭 페이지는 `dataVersion`을 재조회 의존성으로 씁니다.
+- 데이터를 바꾼 화면은 `useInvalidateData()`로 실제로 바뀐 데이터 종류(`DataKind`)만 무효화하고, 데이터를 받는 화면은 쓰는 종류의 `useDataVersion(kinds)`을 재조회 의존성으로 씁니다(`context/DataSyncContext.tsx`, 규칙은 `apps/web/AGENTS.md`).
 - 저장 실패(네트워크 오류) 알림은 `useSystemNotice()`(`context/SystemNoticeContext.tsx`)의 `showSaveFailure`로 띄웁니다.
 - 공통 UI는 `apps/web/src/components/ui/`, 색·둥글기·글자 크기는 `index.css`의 `pk-*` 토큰을 씁니다. 하드코딩 색을 쓰지 않습니다.
 - `apps/web/AGENTS.md`의 모바일·PWA·UI 세부 규칙(디자인 규칙 포함)을 함께 따릅니다. `apps/web/CLAUDE.md`가 그 문서를 불러오므로 web 파일을 다루면 자동으로 읽힙니다.

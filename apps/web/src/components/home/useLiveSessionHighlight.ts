@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import type { SessionPlayerReport } from "@pkpkdupr/shared/ranking";
 import type { MatchSessionKind } from "@pkpkdupr/shared/session";
 import type { SessionWinStreakByPlayer } from "@/components/ui/PlayerAvatar";
+import type { DataVersionOptions } from "@/context/DataSyncContext";
 import {
   getSessionWinStreaks,
   type SessionWinStreak,
@@ -20,16 +21,16 @@ export interface LiveSessionHighlight {
 /**
  * 진행 중 일반 세션의 세션 지배자와 세션 연승. 홈 진행 화면과 진행 중 세션 상세가 같이 쓴다.
  * session이 없거나 대회 세션이면(대회 진행 화면에는 지배자가 없다) 받지 않고 비어 있다.
- * matches는 그 세션 경기(셸의 useLiveSession().matches)다
+ * matches는 그 세션 경기(셸의 useLiveSession().matches)다. dataVersionOptions는 지배자 재조회의 useDataVersion에 넘긴다
  */
 export const useLiveSessionHighlight = (
   session: { id: string; kind: MatchSessionKind } | null,
   matches: readonly MatchInfo[],
-  dataVersion: number,
+  dataVersionOptions?: DataVersionOptions,
 ): LiveSessionHighlight => {
   const regularSessionId =
     session && session.kind !== "tournament" ? session.id : null;
-  const topRiser = useSessionTopRiser(regularSessionId, dataVersion);
+  const topRiser = useSessionTopRiser(regularSessionId, dataVersionOptions);
   const streaks = useMemo(
     () => (regularSessionId ? getSessionWinStreaks(matches) : []),
     [matches, regularSessionId],

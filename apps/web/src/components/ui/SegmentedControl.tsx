@@ -75,7 +75,7 @@ export function SegmentedControl<T extends string>({
 
 /**
  * 세그먼트로 바꾼 뒤 새로 보이는 목록을 200ms 페이드인한다.
- * 첫 마운트·dataVersion 재조회·keep-alive 탭 재표시에서 다시 재생하지 않도록
+ * 첫 마운트·데이터 재조회(useDataVersion)·keep-alive 탭 재표시에서 다시 재생하지 않도록
  * 쓰는 쪽이 세그먼트 onChange에서만 isPlaying을 켜고, 끝나면(onFinish) 끈다.
  * 전환 결과가 빈 목록·오류라 이 래퍼가 그려지지 않으면 쓰는 쪽이 직접 꺼야 한다.
  */
