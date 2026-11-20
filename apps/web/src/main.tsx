@@ -28,6 +28,13 @@ const restorePagesRedirect = () => {
 
 restorePagesRedirect();
 
+// 안드로이드는 이미지·링크를 길게 누르면 저장·복사 메뉴를 띄운다. CSS로는 못 막아 메뉴 이벤트를 끈다.
+document.addEventListener("contextmenu", (event) => {
+  if (event.target instanceof Element && event.target.closest("img, a")) {
+    event.preventDefault();
+  }
+});
+
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
     <BrowserRouter basename={routerBaseName}>
