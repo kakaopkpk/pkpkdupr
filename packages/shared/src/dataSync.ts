@@ -20,3 +20,18 @@ export const DATA_KINDS: readonly DataKind[] = [
   "achievements",
   "players",
 ];
+
+/** api가 쓰기 뒤 데이터 종류 변경 신호를 보내는 Supabase Realtime private 채널 topic */
+export const DATA_SYNC_CHANNEL_TOPIC = "data-sync";
+/** 변경 신호 broadcast 이벤트 이름 */
+export const DATA_SYNC_CHANGED_EVENT = "changed";
+
+/** 변경 신호 payload. 데이터·id는 싣지 않고 바뀐 종류만 알린다 */
+export interface DataSyncChangedPayload {
+  kinds: DataKind[];
+}
+
+const DATA_KIND_SET: ReadonlySet<string> = new Set(DATA_KINDS);
+
+export const isDataKind = (value: unknown): value is DataKind =>
+  typeof value === "string" && DATA_KIND_SET.has(value);

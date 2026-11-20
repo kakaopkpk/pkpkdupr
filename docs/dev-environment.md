@@ -102,6 +102,8 @@ pnpm db:push                                      # 원격 DB에 미적용 마�
 
 모든 테이블에 RLS가 켜져 있고 정책은 하나도 없습니다. 따라서 브라우저에 공개되는 anon key나 로그인 사용자 JWT(`anon`·`authenticated` 역할)로는 Data API를 통해 어떤 행도 읽거나 쓸 수 없습니다. DB 접근은 테이블 소유자(`postgres`)로 접속하는 서버(api / Edge Function)만 합니다.
 
+예외로 `realtime.messages`(public 스키마 밖)에는 로그인 회원이 데이터 변경 신호 채널 `data-sync`를 받는 select 정책 하나가 있습니다(`SELECT policyname FROM pg_policies WHERE schemaname = 'realtime';`).
+
 로컬 스택에서 다음으로 확인합니다.
 
 1. RLS·정책 상태 (Studio SQL Editor 또는 `psql "$DATABASE_URL"`):

@@ -135,6 +135,8 @@ export const getNextLiveSessionBoundary = (
 const BOUNDARY_RELOAD_DELAY_MS = 1_000;
 // 경계 시각 재조회가 실패했을 때 한 번 더 읽는 시점(첫 재조회 뒤)
 const BOUNDARY_RETRY_DELAY_MS = 30_000;
+// 숨은 동안 경계 시각이 지났을 때, 다시 보인 뒤 dataVersion 재조회를 기다리는 시간
+const VISIBLE_BOUNDARY_RELOAD_GRACE_MS = 500;
 
 const fetchSessionMatches = async (sessionId: string) => {
   const res = await apiFetch(
@@ -167,10 +169,12 @@ export const useLiveSessionState = (
   const dataVersion = useDataVersion(LIVE_SESSION_DATA_KINDS);
   // 숨은 동안 경계 시각이 지났으면 다시 보일 때 읽는다
   const isBoundaryReloadPendingRef = useRef(false);
+  const lastReloadStartedAtRef = useRef(0);
 
   const reload = useCallback(async () => {
     const requestId = requestIdRef.current + 1;
     requestIdRef.current = requestId;
+    lastReloadStartedAtRef.current = Date.now();
 
     if (!playerId) {
       setLiveSession(null);
@@ -210,6 +214,7 @@ export const useLiveSessionState = (
   }, [reload, dataVersion]);
 
   useEffect(() => {
+    let timeoutId: number | null = null;
     const handleVisibilityChange = () => {
       if (
         document.visibilityState !== "visible" ||
@@ -218,12 +223,21 @@ export const useLiveSessionState = (
         return;
       }
       isBoundaryReloadPendingRef.current = false;
-      void reload();
+      const visibleAt = Date.now();
+      // 앱 복귀 때는 숨은 동안의 무효화(Realtime 구독 해제)·TTL로 dataVersion도 올라 바로 다시 읽으므로,
+      // 잠깐 기다려 그 재조회가 시작됐으면 한 번 더 읽지 않는다
+      if (timeoutId !== null) window.clearTimeout(timeoutId);
+      timeoutId = window.setTimeout(() => {
+        timeoutId = null;
+        if (lastReloadStartedAtRef.current >= visibleAt) return;
+        void reload();
+      }, VISIBLE_BOUNDARY_RELOAD_GRACE_MS);
     };
 
     document.addEventListener("visibilitychange", handleVisibilityChange);
     return () => {
       document.removeEventListener("visibilitychange", handleVisibilityChange);
+      if (timeoutId !== null) window.clearTimeout(timeoutId);
     };
   }, [reload]);
 
