@@ -49,6 +49,7 @@ import {
   useInvalidateData,
 } from "@/context/DataSyncContext";
 import { ScreenVisibilityProvider } from "@/context/ScreenVisibilityContext";
+import { useDataSyncRealtime } from "@/context/useDataSyncRealtime";
 import {
   LiveSessionProvider,
   useLiveSessionState,
@@ -272,6 +273,8 @@ const BottomNavShell: React.FC = () => {
   const invalidateData = useInvalidateData();
   const isOnline = useOnlineStatus();
   const liveSessionState = useLiveSessionState(player?.id);
+  // 남의 변경 신호를 받아 무효화한다
+  useDataSyncRealtime(!!player);
   const [selectedTab, setSelectedTab] = useState<TabKey>("home");
   const [visitedTabs, setVisitedTabs] =
     useState<Record<TabKey, boolean>>(initiallyVisitedTabs);
