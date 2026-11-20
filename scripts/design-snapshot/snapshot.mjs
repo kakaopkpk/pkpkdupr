@@ -235,12 +235,8 @@ function requestKind(url) {
   return null;
 }
 
-// 추천 매칭의 seed처럼 실행마다 바뀌는 쿼리는 키에서 뺀다.
-const VOLATILE_PARAMS = ["seed"];
-
 function requestKey(request) {
   const url = new URL(request.url());
-  for (const name of VOLATILE_PARAMS) url.searchParams.delete(name);
   return `${request.method()} ${url.pathname}${url.search}`;
 }
 

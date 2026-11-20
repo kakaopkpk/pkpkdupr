@@ -1,8 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
   MATCHMAKING_ALL_NR_FALLBACK_RATING,
+  MATCHMAKING_CANDIDATE_PENALTY_MARGIN,
   MATCHMAKING_DEFAULT_COURTS,
+  MATCHMAKING_MIN_CANDIDATES,
   clampMatchmakingCourts,
+  getMatchmakingSeed,
   recommendDoublesMatches,
   type DoublesRecommendationPlan,
   type MatchmakingParticipant,
@@ -25,6 +28,7 @@ const recommend = (
     completedMatches: [],
     courts: 3,
     seed: 1,
+    rank: 0,
     ...overrides,
   });
 
@@ -59,6 +63,7 @@ describe("recommendDoublesMatches", () => {
       completedMatches: [{ teams: [["p01", "p02"], ["p03", "p04"]] }],
       courts: 3,
       seed: 42,
+      rank: 2,
     };
     expect(recommendDoublesMatches(input)).toEqual(
       recommendDoublesMatches(input),
@@ -94,6 +99,8 @@ describe("recommendDoublesMatches", () => {
     expect(tooFew.courts).toEqual([]);
     expect(tooFew.restingPlayerIds).toEqual(["p01", "p02", "p03"]);
     expect(tooFew.penalty).toBe(0);
+    expect(tooFew.rank).toBe(0);
+    expect(tooFew.candidateCount).toBe(0);
   });
 
   it("오늘 경기 수가 2판 이상 적은 사람은 어떤 seed에서도 더 많이 친 사람보다 늦게 뽑히지 않는다", () => {
@@ -207,20 +214,86 @@ describe("recommendDoublesMatches", () => {
     expect(court.repeatedOpponentPairs).toEqual([]);
   });
 
-  it("12명·코트 3면을 seed 20개로 돌리면 대진이 다양하고 두 팀 평균 차가 0.2 이하다", () => {
-    const participants = players(12);
-    const matchups = new Set<string>();
-    for (let seed = 0; seed < 20; seed += 1) {
-      const plan = recommend({ participants, courts: 3, seed });
-      expect(plan.courts).toHaveLength(3);
-      expect(plan.restingPlayerIds).toEqual([]);
-      for (const court of plan.courts) {
-        expect(
-          Math.abs(court.teamAverages[0] - court.teamAverages[1]),
-        ).toBeLessThanOrEqual(0.2 + 1e-9);
-      }
-      matchups.add(matchupKey(plan));
+  it("rank를 올리면 감점이 줄지 않는 순서로 서로 다른 대진이 나오고, 후보 수를 넘으면 1등으로 돌아간다", () => {
+    const completedMatches: MatchmakingPlayedMatch[] = [
+      { teams: [["p01", "p02"], ["p03", "p04"]] },
+      { teams: [["p05", "p06"], ["p07", "p08"]] },
+    ];
+    const input = { participants: players(12), completedMatches, courts: 3 };
+    const first = recommend({ ...input, rank: 0 });
+    expect(first.rank).toBe(0);
+    expect(first.candidateCount).toBeGreaterThanOrEqual(
+      MATCHMAKING_MIN_CANDIDATES,
+    );
+
+    const plans = Array.from({ length: first.candidateCount }, (_, rank) =>
+      recommend({ ...input, rank }),
+    );
+    expect(new Set(plans.map(matchupKey)).size).toBe(first.candidateCount);
+    for (let rank = 1; rank < plans.length; rank += 1) {
+      expect(plans[rank].rank).toBe(rank);
+      expect(plans[rank].penalty).toBeGreaterThanOrEqual(
+        plans[rank - 1].penalty - 1e-9,
+      );
     }
-    expect(matchups.size).toBeGreaterThanOrEqual(15);
+    // 선발은 순번과 상관없이 같다
+    for (const plan of plans) {
+      expect(plan.restingPlayerIds).toEqual(first.restingPlayerIds);
+    }
+
+    const wrapped = recommend({ ...input, rank: first.candidateCount });
+    expect(wrapped.rank).toBe(0);
+    expect(matchupKey(wrapped)).toBe(matchupKey(first));
+    expect(
+      matchupKey(recommend({ ...input, rank: first.candidateCount + 1 })),
+    ).toBe(matchupKey(plans[1]));
+  });
+
+  it("여유폭 안 후보가 적으면 감점순으로 최소 개수까지 채우고, 가능한 대진이 적으면 그만큼만 둔다", () => {
+    // 4명 1코트는 팀 나누기가 3가지뿐이다. a+b vs c+d(15점)만 여유폭 안이고 나머지 둘은 60점이다
+    const participants = [
+      { id: "a", doublesRating: 5 },
+      { id: "b", doublesRating: 2 },
+      { id: "c", doublesRating: 3.5 },
+      { id: "d", doublesRating: 3.5 },
+    ];
+    const plan = recommend({ participants, courts: 1 });
+    expect(plan.candidateCount).toBe(3);
+    expect(plan.penalty).toBeCloseTo(15);
+
+    const second = recommend({ participants, courts: 1, rank: 1 });
+    expect(second.penalty).toBeCloseTo(60);
+    expect(second.penalty - plan.penalty).toBeGreaterThan(
+      MATCHMAKING_CANDIDATE_PENALTY_MARGIN,
+    );
+  });
+
+  it("여유폭 안 대진이 최소 개수보다 많으면 모두 후보다", () => {
+    // 평점이 모두 같고 오늘 기록이 없으면 모든 대진의 감점이 0이다
+    const plan = recommend({
+      participants: Array.from({ length: 8 }, (_, index) => ({
+        id: `p${index}`,
+        doublesRating: 3,
+      })),
+      courts: 2,
+    });
+    expect(plan.penalty).toBe(0);
+    expect(plan.candidateCount).toBeGreaterThan(MATCHMAKING_MIN_CANDIDATES);
+  });
+
+  it("탐색 seed는 세션과 완료 경기 수가 같으면 같고, 경기가 끝나면 바뀐다", () => {
+    expect(getMatchmakingSeed("Sabc", 3)).toBe(getMatchmakingSeed("Sabc", 3));
+    expect(getMatchmakingSeed("Sabc", 4)).not.toBe(getMatchmakingSeed("Sabc", 3));
+    expect(getMatchmakingSeed("Sxyz", 3)).not.toBe(getMatchmakingSeed("Sabc", 3));
+    expect(Number.isInteger(getMatchmakingSeed("Sabc", 0))).toBe(true);
+  });
+
+  it("rank가 음수·NaN이면 0, 소수면 내린다", () => {
+    const participants = players(8);
+    const at = (rank: number) =>
+      matchupKey(recommend({ participants, courts: 2, rank }));
+    expect(at(-3)).toBe(at(0));
+    expect(at(Number.NaN)).toBe(at(0));
+    expect(at(1.9)).toBe(at(1));
   });
 });
