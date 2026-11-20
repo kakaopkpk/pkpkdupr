@@ -9,7 +9,7 @@ import {
   countAchievementHolders,
   createRankingContext,
   findAchievementsEarnedByMatches,
-  findSessionDominations,
+  findEndedSessions,
   getRatingAt,
   rankPlayersAt,
   selectBaselineSession,
@@ -444,7 +444,7 @@ describe("buildSessionReport", () => {
     const report = buildSessionReport({
       context: createRankingContext(players, logs, matches),
       session,
-      dominations: new Map(),
+      endedSessions: new Map(),
     });
 
     expect(report?.session).toMatchObject({
@@ -484,7 +484,7 @@ describe("buildSessionReport", () => {
     const report = buildSessionReport({
       context: createRankingContext(players, flatLogs, matches),
       session,
-      dominations: new Map(),
+      endedSessions: new Map(),
     });
     expect(report?.topRiser).toBeNull();
   });
@@ -530,7 +530,7 @@ describe("buildSessionReport", () => {
     const report = buildSessionReport({
       context: createRankingContext(nrPlayers, nrLogs, nrMatches),
       session: nrSession,
-      dominations: new Map(),
+      endedSessions: new Map(),
     });
 
     expect(report?.topRiser?.player.username).toBe("erin");
@@ -557,7 +557,7 @@ describe("buildSessionReport", () => {
       buildSessionReport({
         context: createRankingContext(players, logs, []),
         session,
-        dominations: new Map(),
+        endedSessions: new Map(),
       }),
     ).toBeNull();
   });
@@ -570,7 +570,7 @@ describe("buildSessionReport", () => {
     return buildSessionReport({
       context,
       session,
-      dominations: findSessionDominations(context, [session], reportNow),
+      endedSessions: findEndedSessions(context, [session], reportNow),
     });
   };
 
@@ -610,16 +610,16 @@ describe("buildSessionReport", () => {
       endTime: "01:30",
     };
     const context = createRankingContext(players, logs, matches);
-    const dominationsAt = (now: Date) =>
-      findSessionDominations(context, [overnight], now);
+    const endedAt = (now: Date) =>
+      findEndedSessions(context, [overnight], now);
 
-    expect(dominationsAt(at("2026-11-09T15:00:00Z")).size).toBe(0);
-    expect([...dominationsAt(at("2026-11-09T16:30:00Z")).entries()]).toEqual([
-      ["Palice01", new Set([overnight.id])],
-    ]);
+    expect(endedAt(at("2026-11-09T15:00:00Z"))).toEqual(new Map());
+    expect(endedAt(at("2026-11-09T16:30:00Z"))).toEqual(
+      new Map([[overnight.id, "Palice01"]]),
+    );
   });
 
-  it("findSessionDominations는 끝난 세션마다 지배자를 모으고 오른 사람이 없는 세션은 뺀다", () => {
+  it("findEndedSessions는 만료된 세션마다 지배자를 모으고, 오른 사람이 없는 세션은 지배자를 null로 둔다", () => {
     const flatSession = makeSession("Sflat001", at("2026-11-05T09:00:00Z"));
     const flatMatch = makeMatch(
       "Mflat001",
@@ -627,14 +627,51 @@ describe("buildSessionReport", () => {
       [["Palice01"], ["Pbob0001"]],
       { type: "unrestricted-singles", sessionId: flatSession.id },
     );
-    const dominations = findSessionDominations(
-      createRankingContext(players, logs, [...matches, flatMatch]),
-      [session, flatSession],
-      sessionEndsAt,
+    expect(
+      findEndedSessions(
+        createRankingContext(players, logs, [...matches, flatMatch]),
+        [session, flatSession],
+        sessionEndsAt,
+      ),
+    ).toEqual(
+      new Map([
+        [session.id, "Palice01"],
+        [flatSession.id, null],
+      ]),
     );
-    expect([...dominations.entries()]).toEqual([
-      ["Palice01", new Set([session.id])],
-    ]);
+  });
+
+  it("무패 세션 업적은 세션이 만료된 뒤에만 전승 4번째 경기로 받는다", () => {
+    const wins = [0, 1, 2, 3].map((index) =>
+      makeMatch(
+        `Mwin000${index}`,
+        new Date(first.getTime() + index * 600_000),
+        [
+          ["Palice01", "Pbob0001"],
+          ["Pcarol01", "Pdave001"],
+        ],
+        { sessionId: session.id },
+      ),
+    );
+    const context = createRankingContext(players, [], wins);
+    const unbeatenAt = (reportNow: Date) =>
+      buildSessionReport({
+        context,
+        session,
+        endedSessions: findEndedSessions(context, [session], reportNow),
+      })?.achievements.filter(
+        (item) => item.achievementId === "unbeaten-session",
+      );
+
+    expect(unbeatenAt(new Date(sessionEndsAt.getTime() - 1))).toEqual([]);
+    expect(unbeatenAt(sessionEndsAt)).toEqual(
+      ["Palice01", "Pbob0001"].map((playerId) => ({
+        playerId,
+        achievementId: "unbeaten-session",
+        earnedMatchId: wins[3].id,
+        earnedAt: wins[3].completedAt,
+      })),
+    );
   });
 });
 

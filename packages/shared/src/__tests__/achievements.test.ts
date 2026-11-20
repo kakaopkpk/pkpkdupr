@@ -15,6 +15,7 @@ import {
   type AchievementMatch,
   type AchievementProgress,
   type EarnedAchievement,
+  type EndedSessions,
 } from "../achievements";
 import { ACHIEVEMENT_COUNT_START } from "../achievementCountStart";
 import { kstDateKeyTimeToDate } from "../session";
@@ -131,6 +132,16 @@ const progressOf = (
 
 const compute = (matches: AchievementMatch[]) =>
   computeAchievements(ME, matches);
+
+/** 만료된 세션 id로 업적 계산 입력을 만든다. dominatedSessionIds 세션은 내가 지배자다 */
+const endedSessions = (
+  endedSessionIds: string[],
+  dominatedSessionIds: string[] = [],
+): EndedSessions =>
+  new Map([
+    ...endedSessionIds.map((id) => [id, null] as const),
+    ...dominatedSessionIds.map((id) => [id, ME] as const),
+  ]);
 
 describe("ACHIEVEMENTS", () => {
   it("업적 47개를 표 순서로 정의한다", () => {
@@ -775,19 +786,30 @@ describe("computeAchievements", () => {
     });
   });
 
-  it("무패 세션은 한 세션에서 4경기 이상 모두 이기면 받고, 같은 세션에서 지면 받지 않은 상태다", () => {
+  it("무패 세션은 만료된 세션에서 4경기 이상 모두 이기면 받고, 같은 세션에서 지면 받지 않은 상태다", () => {
     const inSession = (won: boolean, sessionId = "session-a") =>
       makeMatch({ won, sessionId });
+    const computeEnded = (matches: AchievementMatch[]) =>
+      computeAchievements(
+        ME,
+        matches,
+        endedSessions(["session-a", "session-b"]),
+      );
 
     const three = repeat(3, () => inSession(true));
-    expect(progressOf(compute(three), "unbeaten-session")).toMatchObject({
+    expect(progressOf(computeEnded(three), "unbeaten-session")).toMatchObject({
       earned: false,
       current: 0,
     });
 
     const fourth = inSession(true);
     const unbeaten = [...three, fourth, inSession(true)];
+    // 아직 만료되지 않은 세션은 이후 경기로 결과가 바뀔 수 있어 세지 않는다.
     expect(progressOf(compute(unbeaten), "unbeaten-session")).toMatchObject({
+      earned: false,
+      current: 0,
+    });
+    expect(progressOf(computeEnded(unbeaten), "unbeaten-session")).toMatchObject({
       earned: true,
       // 네 번째 경기에서 조건을 채운다.
       earnedMatchId: fourth.id,
@@ -797,7 +819,10 @@ describe("computeAchievements", () => {
 
     // 같은 세션에서 한 번이라도 지면 무패 세션이 아니다.
     expect(
-      progressOf(compute([...unbeaten, inSession(false)]), "unbeaten-session"),
+      progressOf(
+        computeEnded([...unbeaten, inSession(false)]),
+        "unbeaten-session",
+      ),
     ).toMatchObject({
       earned: false,
       earnedAt: null,
@@ -808,7 +833,7 @@ describe("computeAchievements", () => {
     // 다른 세션의 패배는 영향이 없다.
     expect(
       progressOf(
-        compute([...unbeaten, inSession(false, "session-b")]),
+        computeEnded([...unbeaten, inSession(false, "session-b")]),
         "unbeaten-session",
       ),
     ).toMatchObject({ earned: true, earnedMatchId: fourth.id });
@@ -833,7 +858,7 @@ describe("computeAchievements", () => {
     const progress = computeAchievements(
       ME,
       [...before, atStart],
-      new Set(["session-old", "session-new"]),
+      endedSessions([], ["session-old", "session-new"]),
     );
     // 경기 수·승 수·출석은 기준 시각 전 경기도 세고, 받은 경기도 그 경기다
     expect(progressOf(progress, "matches-1")).toMatchObject({
@@ -905,7 +930,7 @@ describe("computeAchievements", () => {
     const progress = computeAchievements(
       ME,
       matches,
-      new Set(["session-b", "session-a", "session-none"]),
+      endedSessions([], ["session-b", "session-a", "session-none"]),
     );
     expect(progressOf(progress, "dominator-1")).toMatchObject({
       earned: true,
@@ -924,7 +949,8 @@ describe("computeAchievements", () => {
     const matches = Array.from({ length: 10 }, (_, index) =>
       makeMatch({ sessionId: `session-${index}` }),
     );
-    const dominated = new Set(matches.map((_, index) => `session-${index}`));
+    const sessionIds = matches.map((_, index) => `session-${index}`);
+    const dominated = endedSessions([], sessionIds);
     expect(
       progressOf(computeAchievements(ME, matches, dominated), "dominator-10"),
     ).toMatchObject({
@@ -988,6 +1014,15 @@ describe("findNewAchievements", () => {
         earnedAt: saved.completedAt,
       },
     ]);
+  });
+
+  it("세션 안 4경기 전승을 기록해도 무패 세션은 새 업적이 아니다(세션 만료 뒤 정해진다)", () => {
+    const before = repeat(3, () => makeMatch({ sessionId: "session-a" }));
+    const saved = makeMatch({ sessionId: "session-a" });
+    expect(
+      findNewAchievements({ playerIds: [ME], before, after: [...before, saved] })
+        .map((item) => item.achievementId),
+    ).not.toContain("unbeaten-session");
   });
 
   it("새로 받은 업적이 없으면 빈 배열이다", () => {

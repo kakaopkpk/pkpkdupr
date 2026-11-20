@@ -8,6 +8,7 @@ import {
   toEarnedAchievements,
   type AchievementMatch,
   type EarnedAchievement,
+  type EndedSessions,
 } from "@pkpkdupr/shared/achievements";
 import { isEntityId } from "@pkpkdupr/shared/entityId";
 import {
@@ -642,37 +643,32 @@ export const buildSessionPlayerReports = (
 export const pickTopRiser = <T extends SessionPlayerStats>(players: T[]): T | null =>
   players[0] && players[0].ratingDelta > 0 ? players[0] : null;
 
-/** 회원 id → 세션 지배자로 확정된 세션 id(`findSessionDominations`) */
-export type SessionDominations = ReadonlyMap<string, ReadonlySet<string>>;
-
 /**
- * 만료된 세션(`getEmptySessionExpiresAt` ≤ now)의 지배자를 모은다.
- * 진행 중이거나 오늘 아직 끝나지 않은 세션은 지배자가 바뀔 수 있어 넣지 않는다.
- * 다른 업적처럼 조회 때마다 계산하므로, 끝난 뒤 경기를 수정·삭제하면 지배자도 다시 정해진다.
+ * 만료된 세션(`getEmptySessionExpiresAt` ≤ now)과 그 세션들의 지배자를 모은다.
+ * 진행 중이거나 오늘 아직 끝나지 않은 세션은 무패 여부·지배자가 바뀔 수 있어 넣지 않는다.
+ * 다른 업적처럼 조회 때마다 계산하므로, 끝난 뒤 경기를 수정·삭제하면 결과도 다시 정해진다.
  */
-export const findSessionDominations = (
+export const findEndedSessions = (
   context: RankingContext,
   sessions: RankingSession[],
   now: Date,
-): SessionDominations => {
+): EndedSessions => {
   const matchesBySession = groupMatchesBySession(
     getRatedMatches(context.matches),
   );
-  const dominations = new Map<string, Set<string>>();
+  const endedSessions = new Map<string, string | null>();
   for (const session of sessions) {
     if (getEmptySessionExpiresAt(session.kind, session.date, session) > now) {
       continue;
     }
     const sessionMatches = matchesBySession.get(session.id);
-    if (!sessionMatches) continue;
-    const stats = buildSessionPlayerStats(context, session, sessionMatches);
-    const topRiser = stats && pickTopRiser(stats.players);
-    if (!topRiser) continue;
-    const sessionIds = dominations.get(topRiser.player.id) ?? new Set();
-    sessionIds.add(session.id);
-    dominations.set(topRiser.player.id, sessionIds);
+    const stats =
+      sessionMatches &&
+      buildSessionPlayerStats(context, session, sessionMatches);
+    const topRiser = stats ? pickTopRiser(stats.players) : null;
+    endedSessions.set(session.id, topRiser?.player.id ?? null);
   }
-  return dominations;
+  return endedSessions;
 };
 
 /**
@@ -683,11 +679,11 @@ export const findSessionDominations = (
 export const buildSessionReport = ({
   context,
   session,
-  dominations,
+  endedSessions,
 }: {
   context: RankingContext;
   session: RankingSession;
-  dominations: SessionDominations;
+  endedSessions: EndedSessions;
 }): MatchSessionReport | null => {
   const sessionMatches = context.matches.filter(
     (match) => match.sessionId === session.id,
@@ -705,7 +701,7 @@ export const buildSessionReport = ({
     topRiser: pickTopRiser(players),
     achievements: findAchievementsEarnedByMatches(
       context,
-      dominations,
+      endedSessions,
       new Set(sessionMatches.map((match) => match.id)),
       players.map((report) => report.player.id),
     ),
@@ -809,15 +805,15 @@ export const toContextAchievementMatches = (context: RankingContext) =>
     context.categoryByMatchId,
   );
 
-/** 한 회원이 지금 받은 업적(ACHIEVEMENTS 순서). 세션 지배자는 끝난 세션 기준이다 */
+/** 한 회원이 지금 받은 업적(ACHIEVEMENTS 순서). 무패 세션·세션 지배자는 만료 세션 기준이다 */
 export const findPlayerEarnedAchievements = (
   matches: readonly AchievementMatch[],
-  dominations: SessionDominations,
+  endedSessions: EndedSessions,
   playerId: string,
 ): EarnedAchievement[] =>
   toEarnedAchievements(
     playerId,
-    computeAchievements(playerId, matches, dominations.get(playerId)),
+    computeAchievements(playerId, matches, endedSessions),
   );
 
 /**
@@ -832,14 +828,14 @@ export const findPlayerEarnedAchievements = (
  */
 export const findAchievementsEarnedByMatches = (
   context: RankingContext,
-  dominations: SessionDominations,
+  endedSessions: EndedSessions,
   matchIds: ReadonlySet<string>,
   playerIds: readonly string[],
 ): EarnedAchievement[] => {
   const matches = toContextAchievementMatches(context);
   return selectAchievementsEarnedByMatches(
     playerIds.flatMap((playerId) =>
-      findPlayerEarnedAchievements(matches, dominations, playerId),
+      findPlayerEarnedAchievements(matches, endedSessions, playerId),
     ),
     matchIds,
   );
@@ -867,7 +863,7 @@ export const selectAchievementsEarnedByMatches = (
 /** 업적 id별 받은 활성 회원 수. 아무도 받지 않은 업적도 0으로 넣는다 */
 export const countAchievementHolders = (
   context: RankingContext,
-  dominations: SessionDominations,
+  endedSessions: EndedSessions,
 ): Record<string, number> => {
   const counts: Record<string, number> = Object.fromEntries(
     ACHIEVEMENTS.map((definition) => [definition.id, 0]),
@@ -877,7 +873,7 @@ export const countAchievementHolders = (
     for (const item of computeAchievements(
       playerId,
       matches,
-      dominations.get(playerId),
+      endedSessions,
     )) {
       if (item.earned) counts[item.id] += 1;
     }
@@ -892,7 +888,7 @@ export const countAchievementHolders = (
  */
 export const buildAchievementRankingResponse = (
   context: RankingContext,
-  dominations: SessionDominations,
+  endedSessions: EndedSessions,
 ): AchievementRankingResponse => {
   const matches = toContextAchievementMatches(context);
   const scored = [...context.playersById.values()]
@@ -900,7 +896,7 @@ export const buildAchievementRankingResponse = (
     .map((player) => {
       const earned = findPlayerEarnedAchievements(
         matches,
-        dominations,
+        endedSessions,
         player.id,
       ).filter((item) => getAchievementPoints(item.achievementId) > 0);
       return {

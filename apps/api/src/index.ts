@@ -84,6 +84,7 @@ import {
   type AchievementHoldersResponse,
   type AchievementMatch,
   type EarnedAchievement,
+  type EndedSessions,
   type SeenAchievementRef,
   type UnseenAchievementsResponse,
 } from "@pkpkdupr/shared/achievements";
@@ -169,11 +170,10 @@ import {
   countAchievementHolders,
   createRankingContext,
   findAchievementsEarnedByMatches,
+  findEndedSessions,
   findPlayerEarnedAchievements,
-  findSessionDominations,
   parseRecordsCursor,
   type RecordsPageEntry,
-  type SessionDominations,
   toContextAchievementMatches,
 } from "./services/RankingService";
 import {
@@ -1006,18 +1006,18 @@ const requireOpenSessionForParticipants = async (
 const getTeamPlayerIds = (teams: Team[]) =>
   teams.flatMap((team) => team.players.map((player) => player.id));
 
-/** 새 업적을 받은 참가자별 지금 업적 점수 합(세션 지배자 업적 포함) */
+/** 새 업적을 받은 참가자별 지금 업적 점수 합(만료 세션으로 받은 무패 세션·세션 지배자 업적 포함) */
 const findAchievementPointsForNewAchievements = (
   newAchievements: readonly EarnedAchievement[],
   matches: readonly AchievementMatch[],
-  dominations: SessionDominations,
+  endedSessions: EndedSessions,
 ): Record<string, number> => {
   const playerIds = [...new Set(newAchievements.map((item) => item.playerId))];
   return Object.fromEntries(
     playerIds.map((playerId) => [
       playerId,
       sumEarnedAchievementPoints(
-        findPlayerEarnedAchievements(matches, dominations, playerId),
+        findPlayerEarnedAchievements(matches, endedSessions, playerId),
       ),
     ]),
   );
@@ -1036,7 +1036,7 @@ const findAchievementsEarnedByMatch = async (
     const { context, sessions } = await loadRankingSource();
     return findAchievementsEarnedByMatches(
       context,
-      findSessionDominations(context, sessions, new Date()),
+      findEndedSessions(context, sessions, new Date()),
       new Set([match.id]),
       getTeamPlayerIds(match.teams),
     );
@@ -1072,7 +1072,7 @@ const findAchievementsForSavedMatch = async (
           ? findAchievementPointsForNewAchievements(
               newAchievements,
               after,
-              findSessionDominations(context, sessions, new Date()),
+              findEndedSessions(context, sessions, new Date()),
             )
           : {},
     };
@@ -1304,21 +1304,17 @@ app.get("/api/players/:playerId/profile-summary", async (req, res) => {
           ? Promise.resolve([])
           : matchRepository.getPlayerRatingChangeLogs(viewerPlayerId),
         playerRatingChartProjectionService.getOrRebuild(playerId),
-        // 세션 지배자·연승 저지·환영 인사·개근상 업적은 다른 회원 기록이 필요해 전체 원천을 읽는다.
+        // 무패 세션·세션 지배자(세션 만료)·연승 저지·환영 인사·개근상 업적은 전체 원천이 필요해 함께 읽는다.
         // 실패해도 요약은 돌려주고 업적은 이 회원 경기로만 계산한다.
         loadRankingSource().catch((err) => {
-          console.error("[PROFILE] 세션 지배자 원천 조회 실패", playerId, err);
+          console.error("[PROFILE] 업적 원천 조회 실패", playerId, err);
           return null;
         }),
       ]);
     const matches = attachMatchRatingChanges(result.matches, ratingChangeLogs);
-    const dominations = rankingSource
-      ? findSessionDominations(
-          rankingSource.context,
-          rankingSource.sessions,
-          now,
-        )
-      : null;
+    const endedSessions = rankingSource
+      ? findEndedSessions(rankingSource.context, rankingSource.sessions, now)
+      : undefined;
     res.json({
       player,
       ...buildPlayerProfileSummary(
@@ -1330,7 +1326,7 @@ app.get("/api/players/:playerId/profile-summary", async (req, res) => {
         ),
         viewerPlayerId,
         now,
-        dominations?.get(playerId),
+        endedSessions,
         groupRatingChangeLogsByMatchId(viewerRatingChangeLogs),
         rankingSource
           ? toContextAchievementMatches(rankingSource.context)
@@ -3557,7 +3553,7 @@ app.get("/api/rankings", async (req, res) => {
       category === "achievements"
         ? buildAchievementRankingResponse(
             context,
-            findSessionDominations(context, sessions, now),
+            findEndedSessions(context, sessions, now),
           )
         : buildRankingResponse({ context, category, sessions, now });
     res.json(response);
@@ -3669,7 +3665,7 @@ app.get("/api/news-feed", async (req, res) => {
       context,
       sessions,
       players,
-      dominations: findSessionDominations(context, sessions, new Date()),
+      endedSessions: findEndedSessions(context, sessions, new Date()),
       requesterId: auth.playerId,
       cursor,
     });
@@ -3758,7 +3754,7 @@ app.get("/api/session-reports/:sessionId", async (req, res) => {
       ? buildSessionReport({
           context,
           session,
-          dominations: findSessionDominations(context, sessions, new Date()),
+          endedSessions: findEndedSessions(context, sessions, new Date()),
         })
       : null;
     if (!report) {
@@ -3780,7 +3776,7 @@ app.get("/api/achievements/holders", async (req, res) => {
     const response: AchievementHoldersResponse = {
       counts: countAchievementHolders(
         context,
-        findSessionDominations(context, sessions, new Date()),
+        findEndedSessions(context, sessions, new Date()),
       ),
     };
     res.json(response);
@@ -3830,7 +3826,7 @@ app.get("/api/me/achievements/unseen", async (req, res) => {
     ]);
     const earned = findPlayerEarnedAchievements(
       toContextAchievementMatches(context),
-      findSessionDominations(context, sessions, new Date()),
+      findEndedSessions(context, sessions, new Date()),
       decoded.playerId,
     );
     const response: UnseenAchievementsResponse = {

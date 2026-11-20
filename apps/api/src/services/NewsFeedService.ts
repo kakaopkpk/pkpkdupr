@@ -1,4 +1,7 @@
-import type { EarnedAchievement } from "@pkpkdupr/shared/achievements";
+import type {
+  EarnedAchievement,
+  EndedSessions,
+} from "@pkpkdupr/shared/achievements";
 import type {
   NewsFeedItem,
   NewsFeedLine,
@@ -28,7 +31,6 @@ import {
   type RankingMatch,
   type RankingSession,
   type RankingSourcePlayer,
-  type SessionDominations,
 } from "./RankingService";
 
 /**
@@ -207,7 +209,7 @@ export const buildNewsFeedPage = ({
   context,
   sessions,
   players,
-  dominations,
+  endedSessions,
   requesterId,
   cursor,
 }: {
@@ -215,7 +217,7 @@ export const buildNewsFeedPage = ({
   sessions: RankingSession[];
   /** 새 회원 후보(가입 시각 포함). 활성 정회원만 고른다 */
   players: readonly NewsFeedSourcePlayer[];
-  dominations: SessionDominations;
+  endedSessions: EndedSessions;
   requesterId: string;
   /** 이전 페이지 nextCursor(ms). 첫 페이지는 null */
   cursor: number | null;
@@ -271,7 +273,7 @@ export const buildNewsFeedPage = ({
     if (!earned) {
       earned = findPlayerEarnedAchievements(
         achievementMatches,
-        dominations,
+        endedSessions,
         playerId,
       );
       earnedCache.set(playerId, earned);

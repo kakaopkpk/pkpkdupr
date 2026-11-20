@@ -77,7 +77,7 @@ describe("세션 리포트 업적과 업적 기준 시각", () => {
     const report = buildSessionReport({
       context,
       session,
-      dominations: new Map(),
+      endedSessions: new Map(),
     });
 
     // 받은 업적이지만 이 세션에서 받은 것으로 보여 주지 않는다

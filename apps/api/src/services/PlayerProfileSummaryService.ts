@@ -2,6 +2,7 @@ import {
   computeAchievements,
   type AchievementMatch,
   type AchievementProgress,
+  type EndedSessions,
 } from "@pkpkdupr/shared/achievements";
 import {
   getMatchRecordedAt,
@@ -136,8 +137,8 @@ export const buildPlayerProfileSummary = (
   ratingHistory: PlayerRatingHistory,
   viewerPlayerId: string,
   now: Date = new Date(),
-  /** 이 회원이 세션 지배자로 확정된 세션 id(세션 지배자 업적용) */
-  dominatedSessionIds?: ReadonlySet<string>,
+  /** 만료 세션과 그 지배자(무패 세션·세션 지배자 업적용). 없으면 두 업적은 받지 않은 상태다 */
+  endedSessions?: EndedSessions,
   /** 요청자 평점 변경 로그(경기 id별). 상대 전적의 요청자 평점 변화 합에 쓴다 */
   viewerRatingChangesByMatchId?: ReadonlyMap<string, PlayerRatingChangeLog[]>,
   /**
@@ -294,11 +295,11 @@ export const buildPlayerProfileSummary = (
     rivals,
     headToHead,
     achievements: achievementMatches
-      ? computeAchievements(playerId, achievementMatches, dominatedSessionIds)
+      ? computeAchievements(playerId, achievementMatches, endedSessions)
       : computeAchievements(
           playerId,
           withDoublesRatingAfter(matches),
-          dominatedSessionIds,
+          endedSessions,
           { clubMatches: false },
         ),
     winStreak: computeCurrentWinStreak(

@@ -617,7 +617,7 @@ const ACHIEVEMENT_TABLE: readonly {
       id: "dominator-1",
       category: "session",
       name: "세션 지배자",
-      condition: "끝난 세션에서 복식 평점이 가장 많이 오름",
+      condition: "세션에서 복식 평점이 가장 많이 오름",
       badgeNumber: null,
       target: 1,
       points: 25,
@@ -1038,7 +1038,7 @@ interface SessionRecord {
   lastMatch: CountedMatch;
 }
 
-/** 세션 단위로 다 훑은 뒤에 판정하는 지표. 나중 경기나 세션 종료로 결과가 정해진다 */
+/** 세션 단위로 다 훑은 뒤에 판정하는 지표. 만료된 세션만 세고 그 세션의 모든 경기로 결과가 정해진다 */
 const SESSION_EVENT_METRICS = [
   "unbeatenSessions",
   "dominatedSessions",
@@ -1051,7 +1051,14 @@ const isSessionEventMetric = (
 ): metric is SessionEventMetric =>
   (SESSION_EVENT_METRICS as readonly AchievementMetric[]).includes(metric);
 
-const NO_SESSIONS: ReadonlySet<string> = new Set();
+/**
+ * 만료된 세션 id → 그 세션 지배자 회원 id(지배자가 없으면 null). 무패 세션·세션 지배자는 이 세션만 센다.
+ * 세션 만료는 경기만으로 알 수 없어 서버가 세션 만료 시각으로 정한다.
+ * 진행 중이거나 아직 만료되지 않은 세션은 결과가 바뀔 수 있어 넣지 않는다.
+ */
+export type EndedSessions = ReadonlyMap<string, string | null>;
+
+const NO_ENDED_SESSIONS: EndedSessions = new Map();
 
 /** 평점 진행도에 경기 직후 복식 평점을 반영한다 */
 const applyDoublesRating = (
@@ -1098,7 +1105,7 @@ const computeProgressSince = (
   playerId: string,
   playerMatches: readonly CountedMatch[],
   start: Date | null,
-  dominatedSessionIds: ReadonlySet<string>,
+  endedSessions: EndedSessions,
   facts: ClubFacts,
 ): AchievementProgress[] => {
   const metrics: Record<AchievementMetric, number> = {
@@ -1300,16 +1307,20 @@ const computeProgressSince = (
   }
 
   // 세션 단위 지표는 해당 세션마다 조건을 채운 경기를 모아, 시간순 target번째 경기를 받은 경기로 정한다.
-  // 무패 세션: 끝까지 전승인 세션의 전승 4번째 경기. 세션 지배자: 지배 세션의 내 마지막 경기.
+  // 무패 세션: 만료 세션 중 끝까지 전승인 세션의 전승 4번째 경기. 세션 지배자: 지배 세션의 내 마지막 경기.
   const sessionEventMatches: Record<SessionEventMetric, CountedMatch[]> = {
     unbeatenSessions: [],
     dominatedSessions: [],
   };
   for (const [sessionId, session] of sessions) {
-    if (session.allWon && session.qualifiedMatch) {
+    if (
+      session.allWon &&
+      session.qualifiedMatch &&
+      endedSessions.has(sessionId)
+    ) {
       sessionEventMatches.unbeatenSessions.push(session.qualifiedMatch);
     }
-    if (dominatedSessionIds.has(sessionId)) {
+    if (endedSessions.get(sessionId) === playerId) {
       sessionEventMatches.dominatedSessions.push(session.lastMatch);
     }
   }
@@ -1342,9 +1353,10 @@ const computeProgressSince = (
  * computeProgressSince를 따로 돌려, 지표를 추가할 때 시작 시각만 적으면 되게 한다.
  * 승패가 갈리지 않은 경기는 승리에는 세지 않고 연승·콤비 연승·무패 세션·리벤지는 끊는다.
  * 경기 수·단짝·라이벌·세션 진행도에는 센다.
- * 무패 세션은 그 세션의 모든 경기로 판정하므로, 4경기 전승 뒤 같은 세션에서 지면 받지 않은 상태가 된다.
- * 세션 지배자는 경기만으로 알 수 없어 서버가 정한 dominatedSessionIds(이 회원이 지배자로 확정된
- * 끝난 세션)로 세고, 그 세션에서 이 회원의 마지막 경기를 받은 경기로 정한다.
+ * 무패 세션·세션 지배자는 서버가 정한 endedSessions의 만료 세션만 센다.
+ * 무패 세션은 만료 세션의 모든 경기가 전승이고 4경기 이상일 때, 전승 4번째 경기를 받은 경기로 정한다.
+ * 세션 지배자는 이 회원이 지배자인 만료 세션에서 이 회원의 마지막 경기를 받은 경기로 정한다.
+ * endedSessions를 넘기지 않으면 둘 다 받지 않은 상태다.
  * 평점 업적은 평점 반영 복식 경기가 RATING_ACHIEVEMENT_MIN_DOUBLES_MATCHES개 이상인 뒤의 복식 경기 직후
  * 복식 평점(doublesRatingAfter)의 최고치(낮은 평점 업적은 최저치)로 세므로, 받은 뒤 평점이 바뀌어도 유지된다.
  * 복식 경기 수는 집계 시작 시각 전 경기도 센다. 평점은 집계 시작 시각 시점 평점(그 전 마지막
@@ -1358,7 +1370,7 @@ const computeProgressSince = (
 export function computeAchievements(
   playerId: string,
   matches: readonly AchievementMatch[],
-  dominatedSessionIds: ReadonlySet<string> = NO_SESSIONS,
+  endedSessions: EndedSessions = NO_ENDED_SESSIONS,
   { clubMatches = true }: { clubMatches?: boolean } = {},
 ): AchievementProgress[] {
   const playerMatches = getPlayerCountedMatches(playerId, matches);
@@ -1374,7 +1386,7 @@ export function computeAchievements(
         playerId,
         playerMatches,
         start,
-        dominatedSessionIds,
+        endedSessions,
         facts,
       );
       progressByStart.set(key, progress);
@@ -1404,7 +1416,7 @@ export const toEarnedAchievements = (
 /**
  * 경기 저장 전후 계산 차이로 새로 받은 업적을 구한다.
  * 저장 후에 받았고 저장 전에는 받지 않은 업적만 돌려준다(회원 순서 → ACHIEVEMENTS 순서).
- * 세션 지배자는 세션이 끝난 뒤 정해지므로 넣지 않는다.
+ * 무패 세션·세션 지배자는 세션이 만료된 뒤 정해지므로 넣지 않는다(만료 뒤 미확인 업적으로 축하한다).
  * 업적 기준 시각 전 경기로 받은 업적(isEarnedByCountedMatch가 아닌 것)도 넣지 않는다.
  */
 export const findNewAchievements = ({
