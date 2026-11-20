@@ -1,6 +1,4 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { getMatchRecordedAt } from "@pkpkdupr/shared/match";
-import type { MatchInfo } from "@/types/match";
 import { getUserErrorMessage } from "@/lib/errors";
 import {
   fetchUpcomingMatchSessions,
@@ -10,11 +8,6 @@ import {
 export interface PreSessionData {
   upcoming: UpcomingMatchSessionsInfo;
 }
-
-/** 기록 시각(완료 경기는 점수 입력 시각) 최신순 정렬 비교 함수 */
-export const byLatestRecorded = (a: MatchInfo, b: MatchInfo) =>
-  new Date(getMatchRecordedAt(b)).getTime() -
-  new Date(getMatchRecordedAt(a)).getTime();
 
 const loadPreSessionData = async (): Promise<PreSessionData> => ({
   upcoming: await fetchUpcomingMatchSessions(),

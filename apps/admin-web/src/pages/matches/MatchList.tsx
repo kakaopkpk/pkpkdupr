@@ -1,6 +1,6 @@
 import React, { useMemo } from "react";
 import {
-  getMatchRecordedAt,
+  compareMatchesByRecordedAtDesc,
   getWinningTeamIndex,
   isSinglesMatchType,
   isWithinMatchEditWindow,
@@ -19,9 +19,9 @@ import {
 } from "../../lib/format";
 import {
   buildPlayerLookup,
-  compareMatchesLatestFirst,
   DELETED_PLAYER_LABEL,
   lookupUsername,
+  matchRecordedAt,
   toDate,
   type PlayerLookup,
 } from "./matchView";
@@ -37,8 +37,8 @@ interface MatchGroup {
  */
 const groupMatches = (matches: readonly Match[], now: Date): MatchGroup[] => {
   const groups = new Map<string, MatchGroup>();
-  for (const match of [...matches].sort(compareMatchesLatestFirst)) {
-    const recordedAt = toDate(getMatchRecordedAt(match));
+  for (const match of [...matches].sort(compareMatchesByRecordedAtDesc)) {
+    const recordedAt = matchRecordedAt(match);
     const key = `${toKstDateKey(recordedAt)}:${match.session?.id ?? ""}`;
     let group = groups.get(key);
     if (!group) {
@@ -94,7 +94,7 @@ const MatchRowContent: React.FC<{
   lookup: PlayerLookup;
   now: Date;
 }> = ({ match, lookup, now }) => {
-  const recordedAt = toDate(getMatchRecordedAt(match));
+  const recordedAt = matchRecordedAt(match);
   const creator = lookupUsername(lookup, match.creatorPlayerId);
   const editor =
     match.resultSubmittedByPlayerId &&
@@ -186,7 +186,7 @@ export const MatchList: React.FC<{
                   {selection && (
                     <input
                       type="checkbox"
-                      aria-label={`${formatKstTime(toDate(getMatchRecordedAt(match)))} 경기 고르기`}
+                      aria-label={`${formatKstTime(matchRecordedAt(match))} 경기 고르기`}
                       checked={selection.selectedIds.has(match.id)}
                       onChange={() => selection.onToggle(match.id)}
                       className="mt-4 size-4 shrink-0 accent-pk-primary"

@@ -184,6 +184,14 @@ export const getMatchRecordedAt = <T extends Date | string>(match: {
   completedAt: T | null;
 }): T => match.completedAt ?? match.matchStartsAt;
 
+/** 기록 시각(getMatchRecordedAt) 최신순, 같으면 id 내림차순. JSON 응답(문자열 시각)에도 쓴다 */
+export const compareMatchesByRecordedAtDesc = (
+  a: { id: string; matchStartsAt: Date | string; completedAt: Date | string | null },
+  b: { id: string; matchStartsAt: Date | string; completedAt: Date | string | null },
+): number =>
+  new Date(getMatchRecordedAt(b)).getTime() -
+    new Date(getMatchRecordedAt(a)).getTime() || b.id.localeCompare(a.id);
+
 /**
  * 점수를 넣거나 고칠 수 있는 경기면 true. 회원 누구나 가능하며
  * 취소 아님 · 시작 후 24시간 이내(isWithinMatchEditWindow)일 때

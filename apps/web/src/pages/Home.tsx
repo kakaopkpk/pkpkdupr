@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { compareMatchesByRecordedAtDesc } from "@pkpkdupr/shared/match";
 import type { RecommendedCourt } from "@pkpkdupr/shared/matchmaking";
 import { toKstDateKey } from "@pkpkdupr/shared/session";
 import { getMatchPlayerIds, type MatchInfo } from "@/types/match";
@@ -14,10 +15,7 @@ import RecommendationSection, {
   getCourtKey,
 } from "@/components/home/RecommendationSection";
 import { useNewsFeed } from "@/components/home/useNewsFeed";
-import {
-  byLatestRecorded,
-  usePreSessionData,
-} from "@/components/home/usePreSessionData";
+import { usePreSessionData } from "@/components/home/usePreSessionData";
 import { useSessionRecommendations } from "@/components/home/useSessionRecommendations";
 import { useSessionTopRiser } from "@/components/home/useSessionTopRiser";
 import { TopRiserCard } from "@/components/records/SessionReportParts";
@@ -196,7 +194,7 @@ const Home: React.FC = () => {
     () =>
       live.matches
         .filter((match) => match.status === "completed")
-        .sort(byLatestRecorded),
+        .sort(compareMatchesByRecordedAtDesc),
     [live.matches],
   );
   const waitingCount = useMemo(() => {

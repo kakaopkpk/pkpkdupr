@@ -37,11 +37,9 @@ export const normalizeMatch = (match: Match): Match => ({
     : undefined,
 });
 
-/** 기록 시각(완료 경기는 점수 입력 시각, getMatchRecordedAt) 내림차순, 같으면 id 내림차순 */
-export const compareMatchesLatestFirst = (a: Match, b: Match): number =>
-  toDate(getMatchRecordedAt(b)).getTime() -
-    toDate(getMatchRecordedAt(a)).getTime() ||
-  b.id.localeCompare(a.id);
+/** 경기 줄 시각(완료 경기는 점수 입력 시각, getMatchRecordedAt) */
+export const matchRecordedAt = (match: Match): Date =>
+  toDate(getMatchRecordedAt(match));
 
 export type PlayerLookup = ReadonlyMap<string, { username: string }>;
 

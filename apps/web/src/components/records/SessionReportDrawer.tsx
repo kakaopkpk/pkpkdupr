@@ -5,11 +5,11 @@ import React, {
   useRef,
   useState,
 } from "react";
+import { compareMatchesByRecordedAtDesc } from "@pkpkdupr/shared/match";
 import { getSessionEndsAt, toKstDateKey } from "@pkpkdupr/shared/session";
 import { getMatchPlayerIds, type MatchInfo } from "@/types/match";
 import PushScreen from "@/components/PushScreen";
 import LastSessionMeCard from "@/components/home/LastSessionMeCard";
-import { byLatestRecorded } from "@/components/home/usePreSessionData";
 import {
   getPlayerSessionAchievements,
   MyNewAchievementsCard,
@@ -280,7 +280,7 @@ export default function SessionReportDrawer({
             matchFilter === "all" ||
             (!!playerId && isPlayerInMatch(match, playerId)),
         )
-        .sort(byLatestRecorded),
+        .sort(compareMatchesByRecordedAtDesc),
     [matchFilter, matches, playerId],
   );
 
