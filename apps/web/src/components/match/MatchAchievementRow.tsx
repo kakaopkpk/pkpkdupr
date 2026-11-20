@@ -1,5 +1,6 @@
 import React from "react";
 import type { Player } from "@pkpkdupr/shared/player";
+import { rowPressClassName } from "@/components/ui/Button";
 import { AchievementBadge } from "@/components/profile/AchievementBadge";
 import { PlayerAvatar } from "@/components/ui/PlayerAvatar";
 import { cx } from "@/components/ui/cx";
@@ -32,7 +33,7 @@ export const MatchAchievementRow: React.FC<MatchAchievementRowProps> = ({
     type="button"
     onClick={onPress}
     style={style}
-    className={cx("flex w-full items-center gap-3 text-left", className)}
+    className={cx("flex w-full items-center gap-3 text-left", rowPressClassName, className)}
   >
     <span style={badgeStyle} className={cx("flex shrink-0", badgeClassName)}>
       <AchievementBadge achievement={definition} earned size={40} />

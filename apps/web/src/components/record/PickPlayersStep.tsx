@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import BottomSheet from "@/components/BottomSheet";
-import { PkButton } from "@/components/ui/Button";
+import { PkButton, buttonPressClassName } from "@/components/ui/Button";
 import { GuestLabel } from "@/components/ui/GuestLabel";
 import { InfoIcon } from "@/components/ui/Icons";
 import { PlayerAvatar, type AvatarPlayer } from "@/components/ui/PlayerAvatar";
@@ -215,7 +215,7 @@ export default function PickPlayersStep({
         aria-label={ariaLabel}
         aria-pressed={player ? isSelected : undefined}
         onClick={() => handleSlotPress(index)}
-        className="flex min-h-20 min-w-0 flex-col items-center gap-1 text-pk-ink"
+        className={cx("flex min-h-20 min-w-0 flex-col items-center gap-1 text-pk-ink", buttonPressClassName)}
       >
         {player ? (
           <>

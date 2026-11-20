@@ -91,7 +91,7 @@ export const RecordSessionCard: React.FC<{
     <button
       type="button"
       onClick={onPress}
-      className={cx(className, "active:bg-pk-primary-soft/60", rowPressClassName)}
+      className={cx(className, rowPressClassName)}
     >
       {content}
     </button>

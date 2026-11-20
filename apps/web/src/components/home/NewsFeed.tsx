@@ -273,7 +273,7 @@ const NewMemberCard: React.FC<{ item: NewsFeedNewMemberItemInfo }> = ({
       type="button"
       onClick={() => openMemberProfile(item.player.id)}
       className={cx(
-        "flex min-h-[60px] w-full items-center gap-3 rounded-pk-lg bg-white px-5 py-3 text-left active:bg-pk-primary-soft/60",
+        "flex min-h-[60px] w-full items-center gap-3 rounded-pk-lg bg-white px-5 py-3 text-left",
         rowPressClassName,
       )}
     >

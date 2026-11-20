@@ -1,6 +1,7 @@
 import React, { useRef, useState } from "react";
 import { kstDateKeyToDate, WEEKDAY_LABELS } from "@pkpkdupr/shared/session";
 import { addScheduleMonths } from "@pkpkdupr/shared/schedule";
+import { buttonPressClassName } from "@/components/ui/Button";
 import { ChevronRightIcon } from "@/components/ui/Icons";
 import { cx } from "@/components/ui/cx";
 import { formatKstLongDate } from "@/lib/format";
@@ -19,7 +20,7 @@ const MonthNavButton: React.FC<{
     aria-label={label}
     disabled={disabled}
     onClick={onPress}
-    className="flex size-11 items-center justify-center rounded-full text-pk-primary active:bg-pk-primary-soft disabled:text-pk-quiet disabled:active:bg-transparent"
+    className={cx("flex size-11 items-center justify-center rounded-full text-pk-primary disabled:text-pk-quiet", buttonPressClassName)}
   >
     <ChevronRightIcon
       className={cx("size-5 shrink-0", direction === "prev" && "rotate-180")}
@@ -264,7 +265,7 @@ const MonthCalendar: React.FC<{
             type="button"
             onClick={onGoToday}
             aria-label={`${formatMonthTitle(titleMonthKey)}, 누르면 오늘로 이동`}
-            className="flex min-h-11 items-center px-3 text-pk-15 font-extrabold text-pk-ink tabular-nums"
+            className={cx("flex min-h-11 items-center px-3 text-pk-15 font-extrabold text-pk-ink tabular-nums", buttonPressClassName)}
           >
             {formatMonthTitle(titleMonthKey)}
           </button>

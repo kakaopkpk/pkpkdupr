@@ -147,7 +147,7 @@ export const PlayerLineButton: React.FC<{
     type="button"
     onClick={onPress}
     className={cx(
-      "flex min-h-[60px] w-full items-center gap-3 py-3 text-left not-last:border-b not-last:border-pk-divider active:opacity-80",
+      "flex min-h-[60px] w-full items-center gap-3 py-3 text-left not-last:border-b not-last:border-pk-divider",
       rowPressClassName,
     )}
   >
@@ -290,7 +290,7 @@ export const SessionPlayerRatingRow: React.FC<{
       type="button"
       onClick={onPress}
       className={cx(
-        "flex min-h-14 w-full items-center gap-3 py-2.5 text-left not-last:border-b not-last:border-pk-divider active:bg-pk-bg",
+        "flex min-h-14 w-full items-center gap-3 py-2.5 text-left not-last:border-b not-last:border-pk-divider",
         rowPressClassName,
       )}
     >

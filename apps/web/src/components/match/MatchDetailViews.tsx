@@ -10,7 +10,7 @@ import {
 } from "@/types/match";
 import SkeletonBlock from "@/components/SkeletonBlock";
 import { FooterError } from "@/components/record/RecordMatchParts";
-import { PkButton, rowPressClassName } from "@/components/ui/Button";
+import { PkButton, rowPressClassName, buttonPressClassName } from "@/components/ui/Button";
 import {
   RallyTeamRow,
   TEAM_ROW_AVATAR_SIZE,
@@ -64,7 +64,7 @@ const SessionLink: React.FC<{
   <button
     type="button"
     onClick={() => onOpen(session.id)}
-    className="inline-flex items-center gap-0.5 font-bold text-pk-primary active:opacity-70"
+    className={cx("inline-flex items-center gap-0.5 font-bold text-pk-primary", buttonPressClassName)}
   >
     {getSessionLabel(session)}
     <LinkChevron />
@@ -88,7 +88,7 @@ const TeamNames: React.FC<{
         key={player.id}
         type="button"
         onClick={() => onOpenPlayer(player.id)}
-        className="max-w-full truncate active:opacity-70"
+        className={cx("max-w-full truncate", buttonPressClassName)}
       >
         {player.username}
       </button>
@@ -301,7 +301,7 @@ const RatingChangeCard: React.FC<{
             type="button"
             onClick={() => onOpenPlayer(player.id)}
             className={cx(
-              "grid min-h-14 w-full grid-cols-[32px_minmax(0,1fr)_auto_60px] items-center gap-3 text-left active:opacity-70",
+              "grid min-h-14 w-full grid-cols-[32px_minmax(0,1fr)_auto_60px] items-center gap-3 text-left",
               rowDividerClassName,
               rowPressClassName,
             )}
@@ -345,7 +345,7 @@ const MatchAchievementsCard: React.FC<{
               onOpenAchievement(achievement.player.id, achievement.definition.id)
             }
             className={cx(
-              "py-3 active:opacity-70",
+              "py-3",
               rowDividerClassName,
               rowPressClassName,
             )}
@@ -432,7 +432,7 @@ export const DeleteMatchHeaderButton: React.FC<{ onPress: () => void }> = ({
   <button
     type="button"
     onClick={onPress}
-    className="inline-flex min-h-11 items-center px-2 text-pk-15 font-bold text-pk-sub active:opacity-70"
+    className={cx("inline-flex min-h-11 items-center px-2 text-pk-15 font-bold text-pk-sub", buttonPressClassName)}
   >
     삭제
   </button>

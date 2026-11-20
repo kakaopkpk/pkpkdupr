@@ -3,7 +3,7 @@ import BottomSheet from "@/components/BottomSheet";
 import HoldToConfirmButton, {
   HOLD_TO_CONFIRM_DURATION_MS,
 } from "@/components/HoldToConfirmButton";
-import { PkButton } from "@/components/ui/Button";
+import { PkButton, buttonPressClassName } from "@/components/ui/Button";
 import { TextField } from "@/components/ui/Form";
 import {
   TeamAvatars,
@@ -80,7 +80,7 @@ export default function ScoreStep({
             <button
               type="button"
               onClick={() => setIsEditingLocation((open) => !open)}
-              className="inline-flex items-center gap-0.5 text-pk-13 text-pk-sub"
+              className={cx("inline-flex items-center gap-0.5 text-pk-13 text-pk-sub", buttonPressClassName)}
             >
               {trimmedLocation || "장소 없음"}
               <ChevronRightIcon className="size-3.5 shrink-0" />

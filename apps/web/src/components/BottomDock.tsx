@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import type { MatchInfo } from "@/types/match";
 import type { TabKey } from "@/context/TabNavigationContext";
 import { useMinuteClock } from "@/hooks/useMinuteClock";
+import { buttonPressClassName, rowPressClassName } from "@/components/ui/Button";
 import { PlusIcon } from "@/components/ui/Icons";
 import { formatElapsed } from "@/lib/format";
 import {
@@ -150,7 +151,7 @@ export const PlusMenu: React.FC<{
   }, [isOpen]);
 
   const itemClassName =
-    "flex min-h-14 w-full items-center gap-3 px-4 text-left text-pk-15 font-bold text-pk-ink disabled:text-pk-muted";
+    `flex min-h-14 w-full items-center gap-3 px-4 text-left text-pk-15 font-bold text-pk-ink disabled:text-pk-muted ${rowPressClassName}`;
   const itemIconClassName =
     "inline-flex size-9 shrink-0 items-center justify-center rounded-pk-sm bg-pk-primary-soft text-pk-primary";
 
@@ -197,7 +198,7 @@ export const PlusMenu: React.FC<{
         aria-haspopup="menu"
         aria-expanded={isOpen}
         onClick={onToggle}
-        className="flex size-[66px] shrink-0 items-center justify-center rounded-full bg-pk-primary text-white shadow-[0_8px_18px] shadow-pk-ink/18 transition-transform duration-200 touch-manipulation active:scale-[0.92] motion-reduce:transition-none motion-reduce:active:scale-100"
+        className={`flex size-[66px] shrink-0 items-center justify-center rounded-full bg-pk-primary text-white shadow-[0_8px_18px] shadow-pk-ink/18 touch-manipulation ${buttonPressClassName}`}
       >
         {/* 열리면 +를 돌려 ×로 만든다 */}
         <span
@@ -261,7 +262,7 @@ const DockBar: React.FC<{
         <button
           type="button"
           onClick={onPressContent}
-          className="flex h-full min-w-0 flex-1 items-center gap-2.5 text-left active:opacity-80"
+          className={`flex h-full min-w-0 flex-1 items-center gap-2.5 text-left ${rowPressClassName}`}
         >
           {content}
         </button>
@@ -272,7 +273,7 @@ const DockBar: React.FC<{
         type="button"
         disabled={isActionDisabled}
         onClick={onAction}
-        className="ml-auto flex h-[46px] shrink-0 items-center rounded-full bg-pk-primary px-[18px] text-pk-15 font-extrabold text-white disabled:bg-pk-neutral disabled:text-pk-muted"
+        className={`ml-auto flex h-[46px] shrink-0 items-center rounded-full bg-pk-primary px-[18px] text-pk-15 font-extrabold text-white disabled:bg-pk-neutral disabled:text-pk-muted ${buttonPressClassName}`}
       >
         {actionLabel}
       </button>

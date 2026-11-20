@@ -13,19 +13,19 @@ export interface PkButtonProps
   ref?: React.Ref<HTMLButtonElement>;
 }
 
-/**
- * 버튼 누름 피드백: 120ms 이동 곡선으로 살짝 줄어든다. 비활성은 줄지 않고,
- * 움직임 줄이기면 축소 대신 투명도로 누름을 알린다.
+/*
+ * 누름 피드백은 축소 + 투명도 0.8 하나다(바탕색은 누름 영역 모양이 드러나서 쓰지 않는다).
+ * 120ms 이동 곡선, 비활성은 반응하지 않고, 움직임 줄이기면 축소 없이 투명도만 바뀐다.
+ * 안의 버튼을 누르는 동안은 바깥(누를 수 있는 카드)이 함께 반응하지 않는다.
  */
-export const buttonPressClassName =
-  "transition-[scale,opacity] duration-[120ms] ease-pk-move motion-safe:enabled:active:scale-[0.97] motion-reduce:enabled:active:opacity-80";
 
-/**
- * 목록 줄 누름 피드백: 기존 누름 바탕색·투명도에 더해 scale 0.985로 줄어든다.
- * 움직임 줄이기면 축소 없이 바탕색·투명도만 바뀐다.
- */
+/** 버튼·아이콘 버튼·글자 버튼 누름 피드백: scale 0.97 */
+export const buttonPressClassName =
+  "transition-[scale,opacity] duration-[120ms] ease-pk-move not-disabled:active:not-has-[button:active]:opacity-80 motion-safe:not-disabled:active:not-has-[button:active]:scale-[0.97]";
+
+/** 목록 줄·카드 누름 피드백: 큰 요소라 scale 0.985로 덜 줄어든다 */
 export const rowPressClassName =
-  "transition-[background-color,opacity,scale] duration-[120ms] ease-pk-move motion-safe:active:scale-[0.985]";
+  "transition-[scale,opacity] duration-[120ms] ease-pk-move not-disabled:active:not-has-[button:active]:opacity-80 motion-safe:not-disabled:active:not-has-[button:active]:scale-[0.985]";
 
 const variantClassName: Record<PkButtonVariant, string> = {
   primary: "bg-pk-primary text-white",

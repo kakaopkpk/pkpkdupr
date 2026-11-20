@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { PkButton } from "@/components/ui/Button";
+import { PkButton, buttonPressClassName } from "@/components/ui/Button";
 import { cx } from "@/components/ui/cx";
 import { useDimmedThemeColor } from "@/lib/themeColor";
 import { cropAvatarImage } from "@/utils/avatar";
@@ -293,7 +293,7 @@ const AvatarCropScreen: React.FC<AvatarCropScreenProps> = ({
             type="button"
             disabled={isSaving}
             onClick={onCancel}
-            className="justify-self-start px-3 py-2 text-pk-15 font-bold disabled:opacity-40"
+            className={cx("justify-self-start px-3 py-2 text-pk-15 font-bold disabled:opacity-40", buttonPressClassName)}
           >
             취소
           </button>
@@ -302,7 +302,7 @@ const AvatarCropScreen: React.FC<AvatarCropScreenProps> = ({
             type="button"
             disabled={isSaving || !imageSize || isInitialAvatarCropView(view)}
             onClick={() => setView(INITIAL_AVATAR_CROP_VIEW)}
-            className="justify-self-end px-3 py-2 text-pk-15 font-bold text-pk-primary-line disabled:opacity-40"
+            className={cx("justify-self-end px-3 py-2 text-pk-15 font-bold text-pk-primary-line disabled:opacity-40", buttonPressClassName)}
           >
             원래대로
           </button>

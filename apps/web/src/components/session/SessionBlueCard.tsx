@@ -1,6 +1,6 @@
 import React from "react";
 import { LivePill } from "@/components/ui/Badges";
-import { buttonPressClassName } from "@/components/ui/Button";
+import { buttonPressClassName, rowPressClassName } from "@/components/ui/Button";
 import { CheckIcon, ChevronRightIcon, TrophyIcon } from "@/components/ui/Icons";
 import { PlayerAvatar } from "@/components/ui/PlayerAvatar";
 import { cx } from "@/components/ui/cx";
@@ -136,7 +136,7 @@ export const SessionBlueCard: React.FC<{
       className={cx(
         "relative overflow-hidden rounded-pk-lg text-white",
         isTournament ? "bg-pk-deep" : "bg-pk-primary",
-        onPress && "cursor-pointer",
+        onPress && cx("cursor-pointer", rowPressClassName),
         className,
       )}
     >
@@ -173,7 +173,7 @@ export const SessionBlueCard: React.FC<{
           <button
             type="button"
             onClick={onOpenParticipants}
-            className={cx(participantsRowClassName, "active:opacity-80")}
+            className={cx(participantsRowClassName, rowPressClassName)}
           >
             {participantsContent}
           </button>
