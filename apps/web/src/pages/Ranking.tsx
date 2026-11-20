@@ -1,4 +1,10 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 import type {
   AchievementRankingEntry,
   AchievementRankingResponse,
@@ -44,6 +50,11 @@ const CATEGORY_OPTIONS: readonly SegmentedOption<RankingCategory>[] = [
 ];
 
 const SKELETON_ROW_COUNT = 6;
+
+type RankingByCategory = Partial<
+  Record<RankingCategory, RankingResponse | AchievementRankingResponse>
+>;
+type ErrorByCategory = Partial<Record<RankingCategory, string | null>>;
 
 // 순위 24 · 아바타 32 · 이름 · 평점(아래 변동). 줄 좌우 여백 없이 카드 안쪽 12px에 맞춘다.
 // 최소 높이 61은 이름 아래 상태메시지 칩이 붙은 줄 높이(이름 22.5 + 간격 2 + 칩 20 + 위아래 여백 16)라, 칩 유무와 상관없이 모든 줄 높이가 같다
@@ -209,42 +220,63 @@ const Ranking: React.FC = () => {
   const { registerPullToRefresh } = useTabNavigation();
   const [category, setCategory] = useState<RankingCategory>("doubles");
   const [isListFading, setIsListFading] = useState(false);
-  const [ranking, setRanking] = useState<
-    RankingResponse | AchievementRankingResponse | null
-  >(null);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  // 늦게 끝난 이전 요청(분류 전환 전 등)이 최신 결과를 덮지 않게 한다
-  const requestIdRef = useRef(0);
+  // 분류마다 한 번 받은 결과를 메모리에 보관해 이미 본 분류로 돌아오면 바로 보인다
+  const [rankings, setRankings] = useState<RankingByCategory>({});
+  const [errors, setErrors] = useState<ErrorByCategory>({});
+  const categoryRef = useRef(category);
+  const dataVersionRef = useRef(dataVersion);
+  // 커밋된 값만 담는다. 받기 effect보다 먼저 실행돼 loadCategory가 이번 렌더의 dataVersion을 읽는다
+  useLayoutEffect(() => {
+    categoryRef.current = category;
+    dataVersionRef.current = dataVersion;
+  }, [category, dataVersion]);
+  // 분류마다 가장 최근 요청 번호. 늦게 끝난 이전 요청이 최신 결과를 덮지 않게 한다
+  const requestIdsRef = useRef(new Map<RankingCategory, number>());
+  const requestSequenceRef = useRef(0);
+  // 분류마다 마지막으로 받기 시작한 dataVersion. 같은 기준으로 받아 둔 분류는 다시 받지 않고, 다르면 오래된 것으로 보고 그 분류를 볼 때 받는다
+  const loadStampsRef = useRef(new Map<RankingCategory, number>());
 
-  const loadRanking = useCallback(async () => {
-    const requestId = ++requestIdRef.current;
+  /** 그 분류를 다시 받는다. 받아 둔 내용은 새 결과가 올 때까지 그대로 둔다 */
+  const loadCategory = useCallback(async (target: RankingCategory) => {
+    const requestId = ++requestSequenceRef.current;
+    requestIdsRef.current.set(target, requestId);
+    loadStampsRef.current.set(target, dataVersionRef.current);
+    const isLatest = () => requestIdsRef.current.get(target) === requestId;
     try {
-      const response = await fetchRankings(category);
-      if (requestId !== requestIdRef.current) return;
-      setRanking(response);
-      setErrorMessage(null);
+      const response = await fetchRankings(target);
+      if (!isLatest()) return;
+      setRankings((current) => ({ ...current, [target]: response }));
+      setErrors((current) => ({ ...current, [target]: null }));
       // 빈 결과면 페이드 래퍼가 그려지지 않으므로 대기 중인 페이드를 버린다. 남겨 두면 나중 재조회에서 재생된다
-      if (countRankingRows(response) === 0) {
+      if (target === categoryRef.current && countRankingRows(response) === 0) {
         setIsListFading(false);
       }
     } catch (error) {
-      if (requestId !== requestIdRef.current) return;
-      setIsListFading(false);
-      setErrorMessage(getUserErrorMessage(error, "랭킹을 불러오지 못했어요"));
+      if (!isLatest()) return;
+      // 실패한 분류는 다시 보일 때 또 받는다
+      loadStampsRef.current.delete(target);
+      if (target === categoryRef.current) setIsListFading(false);
+      setErrors((current) => ({
+        ...current,
+        [target]: getUserErrorMessage(error, "랭킹을 불러오지 못했어요"),
+      }));
     }
-  }, [category]);
+  }, []);
 
+  // 보고 있는 분류만 받는다. 이미 이 기준으로 받아 둔 분류는 건너뛴다
   useEffect(() => {
-    void loadRanking();
-  }, [loadRanking, dataVersion]);
+    if (loadStampsRef.current.get(category) === dataVersion) return;
+    void loadCategory(category);
+  }, [loadCategory, category, dataVersion]);
 
   useEffect(
-    () => registerPullToRefresh("ranking", loadRanking),
-    [loadRanking, registerPullToRefresh],
+    () =>
+      registerPullToRefresh("ranking", () => loadCategory(categoryRef.current)),
+    [loadCategory, registerPullToRefresh],
   );
 
-  // 분류를 바꾼 직후에는 이전 분류 결과 대신 스켈레톤을 보인다
-  const currentRanking = ranking?.category === category ? ranking : null;
+  const currentRanking = rankings[category] ?? null;
+  const errorMessage = errors[category] ?? null;
 
   return (
     <div className="pb-6">
@@ -255,9 +287,11 @@ const Ranking: React.FC = () => {
             options={CATEGORY_OPTIONS}
             value={category}
             onChange={(nextCategory) => {
-              setErrorMessage(null);
+              setErrors((current) => ({ ...current, [nextCategory]: null }));
               setCategory(nextCategory);
-              setIsListFading(true);
+              // 보관한 결과가 빈 목록이면 페이드 래퍼가 그려지지 않으므로 대기시키지 않는다
+              const cached = rankings[nextCategory];
+              setIsListFading(!cached || countRankingRows(cached) > 0);
             }}
             ariaLabel="종목"
           />
@@ -268,6 +302,8 @@ const Ranking: React.FC = () => {
           <>
             {countRankingRows(currentRanking) > 0 ? (
               <SegmentSwitchFade
+                // 분류마다 새로 그려 페이드와 카운트업이 처음부터 재생되게 한다
+                key={category}
                 isPlaying={isListFading}
                 onFinish={() => setIsListFading(false)}
               >
@@ -318,8 +354,8 @@ const Ranking: React.FC = () => {
             message={errorMessage}
             onRetry={() => {
               // 다시 받는 동안 스켈레톤을 보인다
-              setErrorMessage(null);
-              void loadRanking();
+              setErrors((current) => ({ ...current, [category]: null }));
+              void loadCategory(category);
             }}
           />
         ) : (
