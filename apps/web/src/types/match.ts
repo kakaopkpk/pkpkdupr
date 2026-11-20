@@ -66,6 +66,18 @@ export const isMatchSessionToday = (
     now,
   );
 
+/** 완료 경기 상세에서 "같은 멤버로 한 판 더"를 보여 주는 기간(기록 시각 기준) */
+export const REMATCH_WINDOW_MS = 60 * 60 * 1000;
+
+/** 기록(completedAt, 없으면 시작 시각)한 지 1시간이 안 된 경기면 true */
+export const isWithinRematchWindow = (
+  match: Pick<MatchInfo, "completedAt" | "matchStartsAt">,
+  now: Date,
+): boolean =>
+  now.getTime() -
+    new Date(match.completedAt ?? match.matchStartsAt).getTime() <
+  REMATCH_WINDOW_MS;
+
 /** 게스트가 낀 경기(ratingExcluded)의 평점 변화 자리에 보이는 한 줄 */
 export const RATING_EXCLUDED_NOTICE = "평점 미반영 · 게스트 참여 경기";
 
