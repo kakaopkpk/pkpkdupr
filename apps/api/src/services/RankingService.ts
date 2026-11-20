@@ -932,7 +932,7 @@ export const buildAchievementRankingResponse = (
   return { category: "achievements", entries };
 };
 
-/** 기록 탭 줄의 정렬 키. 세션은 date, 경기는 matchStartsAt */
+/** 기록 탭 줄의 정렬 키. 세션은 date, 경기는 점수를 입력한 completedAt */
 export interface RecordsCursor {
   atMs: number;
   id: string;
@@ -972,7 +972,7 @@ const compareRecordRows = (left: RecordsCursor, right: RecordsCursor) =>
   right.atMs - left.atMs || compareText(right.id, left.id);
 
 /**
- * 기록 줄 후보. 완료 경기가 있는 세션과 세션 없는 완료 경기를 정렬 시각(세션 date·경기 matchStartsAt)
+ * 기록 줄 후보. 완료 경기가 있는 세션과 세션 없는 완료 경기를 정렬 시각(세션 date·경기 completedAt)
  * 내림차순 → id 내림차순으로 섞는다. playerId를 주면 그 회원이 완료 경기를 뛴 세션·경기만 남긴다.
  */
 const collectRecordRows = (
@@ -1000,7 +1000,7 @@ const collectRecordRows = (
     if (match.sessionId || !hasPlayer(match)) continue;
     rows.push({
       kind: "match",
-      atMs: match.matchStartsAt.getTime(),
+      atMs: match.completedAt.getTime(),
       id: match.id,
       match,
     });

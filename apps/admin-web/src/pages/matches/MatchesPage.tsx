@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import {
+  compareMatchesByRecordedAtDesc,
   getMatchTopLevelType,
   type AdminMatchDeletionLog,
   type AdminMatchEditLog,
@@ -37,7 +38,7 @@ import { DeletedMatchesTable } from "./DeletedMatchesTable";
 import { EditedMatchesTable } from "./EditedMatchesTable";
 import { MatchCorrectionPanel } from "./MatchCorrectionPanel";
 import { MatchList } from "./MatchList";
-import { compareMatchesLatestFirst, normalizeMatch, toDate } from "./matchView";
+import { matchRecordedAt, normalizeMatch, toDate } from "./matchView";
 import { SessionLinkBar } from "./SessionLinkBar";
 import { buildSessionOptions } from "./sessionOptions";
 import { SheetImportDialog } from "./SheetImportDialog";
@@ -84,7 +85,7 @@ const loadMatchesData = async (): Promise<MatchesData> => {
     fetchMatchEditLogs(),
   ]);
   return {
-    matches: matches.map(normalizeMatch).sort(compareMatchesLatestFirst),
+    matches: matches.map(normalizeMatch).sort(compareMatchesByRecordedAtDesc),
     players,
     sessions,
     deletionLogs,
@@ -185,7 +186,7 @@ const MatchesPage: React.FC = () => {
       if (sessionFilterId !== null && match.session?.id !== sessionFilterId) {
         return false;
       }
-      if (periodStart !== null && toDate(match.matchStartsAt).getTime() < periodStart) {
+      if (periodStart !== null && matchRecordedAt(match).getTime() < periodStart) {
         return false;
       }
       if (category !== "all" && getMatchTopLevelType(match.type) !== category) {

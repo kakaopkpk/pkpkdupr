@@ -4,6 +4,7 @@ import {
   type AchievementProgress,
 } from "@pkpkdupr/shared/achievements";
 import {
+  getMatchRecordedAt,
   getMatchTopLevelType,
   getWinningTeamIndex,
   type Match,
@@ -98,18 +99,14 @@ const toTimeMs = (date: Date) => {
   return Number.isNaN(value) ? Number.NEGATIVE_INFINITY : value;
 };
 
-const getMatchStartsAtMs = (match: Match) => toTimeMs(match.matchStartsAt);
-
 const toStatPlayer = (player: Player): StatPlayer => ({
   id: player.id,
   username: player.username,
   avatarUrl: player.avatarUrl,
 });
 
-/** 경기 끝난 시각. 완료 시각이 없으면 시작 시각으로 본다 */
-const getMatchEndedAt = (match: Match) => match.completedAt ?? match.matchStartsAt;
-
-const getMatchEndedAtMs = (match: Match) => toTimeMs(getMatchEndedAt(match));
+/** 경기 기록 시각(ms). 완료 시각이 없으면 시작 시각으로 본다 */
+const getMatchEndedAtMs = (match: Match) => toTimeMs(getMatchRecordedAt(match));
 
 /** 승률 내림차순 → 경기 수 내림차순 → 아이디(username) 오름차순 */
 const sortPartnerStats = (left: PartnerStat, right: PartnerStat) => {
@@ -285,7 +282,7 @@ export const buildPlayerProfileSummary = (
     (match) => match.status === "completed",
   );
   const recentMatches = [...completedMatches]
-    .sort((left, right) => getMatchStartsAtMs(right) - getMatchStartsAtMs(left))
+    .sort((left, right) => getMatchEndedAtMs(right) - getMatchEndedAtMs(left))
     .slice(0, 5);
 
   return {
@@ -307,7 +304,7 @@ export const buildPlayerProfileSummary = (
     winStreak: computeCurrentWinStreak(
       completedMatches.map((match) => ({
           id: match.id,
-          completedAt: getMatchEndedAt(match),
+          completedAt: getMatchRecordedAt(match),
           teamPlayerIds: [
             match.teams[0].players.map((player) => player.id),
             match.teams[1].players.map((player) => player.id),

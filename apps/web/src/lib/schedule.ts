@@ -86,7 +86,7 @@ export const buildScheduleDayMarks = (
   }
   for (const item of data.records) {
     if (item.kind !== "match") continue;
-    const dateKey = toKstDateKey(new Date(item.match.matchStartsAt));
+    const dateKey = toKstDateKey(new Date(getRecordItemDate(item)));
     const current = marks.get(dateKey);
     if (current?.kind === "session") continue;
     marks.set(dateKey, {

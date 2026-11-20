@@ -37,6 +37,7 @@
 ## 경기
 
 - `GET /api/matches`: `playerId`와 함께 `category=singles|doubles`로 분류 필터, 대진 예정 경기(`scheduled`) 제외
+- 경기 목록 정렬: `GET /api/matches`·`GET /api/match-feed`·세션 경기 목록은 기록 시각(`getMatchRecordedAt`, 완료 경기는 점수를 입력한 `completedAt`, 그 밖은 `matchStartsAt`) 최신순
 - 경기 기록 `POST /api/matches`
 - 수정 `PUT /api/matches/:matchId`
   - 관리자는 24시간 검사 없이 고친다.
@@ -108,7 +109,7 @@
 - 세션 기록 목록 `GET /api/session-reports?limit=&playerId=`: 완료 경기가 있는 세션 최신순, limit 기본 20·최대 100, 지금 웹은 쓰지 않음
 - 기록 목록 `GET /api/records?limit=&cursor=&playerId=`
   - 지금 웹은 쓰지 않음. 응답 `RecordsResponse` `{ items, nextCursor }`.
-  - 완료 경기가 있는 세션 줄 `kind: 'session'`과 세션 없는 완료 경기 줄 `kind: 'match'`를 세션 `date`·경기 `matchStartsAt` 내림차순, 같으면 id 내림차순으로 섞는다.
+  - 완료 경기가 있는 세션 줄 `kind: 'session'`과 세션 없는 완료 경기 줄 `kind: 'match'`를 세션 `date`·경기 `completedAt` 내림차순, 같으면 id 내림차순으로 섞는다.
   - 세션 줄의 요청자 줄 `mine`은 세션 리포트 players의 요청자 줄과 같고, 안 뛰었으면 null, 업적 제외.
   - limit 규칙은 세션 기록 목록과 같다.
   - `cursor`는 `nextCursor`를 그대로 넘기며 형식 오류 400, 더 없으면 `nextCursor` null.

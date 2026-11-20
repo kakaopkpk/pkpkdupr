@@ -32,6 +32,7 @@ import {
   lt,
   max,
   ne,
+  sql,
 } from "drizzle-orm";
 import {
   matchParticipants,
@@ -276,6 +277,9 @@ export const REGULAR_SESSION_EXISTS_MESSAGE = "그 날짜에는 이미 정기 �
 const REGULAR_SESSION_HOLIDAY_MESSAGE = "공휴일에는 정기 세션을 둘 수 없어요.";
 const AUTO_REGULAR_SESSION_KIND_LOCKED_MESSAGE =
   "자동으로 만든 정기 세션은 종류를 바꿀 수 없어요.";
+
+/** 경기 기록 시각(완료 경기는 completedAt, 그 밖은 matchStartsAt) 최신순. getMatchRecordedAt과 같은 기준 */
+const matchRecordedAtDesc = sql`coalesce(${matches.completedAt}, ${matches.matchStartsAt}) desc`;
 
 const toDateOrNull = (value: Date | string | number | null | undefined) =>
   value == null ? null : new Date(value);
@@ -944,7 +948,7 @@ export class MatchRepository {
           )
           .where(and(eq(matchParticipants.playerId, playerId), statusFilter))
           .orderBy(
-            desc(matches.matchStartsAt),
+            matchRecordedAtDesc,
             desc(matches.createdAt),
             desc(matches.id),
           )).map((row: { match: StoredMatch }) => row.match)
@@ -953,7 +957,7 @@ export class MatchRepository {
           .from(matches)
           .where(statusFilter)
           .orderBy(
-            desc(matches.matchStartsAt),
+            matchRecordedAtDesc,
             desc(matches.createdAt),
             desc(matches.id),
           );
@@ -3009,7 +3013,7 @@ export class MatchRepository {
       .select()
       .from(matches)
       .orderBy(
-        desc(matches.matchStartsAt),
+        matchRecordedAtDesc,
         desc(matches.createdAt),
         desc(matches.id),
       );

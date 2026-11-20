@@ -2,6 +2,7 @@ import type {
   RecordMatchItem,
   RecordSessionItem,
 } from "@pkpkdupr/shared/ranking";
+import { getMatchRecordedAt } from "@pkpkdupr/shared/match";
 import type { MatchInfo } from "@/types/match";
 import type { MatchSessionHistoryInfo } from "@/lib/rankings";
 
@@ -19,6 +20,6 @@ export type RecordItemInfo = RecordSessionItemInfo | RecordMatchItemInfo;
 export const getRecordItemKey = (item: RecordItemInfo) =>
   item.kind === "session" ? `session:${item.session.id}` : `match:${item.match.id}`;
 
-/** 기록 줄의 날짜 기준 시각: 세션은 session.date, 경기는 matchStartsAt */
+/** 기록 줄의 날짜 기준 시각: 세션은 session.date, 경기는 기록 시각(getMatchRecordedAt) */
 export const getRecordItemDate = (item: RecordItemInfo) =>
-  item.kind === "session" ? item.session.date : item.match.matchStartsAt;
+  item.kind === "session" ? item.session.date : getMatchRecordedAt(item.match);

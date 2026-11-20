@@ -1,5 +1,8 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import type { MatchTopLevelType } from "@pkpkdupr/shared/match";
+import {
+  getMatchRecordedAt,
+  type MatchTopLevelType,
+} from "@pkpkdupr/shared/match";
 import type { MatchInfo } from "@/types/match";
 import PushScreen, {
   usePushScreenScrollContainer,
@@ -39,7 +42,7 @@ const groupMatches = (matches: readonly MatchInfo[]): MatchGroup[] => {
   let previousKey: string | null = null;
 
   for (const match of matches) {
-    const dateLabel = formatKstShortDate(match.matchStartsAt);
+    const dateLabel = formatKstShortDate(getMatchRecordedAt(match));
     const key = `${dateLabel}|${match.session?.id ?? ""}`;
     const lastGroup = groups[groups.length - 1];
     if (lastGroup && key === previousKey) {

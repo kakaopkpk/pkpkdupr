@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { MatchInfo } from "@/types/match";
 import { getUserErrorMessage } from "@/lib/errors";
 import {
   fetchUpcomingMatchSessions,
@@ -9,10 +8,6 @@ import {
 export interface PreSessionData {
   upcoming: UpcomingMatchSessionsInfo;
 }
-
-/** 시작 시각 최신순 정렬 비교 함수 */
-export const byLatestStart = (a: MatchInfo, b: MatchInfo) =>
-  new Date(b.matchStartsAt).getTime() - new Date(a.matchStartsAt).getTime();
 
 const loadPreSessionData = async (): Promise<PreSessionData> => ({
   upcoming: await fetchUpcomingMatchSessions(),

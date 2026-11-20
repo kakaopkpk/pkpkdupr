@@ -5,6 +5,7 @@ import React, {
   useRef,
   useState,
 } from "react";
+import { compareMatchesByRecordedAtDesc } from "@pkpkdupr/shared/match";
 import { getSessionEndsAt, toKstDateKey } from "@pkpkdupr/shared/session";
 import { getMatchPlayerIds, type MatchInfo } from "@/types/match";
 import PushScreen from "@/components/PushScreen";
@@ -279,11 +280,7 @@ export default function SessionReportDrawer({
             matchFilter === "all" ||
             (!!playerId && isPlayerInMatch(match, playerId)),
         )
-        .sort(
-          (a, b) =>
-            new Date(b.matchStartsAt).getTime() -
-            new Date(a.matchStartsAt).getTime(),
-        ),
+        .sort(compareMatchesByRecordedAtDesc),
     [matchFilter, matches, playerId],
   );
 
