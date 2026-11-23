@@ -129,6 +129,12 @@ pnpm lint
   - 회원·관리자 삭제 모두 경기 전체 스냅샷을 `match_deletion_logs`에 남긴다.
 - 평점을 쓰는 경로(증분 반영·일괄 반영·전체 재계산·공식 DUPR 조정)는 `AuthService` 공개 메서드에서 advisory 잠금 하나(`db.ratingWriteLock`)로 직렬화된다. 재계산 입력은 잠금 안에서 읽도록 로더 함수로 넘기고, 잠금 안에서는 잠금을 다시 잡지 않는다.
 
+### 특수 매치
+
+- 경기 시작 때 판정한 특수 매치는 `Match.specialMatch`(`matches.special_match` jsonb)에 저장한다. 판정 기준은 `docs/product.md` "특수 매치", 판정 함수는 `packages/shared/src/specialMatch.ts`다.
+  - 추천 카드 출처 세션 시작(`recommendedSpecialKind`)은 서버 재판정 유형이 카드 유형과 같을 때만, 한 판 더 출처 시작(`rematchOfMatchId`)은 리벤지만 저장한다.
+  - 그 밖의 시작·직접 기록·관리자 생성·대진 시작은 null이다.
+
 ### 진행 중 경기
 
 - 예외로 세션에서 시작한 경기는 점수 없는 진행 중 경기(`status: "created"`)입니다.

@@ -255,4 +255,87 @@ describe("POST /api/matches/start", () => {
     expect(response.status).toBe(400);
     expect(createInProgress).not.toHaveBeenCalled();
   });
+
+  describe("같은 멤버로 한 판 더(rematchOfMatchId)", () => {
+    const previousMatch = (overrides: Partial<Match> = {}): Match =>
+      ({
+        id: "Mprevi01",
+        type: "mixed-doubles",
+        source: "player_created",
+        creatorPlayerId: requester.id,
+        status: "completed",
+        teams: [
+          { id: "t0", name: "A", players: [playerA, playerB] },
+          { id: "t1", name: "B", players: [playerC, playerD] },
+        ],
+        scores: [{ scoreA: 11, scoreB: 7 }],
+        resultSubmittedByPlayerId: requester.id,
+        resultSubmittedAt: thursdayAfternoon,
+        location: "야탑초등학교",
+        matchStartsAt: thursdayAfternoon,
+        createdAt: thursdayAfternoon,
+        completedAt: thursdayAfternoon,
+        updatedAt: thursdayAfternoon,
+        ratingExcluded: false,
+        ...overrides,
+      }) as Match;
+
+    const mockPrevious = (match: Match | undefined) =>
+      vi.spyOn(MatchRepository.prototype, "findById").mockResolvedValue(match);
+
+    it("같은 멤버면 리벤지로 저장하고 원래 이긴 팀의 새 index가 지킨다", async () => {
+      const findById = mockPrevious(previousMatch());
+
+      const response = await startMatch({
+        teams: [doublesTeams[1], doublesTeams[0]],
+        rematchOfMatchId: "Mprevi01",
+      });
+
+      expect(response.status).toBe(201);
+      expect(findById).toHaveBeenCalledWith("Mprevi01");
+      expect(createInProgress.mock.calls[0]![0].specialMatch).toEqual({
+        kind: "revenge",
+        defendingTeamIndex: 1,
+        protagonistIds: [null, null],
+        challengePairs: [],
+        outcome: null,
+      });
+      expect(response.body.specialMatch.kind).toBe("revenge");
+    });
+
+    it.each([
+      ["원래 경기가 없으면", undefined],
+      ["원래 경기가 완료 전이면", previousMatch({ status: "created", scores: [] })],
+      ["원래 경기 승패가 안 갈렸으면", previousMatch({ scores: [{ scoreA: 9, scoreB: 9 }] })],
+      [
+        "멤버가 다르면",
+        previousMatch({
+          teams: [
+            { id: "t0", name: "A", players: [playerA, playerC] },
+            { id: "t1", name: "B", players: [playerB, playerD] },
+          ],
+        }),
+      ],
+    ])("%s 특수 매치 없이 시작한다", async (_, previous) => {
+      mockPrevious(previous);
+
+      const response = await startMatch({
+        teams: doublesTeams,
+        rematchOfMatchId: "Mprevi01",
+      });
+
+      expect(response.status).toBe(201);
+      expect(createInProgress.mock.calls[0]![0].specialMatch).toBeNull();
+    });
+
+    it("rematchOfMatchId가 없으면 원래 경기를 찾지 않고 null이다", async () => {
+      const findById = mockPrevious(previousMatch());
+
+      const response = await startMatch({ teams: doublesTeams });
+
+      expect(response.status).toBe(201);
+      expect(findById).not.toHaveBeenCalled();
+      expect(createInProgress.mock.calls[0]![0].specialMatch).toBeNull();
+    });
+  });
 });

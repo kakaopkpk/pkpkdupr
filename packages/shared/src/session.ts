@@ -5,6 +5,7 @@ import type {
   RecordMatchTeamRequest,
 } from "./match.js";
 import type { PublicPlayerDupr } from "./player.js";
+import type { SpecialMatchKind } from "./specialMatch.js";
 import type { TournamentPlacement } from "./tournament.js";
 
 /** 정기 세션 요일(KST, 0=일요일). 월·목 */
@@ -433,6 +434,8 @@ export interface StartSessionMatchRequest {
   location?: string;
   /** 예: "코트 1" */
   courtName?: string;
+  /** 추천 카드가 보여 준 특수 유형(일반 카드면 생략). 서버가 다시 판정해 같을 때만 저장한다 */
+  recommendedSpecialKind?: SpecialMatchKind;
 }
 
 /**
