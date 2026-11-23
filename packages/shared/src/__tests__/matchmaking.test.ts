@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   MATCHMAKING_ALL_NR_FALLBACK_RATING,
+  MATCHMAKING_GUEST_RATING,
   MATCHMAKING_CANDIDATE_PENALTY_MARGIN,
   MATCHMAKING_DEFAULT_COURTS,
   MATCHMAKING_MIN_CANDIDATES,
@@ -166,6 +167,25 @@ describe("recommendDoublesMatches", () => {
     // 중복을 빼면 non-null [3, 4, 5]의 중앙값 4가 c의 평점이 된다
     const [averageA, averageB] = plan.courts[0].teamAverages;
     expect(averageA + averageB).toBeCloseTo((3 + 4 + 4 + 5) / 2);
+  });
+
+  it("게스트는 평점과 상관없이 2.5로 치고 NR 중앙값 계산에서 뺀다", () => {
+    const plan = recommend({
+      participants: [
+        { id: "a", doublesRating: 3 },
+        { id: "b", doublesRating: 4 },
+        { id: "c", doublesRating: null },
+        { id: "guest", doublesRating: 5, isGuest: true },
+        { id: "guest2", doublesRating: null, isGuest: true },
+      ],
+      busyPlayerIds: ["guest2"],
+      courts: 1,
+    });
+    // 게스트를 뺀 non-null [3, 4]의 중앙값 3.5가 c의 평점, 게스트는 2.5다
+    const [averageA, averageB] = plan.courts[0].teamAverages;
+    expect(averageA + averageB).toBeCloseTo(
+      (3 + 4 + 3.5 + MATCHMAKING_GUEST_RATING) / 2,
+    );
   });
 
   it("전원 NR이면 3.5로 계산한다", () => {

@@ -29,11 +29,14 @@ export const MATCHMAKING_CANDIDATE_PENALTY_MARGIN = 5;
 export const MATCHMAKING_MIN_CANDIDATES = 5;
 /** 참여자 전원이 NR일 때 쓰는 복식 평점 */
 export const MATCHMAKING_ALL_NR_FALLBACK_RATING = 3.5;
+/** 게스트 복식 평점. 게스트는 보통 정회원보다 실력이 낮아 NR 대체 중앙값 대신 이 값으로 친다 */
+export const MATCHMAKING_GUEST_RATING = 2.5;
 
 export interface MatchmakingParticipant {
   id: string;
-  /** 복식 평점. NR이면 null */
+  /** 복식 평점. NR이면 null. 게스트면 무시하고 MATCHMAKING_GUEST_RATING으로 친다 */
   doublesRating: number | null;
+  isGuest?: boolean;
 }
 
 /** 오늘 이 세션에서 완료된 경기의 팀 구성(선수 id) */
@@ -42,7 +45,7 @@ export interface MatchmakingPlayedMatch {
 }
 
 export interface RecommendDoublesMatchesInput {
-  /** 세션 참여자 전원. NR 대체 중앙값의 기준이다 */
+  /** 세션 참여자 전원. 게스트를 뺀 참여자가 NR 대체 중앙값의 기준이다 */
   participants: MatchmakingParticipant[];
   /** 진행 중 경기에 들어가 있어 이번 추천에서 빠지는 선수 id */
   busyPlayerIds: readonly string[];
@@ -98,7 +101,7 @@ export interface RecommendationPlayer {
 
 export interface RecommendedTeam {
   players: [RecommendationPlayer, RecommendationPlayer];
-  /** 표시용 팀 평균 평점. NR(게스트 포함)은 기본 평점 3.0으로 치며, 팀 나누기의 NR 대체값과 다르다 */
+  /** 표시용 팀 평균 평점. 게스트는 MATCHMAKING_GUEST_RATING, NR 정회원은 기본 평점 3.0으로 치며, 후자는 팀 나누기의 NR 대체값과 다르다 */
   averageRating: number;
 }
 
@@ -213,9 +216,10 @@ const collectTodayHistory = (
   return { gamesPlayed, partnerCounts, opponentCounts };
 };
 
-/** NR 대체값: 참여자 전체 non-null 평점의 중앙값, 전원 NR이면 고정값 */
+/** NR 대체값: 게스트를 뺀 참여자 non-null 평점의 중앙값, 전원 NR이면 고정값 */
 const resolveNrRating = (participants: MatchmakingParticipant[]): number => {
   const ratings = participants
+    .filter((participant) => !participant.isGuest)
     .map((participant) => participant.doublesRating)
     .filter((rating): rating is number => rating !== null)
     .sort((a, b) => a - b);
@@ -325,7 +329,9 @@ export const recommendDoublesMatches = (
   const ratingById = new Map(
     eligible.map((participant) => [
       participant.id,
-      participant.doublesRating ?? nrRating,
+      participant.isGuest
+        ? MATCHMAKING_GUEST_RATING
+        : (participant.doublesRating ?? nrRating),
     ]),
   );
   const ratingOf = (id: string): number => ratingById.get(id) ?? nrRating;

@@ -1,5 +1,8 @@
 import type { ManagedMatchSession, Match, Team } from "@pkpkdupr/shared/match";
-import type { MatchSessionRecommendationResponse } from "@pkpkdupr/shared/matchmaking";
+import {
+  MATCHMAKING_GUEST_RATING,
+  type MatchSessionRecommendationResponse,
+} from "@pkpkdupr/shared/matchmaking";
 import type { CompletedMatchOutcome } from "@pkpkdupr/db";
 import type { Player } from "@pkpkdupr/shared/player";
 import request from "supertest";
@@ -295,6 +298,41 @@ describe("GET /api/match-sessions/:sessionId/recommendations", () => {
     expect(partner.doublesRating).not.toBeNull();
     expect(nrTeam.averageRating).toBeCloseTo(
       (partner.doublesRating! + 3) / 2,
+      10,
+    );
+  });
+
+  it("팀 평균은 게스트를 게스트 평점 2.5로 치고 응답 평점은 null로 보낸다", async () => {
+    const guest: Player = {
+      ...makePlayer("Pguest00", 4.5),
+      isGuest: true,
+    };
+    vi.spyOn(AuthService.prototype, "getPublicPlayers").mockResolvedValue([
+      ...players,
+      guest,
+    ]);
+    sessions = [
+      makeSession({
+        participantIds: [playerIds[0], playerIds[1], playerIds[2], guest.id],
+      }),
+    ];
+
+    const response = await recommend("Stoday00", "?courts=1");
+
+    expect(response.status).toBe(200);
+    const body = response.body as MatchSessionRecommendationResponse;
+    const guestTeam = body.courts[0]!.teams.find((team) =>
+      team.players.some((player) => player.id === guest.id),
+    )!;
+    const guestPlayer = guestTeam.players.find(
+      (player) => player.id === guest.id,
+    )!;
+    const partner = guestTeam.players.find(
+      (player) => player.id !== guest.id,
+    )!;
+    expect(guestPlayer.doublesRating).toBeNull();
+    expect(guestTeam.averageRating).toBeCloseTo(
+      (partner.doublesRating! + MATCHMAKING_GUEST_RATING) / 2,
       10,
     );
   });
