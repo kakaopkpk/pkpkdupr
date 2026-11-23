@@ -4,6 +4,8 @@ import {
   type AchievementDefinition,
 } from "@pkpkdupr/shared/achievements";
 import {
+  CROSSED_SWORDS_ICON_PATHS,
+  FIST_ICON_PATHS,
   FLAME_ICON_PATH,
   SHIELD_CHECK_ICON_PATHS,
   STOP_HAND_ICON_PATHS,
@@ -135,7 +137,11 @@ const BADGE_ICON_PATHS: Record<BadgeIconKind, React.ReactNode> = {
     </>
   ),
   versus: (
-    <path d="M5 4l9.5 9.5M19 4L9.5 13.5M4 15.5l4.5 4.5M20 15.5L15.5 20M6.5 18L11 13.5M17.5 18L13 13.5" />
+    <>
+      {CROSSED_SWORDS_ICON_PATHS.map((d) => (
+        <path key={d} d={d} />
+      ))}
+    </>
   ),
   target: (
     <>
@@ -146,8 +152,9 @@ const BADGE_ICON_PATHS: Record<BadgeIconKind, React.ReactNode> = {
   ),
   fist: (
     <>
-      <path d="M6 10.5V8.2a1.7 1.7 0 0 1 3.4 0v1.8M9.4 9.6V7.2a1.7 1.7 0 0 1 3.4 0v2.4M12.8 9.6V7.6a1.7 1.7 0 0 1 3.4 0V10M16.2 10.2V9a1.7 1.7 0 0 1 3.4 0v4.3a6.6 6.6 0 0 1-6.6 6.6h-.4A6.6 6.6 0 0 1 6 13.3v-2.8" />
-      <path d="M6 12.4h5.6a2 2 0 0 1 0 4H9.4" />
+      {FIST_ICON_PATHS.map((d) => (
+        <path key={d} d={d} />
+      ))}
     </>
   ),
   star: (

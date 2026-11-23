@@ -56,6 +56,8 @@ const twMerge = extendTailwindMerge({
         "pk-rays-pulse",
         "pk-slide-away",
         "pk-flash",
+        "pk-stamp-drop",
+        "pk-shake",
       ],
       radius: ["pk-sm", "pk-lg"],
       text: ["pk-12", "pk-13", "pk-15", "pk-17", "pk-22", "pk-26"],

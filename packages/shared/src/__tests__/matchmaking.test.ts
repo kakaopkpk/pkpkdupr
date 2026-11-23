@@ -6,12 +6,18 @@ import {
   MATCHMAKING_MIN_CANDIDATES,
   clampMatchmakingCourts,
   getMatchmakingSeed,
+  getSpecialMatchRecommendationBonus,
   recommendDoublesMatches,
   type DoublesRecommendationPlan,
   type MatchmakingParticipant,
   type MatchmakingPlayedMatch,
   type RecommendDoublesMatchesInput,
 } from "../matchmaking";
+import {
+  judgeRecommendedSpecialMatch,
+  SPECIAL_MATCH_RECOMMENDATION_BONUS,
+  type SpecialMatchCandidatePlayer,
+} from "../specialMatch";
 
 const players = (count: number, baseRating = 3): MatchmakingParticipant[] =>
   Array.from({ length: count }, (_, index) => ({
@@ -295,5 +301,201 @@ describe("recommendDoublesMatches", () => {
     expect(at(-3)).toBe(at(0));
     expect(at(Number.NaN)).toBe(at(0));
     expect(at(1.9)).toBe(at(1));
+  });
+});
+
+describe("recommendDoublesMatches 특수 유형 가산점", () => {
+  /** 평점 내림차순으로 순위를 매긴 판정 입력. winStreaks로 연승을, guestIds로 게스트를 지정한다 */
+  const toSpecialPlayers = (
+    participants: MatchmakingParticipant[],
+    winStreaks: Record<string, number> = {},
+    guestIds: string[] = [],
+  ): Map<string, SpecialMatchCandidatePlayer> => {
+    const ranked = [...participants]
+      .filter((participant) => participant.doublesRating !== null)
+      .sort((a, b) => b.doublesRating! - a.doublesRating!);
+    return new Map(
+      participants.map((participant) => {
+        const isGuest = guestIds.includes(participant.id);
+        const rankIndex = ranked.findIndex(
+          (entry) => entry.id === participant.id,
+        );
+        return [
+          participant.id,
+          {
+            id: participant.id,
+            isGuest,
+            rank: isGuest || rankIndex < 0 ? null : rankIndex + 1,
+            rating: isGuest ? null : participant.doublesRating,
+            winStreak: winStreaks[participant.id] ?? 0,
+          },
+        ];
+      }),
+    );
+  };
+
+  /** 가산점 없이 계산한 대진별 감점 */
+  const basePenaltyByMatchup = (
+    input: Partial<RecommendDoublesMatchesInput>,
+  ): Map<string, number> => {
+    const first = recommend({ ...input, specialPlayers: undefined });
+    const penalties = new Map<string, number>();
+    for (let rank = 0; rank < first.candidateCount; rank += 1) {
+      const plan = recommend({ ...input, specialPlayers: undefined, rank });
+      penalties.set(matchupKey(plan), plan.penalty);
+    }
+    return penalties;
+  };
+
+  /** 고른 대진의 코트마다 판정한 가산점 중 최대값 */
+  const expectedBonus = (
+    plan: DoublesRecommendationPlan,
+    specialPlayers: Map<string, SpecialMatchCandidatePlayer>,
+  ): number =>
+    Math.max(
+      0,
+      ...plan.courts.map((court) => {
+        const [teamA, teamB] = court.teams.map((team) =>
+          team.map((id) => specialPlayers.get(id)!),
+        );
+        const special = judgeRecommendedSpecialMatch([teamA, teamB]);
+        return special ? getSpecialMatchRecommendationBonus(special.kind) : 0;
+      }),
+    );
+
+  it("유형별 가산점은 연승 저지·최강자전 2, 도전 매치 1.5, 리벤지 0이다", () => {
+    expect(getSpecialMatchRecommendationBonus("streak_stopper")).toBe(
+      SPECIAL_MATCH_RECOMMENDATION_BONUS.streak,
+    );
+    expect(getSpecialMatchRecommendationBonus("champions")).toBe(
+      SPECIAL_MATCH_RECOMMENDATION_BONUS.streak,
+    );
+    expect(getSpecialMatchRecommendationBonus("challenge")).toBe(
+      SPECIAL_MATCH_RECOMMENDATION_BONUS.challenge,
+    );
+    expect(getSpecialMatchRecommendationBonus("revenge")).toBe(0);
+  });
+
+  it("특수 유형 판정 입력이 없거나 아무도 해당하지 않으면 기존과 같은 결과이고 specialMatch는 모두 null이다", () => {
+    const participants = players(10);
+    const input = { participants, courts: 2, seed: 7 };
+    for (let rank = 0; rank < 5; rank += 1) {
+      const withoutSpecial = recommend({ ...input, rank });
+      const allGuests = recommend({
+        ...input,
+        rank,
+        specialPlayers: toSpecialPlayers(
+          participants,
+          { p01: 6 },
+          participants.map((participant) => participant.id),
+        ),
+      });
+      expect(allGuests).toEqual(withoutSpecial);
+      expect(
+        withoutSpecial.courts.every((court) => court.specialMatch === null),
+      ).toBe(true);
+    }
+  });
+
+  it("연승 회원이 있는 코트는 감점에서 2를 빼고 연승 저지로 판정한다", () => {
+    const participants = players(4);
+    const specialPlayers = toSpecialPlayers(participants, { p02: 5 });
+    const input = { participants, courts: 1, specialPlayers };
+    const base = basePenaltyByMatchup(input);
+    const plan = recommend(input);
+
+    expect(plan.penalty).toBeCloseTo(base.get(matchupKey(plan))! - 2);
+    const [court] = plan.courts;
+    expect(court.specialMatch).toMatchObject({
+      kind: "streak_stopper",
+      outcome: null,
+    });
+    const streakTeam = court.teams.findIndex((team) => team.includes("p02"));
+    expect(court.specialMatch?.defendingTeamIndex).toBe(streakTeam);
+    expect(court.specialMatch?.protagonistIds[streakTeam]).toBe("p02");
+  });
+
+  it("도전 매치가 되는 대진만 감점에서 1.5를 빼고, 후보는 뺀 감점순이다", () => {
+    const participants: MatchmakingParticipant[] = [
+      { id: "a", doublesRating: 3 },
+      { id: "b", doublesRating: 3.02 },
+      { id: "c", doublesRating: 4 },
+      { id: "d", doublesRating: 4.02 },
+    ];
+    const specialPlayers = toSpecialPlayers(participants);
+    const input = { participants, courts: 1, specialPlayers };
+    const base = basePenaltyByMatchup(input);
+    const first = recommend(input);
+    const penalties: number[] = [];
+    for (let rank = 0; rank < first.candidateCount; rank += 1) {
+      const plan = recommend({ ...input, rank });
+      const [court] = plan.courts;
+      // 같은 실력끼리 한 팀(a+b vs c+d)이면 평점 0.05 이내 맞상대가 없다
+      const isChallenge = !court.teams.some(
+        (team) => team.includes("a") && team.includes("b"),
+      );
+      expect(court.specialMatch?.kind ?? null).toBe(
+        isChallenge ? "challenge" : null,
+      );
+      expect(plan.penalty).toBeCloseTo(
+        base.get(matchupKey(plan))! - (isChallenge ? 1.5 : 0),
+      );
+      penalties.push(plan.penalty);
+    }
+    expect(penalties).toEqual([...penalties].sort((a, b) => a - b));
+  });
+
+  it("게스트가 낀 코트는 연승 회원이 있어도 특수 유형이 아니다", () => {
+    const participants = players(4);
+    const plan = recommend({
+      participants,
+      courts: 1,
+      specialPlayers: toSpecialPlayers(participants, { p01: 7 }, ["p04"]),
+    });
+    expect(plan.courts[0].specialMatch).toBeNull();
+    expect(plan.penalty).toBeCloseTo(
+      recommend({ participants, courts: 1 }).penalty,
+    );
+  });
+
+  it("여러 코트가 해당해도 가산점이 가장 큰 코트 하나만 특수 유형이고 가산점도 한 번만 뺀다", () => {
+    const participants = players(12);
+    const specialPlayers = toSpecialPlayers(participants, {
+      p01: 5,
+      p05: 6,
+      p09: 8,
+    });
+    const input = { participants, courts: 3, seed: 3, specialPlayers };
+    const base = basePenaltyByMatchup(input);
+    const { candidateCount } = recommend(input);
+    for (let rank = 0; rank < candidateCount; rank += 1) {
+      const plan = recommend({ ...input, rank });
+      const specialCourts = plan.courts.filter(
+        (court) => court.specialMatch !== null,
+      );
+      const bonus = expectedBonus(plan, specialPlayers);
+      expect(specialCourts).toHaveLength(bonus > 0 ? 1 : 0);
+      if (specialCourts[0]?.specialMatch) {
+        expect(
+          getSpecialMatchRecommendationBonus(specialCourts[0].specialMatch.kind),
+        ).toBe(bonus);
+      }
+      const basePenalty = base.get(matchupKey(plan));
+      if (basePenalty !== undefined) {
+        expect(plan.penalty).toBeCloseTo(basePenalty - bonus);
+      }
+    }
+  });
+
+  it("특수 유형 판정 입력이 있어도 같은 입력·같은 seed면 결과가 같다", () => {
+    const participants = players(10);
+    const input = {
+      participants,
+      courts: 2,
+      seed: 11,
+      rank: 2,
+      specialPlayers: toSpecialPlayers(participants, { p03: 5 }),
+    };
+    expect(recommend(input)).toEqual(recommend(input));
   });
 });

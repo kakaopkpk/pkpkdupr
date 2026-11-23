@@ -72,6 +72,19 @@ import {
 } from "@pkpkdupr/shared/session";
 import { isEntityId } from "@pkpkdupr/shared/entityId";
 import {
+  computeCurrentWinStreaks,
+  WIN_STREAK_DISPLAY_MIN,
+  type WinStreakMatch,
+} from "@pkpkdupr/shared/streak";
+import {
+  isSpecialMatchKind,
+  judgeRecommendedSpecialMatch,
+  judgeRematchSpecialMatch,
+  type SpecialMatch,
+  type SpecialMatchCandidatePlayer,
+  type SpecialMatchCelebration,
+} from "@pkpkdupr/shared/specialMatch";
+import {
   isTournamentPlace,
   type AdminUpdateTournamentPlacementsRequest,
   type TournamentPlace,
@@ -165,6 +178,11 @@ import {
   selectRatingTrendWindow,
 } from "./services/PlayerRatingChartProjectionService";
 import { buildPlayerProfileSummary } from "./services/PlayerProfileSummaryService";
+import {
+  buildSpecialMatchCandidatePlayers,
+  judgeSpecialMatchOutcome,
+  settleSpecialMatch,
+} from "./services/SpecialMatchService";
 import {
   buildSessionPraiseResponse,
   findPendingSessionPraises,
@@ -744,6 +762,7 @@ const startInProgressMatch = async ({
   session,
   location,
   courtName,
+  specialMatch = null,
   now,
 }: {
   requesterPlayerId: string;
@@ -751,6 +770,8 @@ const startInProgressMatch = async ({
   session: ManagedMatchSession | undefined;
   location: string;
   courtName?: string;
+  /** 시작 때 판정한 특수 매치. 생략하면 null */
+  specialMatch?: SpecialMatch | null;
   now: Date;
 }): Promise<Match> => {
   const result = await matchRepository.createInProgress(
@@ -777,6 +798,7 @@ const startInProgressMatch = async ({
       completedAt: null,
       // 평점 미반영 여부는 첫 점수로 completed가 될 때(PUT) 정한다.
       ratingExcluded: false,
+      specialMatch,
     },
     now,
   );
@@ -796,6 +818,71 @@ const toPlayerBusyError = (
   return new MatchRecordRequestError(
     `${busyPlayer?.username ?? busyPlayerId}님이 다른 경기 중이에요`,
     409,
+  );
+};
+
+/**
+ * 추천 카드 출처 경기의 특수 매치. 서버가 지금 랭킹·연승으로 팀 구성을 다시 판정해 카드가 보여 준 유형과 같을 때만
+ * 돌려주고, 다르거나 판정하지 못하면 null이다(시작 요청은 실패시키지 않는다).
+ */
+const judgeRecommendedSpecialMatchForLineup = async (
+  requestedKind: unknown,
+  lineup: PreparedMatchLineup,
+): Promise<SpecialMatch | null> => {
+  // 리벤지는 추천에서 만들지 않는다
+  if (!isSpecialMatchKind(requestedKind) || requestedKind === "revenge") {
+    return null;
+  }
+  try {
+    const { context } = await loadRankingSource();
+    const candidates = buildSpecialMatchCandidatePlayers(
+      context,
+      getMatchTopLevelType(lineup.type),
+      lineup.teams.flatMap((team) => team.players),
+    );
+    // 빠진 선수가 있으면 줄어든 팀으로 판정하지 않고 판정 실패(null)로 둔다
+    const toCandidates = (team: Team) =>
+      team.players.map((player) => {
+        const candidate = candidates.get(player.id);
+        if (!candidate) {
+          throw new Error(`특수 매치 판정 후보 없음: ${player.id}`);
+        }
+        return candidate;
+      });
+    const judged = judgeRecommendedSpecialMatch([
+      toCandidates(lineup.teams[0]),
+      toCandidates(lineup.teams[1]),
+    ]);
+    return judged?.kind === requestedKind ? judged : null;
+  } catch (error) {
+    console.error("[MATCH] 추천 특수 매치 판정 실패", error);
+    return null;
+  }
+};
+
+/**
+ * 같은 멤버로 한 판 더 출처 경기의 리벤지 판정. 원래 경기가 없거나·완료 전이거나·승패가 안 갈렸거나·멤버가 다르면 null이다.
+ */
+const judgeRematchSpecialMatchForLineup = async (
+  rematchOfMatchId: unknown,
+  lineup: PreparedMatchLineup,
+): Promise<SpecialMatch | null> => {
+  if (
+    typeof rematchOfMatchId !== "string" ||
+    !isEntityId(rematchOfMatchId, "match")
+  ) {
+    return null;
+  }
+  const previous = await matchRepository.findById(rematchOfMatchId);
+  if (!previous) {
+    return null;
+  }
+  return judgeRematchSpecialMatch(
+    [
+      lineup.teams[0].players.map((player) => player.id),
+      lineup.teams[1].players.map((player) => player.id),
+    ],
+    previous,
   );
 };
 
@@ -1064,6 +1151,64 @@ const findAchievementsEarnedByMatch = async (
   } catch (err) {
     console.error("[MATCH] 경기 업적 계산 실패", err);
     return [];
+  }
+};
+
+/** 두 팀 구성이 팀별 선수 집합까지 같은지(팀 안 순서는 상관없음) */
+const hasSameTeamPlayers = (
+  left: readonly Team[],
+  right: readonly Team[],
+): boolean =>
+  left.length === right.length &&
+  left.every((team, index) => {
+    const leftIds = new Set(team.players.map((player) => player.id));
+    const rightIds = right[index].players.map((player) => player.id);
+    return (
+      leftIds.size === new Set(rightIds).size &&
+      rightIds.every((id) => leftIds.has(id))
+    );
+  });
+
+/**
+ * 평점 반영이 끝난 특수 매치의 결과를 정해 저장하고, 결과가 이번 저장으로 처음 도전 성공·연승 저지·최강자전 승리로
+ * 정해졌으면 큰 연출 데이터를 돌려준다. completed 특수 매치는 저장할 때마다 다시 정한다(승패가 같아도 점수 차로
+ * 순위가 달라질 수 있고, 첫 판정이 실패해 결과가 null인 경기도 이때 채운다).
+ * 평점 잠금 밖에서 반영 직후 랭킹을 다시 읽는다(동호회 규모라 그사이 다른 반영이 끼는 경우는 무시한다).
+ * 저장은 이미 끝났으므로 실패하면 결과를 바꾸지 않고 연출 없이 응답한다.
+ */
+const settleSpecialMatchForSavedMatch = async (
+  match: Match,
+): Promise<{
+  match: Match;
+  specialMatchCelebration: SpecialMatchCelebration | null;
+}> => {
+  const specialMatch = match.specialMatch;
+  const completedAt = match.completedAt;
+  if (!specialMatch || match.status !== "completed" || !completedAt) {
+    return { match, specialMatchCelebration: null };
+  }
+  try {
+    const { context } = await loadRankingSource();
+    const target = { ...match, completedAt };
+    // 결과가 이미 정해져 있던 경기는 연출하지 않으므로 결과만 다시 정한다
+    const { outcome, celebration } =
+      specialMatch.outcome == null
+        ? settleSpecialMatch(context, specialMatch, target)
+        : {
+            outcome: judgeSpecialMatchOutcome(context, specialMatch, target),
+            celebration: null,
+          };
+    const settled: SpecialMatch = { ...specialMatch, outcome };
+    if (outcome !== specialMatch.outcome) {
+      await matchRepository.updateSpecialMatch(match.id, settled);
+    }
+    return {
+      match: { ...match, specialMatch: settled },
+      specialMatchCelebration: celebration,
+    };
+  } catch (err) {
+    console.error("[MATCH] 특수 매치 결과 판정 실패", match.id, err);
+    return { match, specialMatchCelebration: null };
   }
 };
 
@@ -1734,11 +1879,14 @@ const getRecommendationDoublesRating = (member: MatchSessionMember) =>
 
 const toRecommendationPlayer = (
   member: MatchSessionMember,
+  special: SpecialMatchCandidatePlayer | undefined,
 ): RecommendationPlayer => ({
   id: member.id,
   username: member.username,
   avatarUrl: member.avatarUrl,
   doublesRating: getRecommendationDoublesRating(member),
+  doublesRank: special?.rank ?? null,
+  winStreak: special?.winStreak ?? 0,
 });
 
 app.get("/api/match-sessions/:sessionId/recommendations", async (req, res) => {
@@ -1764,10 +1912,23 @@ app.get("/api/match-sessions/:sessionId/recommendations", async (req, res) => {
       );
     }
 
-    const [busyPlayerIds, sessionMatches] = await Promise.all([
+    const [busyPlayerIds, sessionMatches, rankingSource] = await Promise.all([
       matchRepository.findInProgressPlayerIds(now),
       matchRepository.findBySession(sessionId),
+      // 특수 유형·주인공 정보는 부가 정보라 원천 조회가 실패하면 가산점 없이 추천한다
+      loadRankingSource().catch((err) => {
+        console.error("[RECOMMENDATION] 랭킹 원천 조회 실패", sessionId, err);
+        return null;
+      }),
     ]);
+    // 추천은 복식만이라 특수 유형 판정·주인공 순위는 복식 랭킹 기준이다
+    const specialPlayers = rankingSource
+      ? buildSpecialMatchCandidatePlayers(
+          rankingSource.context,
+          "doubles",
+          session.participants,
+        )
+      : undefined;
     const completedMatches: MatchmakingPlayedMatch[] = sessionMatches
       .filter((match) => match.status === "completed")
       .map((match) => ({
@@ -1786,13 +1947,14 @@ app.get("/api/match-sessions/:sessionId/recommendations", async (req, res) => {
       courts,
       seed: getMatchmakingSeed(sessionId, completedMatches.length),
       rank,
+      specialPlayers,
     });
 
     // 알고리즘은 participants 안의 id만 돌려주므로 조회가 항상 성공한다.
     const playersById = new Map(
       session.participants.map((member) => [
         member.id,
-        toRecommendationPlayer(member),
+        toRecommendationPlayer(member, specialPlayers?.get(member.id)),
       ]),
     );
     const playerOf = (id: string) => playersById.get(id)!;
@@ -1825,6 +1987,7 @@ app.get("/api/match-sessions/:sessionId/recommendations", async (req, res) => {
         ],
         repeatedPartnerPairs: court.repeatedPartnerPairs,
         repeatedOpponentPairs: court.repeatedOpponentPairs,
+        specialMatch: court.specialMatch,
       })),
       restingPlayers: plan.restingPlayerIds.map(playerOf),
     };
@@ -1951,7 +2114,8 @@ app.post("/api/match-sessions/:sessionId/matches", async (req, res) => {
       throw new MatchRecordRequestError("유효한 세션 ID가 필요합니다.", 400);
     }
     const body = req.body as Partial<StartSessionMatchRequest> | undefined;
-    const { type, teams, location, courtName } = body ?? {};
+    const { type, teams, location, courtName, recommendedSpecialKind } =
+      body ?? {};
     if (type != null && !isMatchType(type)) {
       throw new MatchRecordRequestError("유효한 매치 타입이 필요합니다.", 400);
     }
@@ -1976,6 +2140,10 @@ app.post("/api/match-sessions/:sessionId/matches", async (req, res) => {
     }
 
     const lineup = await prepareMatchLineup(type, teams, decoded.playerId);
+    const specialMatch = await judgeRecommendedSpecialMatchForLineup(
+      recommendedSpecialKind,
+      lineup,
+    );
     const session = await resolveSessionForNewMatch(sessionId, now);
     const match = await startInProgressMatch({
       requesterPlayerId: decoded.playerId,
@@ -1983,6 +2151,7 @@ app.post("/api/match-sessions/:sessionId/matches", async (req, res) => {
       session,
       location: normalizeOptionalName(location) ?? requestedSession.location,
       courtName: normalizedCourtName ?? undefined,
+      specialMatch,
       now,
     });
     res.status(201).json(match);
@@ -2013,6 +2182,10 @@ app.post("/api/matches/start", async (req, res) => {
     await matchRepository.cleanupExpired(now);
     const lineup = await prepareMatchLineup(type, teams, decoded.playerId);
     await assertPlayersNotInProgress(lineup, now);
+    const specialMatch = await judgeRematchSpecialMatchForLineup(
+      body?.rematchOfMatchId,
+      lineup,
+    );
     const session = await resolveSessionForStartedMatch(requestedSessionId, now);
     const match = await startInProgressMatch({
       requesterPlayerId: decoded.playerId,
@@ -2022,6 +2195,7 @@ app.post("/api/matches/start", async (req, res) => {
         normalizeOptionalName(location) ??
         session?.location ??
         DEFAULT_MATCH_LOCATION,
+      specialMatch,
       now,
     });
     res.status(201).json(match);
@@ -2075,6 +2249,26 @@ app.post("/api/matches/:matchId/start", async (req, res) => {
   }
 });
 
+/** 진행 중 경기 참가자 중 지금 연승이 WIN_STREAK_DISPLAY_MIN 이상인 정회원의 연승 수(랭킹 winStreak과 같은 규칙) */
+const buildInProgressWinStreaks = (
+  matches: readonly Match[],
+  completedMatches: readonly WinStreakMatch[],
+): Record<string, number> => {
+  const streaks = computeCurrentWinStreaks(completedMatches);
+  const winStreaks: Record<string, number> = {};
+  for (const match of matches) {
+    for (const team of match.teams) {
+      for (const player of team.players) {
+        const streak = streaks.get(player.id) ?? 0;
+        if (!player.isGuest && streak >= WIN_STREAK_DISPLAY_MIN) {
+          winStreaks[player.id] = streak;
+        }
+      }
+    }
+  }
+  return winStreaks;
+};
+
 // "/api/matches/:matchId"보다 먼저 등록해야 "in-progress"를 경기 id로 읽지 않는다.
 app.get("/api/matches/in-progress", async (req, res) => {
   try {
@@ -2084,8 +2278,20 @@ app.get("/api/matches/in-progress", async (req, res) => {
 
     const now = new Date();
     await matchRepository.cleanupExpired(now);
+    const matches = await matchRepository.findInProgress(now);
+    // 연승은 완료 경기만으로 센다. 부가 정보라 못 읽어도 진행 중 경기는 돌려준다
+    const completedMatches =
+      matches.length > 0
+        ? await matchRepository.findCompletedMatchOutcomes().catch((err) => {
+            console.error("[IN_PROGRESS] 완료 경기 조회 실패", err);
+            return null;
+          })
+        : null;
     const response: InProgressMatchesResponse = {
-      matches: await matchRepository.findInProgress(now),
+      matches,
+      winStreaks: completedMatches
+        ? buildInProgressWinStreaks(matches, completedMatches)
+        : {},
     };
     res.json(response);
   } catch (err) {
@@ -2144,6 +2350,8 @@ app.post("/api/matches", async (req, res) => {
       ...match,
       ratingChanges: ratingChangeLogs,
       ...(await findAchievementsForSavedMatch(match, null)),
+      // 직접 기록한 경기는 특수 매치가 아니다
+      specialMatchCelebration: null,
     };
     res.status(201).json(response);
   } catch (err) {
@@ -3300,6 +3508,11 @@ app.put("/api/matches/:matchId", async (req, res) => {
         existing,
         prepared.teams,
       ),
+      // 판정한 선수 구성이 아니게 되면 특수 매치가 아니다
+      ...(existing.specialMatch &&
+      !hasSameTeamPlayers(existing.teams, prepared.teams)
+        ? { specialMatch: null }
+        : {}),
       expectedUpdatedAt: expectedUpdatedAt ?? existing.updatedAt,
       // 완료 경기를 고칠 때만 저장소가 수정 기록을 남긴다(첫 점수 입력은 기록이라 남기지 않음)
       editLog: {
@@ -3331,10 +3544,12 @@ app.put("/api/matches/:matchId", async (req, res) => {
       ({ ratingChangeLogs: ratingChanges } =
         await authService.applyMatchResultToRatings(match));
     }
+    const settled = await settleSpecialMatchForSavedMatch(match);
     const response: RecordedMatchResponse = {
-      ...match,
+      ...settled.match,
       ratingChanges,
       ...(await findAchievementsForSavedMatch(match, previous)),
+      specialMatchCelebration: settled.specialMatchCelebration,
     };
     res.json(response);
   } catch (err) {

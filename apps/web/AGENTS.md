@@ -39,8 +39,13 @@
       - 진행 중 세션이 없으면 캐러셀(과 진행 중 경기) 아래 "소식" 피드 `home/NewsFeed`(`GET /api/news-feed`, 무한 스크롤, 데이터는 `home/useNewsFeed`)를 둔다. 카드 모양·누르면 가는 곳은 `docs/design.md` "홈"을 따른다.
       - 진행 중 일반 세션이면 블루 카드 아래 `records/SessionReportParts`의 `LiveSessionHighlightCard`(세션 지배자 줄 + 세션 연승 줄)를 둔다. 모양은 `docs/design.md` "홈".
         - 데이터는 `home/useLiveSessionHighlight`다. 지배자는 `home/useSessionTopRiser`, 연승은 셸의 세션 경기로 `lib/sessionWinStreak`의 `getSessionWinStreaks`가 센다.
-        - 같은 연승을 진행 중 경기 카드·추천 매칭에 `sessionWinStreaks` prop으로 넘겨 `TeamAvatars`가 아바타 링을 두른다.
+        - 같은 연승을 진행 중 경기 카드·추천 매칭에 `sessionWinStreaks` prop으로 넘겨 아바타 링을 두른다(진행 중 경기 카드는 `TeamAvatars`).
       - 진행 중 경기는 경기마다 가로 vs 카드로 둔다. `home/LiveMatchCard`의 내 경기 `MyLiveMatchCard`는 테두리·"내 경기" 칩·점수 입력 버튼과 경기 상세 같은 랠리 팀 줄(`RallyTeamRow`)이 있고, 남의 경기 `LiveMatchCard`는 없다.
+        - 특수 매치(`Match.specialMatch`)면 머리 줄에 `ui/SpecialMatchLabel`을 붙인다. 남의 경기는 경과 시간 뒤, 내 경기는 "내 경기" 칩(대회면 머리 글자) 뒤다.
+        - 남의 경기는 특수 매치 여부와 상관없이 지금 5연승 이상 회원(`useLiveSession().inProgressWinStreaks`, 진행 중 경기 응답 `winStreaks`)도 세션 연승 회원처럼 아바타에 연승 링(태그 없음)을 두른다. 둘 다면 링은 하나다. 내 경기 카드는 세션 연승만이다.
+      - 진행 중 일반 세션이면 "추천 매칭 · 대기 N명" 섹션(`home/RecommendationSection`)을 둔다. 추천 코트마다 `home/RecommendationCard` 한 장이고 모양은 `docs/design.md` "특수 매치"의 추천 매칭 카드다.
+        - 주인공·지키는 쪽 팀은 `RecommendedCourt.specialMatch`의 `protagonistIds`·`defendingTeamIndex`로만 정하고 웹이 다시 판정하지 않는다. 지키는 쪽 팀을 왼쪽 칸에 둔다.
+        - "경기 시작"은 `lib/matchSessions`의 `buildRecommendedMatchRequest`로 추천 응답 팀 순서 그대로 `startSessionMatch`를 부르고, 특수 유형 카드면 `recommendedSpecialKind`를 넘긴다(일반이면 생략).
       - 진행 중 일반 세션이면 추천 매칭 아래 "경기 기록" 섹션(세션의 끝난 경기, 제목 줄 오른쪽 전체/내 경기 전환 `ui/MatchFilterControl`)을 둔다.
       - 진행 중 세션이 대회 세션이면 진행 화면이 대회 카드(`LiveSessionCard`) → "내 경기" 섹션 → 라운드별 대진(`TournamentBracketSection`, `showFilter` false)이다.
         - 세션 지배자·"진행 중" 섹션·추천 매칭·"경기 기록"은 없고, 남의 진행 중 경기는 대진 안 제자리에만 있다.
@@ -80,6 +85,7 @@
       - 예정 경기면 vs 글자만, 화면이 안 보이면 멈춘다. 공·패들·충격선은 `index.css`의 `pk-rally-*`, 움직임 줄이기면 공이 네트 위에 멈춘다.
       - 완료 경기는 평점 변화 아래 '이 경기로 받은 업적'(응답 `achievements`)을 기록 완료 띠와 같은 줄 `MatchAchievementRow`로 보인다.
       - 완료 경기 하단 "같은 멤버로 한 판 더"는 기록(`completedAt`, 없으면 시작 시각) 1시간 안에만 보인다(`isWithinRematchWindow`). 지나면 수정 버튼만 전체 너비로 남는다.
+      - 한 판 더(경기 상세·기록 완료)는 `startMatch`에 `rematchOfMatchId`(원래 경기 id)를 넘기고, 리벤지 매치 판정은 서버가 한다.
       - 대진 예정 경기(`status: "scheduled"`)는 vs 글자만·시각 없이 보이고 점수 입력·수정·삭제·한 판 더가 없다. 세션 날짜가 오늘(KST)이면 하단 "경기 시작"(`startScheduledMatch`)만 있다.
     - `profile/`: 회원 프로필·경기 목록, 나 탭과 같이 쓰는 머리 `ProfileHeader`. 사진을 불러온 아바타를 누르면 그 자리에서 가운데 240px 원으로 커지는 확대 보기 `AvatarZoomViewer`(누르기·아래로 끌기·Escape·뒤로가기로 닫힘)
     - `records/`: 세션 상세 `SessionReportDrawer`와 그 위 평점 변화 전체 `SessionRatingChangesScreen`
@@ -95,7 +101,11 @@
       - 끝난 세션 머리 카드는 `mine`을 넘기지 않는다(내 기록 띠·줄 없음). 내 기록은 `LastSessionMeCard` 하나만 보인다.
       - 리포트가 있는 끝난 세션은 머리 오른쪽 위 공유 아이콘으로 `records/SessionReportShareSheet`를 연다. 내용은 `lib/sessionReportShare`가 리포트·칭찬 응답으로 만들고(새 API 없음), 이미지는 `records/sessionReportShareImage`, 미리 만들기·공유는 `hooks/useSessionReportShare`다.
     - `record/`: 경기 기록 시트. 완료 단계는 이 경기로 참가자 전원이 받은 업적을 띠(`match/MatchAchievementRow`)로 보이고, 그중 내 새 업적만 화면 전체 축하 연출 `AchievementCelebration`으로 띄우고 닫으면 확인 처리
+      - 완료 단계 한 판 더 버튼은 내가 진 팀이면 "같은 멤버로 리벤지", 그 밖(경기하지 않은 기록자 포함)은 "같은 멤버로 한 판 더"다. 어느 쪽이든 요청은 같다.
       - 축하 연출과 내 받은 업적 상세 시트의 공유는 `hooks/useAchievementShare`가 열 때 공유 이미지(`profile/achievementShareImage`, canvas 2D)를 미리 만들어 두고, 누르면 바로 기기 공유 시트(못 하면 내려받기, 문구는 `lib/achievementShare`)를 연다. iOS Safari는 사용자 동작 직후에만 공유 시트가 열려 누른 뒤에 만들지 않는다.
+      - 특수 매치 큰 연출 `SpecialMatchCelebrationScreen`(그림 `SpecialMatchCelebrationScenes`, 시각·공유 대상 변환 `specialMatchCelebration.utils`)은 기록 응답 `specialMatchCelebration`이 있고 기록한 내가 이긴 팀일 때만 완료 단계에서 띄운다. 진 팀·경기하지 않은 기록자·null이면 없고, 경기 상세·홈 등 다른 화면에서 나중에 띄우지 않는다.
+        - 순위·연승 수는 응답 값만 쓰고 다시 계산하지 않는다. 내 새 업적 축하와 겹치면 이 연출이 먼저이고, 닫으면 업적 축하가 바로 이어진다.
+        - 틀(딤·`useDimmedThemeColor`·확인/배경/Esc로 닫기·움직임 줄이기면 마지막 장면)은 `AchievementCelebration`과 같다. 장면 박자는 `getSceneBeatTimes`, 설명 줄은 장면이 끝나는 `getSceneEndMs`에 떠오른다.
       - 특수 매치 큰 연출(도전 성공·연승 저지·최강자전 승리)의 "이미지로 공유"는 `hooks/useSpecialMatchShare`(이미지 `record/specialMatchShareImage`, 문구·파일 이름 `lib/specialMatchShare`)를 부른다.
       - 공유 이미지(업적·특수 매치·세션 리포트)의 틀(캔버스·빛줄기·후광·아래 줄)은 `lib/shareImageCanvas`, 아바타 원은 `lib/shareImageAvatar`, 미리 만들어 두는 훅은 `hooks/usePreparedShareImage`, 공유·내려받기는 `lib/shareImage`가 같이 맡는다.
       - 이미지 만들기는 effect가 끝난 뒤(마이크로태스크)에 시작한다. 아이콘·배지를 `flushSync`로 SVG 문자열로 그리는데, effect 안에서 바로 부르면 그리지 못한다.
@@ -108,7 +118,7 @@
     - `onOpenParticipants`를 생략하면 참여자 줄은 누를 수 없다.
   - `tournament/`: 대회 대진·순위 조각. 세션 상세·홈·일정 탭이 같이 쓴다.
     - `TournamentBracketSection`: "대진" 섹션. 라운드마다 흰 카드(첫 줄 라운드 이름), 제목 줄 오른쪽 전체/내 경기 전환(`showFilter`).
-    - `BracketMatchRow`: 끝난 경기는 `MatchRow` 그대로, 예정·진행 중은 추천 매칭 줄 모양(위 팀 평균, 아래 `home/TeamBlock`의 vs). 진행 중은 오른쪽 앰버 점 + "진행 중".
+    - `BracketMatchRow`: 끝난 경기는 `MatchRow` 그대로, 예정·진행 중은 `home/TeamBlock`의 `TeamsVersusWithAverages` 줄 모양(위 팀 평균, 아래 vs, 추천 매칭 카드와 별개). 진행 중은 오른쪽 앰버 점 + "진행 중".
     - `TournamentRankCard`: 끝난 대회 순위 카드. 대회 카드 틀(D-day 자리 "종료", 참여 줄은 누를 수 없음)에 구분선(흰색 14%) → 1~3위 줄 → 구분선 → 내 기록 줄.
       - 순위 줄은 금·은·동 원 + 참가 단위 아바타(최대 4개)·이름(1명 아이디, 2명 "a · b", 3명 이상 "대표 외 N명") + 오른쪽 승패(`record`가 있을 때만)이고, 줄 높이는 같다.
       - 내 기록 줄은 "내 기록" + 승패 + 평점 변화(`pk-up-on-deep`·`pk-down-on-deep`, 0은 흐린 흰색, 세션 후 평점이 없으면 승패만).
@@ -117,6 +127,9 @@
   - `ui/`: 새 디자인 공통 컴포넌트. 새 화면은 여기 것을 먼저 씁니다.
     - `Button.tsx`(`PkButton`, variant `primary`·`soft`·`outline`·`ghost`), `Card.tsx`, `SegmentedControl.tsx`, `MatchFilterControl.tsx`(섹션 제목 줄의 전체/내 경기 전환, 라벨에 경기 수), `Headers.tsx`(`TabHeader`·`DetailHeader`), `Form.tsx`(`TextField`·`ListRow`), `Section.tsx`(`Section`·`PreviewSection`·`TextLink`. 섹션 제목이 붙는 묶음은 `Section`으로 만든다), `SheetTitle.tsx`, `ConfirmDialog.tsx`(시트 위 가운데 확인 창. 바텀시트를 겹쳐 쌓지 않을 때 쓰고, 연 쪽이 `useLayerDepth` kind `dialog`로 뒤로가기에 묶는다)
     - `MatchRow.tsx`(`MatchRow`), `PlayerAvatar.tsx`(`PlayerAvatar`·`TeamAvatars`), `Delta.tsx`(`RatingDelta`·`RankChange`), `RankBadge.tsx`, `Badges.tsx`(`LivePill`·`HighlightBadge`), `StatusMessageChip.tsx`, `StateMessage.tsx`(빈 상태 `empty`·불러오기 실패 `error`(항상 "다시 시도") 문구, size `panel` 탭·화면 전체·`inline` 카드·목록·시트 안), `CountUpText.tsx`(카운트업 숫자의 자리 폭을 최종 내용으로 고정), `PraisedAvatarFrame.tsx`(한 세션 칭찬 5개 이상 아바타의 앰버 링·엄지 배지, 세션 상세 칭찬 줄·홈 소식 칭찬 줄), `SheenOverlay.tsx`(한 번 지나가는 흰 빛, 부모 `relative`·`overflow-hidden` 필요), `Icons.tsx`, `cx.ts`
+      - `MatchRow`는 특수 매치(`Match.specialMatch`)면 메타 줄 오른쪽 끝에 `SpecialMatchLabel`로 유형 이름을 둔다(결과는 쓰지 않음).
+      - `SpecialMatchLabel.tsx`: 특수 매치 유형 아이콘 `SpecialMatchIcon`(currentColor)과 아이콘 + 굵은 블루 이름 `SpecialMatchLabel`.
+        - 손바닥·주먹·칼 선 모양은 `Icons.tsx`의 경로를 업적 배지와 같이 쓴다.
   - `praise/`: 세션 칭찬. 모양·연출은 `docs/design.md` "세션 칭찬".
     - `PendingSessionPraisePopup`: `BottomNav`가 렌더. 전역 화면·바텀시트·+ 메뉴·업적 축하가 없을 때 앱 진입·데이터 버전 변경·열린 화면이 모두 닫힐 때 `GET /api/me/session-praises/pending`을 조회해 첫 세션을 `SessionPraisePopup`으로 띄운다.
       - 조회 중·표시 중에는 `onBusyChange`로 알려 업적 축하가 기다린다(칭찬 팝업이 먼저).
@@ -132,7 +145,7 @@
   - `TabNavigationContext.tsx`: 탭(`TabKey`: `home`·`schedule`·`ranking`·`me`)·깊이 스택(`pushDepth`/`closeDepth`, 브라우저 뒤로가기 연동)·스크롤 복원·당겨서 새로고침 등록
   - `AppNavigationContext.tsx`: `useAppNavigation()`으로 전역 화면 열기(`openMatchDetail`, `openMemberProfile`(내 id면 나 탭. `initialCategory`로 평점 카드·통계가 처음 보일 종목을 정하고 없으면 복식, 랭킹 탭 단식 줄은 단식으로 연다), `openRecordMatch`, `openCreateSession`(`dateKey`로 날짜를 골라 둔 채 열고, 만든 뒤 `onCreated`를 부름. + 메뉴는 홈 탭으로, 일정 탭은 만든 날로 옮김), `openSettings`, `openSessionReport`(지금 탭 위에 세션 상세 화면), `openAchievementDetail`(업적 상세 시트, 경기 기록 시트보다 위 레이어. 여는 곳이 받은 여부 `earned`를 넘겨 배지를 불러오기 전에 바로 그림), `openAchievements`(지금 탭 위에 업적 전체 보기 화면, 내 id여도 나 탭으로 바꾸지 않음. `focusAchievementId`를 주면 진행도 준비 뒤 그 업적 줄 위쪽 끝을 스크롤 영역 높이 40%에 두고 카드 폭 가득 `pk-primary-soft` 바탕을 한 번 반짝임, 움직임 줄이기면 스크롤만)), 전역 화면 레이어 번호 `GLOBAL_LAYER`
   - `DataSyncContext.tsx`: 데이터 종류별 무효화와 재조회 신호. 셸(`BottomNav`)이 `DataSyncProvider`로 감싼다(아래 "데이터 재조회")
-  - `LiveSessionContext.tsx`: `useLiveSession()`으로 오늘 진행 중 세션·그 경기, 세션과 상관없는 진행 중 경기(`GET /api/matches/in-progress`)와 그중 내 경기
+  - `LiveSessionContext.tsx`: `useLiveSession()`으로 오늘 진행 중 세션·그 경기, 세션과 상관없는 진행 중 경기(`GET /api/matches/in-progress`)와 그중 내 경기, 그 참가자 중 5연승 이상 회원의 연승 `inProgressWinStreaks`
     - 진행 중 세션 `liveSession`은 `getLiveSessionStartsAt` ≤ 지금 < 세션 끝 시각(`getSessionEndsAt`)인 세션(정기 우선)이다. 대회 세션만 시작 시각(`startTime`이 있으면 그날 그 시각)부터다.
     - 경기 기록 시트는 `recordingSession`(진행 중 세션이 있으면 그 세션, 없으면 빈 세션 만료 시각 전 세션)으로 새 경기를 세션에 붙여, 종료 시각이 지난 회원·대회 세션도 그날 자정까지 기록이 그 세션에 들어간다.
     - 완료할 수 있는 정기 세션 `completableSession`(`isSessionCompletable`)이 있으면 셸이 세션 완료 바를 띄운다.
@@ -243,8 +256,10 @@
   - `active:bg-*`·`active:opacity-*`·`active:scale-*`를 직접 쓰지 않습니다(`PkButton`은 이미 붙어 있음).
   - `rowPressClassName`은 안의 버튼을 누르는 동안 반응하지 않으므로, 버튼을 품은 누를 수 있는 카드에도 그대로 씁니다.
 - 탭 하이라이트·글자 선택·iOS 콜아웃·이미지 끌기는 `index.css` base에서 전역으로 끄고(입력칸은 글자 선택 허용), 이미지·링크 길게 누르기 메뉴는 `main.tsx`가 터치 기기(`pointer: coarse`)에서만 막습니다. 화면별로 `select-none`을 붙이지 않습니다.
-- 모션 곡선은 `@theme`의 `ease-pk-move`(이동·전환)와 `ease-pk-pop`(튀어나오는 등장) 두 개를 씁니다. arbitrary `ease-[cubic-bezier(...)]`를 새로 쓰지 않습니다.
-- 공용 애니메이션은 `index.css`의 `animate-pk-*`(`fade-in`·`fade-up`·`fade-out`·`pop`·`draw`·`sheen`·`ping`·`spin-slow`·`rise-in`·`sink-out`·`wobble`·`flash`(한 번 나타났다 사라짐), 업적 축하 전용 `celebrate-pop`·`rays-pulse`·`slide-away`)를 재사용합니다.
+- 모션 곡선은 `@theme` 토큰을 쓰고, arbitrary `ease-[cubic-bezier(...)]`를 새로 쓰지 않습니다.
+  - 기본은 `ease-pk-move`(이동·전환)와 `ease-pk-pop`(튀어나오는 등장) 두 개입니다.
+  - 예외로 점점 빨라지며 떨어지는 연출(도장)만 `ease-pk-drop`을 씁니다.
+- 공용 애니메이션은 `index.css`의 `animate-pk-*`(`fade-in`·`fade-up`·`fade-out`·`pop`·`draw`·`sheen`·`ping`·`spin-slow`·`rise-in`·`sink-out`·`wobble`·`flash`(한 번 나타났다 사라짐), 업적 축하 전용 `celebrate-pop`·`rays-pulse`·`slide-away`, 특수 매치 큰 연출 전용 `stamp-drop`(점점 빨라지며 떨어지는 도장)·`shake`(카드 흔들림))를 재사용합니다.
   - 모두 fill-mode both이고 지연·길이는 inline style `animationDelay`·`animationDuration`으로 덮어씁니다.
   - `animate-pk-draw`는 요소에 `pathLength="1"`이 필요합니다.
   - transform·opacity만 움직이고 height·top·width·left는 애니메이션하지 않습니다.
@@ -266,6 +281,7 @@
 - 테두리가 필요한 곳(진행 중인 내 경기 카드, 테두리 버튼)은 옅은 파랑 `pk-primary-line`입니다.
 - 하이라이트 `pk-hl`(앰버 #ffb627)은 테두리 없이 LIVE 표시, 오늘의 급상승, 업적 축하 연출(`AchievementCelebration`)과 받은 업적 시트 머리의 배지 빛줄기·후광에만 씁니다. 예외로 경기 삭제 버튼의 길게 누르기 채움 앞 끝 선, 축하 연출·받은 업적 시트에서 한 번 퍼지는 고리, 연승 아바타(`WinStreakAvatarFrame`, `.pk-streak-ring`)의 링·태그, 진행 중 세션 연승 아바타(`SessionWinStreakFrame`)의 링·태그와 "N연승" 칩(`SessionWinStreakBadge`)에 씁니다. 평점 추세선 끝점은 블루 점입니다.
   - 대회 세션 예외로 달력의 대회 날 점과 대진 진행 중 경기의 앰버 점("진행 중" 앞)에도 씁니다.
+  - 특수 매치 큰 연출(`SpecialMatchCelebrationScreen`) 예외로 연승 테두리·태그·이긴 쪽 테두리가 타오르는 빛·고리와 설명 줄의 N연승 글자에도 씁니다(연승 아바타 예외와 같은 범위).
   - 세션 칭찬 예외로 칭찬 팝업의 "세션 종료" 글자, 칭찬 분류 칩, 칭찬 직후 고른 카드의 링·빛줄기, 칭찬 5개 이상 아바타의 링·엄지 배지에도 씁니다(`docs/design.md` "세션 칭찬").
 - 대회 세션 카드(대회 카드·순위 카드)는 짙은 남색 `pk-deep` 바탕입니다.
   - "트로피 + 대회" 칩은 `pk-gold` 바탕에 글자·트로피 아이콘 `pk-ink`이고, 오른쪽 위 원에 연한 금색 트로피 장식을 둡니다.

@@ -17,6 +17,7 @@ import {
   matchTypeValues,
 } from "@pkpkdupr/shared/match";
 import { PLAYER_STATUS_MESSAGE_MAX_LENGTH } from "@pkpkdupr/shared/player";
+import type { SpecialMatch } from "@pkpkdupr/shared/specialMatch";
 
 /**
  * 테이블 정의는 쿼리 빌더용이다. 실제 스키마는 supabase/migrations/*.sql이
@@ -169,6 +170,8 @@ export const matches = pgTable("matches", {
   ratingExcluded: boolean("rating_excluded").notNull().default(false),
   /** 대회 대진 라운드(1부터). 대진 경기만 값이 있고, status가 scheduled면 반드시 있다 */
   round: integer("round"),
+  /** 경기 시작 때 판정한 특수 매치. 추천 카드·한 판 더로 시작한 경기만 값이 있고 그 밖은 null이다 */
+  specialMatch: jsonb("special_match").$type<SpecialMatch>(),
   createdAt: unixTimestamp("created_at").notNull(),
   updatedAt: unixTimestamp("updated_at").notNull(),
 }, (table) => ({
