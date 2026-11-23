@@ -214,13 +214,7 @@ const BADGE_ICON_PATHS: Record<BadgeIconKind, React.ReactNode> = {
     </>
   ),
   // 멈춤 손바닥
-  stopHand: (
-    <>
-      {STOP_HAND_ICON_PATHS.map((d) => (
-        <path key={d} d={d} />
-      ))}
-    </>
-  ),
+  stopHand: STOP_HAND_ICON_PATHS.map((d) => <path key={d} d={d} />),
   handshake: (
     <>
       <path d="M11 17l2 2a1 1 0 1 0 3-3" />
