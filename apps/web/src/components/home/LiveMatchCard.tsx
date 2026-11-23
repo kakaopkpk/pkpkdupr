@@ -1,5 +1,4 @@
 import React from "react";
-import { WIN_STREAK_DISPLAY_MIN } from "@pkpkdupr/shared/streak";
 import type { MatchInfo } from "@/types/match";
 import { RallyTeamRow } from "@/components/match/LiveMatchRally";
 import { PkButton, rowPressClassName } from "@/components/ui/Button";
@@ -40,24 +39,23 @@ const LiveMatchHeader: React.FC<{
 };
 
 /**
- * 남의 경기 아바타 연승 링 대상. 세션 연승 회원에 더해, 연승 저지·최강자전 경기의 연승 회원(주인공,
- * 지금 WIN_STREAK_DISPLAY_MIN 이상 연승)을 넣는다. 경기 아바타 링은 태그가 없어 연승 수 값은 보이지 않는다
+ * 남의 경기 아바타 연승 링 대상. 세션 연승 회원에 더해, 이 경기 참가자 중 지금 WIN_STREAK_DISPLAY_MIN 이상
+ * 연승인 회원을 넣는다(특수 매치 여부와 상관없음). 둘 다면 세션 연승 값을 둔다.
+ * 경기 아바타 링은 태그가 없어 연승 수 값은 보이지 않는다
  */
-const withSpecialMatchStreakPlayers = (
-  match: MatchInfo,
+export const withWinStreakPlayers = (
+  match: Pick<MatchInfo, "teams">,
   sessionWinStreaks: SessionWinStreakByPlayer | undefined,
+  winStreaks: SessionWinStreakByPlayer | undefined,
 ): SessionWinStreakByPlayer | undefined => {
-  const special = match.specialMatch;
-  if (
-    !special ||
-    (special.kind !== "streak_stopper" && special.kind !== "champions")
-  ) {
-    return sessionWinStreaks;
-  }
+  if (!winStreaks || winStreaks.size === 0) return sessionWinStreaks;
   const merged = new Map(sessionWinStreaks);
-  for (const playerId of special.protagonistIds) {
-    if (playerId && !merged.has(playerId)) {
-      merged.set(playerId, WIN_STREAK_DISPLAY_MIN);
+  for (const team of match.teams) {
+    for (const player of team.players) {
+      const streak = winStreaks.get(player.id);
+      if (streak !== undefined && !merged.has(player.id)) {
+        merged.set(player.id, streak);
+      }
     }
   }
   return merged;
@@ -212,15 +210,17 @@ export const MyNextBracketMatchCard: React.FC<{
 
 /**
  * 진행 중인 남의 경기. 내 경기 카드에서 "내 경기" 칩·테두리·점수 입력 버튼을 뺀 모양이고, 누르면 경기 상세를 연다.
- * 연승 저지·최강자전 경기의 연승 회원은 세션 연승이 아니어도 아바타에 연승 링(태그 없음)을 두른다
+ * 지금 5연승 이상 회원(winStreaks)은 세션 연승이 아니어도 아바타에 연승 링(태그 없음)을 두른다
  */
 export const LiveMatchCard: React.FC<{
   match: MatchInfo;
   now: Date;
   /** 든 회원 아바타에 세션 연승 링을 두른다(홈 진행 중 세션) */
   sessionWinStreaks?: SessionWinStreakByPlayer;
+  /** 지금 WIN_STREAK_DISPLAY_MIN 이상 연승인 회원(GET /api/matches/in-progress의 winStreaks) */
+  winStreaks?: SessionWinStreakByPlayer;
   onOpenDetail: () => void;
-}> = ({ match, now, sessionWinStreaks, onOpenDetail }) => (
+}> = ({ match, now, sessionWinStreaks, winStreaks, onOpenDetail }) => (
   <button
     type="button"
     onClick={onOpenDetail}
@@ -232,9 +232,10 @@ export const LiveMatchCard: React.FC<{
     <LiveMatchHeader match={match} now={now} />
     <TeamsVersus
       teams={[match.teams[0].players, match.teams[1].players]}
-      sessionWinStreaks={withSpecialMatchStreakPlayers(
+      sessionWinStreaks={withWinStreakPlayers(
         match,
         sessionWinStreaks,
+        winStreaks,
       )}
     />
   </button>

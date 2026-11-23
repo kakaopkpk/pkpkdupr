@@ -73,6 +73,11 @@ import {
 } from "@pkpkdupr/shared/session";
 import { isEntityId } from "@pkpkdupr/shared/entityId";
 import {
+  computeCurrentWinStreaks,
+  WIN_STREAK_DISPLAY_MIN,
+  type WinStreakMatch,
+} from "@pkpkdupr/shared/streak";
+import {
   isSpecialMatchKind,
   judgeRecommendedSpecialMatch,
   judgeRematchSpecialMatch,
@@ -2251,6 +2256,26 @@ app.post("/api/matches/:matchId/start", async (req, res) => {
   }
 });
 
+/** 진행 중 경기 참가자 중 지금 연승이 WIN_STREAK_DISPLAY_MIN 이상인 정회원의 연승 수(랭킹 winStreak과 같은 규칙) */
+const buildInProgressWinStreaks = (
+  matches: readonly Match[],
+  completedMatches: readonly WinStreakMatch[],
+): Record<string, number> => {
+  const streaks = computeCurrentWinStreaks(completedMatches);
+  const winStreaks: Record<string, number> = {};
+  for (const match of matches) {
+    for (const team of match.teams) {
+      for (const player of team.players) {
+        const streak = streaks.get(player.id) ?? 0;
+        if (!player.isGuest && streak >= WIN_STREAK_DISPLAY_MIN) {
+          winStreaks[player.id] = streak;
+        }
+      }
+    }
+  }
+  return winStreaks;
+};
+
 // "/api/matches/:matchId"보다 먼저 등록해야 "in-progress"를 경기 id로 읽지 않는다.
 app.get("/api/matches/in-progress", async (req, res) => {
   try {
@@ -2260,8 +2285,20 @@ app.get("/api/matches/in-progress", async (req, res) => {
 
     const now = new Date();
     await matchRepository.cleanupExpired(now);
+    const matches = await matchRepository.findInProgress(now);
+    // 연승은 완료 경기만으로 센다. 부가 정보라 못 읽어도 진행 중 경기는 돌려준다
+    const completedMatches =
+      matches.length > 0
+        ? await matchRepository.findCompletedMatchOutcomes().catch((err) => {
+            console.error("[IN_PROGRESS] 완료 경기 조회 실패", err);
+            return null;
+          })
+        : null;
     const response: InProgressMatchesResponse = {
-      matches: await matchRepository.findInProgress(now),
+      matches,
+      winStreaks: completedMatches
+        ? buildInProgressWinStreaks(matches, completedMatches)
+        : {},
     };
     res.json(response);
   } catch (err) {
