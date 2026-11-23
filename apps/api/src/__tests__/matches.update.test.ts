@@ -8,6 +8,7 @@ import {
   type Match,
 } from "@pkpkdupr/shared/match";
 import type { Player, PlayerRatingChangeLog } from "@pkpkdupr/shared/player";
+import type { SpecialMatch } from "@pkpkdupr/shared/specialMatch";
 import request from "supertest";
 import {
   afterEach,
@@ -1129,7 +1130,7 @@ describe("PUT /api/matches/:matchId", () => {
     });
 
     describe("도전 매치", () => {
-      const challengeMatch: Match["specialMatch"] = {
+      const challengeMatch: SpecialMatch = {
         kind: "challenge",
         defendingTeamIndex: 1,
         protagonistIds: [requester.id, opponentM.id],
@@ -1139,7 +1140,8 @@ describe("PUT /api/matches/:matchId", () => {
       // 요청자 팀이 이기는 수정 점수(승패는 기존 11:5와 같다)
       const sameWinnerBody = { ...validBody, scores: [{ scoreA: 11, scoreB: 7 }] };
 
-      // 이 경기 반영 전 순위는 상대(3.52)가 요청자(3.48)보다 높고, 반영 직후 평점은 인자로 정한다
+      // 이 경기 반영 전 순위는 상대(3.52)가 요청자(3.48)보다 높고, 반영 직후 평점은 인자로 정한다.
+      // 지금 existing의 id·completedAt으로 로그를 만들므로 existing을 정한 뒤 부른다
       const mockRankingSource = (afterRequester: number, afterOpponent: number) => {
         const completedAt = existing.completedAt ?? new Date();
         const before = {
@@ -1192,10 +1194,10 @@ describe("PUT /api/matches/:matchId", () => {
       };
 
       it("승패가 같은 점수 수정으로 순위가 달라지면 결과를 다시 정하지만 연출은 하지 않는다", async () => {
-        mockRankingSource(3.5, 3.51);
         existing = buildExistingMatch({
-          specialMatch: { ...challengeMatch!, outcome: "challenge_success" },
+          specialMatch: { ...challengeMatch, outcome: "challenge_success" },
         });
+        mockRankingSource(3.5, 3.51);
 
         const response = await putMatch(sameWinnerBody);
 
@@ -1209,8 +1211,8 @@ describe("PUT /api/matches/:matchId", () => {
       });
 
       it("결과가 null로 남은 완료 경기는 승패가 같아도 수정 때 결과를 채우고 연출을 싣는다", async () => {
-        mockRankingSource(3.56, 3.44);
         existing = buildExistingMatch({ specialMatch: challengeMatch });
+        mockRankingSource(3.56, 3.44);
 
         const response = await putMatch(sameWinnerBody);
 
