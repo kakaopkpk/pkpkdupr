@@ -103,11 +103,18 @@ export interface SpecialMatchCandidatePlayer {
 /** 라이벌전으로 보는 상대 두 사람의 최대 평점 차 */
 export const CHALLENGE_MATCH_MAX_RATING_GAP = 0.05;
 
-/** 추천 매칭에서 특수 유형 코트에 주는 가산점 */
+/**
+ * 추천 매칭에서 특수 유형 코트에 주는 가산점.
+ * 연승 저지는 뛸 사람을 고른 뒤 대진을 탐색하므로 연승자가 뽑히면 모든 후보 대진에 생겨 후보를 가르지 못하고,
+ * 대진 감점은 코트 최대 가산점 하나만 빼서 최강자전·라이벌전 가산점을 가리기 때문에 0이다.
+ * 리벤지는 추천에서 만들지 않아 0이다.
+ */
 export const SPECIAL_MATCH_RECOMMENDATION_BONUS = {
-  streak: 2,
   challenge: 1.5,
-} as const;
+  streak_stopper: 0,
+  champions: 2,
+  revenge: 0,
+} as const satisfies Record<SpecialMatchKind, number>;
 
 /** 평점 차를 소수 여섯째 자리에서 반올림해 3.55 - 3.5 같은 부동소수 오차가 판정·정렬을 흔들지 않게 한다 */
 const toRatingGap = (left: number, right: number) =>
