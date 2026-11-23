@@ -37,6 +37,8 @@ import { usePlayers } from "@/hooks/usePlayers";
 
 export interface MemberProfileDrawerProps {
   playerId: string;
+  /** 평점 카드·통계가 처음 보일 종목. 없으면 복식 */
+  initialCategory?: MatchTopLevelType;
   /** 열어 달라는 요청. false가 되면 닫히는 움직임 뒤 onExited를 부른다 */
   isOpen: boolean;
   tabKey: TabKey;
@@ -108,6 +110,7 @@ const InactiveMemberNotice: React.FC = () => (
 /** 전역 회원 프로필 화면. 평점 카드·통계 4칸(승률·최근 7일·맞대결 승패·상대가 바꾼 내 평점)·파트너 궁합·천적·받은 업적·최근 경기 */
 export default function MemberProfileDrawer({
   playerId,
+  initialCategory = "doubles",
   isOpen: isRequested,
   tabKey,
   depthId,
@@ -117,7 +120,7 @@ export default function MemberProfileDrawer({
   const { closeDepth, restoreScrollTop, selectedTab } = useTabNavigation();
   const { players, reload: reloadPlayers } = usePlayers();
   const { player: viewer } = useAuth();
-  const [category, setCategory] = useState<MatchTopLevelType>("doubles");
+  const [category, setCategory] = useState<MatchTopLevelType>(initialCategory);
   const [isMatchHistoryRequested, setIsMatchHistoryRequested] = useState(false);
   const [isAchievementsRequested, setIsAchievementsRequested] = useState(false);
   // 데이터는 PushScreen 본문 밖에서 받으므로 보임은 PushScreen이 알려 준 값을 쓴다

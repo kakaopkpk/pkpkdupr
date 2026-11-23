@@ -334,14 +334,22 @@ const Ranking: React.FC = () => {
                           key={entry.player.id}
                           entry={entry}
                           index={index}
-                          onPress={() => openMemberProfile(entry.player.id)}
+                          onPress={() =>
+                            openMemberProfile(entry.player.id, {
+                              initialCategory: currentRanking.category,
+                            })
+                          }
                         />
                       ))}
                       {sortUnrated(currentRanking.unrated).map((entry) => (
                         <UnratedRow
                           key={entry.player.id}
                           entry={entry}
-                          onPress={() => openMemberProfile(entry.player.id)}
+                          onPress={() =>
+                            openMemberProfile(entry.player.id, {
+                              initialCategory: currentRanking.category,
+                            })
+                          }
                         />
                       ))}
                     </>

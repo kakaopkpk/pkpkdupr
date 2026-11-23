@@ -7,6 +7,7 @@ import React, {
 } from "react";
 import { createPortal } from "react-dom";
 import { Alert, CloseButton } from "@heroui/react";
+import type { MatchTopLevelType } from "@pkpkdupr/shared/match";
 import { getEmptySessionExpiresAt } from "@pkpkdupr/shared/session";
 import {
   CompleteSessionBar,
@@ -43,6 +44,7 @@ import {
   AppNavigationProvider,
   type AppNavigationContextValue,
   type CreateSessionRequest,
+  type MemberProfileOpenOptions,
   type RecordMatchSheetRequest,
 } from "@/context/AppNavigationContext";
 import { useAuth } from "@/context/AuthContext";
@@ -176,7 +178,11 @@ const isTabDepthHistoryState = (
 
 type GlobalScreenRoute =
   | { kind: "match-detail"; matchId: string }
-  | { kind: "member-profile"; playerId: string }
+  | {
+      kind: "member-profile";
+      playerId: string;
+      initialCategory?: MatchTopLevelType;
+    }
   | { kind: "session-report"; sessionId: string }
   | ({ kind: "achievements" } & AchievementsScreenRequest);
 
@@ -664,13 +670,17 @@ const BottomNavShell: React.FC = () => {
   );
 
   const openMemberProfile = useCallback(
-    (playerId: string) => {
+    (playerId: string, options?: MemberProfileOpenOptions) => {
       if (playerId === player?.id) {
         selectTab("me");
         return;
       }
 
-      openGlobalScreen({ kind: "member-profile", playerId });
+      openGlobalScreen({
+        kind: "member-profile",
+        playerId,
+        initialCategory: options?.initialCategory,
+      });
     },
     [openGlobalScreen, player?.id, selectTab],
   );
@@ -1444,6 +1454,7 @@ const BottomNavShell: React.FC = () => {
                     <MemberProfileDrawer
                       key={screen.id}
                       playerId={screen.route.playerId}
+                      initialCategory={screen.route.initialCategory}
                       {...screenProps}
                     />
                   );
