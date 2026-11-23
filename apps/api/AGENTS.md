@@ -55,6 +55,7 @@
   - 요청 `sessionId`가 오늘 회원 세션이면 그 세션, 아니면 기록과 같은 시간 규칙을 따른다.
   - 선수가 이미 진행 중 경기에 있으면 409 "<아이디>님이 다른 경기 중이에요".
   - 확인·생성은 advisory 잠금으로 직렬화한다.
+  - 같은 멤버로 한 판 더의 `rematchOfMatchId`를 주면 `judgeRematchSpecialMatch`로 리벤지를 판정해 `specialMatch`에 저장한다. 원래 경기가 없거나·완료 전이거나·승패가 안 갈렸거나·멤버가 다르면 null로 시작한다.
 - 대진 예정 경기 시작 `POST /api/matches/:matchId/start`: 200 `Match`
   - 활성 회원 누구나. `status`를 created로, `matchStartsAt`을 시작 시각으로 바꾼다.
   - 경기 없음 404, 예정 경기가 아니면 409, 세션이 오늘 세션이 아니면 409.
@@ -88,6 +89,7 @@
 - 상세 `GET /api/match-sessions/:sessionId`
 - 세션 경기 `GET /api/match-sessions/:sessionId/matches`: 대진 예정 경기(`scheduled`, `round` 포함)도 포함
 - 점수 없이 진행 중 경기 시작 `POST /api/match-sessions/:sessionId/matches`: `POST /api/matches/start`와 같은 처리, 오늘 세션만, 이미 진행 중인 선수 포함 시 409, 선수 자동 참여
+  - 추천 카드의 `recommendedSpecialKind`를 주면 지금 그 경기 종류 랭킹·연승으로 `judgeRecommendedSpecialMatch`를 다시 판정해 유형이 같을 때만 `specialMatch`에 저장하고, 다르거나 리벤지·모르는 값이면 null로 시작한다(요청은 실패하지 않는다).
 - 복식 추천 매칭 `GET /api/match-sessions/:sessionId/recommendations?courts=N&rank=R`
   - 오늘 세션만, courts 기본 3·1~4로 자름.
   - 탐색 난수는 세션 id와 완료 경기 수로 서버가 정해, 같은 상황이면 누구에게나 같은 결과.

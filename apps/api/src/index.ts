@@ -72,6 +72,12 @@ import {
 } from "@pkpkdupr/shared/session";
 import { isEntityId } from "@pkpkdupr/shared/entityId";
 import {
+  isSpecialMatchKind,
+  judgeRecommendedSpecialMatch,
+  judgeRematchSpecialMatch,
+  type SpecialMatch,
+} from "@pkpkdupr/shared/specialMatch";
+import {
   isTournamentPlace,
   type AdminUpdateTournamentPlacementsRequest,
   type TournamentPlace,
@@ -165,6 +171,7 @@ import {
   selectRatingTrendWindow,
 } from "./services/PlayerRatingChartProjectionService";
 import { buildPlayerProfileSummary } from "./services/PlayerProfileSummaryService";
+import { buildSpecialMatchCandidatePlayers } from "./services/SpecialMatchService";
 import {
   buildSessionPraiseResponse,
   findPendingSessionPraises,
@@ -744,6 +751,7 @@ const startInProgressMatch = async ({
   session,
   location,
   courtName,
+  specialMatch = null,
   now,
 }: {
   requesterPlayerId: string;
@@ -751,6 +759,8 @@ const startInProgressMatch = async ({
   session: ManagedMatchSession | undefined;
   location: string;
   courtName?: string;
+  /** 시작 때 판정한 특수 매치. 생략하면 null */
+  specialMatch?: SpecialMatch | null;
   now: Date;
 }): Promise<Match> => {
   const result = await matchRepository.createInProgress(
@@ -777,6 +787,7 @@ const startInProgressMatch = async ({
       completedAt: null,
       // 평점 미반영 여부는 첫 점수로 completed가 될 때(PUT) 정한다.
       ratingExcluded: false,
+      specialMatch,
     },
     now,
   );
@@ -796,6 +807,67 @@ const toPlayerBusyError = (
   return new MatchRecordRequestError(
     `${busyPlayer?.username ?? busyPlayerId}님이 다른 경기 중이에요`,
     409,
+  );
+};
+
+/**
+ * 추천 카드 출처 경기의 특수 매치. 서버가 지금 랭킹·연승으로 팀 구성을 다시 판정해 카드가 보여 준 유형과 같을 때만
+ * 돌려주고, 다르거나 판정하지 못하면 null이다(시작 요청은 실패시키지 않는다).
+ */
+const judgeRecommendedSpecialMatchForLineup = async (
+  requestedKind: unknown,
+  lineup: PreparedMatchLineup,
+): Promise<SpecialMatch | null> => {
+  // 리벤지는 추천에서 만들지 않는다
+  if (!isSpecialMatchKind(requestedKind) || requestedKind === "revenge") {
+    return null;
+  }
+  try {
+    const { context } = await loadRankingSource();
+    const candidates = buildSpecialMatchCandidatePlayers(
+      context,
+      getMatchTopLevelType(lineup.type),
+      lineup.teams.flatMap((team) => team.players),
+    );
+    const toCandidates = (team: Team) =>
+      team.players.flatMap((player) => {
+        const candidate = candidates.get(player.id);
+        return candidate ? [candidate] : [];
+      });
+    const judged = judgeRecommendedSpecialMatch([
+      toCandidates(lineup.teams[0]),
+      toCandidates(lineup.teams[1]),
+    ]);
+    return judged?.kind === requestedKind ? judged : null;
+  } catch (error) {
+    console.error("[MATCH] 추천 특수 매치 판정 실패", error);
+    return null;
+  }
+};
+
+/**
+ * 같은 멤버로 한 판 더 출처 경기의 리벤지 판정. 원래 경기가 없거나·완료 전이거나·승패가 안 갈렸거나·멤버가 다르면 null이다.
+ */
+const judgeRematchSpecialMatchForLineup = async (
+  rematchOfMatchId: unknown,
+  lineup: PreparedMatchLineup,
+): Promise<SpecialMatch | null> => {
+  if (
+    typeof rematchOfMatchId !== "string" ||
+    !isEntityId(rematchOfMatchId, "match")
+  ) {
+    return null;
+  }
+  const previous = await matchRepository.findById(rematchOfMatchId);
+  if (!previous) {
+    return null;
+  }
+  return judgeRematchSpecialMatch(
+    [
+      lineup.teams[0].players.map((player) => player.id),
+      lineup.teams[1].players.map((player) => player.id),
+    ],
+    previous,
   );
 };
 
@@ -1951,7 +2023,8 @@ app.post("/api/match-sessions/:sessionId/matches", async (req, res) => {
       throw new MatchRecordRequestError("유효한 세션 ID가 필요합니다.", 400);
     }
     const body = req.body as Partial<StartSessionMatchRequest> | undefined;
-    const { type, teams, location, courtName } = body ?? {};
+    const { type, teams, location, courtName, recommendedSpecialKind } =
+      body ?? {};
     if (type != null && !isMatchType(type)) {
       throw new MatchRecordRequestError("유효한 매치 타입이 필요합니다.", 400);
     }
@@ -1976,6 +2049,10 @@ app.post("/api/match-sessions/:sessionId/matches", async (req, res) => {
     }
 
     const lineup = await prepareMatchLineup(type, teams, decoded.playerId);
+    const specialMatch = await judgeRecommendedSpecialMatchForLineup(
+      recommendedSpecialKind,
+      lineup,
+    );
     const session = await resolveSessionForNewMatch(sessionId, now);
     const match = await startInProgressMatch({
       requesterPlayerId: decoded.playerId,
@@ -1983,6 +2060,7 @@ app.post("/api/match-sessions/:sessionId/matches", async (req, res) => {
       session,
       location: normalizeOptionalName(location) ?? requestedSession.location,
       courtName: normalizedCourtName ?? undefined,
+      specialMatch,
       now,
     });
     res.status(201).json(match);
@@ -2013,6 +2091,10 @@ app.post("/api/matches/start", async (req, res) => {
     await matchRepository.cleanupExpired(now);
     const lineup = await prepareMatchLineup(type, teams, decoded.playerId);
     await assertPlayersNotInProgress(lineup, now);
+    const specialMatch = await judgeRematchSpecialMatchForLineup(
+      body?.rematchOfMatchId,
+      lineup,
+    );
     const session = await resolveSessionForStartedMatch(requestedSessionId, now);
     const match = await startInProgressMatch({
       requesterPlayerId: decoded.playerId,
@@ -2022,6 +2104,7 @@ app.post("/api/matches/start", async (req, res) => {
         normalizeOptionalName(location) ??
         session?.location ??
         DEFAULT_MATCH_LOCATION,
+      specialMatch,
       now,
     });
     res.status(201).json(match);

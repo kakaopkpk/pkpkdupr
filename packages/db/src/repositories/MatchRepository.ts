@@ -47,6 +47,7 @@ import {
 } from "../db/schema";
 import { generateEntityId, isEntityId } from "@pkpkdupr/shared/entityId";
 import type { SessionPraiseRecord } from "@pkpkdupr/shared/sessionPraise";
+import type { SpecialMatch } from "@pkpkdupr/shared/specialMatch";
 import {
   IN_PROGRESS_MATCH_TIMEOUT_MS,
   REGULAR_SESSION_LOCATION,
@@ -204,6 +205,8 @@ export interface CreateMatchInput {
   ratingExcluded?: boolean;
   /** 대회 대진 라운드(1부터). status가 scheduled면 필수, 생략하면 null */
   round?: number | null;
+  /** 시작 때 판정한 특수 매치. 생략하면 null */
+  specialMatch?: SpecialMatch | null;
 }
 
 /** 경기 기록 수정 입력. 코트·생성자는 바꾸지 않고, 세션·시작 시각은 주었을 때만 바꾼다. */
@@ -1436,6 +1439,7 @@ export class MatchRepository {
       resultSubmittedAt: toDateOrNull(data.resultSubmittedAt),
       ratingExcluded: data.ratingExcluded ?? false,
       round: data.round ?? null,
+      specialMatch: data.specialMatch ?? null,
       createdAt: now,
       updatedAt: now,
     });
@@ -1726,10 +1730,11 @@ export class MatchRepository {
             completed_at,
             result_submitted_by_player_id,
             result_submitted_at,
+            special_match,
             created_at,
             updated_at
           )
-          VALUES (${placeholders(17)})
+          VALUES (${placeholders(15)}, $16::jsonb, $17, $18)
         `,
         args: [
           data.id,
@@ -1747,6 +1752,7 @@ export class MatchRepository {
           null,
           null,
           null,
+          data.specialMatch ? JSON.stringify(data.specialMatch) : null,
           nowSeconds,
           nowSeconds,
         ],
@@ -3056,6 +3062,7 @@ export class MatchRepository {
         updatedAt: toDate(match.updatedAt),
         ratingExcluded: match.ratingExcluded === true,
         round: match.round ?? null,
+        specialMatch: match.specialMatch ?? null,
       } as Match & { sessionName?: string };
     });
   }

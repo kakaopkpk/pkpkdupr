@@ -235,6 +235,7 @@ export const hydrateMatch = (record: any): Match => ({
   updatedAt: new Date(record.updatedAt),
   ratingExcluded: record.ratingExcluded === true,
   round: typeof record.round === "number" ? record.round : null,
+  specialMatch: record.specialMatch ?? null,
 });
 
 const hydrateSessionSummary = (record: any): MatchSessionSummary => ({
