@@ -92,6 +92,14 @@ export const TrophyIcon: React.FC<{
 export const FLAME_ICON_PATH =
   "M12 3c1 3 4.5 4.5 4.5 9.5a4.5 4.5 0 0 1-9 0c0-2.2 1-3.5 2.2-4.5 0 2 .8 3 1.8 3 0-3-1-5.2.5-8z";
 
+/** 멈춤 손바닥(연승 저지 배지·특수 매치 공유 이미지 도장) 선 모양, 24 viewBox */
+export const STOP_HAND_ICON_PATHS = [
+  "M18 11V6a2 2 0 0 0-4 0",
+  "M14 10V4a2 2 0 0 0-4 0v2",
+  "M10 10.5V6a2 2 0 0 0-4 0v8",
+  "M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15",
+] as const;
+
 /** 채운 불꽃 아이콘 */
 export const FlameIcon: React.FC<{ size: number }> = ({ size }) => (
   <svg

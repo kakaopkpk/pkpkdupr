@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { resolveAssetUrl } from "@/lib/api";
+import { getAvatarBackground, getAvatarInitial } from "@/utils/avatar";
 import { cx } from "./cx";
 import { SessionWinStreakFrame } from "./WinStreakAvatarFrame";
 
@@ -8,29 +9,6 @@ export interface AvatarPlayer {
   username: string;
   avatarUrl?: string | null;
 }
-
-const AVATAR_BACKGROUNDS = [
-  "#f2cdc4",
-  "#c9d4f2",
-  "#c8e5d3",
-  "#e2d3f0",
-  "#efd0dc",
-  "#f2e2b8",
-  "#c6e3ec",
-  "#d9dde6",
-] as const;
-
-/** 같은 선수는 어느 화면에서든 같은 배경색이 되도록 id 해시로 고른다 */
-const getAvatarBackground = (playerId: string) => {
-  let hash = 0;
-  for (let index = 0; index < playerId.length; index += 1) {
-    hash = (hash * 31 + playerId.charCodeAt(index)) | 0;
-  }
-  return AVATAR_BACKGROUNDS[Math.abs(hash) % AVATAR_BACKGROUNDS.length];
-};
-
-const getInitial = (username: string) =>
-  (Array.from(username.trim())[0] ?? "?").toUpperCase();
 
 export const PlayerAvatar: React.FC<{
   player: AvatarPlayer;
@@ -67,7 +45,7 @@ export const PlayerAvatar: React.FC<{
           onError={() => setFailedUrl(avatarUrl)}
         />
       ) : (
-        getInitial(player.username)
+        getAvatarInitial(player.username)
       )}
     </span>
   );

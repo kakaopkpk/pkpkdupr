@@ -7,19 +7,15 @@ import {
   CountUpRatingDelta,
 } from "@/components/ui/CountUpNumber";
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
+import { MATCH_CATEGORY_LABELS } from "@/lib/format";
 import { formatRating } from "@/utils/dupr";
 import RatingTrendChart, {
   type RatingTrendPoint,
 } from "@/components/profile/RatingTrendChart";
 
-const CATEGORY_LABELS = {
-  doubles: "복식",
-  singles: "단식",
-} as const satisfies Record<MatchTopLevelType, string>;
-
 export const PROFILE_CATEGORY_OPTIONS = [
-  { value: "doubles", label: CATEGORY_LABELS.doubles },
-  { value: "singles", label: CATEGORY_LABELS.singles },
+  { value: "doubles", label: MATCH_CATEGORY_LABELS.doubles },
+  { value: "singles", label: MATCH_CATEGORY_LABELS.singles },
 ] as const satisfies readonly { value: MatchTopLevelType; label: string }[];
 
 /**
@@ -68,7 +64,7 @@ const ProfileRatingCard: React.FC<{
       </div>
       <RatingTrendChart
         points={history}
-        ariaLabel={`최근 30일 ${CATEGORY_LABELS[category]} 평점 추세`}
+        ariaLabel={`최근 30일 ${MATCH_CATEGORY_LABELS[category]} 평점 추세`}
       />
     </React.Fragment>
   </Card>
