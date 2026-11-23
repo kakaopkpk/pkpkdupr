@@ -11,6 +11,8 @@ export interface PreparedShareImageState {
   isAvailable: boolean;
   /** 이미지가 준비됐고 공유 중이 아닐 때만 true */
   canShare: boolean;
+  /** 만들어 둔 이미지. 만드는 중이거나 실패했으면 null(미리보기에 쓴다) */
+  file: File | null;
   share: () => void;
 }
 
@@ -47,7 +49,9 @@ export function usePreparedShareImage<T>(
     }
     let isCancelled = false;
     setPrepared({ status: "preparing", key });
-    source.create(current).then(
+    // 이미지 만들기는 아이콘·배지를 flushSync로 SVG 문자열로 그린다. effect 안에서 바로 부르면 React가 아직
+    // 커밋 중이라 flushSync가 그리지 못해 빈 SVG가 되므로, effect가 끝난 뒤(마이크로태스크)에 시작한다
+    Promise.resolve().then(() => source.create(current)).then(
       (file) => {
         if (!isCancelled) setPrepared({ status: "ready", key, file });
       },
@@ -73,6 +77,7 @@ export function usePreparedShareImage<T>(
   return {
     isAvailable: current?.status !== "failed",
     canShare: !!file && !isSharing,
+    file,
     share,
   };
 }
