@@ -24,7 +24,7 @@ import {
 } from "@/components/ui/CountUpNumber";
 import { rowDividerClassName } from "@/components/ui/MatchRow";
 import { PlayerAvatar, TeamAvatars } from "@/components/ui/PlayerAvatar";
-import { MatchResultLabel } from "@/components/ui/SpecialMatchLabel";
+import { MatchResultLabel } from "@/components/ui/MatchResultLabel";
 import { LinkChevron, Section } from "@/components/ui/Section";
 import { cx } from "@/components/ui/cx";
 import { useIsMatchScheduled } from "@/hooks/useIsMatchScheduled";
@@ -228,7 +228,7 @@ const ScoreBlock: React.FC<{
   viewerId: string | null;
   onOpenPlayer: (playerId: string) => void;
 }> = ({ match, viewerId, onOpenPlayer }) => {
-  const matchResult = useMemo(() => getMatchResultName(match, viewerId), [match, viewerId]);
+  const matchResult = getMatchResultName(match, viewerId);
   const hasScores = (match.scores?.length ?? 0) > 0;
   const [scoreA, scoreB] = getTeamResultScores(match);
   const winnerIndex = !hasScores || scoreA === scoreB ? null : scoreA > scoreB ? 0 : 1;

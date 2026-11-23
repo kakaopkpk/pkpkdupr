@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { getMatchResultName } from "@/lib/matchResult";
 import { getSpecialMatchResultName, type SpecialMatchResultSource } from "@/lib/specialMatchResult";
 
 const teams = [
@@ -14,8 +15,9 @@ const name = (
   specialMatch: SpecialMatchResultSource | null,
   scores: { scoreA: number; scoreB: number }[],
   viewerId: string | null,
-) => getSpecialMatchResultName({ specialMatch, teams, scores }, viewerId);
+) => getMatchResultName({ specialMatch, teams, scores }, viewerId);
 
+/** 특수 매치 결과 이름은 getMatchResultName을 거쳐 보는 회원 팀 기준으로 확인한다 */
 describe("getSpecialMatchResultName", () => {
   describe("도전 매치(팀 0 방어)", () => {
     const challengeSuccess = { kind: "challenge", defendingTeamIndex: 0, outcome: "challenge_success" } as const;
@@ -85,12 +87,7 @@ describe("getSpecialMatchResultName", () => {
     expect(name(streakStopped, teamBWins, null)).toBeNull();
   });
 
-  it("일반 매치·결과 없음·승패가 갈리지 않은 경기는 null", () => {
-    expect(name(null, teamAWins, "a1")).toBeNull();
-    expect(name({ kind: "champions", defendingTeamIndex: null, outcome: null }, teamAWins, "a1")).toBeNull();
-    expect(
-      name({ kind: "champions", defendingTeamIndex: null, outcome: "champions_won" }, [{ scoreA: 11, scoreB: 11 }], "a1"),
-    ).toBeNull();
-    expect(getSpecialMatchResultName({ teams, scores: teamAWins }, "a1")).toBeNull();
+  it("결과가 아직 없으면 null", () => {
+    expect(getSpecialMatchResultName({ kind: "champions", defendingTeamIndex: null, outcome: null }, 0, true)).toBeNull();
   });
 });

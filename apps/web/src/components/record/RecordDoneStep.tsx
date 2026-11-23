@@ -1,7 +1,6 @@
 import React, { useMemo, useState } from "react";
 import {
   getMatchTopLevelType,
-  getWinningTeamIndex,
   type MatchTopLevelType,
 } from "@pkpkdupr/shared/match";
 import type { Player, PlayerRatingChangeLog } from "@pkpkdupr/shared/player";
@@ -17,7 +16,7 @@ import {
 } from "@/components/ui/CountUpNumber";
 import { CountUpText } from "@/components/ui/CountUpText";
 import { PlayerAvatar, TeamAvatars } from "@/components/ui/PlayerAvatar";
-import { MatchResultLabel } from "@/components/ui/SpecialMatchLabel";
+import { MatchResultLabel } from "@/components/ui/MatchResultLabel";
 import { cx } from "@/components/ui/cx";
 import { useAppNavigation } from "@/context/AppNavigationContext";
 import { useAuth } from "@/context/AuthContext";
@@ -77,19 +76,13 @@ export default function RecordDoneStep({
   const scoreACount = useCountUp(score?.scoreA ?? 0, SCORE_COUNT);
   const scoreBCount = useCountUp(score?.scoreB ?? 0, SCORE_COUNT);
   const ratingCategory = getMatchTopLevelType(match.type);
-  // 내가 진 팀이면 한 판 더 버튼 문구만 "리벤지"다. 이긴 팀·경기하지 않은 기록자는 그대로다
-  const isViewerOnLosingTeam = useMemo(() => {
-    const winningTeamIndex = getWinningTeamIndex(match);
-    if (winningTeamIndex == null || !viewer) return false;
-    return match.teams[winningTeamIndex === 0 ? 1 : 0].players.some(
-      (teamPlayer) => teamPlayer.id === viewer.id,
-    );
-  }, [match, viewer]);
   // 점수 아래 내 기준 결과 이름. 경기하지 않은 기록자는 null
   const matchResult = useMemo(
     () => getMatchResultName(match, viewer?.id),
     [match, viewer],
   );
+  // 내가 진 팀이면 한 판 더 버튼 문구만 "리벤지"다. 이긴 팀·경기하지 않은 기록자는 그대로다
+  const isViewerOnLosingTeam = matchResult?.isWin === false;
   const ratingRows = useMemo(() => {
     const changeByPlayerId = new Map<string, PlayerRatingChangeLog>(
       (match.ratingChanges ?? []).map((change) => [change.playerId, change]),
