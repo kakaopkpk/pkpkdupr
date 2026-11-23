@@ -1,4 +1,5 @@
 import React, { createContext, useContext } from "react";
+import type { MatchTopLevelType } from "@pkpkdupr/shared/match";
 import type { TabKey } from "@/context/TabNavigationContext";
 import type { MatchSessionDetailInfo } from "@/lib/matchSessions";
 
@@ -30,11 +31,19 @@ export interface AchievementsScreenRequest {
   focusAchievementId?: string;
 }
 
+export interface MemberProfileOpenOptions {
+  /** 평점 카드·통계가 처음 보일 종목. 없으면 복식 */
+  initialCategory?: MatchTopLevelType;
+}
+
 export interface AppNavigationContextValue {
   selectTab: (tab: TabKey) => void;
   openMatchDetail: (matchId: string) => void;
   /** 내 id면 나 탭으로 전환 */
-  openMemberProfile: (playerId: string) => void;
+  openMemberProfile: (
+    playerId: string,
+    options?: MemberProfileOpenOptions,
+  ) => void;
   openRecordMatch: (request: RecordMatchSheetRequest) => void;
   /** 세션 만들기 시트 */
   openCreateSession: (request?: CreateSessionRequest) => void;
