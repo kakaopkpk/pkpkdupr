@@ -354,6 +354,46 @@ describe("POST /api/match-sessions/:sessionId/matches", () => {
       });
     });
 
+    describe("게스트가 낀 코트", () => {
+      const guestD: Player = { ...playerD, isGuest: true, duprRating: null };
+
+      beforeEach(() => {
+        vi.spyOn(AuthService.prototype, "getPublicPlayers").mockResolvedValue(
+          activePlayers.map((player) =>
+            player.id === guestD.id ? guestD : player,
+          ),
+        );
+      });
+
+      it("정회원 연승 회원이 있으면 연승 저지로 판정해 저장한다", async () => {
+        mockRankingSource(winsOfPlayerC(5));
+
+        const response = await startMatch("Scustom1", {
+          ...doublesBody,
+          recommendedSpecialKind: "streak_stopper",
+        });
+
+        expect(response.status).toBe(201);
+        expect(createInProgress.mock.calls[0]![0].specialMatch).toMatchObject({
+          kind: "streak_stopper",
+          defendingTeamIndex: 1,
+          protagonistIds: [null, playerC.id],
+        });
+      });
+
+      it("라이벌전 조건이어도 특수 매치는 null이다", async () => {
+        mockRankingSource();
+
+        const response = await startMatch("Scustom1", {
+          ...doublesBody,
+          recommendedSpecialKind: "challenge",
+        });
+
+        expect(response.status).toBe(201);
+        expect(createInProgress.mock.calls[0]![0].specialMatch).toBeNull();
+      });
+    });
+
     it("재판정 유형이 카드 유형과 다르면 요청은 성공하고 특수 매치는 null이다", async () => {
       mockRankingSource(winsOfPlayerC(5));
 

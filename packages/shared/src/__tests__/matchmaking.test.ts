@@ -465,15 +465,38 @@ describe("recommendDoublesMatches 특수 유형 가산점", () => {
     expect(penalties).toEqual([...penalties].sort((a, b) => a - b));
   });
 
-  it("게스트가 낀 코트는 연승 회원이 있어도 특수 유형이 아니다", () => {
+  it("게스트가 낀 코트도 연승 회원이 있으면 연승 저지다", () => {
     const participants = players(4);
     const plan = recommend({
       participants,
       courts: 1,
       specialPlayers: toSpecialPlayers(participants, { p01: 7 }, ["p04"]),
     });
-    expect(plan.courts[0].specialMatch).toBeNull();
+    expect(plan.courts[0].specialMatch).toMatchObject({
+      kind: "streak_stopper",
+      protagonistIds: expect.arrayContaining(["p01"]),
+    });
+    // 연승 저지 가산점은 0이다
     expect(plan.penalty).toBeCloseTo(
+      recommend({ participants, courts: 1 }).penalty,
+    );
+  });
+
+  it("게스트가 낀 코트는 라이벌전이 아니다", () => {
+    const participants: MatchmakingParticipant[] = [
+      { id: "a", doublesRating: 3 },
+      { id: "b", doublesRating: 3.02 },
+      { id: "c", doublesRating: 4 },
+      { id: "g", doublesRating: 4.02, isGuest: true },
+    ];
+    const specialPlayers = toSpecialPlayers(participants, {}, ["g"]);
+    const input = { participants, courts: 1, specialPlayers };
+    const first = recommend(input);
+    for (let rank = 0; rank < first.candidateCount; rank += 1) {
+      const plan = recommend({ ...input, rank });
+      expect(plan.courts[0].specialMatch).toBeNull();
+    }
+    expect(first.penalty).toBeCloseTo(
       recommend({ participants, courts: 1 }).penalty,
     );
   });

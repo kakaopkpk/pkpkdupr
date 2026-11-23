@@ -2,6 +2,7 @@ import { compareCountedMatches } from "@pkpkdupr/shared/achievements";
 import {
   getMatchTopLevelType,
   getWinningTeamIndex,
+  hasGuestPlayer,
   type Match,
   type MatchTopLevelType,
 } from "@pkpkdupr/shared/match";
@@ -88,7 +89,7 @@ type SpecialMatchEvaluation =
 
 /**
  * 평점 반영이 끝난 특수 매치의 결과. 순위는 그 경기 종류 랭킹에서 이 경기 반영 직후(rankAfter) 시점이다.
- * 승패가 갈리지 않으면 outcome null이다.
+ * 승패가 갈리지 않으면 outcome null이다. 게스트가 낀 연승 저지·최강자전·리벤지도 승패로 정한다.
  */
 const evaluateSpecialMatch = (
   context: RankingContext,
@@ -103,6 +104,11 @@ const evaluateSpecialMatch = (
 
   switch (specialMatch.kind) {
     case "challenge": {
+      // 게스트가 낀 경기는 평점에 반영하지 않아 순위가 뒤집히지 않으므로 라이벌전 결과를 정하지 않는다.
+      // 참가자가 바뀌는 수정은 specialMatch를 지우므로 지금 경로로는 생기지 않는 방어용이다
+      if (hasGuestPlayer(match.teams)) {
+        return { outcome: null };
+      }
       const rankAfter = getRankById(
         context,
         getMatchTopLevelType(match.type),
