@@ -1,6 +1,6 @@
 import {
-  ACHIEVEMENTS,
   PRAISE_ACHIEVEMENT_IDS,
+  getAchievementDefinition,
   type EarnedAchievement,
   type EndedSessions,
 } from "@pkpkdupr/shared/achievements";
@@ -56,10 +56,6 @@ const FIRST_DOMINATOR_ACHIEVEMENT_ID = "dominator-1";
 
 /** 세션 카드 하나에 보이는 업적 줄 최대 수 */
 export const NEWS_FEED_ACHIEVEMENT_LINE_LIMIT = 3;
-
-const ACHIEVEMENT_DEFINITION_BY_ID = new Map(
-  ACHIEVEMENTS.map((definition) => [definition.id, definition]),
-);
 /** 세션 칭찬의 받은 회원별 칭찬 수 */
 const countPraisesByTarget = (session: RankingSession) => {
   const counts = new Map<string, number>();
@@ -201,7 +197,7 @@ const buildSessionItem = ({
       return [];
     }
     const player = lineMembers.get(earned.playerId);
-    const definition = ACHIEVEMENT_DEFINITION_BY_ID.get(earned.achievementId);
+    const definition = getAchievementDefinition(earned.achievementId);
     return player && definition ? [{ earned, player, definition }] : [];
   });
   // 업적 점수 내림차순 → 업적 이름 가나다순 → 아이디 순으로 앞에서부터 보인다
