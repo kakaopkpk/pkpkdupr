@@ -672,9 +672,14 @@ export const PRAISE_ACHIEVEMENT_IDS: ReadonlySet<string> = new Set(
   ),
 );
 
-const ACHIEVEMENT_POINTS_BY_ID = new Map(
-  ACHIEVEMENTS.map((definition) => [definition.id, definition.points]),
+const ACHIEVEMENT_BY_ID = new Map(
+  ACHIEVEMENTS.map((definition) => [definition.id, definition]),
 );
+
+/** 업적 id의 정의. 모르는 업적은 null이다 */
+export const getAchievementDefinition = (
+  achievementId: string,
+): AchievementDefinition | null => ACHIEVEMENT_BY_ID.get(achievementId) ?? null;
 
 /** 업적 점수 만점(모든 업적 점수 합) */
 export const ACHIEVEMENT_MAX_POINTS = ACHIEVEMENTS.reduce(
@@ -684,7 +689,7 @@ export const ACHIEVEMENT_MAX_POINTS = ACHIEVEMENTS.reduce(
 
 /** 업적 id의 점수. 모르는 업적은 0점이다 */
 export const getAchievementPoints = (achievementId: string) =>
-  ACHIEVEMENT_POINTS_BY_ID.get(achievementId) ?? 0;
+  ACHIEVEMENT_BY_ID.get(achievementId)?.points ?? 0;
 
 /** 받은 업적 점수 합(진행 상태 목록). 저장하지 않고 받은 업적으로 계산하므로, 업적을 잃으면 점수도 빠진다 */
 export const sumAchievementPoints = (

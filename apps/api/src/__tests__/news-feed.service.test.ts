@@ -1,7 +1,9 @@
+import { ACHIEVEMENTS } from "@pkpkdupr/shared/achievements";
 import type { NewsFeedSessionItem } from "@pkpkdupr/shared/newsFeed";
 import type { PlayerRatingChangeLog } from "@pkpkdupr/shared/player";
 import { describe, expect, it, vi } from "vitest";
 import {
+  NEWS_FEED_ACHIEVEMENT_LINE_LIMIT,
   NEWS_FEED_WINDOW_MS,
   buildNewsFeedPage,
   parseNewsFeedCursor,
@@ -9,6 +11,7 @@ import {
 } from "../services/NewsFeedService";
 import {
   buildSessionReport,
+  compareText,
   createRankingContext,
   findEndedSessions,
   type RankingMatch,
@@ -381,13 +384,35 @@ describe("buildNewsFeedPage 세션 항목", () => {
     ]);
   });
 
-  it("업적 줄은 세션 리포트 achievements 중 활성 정회원 것이고, 줄 순서는 랭킹 → 연승 → 업적이다", () => {
+  it("업적 줄은 세션 리포트 achievements 중 활성 정회원 것을 점수 → 업적 이름 → 아이디 순으로 3개까지 고르고, 줄 순서는 랭킹 → 연승 → 업적이다", () => {
     const item = sessionItem(alice.id);
-    const expected = report()
-      .achievements.filter(
-        (earned) =>
-          earned.playerId !== xavier.id && !isTopRiserFirstDominator(earned),
-      )
+    const definitionById = new Map(
+      ACHIEVEMENTS.map((definition) => [definition.id, definition]),
+    );
+    const usernameById = new Map(
+      players.map((player) => [player.id, player.username]),
+    );
+    const candidates = report().achievements.filter(
+      (earned) =>
+        earned.playerId !== xavier.id && !isTopRiserFirstDominator(earned),
+    );
+    // 고정 데이터가 제한보다 많은 업적을 만들어야 자르기를 확인한다
+    expect(candidates.length).toBeGreaterThan(NEWS_FEED_ACHIEVEMENT_LINE_LIMIT);
+    const expected = [...candidates]
+      .sort((left, right) => {
+        const leftDefinition = definitionById.get(left.achievementId)!;
+        const rightDefinition = definitionById.get(right.achievementId)!;
+        return (
+          rightDefinition.points - leftDefinition.points ||
+          compareText(leftDefinition.name, rightDefinition.name) ||
+          compareText(
+            usernameById.get(left.playerId)!,
+            usernameById.get(right.playerId)!,
+          ) ||
+          compareText(left.playerId, right.playerId)
+        );
+      })
+      .slice(0, NEWS_FEED_ACHIEVEMENT_LINE_LIMIT)
       .map((earned) => ({
         kind: "achievement",
         playerId: earned.playerId,
