@@ -79,9 +79,9 @@ type SpecialMatchEvaluation =
       outcome: SpecialMatchOutcome;
       winnerIndex: 0 | 1;
       loserIndex: 0 | 1;
-      /** 도전 성공 쌍(대표 쌍 먼저). 도전 매치가 아니면 빈 배열이다 */
+      /** 순위를 뒤집은 도전 쌍(대표 쌍 먼저). 라이벌전이 아니면 빈 배열이다 */
       successfulPairs: SpecialMatchChallengePair[];
-      /** 반영 직후 순위. 도전 매치가 아니면 계산하지 않아 비어 있다 */
+      /** 반영 직후 순위. 라이벌전이 아니면 계산하지 않아 비어 있다 */
       rankAfter: Map<string, number>;
     };
 
@@ -189,7 +189,7 @@ const computeWinStreaksBefore = (
   );
 
 /**
- * 결과와 큰 연출 데이터. 연출은 결과가 도전 성공·연승 저지·최강자전 승리일 때만 만들고,
+ * 결과와 큰 연출 데이터. 연출은 결과가 라이벌전 승리·연승 저지·최강자전 승리일 때만 만들고,
  * 필요한 선수·순위를 찾지 못하면 null이다(결과는 그대로 정한다).
  */
 export const settleSpecialMatch = (

@@ -3,7 +3,7 @@ import type { Player } from "./player.js";
 import { WIN_STREAK_DISPLAY_MIN } from "./streak.js";
 
 /**
- * 특수 매치 유형. 추천 매칭 카드로 시작한 경기(도전 매치·연승 저지·최강자전)와
+ * 특수 매치 유형. 추천 매칭 카드로 시작한 경기(라이벌전·연승 저지·최강자전)와
  * '같은 멤버로 한 판 더'로 시작한 경기(리벤지)에만 붙는다(docs/product.md "특수 매치")
  */
 export type SpecialMatchKind =
@@ -21,7 +21,7 @@ export const specialMatchKindValues = [
 
 /** 화면 이름 */
 export const specialMatchKindLabels: Record<SpecialMatchKind, string> = {
-  challenge: "도전 매치",
+  challenge: "라이벌전",
   streak_stopper: "연승 저지",
   champions: "최강자전",
   revenge: "리벤지 매치",
@@ -50,16 +50,16 @@ export interface SpecialMatchChallengePair {
 export interface SpecialMatch {
   kind: SpecialMatchKind;
   /**
-   * 지키는 쪽 팀 index. 도전 매치 방어 쪽, 연승 저지 연승 회원 팀, 리벤지 직전 경기에서 이긴 팀.
-   * 최강자전과 양쪽 다 공격인 도전 매치는 null
+   * 지키는 쪽 팀 index. 라이벌전 방어 쪽, 연승 저지 연승 회원 팀, 리벤지 직전 경기에서 이긴 팀.
+   * 최강자전과 양쪽 다 공격인 라이벌전은 null
    */
   defendingTeamIndex: 0 | 1 | null;
   /**
-   * 팀별 주인공 선수 id(카드에서 40px로 앞세우는 사람). 도전 매치는 대표 도전 쌍의 두 사람,
+   * 팀별 주인공 선수 id(카드에서 40px로 앞세우는 사람). 라이벌전은 대표 도전 쌍의 두 사람,
    * 연승 저지는 연승 회원 팀만, 최강자전은 양쪽 연승 회원, 리벤지는 둘 다 null
    */
   protagonistIds: [string | null, string | null];
-  /** 도전 매치의 도전 쌍(대표 쌍이 첫 번째). 다른 유형은 빈 배열 */
+  /** 라이벌전의 도전 쌍(대표 쌍이 첫 번째). 다른 유형은 빈 배열 */
   challengePairs: SpecialMatchChallengePair[];
   /** 완료 전이거나 승패가 갈리지 않으면 null */
   outcome: SpecialMatchOutcome | null;
@@ -68,7 +68,7 @@ export interface SpecialMatch {
 export type SpecialMatchCelebrationPlayer = Pick<Player, "id" | "username" | "avatarUrl">;
 
 /**
- * 기록 완료 화면 큰 연출 데이터. 도전 성공·연승 저지·최강자전 승리가 그 저장으로 처음 정해졌을 때만 기록 응답에 실린다.
+ * 기록 완료 화면 큰 연출 데이터. 라이벌전 승리·연승 저지·최강자전 승리가 그 저장으로 처음 정해졌을 때만 기록 응답에 실린다.
  * 순위는 그 경기 종류 랭킹, 연승 수는 이 경기 직전까지 센 랭킹 연승 규칙이다
  */
 export type SpecialMatchCelebration =
@@ -100,7 +100,7 @@ export interface SpecialMatchCandidatePlayer {
   winStreak: number;
 }
 
-/** 도전 매치로 보는 상대 두 사람의 최대 평점 차 */
+/** 라이벌전으로 보는 상대 두 사람의 최대 평점 차 */
 export const CHALLENGE_MATCH_MAX_RATING_GAP = 0.05;
 
 /** 추천 매칭에서 특수 유형 코트에 주는 가산점 */

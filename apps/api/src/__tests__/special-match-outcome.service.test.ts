@@ -114,7 +114,7 @@ const challenge: SpecialMatch = {
 };
 
 describe("특수 매치 결과 판정", () => {
-  it("도전 매치는 이긴 팀 공격자가 반영 직후 방어자보다 순위가 높아지면 도전 성공이고 두 사람 순위 전후를 싣는다", () => {
+  it("라이벌전은 이긴 팀 공격자가 반영 직후 방어자보다 순위가 높아지면 challenge_success이고 두 사람 순위 전후를 싣는다", () => {
     const context = buildContext(
       { a1: 3.56, a2: 3.28, d1: 3.44, d2: 3.72 },
       teamAWin,
@@ -138,7 +138,7 @@ describe("특수 매치 결과 판정", () => {
     });
   });
 
-  it("도전 팀이 이겨도 순위가 뒤집히지 않으면 방어 성공이고 연출은 없다", () => {
+  it("도전 팀이 이겨도 순위가 뒤집히지 않으면 defense_success이고 연출은 없다", () => {
     const context = buildContext(
       { a1: 3.5, a2: 3.22, d1: 3.51, d2: 3.79 },
       teamAWin,
@@ -150,7 +150,7 @@ describe("특수 매치 결과 판정", () => {
     });
   });
 
-  it("도전 팀이 지면 방어 성공이다", () => {
+  it("도전 팀이 지면 defense_success다", () => {
     const context = buildContext(
       { a1: 3.44, a2: 3.16, d1: 3.56, d2: 3.84 },
       teamBWin,

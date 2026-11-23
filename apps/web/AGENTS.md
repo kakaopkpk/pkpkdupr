@@ -104,12 +104,12 @@
       - 완료 단계 한 판 더 버튼은 내가 진 팀이면 "같은 멤버로 리벤지", 그 밖(경기하지 않은 기록자 포함)은 "같은 멤버로 한 판 더"다. 어느 쪽이든 요청은 같다.
       - 완료 단계 점수 아래 결과 이름(`ui/SpecialMatchLabel`의 `SpecialMatchResultLabel`)은 결과(`specialMatch.outcome`)가 있는 특수 매치에만 있다.
         - 이름·아이콘·색은 `lib/specialMatchResult`의 `getSpecialMatchResultName`이 `defendingTeamIndex`·`outcome`과 기록자 팀(경기하지 않았으면 이긴 팀)으로 정하고, 웹이 판정을 다시 하지 않는다.
-        - 도전 매치 성공·실패는 승패가 아니라 `outcome`(순위 역전)을 따르고, 색은 승패를 따른다.
+        - 라이벌전은 공격·방어 구분 없이 승패로 라이벌전 승리·라이벌전 패배다.
       - 축하 연출과 내 받은 업적 상세 시트의 공유는 `hooks/useAchievementShare`가 열 때 공유 이미지(`profile/achievementShareImage`, canvas 2D)를 미리 만들어 두고, 누르면 바로 기기 공유 시트(못 하면 내려받기, 문구는 `lib/achievementShare`)를 연다. iOS Safari는 사용자 동작 직후에만 공유 시트가 열려 누른 뒤에 만들지 않는다.
       - 특수 매치 큰 연출 `SpecialMatchCelebrationScreen`(그림 `SpecialMatchCelebrationScenes`, 시각·공유 대상 변환 `specialMatchCelebration.utils`)은 기록 응답 `specialMatchCelebration`이 있고 기록한 내가 이긴 팀일 때만 완료 단계에서 띄운다. 진 팀·경기하지 않은 기록자·null이면 없고, 경기 상세·홈 등 다른 화면에서 나중에 띄우지 않는다.
         - 순위·연승 수는 응답 값만 쓰고 다시 계산하지 않는다. 내 새 업적 축하와 겹치면 이 연출이 먼저이고, 닫으면 업적 축하가 바로 이어진다.
         - 틀(딤·`useDimmedThemeColor`·확인/배경/Esc로 닫기·움직임 줄이기면 마지막 장면)은 `AchievementCelebration`과 같다. 장면 박자는 `getSceneBeatTimes`, 설명 줄은 장면이 끝나는 `getSceneEndMs`에 떠오른다.
-      - 특수 매치 큰 연출(도전 성공·연승 저지·최강자전 승리)의 "이미지로 공유"는 `hooks/useSpecialMatchShare`(이미지 `record/specialMatchShareImage`, 문구·파일 이름 `lib/specialMatchShare`)를 부른다.
+      - 특수 매치 큰 연출(라이벌전 승리·연승 저지·최강자전 승리)의 "이미지로 공유"는 `hooks/useSpecialMatchShare`(이미지 `record/specialMatchShareImage`, 문구·파일 이름 `lib/specialMatchShare`)를 부른다.
       - 공유 이미지(업적·특수 매치·세션 리포트)의 틀(캔버스·빛줄기·후광·아래 줄)은 `lib/shareImageCanvas`, 아바타 원은 `lib/shareImageAvatar`, 미리 만들어 두는 훅은 `hooks/usePreparedShareImage`, 공유·내려받기는 `lib/shareImage`가 같이 맡는다.
       - 이미지 만들기는 effect가 끝난 뒤(마이크로태스크)에 시작한다. 아이콘·배지를 `flushSync`로 SVG 문자열로 그리는데, effect 안에서 바로 부르면 그리지 못한다.
     - `session/`: 세션 만들기(일정 탭과 같은 `MonthCalendar`로 고르는 날짜, `minDateKey`로 지난 날·오늘이 든 달 앞은 막음, 표시는 `schedule/useScheduleMonthMarks`·시작·종료 시각 칩 `SessionSchedulePicker`, 오늘 이후 어느 날이든)·참여자 시트 `ParticipantsSheet`(열면 참여자 보기, 오른쪽 위 "수정"으로 같은 시트에서 전체 회원 체크·게스트 추가 수정 모드, 완료·취소·뒤로가기는 보기로 돌아감)

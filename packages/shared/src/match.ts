@@ -478,7 +478,7 @@ export type RecordedMatchResponse = Match & {
   newAchievements: EarnedAchievement[];
   /** 새 업적을 받은 참가자별 지금 업적 점수 합(새 업적 포함). 새 업적이 없으면 빈 객체 */
   achievementPoints: Record<string, number>;
-  /** 특수 매치 결과가 이 저장으로 처음 도전 성공·연승 저지·최강자전 승리로 정해졌을 때의 큰 연출 데이터. 그 밖은 null */
+  /** 특수 매치 결과가 이 저장으로 처음 라이벌전 승리·연승 저지·최강자전 승리로 정해졌을 때의 큰 연출 데이터. 그 밖은 null */
   specialMatchCelebration: SpecialMatchCelebration | null;
 };
 
