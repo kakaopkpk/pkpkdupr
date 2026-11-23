@@ -11,6 +11,8 @@ import type {
   SpecialMatchCandidatePlayer,
   SpecialMatchCelebration,
   SpecialMatchCelebrationPlayer,
+  SpecialMatchChallengePair,
+  SpecialMatchKind,
   SpecialMatchOutcome,
 } from "@pkpkdupr/shared/specialMatch";
 import { computeCurrentWinStreaks } from "@pkpkdupr/shared/streak";
@@ -71,66 +73,87 @@ export type SpecialMatchSettleTarget = Pick<
   "id" | "type" | "teams" | "scores" | "completedAt"
 > & { completedAt: Date };
 
+type SpecialMatchEvaluation =
+  | { outcome: null }
+  | {
+      outcome: SpecialMatchOutcome;
+      winnerIndex: 0 | 1;
+      loserIndex: 0 | 1;
+      /** 도전 성공 쌍(대표 쌍 먼저). 도전 매치가 아니면 빈 배열이다 */
+      successfulPairs: SpecialMatchChallengePair[];
+      /** 반영 직후 순위. 도전 매치가 아니면 계산하지 않아 비어 있다 */
+      rankAfter: Map<string, number>;
+    };
+
 /**
- * 평점 반영이 끝난 특수 매치의 결과. 순위는 그 경기 종류 랭킹에서 이 경기 반영 전(rankBefore)·직후(rankAfter) 시점이다.
+ * 평점 반영이 끝난 특수 매치의 결과. 순위는 그 경기 종류 랭킹에서 이 경기 반영 직후(rankAfter) 시점이다.
  * 승패가 갈리지 않으면 outcome null이다.
  */
 const evaluateSpecialMatch = (
   context: RankingContext,
   specialMatch: SpecialMatch,
   match: SpecialMatchSettleTarget,
-) => {
+): SpecialMatchEvaluation => {
   const winnerIndex = getWinningTeamIndex(match);
   if (winnerIndex == null) {
-    return { outcome: null, winnerIndex, successfulPairs: [] };
+    return { outcome: null };
   }
   const loserIndex = winnerIndex === 0 ? 1 : 0;
-  const category = getMatchTopLevelType(match.type);
-  const rankAfter = getRankById(context, category, {
-    at: match.completedAt,
-    inclusive: true,
-  });
-  const winnerIds = new Set(
-    match.teams[winnerIndex].players.map((player) => player.id),
-  );
-  // 이긴 팀 공격자가 반영 직후 방어자보다 높은 순위(작은 숫자)가 된 도전 쌍. 원래 순서(대표 쌍 먼저)를 지킨다
-  const successfulPairs = specialMatch.challengePairs.filter((pair) => {
-    const attackerRank = rankAfter.get(pair.attackerId);
-    const defenderRank = rankAfter.get(pair.defenderId);
-    return (
-      winnerIds.has(pair.attackerId) &&
-      attackerRank != null &&
-      defenderRank != null &&
-      attackerRank < defenderRank
-    );
-  });
 
-  let outcome: SpecialMatchOutcome;
   switch (specialMatch.kind) {
-    case "challenge":
-      outcome =
-        successfulPairs.length > 0 ? "challenge_success" : "defense_success";
-      break;
+    case "challenge": {
+      const rankAfter = getRankById(
+        context,
+        getMatchTopLevelType(match.type),
+        { at: match.completedAt, inclusive: true },
+      );
+      const winnerIds = new Set(
+        match.teams[winnerIndex].players.map((player) => player.id),
+      );
+      // 이긴 팀 공격자가 반영 직후 방어자보다 높은 순위(작은 숫자)가 된 도전 쌍. 원래 순서(대표 쌍 먼저)를 지킨다
+      const successfulPairs = specialMatch.challengePairs.filter((pair) => {
+        const attackerRank = rankAfter.get(pair.attackerId);
+        const defenderRank = rankAfter.get(pair.defenderId);
+        return (
+          winnerIds.has(pair.attackerId) &&
+          attackerRank != null &&
+          defenderRank != null &&
+          attackerRank < defenderRank
+        );
+      });
+      return {
+        outcome:
+          successfulPairs.length > 0 ? "challenge_success" : "defense_success",
+        winnerIndex,
+        loserIndex,
+        successfulPairs,
+        rankAfter,
+      };
+    }
     case "streak_stopper":
-      outcome =
-        specialMatch.defendingTeamIndex === loserIndex
-          ? "streak_stopped"
-          : "streak_defended";
-      break;
     case "champions":
-      outcome = "champions_won";
-      break;
-    case "revenge":
-      outcome =
-        specialMatch.defendingTeamIndex === loserIndex
-          ? "revenge_success"
-          : "revenge_defended";
-      break;
+    case "revenge": {
+      const defendingTeamLost = specialMatch.defendingTeamIndex === loserIndex;
+      const outcomeByKind: Record<
+        Exclude<SpecialMatchKind, "challenge">,
+        SpecialMatchOutcome
+      > = {
+        streak_stopper: defendingTeamLost ? "streak_stopped" : "streak_defended",
+        champions: "champions_won",
+        revenge: defendingTeamLost ? "revenge_success" : "revenge_defended",
+      };
+      return {
+        outcome: outcomeByKind[specialMatch.kind],
+        winnerIndex,
+        loserIndex,
+        successfulPairs: [],
+        rankAfter: new Map(),
+      };
+    }
   }
-  return { outcome, winnerIndex, successfulPairs, rankAfter };
 };
 
-/** 특수 매치 결과 판정 */
+/** 특수 매치 결과 판정(연출 데이터는 만들지 않는다) */
 export const judgeSpecialMatchOutcome = (
   context: RankingContext,
   specialMatch: SpecialMatch,
@@ -177,11 +200,12 @@ export const settleSpecialMatch = (
   outcome: SpecialMatchOutcome | null;
   celebration: SpecialMatchCelebration | null;
 } => {
-  const { outcome, winnerIndex, successfulPairs, rankAfter } =
-    evaluateSpecialMatch(context, specialMatch, match);
-  if (outcome == null || winnerIndex == null || !rankAfter) {
-    return { outcome, celebration: null };
+  const evaluation = evaluateSpecialMatch(context, specialMatch, match);
+  if (evaluation.outcome == null) {
+    return { outcome: null, celebration: null };
   }
+  const { outcome, winnerIndex, loserIndex, successfulPairs, rankAfter } =
+    evaluation;
 
   const buildCelebration = (): SpecialMatchCelebration | null => {
     if (outcome === "challenge_success") {
@@ -240,7 +264,7 @@ export const settleSpecialMatch = (
       );
       const loser = toCelebrationPlayer(
         match,
-        specialMatch.protagonistIds[winnerIndex === 0 ? 1 : 0],
+        specialMatch.protagonistIds[loserIndex],
       );
       if (!winner || !loser) return null;
       const streaks = computeWinStreaksBefore(context, match);

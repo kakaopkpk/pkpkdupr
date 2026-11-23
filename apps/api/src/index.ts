@@ -175,6 +175,7 @@ import {
 import { buildPlayerProfileSummary } from "./services/PlayerProfileSummaryService";
 import {
   buildSpecialMatchCandidatePlayers,
+  judgeSpecialMatchOutcome,
   settleSpecialMatch,
 } from "./services/SpecialMatchService";
 import {
@@ -1189,19 +1190,22 @@ const settleSpecialMatchForSavedMatch = async (
   }
   try {
     const { context } = await loadRankingSource();
-    const { outcome, celebration } = settleSpecialMatch(context, specialMatch, {
-      ...match,
-      completedAt,
-    });
+    const target = { ...match, completedAt };
+    // 결과가 이미 정해져 있던 경기(수정으로 승패가 뒤집힘)는 연출하지 않으므로 결과만 다시 정한다
+    const { outcome, celebration } =
+      specialMatch.outcome == null
+        ? settleSpecialMatch(context, specialMatch, target)
+        : {
+            outcome: judgeSpecialMatchOutcome(context, specialMatch, target),
+            celebration: null,
+          };
     const settled: SpecialMatch = { ...specialMatch, outcome };
     if (outcome !== specialMatch.outcome) {
       await matchRepository.updateSpecialMatch(match.id, settled);
     }
     return {
       match: { ...match, specialMatch: settled },
-      // 결과가 이미 정해져 있던 경기(수정으로 승패가 뒤집힘)는 연출하지 않는다
-      specialMatchCelebration:
-        specialMatch.outcome == null ? celebration : null,
+      specialMatchCelebration: celebration,
     };
   } catch (err) {
     console.error("[MATCH] 특수 매치 결과 판정 실패", match.id, err);
