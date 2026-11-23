@@ -93,10 +93,12 @@
       - 끝난 일반 세션: `RecordSessionCard`(`onPress` 없이 누를 수 없음, 메타 줄 앞에 날짜) → 세션 지배자·칭찬·내 평점·내 새 업적·평점 변화 → "경기" 섹션. 리포트가 없으면 버튼 없는 블루 카드("종료").
       - 칭찬은 `praise/SessionPraiseSection`이다. 끝난 세션이 칭찬하는 세션(`isSessionPraiseEnabled`)이면 리포트와 함께 `GET /api/match-sessions/:sessionId/praise`를 읽고, 후보가 없으면 섹션이 없다. 칭찬을 못 읽으면 보이던 칭찬을 두고 화면은 그대로 그린다.
       - 끝난 세션 머리 카드는 `mine`을 넘기지 않는다(내 기록 띠·줄 없음). 내 기록은 `LastSessionMeCard` 하나만 보인다.
+      - 리포트가 있는 끝난 세션은 머리 오른쪽 위 공유 아이콘으로 `records/SessionReportShareSheet`를 연다. 내용은 `lib/sessionReportShare`가 리포트·칭찬 응답으로 만들고(새 API 없음), 이미지는 `records/sessionReportShareImage`, 미리 만들기·공유는 `hooks/useSessionReportShare`다.
     - `record/`: 경기 기록 시트. 완료 단계는 이 경기로 참가자 전원이 받은 업적을 띠(`match/MatchAchievementRow`)로 보이고, 그중 내 새 업적만 화면 전체 축하 연출 `AchievementCelebration`으로 띄우고 닫으면 확인 처리
       - 축하 연출과 내 받은 업적 상세 시트의 공유는 `hooks/useAchievementShare`가 열 때 공유 이미지(`profile/achievementShareImage`, canvas 2D)를 미리 만들어 두고, 누르면 바로 기기 공유 시트(못 하면 내려받기, 문구는 `lib/achievementShare`)를 연다. iOS Safari는 사용자 동작 직후에만 공유 시트가 열려 누른 뒤에 만들지 않는다.
       - 특수 매치 큰 연출(도전 성공·연승 저지·최강자전 승리)의 "이미지로 공유"는 `hooks/useSpecialMatchShare`(이미지 `record/specialMatchShareImage`, 문구·파일 이름 `lib/specialMatchShare`)를 부른다.
-      - 두 공유 이미지의 틀(어두운 4:5 캔버스·빛줄기·후광·아래 줄)은 `lib/shareImageCanvas`, 미리 만들어 두는 훅은 `hooks/usePreparedShareImage`, 공유·내려받기는 `lib/shareImage`가 같이 맡는다.
+      - 공유 이미지(업적·특수 매치·세션 리포트)의 틀(캔버스·빛줄기·후광·아래 줄)은 `lib/shareImageCanvas`, 아바타 원은 `lib/shareImageAvatar`, 미리 만들어 두는 훅은 `hooks/usePreparedShareImage`, 공유·내려받기는 `lib/shareImage`가 같이 맡는다.
+      - 이미지 만들기는 effect가 끝난 뒤(마이크로태스크)에 시작한다. 아이콘·배지를 `flushSync`로 SVG 문자열로 그리는데, effect 안에서 바로 부르면 그리지 못한다.
     - `session/`: 세션 만들기(일정 탭과 같은 `MonthCalendar`로 고르는 날짜, `minDateKey`로 지난 날·오늘이 든 달 앞은 막음, 표시는 `schedule/useScheduleMonthMarks`·시작·종료 시각 칩 `SessionSchedulePicker`, 오늘 이후 어느 날이든)·참여자 시트 `ParticipantsSheet`(열면 참여자 보기, 오른쪽 위 "수정"으로 같은 시트에서 전체 회원 체크·게스트 추가 수정 모드, 완료·취소·뒤로가기는 보기로 돌아감)
     - `settings/`: 설정·비밀번호 변경·상태메시지 편집·프로필 사진 조정 `AvatarCropScreen`
       - 고른 사진을 끌어 옮기고 핀치로 1~4배, 두 번 탭 2배↔1배, 원 안을 512px JPEG로 잘라 저장. 좌표 계산은 `utils/avatarCrop.ts`

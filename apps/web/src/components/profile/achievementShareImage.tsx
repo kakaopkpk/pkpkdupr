@@ -46,16 +46,21 @@ const COLOR_VARS = {
 
 /**
  * 화면 배지와 같은 육각형·아이콘을 한 장의 SVG 문자열로 만든다. 숫자 꼬리표는 웹폰트가 필요해 캔버스에 따로 그린다.
- * 이미지로 그리는 SVG에서는 CSS 변수가 풀리지 않아 색을 직접 넣는다
+ * 이미지로 그리는 SVG에서는 CSS 변수가 풀리지 않아 색을 직접 넣는다. size는 SVG 픽셀 크기다
  */
-const renderBadgeSvg = (definition: AchievementDefinition, color: string, iconColor: string) => {
+export const renderBadgeSvg = (
+  definition: AchievementDefinition,
+  color: string,
+  iconColor: string,
+  size = BADGE_SIZE,
+) => {
   const iconSize = 48 * BADGE_ICON_RATIO;
   const iconOffset = (48 - iconSize) / 2;
   const container = document.createElement("div");
   const root = createRoot(container);
   flushSync(() => {
     root.render(
-      <svg xmlns="http://www.w3.org/2000/svg" width={BADGE_SIZE} height={BADGE_SIZE} viewBox="0 0 48 48">
+      <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 48 48">
         <polygon
           points={BADGE_HEX_POINTS}
           fill={color}
@@ -86,7 +91,7 @@ const renderBadgeSvg = (definition: AchievementDefinition, color: string, iconCo
   return markup;
 };
 
-const loadSvgImage = async (markup: string) => {
+export const loadSvgImage = async (markup: string) => {
   const image = await loadShareImage(`data:image/svg+xml;charset=utf-8,${encodeURIComponent(markup)}`);
   if (!image) throw new Error("업적 배지를 그리지 못했어요");
   return image;
@@ -199,7 +204,7 @@ export const createAchievementShareImage = async ({
   );
   drawCenteredLines(ctx, conditionLines, top, 15 * 1.45);
 
-  drawShareFooter(ctx, { username, dateLabel, white });
+  drawShareFooter(ctx, { username, dateLabel, color: white });
 
   return canvasToPngFile(canvas, getAchievementShareFileName(definition.id));
 };

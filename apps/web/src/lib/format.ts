@@ -58,6 +58,12 @@ export const formatKstFullDate = (date: Date | string) => {
   return `${year}년 ${month}월 ${day}일`;
 };
 
+/** "2026년 11월 13일 목" 연도와 요일 한 글자까지 쓰는 날짜 */
+export const formatKstFullDateWithWeekday = (date: Date | string) => {
+  const { weekday } = getKstParts(date);
+  return `${formatKstFullDate(date)} ${weekday.charAt(0)}`;
+};
+
 /** "11월 13일 목요일" */
 export const formatKstLongDate = (date: Date | string) => {
   const { month, day, weekday } = getKstParts(date);

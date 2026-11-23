@@ -1,5 +1,6 @@
 /*
- * 공유 이미지(업적·특수 매치) 공통 틀. 어두운 4:5 카드이며, 360×450 배치를 3배로 그려 1080×1350 PNG로 만든다.
+ * 공유 이미지(업적·특수 매치·세션 리포트) 공통 틀. 너비 360 배치를 3배로 그려 1080px 너비 PNG로 만든다.
+ * 업적·특수 매치는 어두운 4:5 카드(360×450 → 1080×1350)이고, 세션 리포트는 흰 바탕에 높이가 내용을 따른다.
  * 빛줄기·후광 크기는 축하 연출의 .pk-celebration-rays(520px 원)·.pk-celebration-glow(300px 원)와 같다.
  */
 export const SHARE_WIDTH = 360;
@@ -16,9 +17,9 @@ const RAY_COUNT = 18;
 const RAY_DEGREES = 7;
 const GLOW_FADE_END = 150 * Math.SQRT2 * 0.62;
 /** 아래 줄(아이디 15 + 2 + 날짜 12)의 높이 */
-const FOOTER_HEIGHT = 15 * SHARE_LINE_HEIGHT + 2 + 12 * SHARE_LINE_HEIGHT;
+export const SHARE_FOOTER_HEIGHT = 15 * SHARE_LINE_HEIGHT + 2 + 12 * SHARE_LINE_HEIGHT;
 /** 아래 줄 위 공간의 끝(가운데 묶음을 세로 가운데에 둘 때 쓴다) */
-export const SHARE_CONTENT_BOTTOM = SHARE_HEIGHT - SHARE_EDGE - FOOTER_HEIGHT;
+export const SHARE_CONTENT_BOTTOM = SHARE_HEIGHT - SHARE_EDGE - SHARE_FOOTER_HEIGHT;
 const SHARE_BRAND = "pkpkdupr";
 
 /** 그릴 때 쓰는 pk 토큰 색을 한 번에 읽는다 */
@@ -73,16 +74,16 @@ export const loadShareImage = (
     image.src = src;
   });
 
-/** 360×450 좌표로 그리는 3배 캔버스와 바탕을 만든다 */
-export const createShareCanvas = (background: string) => {
+/** 360×height(기본 450) 좌표로 그리는 3배 캔버스와 바탕을 만든다 */
+export const createShareCanvas = (background: string, height = SHARE_HEIGHT) => {
   const canvas = document.createElement("canvas");
   canvas.width = SHARE_WIDTH * SHARE_SCALE;
-  canvas.height = SHARE_HEIGHT * SHARE_SCALE;
+  canvas.height = Math.round(height * SHARE_SCALE);
   const ctx = canvas.getContext("2d");
   if (!ctx) throw new Error("이미지를 만들지 못했어요");
   ctx.scale(SHARE_SCALE, SHARE_SCALE);
   ctx.fillStyle = background;
-  ctx.fillRect(0, 0, SHARE_WIDTH, SHARE_HEIGHT);
+  ctx.fillRect(0, 0, SHARE_WIDTH, height);
   return { canvas, ctx };
 };
 
@@ -191,18 +192,34 @@ export const fitLine = (ctx: CanvasRenderingContext2D, text: string, maxWidth: n
   return `${chars.join("")}…`;
 };
 
-/** 아래 줄: 왼쪽 아이디(15 굵게 흰 글자)·날짜 줄(12, 흰색 70%), 오른쪽 pkpkdupr(아래 끝 맞춤) */
+/**
+ * 아래 줄: 왼쪽 이름(15 굵게)·날짜 줄(12), 오른쪽 pkpkdupr(13 굵게, 아래 끝 맞춤).
+ * 어두운 카드는 이름 흰색, 날짜·pkpkdupr 흰색 70%이고, 흰 바탕은 이름 잉크, 날짜·pkpkdupr `pk-muted`다
+ */
 export const drawShareFooter = (
   ctx: CanvasRenderingContext2D,
-  { username, dateLabel, white }: { username: string; dateLabel: string; white: string },
+  {
+    username,
+    dateLabel,
+    color,
+    secondary = "rgba(255, 255, 255, 0.7)",
+    height = SHARE_HEIGHT,
+  }: {
+    username: string;
+    dateLabel: string;
+    color: string;
+    secondary?: string;
+    /** 캔버스 높이. 아래 끝에서 SHARE_EDGE 위에 맞춘다 */
+    height?: number;
+  },
 ) => {
-  const bottom = SHARE_HEIGHT - SHARE_EDGE;
+  const bottom = height - SHARE_EDGE;
   ctx.save();
   ctx.textBaseline = "middle";
   setLetterSpacing(ctx, "0px");
   ctx.textAlign = "right";
   ctx.font = shareFont(800, 13);
-  ctx.fillStyle = "rgba(255, 255, 255, 0.7)";
+  ctx.fillStyle = secondary;
   ctx.fillText(SHARE_BRAND, SHARE_WIDTH - SHARE_EDGE, bottom - (13 * SHARE_LINE_HEIGHT) / 2);
   const brandWidth = ctx.measureText(SHARE_BRAND).width;
 
@@ -211,7 +228,7 @@ export const drawShareFooter = (
   ctx.font = shareFont(400, 12);
   ctx.fillText(fitLine(ctx, dateLabel, leftMaxWidth), SHARE_EDGE, bottom - (12 * SHARE_LINE_HEIGHT) / 2);
   ctx.font = shareFont(800, 15);
-  ctx.fillStyle = white;
+  ctx.fillStyle = color;
   ctx.fillText(
     fitLine(ctx, username, leftMaxWidth),
     SHARE_EDGE,
@@ -220,3 +237,30 @@ export const drawShareFooter = (
   ctx.restore();
 };
 
+export const fillRoundRect = (
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  radius: number,
+  color: string,
+) => {
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  ctx.roundRect(x, y, width, height, radius);
+  ctx.fill();
+};
+
+export const fillCircle = (
+  ctx: CanvasRenderingContext2D,
+  cx: number,
+  cy: number,
+  radius: number,
+  color: string,
+) => {
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+  ctx.fill();
+};
