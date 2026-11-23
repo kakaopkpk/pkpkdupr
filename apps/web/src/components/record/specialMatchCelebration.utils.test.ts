@@ -12,7 +12,7 @@ import {
   toSpecialMatchShareTarget,
 } from "./specialMatchCelebration.utils";
 
-const player = (id: string) => ({ id, username: id, avatarUrl: null });
+const player = (id: string) => ({ id, username: id });
 
 const challenge = (
   challengerBefore: number,

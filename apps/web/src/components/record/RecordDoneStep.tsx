@@ -112,7 +112,7 @@ export default function RecordDoneStep({
   );
   // 특수 매치 큰 연출은 기록한 내가 이긴 팀일 때만, 이 완료 화면에서만 띄운다(다른 화면에서 나중에 띄우지 않음)
   const specialMatchCelebration =
-    viewer && match.specialMatchCelebration && isViewerOnWinningTeam(match, viewer.id)
+    viewer?.username && match.specialMatchCelebration && isViewerOnWinningTeam(match, viewer.id)
       ? match.specialMatchCelebration
       : null;
   const isSpecialMatchCelebrationShown =
@@ -243,7 +243,7 @@ export default function RecordDoneStep({
           </PkButton>
         </div>
       </BottomSheet.Footer>
-      {viewer && specialMatchCelebration && isSpecialMatchCelebrationShown ? (
+      {viewer?.username && specialMatchCelebration && isSpecialMatchCelebrationShown ? (
         <SpecialMatchCelebrationScreen
           celebration={specialMatchCelebration}
           match={match}
