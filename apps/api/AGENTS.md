@@ -65,7 +65,10 @@
   - 경기 없음 404, 예정 경기가 아니면 409, 세션이 오늘 세션이 아니면 409.
   - 선수가 이미 진행 중 경기에 있으면 409 "<아이디>님이 다른 경기 중이에요".
   - `POST /api/matches/start`와 같은 advisory 잠금으로 직렬화한다.
-- 진행 중 경기 전부 `GET /api/matches/in-progress`: `/api/matches/:matchId`보다 먼저 등록, 대진 예정 경기 제외
+- 진행 중 경기 전부 `GET /api/matches/in-progress`: 응답 `InProgressMatchesResponse`
+  - `/api/matches/:matchId`보다 먼저 등록, 대진 예정 경기 제외.
+  - `winStreaks`는 참가자 중 지금 연승(랭킹 `winStreak`과 같은 규칙)이 `WIN_STREAK_DISPLAY_MIN` 이상인 정회원의 선수 id → 연승 수이고, 없으면 빈 객체다.
+  - 랭킹 원천을 못 읽으면 `winStreaks`만 빈 객체로 응답한다. 진행 중 경기가 없으면 원천을 읽지 않는다.
 - `GET /api/match-feed`: 대진 예정 경기 제외
 - 세션 조회 API
 

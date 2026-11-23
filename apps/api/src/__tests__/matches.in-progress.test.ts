@@ -1,3 +1,4 @@
+import type { CompletedMatchOutcome } from "@pkpkdupr/db";
 import type { Match } from "@pkpkdupr/shared/match";
 import type { Player } from "@pkpkdupr/shared/player";
 import request from "supertest";
@@ -30,6 +31,13 @@ const requester: Player = {
   updatedAt: now,
 };
 
+const makePlayer = (id: string, isGuest = false): Player => ({
+  ...requester,
+  id,
+  username: id,
+  isGuest,
+});
+
 const inProgressMatch = {
   id: "Minprog1",
   type: "mixed-doubles",
@@ -37,10 +45,33 @@ const inProgressMatch = {
   scores: [],
   matchStartsAt: now,
   completedAt: null,
+  teams: [
+    { id: "Tteam-a", name: "Team A", players: [makePlayer("Pstreak5"), makePlayer("Pstreak4")] },
+    { id: "Tteam-b", name: "Team B", players: [makePlayer("Pstreak7"), makePlayer("Pguest01", true)] },
+  ],
 } as unknown as Match;
+
+/** winnerId가 이긴 완료 경기 count개(오래된 것부터, now 이전) */
+const winsFor = (winnerId: string, count: number) =>
+  Array.from({ length: count }, (_, index): CompletedMatchOutcome => {
+    const at = new Date(now.getTime() - (count - index) * 3_600_000);
+    return {
+      id: `Mwin-${winnerId}-${index}`,
+      type: "men-doubles",
+      sessionId: null,
+      matchStartsAt: at,
+      completedAt: at,
+      teamPlayerIds: [[winnerId], [`Ploser-${winnerId}-${index}`]],
+      scores: [{ scoreA: 11, scoreB: 5 }],
+      ratingExcluded: false,
+    };
+  });
 
 describe("GET /api/matches/in-progress", () => {
   let findInProgress: MockInstance<MatchRepository["findInProgress"]>;
+  let findCompletedMatchOutcomes: MockInstance<
+    MatchRepository["findCompletedMatchOutcomes"]
+  >;
   let findByIdWithRatingChanges: MockInstance<
     MatchRepository["findByIdWithRatingChanges"]
   >;
@@ -60,6 +91,18 @@ describe("GET /api/matches/in-progress", () => {
     findInProgress = vi
       .spyOn(MatchRepository.prototype, "findInProgress")
       .mockResolvedValue([inProgressMatch]);
+    vi.spyOn(AuthService.prototype, "getAllPlayers").mockResolvedValue([]);
+    vi.spyOn(
+      MatchRepository.prototype,
+      "getAllRatingChangeLogs",
+    ).mockResolvedValue([]);
+    findCompletedMatchOutcomes = vi
+      .spyOn(MatchRepository.prototype, "findCompletedMatchOutcomes")
+      .mockResolvedValue([]);
+    vi.spyOn(
+      MatchRepository.prototype,
+      "findSessionsWithParticipantIds",
+    ).mockResolvedValue([]);
     findByIdWithRatingChanges = vi
       .spyOn(MatchRepository.prototype, "findByIdWithRatingChanges")
       .mockResolvedValue(undefined);
@@ -70,7 +113,7 @@ describe("GET /api/matches/in-progress", () => {
     vi.restoreAllMocks();
   });
 
-  it("세션과 상관없이 진행 중 경기 전부를 { matches }로 돌려준다", async () => {
+  it("세션과 상관없이 진행 중 경기 전부를 matches로 돌려준다", async () => {
     const response = await request(app)
       .get("/api/matches/in-progress")
       .set("Authorization", "Bearer token");
@@ -82,6 +125,58 @@ describe("GET /api/matches/in-progress", () => {
       id: "Minprog1",
       status: "created",
     });
+  });
+
+  it("참가자 중 지금 5연승 이상인 정회원만 winStreaks에 연승 수를 싣는다", async () => {
+    findCompletedMatchOutcomes.mockResolvedValue([
+      ...winsFor("Pstreak5", 5),
+      ...winsFor("Pstreak4", 4),
+      ...winsFor("Pstreak7", 7),
+      ...winsFor("Pguest01", 6),
+      // 진행 중 경기에 없는 회원은 연승이 길어도 싣지 않는다
+      ...winsFor("Poutside", 9),
+    ]);
+
+    const response = await request(app)
+      .get("/api/matches/in-progress")
+      .set("Authorization", "Bearer token");
+
+    expect(response.status).toBe(200);
+    expect(response.body.winStreaks).toEqual({ Pstreak5: 5, Pstreak7: 7 });
+  });
+
+  it("연승 회원이 없으면 winStreaks는 빈 객체다", async () => {
+    const response = await request(app)
+      .get("/api/matches/in-progress")
+      .set("Authorization", "Bearer token");
+
+    expect(response.status).toBe(200);
+    expect(response.body.winStreaks).toEqual({});
+  });
+
+  it("랭킹 원천을 못 읽어도 진행 중 경기는 돌려주고 winStreaks는 빈 객체다", async () => {
+    findCompletedMatchOutcomes.mockRejectedValue(new Error("db down"));
+    vi.spyOn(console, "error").mockImplementation(() => {});
+
+    const response = await request(app)
+      .get("/api/matches/in-progress")
+      .set("Authorization", "Bearer token");
+
+    expect(response.status).toBe(200);
+    expect(response.body.matches).toHaveLength(1);
+    expect(response.body.winStreaks).toEqual({});
+  });
+
+  it("진행 중 경기가 없으면 랭킹 원천을 읽지 않는다", async () => {
+    findInProgress.mockResolvedValue([]);
+
+    const response = await request(app)
+      .get("/api/matches/in-progress")
+      .set("Authorization", "Bearer token");
+
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual({ matches: [], winStreaks: {} });
+    expect(findCompletedMatchOutcomes).not.toHaveBeenCalled();
   });
 
   it("경기 상세 라우트보다 먼저 등록되어 in-progress를 경기 id로 읽지 않는다", async () => {
