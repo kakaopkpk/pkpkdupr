@@ -77,6 +77,8 @@ export interface SessionRecommendationsState {
   recommendation: MatchSessionRecommendationResponse | null;
   status: "idle" | "loading" | "ready" | "error";
   error: string | null;
+  /** 다시 추천을 받는 중. 그동안 보던 추천을 그대로 둔다 */
+  isRerolling: boolean;
   /** 감점순 다음 후보를 받는다. 마지막 후보 다음은 서버가 1등으로 돌린다 */
   recommendAgain: () => void;
   /** 지금 순번 그대로 다시 받는다(당겨서 새로고침) */
@@ -103,6 +105,7 @@ export const useSessionRecommendations = (
   const [status, setStatus] =
     useState<SessionRecommendationsState["status"]>("idle");
   const [error, setError] = useState<string | null>(null);
+  const [isRerolling, setIsRerolling] = useState(false);
   const requestIdRef = useRef(0);
   const loadedSessionIdRef = useRef<string | null>(null);
   const isLoadingRef = useRef(false);
@@ -119,6 +122,7 @@ export const useSessionRecommendations = (
       if (!sessionId) {
         loadedSessionIdRef.current = null;
         isLoadingRef.current = false;
+        setIsRerolling(false);
         setRecommendation(null);
         setStatus("idle");
         setError(null);
@@ -140,6 +144,7 @@ export const useSessionRecommendations = (
         );
         if (requestIdRef.current !== requestId) return;
         isLoadingRef.current = false;
+        setIsRerolling(false);
         shownRankRef.current = data.rank;
         setRecommendation(data);
         setStatus("ready");
@@ -147,6 +152,7 @@ export const useSessionRecommendations = (
       } catch (err) {
         if (requestIdRef.current !== requestId) return;
         isLoadingRef.current = false;
+        setIsRerolling(false);
         setError(
           err instanceof Error && err.message
             ? err.message
@@ -199,7 +205,7 @@ export const useSessionRecommendations = (
   );
   // 같은 코트 수로는 한 번만 다시 받는다. 서버가 그만큼 채우지 못해도(진행 중 경기 목록이 늦음 등) 되풀이하지 않는다.
   // 추천이 있는데 늘어날 코트가 없어지면 잊어서, 나중에 다시 늘 수 있게 되면 또 받는다.
-  // 추천을 비운 동안(다시 추천·세션 바뀜)은 잊지 않아, 응답이 같은 코트 수에 못 미쳐도 또 받지 않는다
+  // 추천을 비운 동안(세션 바뀜)은 잊지 않아, 응답이 같은 코트 수에 못 미쳐도 또 받지 않는다
   const handledExpandableCourtsRef = useRef(0);
   useEffect(() => {
     if (!expandableCourts) {
@@ -213,13 +219,13 @@ export const useSessionRecommendations = (
     void load(shownRankRef.current);
   }, [expandableCourts, load, recommendation]);
 
+  // 보던 추천을 비우지 않고 새 추천이 오면 바꿔 끼워, 스켈레톤으로 카드 높이가 흔들리지 않게 한다
   const recommendAgain = useCallback(() => {
-    setStatus("loading");
-    setRecommendation(null);
+    setIsRerolling(true);
     void load(shownRankRef.current + 1);
   }, [load]);
 
   const reload = useCallback(() => load(shownRankRef.current), [load]);
 
-  return { recommendation, status, error, recommendAgain, reload };
+  return { recommendation, status, error, isRerolling, recommendAgain, reload };
 };

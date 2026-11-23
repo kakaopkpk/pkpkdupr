@@ -5,6 +5,7 @@ import {
 } from "@pkpkdupr/shared/matchmaking";
 import SkeletonBlock from "@/components/SkeletonBlock";
 import { Card } from "@/components/ui/Card";
+import { cx } from "@/components/ui/cx";
 import { Section, TextLink } from "@/components/ui/Section";
 import type { SessionWinStreakByPlayer } from "@/components/ui/PlayerAvatar";
 import RecommendationCard from "./RecommendationCard";
@@ -41,10 +42,14 @@ const RecommendationSection: React.FC<{
   sessionWinStreaks,
   onStart,
 }) => {
-  const { recommendation, status, error, recommendAgain } = state;
+  const { recommendation, status, error, isRerolling, recommendAgain } = state;
 
   const renderBody = () => {
-    if (status === "loading" || (status === "idle" && !recommendation)) {
+    if (
+      status === "loading" ||
+      (status === "idle" && !recommendation) ||
+      (isRerolling && !recommendation)
+    ) {
       return <RecommendationSkeleton />;
     }
     if (status === "error" && !recommendation) {
@@ -65,7 +70,13 @@ const RecommendationSection: React.FC<{
     }
 
     return (
-      <div className="flex flex-col gap-3">
+      <div
+        aria-busy={isRerolling}
+        className={cx(
+          "flex flex-col gap-3 transition-opacity duration-150",
+          isRerolling && "opacity-50",
+        )}
+      >
         {recommendation.courts.map((court) => {
           const key = getCourtKey(court);
           return (
@@ -73,14 +84,21 @@ const RecommendationSection: React.FC<{
               key={key}
               court={court}
               isStarting={startingKey === key}
-              // 시작 요청 중에는 다른 추천도 막아 같은 선수가 두 경기에 들어가지 않게 한다
-              isStartDisabled={startingKey !== null}
+              // 시작 요청 중에는 다른 추천도 막아 같은 선수가 두 경기에 들어가지 않게 한다.
+              // 다시 추천을 받는 중에는 곧 바뀔 카드라 시작하지 않는다
+              isStartDisabled={startingKey !== null || isRerolling}
               error={startError?.key === key ? startError.message : null}
               sessionWinStreaks={sessionWinStreaks}
               onStart={() => onStart(court)}
             />
           );
         })}
+        {/* 다시 받기에 실패하면 보던 추천을 두고 실패만 알린다 */}
+        {status === "error" ? (
+          <p role="alert" className="px-1 text-pk-13 font-medium text-pk-down">
+            {error ?? "추천 매칭을 불러오지 못했어요."}
+          </p>
+        ) : null}
       </div>
     );
   };
