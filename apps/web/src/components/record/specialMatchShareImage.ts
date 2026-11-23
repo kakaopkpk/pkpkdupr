@@ -48,6 +48,7 @@ const TITLE_LINE = 37;
 const TITLE_CARD_GAP = 18;
 const CARD_CAPTION_GAP = 16;
 const CAPTION_SIZE = 15;
+const CAPTION_WEIGHT = 700;
 const CAPTION_LINE = 22;
 const MIN_CAPTION_SIZE = 12;
 const MIN_CONTENT_TOP = 36;
@@ -446,7 +447,7 @@ const drawCaption = (
   const texts = parts.map((part) => part.text);
   const measure = (size: number) =>
     texts.map((text) => {
-      ctx.font = shareFont(700, size);
+      ctx.font = shareFont(CAPTION_WEIGHT, size);
       return ctx.measureText(text).width;
     });
   let size = CAPTION_SIZE;
@@ -458,13 +459,13 @@ const drawCaption = (
   const overflow = sum(widths) - CARD_WIDTH;
   const fitIndex = parts.findIndex((part) => part.fit);
   if (overflow > 0 && fitIndex >= 0) {
-    ctx.font = shareFont(700, size);
+    ctx.font = shareFont(CAPTION_WEIGHT, size);
     texts[fitIndex] = fitLine(ctx, texts[fitIndex], widths[fitIndex] - overflow);
     widths[fitIndex] = ctx.measureText(texts[fitIndex]).width;
   }
   let x = (SHARE_WIDTH - sum(widths)) / 2;
   parts.forEach((part, index) => {
-    ctx.font = shareFont(700, size);
+    ctx.font = shareFont(CAPTION_WEIGHT, size);
     ctx.fillStyle =
       part.highlight === "up" ? colors.upOnDeep : part.highlight === "amber" ? colors.amber : colors.white;
     ctx.fillText(texts[index], x, cy);
