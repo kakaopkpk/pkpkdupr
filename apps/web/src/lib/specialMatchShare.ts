@@ -60,10 +60,11 @@ export type SpecialMatchShareTarget = SpecialMatchShareBase &
 
 export type SpecialMatchShareKind = SpecialMatchShareTarget["kind"];
 
-/** 문구 조각. highlight가 있으면 그 색으로 굵게 칠한다 */
+/** 문구 조각. highlight가 있으면 그 색으로 굵게 칠하고, fit이면 한 줄에 안 들어갈 때 말줄임으로 줄인다(아이디) */
 export interface SpecialMatchCaptionPart {
   text: string;
   highlight?: "up" | "amber";
+  fit?: boolean;
 }
 
 const TITLES: Record<SpecialMatchShareKind, string> = {
@@ -90,19 +91,22 @@ export const getSpecialMatchCaptionParts = (
     case "challenge": {
       const passed = target.passed.player.username;
       return [
-        { text: `${passed}${getObjectParticle(passed)} 넘어 ` },
+        { text: passed, fit: true },
+        { text: `${getObjectParticle(passed)} 넘어 ` },
         { text: `${target.winner.rank}위`, highlight: "up" },
       ];
     }
     case "streak-break":
       return [
-        { text: `${target.loser.username}의 ` },
+        { text: target.loser.username, fit: true },
+        { text: "의 " },
         { text: `${target.brokenStreak}연승`, highlight: "amber" },
         { text: "을 끊었어요" },
       ];
     case "king-win":
       return [
-        { text: `${target.loser.username}의 ` },
+        { text: target.loser.username, fit: true },
+        { text: "의 " },
         { text: `${target.brokenStreak}연승`, highlight: "amber" },
         { text: "을 끊고 " },
         { text: `${target.winnerStreak}연승`, highlight: "amber" },

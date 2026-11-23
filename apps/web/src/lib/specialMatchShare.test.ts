@@ -75,6 +75,17 @@ describe("getSpecialMatchCaptionParts", () => {
   it("최강자전 승리는 끊긴 연승과 이어 간 연승", () => {
     expect(join(kingWin)).toBe("colin.34의 [7연승]을 끊고 [6연승]");
   });
+
+  it("넘치면 줄일 조각은 상대 아이디 하나", () => {
+    for (const [target, username] of [
+      [challenge, "jackie.hur"],
+      [streakBreak, "martin.bok"],
+      [kingWin, "colin.34"],
+    ] as const) {
+      const fitParts = getSpecialMatchCaptionParts(target).filter((part) => part.fit);
+      expect(fitParts).toEqual([{ text: username, fit: true }]);
+    }
+  });
 });
 
 describe("getSpecialMatchShareText", () => {

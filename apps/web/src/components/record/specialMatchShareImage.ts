@@ -499,7 +499,7 @@ const getCardLayout = (target: SpecialMatchShareTarget, avatars: Avatars, colors
   }
 };
 
-/** 문구: 15 굵게 흰 글자, 강조 조각만 색. 한 줄에 안 들어가면 12까지 글자를 줄인다 */
+/** 문구: 15 굵게 흰 글자, 강조 조각만 색. 한 줄에 안 들어가면 12까지 글자를 줄이고, 그래도 넘치면 아이디를 말줄임한다 */
 const drawCaption = (
   ctx: CanvasRenderingContext2D,
   parts: SpecialMatchCaptionPart[],
@@ -521,12 +521,20 @@ const drawCaption = (
     size -= 1;
     widths = measure(size);
   }
+  const overflow = widths.reduce((sum, width) => sum + width, 0) - CARD_WIDTH;
+  const fitIndex = parts.findIndex((part) => part.fit);
+  const lines = parts.map((part) => part.text);
+  if (overflow > 0 && fitIndex >= 0) {
+    ctx.font = shareFont(parts[fitIndex].highlight ? 800 : 700, size);
+    lines[fitIndex] = fitLine(ctx, lines[fitIndex], widths[fitIndex] - overflow);
+    widths[fitIndex] = ctx.measureText(lines[fitIndex]).width;
+  }
   let x = (SHARE_WIDTH - widths.reduce((sum, width) => sum + width, 0)) / 2;
   parts.forEach((part, index) => {
     ctx.font = shareFont(part.highlight ? 800 : 700, size);
     ctx.fillStyle =
       part.highlight === "up" ? colors.upOnDeep : part.highlight === "amber" ? colors.amber : colors.white;
-    ctx.fillText(part.text, x, cy);
+    ctx.fillText(lines[index], x, cy);
     x += widths[index];
   });
   ctx.restore();
