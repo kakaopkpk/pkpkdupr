@@ -449,7 +449,7 @@ describe("게스트가 낀 경기 기록·수정의 ratingExcluded", () => {
             [requester.id, partner.id],
             [opponentM.id, guest.id],
           ],
-          scores: match.scores,
+          scores: match.scores ?? [],
           ratingExcluded: true,
         },
       ]);
