@@ -190,7 +190,7 @@
   - 나 탭·회원 프로필(`useProfileOverview`): `matches`·`ratings`·`achievements`·`players`
   - 랭킹 복식·단식: `ratings`·`players`, 업적 랭킹: `achievements`·`players`. 보고 있는 분류만 다시 받고 나머지는 볼 때 받습니다.
   - 회원 경기 전체: `matches`, 업적 전체 보기·업적 축하: `achievements`
-  - 칭찬 팝업: `sessions`·`matches`. 칭찬 저장은 `sessions`·`achievements`를 무효화한다(칭찬 수·칭찬 업적).
+  - 칭찬 팝업: `sessions`·`matches`. 떠 있는 동안 고르기 전이면 `sessions`가 바뀔 때 그 세션 칭찬을 다시 읽어 칭찬 수를 갱신한다. 칭찬 저장은 `sessions`·`achievements`를 무효화한다(칭찬 수·칭찬 업적).
 - 참여 버튼은 무효화 뒤 그 화면의 `dataVersion`이 오른 값 이상으로 새로 받은 데이터가 올 때 풀립니다(`useSessionParticipation`의 `dataVersion`·`loadedVersion`).
 - 진행 중 세션은 이와 별개로 세션 시작·끝·만료 시각에 다시 읽고, 숨은 동안 그 시각이 지났으면 다시 보일 때 읽습니다.
   - 다시 보일 때는 잠깐 기다려 숨은 동안의 무효화·TTL로 이미 다시 읽기 시작했으면 한 번 더 읽지 않습니다.

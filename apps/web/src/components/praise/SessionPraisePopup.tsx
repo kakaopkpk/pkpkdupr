@@ -13,7 +13,7 @@ import { PlayerAvatar } from "@/components/ui/PlayerAvatar";
 import { SheenOverlay } from "@/components/ui/SheenOverlay";
 import { cx } from "@/components/ui/cx";
 import { GLOBAL_LAYER } from "@/context/AppNavigationContext";
-import { useInvalidateData } from "@/context/DataSyncContext";
+import { useDataVersion, useInvalidateData } from "@/context/DataSyncContext";
 import { useSystemNotice } from "@/context/SystemNoticeContext";
 import {
   type TabKey,
@@ -25,6 +25,7 @@ import { prefersReducedMotion } from "@/hooks/useSheetDrag";
 import { isNetworkError } from "@/lib/errors";
 import { cycleFocusWithin } from "@/lib/focus";
 import {
+  fetchSessionPraise,
   formatSessionPraiseValue,
   isSessionPraiseValueRising,
   praiseSessionPlayer,
@@ -35,6 +36,8 @@ import { SessionPraiseCategoryChip } from "./SessionPraiseParts";
 const DEPTH_ID = "session-praise-popup";
 // index.css `.pk-celebration-dim`의 딤 투명도와 같다
 const DIM_OPACITY = 0.62;
+// 다른 회원이 칭찬하면 sessions가 무효화된다(서버 변경 신호)
+const LIVE_COUNT_DATA_KINDS = ["sessions"] as const;
 // 칭찬이 저장된 뒤 화면 전체가 사라지기 시작하는 시각(탭 후 약 3초)
 const AUTO_CLOSE_MS = 2800;
 const CLOSE_FADE_MS = 420;
@@ -203,6 +206,9 @@ export default function SessionPraisePopup({
   const [phase, setPhase] = useState<Phase>("idle");
   const [pickedPlayerId, setPickedPlayerId] = useState<string | null>(null);
   const [result, setResult] = useState<SessionPraiseResponse | null>(null);
+  // 고르기 전 실시간 칭찬 수: 다른 회원이 칭찬해 세션 데이터 버전이 오르면 다시 읽는다
+  const [latest, setLatest] = useState(praise);
+  const sessionsVersion = useDataVersion(LIVE_COUNT_DATA_KINDS);
   const [error, setError] = useState<string | null>(null);
   const cardsRef = useRef<HTMLDivElement>(null);
   const dialogRef = useRef<HTMLDivElement>(null);
@@ -223,7 +229,8 @@ export default function SessionPraisePopup({
     if (isClosedRef.current) return;
     isClosedRef.current = true;
     setIsDepthRequested(false);
-    if (phaseRef.current !== "praised") callbacksRef.current.onSkip();
+    // 저장 중에 닫으면 결과를 모르므로 넘김으로 기록하지 않는다(실패했으면 다음에 다시 뜬다)
+    if (phaseRef.current === "idle") callbacksRef.current.onSkip();
     if (isReducedMotion) callbacksRef.current.onExited();
     else setIsClosing(true);
   }, [isReducedMotion]);
@@ -307,7 +314,21 @@ export default function SessionPraisePopup({
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [requestClose]);
 
-  const shown = result ?? praise;
+  useEffect(() => {
+    if (phaseRef.current !== "idle") return;
+    let isCancelled = false;
+    fetchSessionPraise(praise.session.id)
+      .then((next) => {
+        if (!isCancelled && phaseRef.current === "idle") setLatest(next);
+      })
+      // 실패하면 보던 수를 그대로 둔다
+      .catch(() => {});
+    return () => {
+      isCancelled = true;
+    };
+  }, [praise.session.id, sessionsVersion]);
+
+  const shown = result ?? latest;
   const getMode = (playerId: string): CardMode => {
     if (phase === "idle") return "idle";
     const isPicked = playerId === pickedPlayerId;
@@ -371,7 +392,7 @@ export default function SessionPraisePopup({
                 mode={getMode(candidate.player.id)}
                 count={candidate.praiseCount}
                 countFrom={
-                  praise.candidates.find(
+                  latest.candidates.find(
                     (before) => before.player.id === candidate.player.id,
                   )?.praiseCount ?? candidate.praiseCount
                 }
