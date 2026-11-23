@@ -383,7 +383,7 @@ describe("recommendDoublesMatches 특수 유형 가산점", () => {
       }),
     );
 
-  it("유형별 가산점은 연승 저지·최강자전 2, 도전 매치 1.5, 리벤지 0이다", () => {
+  it("유형별 가산점은 연승 저지·최강자전 2, 라이벌전 1.5, 리벤지 0이다", () => {
     expect(getSpecialMatchRecommendationBonus("streak_stopper")).toBe(
       SPECIAL_MATCH_RECOMMENDATION_BONUS.streak,
     );
@@ -435,7 +435,7 @@ describe("recommendDoublesMatches 특수 유형 가산점", () => {
     expect(court.specialMatch?.protagonistIds[streakTeam]).toBe("p02");
   });
 
-  it("도전 매치가 되는 대진만 감점에서 1.5를 빼고, 후보는 뺀 감점순이다", () => {
+  it("라이벌전이 되는 대진만 감점에서 1.5를 빼고, 후보는 뺀 감점순이다", () => {
     const participants: MatchmakingParticipant[] = [
       { id: "a", doublesRating: 3 },
       { id: "b", doublesRating: 3.02 },

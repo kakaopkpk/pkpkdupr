@@ -43,7 +43,7 @@ const kingWin: SpecialMatchShareTarget = {
 
 describe("getSpecialMatchShareTitle", () => {
   it("연출 제목과 같다", () => {
-    expect(getSpecialMatchShareTitle("challenge")).toBe("도전 성공!");
+    expect(getSpecialMatchShareTitle("challenge")).toBe("라이벌전 승리!");
     expect(getSpecialMatchShareTitle("streak-break")).toBe("연승 저지!");
     expect(getSpecialMatchShareTitle("king-win")).toBe("최강자전 승리!");
   });
@@ -55,7 +55,7 @@ describe("getSpecialMatchCaptionParts", () => {
       .map((part) => (part.highlight ? `[${part.text}]` : part.text))
       .join("");
 
-  it("도전 성공은 넘어선 회원과 새 순위(상승색)", () => {
+  it("라이벌전 승리는 넘어선 회원과 새 순위(상승색)", () => {
     expect(join(challenge)).toBe("jackie.hur를 넘어 [11위]");
     expect(getSpecialMatchCaptionParts(challenge).at(-1)?.highlight).toBe("up");
   });
@@ -89,7 +89,7 @@ describe("getSpecialMatchCaptionParts", () => {
 });
 
 describe("getSpecialMatchShareText", () => {
-  it("도전 성공은 순위가 오른 회원이 주어이고 종목을 붙인다", () => {
+  it("라이벌전 승리는 순위가 오른 회원이 주어이고 종목을 붙인다", () => {
     expect(getSpecialMatchShareText(challenge)).toBe("sean.oh님이 jackie.hur를 넘어 복식 11위가 됐어요");
     expect(getSpecialMatchShareText({ ...challenge, category: "singles" } as SpecialMatchShareTarget)).toBe(
       "sean.oh님이 jackie.hur를 넘어 단식 11위가 됐어요",

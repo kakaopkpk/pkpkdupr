@@ -10,9 +10,9 @@ import type { MatchInfo } from "@/types/match";
 
 /** 카드가 튀어나와 자리 잡은 뒤 잠깐 멈췄다가 장면을 시작한다 */
 export const SCENE_START_MS = 900;
-/** 도전 성공: 도전한 쪽 순위가 한 칸 오르는 박자 */
+/** 라이벌전 승리: 도전한 쪽 순위가 한 칸 오르는 박자 */
 export const CHALLENGE_STEP_MS = 500;
-/** 도전 성공: 두 줄이 자리를 바꾸는 시간 */
+/** 라이벌전 승리: 두 줄이 자리를 바꾸는 시간 */
 export const CHALLENGE_SWAP_MS = 350;
 /** 손바닥 도장이 떨어지는 시간. index.css `--animate-pk-stamp-drop` 길이와 같아야 한다 */
 const STAMP_DROP_MS = 520;
@@ -32,7 +32,7 @@ export const getChallengeCountSteps = (
 ): number => Math.max(0, celebration.challenger.rankBefore - celebration.defender.rankBefore - 1);
 
 /**
- * 장면 박자 시각. 도전 성공은 한 칸씩 오르는 박자들 뒤 자리 바꿈 한 번,
+ * 장면 박자 시각. 라이벌전 승리는 한 칸씩 오르는 박자들 뒤 자리 바꿈 한 번,
  * 연승 저지는 도장 떨어지기 시작·박힘, 최강자전은 그 뒤 이긴 쪽 테두리 타오름이다
  */
 export const getSceneBeatTimes = (celebration: SpecialMatchCelebration): number[] => {

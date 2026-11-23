@@ -43,7 +43,7 @@ describe("getChallengeCountSteps", () => {
 });
 
 describe("getSceneBeatTimes·getSceneEndMs", () => {
-  it("도전 성공은 오르는 박자들 뒤 자리 바꿈 한 번이고 자리를 다 바꾸면 끝난다", () => {
+  it("라이벌전 승리는 오르는 박자들 뒤 자리 바꿈 한 번이고 자리를 다 바꾸면 끝난다", () => {
     const celebration = challenge(6, 3);
     expect(getSceneBeatTimes(celebration)).toEqual([
       SCENE_START_MS,
@@ -91,7 +91,7 @@ describe("isViewerOnWinningTeam", () => {
 });
 
 describe("toSpecialMatchShareTarget", () => {
-  it("도전 성공은 도전한 쪽이 위 줄(▲), 지키던 쪽이 넘어선 회원(▼)이다", () => {
+  it("라이벌전 승리는 도전한 쪽이 위 줄(▲), 지키던 쪽이 넘어선 회원(▼)이다", () => {
     expect(toSpecialMatchShareTarget(challenge(5, 3), match, "me")).toEqual({
       matchId: "m1",
       username: "me",

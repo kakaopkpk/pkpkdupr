@@ -1129,7 +1129,7 @@ describe("PUT /api/matches/:matchId", () => {
       expect(response.body.specialMatchCelebration).toBeNull();
     });
 
-    describe("도전 매치", () => {
+    describe("라이벌전", () => {
       const challengeMatch: SpecialMatch = {
         kind: "challenge",
         defendingTeamIndex: 1,

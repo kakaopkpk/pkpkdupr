@@ -85,7 +85,7 @@ describe("MatchRow 특수 매치", () => {
         outcome: "challenge_success",
       },
     };
-    expect(getMetaText(match, "alice")).toBe("21:50 · 내 경기도전 매치");
+    expect(getMetaText(match, "alice")).toBe("21:50 · 내 경기라이벌전");
   });
 
   it("일반 매치는 유형 이름이 없다", () => {
