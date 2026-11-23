@@ -27,9 +27,14 @@ import { SupabaseAuthAdmin } from "../services/supabaseAuthAdmin";
 import type { RatingServiceContract } from "../services/RatingContract";
 import {
   buildRankingResponse,
+  countAchievementHolders,
   createRankingContext,
+  findAchievementsEarnedByMatches,
+  findEndedSessions,
   type RankingMatch,
+  type RankingSession,
 } from "../services/RankingService";
+import { buildSpecialMatchCandidatePlayers } from "../services/SpecialMatchService";
 
 // 2026-11-12는 목요일, 2026-11-11은 수요일(정기 세션 요일이 아님)이다.
 const thursdayMorning = new Date("2026-11-12T10:00:00+09:00");
@@ -380,6 +385,94 @@ describe("게스트가 낀 경기 기록·수정의 ratingExcluded", () => {
       expect(create.mock.calls[0]![0]).toMatchObject({ ratingExcluded: false });
       expect(applyMatchResult).toHaveBeenCalledTimes(1);
     });
+
+    it("게스트가 낀 경기도 정회원은 새 업적을 받고, 게스트 본인은 받지 않는다", async () => {
+      // 업적 기준 시각(2026-11-17) 뒤에 기록한다
+      const recordedAt = new Date("2026-11-19T10:00:00+09:00");
+      vi.setSystemTime(recordedAt);
+      vi.mocked(
+        MatchRepository.prototype.findCompletedMatchOutcomes,
+      ).mockResolvedValue([
+        {
+          id: "Mmatch01",
+          type: "unrestricted-doubles",
+          sessionId: null,
+          matchStartsAt: recordedAt,
+          completedAt: recordedAt,
+          teamPlayerIds: [
+            [requester.id, partner.id],
+            [opponentM.id, guest.id],
+          ],
+          scores: [{ scoreA: 11, scoreB: 7 }],
+          ratingExcluded: true,
+        },
+      ]);
+
+      const response = await record([opponentM.id, guest.id]);
+
+      expect(response.status).toBe(201);
+      const holderIds = new Set(
+        (response.body.newAchievements as { playerId: string }[]).map(
+          (item) => item.playerId,
+        ),
+      );
+      expect(holderIds).toEqual(
+        new Set([requester.id, partner.id, opponentM.id]),
+      );
+      expect(response.body.achievementPoints).not.toHaveProperty(guest.id);
+    });
+  });
+
+  describe("GET /api/matches/:matchId", () => {
+    it("게스트가 낀 완료 경기도 이 경기로 받은 업적을 싣고, 게스트 본인 업적은 없다", async () => {
+      // 업적 기준 시각(2026-11-17) 뒤 경기
+      const recordedAt = new Date("2026-11-19T10:00:00+09:00");
+      vi.setSystemTime(recordedAt);
+      const match = buildMatch({
+        matchStartsAt: recordedAt,
+        completedAt: recordedAt,
+      });
+      vi.spyOn(
+        MatchRepository.prototype,
+        "findByIdWithRatingChanges",
+      ).mockResolvedValue({ match, ratingChanges: [] });
+      vi.mocked(
+        MatchRepository.prototype.findCompletedMatchOutcomes,
+      ).mockResolvedValue([
+        {
+          id: match.id,
+          type: match.type,
+          sessionId: null,
+          matchStartsAt: recordedAt,
+          completedAt: recordedAt,
+          teamPlayerIds: [
+            [requester.id, partner.id],
+            [opponentM.id, guest.id],
+          ],
+          scores: match.scores ?? [],
+          ratingExcluded: true,
+        },
+      ]);
+      vi.mocked(AuthService.prototype.getAllPlayers).mockResolvedValue(
+        [requester, partner, opponentM, guest] as Awaited<
+          ReturnType<AuthService["getAllPlayers"]>
+        >,
+      );
+
+      const response = await request(app)
+        .get(`/api/matches/${match.id}`)
+        .set("Authorization", "Bearer token");
+
+      expect(response.status).toBe(200);
+      const holderIds = new Set(
+        (response.body.achievements as { playerId: string }[]).map(
+          (item) => item.playerId,
+        ),
+      );
+      expect(holderIds).toEqual(
+        new Set([requester.id, partner.id, opponentM.id]),
+      );
+    });
   });
 
   describe("PUT /api/matches/:matchId", () => {
@@ -659,12 +752,13 @@ describe("평점 반영에서 ratingExcluded 경기 제외", () => {
   });
 });
 
-describe("랭킹에서 게스트 제외", () => {
+describe("게스트가 낀 경기 집계(평점에만 빼고 연승·업적·통계에 센다)", () => {
   const completedAt = new Date("2026-11-09T19:00:00+09:00");
   const outcome = (
     id: string,
     teamPlayerIds: [string[], string[]],
     ratingExcluded: boolean,
+    overrides: Partial<RankingMatch> = {},
   ): RankingMatch => ({
     id,
     type: "unrestricted-doubles",
@@ -674,9 +768,25 @@ describe("랭킹에서 게스트 제외", () => {
     teamPlayerIds,
     scores: [{ scoreA: 11, scoreB: 5 }],
     ratingExcluded,
+    ...overrides,
+  });
+  const rankingSession = (
+    id: string,
+    date: Date,
+    overrides: Partial<RankingSession> = {},
+  ): RankingSession => ({
+    id,
+    name: id,
+    kind: "custom",
+    date,
+    startTime: null,
+    endTime: null,
+    location: "탄천",
+    participantIds: [],
+    ...overrides,
   });
 
-  it("게스트는 순위·NR 목록에 없고, 게스트 경기는 경기 수에 세지 않는다", () => {
+  it("게스트는 순위·NR 목록에 없고, 게스트가 낀 경기는 경기 수·연승에 센다", () => {
     const ratedGuest = { ...guest, duprRating: { singles: 4, doubles: 4 } };
     const context = createRankingContext(
       [
@@ -704,6 +814,7 @@ describe("랭킹에서 게스트 제외", () => {
             [opponentM.id, ratedGuest.id],
           ],
           true,
+          { completedAt: new Date(completedAt.getTime() + 60_000) },
         ),
       ],
     );
@@ -722,9 +833,145 @@ describe("랭킹에서 게스트 제외", () => {
       "Pguest02",
     );
     expect(
-      response.entries.find((entry) => entry.player.id === requester.id)
-        ?.matchCount,
-    ).toBe(1);
+      response.entries.find((entry) => entry.player.id === requester.id),
+    ).toMatchObject({ matchCount: 2, winStreak: 2 });
+  });
+
+  it("순위 변동 기준 세션은 평점 반영 경기가 있는 세션만 본다", () => {
+    const ratedSession = rankingSession(
+      "Srated01",
+      new Date("2026-11-09T00:00:00+09:00"),
+    );
+    const guestSession = rankingSession(
+      "Sguest01",
+      new Date("2026-11-10T00:00:00+09:00"),
+    );
+    const context = createRankingContext(
+      [requester, partner, opponentM, guest],
+      [],
+      [
+        outcome(
+          "Mrated01",
+          [
+            [requester.id, partner.id],
+            [opponentM.id, opponentF.id],
+          ],
+          false,
+          { sessionId: ratedSession.id },
+        ),
+        outcome(
+          "Mexclude",
+          [
+            [requester.id, partner.id],
+            [opponentM.id, guest.id],
+          ],
+          true,
+          {
+            sessionId: guestSession.id,
+            completedAt: new Date("2026-11-10T19:00:00+09:00"),
+          },
+        ),
+      ],
+    );
+
+    const response = buildRankingResponse({
+      context,
+      category: "doubles",
+      sessions: [ratedSession, guestSession],
+      now: thursdayMorning,
+    });
+
+    expect(response.baselineSessionId).toBe(ratedSession.id);
+  });
+
+  describe("업적", () => {
+    // 업적 기준 시각(2026-11-17) 뒤 목요일 세션
+    const sessionDate = new Date("2026-11-19T00:00:00+09:00");
+    const session = rankingSession("Sguest01", sessionDate);
+    const guestMatches = Array.from({ length: 4 }, (_, index) =>
+      outcome(
+        `Mguest0${index + 1}`,
+        [
+          [requester.id, partner.id],
+          [opponentM.id, guest.id],
+        ],
+        true,
+        {
+          sessionId: session.id,
+          completedAt: new Date(
+            new Date("2026-11-19T19:00:00+09:00").getTime() + index * 60_000,
+          ),
+        },
+      ),
+    );
+    const context = createRankingContext(
+      [requester, partner, opponentM, guest],
+      [],
+      guestMatches,
+    );
+    const endedSessions = findEndedSessions(
+      context,
+      [session],
+      new Date("2026-11-21T10:00:00+09:00"),
+    );
+
+    it("게스트가 낀 경기로도 업적(무패 세션 포함)을 받고, 게스트 본인은 받지 않는다", () => {
+      const earned = findAchievementsEarnedByMatches(
+        context,
+        endedSessions,
+        new Set(guestMatches.map((match) => match.id)),
+        [requester.id, guest.id],
+      );
+
+      expect(
+        earned.filter((item) => item.playerId === guest.id),
+      ).toEqual([]);
+      expect(
+        earned.find(
+          (item) =>
+            item.playerId === requester.id &&
+            item.achievementId === "unbeaten-session",
+        ),
+      ).toMatchObject({ earnedMatchId: guestMatches[3]!.id });
+      expect(
+        earned.some(
+          (item) =>
+            item.playerId === requester.id && item.achievementId === "matches-1",
+        ),
+      ).toBe(true);
+    });
+
+    it("업적별 받은 회원 수에 게스트를 세지 않는다", () => {
+      expect(countAchievementHolders(context, endedSessions)["matches-1"]).toBe(
+        3,
+      );
+    });
+  });
+
+  it("특수 매치 판정 입력 연승은 게스트가 낀 경기도 세고, 게스트 본인은 0이다", () => {
+    const context = createRankingContext(
+      [requester, partner, opponentM, guest],
+      [],
+      Array.from({ length: 3 }, (_, index) =>
+        outcome(
+          `Mguest0${index + 1}`,
+          [
+            [requester.id, guest.id],
+            [partner.id, opponentM.id],
+          ],
+          true,
+          { completedAt: new Date(completedAt.getTime() + index * 60_000) },
+        ),
+      ),
+    );
+
+    const candidates = buildSpecialMatchCandidatePlayers(context, "doubles", [
+      requester,
+      guest,
+    ]);
+
+    expect(candidates.get(requester.id)?.winStreak).toBe(3);
+    expect(candidates.get(guest.id)?.winStreak).toBe(0);
   });
 });
 

@@ -322,7 +322,7 @@ const RatingChangeCard: React.FC<{
   );
 };
 
-/** 이 경기로 참가자들이 받은 업적. 없으면(게스트가 낀 경기 포함) 섹션을 숨긴다 */
+/** 이 경기로 참가자들이 받은 업적. 없으면 섹션을 숨긴다 */
 const MatchAchievementsCard: React.FC<{
   match: MatchInfo;
   onOpenAchievement: (playerId: string, achievementId: string) => void;

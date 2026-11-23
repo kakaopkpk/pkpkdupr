@@ -2,7 +2,8 @@ import { describe, expect, it } from "vitest";
 import type { MatchInfo } from "@/types/match";
 import { getSessionWinStreaks } from "@/lib/sessionWinStreak";
 
-const player = (id: string) => ({ id, username: id }) as MatchInfo["teams"][number]["players"][number];
+const player = (id: string) =>
+    ({ id, username: id, isGuest: id.startsWith("guest") }) as MatchInfo["teams"][number]["players"][number];
 
 let sequence = 0;
 /** teamA가 scoreA, teamB가 scoreB로 끝난 경기. minute는 완료 시각(분) */
@@ -66,16 +67,26 @@ describe("getSessionWinStreaks", () => {
     expect(streaks).toEqual([]);
   });
 
-  it("평점 미반영 경기(게스트 참가)는 연승에서 빼고, 세션 전적에는 센다", () => {
+  it("게스트가 낀 경기(평점 미반영)도 연승에 센다", () => {
     const streaks = getSessionWinStreaks([
-      match(1, ["a"], ["b"], [11, 3]),
+      match(1, ["a"], ["b"], [3, 11]),
       match(2, ["a"], ["c"], [11, 3]),
-      match(3, ["a"], ["guest"], [3, 11], { ratingExcluded: true }),
+      match(3, ["a"], ["guest1"], [11, 3], { ratingExcluded: true }),
       match(4, ["a"], ["d"], [11, 3]),
     ]);
 
     expect(streaks).toMatchObject([
       { player: { id: "a" }, winStreak: 3, matchCount: 4, wins: 3 },
     ]);
+  });
+
+  it("게스트 본인의 연승은 넣지 않는다", () => {
+    const streaks = getSessionWinStreaks([
+      match(1, ["guest1"], ["b"], [11, 3], { ratingExcluded: true }),
+      match(2, ["guest1"], ["c"], [11, 3], { ratingExcluded: true }),
+      match(3, ["guest1"], ["d"], [11, 3], { ratingExcluded: true }),
+    ]);
+
+    expect(streaks).toEqual([]);
   });
 });

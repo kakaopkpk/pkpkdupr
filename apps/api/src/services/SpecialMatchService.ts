@@ -24,7 +24,8 @@ import {
 
 /**
  * 랭킹 원천으로 특수 매치 판정 입력 선수를 만든다. category는 경기 종류 랭킹이다.
- * 랭킹에 없는 선수(게스트·평점 없음·비활성)는 rank·rating이 null이고, 연승은 랭킹 winStreak과 같은 규칙이다.
+ * 랭킹에 없는 선수(게스트·평점 없음·비활성)는 rank·rating이 null이고, 연승은 랭킹 winStreak과 같은 규칙이다
+ * (게스트가 낀 경기 포함). 게스트 본인의 연승은 보이지 않아 0이다.
  */
 export const buildSpecialMatchCandidatePlayers = (
   context: RankingContext,
@@ -48,7 +49,7 @@ export const buildSpecialMatchCandidatePlayers = (
           isGuest: player.isGuest,
           rank: ranked?.rank ?? null,
           rating: ranked?.rating ?? null,
-          winStreak: winStreaks.get(player.id) ?? 0,
+          winStreak: player.isGuest ? 0 : (winStreaks.get(player.id) ?? 0),
         },
       ];
     }),
@@ -173,7 +174,7 @@ const toCelebrationPlayer = (
     : null;
 };
 
-/** 이 경기 직전까지(완료 순서상 앞선 평점 반영 경기만) 센 연승 */
+/** 이 경기 직전까지(완료 순서상 앞선 경기만, 게스트가 낀 경기 포함) 센 연승 */
 const computeWinStreaksBefore = (
   context: RankingContext,
   match: SpecialMatchSettleTarget,

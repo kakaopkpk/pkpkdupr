@@ -1139,8 +1139,8 @@ const findAchievementPointsForNewAchievements = (
 const findAchievementsEarnedByMatch = async (
   match: Match,
 ): Promise<EarnedAchievement[]> => {
-  // 진행 중·평점 미반영 경기는 업적 계산에서 빠져 결과가 늘 비므로 원천을 읽지 않는다
-  if (match.status !== "completed" || match.ratingExcluded) return [];
+  // 진행 중 경기는 업적 계산에서 빠져 결과가 늘 비므로 원천을 읽지 않는다
+  if (match.status !== "completed") return [];
   try {
     const { context, sessions } = await loadRankingSource();
     return findAchievementsEarnedByMatches(
@@ -1285,7 +1285,10 @@ const findNewAchievementsForSavedMatch = (
       : []),
   ];
   return findNewAchievements({
-    playerIds: getTeamPlayerIds(match.teams),
+    // 게스트는 업적을 받지 않는다
+    playerIds: match.teams.flatMap((team) =>
+      team.players.flatMap((player) => (player.isGuest ? [] : [player.id])),
+    ),
     before,
     after,
   });

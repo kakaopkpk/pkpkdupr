@@ -166,7 +166,7 @@ export const matches = pgTable("matches", {
   completedAt: unixTimestamp("completed_at"),
   resultSubmittedByPlayerId: id("result_submitted_by_player_id"),
   resultSubmittedAt: unixTimestamp("result_submitted_at"),
-  /** completed가 될 때 게스트가 낀 경기. 평점·통계에서 빠진다 */
+  /** completed가 될 때 게스트가 낀 경기. 평점·평점 이력에서 빠진다(연승·업적·통계에는 센다) */
   ratingExcluded: boolean("rating_excluded").notNull().default(false),
   /** 대회 대진 라운드(1부터). 대진 경기만 값이 있고, status가 scheduled면 반드시 있다 */
   round: integer("round"),

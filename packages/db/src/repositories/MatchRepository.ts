@@ -163,7 +163,7 @@ export interface CompletedMatchOutcome {
   /** 팀별 선수 id. [0]=팀 A, [1]=팀 B */
   teamPlayerIds: [string[], string[]];
   scores: MatchScore[];
-  /** 게스트가 낀 경기. 랭킹 경기 수·업적·세션 지배자에서 뺀다 */
+  /** 게스트가 낀 경기. 평점에 묶인 계산(순위 변동 기준 세션·평점 업적 경기 수·언더독)에서만 뺀다 */
   ratingExcluded: boolean;
   /** 정기 세션 경기인지(개근상 업적). 테스트 데이터처럼 없으면 정기 세션이 아니다 */
   regularSession?: boolean;
@@ -1021,6 +1021,7 @@ export class MatchRepository {
     return Number.isFinite(completedAt) ? new Date(completedAt * 1000) : null;
   }
 
+  /** 선수별 마지막 완료 경기 시작 시각. 게스트가 낀 경기(rating_excluded)도 센다 */
   async findLastPlayedAtByPlayerId(): Promise<Record<string, Date>> {
     const rows = await this.db
       .select({
@@ -1030,11 +1031,7 @@ export class MatchRepository {
       .from(matchParticipants)
       .innerJoin(matches, eq(matchParticipants.matchId, matches.id))
       .where(
-        and(
-          eq(matches.status, "completed"),
-          eq(matches.ratingExcluded, false),
-          isNotNull(matches.completedAt),
-        ),
+        and(eq(matches.status, "completed"), isNotNull(matches.completedAt)),
       )
       .groupBy(matchParticipants.playerId);
 
