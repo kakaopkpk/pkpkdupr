@@ -103,6 +103,7 @@ import {
 } from "@pkpkdupr/shared/achievements";
 import {
   MATCHMAKING_DEFAULT_COURTS,
+  MATCHMAKING_GUEST_RATING,
   clampMatchmakingCourts,
   getMatchmakingSeed,
   recommendDoublesMatches,
@@ -1873,7 +1874,7 @@ const parseRecommendationRank = (value: unknown): number => {
   return rank;
 };
 
-/** 추천 매칭의 복식 평점. 게스트는 평점이 없는(NR) 선수로 다룬다 */
+/** 추천 매칭 응답·입력의 복식 평점. 게스트는 평점을 보이지 않고(null), 알고리즘은 isGuest로 게스트 평점을 쓴다 */
 const getRecommendationDoublesRating = (member: MatchSessionMember) =>
   member.isGuest ? null : (member.duprRating?.doubles ?? null);
 
@@ -1941,6 +1942,7 @@ app.get("/api/match-sessions/:sessionId/recommendations", async (req, res) => {
       participants: session.participants.map((member) => ({
         id: member.id,
         doublesRating: getRecommendationDoublesRating(member),
+        isGuest: member.isGuest,
       })),
       busyPlayerIds,
       completedMatches,
@@ -1958,7 +1960,17 @@ app.get("/api/match-sessions/:sessionId/recommendations", async (req, res) => {
       ]),
     );
     const playerOf = (id: string) => playersById.get(id)!;
-    // 표시용 팀 평균은 NR을 기본 평점(3.0)으로 친다. 팀 나누기에 쓰는 NR 대체값(참여자 중앙값)과는 다르다.
+    const guestIds = new Set(
+      session.participants
+        .filter((member) => member.isGuest)
+        .map((member) => member.id),
+    );
+    // 표시용 팀 평균은 게스트를 팀 나누기와 같은 게스트 평점으로, NR 정회원을 기본 평점(3.0)으로 친다.
+    // NR 정회원의 3.0은 팀 나누기에 쓰는 NR 대체값(참여자 중앙값)과 다르다.
+    const displayRatingOf = (player: RecommendationPlayer) =>
+      guestIds.has(player.id)
+        ? MATCHMAKING_GUEST_RATING
+        : (player.doublesRating ?? DUPR_DEFAULT_RATING);
     const toTeam = ([first, second]: [string, string]): RecommendedTeam => {
       const players: [RecommendationPlayer, RecommendationPlayer] = [
         playerOf(first),
@@ -1968,8 +1980,7 @@ app.get("/api/match-sessions/:sessionId/recommendations", async (req, res) => {
         players,
         averageRating:
           players.reduce(
-            (sum, player) =>
-              sum + (player.doublesRating ?? DUPR_DEFAULT_RATING),
+            (sum, player) => sum + displayRatingOf(player),
             0,
           ) / players.length,
       };
