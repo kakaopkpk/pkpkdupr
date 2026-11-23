@@ -243,6 +243,7 @@ export default function MatchDetailDrawer({
         teams: toTeamRequests(getMatchTeamPlayerIds(match)),
         sessionId: match.session?.id,
         location: match.location,
+        rematchOfMatchId: match.id,
       });
       invalidateData(["matches"]);
       closeThen(() => {
