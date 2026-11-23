@@ -31,7 +31,6 @@ import {
   type AdminCreateBracketMatchRequest,
   type AdminMatchDeletionLogsResponse,
   type AdminMatchEditLogsResponse,
-  getWinningTeamIndex,
 } from "@pkpkdupr/shared/match";
 import {
   addKstDays,
@@ -1172,13 +1171,13 @@ const hasSameTeamPlayers = (
 
 /**
  * 평점 반영이 끝난 특수 매치의 결과를 정해 저장하고, 결과가 이번 저장으로 처음 도전 성공·연승 저지·최강자전 승리로
- * 정해졌으면 큰 연출 데이터를 돌려준다. 처음 completed가 됐거나 수정으로 승패가 바뀐 경기만 다시 정한다.
+ * 정해졌으면 큰 연출 데이터를 돌려준다. completed 특수 매치는 저장할 때마다 다시 정한다(승패가 같아도 점수 차로
+ * 순위가 달라질 수 있고, 첫 판정이 실패해 결과가 null인 경기도 이때 채운다).
  * 평점 잠금 밖에서 반영 직후 랭킹을 다시 읽는다(동호회 규모라 그사이 다른 반영이 끼는 경우는 무시한다).
  * 저장은 이미 끝났으므로 실패하면 결과를 바꾸지 않고 연출 없이 응답한다.
  */
 const settleSpecialMatchForSavedMatch = async (
   match: Match,
-  previous: Match | null,
 ): Promise<{
   match: Match;
   specialMatchCelebration: SpecialMatchCelebration | null;
@@ -1188,16 +1187,10 @@ const settleSpecialMatchForSavedMatch = async (
   if (!specialMatch || match.status !== "completed" || !completedAt) {
     return { match, specialMatchCelebration: null };
   }
-  if (
-    previous?.status === "completed" &&
-    getWinningTeamIndex(previous) === getWinningTeamIndex(match)
-  ) {
-    return { match, specialMatchCelebration: null };
-  }
   try {
     const { context } = await loadRankingSource();
     const target = { ...match, completedAt };
-    // 결과가 이미 정해져 있던 경기(수정으로 승패가 뒤집힘)는 연출하지 않으므로 결과만 다시 정한다
+    // 결과가 이미 정해져 있던 경기는 연출하지 않으므로 결과만 다시 정한다
     const { outcome, celebration } =
       specialMatch.outcome == null
         ? settleSpecialMatch(context, specialMatch, target)
@@ -3551,7 +3544,7 @@ app.put("/api/matches/:matchId", async (req, res) => {
       ({ ratingChangeLogs: ratingChanges } =
         await authService.applyMatchResultToRatings(match));
     }
-    const settled = await settleSpecialMatchForSavedMatch(match, previous);
+    const settled = await settleSpecialMatchForSavedMatch(match);
     const response: RecordedMatchResponse = {
       ...settled.match,
       ratingChanges,
