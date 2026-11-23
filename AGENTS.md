@@ -134,6 +134,11 @@ pnpm lint
 - 경기 시작 때 판정한 특수 매치는 `Match.specialMatch`(`matches.special_match` jsonb)에 저장한다. 판정 기준은 `docs/product.md` "특수 매치", 판정 함수는 `packages/shared/src/specialMatch.ts`다.
   - 추천 카드 출처 세션 시작(`recommendedSpecialKind`)은 서버 재판정 유형이 카드 유형과 같을 때만, 한 판 더 출처 시작(`rematchOfMatchId`)은 리벤지만 저장한다.
   - 그 밖의 시작·직접 기록·관리자 생성·대진 시작은 null이다.
+- 결과(`SpecialMatch.outcome`)는 평점 반영 뒤 서버가 정한다. 승패가 갈리지 않으면 null이다.
+  - 도전 매치: 이긴 팀에 공격자가 있는 도전 쌍 중 하나라도 반영 직후 그 경기 종류 랭킹(`rankPlayersAt`)에서 공격자 순위가 방어자보다 높아졌으면 `challenge_success`, 아니면 `defense_success`.
+  - 연승 저지: 연승 회원 팀이 지면 `streak_stopped`, 이기면 `streak_defended`. 최강자전: `champions_won`.
+  - 리벤지: 지키는 쪽이 아닌 팀이 이기면 `revenge_success`, 지면 `revenge_defended`.
+- 큰 연출 데이터(`SpecialMatchCelebration`)의 순위는 그 경기 종류 랭킹의 이 경기 반영 전·직후 순위, 연승 수는 이 경기 직전까지 센 랭킹 연승이다(`apps/api/src/services/SpecialMatchService.ts`).
 
 ### 진행 중 경기
 
