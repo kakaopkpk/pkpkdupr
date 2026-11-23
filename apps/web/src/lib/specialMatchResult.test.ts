@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { SpecialMatch } from "@pkpkdupr/shared/specialMatch";
-import { getSpecialMatchResultName } from "@/lib/specialMatchResult";
+import { getSpecialMatchResultName, type SpecialMatchResultSource } from "@/lib/specialMatchResult";
 
 const teams = [
   { players: [{ id: "a1" }, { id: "a2" }] },
@@ -11,16 +10,11 @@ const teamAWins = [{ scoreA: 11, scoreB: 7 }];
 /** 팀 1 승리 */
 const teamBWins = [{ scoreA: 8, scoreB: 11 }];
 
-const build = (
-  specialMatch: Pick<SpecialMatch, "kind" | "defendingTeamIndex" | "outcome"> | null,
-  scores: { scoreA: number; scoreB: number }[],
-) => ({ specialMatch, teams, scores });
-
 const name = (
-  specialMatch: Pick<SpecialMatch, "kind" | "defendingTeamIndex" | "outcome"> | null,
+  specialMatch: SpecialMatchResultSource | null,
   scores: { scoreA: number; scoreB: number }[],
   viewerId: string | null,
-) => getSpecialMatchResultName(build(specialMatch, scores), viewerId);
+) => getSpecialMatchResultName({ specialMatch, teams, scores }, viewerId);
 
 describe("getSpecialMatchResultName", () => {
   describe("도전 매치(팀 0 방어)", () => {
