@@ -7,13 +7,13 @@ import { WIN_STREAK_DISPLAY_MIN } from "./streak.js";
  * '같은 멤버로 한 판 더'로 시작한 경기(리벤지)에만 붙는다(docs/product.md "특수 매치")
  */
 export type SpecialMatchKind =
-  | "challenge"
+  | "rival"
   | "streak_stopper"
   | "champions"
   | "revenge";
 
 export const specialMatchKindValues = [
-  "challenge",
+  "rival",
   "streak_stopper",
   "champions",
   "revenge",
@@ -21,7 +21,7 @@ export const specialMatchKindValues = [
 
 /** 화면 이름 */
 export const specialMatchKindLabels: Record<SpecialMatchKind, string> = {
-  challenge: "라이벌전",
+  rival: "라이벌전",
   streak_stopper: "연승 저지",
   champions: "최강자전",
   revenge: "리벤지 매치",
@@ -31,16 +31,16 @@ export const isSpecialMatchKind = (value: unknown): value is SpecialMatchKind =>
   specialMatchKindValues.includes(value as SpecialMatchKind);
 
 export type SpecialMatchOutcome =
-  | "challenge_success"
-  | "defense_success"
+  | "rival_overtaken"
+  | "rival_held"
   | "streak_stopped"
   | "streak_defended"
   | "champions_won"
   | "revenge_success"
   | "revenge_defended";
 
-export interface SpecialMatchChallengePair {
-  /** 순위가 낮은(도전하는) 선수 */
+export interface SpecialMatchRivalPair {
+  /** 순위가 낮은(공격하는) 선수 */
   attackerId: string;
   /** 순위가 높은(지키는) 선수 */
   defenderId: string;
@@ -55,12 +55,12 @@ export interface SpecialMatch {
    */
   defendingTeamIndex: 0 | 1 | null;
   /**
-   * 팀별 주인공 선수 id(카드에서 40px로 앞세우는 사람). 라이벌전은 대표 도전 쌍의 두 사람,
+   * 팀별 주인공 선수 id(카드에서 40px로 앞세우는 사람). 라이벌전은 대표 라이벌 쌍의 두 사람,
    * 연승 저지는 연승 회원 팀만, 최강자전은 양쪽 연승 회원, 리벤지는 둘 다 null
    */
   protagonistIds: [string | null, string | null];
-  /** 라이벌전의 도전 쌍(대표 쌍이 첫 번째). 다른 유형은 빈 배열 */
-  challengePairs: SpecialMatchChallengePair[];
+  /** 라이벌전의 라이벌 쌍(대표 쌍이 첫 번째). 다른 유형은 빈 배열 */
+  rivalPairs: SpecialMatchRivalPair[];
   /** 완료 전이거나 승패가 갈리지 않으면 null */
   outcome: SpecialMatchOutcome | null;
 }
@@ -73,11 +73,11 @@ export type SpecialMatchCelebrationPlayer = Pick<Player, "id" | "username" | "av
  */
 export type SpecialMatchCelebration =
   | {
-      kind: "challenge";
+      kind: "rival";
       /** 지키던 쪽 */
       defender: { player: SpecialMatchCelebrationPlayer; rankBefore: number; rankAfter: number };
-      /** 도전한 쪽 */
-      challenger: { player: SpecialMatchCelebrationPlayer; rankBefore: number; rankAfter: number };
+      /** 공격 쪽 */
+      attacker: { player: SpecialMatchCelebrationPlayer; rankBefore: number; rankAfter: number };
     }
   | {
       kind: "streak_stopper";
@@ -101,7 +101,10 @@ export interface SpecialMatchCandidatePlayer {
 }
 
 /** 라이벌전으로 보는 상대 두 사람의 최대 평점 차 */
-export const CHALLENGE_MATCH_MAX_RATING_GAP = 0.05;
+export const RIVAL_MATCH_MAX_RATING_GAP = 0.02;
+
+/** 라이벌전으로 보는 두 팀 평균 평점의 최대 차 */
+export const RIVAL_MATCH_MAX_TEAM_AVERAGE_GAP = 0.1;
 
 /**
  * 추천 매칭에서 특수 유형 코트에 주는 가산점.
@@ -110,7 +113,7 @@ export const CHALLENGE_MATCH_MAX_RATING_GAP = 0.05;
  * 리벤지는 추천에서 만들지 않아 0이다.
  */
 export const SPECIAL_MATCH_RECOMMENDATION_BONUS = {
-  challenge: 1.5,
+  rival: 1.5,
   streak_stopper: 0,
   champions: 2,
   revenge: 0,
@@ -157,7 +160,7 @@ const judgeStreakMatch = (teams: CandidateTeams): SpecialMatch | null => {
       kind: "champions",
       defendingTeamIndex: null,
       protagonistIds,
-      challengePairs: [],
+      rivalPairs: [],
       outcome: null,
     };
   }
@@ -165,7 +168,7 @@ const judgeStreakMatch = (teams: CandidateTeams): SpecialMatch | null => {
     kind: "streak_stopper",
     defendingTeamIndex: leaders[0] ? 0 : 1,
     protagonistIds,
-    challengePairs: [],
+    rivalPairs: [],
     outcome: null,
   };
 };
@@ -176,7 +179,7 @@ interface RankedCandidate extends SpecialMatchCandidatePlayer {
   teamIndex: 0 | 1;
 }
 
-interface ChallengeCandidatePair {
+interface RivalCandidatePair {
   attacker: RankedCandidate;
   defender: RankedCandidate;
   gap: number;
@@ -192,15 +195,32 @@ const toRankedCandidates = (
       : [],
   );
 
-const judgeChallengeMatch = (teams: CandidateTeams): SpecialMatch | null => {
+/** 선수 평점 평균. 평점 없는 선수가 있으면 null */
+const toTeamAverageRating = (
+  team: readonly SpecialMatchCandidatePlayer[],
+): number | null => {
+  if (team.length === 0 || team.some((player) => player.rating == null)) return null;
+  return team.reduce((sum, player) => sum + (player.rating ?? 0), 0) / team.length;
+};
+
+const judgeRivalMatch = (teams: CandidateTeams): SpecialMatch | null => {
+  // 팀 평균을 알 수 없거나(평점 없는 선수) 차이가 크면 개인 평점이 비슷해도 라이벌전이 아니다
+  const [averageA, averageB] = TEAM_INDEXES.map((index) => toTeamAverageRating(teams[index]));
+  if (
+    averageA == null ||
+    averageB == null ||
+    toRatingGap(averageA, averageB) > RIVAL_MATCH_MAX_TEAM_AVERAGE_GAP
+  ) {
+    return null;
+  }
   const [teamA, teamB] = TEAM_INDEXES.map((index) =>
     toRankedCandidates(teams[index], index),
   );
-  const pairs: ChallengeCandidatePair[] = teamA.flatMap((left) =>
+  const pairs: RivalCandidatePair[] = teamA.flatMap((left) =>
     teamB.flatMap((right) => {
       const gap = toRatingGap(left.rating, right.rating);
-      if (gap > CHALLENGE_MATCH_MAX_RATING_GAP) return [];
-      // 순위 숫자가 큰(낮은 순위) 쪽이 도전한다
+      if (gap > RIVAL_MATCH_MAX_RATING_GAP) return [];
+      // 순위 숫자가 큰(낮은 순위) 쪽이 공격이다
       const [attacker, defender] =
         left.rank > right.rank ? [left, right] : [right, left];
       return [{ attacker, defender, gap }];
@@ -226,10 +246,10 @@ const judgeChallengeMatch = (teams: CandidateTeams): SpecialMatch | null => {
   protagonistIds[representative.defender.teamIndex] = representative.defender.id;
 
   return {
-    kind: "challenge",
+    kind: "rival",
     defendingTeamIndex,
     protagonistIds,
-    challengePairs: pairs.map((pair) => ({
+    rivalPairs: pairs.map((pair) => ({
       attackerId: pair.attacker.id,
       defenderId: pair.defender.id,
     })),
@@ -249,7 +269,7 @@ export const judgeRecommendedSpecialMatch = (
   const streakMatch = judgeStreakMatch(teams);
   if (streakMatch) return streakMatch;
   if (teams.some((team) => team.some((player) => player.isGuest))) return null;
-  return judgeChallengeMatch(teams);
+  return judgeRivalMatch(teams);
 };
 
 const isSamePlayerSet = (
@@ -292,7 +312,7 @@ export const judgeRematchSpecialMatch = (
     kind: "revenge",
     defendingTeamIndex,
     protagonistIds: [null, null],
-    challengePairs: [],
+    rivalPairs: [],
     outcome: null,
   };
 };

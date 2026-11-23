@@ -20,25 +20,25 @@ const name = (
 /** 특수 매치 결과 이름은 getMatchResultName을 거쳐 보는 회원 팀 기준으로 확인한다 */
 describe("getSpecialMatchResultName", () => {
   describe("라이벌전(팀 0 방어)", () => {
-    const challengeSuccess = { kind: "challenge", defendingTeamIndex: 0, outcome: "challenge_success" } as const;
-    const defenseSuccess = { kind: "challenge", defendingTeamIndex: 0, outcome: "defense_success" } as const;
+    const rivalOvertaken = { kind: "rival", defendingTeamIndex: 0, outcome: "rival_overtaken" } as const;
+    const rivalHeld = { kind: "rival", defendingTeamIndex: 0, outcome: "rival_held" } as const;
 
     it("공격·방어와 상관없이 이긴 팀은 라이벌전 승리, 진 팀은 라이벌전 패배이고 아이콘은 칼이다", () => {
-      expect(name(challengeSuccess, teamBWins, "b1")).toEqual({ label: "라이벌전 승리", icon: "challenge", isWin: true });
-      expect(name(challengeSuccess, teamBWins, "a1")).toEqual({ label: "라이벌전 패배", icon: "challenge", isWin: false });
-      expect(name(defenseSuccess, teamAWins, "a2")).toEqual({ label: "라이벌전 승리", icon: "challenge", isWin: true });
-      expect(name(defenseSuccess, teamAWins, "b2")).toEqual({ label: "라이벌전 패배", icon: "challenge", isWin: false });
+      expect(name(rivalOvertaken, teamBWins, "b1")).toEqual({ label: "라이벌전 승리", icon: "rival", isWin: true });
+      expect(name(rivalOvertaken, teamBWins, "a1")).toEqual({ label: "라이벌전 패배", icon: "rival", isWin: false });
+      expect(name(rivalHeld, teamAWins, "a2")).toEqual({ label: "라이벌전 승리", icon: "rival", isWin: true });
+      expect(name(rivalHeld, teamAWins, "b2")).toEqual({ label: "라이벌전 패배", icon: "rival", isWin: false });
     });
 
     it("순위가 뒤바뀌지 않았어도(방어 성공) 이름은 승패를 따른다", () => {
-      expect(name(defenseSuccess, teamBWins, "b1")).toEqual({ label: "라이벌전 승리", icon: "challenge", isWin: true });
-      expect(name(defenseSuccess, teamBWins, "a1")).toEqual({ label: "라이벌전 패배", icon: "challenge", isWin: false });
+      expect(name(rivalHeld, teamBWins, "b1")).toEqual({ label: "라이벌전 승리", icon: "rival", isWin: true });
+      expect(name(rivalHeld, teamBWins, "a1")).toEqual({ label: "라이벌전 패배", icon: "rival", isWin: false });
     });
 
     it("양쪽 다 공격(지키는 쪽 없음)이어도 이름은 승패를 따른다", () => {
-      const bothAttacking = { kind: "challenge", defendingTeamIndex: null, outcome: "challenge_success" } as const;
-      expect(name(bothAttacking, teamAWins, "a1")).toEqual({ label: "라이벌전 승리", icon: "challenge", isWin: true });
-      expect(name(bothAttacking, teamAWins, "b1")).toEqual({ label: "라이벌전 패배", icon: "challenge", isWin: false });
+      const bothAttacking = { kind: "rival", defendingTeamIndex: null, outcome: "rival_overtaken" } as const;
+      expect(name(bothAttacking, teamAWins, "a1")).toEqual({ label: "라이벌전 승리", icon: "rival", isWin: true });
+      expect(name(bothAttacking, teamAWins, "b1")).toEqual({ label: "라이벌전 패배", icon: "rival", isWin: false });
     });
   });
 

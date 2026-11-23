@@ -11,9 +11,9 @@ import { SpecialMatchIcon } from "@/components/ui/SpecialMatchLabel";
 import { cx } from "@/components/ui/cx";
 import { getRankingCategoryLabel, STREAK_END_LABEL, VS_LABEL } from "@/lib/specialMatchShare";
 import {
-  CHALLENGE_SWAP_MS,
+  RIVAL_SWAP_MS,
   STREAK_RING_FADE_MS,
-  getChallengeCountSteps,
+  getRivalCountSteps,
 } from "./specialMatchCelebration.utils";
 
 /*
@@ -29,34 +29,34 @@ const ms = (value: number) => `${value}ms`;
 const RANK_ROW_HEIGHT = 56;
 const RANK_ROW_GAP = 4;
 
-const ChallengeRankRow: React.FC<{
+const RivalRankRow: React.FC<{
   player: SpecialMatchCelebrationPlayer;
   rank: number;
   change: number;
   offset: number;
-  isChallenger: boolean;
+  isAttacker: boolean;
   /** 한 칸 오를 때마다 순위 숫자가 톡 튄다 */
   isRankChanged: boolean;
   isFinal: boolean;
-}> = ({ player, rank, change, offset, isChallenger, isRankChanged, isFinal }) => (
+}> = ({ player, rank, change, offset, isAttacker, isRankChanged, isFinal }) => (
   <div
     className={cx(
       "absolute inset-x-0 top-0 grid grid-cols-[26px_32px_minmax(0,1fr)_auto] items-center gap-2.5 rounded-pk-sm pr-3 pl-2 transition-transform ease-pk-move motion-reduce:transition-none",
-      // 자리를 바꿀 때 도전한 쪽 줄이 위로 지나간다
-      isChallenger &&
+      // 자리를 바꿀 때 공격 쪽 줄이 위로 지나간다
+      isAttacker &&
         "z-10 bg-pk-primary-soft shadow-[0_6px_16px_color-mix(in_srgb,var(--color-pk-ink)_12%,transparent)]",
     )}
     style={{
       height: RANK_ROW_HEIGHT,
       transform: `translateY(${offset}px)`,
-      transitionDuration: ms(CHALLENGE_SWAP_MS),
+      transitionDuration: ms(RIVAL_SWAP_MS),
     }}
   >
     <span
       key={rank}
       className={cx(
         "text-center text-pk-15 font-extrabold tabular-nums",
-        isChallenger && isFinal ? "text-pk-primary" : "text-pk-muted",
+        isAttacker && isFinal ? "text-pk-primary" : "text-pk-muted",
         isRankChanged && "animate-pk-pop motion-reduce:animate-none",
       )}
     >
@@ -69,20 +69,20 @@ const ChallengeRankRow: React.FC<{
 );
 
 /**
- * 라이벌전 승리: 랭킹 줄 모양 두 줄(지키던 쪽 위, 도전한 쪽 아래). 도전한 쪽 순위가 박자마다 한 칸씩 오르고,
+ * 라이벌전 승리: 랭킹 줄 모양 두 줄(지키던 쪽 위, 공격 쪽 아래). 공격 쪽 순위가 박자마다 한 칸씩 오르고,
  * 지키던 쪽과 1 차이가 되면 다음 박자에 두 줄이 자리를 바꾸며 두 사람 순위·▲▼가 최종값이 된다
  */
-export const ChallengeScene: React.FC<{
-  celebration: Extract<SpecialMatchCelebration, { kind: "challenge" }>;
+export const RivalScene: React.FC<{
+  celebration: Extract<SpecialMatchCelebration, { kind: "rival" }>;
   category: MatchTopLevelType;
   beatCount: number;
 }> = ({ celebration, category, beatCount }) => {
-  const { challenger, defender } = celebration;
-  const steps = getChallengeCountSteps(celebration);
+  const { attacker, defender } = celebration;
+  const steps = getRivalCountSteps(celebration);
   const isSwapped = beatCount > steps;
-  const challengerRank = isSwapped
-    ? challenger.rankAfter
-    : challenger.rankBefore - Math.min(beatCount, steps);
+  const attackerRank = isSwapped
+    ? attacker.rankAfter
+    : attacker.rankBefore - Math.min(beatCount, steps);
   const defenderRank = isSwapped ? defender.rankAfter : defender.rankBefore;
   const lowerOffset = RANK_ROW_HEIGHT + RANK_ROW_GAP;
 
@@ -92,22 +92,22 @@ export const ChallengeScene: React.FC<{
         {getRankingCategoryLabel(category)}
       </p>
       <div className="relative mt-1" style={{ height: RANK_ROW_HEIGHT * 2 + RANK_ROW_GAP }}>
-        <ChallengeRankRow
+        <RivalRankRow
           player={defender.player}
           rank={defenderRank}
           change={defender.rankBefore - defenderRank}
           offset={isSwapped ? lowerOffset : 0}
-          isChallenger={false}
+          isAttacker={false}
           isRankChanged={false}
           isFinal={isSwapped}
         />
-        <ChallengeRankRow
-          player={challenger.player}
-          rank={challengerRank}
-          change={challenger.rankBefore - challengerRank}
+        <RivalRankRow
+          player={attacker.player}
+          rank={attackerRank}
+          change={attacker.rankBefore - attackerRank}
           offset={isSwapped ? 0 : lowerOffset}
-          isChallenger
-          isRankChanged={challengerRank !== challenger.rankBefore}
+          isAttacker
+          isRankChanged={attackerRank !== attacker.rankBefore}
           isFinal={isSwapped}
         />
       </div>

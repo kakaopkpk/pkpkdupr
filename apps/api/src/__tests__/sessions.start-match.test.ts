@@ -275,13 +275,13 @@ describe("POST /api/match-sessions/:sessionId/matches", () => {
       ...player,
       duprRating: { singles: doubles, doubles },
     });
-    // 복식 랭킹: B 4.5(1위), C 3.52(2위), A 3.5(3위), D 2.5(4위). A와 C가 상대로 만나 평점 차 0.02다.
+    // 복식 랭킹: C 3.52(1위), A 3.5(2위), B 3.0(3위), D 2.9(4위). A와 C가 상대로 만나 평점 차 0.02, 팀 평균 차 0.04다.
     const rankedPlayers = [
       requester,
       rated(playerA, 3.5),
-      rated(playerB, 4.5),
+      rated(playerB, 3.0),
       rated(playerC, 3.52),
-      rated(playerD, 2.5),
+      rated(playerD, 2.9),
     ];
 
     const mockRankingSource = (
@@ -324,18 +324,18 @@ describe("POST /api/match-sessions/:sessionId/matches", () => {
 
       const response = await startMatch("Scustom1", {
         ...doublesBody,
-        recommendedSpecialKind: "challenge",
+        recommendedSpecialKind: "rival",
       });
 
       expect(response.status).toBe(201);
       expect(createInProgress.mock.calls[0]![0].specialMatch).toEqual({
-        kind: "challenge",
+        kind: "rival",
         defendingTeamIndex: 1,
         protagonistIds: [playerA.id, playerC.id],
-        challengePairs: [{ attackerId: playerA.id, defenderId: playerC.id }],
+        rivalPairs: [{ attackerId: playerA.id, defenderId: playerC.id }],
         outcome: null,
       });
-      expect(response.body.specialMatch.kind).toBe("challenge");
+      expect(response.body.specialMatch.kind).toBe("rival");
     });
 
     it("연승 회원이 있으면 연승 저지로 판정해 저장한다", async () => {
@@ -386,7 +386,7 @@ describe("POST /api/match-sessions/:sessionId/matches", () => {
 
         const response = await startMatch("Scustom1", {
           ...doublesBody,
-          recommendedSpecialKind: "challenge",
+          recommendedSpecialKind: "rival",
         });
 
         expect(response.status).toBe(201);
@@ -399,7 +399,7 @@ describe("POST /api/match-sessions/:sessionId/matches", () => {
 
       const response = await startMatch("Scustom1", {
         ...doublesBody,
-        recommendedSpecialKind: "challenge",
+        recommendedSpecialKind: "rival",
       });
 
       expect(response.status).toBe(201);

@@ -15,7 +15,7 @@ import { cx } from "./cx";
 
 /** 유형별 24 viewBox 선 모양. 손바닥·주먹·칼은 업적 배지와 같은 그림이다 */
 const SPECIAL_MATCH_ICON_PATHS: Record<SpecialMatchResultIcon, readonly string[]> = {
-  challenge: CROSSED_SWORDS_ICON_PATHS,
+  rival: CROSSED_SWORDS_ICON_PATHS,
   streak_stopper: STOP_HAND_ICON_PATHS,
   champions: [FLAME_ICON_PATH],
   revenge: FIST_ICON_PATHS,

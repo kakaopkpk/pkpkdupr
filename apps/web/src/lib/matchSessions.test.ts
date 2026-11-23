@@ -40,10 +40,10 @@ describe("buildRecommendedMatchRequest", () => {
   it("특수 유형 카드는 지키는 쪽이 오른쪽 팀이어도 팀 순서를 바꾸지 않고 유형을 넘긴다", () => {
     const request = buildRecommendedMatchRequest(
       court({
-        kind: "challenge",
+        kind: "rival",
         defendingTeamIndex: 1,
         protagonistIds: ["a", "c"],
-        challengePairs: [{ attackerId: "a", defenderId: "c" }],
+        rivalPairs: [{ attackerId: "a", defenderId: "c" }],
         outcome: null,
       }),
     );
@@ -51,6 +51,6 @@ describe("buildRecommendedMatchRequest", () => {
       ["a", "b"],
       ["c", "d"],
     ]);
-    expect(request.recommendedSpecialKind).toBe("challenge");
+    expect(request.recommendedSpecialKind).toBe("rival");
   });
 });

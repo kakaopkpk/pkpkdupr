@@ -12,7 +12,7 @@ import type {
   SpecialMatchCandidatePlayer,
   SpecialMatchCelebration,
   SpecialMatchCelebrationPlayer,
-  SpecialMatchChallengePair,
+  SpecialMatchRivalPair,
   SpecialMatchKind,
   SpecialMatchOutcome,
 } from "@pkpkdupr/shared/specialMatch";
@@ -81,8 +81,8 @@ type SpecialMatchEvaluation =
       outcome: SpecialMatchOutcome;
       winnerIndex: 0 | 1;
       loserIndex: 0 | 1;
-      /** 순위를 뒤집은 도전 쌍(대표 쌍 먼저). 라이벌전이 아니면 빈 배열이다 */
-      successfulPairs: SpecialMatchChallengePair[];
+      /** 순위를 뒤집은 라이벌 쌍(대표 쌍 먼저). 라이벌전이 아니면 빈 배열이다 */
+      successfulPairs: SpecialMatchRivalPair[];
       /** 반영 직후 순위. 라이벌전이 아니면 계산하지 않아 비어 있다 */
       rankAfter: Map<string, number>;
     };
@@ -103,7 +103,7 @@ const evaluateSpecialMatch = (
   const loserIndex = winnerIndex === 0 ? 1 : 0;
 
   switch (specialMatch.kind) {
-    case "challenge": {
+    case "rival": {
       // 게스트가 낀 경기는 평점에 반영하지 않아 순위가 뒤집히지 않으므로 라이벌전 결과를 정하지 않는다.
       // 참가자가 바뀌는 수정은 specialMatch를 지우므로 지금 경로로는 생기지 않는 방어용이다
       if (hasGuestPlayer(match.teams)) {
@@ -117,8 +117,8 @@ const evaluateSpecialMatch = (
       const winnerIds = new Set(
         match.teams[winnerIndex].players.map((player) => player.id),
       );
-      // 이긴 팀 공격자가 반영 직후 방어자보다 높은 순위(작은 숫자)가 된 도전 쌍. 원래 순서(대표 쌍 먼저)를 지킨다
-      const successfulPairs = specialMatch.challengePairs.filter((pair) => {
+      // 이긴 팀 공격자가 반영 직후 방어자보다 높은 순위(작은 숫자)가 된 라이벌 쌍. 원래 순서(대표 쌍 먼저)를 지킨다
+      const successfulPairs = specialMatch.rivalPairs.filter((pair) => {
         const attackerRank = rankAfter.get(pair.attackerId);
         const defenderRank = rankAfter.get(pair.defenderId);
         return (
@@ -130,7 +130,7 @@ const evaluateSpecialMatch = (
       });
       return {
         outcome:
-          successfulPairs.length > 0 ? "challenge_success" : "defense_success",
+          successfulPairs.length > 0 ? "rival_overtaken" : "rival_held",
         winnerIndex,
         loserIndex,
         successfulPairs,
@@ -142,7 +142,7 @@ const evaluateSpecialMatch = (
     case "revenge": {
       const defendingTeamLost = specialMatch.defendingTeamIndex === loserIndex;
       const outcomeByKind: Record<
-        Exclude<SpecialMatchKind, "challenge">,
+        Exclude<SpecialMatchKind, "rival">,
         SpecialMatchOutcome
       > = {
         streak_stopper: defendingTeamLost ? "streak_stopped" : "streak_defended",
@@ -215,33 +215,33 @@ export const settleSpecialMatch = (
     evaluation;
 
   const buildCelebration = (): SpecialMatchCelebration | null => {
-    if (outcome === "challenge_success") {
+    if (outcome === "rival_overtaken") {
       const rankBefore = getRankById(
         context,
         getMatchTopLevelType(match.type),
         { at: match.completedAt, inclusive: false },
       );
       for (const pair of successfulPairs) {
-        const challenger = toCelebrationPlayer(match, pair.attackerId);
+        const attacker = toCelebrationPlayer(match, pair.attackerId);
         const defender = toCelebrationPlayer(match, pair.defenderId);
-        const challengerBefore = rankBefore.get(pair.attackerId);
+        const attackerBefore = rankBefore.get(pair.attackerId);
         const defenderBefore = rankBefore.get(pair.defenderId);
         if (
-          challenger &&
+          attacker &&
           defender &&
-          challengerBefore != null &&
+          attackerBefore != null &&
           defenderBefore != null
         ) {
           return {
-            kind: "challenge",
+            kind: "rival",
             defender: {
               player: defender,
               rankBefore: defenderBefore,
               rankAfter: rankAfter.get(pair.defenderId)!,
             },
-            challenger: {
-              player: challenger,
-              rankBefore: challengerBefore,
+            attacker: {
+              player: attacker,
+              rankBefore: attackerBefore,
               rankAfter: rankAfter.get(pair.attackerId)!,
             },
           };

@@ -39,7 +39,7 @@ interface SpecialMatchShareBase {
 export type SpecialMatchShareTarget = SpecialMatchShareBase &
   (
     | {
-        kind: "challenge";
+        kind: "rival";
         category: MatchTopLevelType;
         /** 순위가 올라 위 줄이 된 회원(▲) */
         winner: SpecialMatchShareRankRow;
@@ -73,7 +73,7 @@ export interface SpecialMatchCaptionPart {
 }
 
 const TITLES: Record<SpecialMatchShareKind, string> = {
-  challenge: "라이벌전 승리!",
+  rival: "라이벌전 승리!",
   "streak-break": "연승 저지!",
   "king-win": "최강자전 승리!",
 };
@@ -88,7 +88,7 @@ export const getSpecialMatchCaptionParts = (
   target: SpecialMatchShareTarget,
 ): SpecialMatchCaptionPart[] => {
   switch (target.kind) {
-    case "challenge": {
+    case "rival": {
       const passed = target.passed.player.username;
       return [
         { text: passed, fit: true },
@@ -120,7 +120,7 @@ export const getSpecialMatchCaptionParts = (
  */
 export const getSpecialMatchShareText = (target: SpecialMatchShareTarget) => {
   switch (target.kind) {
-    case "challenge": {
+    case "rival": {
       const passed = target.passed.player.username;
       return `${target.winner.player.username}님이 ${passed}${getObjectParticle(passed)} 넘어 ${MATCH_CATEGORY_LABELS[target.category]} ${target.winner.rank}위가 됐어요`;
     }

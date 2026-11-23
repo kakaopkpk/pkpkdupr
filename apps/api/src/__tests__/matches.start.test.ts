@@ -297,7 +297,7 @@ describe("POST /api/matches/start", () => {
         kind: "revenge",
         defendingTeamIndex: 1,
         protagonistIds: [null, null],
-        challengePairs: [],
+        rivalPairs: [],
         outcome: null,
       });
       expect(response.body.specialMatch.kind).toBe("revenge");

@@ -73,7 +73,7 @@ type Avatars = ShareAvatars;
 
 const getPlayers = (target: SpecialMatchShareTarget): SpecialMatchSharePlayer[] => {
   switch (target.kind) {
-    case "challenge":
+    case "rival":
       return [target.winner.player, target.passed.player];
     case "streak-break":
       return [target.loser];
@@ -215,8 +215,8 @@ interface CardLayout {
 }
 
 /** 라이벌전 승리: 랭킹 이름표 + 앱 랭킹 줄 두 개(순위·아바타 32·아이디·▲▼). 평점은 넣지 않는다 */
-const challengeCard = (
-  target: Extract<SpecialMatchShareTarget, { kind: "challenge" }>,
+const rivalCard = (
+  target: Extract<SpecialMatchShareTarget, { kind: "rival" }>,
   colors: Colors,
 ): CardLayout => {
   const paddingTop = 12;
@@ -423,8 +423,8 @@ const kingWinCard = (
 
 const getCardLayout = (target: SpecialMatchShareTarget, colors: Colors) => {
   switch (target.kind) {
-    case "challenge":
-      return challengeCard(target, colors);
+    case "rival":
+      return rivalCard(target, colors);
     case "streak-break":
       return streakBreakCard(target, colors);
     case "king-win":

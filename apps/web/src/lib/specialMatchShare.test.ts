@@ -15,9 +15,9 @@ const base = {
   sessionName: "월요 정기운동",
 };
 
-const challenge: SpecialMatchShareTarget = {
+const rival: SpecialMatchShareTarget = {
   ...base,
-  kind: "challenge",
+  kind: "rival",
   category: "doubles",
   winner: { player: { id: "p1", username: "sean.oh" }, rank: 11, change: 3 },
   passed: { player: { id: "p2", username: "jackie.hur" }, rank: 12, change: 1 },
@@ -43,7 +43,7 @@ const kingWin: SpecialMatchShareTarget = {
 
 describe("getSpecialMatchShareTitle", () => {
   it("연출 제목과 같다", () => {
-    expect(getSpecialMatchShareTitle("challenge")).toBe("라이벌전 승리!");
+    expect(getSpecialMatchShareTitle("rival")).toBe("라이벌전 승리!");
     expect(getSpecialMatchShareTitle("streak-break")).toBe("연승 저지!");
     expect(getSpecialMatchShareTitle("king-win")).toBe("최강자전 승리!");
   });
@@ -56,14 +56,14 @@ describe("getSpecialMatchCaptionParts", () => {
       .join("");
 
   it("라이벌전 승리는 넘어선 회원과 새 순위(상승색)", () => {
-    expect(join(challenge)).toBe("jackie.hur를 넘어 [11위]");
-    expect(getSpecialMatchCaptionParts(challenge).at(-1)?.highlight).toBe("up");
+    expect(join(rival)).toBe("jackie.hur를 넘어 [11위]");
+    expect(getSpecialMatchCaptionParts(rival).at(-1)?.highlight).toBe("up");
   });
 
   it("받침 있는 한글 아이디면 '을'", () => {
     const target = {
-      ...challenge,
-      passed: { ...challenge.passed, player: { id: "p2", username: "김준" } },
+      ...rival,
+      passed: { ...rival.passed, player: { id: "p2", username: "김준" } },
     } as SpecialMatchShareTarget;
     expect(join(target)).toBe("김준을 넘어 [11위]");
   });
@@ -78,7 +78,7 @@ describe("getSpecialMatchCaptionParts", () => {
 
   it("넘치면 줄일 조각은 상대 아이디 하나", () => {
     for (const [target, username] of [
-      [challenge, "jackie.hur"],
+      [rival, "jackie.hur"],
       [streakBreak, "martin.bok"],
       [kingWin, "colin.34"],
     ] as const) {
@@ -90,8 +90,8 @@ describe("getSpecialMatchCaptionParts", () => {
 
 describe("getSpecialMatchShareText", () => {
   it("라이벌전 승리는 순위가 오른 회원이 주어이고 종목을 붙인다", () => {
-    expect(getSpecialMatchShareText(challenge)).toBe("sean.oh님이 jackie.hur를 넘어 복식 11위가 됐어요");
-    expect(getSpecialMatchShareText({ ...challenge, category: "singles" } as SpecialMatchShareTarget)).toBe(
+    expect(getSpecialMatchShareText(rival)).toBe("sean.oh님이 jackie.hur를 넘어 복식 11위가 됐어요");
+    expect(getSpecialMatchShareText({ ...rival, category: "singles" } as SpecialMatchShareTarget)).toBe(
       "sean.oh님이 jackie.hur를 넘어 단식 11위가 됐어요",
     );
   });

@@ -73,7 +73,7 @@ const buildCells = (court: RecommendedCourt): [CourtCell, CourtCell] => {
       protagonist,
       tone,
       rankChip:
-        special?.kind === "challenge" && protagonist
+        special?.kind === "rival" && protagonist
           ? isDefending
             ? "defending"
             : "attacking"

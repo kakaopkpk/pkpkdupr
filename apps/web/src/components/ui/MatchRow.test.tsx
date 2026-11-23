@@ -78,11 +78,11 @@ describe("MatchRow 특수 매치", () => {
     const match: MatchInfo = {
       ...makeMatch(false),
       specialMatch: {
-        kind: "challenge",
+        kind: "rival",
         defendingTeamIndex: 1,
         protagonistIds: ["alice", "carol"],
-        challengePairs: [{ attackerId: "alice", defenderId: "carol" }],
-        outcome: "challenge_success",
+        rivalPairs: [{ attackerId: "alice", defenderId: "carol" }],
+        outcome: "rival_overtaken",
       },
     };
     expect(getMetaText(match, "alice")).toBe("21:50 · 내 경기라이벌전");

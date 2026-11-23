@@ -2,10 +2,10 @@ import { describe, expect, it } from "vitest";
 import type { SpecialMatchCelebration } from "@pkpkdupr/shared/specialMatch";
 import type { MatchInfo } from "@/types/match";
 import {
-  CHALLENGE_STEP_MS,
-  CHALLENGE_SWAP_MS,
+  RIVAL_STEP_MS,
+  RIVAL_SWAP_MS,
   SCENE_START_MS,
-  getChallengeCountSteps,
+  getRivalCountSteps,
   getSceneBeatTimes,
   getSceneEndMs,
   isViewerOnWinningTeam,
@@ -14,13 +14,13 @@ import {
 
 const player = (id: string) => ({ id, username: id });
 
-const challenge = (
-  challengerBefore: number,
+const rival = (
+  attackerBefore: number,
   defenderBefore: number,
-): Extract<SpecialMatchCelebration, { kind: "challenge" }> => ({
-  kind: "challenge",
+): Extract<SpecialMatchCelebration, { kind: "rival" }> => ({
+  kind: "rival",
   defender: { player: player("def"), rankBefore: defenderBefore, rankAfter: defenderBefore + 1 },
-  challenger: { player: player("cha"), rankBefore: challengerBefore, rankAfter: defenderBefore },
+  attacker: { player: player("cha"), rankBefore: attackerBefore, rankAfter: defenderBefore },
 });
 
 const match = {
@@ -31,26 +31,26 @@ const match = {
   session: { id: "s1", name: "월요 정기운동", date: "2026-11-23", kind: "regular", startTime: null, endTime: null },
 } as unknown as MatchInfo;
 
-describe("getChallengeCountSteps", () => {
+describe("getRivalCountSteps", () => {
   it("지키던 쪽과 1 차이가 될 때까지 한 칸씩 오른다", () => {
-    expect(getChallengeCountSteps(challenge(7, 3))).toBe(3);
+    expect(getRivalCountSteps(rival(7, 3))).toBe(3);
   });
 
   it("이미 1 차이면 오르지 않고 바로 자리를 바꾼다", () => {
-    expect(getChallengeCountSteps(challenge(4, 3))).toBe(0);
-    expect(getSceneBeatTimes(challenge(4, 3))).toEqual([SCENE_START_MS]);
+    expect(getRivalCountSteps(rival(4, 3))).toBe(0);
+    expect(getSceneBeatTimes(rival(4, 3))).toEqual([SCENE_START_MS]);
   });
 });
 
 describe("getSceneBeatTimes·getSceneEndMs", () => {
   it("라이벌전 승리는 오르는 박자들 뒤 자리 바꿈 한 번이고 자리를 다 바꾸면 끝난다", () => {
-    const celebration = challenge(6, 3);
+    const celebration = rival(6, 3);
     expect(getSceneBeatTimes(celebration)).toEqual([
       SCENE_START_MS,
-      SCENE_START_MS + CHALLENGE_STEP_MS,
-      SCENE_START_MS + CHALLENGE_STEP_MS * 2,
+      SCENE_START_MS + RIVAL_STEP_MS,
+      SCENE_START_MS + RIVAL_STEP_MS * 2,
     ]);
-    expect(getSceneEndMs(celebration)).toBe(SCENE_START_MS + CHALLENGE_STEP_MS * 2 + CHALLENGE_SWAP_MS);
+    expect(getSceneEndMs(celebration)).toBe(SCENE_START_MS + RIVAL_STEP_MS * 2 + RIVAL_SWAP_MS);
   });
 
   it("최강자전은 연승 저지 박자 뒤에 이긴 쪽 타오름이 한 번 더 있다", () => {
@@ -91,13 +91,13 @@ describe("isViewerOnWinningTeam", () => {
 });
 
 describe("toSpecialMatchShareTarget", () => {
-  it("라이벌전 승리는 도전한 쪽이 위 줄(▲), 지키던 쪽이 넘어선 회원(▼)이다", () => {
-    expect(toSpecialMatchShareTarget(challenge(5, 3), match, "me")).toEqual({
+  it("라이벌전 승리는 공격 쪽이 위 줄(▲), 지키던 쪽이 넘어선 회원(▼)이다", () => {
+    expect(toSpecialMatchShareTarget(rival(5, 3), match, "me")).toEqual({
       matchId: "m1",
       username: "me",
       playedAt: "2026-11-23T11:00:00.000Z",
       sessionName: "월요 정기운동",
-      kind: "challenge",
+      kind: "rival",
       category: "doubles",
       winner: { player: player("cha"), rank: 3, change: 2 },
       passed: { player: player("def"), rank: 4, change: 1 },

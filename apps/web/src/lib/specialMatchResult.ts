@@ -27,9 +27,9 @@ export const getSpecialMatchResultName = (
   const isDefending = specialMatch.defendingTeamIndex === viewerTeamIndex;
 
   switch (specialMatch.kind) {
-    case "challenge":
+    case "rival":
       // 라이벌전은 공격·방어 구분 없이 승패만 따른다
-      return { label: isWin ? "라이벌전 승리" : "라이벌전 패배", icon: "challenge" };
+      return { label: isWin ? "라이벌전 승리" : "라이벌전 패배", icon: "rival" };
     case "streak_stopper":
       return isDefending
         ? { label: isWin ? "연승 연장" : "연승 끝", icon: "champions" }

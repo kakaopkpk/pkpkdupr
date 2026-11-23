@@ -385,11 +385,11 @@ describe("recommendDoublesMatches 특수 유형 가산점", () => {
 
   it("유형별 가산점은 최강자전 2, 라이벌전 1.5, 연승 저지·리벤지 0이다", () => {
     expect(getSpecialMatchRecommendationBonus("champions")).toBe(2);
-    expect(getSpecialMatchRecommendationBonus("challenge")).toBe(1.5);
+    expect(getSpecialMatchRecommendationBonus("rival")).toBe(1.5);
     expect(getSpecialMatchRecommendationBonus("streak_stopper")).toBe(0);
     expect(getSpecialMatchRecommendationBonus("revenge")).toBe(0);
     expect(SPECIAL_MATCH_RECOMMENDATION_BONUS).toEqual({
-      challenge: 1.5,
+      rival: 1.5,
       streak_stopper: 0,
       champions: 2,
       revenge: 0,
@@ -451,14 +451,14 @@ describe("recommendDoublesMatches 특수 유형 가산점", () => {
       const plan = recommend({ ...input, rank });
       const [court] = plan.courts;
       // 같은 실력끼리 한 팀(a+b vs c+d)이면 평점 0.05 이내 맞상대가 없다
-      const isChallenge = !court.teams.some(
+      const isRival = !court.teams.some(
         (team) => team.includes("a") && team.includes("b"),
       );
       expect(court.specialMatch?.kind ?? null).toBe(
-        isChallenge ? "challenge" : null,
+        isRival ? "rival" : null,
       );
       expect(plan.penalty).toBeCloseTo(
-        base.get(matchupKey(plan))! - (isChallenge ? 1.5 : 0),
+        base.get(matchupKey(plan))! - (isRival ? 1.5 : 0),
       );
       penalties.push(plan.penalty);
     }
@@ -568,7 +568,7 @@ describe("recommendDoublesMatches 특수 유형 가산점", () => {
       );
       if (
         kinds.includes("streak_stopper") &&
-        (kinds.includes("champions") || kinds.includes("challenge"))
+        (kinds.includes("champions") || kinds.includes("rival"))
       ) {
         mixed += 1;
         const shown = plan.courts.findIndex(

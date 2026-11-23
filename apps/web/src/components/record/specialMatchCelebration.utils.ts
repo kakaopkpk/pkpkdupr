@@ -10,10 +10,10 @@ import type { MatchInfo } from "@/types/match";
 
 /** 카드가 튀어나와 자리 잡은 뒤 잠깐 멈췄다가 장면을 시작한다 */
 export const SCENE_START_MS = 900;
-/** 라이벌전 승리: 도전한 쪽 순위가 한 칸 오르는 박자 */
-export const CHALLENGE_STEP_MS = 500;
+/** 라이벌전 승리: 공격 쪽 순위가 한 칸 오르는 박자 */
+export const RIVAL_STEP_MS = 500;
 /** 라이벌전 승리: 두 줄이 자리를 바꾸는 시간 */
-export const CHALLENGE_SWAP_MS = 350;
+export const RIVAL_SWAP_MS = 350;
 /** 손바닥 도장이 떨어지는 시간. index.css `--animate-pk-stamp-drop` 길이와 같아야 한다 */
 const STAMP_DROP_MS = 520;
 /** 도장이 박힌 뒤 연승 테두리가 흐려져 사라지는 시간 */
@@ -26,10 +26,10 @@ const CHAMPIONS_FLARE_MS = 400;
 const STAMP_IMPACT_MS = SCENE_START_MS + STAMP_DROP_MS;
 const CHAMPIONS_FLARE_START_MS = STAMP_IMPACT_MS + CHAMPIONS_FLARE_AFTER_IMPACT_MS;
 
-/** 도전한 쪽이 지키던 쪽과 1 차이가 될 때까지 한 칸씩 오르는 횟수. 이미 1 차이 이내면 0 */
-export const getChallengeCountSteps = (
-  celebration: Extract<SpecialMatchCelebration, { kind: "challenge" }>,
-): number => Math.max(0, celebration.challenger.rankBefore - celebration.defender.rankBefore - 1);
+/** 공격 쪽이 지키던 쪽과 1 차이가 될 때까지 한 칸씩 오르는 횟수. 이미 1 차이 이내면 0 */
+export const getRivalCountSteps = (
+  celebration: Extract<SpecialMatchCelebration, { kind: "rival" }>,
+): number => Math.max(0, celebration.attacker.rankBefore - celebration.defender.rankBefore - 1);
 
 /**
  * 장면 박자 시각. 라이벌전 승리는 한 칸씩 오르는 박자들 뒤 자리 바꿈 한 번,
@@ -37,9 +37,9 @@ export const getChallengeCountSteps = (
  */
 export const getSceneBeatTimes = (celebration: SpecialMatchCelebration): number[] => {
   switch (celebration.kind) {
-    case "challenge": {
-      const steps = getChallengeCountSteps(celebration);
-      return Array.from({ length: steps + 1 }, (_, index) => SCENE_START_MS + CHALLENGE_STEP_MS * index);
+    case "rival": {
+      const steps = getRivalCountSteps(celebration);
+      return Array.from({ length: steps + 1 }, (_, index) => SCENE_START_MS + RIVAL_STEP_MS * index);
     }
     case "streak_stopper":
       return [SCENE_START_MS, STAMP_IMPACT_MS];
@@ -53,8 +53,8 @@ export const getSceneEndMs = (celebration: SpecialMatchCelebration): number => {
   const beats = getSceneBeatTimes(celebration);
   const lastBeat = beats[beats.length - 1];
   switch (celebration.kind) {
-    case "challenge":
-      return lastBeat + CHALLENGE_SWAP_MS;
+    case "rival":
+      return lastBeat + RIVAL_SWAP_MS;
     case "streak_stopper":
       return lastBeat + STREAK_RING_FADE_MS;
     case "champions":
@@ -86,16 +86,16 @@ export const toSpecialMatchShareTarget = (
     sessionName: match.session?.name ?? null,
   };
   switch (celebration.kind) {
-    case "challenge": {
-      const { challenger, defender } = celebration;
+    case "rival": {
+      const { attacker, defender } = celebration;
       return {
         ...base,
-        kind: "challenge",
+        kind: "rival",
         category: getMatchTopLevelType(match.type),
         winner: {
-          player: challenger.player,
-          rank: challenger.rankAfter,
-          change: challenger.rankBefore - challenger.rankAfter,
+          player: attacker.player,
+          rank: attacker.rankAfter,
+          change: attacker.rankBefore - attacker.rankAfter,
         },
         passed: {
           player: defender.player,

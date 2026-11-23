@@ -110,31 +110,31 @@ const buildContext = (
   );
 };
 
-const challenge: SpecialMatch = {
-  kind: "challenge",
+const rival: SpecialMatch = {
+  kind: "rival",
   defendingTeamIndex: 1,
   protagonistIds: ["a1", "d1"],
-  challengePairs: [{ attackerId: "a1", defenderId: "d1" }],
+  rivalPairs: [{ attackerId: "a1", defenderId: "d1" }],
   outcome: null,
 };
 
 describe("특수 매치 결과 판정", () => {
-  it("라이벌전은 이긴 팀 공격자가 반영 직후 방어자보다 순위가 높아지면 challenge_success이고 두 사람 순위 전후를 싣는다", () => {
+  it("라이벌전은 이긴 팀 공격자가 반영 직후 방어자보다 순위가 높아지면 rival_overtaken이고 두 사람 순위 전후를 싣는다", () => {
     const context = buildContext(
       { a1: 3.56, a2: 3.28, d1: 3.44, d2: 3.72 },
       teamAWin,
     );
 
-    expect(settleSpecialMatch(context, challenge, toTarget(teamAWin))).toEqual({
-      outcome: "challenge_success",
+    expect(settleSpecialMatch(context, rival, toTarget(teamAWin))).toEqual({
+      outcome: "rival_overtaken",
       celebration: {
-        kind: "challenge",
+        kind: "rival",
         defender: {
           player: { id: "d1", username: "d1", avatarUrl: "https://example.com/d1.png" },
           rankBefore: 2,
           rankAfter: 3,
         },
-        challenger: {
+        attacker: {
           player: { id: "a1", username: "a1", avatarUrl: "https://example.com/a1.png" },
           rankBefore: 3,
           rankAfter: 2,
@@ -143,26 +143,26 @@ describe("특수 매치 결과 판정", () => {
     });
   });
 
-  it("도전 팀이 이겨도 순위가 뒤집히지 않으면 defense_success이고 연출은 없다", () => {
+  it("공격 팀이 이겨도 순위가 뒤집히지 않으면 rival_held이고 연출은 없다", () => {
     const context = buildContext(
       { a1: 3.5, a2: 3.22, d1: 3.51, d2: 3.79 },
       teamAWin,
     );
 
-    expect(settleSpecialMatch(context, challenge, toTarget(teamAWin))).toEqual({
-      outcome: "defense_success",
+    expect(settleSpecialMatch(context, rival, toTarget(teamAWin))).toEqual({
+      outcome: "rival_held",
       celebration: null,
     });
   });
 
-  it("도전 팀이 지면 defense_success다", () => {
+  it("공격 팀이 지면 rival_held다", () => {
     const context = buildContext(
       { a1: 3.44, a2: 3.16, d1: 3.56, d2: 3.84 },
       teamBWin,
     );
 
-    expect(judgeSpecialMatchOutcome(context, challenge, toTarget(teamBWin))).toBe(
-      "defense_success",
+    expect(judgeSpecialMatchOutcome(context, rival, toTarget(teamBWin))).toBe(
+      "rival_held",
     );
   });
 
@@ -171,7 +171,7 @@ describe("특수 매치 결과 판정", () => {
       kind: "streak_stopper",
       defendingTeamIndex: 1,
       protagonistIds: [null, "d1"],
-      challengePairs: [],
+      rivalPairs: [],
       outcome: null,
     };
     const priorWins = [5, 4, 3, 2, 1].map((hours) =>
@@ -203,7 +203,7 @@ describe("특수 매치 결과 판정", () => {
       kind: "champions",
       defendingTeamIndex: null,
       protagonistIds: ["a1", "d1"],
-      challengePairs: [],
+      rivalPairs: [],
       outcome: null,
     };
     const priorWins = [
@@ -241,7 +241,7 @@ describe("특수 매치 결과 판정", () => {
       kind: "revenge",
       defendingTeamIndex: 0,
       protagonistIds: [null, null],
-      challengePairs: [],
+      rivalPairs: [],
       outcome: null,
     };
     const context = buildContext(
@@ -263,7 +263,7 @@ describe("특수 매치 결과 판정", () => {
       kind: "streak_stopper",
       defendingTeamIndex: 1,
       protagonistIds: [null, "d1"],
-      challengePairs: [],
+      rivalPairs: [],
       outcome: null,
     };
     // 직전 5연승 중 2경기는 게스트 g1이 낀 경기다
@@ -303,7 +303,7 @@ describe("특수 매치 결과 판정", () => {
       kind: "champions",
       defendingTeamIndex: null,
       protagonistIds: ["a1", "d1"],
-      challengePairs: [],
+      rivalPairs: [],
       outcome: null,
     };
     const context = buildContext(
@@ -326,14 +326,14 @@ describe("특수 매치 결과 판정", () => {
     );
 
     expect(
-      settleSpecialMatch(context, challenge, toTarget(teamAWin, ["a2"])),
+      settleSpecialMatch(context, rival, toTarget(teamAWin, ["a2"])),
     ).toEqual({ outcome: null, celebration: null });
   });
 
   it("승패가 갈리지 않으면 결과가 null이다", () => {
     const context = buildContext({ a1: 3.48, a2: 3.2, d1: 3.52, d2: 3.8 }, []);
 
-    expect(settleSpecialMatch(context, challenge, toTarget([]))).toEqual({
+    expect(settleSpecialMatch(context, rival, toTarget([]))).toEqual({
       outcome: null,
       celebration: null,
     });

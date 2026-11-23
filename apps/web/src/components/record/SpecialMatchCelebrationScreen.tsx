@@ -17,7 +17,7 @@ import {
 import { useDimmedThemeColor } from "@/lib/themeColor";
 import type { MatchInfo } from "@/types/match";
 import {
-  ChallengeScene,
+  RivalScene,
   ChampionsScene,
   StreakStopperScene,
 } from "./SpecialMatchCelebrationScenes";
@@ -97,7 +97,7 @@ export default function SpecialMatchCelebrationScreen({
   // 이미지는 버튼이 나타날 때 만들어 등장 연출과 겹치지 않게 한다
   const shareState = useSpecialMatchShare(isAcceptingInput ? shareTarget : null);
   // 도장이 박히는 순간 카드가 흔들린다
-  const isShaking = celebration.kind !== "challenge" && beatCount >= 2 && !isReducedMotion;
+  const isShaking = celebration.kind !== "rival" && beatCount >= 2 && !isReducedMotion;
   useDimmedThemeColor(isOpen && !isClosing, DIM_OPACITY);
 
   useEffect(() => {
@@ -181,8 +181,8 @@ export default function SpecialMatchCelebrationScreen({
                 isShaking && "animate-pk-shake motion-reduce:animate-none",
               )}
             >
-              {celebration.kind === "challenge" ? (
-                <ChallengeScene
+              {celebration.kind === "rival" ? (
+                <RivalScene
                   celebration={celebration}
                   category={getMatchTopLevelType(match.type)}
                   beatCount={beatCount}

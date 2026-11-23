@@ -1013,7 +1013,7 @@ describe("PUT /api/matches/:matchId", () => {
       kind: "streak_stopper",
       defendingTeamIndex: 0,
       protagonistIds: [requester.id, null],
-      challengePairs: [],
+      rivalPairs: [],
       outcome: null,
     };
     const requesterWin = (id: string, completedAt: Date): CompletedMatchOutcome => ({
@@ -1124,11 +1124,11 @@ describe("PUT /api/matches/:matchId", () => {
     });
 
     describe("라이벌전", () => {
-      const challengeMatch: SpecialMatch = {
-        kind: "challenge",
+      const rivalMatch: SpecialMatch = {
+        kind: "rival",
         defendingTeamIndex: 1,
         protagonistIds: [requester.id, opponentM.id],
-        challengePairs: [{ attackerId: requester.id, defenderId: opponentM.id }],
+        rivalPairs: [{ attackerId: requester.id, defenderId: opponentM.id }],
         outcome: null,
       };
       // 요청자 팀이 이기는 수정 점수(승패는 기존 11:5와 같다)
@@ -1189,7 +1189,7 @@ describe("PUT /api/matches/:matchId", () => {
 
       it("승패가 같은 점수 수정으로 순위가 달라지면 결과를 다시 정하지만 연출은 하지 않는다", async () => {
         existing = buildExistingMatch({
-          specialMatch: { ...challengeMatch, outcome: "challenge_success" },
+          specialMatch: { ...rivalMatch, outcome: "rival_overtaken" },
         });
         mockRankingSource(3.5, 3.51);
 
@@ -1197,27 +1197,27 @@ describe("PUT /api/matches/:matchId", () => {
 
         expect(response.status).toBe(200);
         expect(updateSpecialMatch).toHaveBeenCalledWith(existing.id, {
-          ...challengeMatch,
-          outcome: "defense_success",
+          ...rivalMatch,
+          outcome: "rival_held",
         });
-        expect(response.body.specialMatch.outcome).toBe("defense_success");
+        expect(response.body.specialMatch.outcome).toBe("rival_held");
         expect(response.body.specialMatchCelebration).toBeNull();
       });
 
       it("결과가 null로 남은 완료 경기는 승패가 같아도 수정 때 결과를 채우고 연출을 싣는다", async () => {
-        existing = buildExistingMatch({ specialMatch: challengeMatch });
+        existing = buildExistingMatch({ specialMatch: rivalMatch });
         mockRankingSource(3.56, 3.44);
 
         const response = await putMatch(sameWinnerBody);
 
         expect(response.status).toBe(200);
         expect(updateSpecialMatch).toHaveBeenCalledWith(existing.id, {
-          ...challengeMatch,
-          outcome: "challenge_success",
+          ...rivalMatch,
+          outcome: "rival_overtaken",
         });
-        expect(response.body.specialMatch.outcome).toBe("challenge_success");
+        expect(response.body.specialMatch.outcome).toBe("rival_overtaken");
         expect(response.body.specialMatchCelebration).toMatchObject({
-          kind: "challenge",
+          kind: "rival",
         });
       });
     });

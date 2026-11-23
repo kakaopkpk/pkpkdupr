@@ -50,7 +50,7 @@
     - 평점 잠금 밖에서 반영 직후 랭킹을 다시 읽어 정한다. 판정이 실패해도 응답은 200이고 결과는 그대로 둔다.
     - 결과가 null로 남은 completed 경기도 다음 수정 때 채운다(승패가 안 갈리면 그대로 null). 바뀐 결과는 저장하되 큰 연출은 결과가 처음 정해질 때만 싣는다.
     - 팀별 선수 구성이 바뀌는 저장은 `specialMatch`를 null로 지운다(팀 안 순서만 바뀌면 그대로).
-  - 응답 `RecordedMatchResponse.specialMatchCelebration`은 결과가 이번 저장으로 처음 `challenge_success`·`streak_stopped`·`champions_won`으로 정해졌을 때만 큰 연출 데이터(`SpecialMatchCelebration`)이고, 그 밖은 null이다. 기록한 회원이 이긴 팀인지와 상관없이 싣는다.
+  - 응답 `RecordedMatchResponse.specialMatchCelebration`은 결과가 이번 저장으로 처음 `rival_overtaken`·`streak_stopped`·`champions_won`으로 정해졌을 때만 큰 연출 데이터(`SpecialMatchCelebration`)이고, 그 밖은 null이다. 기록한 회원이 이긴 팀인지와 상관없이 싣는다.
 - 삭제 `DELETE /api/matches/:matchId`
   - `isMatchRecordDeletable`, 이미 지워졌으면 404.
   - 선택적 `expectedUpdatedAt`이 서버 `updatedAt`과 다르면 409.

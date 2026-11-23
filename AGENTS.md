@@ -151,7 +151,7 @@ pnpm lint
   - 게스트는 `winStreak`과 상관없이 연승 주인공(`protagonistIds`)이 되지 않는다.
   - 리벤지는 게스트가 있어도 된다. 이미 기록된 경기에는 소급하지 않는다.
 - 결과(`SpecialMatch.outcome`)는 평점 반영 뒤 서버가 정한다. 승패가 갈리지 않으면 null이다.
-  - 라이벌전: 이긴 팀에 공격자가 있는 도전 쌍 중 하나라도 반영 직후 그 경기 종류 랭킹(`rankPlayersAt`)에서 공격자 순위가 방어자보다 높아졌으면 `challenge_success`, 아니면 `defense_success`.
+  - 라이벌전: 이긴 팀에 공격자가 있는 라이벌 쌍 중 하나라도 반영 직후 그 경기 종류 랭킹(`rankPlayersAt`)에서 공격자 순위가 방어자보다 높아졌으면 `rival_overtaken`, 아니면 `rival_held`.
   - 연승 저지: 연승 회원 팀이 지면 `streak_stopped`, 이기면 `streak_defended`. 최강자전: `champions_won`.
   - 리벤지: 지키는 쪽이 아닌 팀이 이기면 `revenge_success`, 지면 `revenge_defended`.
 - 끝난 특수 매치를 고치면(회원·관리자 수정) 승패가 같아도 평점 재계산 뒤 결과를 다시 정하고, 결과가 null로 남은 경기도 이때 채운다. 판정 규칙·순위 기준은 처음 판정과 같다.

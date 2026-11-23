@@ -38,7 +38,7 @@ describe("judgeRecommendedSpecialMatch", () => {
       kind: "streak_stopper",
       defendingTeamIndex: 1,
       protagonistIds: [null, "c"],
-      challengePairs: [],
+      rivalPairs: [],
       outcome: null,
     });
   });
@@ -62,36 +62,54 @@ describe("judgeRecommendedSpecialMatch", () => {
       kind: "champions",
       defendingTeamIndex: null,
       protagonistIds: ["a", "d"],
-      challengePairs: [],
+      rivalPairs: [],
       outcome: null,
     });
   });
 
-  it("상대로 만나는 두 랭킹 회원의 평점 차가 0.05 이하면 라이벌전이고 순위가 낮은 쪽이 도전한다", () => {
+  it("상대로 만나는 두 랭킹 회원의 평점 차가 0.02 이하이고 팀 평균 차가 0.1 이하면 라이벌전이고 순위가 낮은 쪽이 공격이다", () => {
     expect(
       judgeRecommendedSpecialMatch([
-        [player("a", { rank: 4, rating: 3.5 }), player("b")],
-        [player("c", { rank: 3, rating: 3.55 }), player("d")],
+        [player("a", { rank: 4, rating: 3.5 }), player("b", { rank: 8, rating: 3.0 })],
+        [player("c", { rank: 3, rating: 3.52 }), player("d", { rank: 9, rating: 2.95 })],
       ]),
     ).toEqual({
-      kind: "challenge",
+      kind: "rival",
       defendingTeamIndex: 1,
       protagonistIds: ["a", "c"],
-      challengePairs: [{ attackerId: "a", defenderId: "c" }],
+      rivalPairs: [{ attackerId: "a", defenderId: "c" }],
       outcome: null,
     });
   });
 
-  it("평점 차가 0.05를 넘거나 랭킹에 없는 회원이면 라이벌전이 아니다", () => {
+  it("평점 차가 0.02를 넘거나 랭킹에 없는 회원이면 라이벌전이 아니다", () => {
     expect(
       judgeRecommendedSpecialMatch([
         [player("a", { rank: 4, rating: 3.5 }), player("b", { rating: 3.6 })],
-        [player("c", { rank: 3, rating: 3.56 }), player("d", { rank: 9 })],
+        [player("c", { rank: 3, rating: 3.53 }), player("d", { rank: 9, rating: 3.57 })],
       ]),
     ).toBeNull();
   });
 
-  it("같은 팀 두 사람은 도전 쌍이 아니다", () => {
+  it("두 팀 평균 평점 차가 0.1을 넘으면 개인 평점이 비슷해도 라이벌전이 아니다", () => {
+    expect(
+      judgeRecommendedSpecialMatch([
+        [player("a", { rank: 4, rating: 3.5 }), player("b", { rank: 10, rating: 3.2 })],
+        [player("c", { rank: 3, rating: 3.51 }), player("d", { rank: 12, rating: 2.9 })],
+      ]),
+    ).toBeNull();
+  });
+
+  it("평점 없는 선수가 있으면 팀 평균을 알 수 없어 라이벌전이 아니다", () => {
+    expect(
+      judgeRecommendedSpecialMatch([
+        [player("a", { rank: 4, rating: 3.5 }), player("b", { rank: 8, rating: 3.0 })],
+        [player("c", { rank: 3, rating: 3.51 }), player("d")],
+      ]),
+    ).toBeNull();
+  });
+
+  it("같은 팀 두 사람은 라이벌 쌍이 아니다", () => {
     expect(
       judgeRecommendedSpecialMatch([
         [player("a", { rank: 4, rating: 3.5 }), player("b", { rank: 3, rating: 3.52 })],
@@ -100,12 +118,12 @@ describe("judgeRecommendedSpecialMatch", () => {
     ).toBeNull();
   });
 
-  it("도전 쌍이 여럿이면 평점 차가 가장 작은 쌍, 같으면 순위가 높은 쌍이 대표다", () => {
+  it("라이벌 쌍이 여럿이면 평점 차가 가장 작은 쌍, 같으면 순위가 높은 쌍이 대표다", () => {
     const result = judgeRecommendedSpecialMatch([
       [player("a", { rank: 6, rating: 3.4 }), player("b", { rank: 4, rating: 3.6 })],
-      [player("c", { rank: 5, rating: 3.43 }), player("d", { rank: 3, rating: 3.63 })],
+      [player("c", { rank: 5, rating: 3.41 }), player("d", { rank: 3, rating: 3.61 })],
     ]);
-    expect(result?.challengePairs).toEqual([
+    expect(result?.rivalPairs).toEqual([
       { attackerId: "b", defenderId: "d" },
       { attackerId: "a", defenderId: "c" },
     ]);
@@ -118,7 +136,7 @@ describe("judgeRecommendedSpecialMatch", () => {
       [player("a", { rank: 2, rating: 4.0 }), player("b", { rank: 7, rating: 3.3 })],
       [player("c", { rank: 3, rating: 3.98 }), player("d", { rank: 6, rating: 3.31 })],
     ]);
-    expect(result?.challengePairs).toEqual([
+    expect(result?.rivalPairs).toEqual([
       { attackerId: "b", defenderId: "d" },
       { attackerId: "c", defenderId: "a" },
     ]);
@@ -126,7 +144,7 @@ describe("judgeRecommendedSpecialMatch", () => {
     expect(result?.protagonistIds).toEqual(["b", "d"]);
   });
 
-  it("연승이 도전보다 먼저다", () => {
+  it("연승이 라이벌전보다 먼저다", () => {
     expect(
       judgeRecommendedSpecialMatch([
         [player("a", { rank: 4, rating: 3.5 }), player("b")],
@@ -145,7 +163,7 @@ describe("judgeRecommendedSpecialMatch", () => {
       kind: "streak_stopper",
       defendingTeamIndex: 1,
       protagonistIds: [null, "d"],
-      challengePairs: [],
+      rivalPairs: [],
       outcome: null,
     });
   });
@@ -229,7 +247,7 @@ describe("judgeRematchSpecialMatch", () => {
       kind: "revenge",
       defendingTeamIndex: 0,
       protagonistIds: [null, null],
-      challengePairs: [],
+      rivalPairs: [],
       outcome: null,
     });
   });
