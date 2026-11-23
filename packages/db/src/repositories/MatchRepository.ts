@@ -47,6 +47,7 @@ import {
 } from "../db/schema";
 import { generateEntityId, isEntityId } from "@pkpkdupr/shared/entityId";
 import type { SessionPraiseRecord } from "@pkpkdupr/shared/sessionPraise";
+import type { SpecialMatch } from "@pkpkdupr/shared/specialMatch";
 import {
   IN_PROGRESS_MATCH_TIMEOUT_MS,
   REGULAR_SESSION_LOCATION,
@@ -204,6 +205,8 @@ export interface CreateMatchInput {
   ratingExcluded?: boolean;
   /** 대회 대진 라운드(1부터). status가 scheduled면 필수, 생략하면 null */
   round?: number | null;
+  /** 시작 때 판정한 특수 매치. 생략하면 null */
+  specialMatch?: SpecialMatch | null;
 }
 
 /** 경기 기록 수정 입력. 코트·생성자는 바꾸지 않고, 세션·시작 시각은 주었을 때만 바꾼다. */
@@ -221,6 +224,8 @@ export interface UpdateRecordedMatchInput {
   resultSubmittedAt: Date;
   /** 저장 후 경기의 평점 미반영 여부 */
   ratingExcluded: boolean;
+  /** null이면 특수 매치를 지운다(참가자가 바뀐 경우). 생략하면 그대로 */
+  specialMatch?: null;
   /** 주면 저장된 updated_at(초 단위)과 같을 때만 고치고, 다르면 MatchStaleUpdateError */
   expectedUpdatedAt?: Date;
   /**
@@ -1436,6 +1441,7 @@ export class MatchRepository {
       resultSubmittedAt: toDateOrNull(data.resultSubmittedAt),
       ratingExcluded: data.ratingExcluded ?? false,
       round: data.round ?? null,
+      specialMatch: data.specialMatch ?? null,
       createdAt: now,
       updatedAt: now,
     });
@@ -1726,10 +1732,11 @@ export class MatchRepository {
             completed_at,
             result_submitted_by_player_id,
             result_submitted_at,
+            special_match,
             created_at,
             updated_at
           )
-          VALUES (${placeholders(17)})
+          VALUES (${placeholders(15)}, $16::jsonb, $17, $18)
         `,
         args: [
           data.id,
@@ -1747,6 +1754,7 @@ export class MatchRepository {
           null,
           null,
           null,
+          data.specialMatch ? JSON.stringify(data.specialMatch) : null,
           nowSeconds,
           nowSeconds,
         ],
@@ -1949,6 +1957,22 @@ export class MatchRepository {
   }
 
   /**
+   * 특수 매치(결과 포함)만 바꾼다. 서버가 평점 반영 뒤 정하는 파생 값이라 updated_at은 올리지 않는다
+   * (기록한 회원이 받은 updatedAt으로 바로 다시 고쳐도 409가 나지 않게).
+   * 이미 special_match가 NULL인 경기는 바꾸지 않는다. 평점 반영 중에 다른 회원이 팀 구성을 바꿔
+   * 특수 매치를 지웠다면 이전 팀 구성 기준의 값을 되살리지 않는다.
+   */
+  async updateSpecialMatch(
+    matchId: string,
+    specialMatch: SpecialMatch | null,
+  ): Promise<void> {
+    await this.client.execute({
+      sql: `UPDATE matches SET special_match = $2::jsonb WHERE id = $1 AND special_match IS NOT NULL`,
+      args: [matchId, specialMatch ? JSON.stringify(specialMatch) : null],
+    });
+  }
+
+  /**
    * scheduled·created·completed 경기의 기록(종류·이름·장소·참가자·점수)을 한 트랜잭션으로 교체하고
    * completed로 만든다. completed_at은 기존 값을 유지하고 없을 때만 resultSubmittedAt으로 채운다.
    * 세션·시작 시각(관리자 정정)도 주면 같은 UPDATE·같은 updated_at 조건으로 바꾼다.
@@ -2026,6 +2050,10 @@ export class MatchRepository {
           `session_name = ${addArg(String(session.name))}`,
           `session_date = ${addArg(Number(session.date))}`,
         );
+      }
+
+      if (data.specialMatch === null) {
+        optionalAssignments.push("special_match = NULL");
       }
 
       if (data.matchStartsAt !== undefined) {
@@ -3056,6 +3084,7 @@ export class MatchRepository {
         updatedAt: toDate(match.updatedAt),
         ratingExcluded: match.ratingExcluded === true,
         round: match.round ?? null,
+        specialMatch: match.specialMatch ?? null,
       } as Match & { sessionName?: string };
     });
   }

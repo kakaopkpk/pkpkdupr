@@ -69,15 +69,16 @@ export const startScheduledMatch = async (matchId: string): Promise<MatchInfo> =
   return (await res.json()) as MatchInfo;
 };
 
-/** 세션 밖 경기까지 포함한 모든 진행 중 경기 */
-export const fetchInProgressMatches = async (): Promise<MatchInfo[]> => {
+/** 세션 밖 경기까지 포함한 모든 진행 중 경기와 그 참가자 중 5연승 이상 정회원의 연승 수 */
+export const fetchInProgressMatches = async (): Promise<InProgressMatchesInfo> => {
   const res = await apiFetch("/api/matches/in-progress");
   if (!res.ok) {
     throw new Error(
       await readErrorMessage(res, "진행 중 경기를 불러오지 못했어요."),
     );
   }
-  return ((await res.json()) as InProgressMatchesInfo).matches;
+  const body = (await res.json()) as InProgressMatchesInfo;
+  return { matches: body.matches, winStreaks: body.winStreaks ?? {} };
 };
 
 /**

@@ -2,15 +2,24 @@ import { describe, expect, it, vi } from "vitest";
 
 vi.mock("@/lib/api", () => ({ apiFetch: vi.fn() }));
 
-import type { MatchSessionRecommendationResponse } from "@pkpkdupr/shared/matchmaking";
+import type {
+  MatchSessionRecommendationResponse,
+  RecommendationPlayer,
+} from "@pkpkdupr/shared/matchmaking";
 import {
   getExpandableCourtCount,
   getStaleRecommendedPlayerIds,
 } from "@/components/home/useSessionRecommendations";
 
-const player = (id: string) => ({ id, username: id, doublesRating: null });
+const player = (id: string): RecommendationPlayer => ({
+  id,
+  username: id,
+  doublesRating: null,
+  doublesRank: null,
+  winStreak: 0,
+});
 const team = (a: string, b: string) => ({
-  players: [player(a), player(b)] as [ReturnType<typeof player>, ReturnType<typeof player>],
+  players: [player(a), player(b)] as [RecommendationPlayer, RecommendationPlayer],
   averageRating: 3,
 });
 
@@ -24,6 +33,7 @@ const recommendation: MatchSessionRecommendationResponse = {
       teams: [team("a", "b"), team("c", "d")],
       repeatedPartnerPairs: [],
       repeatedOpponentPairs: [],
+      specialMatch: null,
     },
   ],
   restingPlayers: [player("e")],

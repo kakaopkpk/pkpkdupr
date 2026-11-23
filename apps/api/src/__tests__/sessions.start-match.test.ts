@@ -269,4 +269,126 @@ describe("POST /api/match-sessions/:sessionId/matches", () => {
     expect(response.status).toBe(400);
     expect(createInProgress).not.toHaveBeenCalled();
   });
+
+  describe("추천 카드 특수 유형(recommendedSpecialKind)", () => {
+    const rated = (player: Player, doubles: number): Player => ({
+      ...player,
+      duprRating: { singles: doubles, doubles },
+    });
+    // 복식 랭킹: B 4.5(1위), C 3.52(2위), A 3.5(3위), D 2.5(4위). A와 C가 상대로 만나 평점 차 0.02다.
+    const rankedPlayers = [
+      requester,
+      rated(playerA, 3.5),
+      rated(playerB, 4.5),
+      rated(playerC, 3.52),
+      rated(playerD, 2.5),
+    ];
+
+    const mockRankingSource = (
+      outcomes: Awaited<
+        ReturnType<MatchRepository["findCompletedMatchOutcomes"]>
+      > = [],
+    ) => {
+      vi.spyOn(AuthService.prototype, "getAllPlayers").mockResolvedValue(
+        rankedPlayers,
+      );
+      vi.spyOn(
+        MatchRepository.prototype,
+        "getAllRatingChangeLogs",
+      ).mockResolvedValue([]);
+      vi.spyOn(
+        MatchRepository.prototype,
+        "findCompletedMatchOutcomes",
+      ).mockResolvedValue(outcomes);
+      vi.spyOn(
+        MatchRepository.prototype,
+        "findSessionsWithParticipantIds",
+      ).mockResolvedValue([]);
+    };
+
+    /** C가 다른 회원에게 연달아 이긴 완료 경기 count개 */
+    const winsOfPlayerC = (count: number) =>
+      Array.from({ length: count }, (_, index) => ({
+        id: `Mwin000${index}`,
+        type: "singles" as const,
+        sessionId: null,
+        matchStartsAt: new Date(Date.UTC(2026, 10, 10, 10, index)),
+        completedAt: new Date(Date.UTC(2026, 10, 10, 10, index)),
+        teamPlayerIds: [[playerC.id], [requester.id]] as [string[], string[]],
+        scores: [{ scoreA: 11, scoreB: 5 }],
+        ratingExcluded: false,
+      }));
+
+    it("서버 재판정이 카드 유형과 같으면 그 특수 매치를 저장한다", async () => {
+      mockRankingSource();
+
+      const response = await startMatch("Scustom1", {
+        ...doublesBody,
+        recommendedSpecialKind: "challenge",
+      });
+
+      expect(response.status).toBe(201);
+      expect(createInProgress.mock.calls[0]![0].specialMatch).toEqual({
+        kind: "challenge",
+        defendingTeamIndex: 1,
+        protagonistIds: [playerA.id, playerC.id],
+        challengePairs: [{ attackerId: playerA.id, defenderId: playerC.id }],
+        outcome: null,
+      });
+      expect(response.body.specialMatch.kind).toBe("challenge");
+    });
+
+    it("연승 회원이 있으면 연승 저지로 판정해 저장한다", async () => {
+      mockRankingSource(winsOfPlayerC(5));
+
+      const response = await startMatch("Scustom1", {
+        ...doublesBody,
+        recommendedSpecialKind: "streak_stopper",
+      });
+
+      expect(response.status).toBe(201);
+      expect(createInProgress.mock.calls[0]![0].specialMatch).toMatchObject({
+        kind: "streak_stopper",
+        defendingTeamIndex: 1,
+        protagonistIds: [null, playerC.id],
+      });
+    });
+
+    it("재판정 유형이 카드 유형과 다르면 요청은 성공하고 특수 매치는 null이다", async () => {
+      mockRankingSource(winsOfPlayerC(5));
+
+      const response = await startMatch("Scustom1", {
+        ...doublesBody,
+        recommendedSpecialKind: "challenge",
+      });
+
+      expect(response.status).toBe(201);
+      expect(createInProgress.mock.calls[0]![0].specialMatch).toBeNull();
+    });
+
+    it("리벤지나 모르는 유형은 판정하지 않고 null이다", async () => {
+      mockRankingSource();
+
+      for (const recommendedSpecialKind of ["revenge", "unknown"]) {
+        const response = await startMatch("Scustom1", {
+          ...doublesBody,
+          recommendedSpecialKind,
+        });
+        expect(response.status).toBe(201);
+      }
+      expect(
+        createInProgress.mock.calls.map(([input]) => input.specialMatch),
+      ).toEqual([null, null]);
+      expect(AuthService.prototype.getAllPlayers).not.toHaveBeenCalled();
+    });
+
+    it("카드 유형이 없으면 특수 매치 조건이어도 null이다", async () => {
+      mockRankingSource();
+
+      const response = await startMatch("Scustom1");
+
+      expect(response.status).toBe(201);
+      expect(createInProgress.mock.calls[0]![0].specialMatch).toBeNull();
+    });
+  });
 });

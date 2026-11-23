@@ -45,6 +45,7 @@ import { useTabNavigation } from "@/context/TabNavigationContext";
 import { useMinuteClock } from "@/hooks/useMinuteClock";
 import {
   type MatchSessionDetailInfo,
+  buildRecommendedMatchRequest,
   startSessionMatch,
 } from "@/lib/matchSessions";
 
@@ -239,18 +240,7 @@ const Home: React.FC = () => {
     const key = getCourtKey(court);
     const sessionId = liveSession.id;
     const run = async () => {
-      await startSessionMatch(sessionId, {
-        teams: [
-          {
-            name: "Team A",
-            playerIds: court.teams[0].players.map((member) => member.id),
-          },
-          {
-            name: "Team B",
-            playerIds: court.teams[1].players.map((member) => member.id),
-          },
-        ],
-      });
+      await startSessionMatch(sessionId, buildRecommendedMatchRequest(court));
       invalidateData(["matches"]);
     };
 
@@ -364,7 +354,8 @@ const Home: React.FC = () => {
   // ── 그리기 ─────────────────────────────────────────
   /**
    * 진행 중 머리·내 경기 카드·남의 진행 중 경기 카드. 내 경기는 세션 밖 경기여도 맨 위에 온다.
-   * 진행 중 세션이면 세션 연승 중인 회원 아바타에 링을 두른다(진행 중 세션이 없으면 연승도 없다)
+   * 진행 중 세션이면 세션 연승 중인 회원 아바타에 링을 두른다(진행 중 세션이 없으면 연승도 없다).
+   * 남의 경기는 지금 5연승 이상 회원에게도 링을 두른다
    */
   const renderInProgress = (otherMatches: MatchInfo[]) => (
     <Section title="진행 중">
@@ -386,6 +377,7 @@ const Home: React.FC = () => {
             match={match}
             now={now}
             sessionWinStreaks={highlight.streakByPlayer}
+            winStreaks={live.inProgressWinStreaks}
             onOpenDetail={() => openMatchDetail(match.id)}
           />
         ))

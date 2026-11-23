@@ -4,74 +4,25 @@ import {
   type RecommendedCourt,
 } from "@pkpkdupr/shared/matchmaking";
 import SkeletonBlock from "@/components/SkeletonBlock";
-import { buttonPressClassName } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { Section, TextLink } from "@/components/ui/Section";
 import type { SessionWinStreakByPlayer } from "@/components/ui/PlayerAvatar";
-import { cx } from "@/components/ui/cx";
-import { TeamsVersusWithAverages } from "./TeamBlock";
+import RecommendationCard from "./RecommendationCard";
 import type { SessionRecommendationsState } from "./useSessionRecommendations";
-
-const rowDividerClassName =
-  "not-last:shadow-[inset_0_-1px_0_var(--color-pk-divider)]";
 
 export const getCourtKey = (court: RecommendedCourt) =>
   court.teams
     .flatMap((team) => team.players.map((player) => player.id))
     .join(":");
 
-const RecommendationRow: React.FC<{
-  court: RecommendedCourt;
-  isStarting: boolean;
-  isStartDisabled: boolean;
-  error: string | null;
-  sessionWinStreaks?: SessionWinStreakByPlayer;
-  onStart: () => void;
-}> = ({
-  court,
-  isStarting,
-  isStartDisabled,
-  error,
-  sessionWinStreaks,
-  onStart,
-}) => (
-  <div className={cx("flex flex-col gap-2.5 py-3", rowDividerClassName)}>
-    {/* 왼쪽: 팀별 평균 위에 팀 vs 팀, 오른쪽: 두 줄 높이 가운데의 시작 버튼 */}
-    <div className="flex items-center gap-3">
-      <TeamsVersusWithAverages
-        teams={[court.teams[0].players, court.teams[1].players]}
-        averages={[court.teams[0].averageRating, court.teams[1].averageRating]}
-        sessionWinStreaks={sessionWinStreaks}
-      />
-      {/* 연한 파랑 36px·둥글기 12px·13/800. PkButton sm(알약·700)과 모양이 달라 직접 그린다 */}
-      <button
-        type="button"
-        disabled={isStartDisabled}
-        onClick={onStart}
-        className={cx(
-          "inline-flex h-9 shrink-0 items-center justify-center whitespace-nowrap rounded-pk-sm bg-pk-primary-soft px-4 text-pk-13 font-extrabold text-pk-primary touch-manipulation disabled:cursor-not-allowed disabled:bg-pk-neutral disabled:text-pk-muted",
-          buttonPressClassName,
-        )}
-      >
-        {isStarting ? "시작하는 중…" : "시작"}
-      </button>
-    </div>
-    {error ? (
-      <p role="alert" className="text-pk-13 font-medium text-pk-down">
-        {error}
-      </p>
-    ) : null}
-  </div>
-);
-
 const RecommendationSkeleton: React.FC = () => (
   <Card className="flex flex-col gap-3 py-4">
-    <SkeletonBlock className="h-10 w-full rounded-pk-sm" />
+    <SkeletonBlock className="h-24 w-full rounded-pk-sm" />
     <SkeletonBlock className="h-10 w-full rounded-pk-sm" />
   </Card>
 );
 
-/** "추천 매칭 · 대기 N명" 섹션. 코트 번호는 보이지 않는다 */
+/** "추천 매칭 · 대기 N명" 섹션. 추천 코트마다 카드 한 장이고 코트 번호는 보이지 않는다 */
 const RecommendationSection: React.FC<{
   state: SessionRecommendationsState;
   waitingCount: number;
@@ -114,11 +65,11 @@ const RecommendationSection: React.FC<{
     }
 
     return (
-      <Card>
+      <div className="flex flex-col gap-3">
         {recommendation.courts.map((court) => {
           const key = getCourtKey(court);
           return (
-            <RecommendationRow
+            <RecommendationCard
               key={key}
               court={court}
               isStarting={startingKey === key}
@@ -130,7 +81,7 @@ const RecommendationSection: React.FC<{
             />
           );
         })}
-      </Card>
+      </div>
     );
   };
 

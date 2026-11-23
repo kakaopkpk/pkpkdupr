@@ -38,7 +38,7 @@
 
 - `GET /api/matches`: `playerId`와 함께 `category=singles|doubles`로 분류 필터, 대진 예정 경기(`scheduled`) 제외
 - 경기 목록 정렬: `GET /api/matches`·`GET /api/match-feed`·세션 경기 목록은 기록 시각(`getMatchRecordedAt`, 완료 경기는 점수를 입력한 `completedAt`, 그 밖은 `matchStartsAt`) 최신순
-- 경기 기록 `POST /api/matches`
+- 경기 기록 `POST /api/matches`: 직접 기록한 경기는 특수 매치가 아니라 `specialMatchCelebration`은 null
 - 수정 `PUT /api/matches/:matchId`
   - 관리자는 24시간 검사 없이 고친다.
   - 관리자 전용 `sessionId`(문자열이면 그 세션으로 옮기고 null이면 세션에서 뺌)·`matchStartsAt`(완료 경기면 `completedAt`도 같은 만큼 옮김)으로 세션·경기 시각을 바꾼다. 회원이 이 둘을 보내면 403.
@@ -46,6 +46,11 @@
   - 대진 예정 경기(`scheduled`)에 점수를 넣으면 진행 중 경기 첫 점수와 같은 규칙으로 completed가 되고, 수정 기록(`match_edit_logs`)은 남기지 않는다.
   - 대진 예정 경기에 바로 점수를 넣는 것은 관리자만 한다. 회원이면 409, `POST /api/matches/:matchId/start`로 시작한 뒤 넣는다.
   - 이미 completed인 경기를 고치면 같은 트랜잭션에서 수정 전·후 스냅샷을 `match_edit_logs`에 남긴다(관리자 수정 포함). 진행 중 경기의 첫 점수 입력과 종류·이름·장소·팀·점수·세션·경기 시각이 그대로인 저장은 남기지 않는다.
+  - 특수 매치(`specialMatch`)는 처음 completed가 되거나(첫 점수·관리자 정정) completed 경기를 고칠 때마다(승패가 같아도) 평점 반영·재계산 뒤 `SpecialMatchService.settleSpecialMatch`로 `outcome`을 정해 저장한다(`updated_at`은 그대로). 규칙은 루트 `AGENTS.md` "특수 매치".
+    - 평점 잠금 밖에서 반영 직후 랭킹을 다시 읽어 정한다. 판정이 실패해도 응답은 200이고 결과는 그대로 둔다.
+    - 결과가 null로 남은 completed 경기도 다음 수정 때 채운다(승패가 안 갈리면 그대로 null). 바뀐 결과는 저장하되 큰 연출은 결과가 처음 정해질 때만 싣는다.
+    - 팀별 선수 구성이 바뀌는 저장은 `specialMatch`를 null로 지운다(팀 안 순서만 바뀌면 그대로).
+  - 응답 `RecordedMatchResponse.specialMatchCelebration`은 결과가 이번 저장으로 처음 `challenge_success`·`streak_stopped`·`champions_won`으로 정해졌을 때만 큰 연출 데이터(`SpecialMatchCelebration`)이고, 그 밖은 null이다. 기록한 회원이 이긴 팀인지와 상관없이 싣는다.
 - 삭제 `DELETE /api/matches/:matchId`
   - `isMatchRecordDeletable`, 이미 지워졌으면 404.
   - 선택적 `expectedUpdatedAt`이 서버 `updatedAt`과 다르면 409.
@@ -55,12 +60,16 @@
   - 요청 `sessionId`가 오늘 회원 세션이면 그 세션, 아니면 기록과 같은 시간 규칙을 따른다.
   - 선수가 이미 진행 중 경기에 있으면 409 "<아이디>님이 다른 경기 중이에요".
   - 확인·생성은 advisory 잠금으로 직렬화한다.
+  - 같은 멤버로 한 판 더의 `rematchOfMatchId`를 주면 `judgeRematchSpecialMatch`로 리벤지를 판정해 `specialMatch`에 저장한다. 원래 경기가 없거나·완료 전이거나·승패가 안 갈렸거나·멤버가 다르면 null로 시작한다.
 - 대진 예정 경기 시작 `POST /api/matches/:matchId/start`: 200 `Match`
   - 활성 회원 누구나. `status`를 created로, `matchStartsAt`을 시작 시각으로 바꾼다.
   - 경기 없음 404, 예정 경기가 아니면 409, 세션이 오늘 세션이 아니면 409.
   - 선수가 이미 진행 중 경기에 있으면 409 "<아이디>님이 다른 경기 중이에요".
   - `POST /api/matches/start`와 같은 advisory 잠금으로 직렬화한다.
-- 진행 중 경기 전부 `GET /api/matches/in-progress`: `/api/matches/:matchId`보다 먼저 등록, 대진 예정 경기 제외
+- 진행 중 경기 전부 `GET /api/matches/in-progress`: 응답 `InProgressMatchesResponse`
+  - `/api/matches/:matchId`보다 먼저 등록, 대진 예정 경기 제외.
+  - `winStreaks`는 참가자 중 지금 연승(랭킹 `winStreak`과 같은 규칙)이 `WIN_STREAK_DISPLAY_MIN` 이상인 정회원의 선수 id → 연승 수이고, 없으면 빈 객체다.
+  - 연승은 완료 경기 결과만 읽어 센다. 못 읽으면 `winStreaks`만 빈 객체로 응답하고, 진행 중 경기가 없으면 읽지 않는다.
 - `GET /api/match-feed`: 대진 예정 경기 제외
 - 세션 조회 API
 
@@ -88,6 +97,7 @@
 - 상세 `GET /api/match-sessions/:sessionId`
 - 세션 경기 `GET /api/match-sessions/:sessionId/matches`: 대진 예정 경기(`scheduled`, `round` 포함)도 포함
 - 점수 없이 진행 중 경기 시작 `POST /api/match-sessions/:sessionId/matches`: `POST /api/matches/start`와 같은 처리, 오늘 세션만, 이미 진행 중인 선수 포함 시 409, 선수 자동 참여
+  - 추천 카드의 `recommendedSpecialKind`를 주면 지금 그 경기 종류 랭킹·연승으로 `judgeRecommendedSpecialMatch`를 다시 판정해 유형이 같을 때만 `specialMatch`에 저장하고, 다르거나 리벤지·모르는 값이면 null로 시작한다(요청은 실패하지 않는다).
 - 복식 추천 매칭 `GET /api/match-sessions/:sessionId/recommendations?courts=N&rank=R`
   - 오늘 세션만, courts 기본 3·1~4로 자름.
   - 탐색 난수는 세션 id와 완료 경기 수로 서버가 정해, 같은 상황이면 누구에게나 같은 결과.
@@ -95,6 +105,11 @@
   - rank(0부터, 기본 0)번째 후보를 돌려주고 후보 수를 넘으면 나머지로 순환한다. 0 이상 정수가 아니면 400. 응답 `rank`·`candidateCount`.
   - 진행 중 경기 선수 제외.
   - 팀 나누기는 NR을 참여자 평점 중앙값으로 대체하고, 응답 팀 `averageRating`은 NR(게스트 포함)을 3.0으로 친 표시용 평균.
+  - 대진마다 코트를 복식 랭킹·연승으로 `judgeRecommendedSpecialMatch` 판정해, 가산점(`SPECIAL_MATCH_RECOMMENDATION_BONUS`, 연승 저지·최강자전 2, 도전 매치 1.5)이 가장 큰 코트 하나의 가산점만 대진 감점에서 뺀다. 리벤지는 만들지 않는다.
+  - 후보 줄 세우기·여유폭은 가산점을 뺀 감점으로 한다.
+  - 응답 코트 `specialMatch`는 그 가산점 코트 하나만 판정 결과(`outcome` null)이고 나머지 코트는 null이다.
+  - 응답 선수(`RecommendationPlayer`)에 복식 랭킹 순위 `doublesRank`(랭킹에 없으면 null)와 지금 연승 수 `winStreak`(랭킹과 같은 규칙).
+  - 랭킹 원천을 못 읽으면 가산점 없이 추천하고, 코트 `specialMatch`는 모두 null, 선수 `doublesRank`는 null·`winStreak`는 0이다.
 - 참여자 한 명씩 추가 `POST /api/match-sessions/:sessionId/participants`·삭제 `DELETE /api/match-sessions/:sessionId/participants/:playerId`
   - 활성 회원 누구나·대리 가능, 오늘·미래 세션만(지난 세션 403), 멱등.
 - 게스트 추가 `POST /api/match-sessions/:sessionId/guests` `{ username }`

@@ -8,6 +8,7 @@ import {
   type Match,
 } from "@pkpkdupr/shared/match";
 import type { Player, PlayerRatingChangeLog } from "@pkpkdupr/shared/player";
+import type { SpecialMatch } from "@pkpkdupr/shared/specialMatch";
 import request from "supertest";
 import {
   afterEach,
@@ -1007,6 +1008,261 @@ describe("PUT /api/matches/:matchId", () => {
       });
       expect(updateRecordedMatch).not.toHaveBeenCalled();
       expect(addSessionParticipants).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("특수 매치 결과", () => {
+    const hoursAgo = (hours: number) =>
+      new Date(Date.now() - hours * 60 * 60 * 1000);
+    // 요청자 팀 연승 저지 경기. validBody(9:11)는 상대 팀이 이긴다
+    const streakStopper: Match["specialMatch"] = {
+      kind: "streak_stopper",
+      defendingTeamIndex: 0,
+      protagonistIds: [requester.id, null],
+      challengePairs: [],
+      outcome: null,
+    };
+    const requesterWin = (id: string, completedAt: Date): CompletedMatchOutcome => ({
+      ratingExcluded: false,
+      id,
+      type: "mixed-doubles",
+      sessionId: null,
+      matchStartsAt: completedAt,
+      completedAt,
+      teamPlayerIds: [
+        [requester.id, partner.id],
+        [opponentM.id, opponentF.id],
+      ],
+      scores: [{ scoreA: 11, scoreB: 5 }],
+    });
+    let updateSpecialMatch: MockInstance<MatchRepository["updateSpecialMatch"]>;
+
+    beforeEach(() => {
+      updateSpecialMatch = vi
+        .spyOn(MatchRepository.prototype, "updateSpecialMatch")
+        .mockResolvedValue(undefined);
+      // 요청자는 이 경기 전 5연승이다
+      findCompletedMatchOutcomes.mockImplementation(async () => [
+        ...[6, 5, 4, 3, 2].map((hours) =>
+          requesterWin(`match-prior-${hours}`, hoursAgo(hours)),
+        ),
+        {
+          ...requesterWin(existing.id, existing.completedAt ?? new Date()),
+          scores: [{ scoreA: 9, scoreB: 11 }],
+        },
+      ]);
+    });
+
+    it("진행 중 특수 매치에 첫 점수를 넣으면 결과를 저장하고 큰 연출 데이터를 응답한다", async () => {
+      existing = buildExistingMatch({
+        status: "created",
+        scores: [],
+        completedAt: null,
+        resultSubmittedByPlayerId: null,
+        resultSubmittedAt: null,
+        matchStartsAt: hoursAgo(0.5),
+        specialMatch: streakStopper,
+      });
+      updateRecordedMatch.mockImplementation(async (matchId, input) => ({
+        ...existing,
+        teams: input.teams,
+        scores: input.scores,
+        status: "completed",
+        completedAt: hoursAgo(0.1),
+      }));
+
+      const response = await putMatch();
+
+      expect(response.status).toBe(200);
+      expect(updateRecordedMatch.mock.calls[0]![1]).not.toHaveProperty(
+        "specialMatch",
+      );
+      expect(updateSpecialMatch).toHaveBeenCalledWith(existing.id, {
+        ...streakStopper,
+        outcome: "streak_stopped",
+      });
+      expect(response.body.specialMatch.outcome).toBe("streak_stopped");
+      expect(response.body.specialMatchCelebration).toEqual({
+        kind: "streak_stopper",
+        stopped: {
+          player: { id: requester.id, username: requester.username },
+          streakBefore: 5,
+        },
+      });
+    });
+
+    it("특수 매치가 아닌 경기는 큰 연출 데이터가 null이고 결과를 저장하지 않는다", async () => {
+      const response = await putMatch();
+
+      expect(response.status).toBe(200);
+      expect(response.body.specialMatchCelebration).toBeNull();
+      expect(updateSpecialMatch).not.toHaveBeenCalled();
+    });
+
+    it("완료된 특수 매치를 고쳐 승패가 바뀌면 결과를 다시 정하지만 연출은 하지 않는다", async () => {
+      existing = buildExistingMatch({
+        specialMatch: { ...streakStopper!, outcome: "streak_defended" },
+      });
+
+      const response = await putMatch();
+
+      expect(response.status).toBe(200);
+      expect(updateSpecialMatch).toHaveBeenCalledWith(existing.id, {
+        ...streakStopper,
+        outcome: "streak_stopped",
+      });
+      expect(response.body.specialMatch.outcome).toBe("streak_stopped");
+      expect(response.body.specialMatchCelebration).toBeNull();
+    });
+
+    it("완료된 특수 매치를 고쳐 다시 정한 결과가 그대로면 저장하지 않는다", async () => {
+      existing = buildExistingMatch({
+        scores: [{ scoreA: 5, scoreB: 11 }],
+        specialMatch: { ...streakStopper!, outcome: "streak_stopped" },
+      });
+
+      const response = await putMatch();
+
+      expect(response.status).toBe(200);
+      expect(updateSpecialMatch).not.toHaveBeenCalled();
+      expect(response.body.specialMatch.outcome).toBe("streak_stopped");
+      expect(response.body.specialMatchCelebration).toBeNull();
+    });
+
+    describe("도전 매치", () => {
+      const challengeMatch: SpecialMatch = {
+        kind: "challenge",
+        defendingTeamIndex: 1,
+        protagonistIds: [requester.id, opponentM.id],
+        challengePairs: [{ attackerId: requester.id, defenderId: opponentM.id }],
+        outcome: null,
+      };
+      // 요청자 팀이 이기는 수정 점수(승패는 기존 11:5와 같다)
+      const sameWinnerBody = { ...validBody, scores: [{ scoreA: 11, scoreB: 7 }] };
+
+      // 이 경기 반영 전 순위는 상대(3.52)가 요청자(3.48)보다 높고, 반영 직후 평점은 인자로 정한다.
+      // 지금 existing의 id·completedAt으로 로그를 만들므로 existing을 정한 뒤 부른다
+      const mockRankingSource = (afterRequester: number, afterOpponent: number) => {
+        const completedAt = existing.completedAt ?? new Date();
+        const before = {
+          [requester.id]: 3.48,
+          [partner.id]: 3.2,
+          [opponentM.id]: 3.52,
+          [opponentF.id]: 3.8,
+        };
+        const after = {
+          ...before,
+          [requester.id]: afterRequester,
+          [opponentM.id]: afterOpponent,
+        };
+        vi.spyOn(AuthService.prototype, "getAllPlayers").mockResolvedValue(
+          Object.entries(after).map(([id, doubles]) => ({
+            ...buildPlayer(id, "M"),
+            duprRating: { singles: null, doubles },
+          })) as Player[],
+        );
+        vi.spyOn(
+          MatchRepository.prototype,
+          "getAllRatingChangeLogs",
+        ).mockResolvedValue(
+          Object.keys(before).map((id) => ({
+            id: `log-${id}`,
+            playerId: id,
+            source: "match_completed",
+            sourceLogId: `match-completed-${existing.id}-${completedAt.getTime()}`,
+            previousRating: { singles: 3, doubles: before[id]! },
+            nextRating: { singles: 3, doubles: after[id]! },
+            delta: { singles: 0, doubles: after[id]! - before[id]! },
+            createdAt: completedAt,
+          })),
+        );
+        findCompletedMatchOutcomes.mockResolvedValue([
+          {
+            ratingExcluded: false,
+            id: existing.id,
+            type: "mixed-doubles",
+            sessionId: null,
+            matchStartsAt: completedAt,
+            completedAt,
+            teamPlayerIds: [
+              [requester.id, partner.id],
+              [opponentM.id, opponentF.id],
+            ],
+            scores: [{ scoreA: 11, scoreB: 7 }],
+          },
+        ]);
+      };
+
+      it("승패가 같은 점수 수정으로 순위가 달라지면 결과를 다시 정하지만 연출은 하지 않는다", async () => {
+        existing = buildExistingMatch({
+          specialMatch: { ...challengeMatch, outcome: "challenge_success" },
+        });
+        mockRankingSource(3.5, 3.51);
+
+        const response = await putMatch(sameWinnerBody);
+
+        expect(response.status).toBe(200);
+        expect(updateSpecialMatch).toHaveBeenCalledWith(existing.id, {
+          ...challengeMatch,
+          outcome: "defense_success",
+        });
+        expect(response.body.specialMatch.outcome).toBe("defense_success");
+        expect(response.body.specialMatchCelebration).toBeNull();
+      });
+
+      it("결과가 null로 남은 완료 경기는 승패가 같아도 수정 때 결과를 채우고 연출을 싣는다", async () => {
+        existing = buildExistingMatch({ specialMatch: challengeMatch });
+        mockRankingSource(3.56, 3.44);
+
+        const response = await putMatch(sameWinnerBody);
+
+        expect(response.status).toBe(200);
+        expect(updateSpecialMatch).toHaveBeenCalledWith(existing.id, {
+          ...challengeMatch,
+          outcome: "challenge_success",
+        });
+        expect(response.body.specialMatch.outcome).toBe("challenge_success");
+        expect(response.body.specialMatchCelebration).toMatchObject({
+          kind: "challenge",
+        });
+      });
+    });
+
+    it("참가자가 바뀌면 특수 매치를 지운다", async () => {
+      existing = buildExistingMatch({
+        specialMatch: { ...streakStopper!, outcome: "streak_defended" },
+      });
+
+      const response = await putMatch({
+        ...validBody,
+        teams: [
+          { name: "Team A", playerIds: [requester.id, substitute.id] },
+          { name: "Team B", playerIds: [opponentM.id, opponentF.id] },
+        ],
+      });
+
+      expect(response.status).toBe(200);
+      expect(updateRecordedMatch.mock.calls[0]![1]).toMatchObject({
+        specialMatch: null,
+      });
+    });
+
+    it("팀 안 순서만 바뀐 수정은 특수 매치를 지우지 않는다", async () => {
+      existing = buildExistingMatch({
+        specialMatch: { ...streakStopper!, outcome: "streak_defended" },
+      });
+
+      await putMatch({
+        ...validBody,
+        teams: [
+          { name: "Team A", playerIds: [partner.id, requester.id] },
+          { name: "Team B", playerIds: [opponentM.id, opponentF.id] },
+        ],
+      });
+
+      expect(updateRecordedMatch.mock.calls[0]![1]).not.toHaveProperty(
+        "specialMatch",
+      );
     });
   });
 });

@@ -8,6 +8,7 @@ import {
 } from "@/lib/format";
 import { rowPressClassName } from "./Button";
 import { TeamAvatars } from "./PlayerAvatar";
+import { SpecialMatchLabel } from "./SpecialMatchLabel";
 import { cx } from "./cx";
 
 type MatchTeam = MatchInfo["teams"][number];
@@ -82,6 +83,7 @@ const timeLabelFormatters = {
  * 경기 한 줄. 이긴 팀이 위에 오고 이긴 쪽만 굵게·블루 점수로 강조한다.
  * 줄 맨 위 메타 줄에 시간을 두고, 내 경기면 시간 뒤에 " · 내 경기" 글자만 붙는다(바탕 강조 없음).
  * 게스트가 낀 경기(ratingExcluded)는 메타 줄 끝에 " · 평점 미반영"을 붙인다.
+ * 특수 매치면 메타 줄 오른쪽 끝(점수 열 위)에 유형 이름을 두고, 결과(도전 성공 등)는 쓰지 않는다.
  * 코트 번호는 보이지 않는다.
  */
 export const MatchRow: React.FC<{
@@ -129,12 +131,17 @@ export const MatchRow: React.FC<{
         rowDividerClassName,
       )}
     >
-      <div className="whitespace-nowrap text-pk-12 text-pk-muted tabular-nums">
-        {time}
-        {isMine ? (
-          <span className="font-bold text-pk-sub"> · 내 경기</span>
+      <div className="flex min-w-0 items-center gap-2 text-pk-12 text-pk-muted tabular-nums">
+        <span className="min-w-0 truncate">
+          {time}
+          {isMine ? (
+            <span className="font-bold text-pk-sub"> · 내 경기</span>
+          ) : null}
+          {match.ratingExcluded ? " · 평점 미반영" : null}
+        </span>
+        {match.specialMatch ? (
+          <SpecialMatchLabel kind={match.specialMatch.kind} className="ml-auto" />
         ) : null}
-        {match.ratingExcluded ? " · 평점 미반영" : null}
       </div>
       {lines.map(({ team, score }, index) => (
         <TeamLine

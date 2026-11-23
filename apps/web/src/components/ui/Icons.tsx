@@ -92,14 +92,6 @@ export const TrophyIcon: React.FC<{
 export const FLAME_ICON_PATH =
   "M12 3c1 3 4.5 4.5 4.5 9.5a4.5 4.5 0 0 1-9 0c0-2.2 1-3.5 2.2-4.5 0 2 .8 3 1.8 3 0-3-1-5.2.5-8z";
 
-/** 멈춤 손바닥(연승 저지 배지·특수 매치 공유 이미지 도장) 선 모양, 24 viewBox */
-export const STOP_HAND_ICON_PATHS = [
-  "M18 11V6a2 2 0 0 0-4 0",
-  "M14 10V4a2 2 0 0 0-4 0v2",
-  "M10 10.5V6a2 2 0 0 0-4 0v8",
-  "M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15",
-] as const;
-
 /** 채운 불꽃 아이콘 */
 export const FlameIcon: React.FC<{ size: number }> = ({ size }) => (
   <svg
@@ -326,4 +318,23 @@ export const ThumbUpIcon: React.FC<{
 export const SHIELD_CHECK_ICON_PATHS = [
   "M12 3l7 3v5c0 4.5-3 8-7 10-4-2-7-5.5-7-10V6z",
   "M9 12l2 2 4-4",
+] as const;
+
+/** 교차한 칼(도전 매치·라이벌 업적 배지) 선 모양 */
+export const CROSSED_SWORDS_ICON_PATHS = [
+  "M5 4l9.5 9.5M19 4L9.5 13.5M4 15.5l4.5 4.5M20 15.5L15.5 20M6.5 18L11 13.5M17.5 18L13 13.5",
+] as const;
+
+/** 멈춤 손바닥(연승 저지 특수 매치·업적 배지·특수 매치 공유 이미지 도장) 선 모양, 24 viewBox */
+export const STOP_HAND_ICON_PATHS = [
+  "M18 11V6a2 2 0 0 0-4 0",
+  "M14 10V4a2 2 0 0 0-4 0v2",
+  "M10 10.5V6a2 2 0 0 0-4 0v8",
+  "M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15",
+] as const;
+
+/** 주먹(리벤지 특수 매치·업적 배지) 선 모양 */
+export const FIST_ICON_PATHS = [
+  "M6 10.5V8.2a1.7 1.7 0 0 1 3.4 0v1.8M9.4 9.6V7.2a1.7 1.7 0 0 1 3.4 0v2.4M12.8 9.6V7.6a1.7 1.7 0 0 1 3.4 0V10M16.2 10.2V9a1.7 1.7 0 0 1 3.4 0v4.3a6.6 6.6 0 0 1-6.6 6.6h-.4A6.6 6.6 0 0 1 6 13.3v-2.8",
+  "M6 12.4h5.6a2 2 0 0 1 0 4H9.4",
 ] as const;

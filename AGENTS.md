@@ -129,6 +129,20 @@ pnpm lint
   - 회원·관리자 삭제 모두 경기 전체 스냅샷을 `match_deletion_logs`에 남긴다.
 - 평점을 쓰는 경로(증분 반영·일괄 반영·전체 재계산·공식 DUPR 조정)는 `AuthService` 공개 메서드에서 advisory 잠금 하나(`db.ratingWriteLock`)로 직렬화된다. 재계산 입력은 잠금 안에서 읽도록 로더 함수로 넘기고, 잠금 안에서는 잠금을 다시 잡지 않는다.
 
+### 특수 매치
+
+- 경기 시작 때 판정한 특수 매치는 `Match.specialMatch`(`matches.special_match` jsonb)에 저장한다. 판정 기준은 `docs/product.md` "특수 매치", 판정 함수는 `packages/shared/src/specialMatch.ts`다.
+  - 추천 카드 출처 세션 시작(`recommendedSpecialKind`)은 서버 재판정 유형이 카드 유형과 같을 때만, 한 판 더 출처 시작(`rematchOfMatchId`)은 리벤지만 저장한다.
+  - 그 밖의 시작·직접 기록·관리자 생성·대진 시작은 null이다.
+- 결과(`SpecialMatch.outcome`)는 평점 반영 뒤 서버가 정한다. 승패가 갈리지 않으면 null이다.
+  - 도전 매치: 이긴 팀에 공격자가 있는 도전 쌍 중 하나라도 반영 직후 그 경기 종류 랭킹(`rankPlayersAt`)에서 공격자 순위가 방어자보다 높아졌으면 `challenge_success`, 아니면 `defense_success`.
+  - 연승 저지: 연승 회원 팀이 지면 `streak_stopped`, 이기면 `streak_defended`. 최강자전: `champions_won`.
+  - 리벤지: 지키는 쪽이 아닌 팀이 이기면 `revenge_success`, 지면 `revenge_defended`.
+- 끝난 특수 매치를 고치면(회원·관리자 수정) 승패가 같아도 평점 재계산 뒤 결과를 다시 정하고, 결과가 null로 남은 경기도 이때 채운다. 판정 규칙·순위 기준은 처음 판정과 같다.
+  - 참가자(팀별 선수 구성)가 바뀌면 `specialMatch`를 지운다.
+  - 큰 연출은 결과가 처음 정해질 때만 만들고, 다시 정한 결과로는 만들지 않는다.
+- 큰 연출 데이터(`SpecialMatchCelebration`)의 순위는 그 경기 종류 랭킹의 이 경기 반영 전·직후 순위, 연승 수는 이 경기 직전까지 센 랭킹 연승이다(`apps/api/src/services/SpecialMatchService.ts`).
+
 ### 진행 중 경기
 
 - 예외로 세션에서 시작한 경기는 점수 없는 진행 중 경기(`status: "created"`)입니다.

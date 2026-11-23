@@ -2,7 +2,11 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 import { getRallyTrack } from "@/components/match/LiveMatchRally";
 import { LiveMatchDetail } from "@/components/match/MatchDetailViews";
-import { LiveMatchCard, MyLiveMatchCard } from "@/components/home/LiveMatchCard";
+import {
+  LiveMatchCard,
+  MyLiveMatchCard,
+  withWinStreakPlayers,
+} from "@/components/home/LiveMatchCard";
 import type { MatchInfo } from "@/types/match";
 
 // 아바타가 쓰는 lib/api가 Supabase 환경변수를 요구하므로 대신한다
@@ -158,5 +162,60 @@ describe("홈 진행 중 경기 카드 랠리", () => {
       />,
     );
     expect(markup).not.toContain("pk-rally");
+  });
+});
+
+describe("남의 진행 중 경기 카드 연승 링", () => {
+  const renderOther = (props: {
+    sessionWinStreaks?: Map<string, number>;
+    winStreaks?: Map<string, number>;
+  }) =>
+    renderToStaticMarkup(
+      <LiveMatchCard
+        match={makeLiveMatch(new Date(Date.now() - 10 * 60_000).toISOString())}
+        now={new Date()}
+        onOpenDetail={() => {}}
+        {...props}
+      />,
+    );
+  const countRings = (markup: string) =>
+    markup.split('class="pk-streak-ring').length - 1;
+
+  it("특수 매치가 아니어도 지금 5연승 이상 회원 아바타에 태그 없는 연승 링을 두른다", () => {
+    const markup = renderOther({ winStreaks: new Map([["bob", 6], ["dave", 5]]) });
+    expect(countRings(markup)).toBe(2);
+    expect(markup).not.toContain("연승 중");
+  });
+
+  it("다른 경기 회원의 연승은 링을 두르지 않는다", () => {
+    const markup = renderOther({ winStreaks: new Map([["erin", 9]]) });
+    expect(countRings(markup)).toBe(0);
+  });
+
+  it("세션 연승과 겹친 회원도 링은 하나다", () => {
+    const markup = renderOther({
+      sessionWinStreaks: new Map([["alice", 3]]),
+      winStreaks: new Map([["alice", 7]]),
+    });
+    expect(countRings(markup)).toBe(1);
+  });
+});
+
+describe("withWinStreakPlayers", () => {
+  const match = makeLiveMatch(new Date().toISOString());
+
+  it("세션 연승 값을 우선하고 이 경기 참가자의 연승만 더한다", () => {
+    const merged = withWinStreakPlayers(
+      match,
+      new Map([["alice", 3]]),
+      new Map([["alice", 7], ["carol", 5], ["erin", 9]]),
+    );
+    expect(merged).toEqual(new Map([["alice", 3], ["carol", 5]]));
+  });
+
+  it("연승 회원이 없으면 세션 연승을 그대로 돌려준다", () => {
+    const session = new Map([["alice", 3]]);
+    expect(withWinStreakPlayers(match, session, new Map())).toBe(session);
+    expect(withWinStreakPlayers(match, undefined, undefined)).toBeUndefined();
   });
 });

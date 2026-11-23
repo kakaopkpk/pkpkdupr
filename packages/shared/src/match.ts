@@ -1,6 +1,7 @@
 import type { EarnedAchievement } from "./achievements.js";
 import type { Player, PlayerRatingChangeLog } from "./player.js";
 import type { MatchSessionKind } from "./session.js";
+import type { SpecialMatch, SpecialMatchCelebration } from "./specialMatch.js";
 
 export const matchTypeValues = [
   "singles",
@@ -271,6 +272,11 @@ export interface Match {
   ratingExcluded: boolean;
   /** 대회 대진 라운드(1부터). 관리자가 대진으로 만든 경기만 숫자이고 그 밖은 null(오래된 픽스처는 생략될 수 있음) */
   round?: number | null;
+  /**
+   * 경기 시작 때 판정해 저장한 특수 매치(추천 카드·'같은 멤버로 한 판 더'로 시작한 경기만). 유형 없는 경기는 null
+   * (오래된 픽스처는 생략될 수 있음)
+   */
+  specialMatch?: SpecialMatch | null;
 }
 
 /** 팀에 게스트가 한 명이라도 있으면 true. 경기가 completed가 될 때 ratingExcluded 판정에 쓴다 */
@@ -441,11 +447,18 @@ export interface StartMatchRequest {
   type?: MatchType;
   /** 생략하면 세션 장소, 세션도 없으면 기본 장소 */
   location?: string;
+  /** 같은 멤버로 한 판 더의 원래 경기. 서버가 리벤지 여부를 판정해 저장한다 */
+  rematchOfMatchId?: string;
 }
 
 /** GET /api/matches/in-progress 응답 */
 export interface InProgressMatchesResponse {
   matches: Match[];
+  /**
+   * 진행 중 경기 참가자 중 지금 연승이 WIN_STREAK_DISPLAY_MIN 이상인 정회원의 연승 수(선수 id → 연승).
+   * 랭킹 `winStreak`과 같은 규칙이고, 없거나 랭킹 원천을 못 읽으면 빈 객체
+   */
+  winStreaks: Record<string, number>;
 }
 
 /** GET /api/matches/:matchId 응답 */
@@ -465,6 +478,8 @@ export type RecordedMatchResponse = Match & {
   newAchievements: EarnedAchievement[];
   /** 새 업적을 받은 참가자별 지금 업적 점수 합(새 업적 포함). 새 업적이 없으면 빈 객체 */
   achievementPoints: Record<string, number>;
+  /** 특수 매치 결과가 이 저장으로 처음 도전 성공·연승 저지·최강자전 승리로 정해졌을 때의 큰 연출 데이터. 그 밖은 null */
+  specialMatchCelebration: SpecialMatchCelebration | null;
 };
 
 export type MatchFeedItem =
