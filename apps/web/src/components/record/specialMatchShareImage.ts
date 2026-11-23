@@ -1,5 +1,4 @@
 import { FLAME_ICON_PATH, STOP_HAND_ICON_PATHS } from "@/components/ui/Icons";
-import { resolveAssetUrl } from "@/lib/api";
 import {
   getRankingCategoryLabel,
   getSpecialMatchCaptionParts,
@@ -12,14 +11,20 @@ import {
   type SpecialMatchShareTarget,
 } from "@/lib/specialMatchShare";
 import {
+  drawShareAvatar,
+  loadShareAvatars,
+  type ShareAvatars,
+} from "@/lib/shareImageAvatar";
+import {
   canvasToPngFile,
   createShareCanvas,
   drawGlow,
   drawRays,
   drawShareFooter,
+  fillCircle,
+  fillRoundRect,
   fitLine,
   loadShareFonts,
-  loadShareImage,
   readTokenColors,
   SHARE_CONTENT_BOTTOM,
   SHARE_EDGE,
@@ -28,7 +33,6 @@ import {
   setLetterSpacing,
   shareFont,
 } from "@/lib/shareImageCanvas";
-import { getAvatarBackground, getAvatarInitial } from "@/utils/avatar";
 
 /*
  * 특수 매치 공유 이미지(4:5). 틀은 업적 공유 이미지와 같고, 가운데는 큰 연출 끝 화면 그대로
@@ -45,7 +49,6 @@ const CAPTION_SIZE = 15;
 const CAPTION_LINE = 22;
 const MIN_CAPTION_SIZE = 12;
 const MIN_CONTENT_TOP = 36;
-const AVATAR_TIMEOUT_MS = 5000;
 const STREAK_END_LABEL = "연승 끝";
 const VS_LABEL = "VS";
 
@@ -65,7 +68,7 @@ const COLOR_VARS = {
 } as const;
 
 type Colors = Record<keyof typeof COLOR_VARS, string>;
-type Avatars = Map<string, HTMLImageElement | null>;
+type Avatars = ShareAvatars;
 
 const getPlayers = (target: SpecialMatchShareTarget): SpecialMatchSharePlayer[] => {
   switch (target.kind) {
@@ -78,84 +81,16 @@ const getPlayers = (target: SpecialMatchShareTarget): SpecialMatchSharePlayer[] 
   }
 };
 
-const loadAvatars = async (players: SpecialMatchSharePlayer[]): Promise<Avatars> => {
-  const entries = await Promise.all(
-    players.map(
-      async (player) =>
-        [
-          player.id,
-          // 못 불러오거나 오래 걸리면 이니셜로 그린다
-          await loadShareImage(resolveAssetUrl(player.avatarUrl), {
-            crossOrigin: true,
-            timeoutMs: AVATAR_TIMEOUT_MS,
-          }),
-        ] as const,
-    ),
-  );
-  return new Map(entries);
-};
-
-/** 아바타 원 하나를 따로 그린다. gray면 CSS grayscale(1) brightness(0.97)과 같은 회색으로 바꾼다 */
-const renderAvatar = (
-  player: SpecialMatchSharePlayer,
-  image: HTMLImageElement | null,
-  size: number,
-  gray: boolean,
-  ink: string,
-) => {
-  const canvas = document.createElement("canvas");
-  canvas.width = Math.round(size * SHARE_SCALE);
-  canvas.height = canvas.width;
-  const ctx = canvas.getContext("2d");
-  if (!ctx) return canvas;
-  ctx.scale(SHARE_SCALE, SHARE_SCALE);
-  ctx.beginPath();
-  ctx.arc(size / 2, size / 2, size / 2, 0, Math.PI * 2);
-  ctx.clip();
-  ctx.fillStyle = getAvatarBackground(player.id);
-  ctx.fillRect(0, 0, size, size);
-  if (image) {
-    // object-fit: cover
-    const ratio = Math.max(size / image.naturalWidth, size / image.naturalHeight);
-    const width = image.naturalWidth * ratio;
-    const height = image.naturalHeight * ratio;
-    ctx.drawImage(image, (size - width) / 2, (size - height) / 2, width, height);
-  } else {
-    ctx.fillStyle = ink;
-    ctx.font = shareFont(800, Math.round(size * 0.42));
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.fillText(getAvatarInitial(player.username), size / 2, size / 2);
-  }
-  if (gray) {
-    // ctx.filter를 못 쓰는 브라우저(Safari)가 있어 픽셀을 직접 바꾼다
-    const data = ctx.getImageData(0, 0, canvas.width, canvas.height);
-    const pixels = data.data;
-    for (let index = 0; index < pixels.length; index += 4) {
-      const luminance =
-        (0.2126 * pixels[index] + 0.7152 * pixels[index + 1] + 0.0722 * pixels[index + 2]) * 0.97;
-      pixels[index] = luminance;
-      pixels[index + 1] = luminance;
-      pixels[index + 2] = luminance;
-    }
-    ctx.putImageData(data, 0, 0);
-  }
-  return canvas;
-};
-
 const drawAvatar = (
   ctx: CanvasRenderingContext2D,
-  avatars: Avatars,
+  avatars: ShareAvatars,
   player: SpecialMatchSharePlayer,
   cx: number,
   cy: number,
   size: number,
   colors: Colors,
   gray = false,
-) => {
-  const avatar = renderAvatar(player, avatars.get(player.id) ?? null, size, gray, colors.ink);
-  ctx.drawImage(avatar, cx - size / 2, cy - size / 2, size, size);
-};
+) => drawShareAvatar(ctx, avatars, player, { cx, cy, size, ink: colors.ink, gray });
 
 /** 캔버스 그림자는 변환 배율을 받지 않아 3배 캔버스에서는 값에 배율을 곱한다 */
 const setShadow = (
@@ -168,34 +103,6 @@ const setShadow = (
   ctx.shadowBlur = blur * SHARE_SCALE;
   ctx.shadowOffsetX = 0;
   ctx.shadowOffsetY = offsetY * SHARE_SCALE;
-};
-
-const fillRoundRect = (
-  ctx: CanvasRenderingContext2D,
-  x: number,
-  y: number,
-  width: number,
-  height: number,
-  radius: number,
-  color: string,
-) => {
-  ctx.fillStyle = color;
-  ctx.beginPath();
-  ctx.roundRect(x, y, width, height, radius);
-  ctx.fill();
-};
-
-const fillCircle = (
-  ctx: CanvasRenderingContext2D,
-  cx: number,
-  cy: number,
-  radius: number,
-  color: string,
-) => {
-  ctx.fillStyle = color;
-  ctx.beginPath();
-  ctx.arc(cx, cy, radius, 0, Math.PI * 2);
-  ctx.fill();
 };
 
 /** 아바타 아래 끝에 걸친 태그("N연승"·"연승 끝"). bottom은 태그 아래 끝(아바타 아래 + 12) */
@@ -567,7 +474,7 @@ export const createSpecialMatchShareImage = async (target: SpecialMatchShareTarg
   const dateLabel = getSpecialMatchShareDateLabel(target.playedAt, target.sessionName);
   const card = getCardLayout(target, colors);
   const [avatars] = await Promise.all([
-    loadAvatars(getPlayers(target)),
+    loadShareAvatars(getPlayers(target)),
     loadShareFonts(
       [title, ...captionParts.map((part) => part.text), ...card.texts, target.username, dateLabel],
       [400, 700, 800],
@@ -604,7 +511,7 @@ export const createSpecialMatchShareImage = async (target: SpecialMatchShareTarg
     colors,
   );
 
-  drawShareFooter(ctx, { username: target.username, dateLabel, white: colors.white });
+  drawShareFooter(ctx, { username: target.username, dateLabel, color: colors.white });
 
   return canvasToPngFile(canvas, getSpecialMatchShareFileName(target));
 };

@@ -22,6 +22,9 @@ import {
 } from "@/components/records/MyNewAchievementsCard";
 import { RecordSessionCard } from "@/components/records/RecordCards";
 import SessionRatingChangesScreen from "@/components/records/SessionRatingChangesScreen";
+import SessionReportShareSheet, {
+  SessionShareHeaderButton,
+} from "@/components/records/SessionReportShareSheet";
 import {
   LiveSessionHighlightCard,
   SessionPlayerRatingRow,
@@ -73,6 +76,10 @@ import {
   RequestError,
 } from "@/lib/rankings";
 import { fetchSessionPraise } from "@/lib/sessionPraise";
+import {
+  buildMyRecordShareTarget,
+  buildSessionSummaryShareTarget,
+} from "@/lib/sessionReportShare";
 
 const EMPTY_IDS: readonly string[] = [];
 const LOAD_ERROR_MESSAGE = "세션을 불러오지 못했어요.";
@@ -145,6 +152,7 @@ export interface SessionReportDrawerProps {
  * - 끝난 일반 세션: 일정 탭 지난 세션 카드(누를 수 없음) → 리포트 → "경기".
  *   리포트가 없으면(완료 경기 없이 끝남) 버튼 없는 블루 카드
  * 끝난 세션 머리 카드에는 내 기록을 넣지 않는다. 내 기록은 리포트의 내 평점 카드에만 있다.
+ * 리포트가 있는 끝난 세션은 화면 머리 오른쪽 위 공유 아이콘으로 리포트 공유 시트(세션 요약·내 기록 이미지)를 연다.
  * 리포트 카드는 데이터가 있는 것만 보인다.
  */
 export default function SessionReportDrawer({
@@ -182,6 +190,7 @@ export default function SessionReportDrawer({
   } = useMatchFilter();
   const [isPlayersRequested, setIsPlayersRequested] = useState(false);
   const [isParticipantsOpen, setIsParticipantsOpen] = useState(false);
+  const [isShareOpen, setIsShareOpen] = useState(false);
   const requestIdRef = useRef(0);
   // 비동기 요청이 시작될 때 최신 dataVersion을 읽기 위한 ref
   const dataVersionRef = useRef(dataVersion);
@@ -292,6 +301,7 @@ export default function SessionReportDrawer({
 
   const closePlayers = useCallback(() => setIsPlayersRequested(false), []);
   const closeParticipants = useCallback(() => setIsParticipantsOpen(false), []);
+  const closeShare = useCallback(() => setIsShareOpen(false), []);
 
   const participation = useSessionParticipation({
     playerId,
@@ -332,6 +342,19 @@ export default function SessionReportDrawer({
           ) ?? null)
         : null,
     [playerId, report],
+  );
+  // 공유 이미지 내용. 리포트가 있는 끝난 세션만 공유한다
+  const username = player?.username;
+  const summaryShareTarget = useMemo(
+    () => (report ? buildSessionSummaryShareTarget(report, praise) : null),
+    [praise, report],
+  );
+  const myShareTarget = useMemo(
+    () =>
+      report && playerId && username
+        ? buildMyRecordShareTarget(report, praise, { id: playerId, username })
+        : null,
+    [playerId, praise, report, username],
   );
   const myAchievements = useMemo(
     () => (report ? getPlayerSessionAchievements(report, playerId) : []),
@@ -513,6 +536,11 @@ export default function SessionReportDrawer({
         ariaLabel="세션"
         title="세션"
         onBack={close}
+        headerRight={
+          summaryShareTarget ? (
+            <SessionShareHeaderButton onPress={() => setIsShareOpen(true)} />
+          ) : null
+        }
         onExited={handleExited}
         onPullToRefresh={handlePullToRefresh}
         onVisibleChange={setIsScreenVisible}
@@ -526,6 +554,15 @@ export default function SessionReportDrawer({
         depthId={`${depthId}:players`}
         onClose={closePlayers}
       />
+      {summaryShareTarget ? (
+        <SessionReportShareSheet
+          isOpen={isShareOpen && isRequested}
+          isActive={tabKey === selectedTab}
+          summary={summaryShareTarget}
+          mine={myShareTarget}
+          onClose={closeShare}
+        />
+      ) : null}
       {readySession ? (
         <ParticipantsSheet
           isOpen={isParticipantsOpen && isRequested}
