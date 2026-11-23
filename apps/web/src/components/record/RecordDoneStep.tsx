@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/CountUpNumber";
 import { CountUpText } from "@/components/ui/CountUpText";
 import { PlayerAvatar, TeamAvatars } from "@/components/ui/PlayerAvatar";
+import { SpecialMatchResultLabel } from "@/components/ui/SpecialMatchLabel";
 import { cx } from "@/components/ui/cx";
 import { useAppNavigation } from "@/context/AppNavigationContext";
 import { useAuth } from "@/context/AuthContext";
@@ -27,6 +28,7 @@ import {
   markAchievementsSeen,
   pickMatchEarnedAchievements,
 } from "@/lib/achievements";
+import { getSpecialMatchResultName } from "@/lib/specialMatchResult";
 import AchievementCelebration from "./AchievementCelebration";
 import { FooterError } from "./RecordMatchParts";
 import SpecialMatchCelebrationScreen from "./SpecialMatchCelebrationScreen";
@@ -83,6 +85,11 @@ export default function RecordDoneStep({
       (teamPlayer) => teamPlayer.id === viewer.id,
     );
   }, [match, viewer]);
+  // 특수 매치면 점수 아래에 기록한 회원 기준 결과 이름을 둔다. 일반 매치는 null
+  const specialMatchResult = useMemo(
+    () => getSpecialMatchResultName(match, viewer?.id),
+    [match, viewer],
+  );
   const ratingRows = useMemo(() => {
     const changeByPlayerId = new Map<string, PlayerRatingChangeLog>(
       (match.ratingChanges ?? []).map((change) => [change.playerId, change]),
@@ -146,21 +153,26 @@ export default function RecordDoneStep({
               players={match.teams[0].players}
               isWinner={score.scoreA > score.scoreB}
             />
-            <div className="font-num text-[64px] leading-none font-bold tabular-nums">
-              {/* 숫자를 콜론 쪽에 붙여 세는 동안 콜론이 제자리에 있게 한다 */}
-              <CountedScore
-                count={scoreACount}
-                finalValue={score.scoreA}
-                align="end"
-                isWinner={score.scoreA > score.scoreB}
-              />
-              <span className="px-2 text-[#c5ccda]">:</span>
-              <CountedScore
-                count={scoreBCount}
-                finalValue={score.scoreB}
-                align="start"
-                isWinner={score.scoreB > score.scoreA}
-              />
+            <div className="flex flex-col items-center">
+              <div className="font-num text-[64px] leading-none font-bold tabular-nums">
+                {/* 숫자를 콜론 쪽에 붙여 세는 동안 콜론이 제자리에 있게 한다 */}
+                <CountedScore
+                  count={scoreACount}
+                  finalValue={score.scoreA}
+                  align="end"
+                  isWinner={score.scoreA > score.scoreB}
+                />
+                <span className="px-2 text-[#c5ccda]">:</span>
+                <CountedScore
+                  count={scoreBCount}
+                  finalValue={score.scoreB}
+                  align="start"
+                  isWinner={score.scoreB > score.scoreA}
+                />
+              </div>
+              {specialMatchResult ? (
+                <SpecialMatchResultLabel result={specialMatchResult} className="mt-1.5" />
+              ) : null}
             </div>
             <ScoreSide
               players={match.teams[1].players}

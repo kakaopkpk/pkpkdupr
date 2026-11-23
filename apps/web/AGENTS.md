@@ -102,6 +102,9 @@
       - 리포트가 있는 끝난 세션은 머리 오른쪽 위 공유 아이콘으로 `records/SessionReportShareSheet`를 연다. 내용은 `lib/sessionReportShare`가 리포트·칭찬 응답으로 만들고(새 API 없음), 이미지는 `records/sessionReportShareImage`, 미리 만들기·공유는 `hooks/useSessionReportShare`다.
     - `record/`: 경기 기록 시트. 완료 단계는 이 경기로 참가자 전원이 받은 업적을 띠(`match/MatchAchievementRow`)로 보이고, 그중 내 새 업적만 화면 전체 축하 연출 `AchievementCelebration`으로 띄우고 닫으면 확인 처리
       - 완료 단계 한 판 더 버튼은 내가 진 팀이면 "같은 멤버로 리벤지", 그 밖(경기하지 않은 기록자 포함)은 "같은 멤버로 한 판 더"다. 어느 쪽이든 요청은 같다.
+      - 완료 단계 점수 아래 결과 이름(`ui/SpecialMatchLabel`의 `SpecialMatchResultLabel`)은 결과(`specialMatch.outcome`)가 있는 특수 매치에만 있다.
+        - 이름·아이콘·색은 `lib/specialMatchResult`의 `getSpecialMatchResultName`이 `defendingTeamIndex`·`outcome`과 기록자 팀(경기하지 않았으면 이긴 팀)으로 정하고, 웹이 판정을 다시 하지 않는다.
+        - 도전 매치 성공·실패는 승패가 아니라 `outcome`(순위 역전)을 따르고, 색은 승패를 따른다.
       - 축하 연출과 내 받은 업적 상세 시트의 공유는 `hooks/useAchievementShare`가 열 때 공유 이미지(`profile/achievementShareImage`, canvas 2D)를 미리 만들어 두고, 누르면 바로 기기 공유 시트(못 하면 내려받기, 문구는 `lib/achievementShare`)를 연다. iOS Safari는 사용자 동작 직후에만 공유 시트가 열려 누른 뒤에 만들지 않는다.
       - 특수 매치 큰 연출 `SpecialMatchCelebrationScreen`(그림 `SpecialMatchCelebrationScenes`, 시각·공유 대상 변환 `specialMatchCelebration.utils`)은 기록 응답 `specialMatchCelebration`이 있고 기록한 내가 이긴 팀일 때만 완료 단계에서 띄운다. 진 팀·경기하지 않은 기록자·null이면 없고, 경기 상세·홈 등 다른 화면에서 나중에 띄우지 않는다.
         - 순위·연승 수는 응답 값만 쓰고 다시 계산하지 않는다. 내 새 업적 축하와 겹치면 이 연출이 먼저이고, 닫으면 업적 축하가 바로 이어진다.
