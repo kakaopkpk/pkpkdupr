@@ -1,4 +1,5 @@
 import {
+  ACHIEVEMENTS,
   PRAISE_ACHIEVEMENT_IDS,
   type EarnedAchievement,
   type EndedSessions,
@@ -52,6 +53,13 @@ export const NEWS_FEED_WINDOW_MS = 28 * 24 * 60 * 60 * 1000;
 
 /** 지배자 줄과 겹쳐 소식 줄에서 빼는 업적(세션 지배자 1회) */
 const FIRST_DOMINATOR_ACHIEVEMENT_ID = "dominator-1";
+
+/** 세션 카드 하나에 보이는 업적 줄 최대 수 */
+export const NEWS_FEED_ACHIEVEMENT_LINE_LIMIT = 3;
+
+const ACHIEVEMENT_DEFINITION_BY_ID = new Map(
+  ACHIEVEMENTS.map((definition) => [definition.id, definition]),
+);
 /** 세션 칭찬의 받은 회원별 칭찬 수 */
 const countPraisesByTarget = (session: RankingSession) => {
   const counts = new Map<string, number>();
@@ -180,9 +188,9 @@ const buildSessionItem = ({
 
   const topRiser = pickTopRiser(players);
 
-  // 세션 리포트 achievements와 같은 집합(참가자 전원으로 고른 뒤 활성 정회원만 남긴다).
+  // 세션 리포트 achievements 중 활성 정회원 것(참가자 전원으로 고른 뒤 거른다).
   // 지배자가 이 세션으로 받은 첫 '세션 지배자' 업적은 카드의 지배자 줄과 같은 소식이라 뺀다
-  const achievementLines: NewsFeedLine[] = selectAchievementsEarnedByMatches(
+  const achievementCandidates = selectAchievementsEarnedByMatches(
     players.flatMap((report) => earnedByPlayerId(report.player.id)),
     new Set(sessionMatches.map((match) => match.id)),
   ).flatMap((earned) => {
@@ -193,20 +201,28 @@ const buildSessionItem = ({
       return [];
     }
     const player = lineMembers.get(earned.playerId);
-    return player
-      ? [
-          {
-            kind: "achievement" as const,
-            player: toRankingPlayer(player),
-            achievementId: earned.achievementId,
-            earnedMatchId: earned.earnedMatchId,
-            earnedAt: earned.earnedAt,
-          },
-        ]
-      : [];
+    const definition = ACHIEVEMENT_DEFINITION_BY_ID.get(earned.achievementId);
+    return player && definition ? [{ earned, player, definition }] : [];
   });
+  // 업적 점수 내림차순 → 업적 이름 가나다순 → 아이디 순으로 앞에서부터 보인다
+  const achievementLines: NewsFeedLine[] = achievementCandidates
+    .sort(
+      (left, right) =>
+        right.definition.points - left.definition.points ||
+        compareText(left.definition.name, right.definition.name) ||
+        compareText(left.player.username, right.player.username) ||
+        compareText(left.player.id, right.player.id),
+    )
+    .slice(0, NEWS_FEED_ACHIEVEMENT_LINE_LIMIT)
+    .map(({ earned, player }) => ({
+      kind: "achievement" as const,
+      player: toRankingPlayer(player),
+      achievementId: earned.achievementId,
+      earnedMatchId: earned.earnedMatchId,
+      earnedAt: earned.earnedAt,
+    }));
 
-  // 칭찬 줄: 마감 뒤 칭찬을 기준 수 이상 받은 후보. 이 세션으로 칭찬 업적(이쁨받기·이 구역 사랑둥이)을 받은 회원은 업적 줄만 남긴다
+  // 칭찬 줄: 마감 뒤 칭찬을 기준 수 이상 받은 후보. 이 세션으로 받은 칭찬 업적(이쁨받기·이 구역 사랑둥이)이 업적 줄에 보이는 회원은 업적 줄만 남긴다
   const praiseAchievementPlayerIds = new Set(
     achievementLines.flatMap((line) =>
       line.kind === "achievement" &&
