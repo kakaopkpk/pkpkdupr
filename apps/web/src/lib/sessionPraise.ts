@@ -87,7 +87,7 @@ export const getSessionPraisePillState = (
 
 /** 칭찬 팝업을 넘긴(칭찬하지 않고 닫은) 세션. 회원 id + 세션 id로 기억해 다시 띄우지 않는다 */
 const SKIPPED_STORAGE_KEY = "pkpkdupr:session-praise-skipped";
-/** 마감(24시간)이 지난 세션은 다시 뜨지 않으므로 최근 것만 남긴다 */
+/** 마감(1시간)이 지난 세션은 다시 뜨지 않으므로 최근 것만 남긴다 */
 const SKIPPED_MAX_COUNT = 30;
 
 export const getSkippedSessionPraiseKey = (playerId: string, sessionId: string) =>
