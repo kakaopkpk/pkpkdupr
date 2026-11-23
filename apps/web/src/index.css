@@ -52,7 +52,7 @@
   --ease-pk-move: cubic-bezier(0.32, 0.72, 0, 1);
   /* 튀어나오는 등장 곡선 */
   --ease-pk-pop: cubic-bezier(0.34, 1.56, 0.64, 1);
-  /* 점점 빨라지며 떨어지는 가속 곡선(떨어지는 연출 전용) */
+  /* 점점 빨라지며 떨어지는 가속 곡선(도장처럼 떨어지는 연출 전용) */
   --ease-pk-drop: cubic-bezier(0.55, 0, 1, 0.45);
   /*
    * 공용 모션. 모두 fill-mode both라 inline style animationDelay 동안 시작 상태로 머문다.

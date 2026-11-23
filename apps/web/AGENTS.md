@@ -254,7 +254,9 @@
   - `active:bg-*`·`active:opacity-*`·`active:scale-*`를 직접 쓰지 않습니다(`PkButton`은 이미 붙어 있음).
   - `rowPressClassName`은 안의 버튼을 누르는 동안 반응하지 않으므로, 버튼을 품은 누를 수 있는 카드에도 그대로 씁니다.
 - 탭 하이라이트·글자 선택·iOS 콜아웃·이미지 끌기는 `index.css` base에서 전역으로 끄고(입력칸은 글자 선택 허용), 이미지·링크 길게 누르기 메뉴는 `main.tsx`가 터치 기기(`pointer: coarse`)에서만 막습니다. 화면별로 `select-none`을 붙이지 않습니다.
-- 모션 곡선은 `@theme`의 `ease-pk-move`(이동·전환)와 `ease-pk-pop`(튀어나오는 등장) 두 개를 씁니다. 점점 빨라지며 떨어지는 연출(도장)만 `ease-pk-drop`을 씁니다. arbitrary `ease-[cubic-bezier(...)]`를 새로 쓰지 않습니다.
+- 모션 곡선은 `@theme` 토큰을 쓰고, arbitrary `ease-[cubic-bezier(...)]`를 새로 쓰지 않습니다.
+  - 기본은 `ease-pk-move`(이동·전환)와 `ease-pk-pop`(튀어나오는 등장) 두 개입니다.
+  - 예외로 점점 빨라지며 떨어지는 연출(도장)만 `ease-pk-drop`을 씁니다.
 - 공용 애니메이션은 `index.css`의 `animate-pk-*`(`fade-in`·`fade-up`·`fade-out`·`pop`·`draw`·`sheen`·`ping`·`spin-slow`·`rise-in`·`sink-out`·`wobble`·`flash`(한 번 나타났다 사라짐), 업적 축하 전용 `celebrate-pop`·`rays-pulse`·`slide-away`, 특수 매치 큰 연출 전용 `stamp-drop`(점점 빨라지며 떨어지는 도장)·`shake`(카드 흔들림))를 재사용합니다.
   - 모두 fill-mode both이고 지연·길이는 inline style `animationDelay`·`animationDuration`으로 덮어씁니다.
   - `animate-pk-draw`는 요소에 `pathLength="1"`이 필요합니다.
