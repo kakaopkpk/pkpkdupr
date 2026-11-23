@@ -436,3 +436,125 @@ describe("buildNewsFeedPage 세션 항목", () => {
     ).toBe(false);
   });
 });
+
+describe("buildNewsFeedPage 칭찬 줄", () => {
+  // 12월 3일(목) 정기 세션: 22:00 KST에 끝나고 12월 4일 22:00 KST(13:00Z)에 칭찬이 마감된다
+  const sessionDate = at("2026-12-03T09:00:00.000Z");
+  const closedAt = at("2026-12-04T13:00:00.000Z");
+  const ann = makePlayer("Pann0001", "ann", 3.2);
+  const ben = makePlayer("Pben0001", "ben", 3.2);
+  const cal = makePlayer("Pcal0001", "cal", 3.2);
+  const session = makeSession("Spraise1", sessionDate, {
+    participantIds: [ann.id, ben.id, cal.id],
+  });
+  const match = (id: string, minute: number, winner: string, loser: string) =>
+    makeMatch(
+      id,
+      new Date(sessionDate.getTime() + 3_600_000 + minute * 60_000),
+      [[winner], [loser]],
+      { type: "singles", sessionId: session.id },
+    );
+  // ann 3연승(최다 연승), ben 1승(최다 승리)
+  const matches = [
+    match("Mpr00001", 1, ann.id, ben.id),
+    match("Mpr00002", 2, ann.id, cal.id),
+    match("Mpr00003", 3, ann.id, ben.id),
+    match("Mpr00004", 4, ben.id, cal.id),
+  ];
+  const praises = (targetId: string, count: number, offset = 0) =>
+    Array.from({ length: count }, (_, index) => ({
+      sessionId: session.id,
+      voterPlayerId: `Pv${String(offset + index).padStart(6, "0")}`,
+      targetPlayerId: targetId,
+      createdAt: at("2026-12-03T14:00:00.000Z"),
+    }));
+
+  const lines = (
+    sessionPraises: RankingSession["praises"],
+    pageNow: Date,
+  ) => {
+    const players = [ann, ben, cal];
+    const sessions = [{ ...session, praises: sessionPraises }];
+    const context = createRankingContext(players, [], matches);
+    const item = buildNewsFeedPage({
+      context,
+      sessions,
+      players,
+      endedSessions: findEndedSessions(context, sessions, pageNow),
+      requesterId: ann.id,
+      cursor: null,
+      now: pageNow,
+    }).items.find((entry) => entry.kind === "session") as NewsFeedSessionItem;
+    return item.lines;
+  };
+
+  it("마감 뒤 칭찬 5개 이상 받은 후보를 맨 앞에 두고, 이 세션으로 칭찬 업적을 받은 회원은 업적 줄만 둔다", () => {
+    const result = lines(
+      [...praises(ann.id, 5), ...praises(ben.id, 6, 10)],
+      closedAt,
+    );
+    // ann·ben 모두 이 세션으로 '이쁨받기'를 받아 칭찬 줄 대신 업적 줄만 나온다
+    expect(result.filter((line) => line.kind === "praise")).toEqual([]);
+    expect(
+      result.flatMap((line) =>
+        line.kind === "achievement" && line.achievementId === "praised-1"
+          ? [line.player.id]
+          : [],
+      ),
+    ).toEqual(expect.arrayContaining([ann.id, ben.id]));
+  });
+
+  it("업적을 이미 다른 세션에서 받은 회원은 칭찬 줄이 나오고, 마감 전에는 나오지 않는다", () => {
+    const earlier = makeSession("Spraise0", at("2026-11-30T09:00:00.000Z"), {
+      participantIds: [ann.id],
+    });
+    const earlierMatch = makeMatch(
+      "Mpr00000",
+      at("2026-11-30T10:00:00.000Z"),
+      [[ann.id], [cal.id]],
+      { type: "singles", sessionId: earlier.id },
+    );
+    const build = (pageNow: Date) => {
+      const players = [ann, ben, cal];
+      const sessions = [
+        { ...session, praises: praises(ann.id, 6) },
+        {
+          ...earlier,
+          praises: praises(ann.id, 5, 20).map((praise) => ({
+            ...praise,
+            sessionId: earlier.id,
+            createdAt: at("2026-11-30T14:00:00.000Z"),
+          })),
+        },
+      ];
+      const context = createRankingContext(players, [], [
+        earlierMatch,
+        ...matches,
+      ]);
+      const item = buildNewsFeedPage({
+        context,
+        sessions,
+        players,
+        endedSessions: findEndedSessions(context, sessions, pageNow),
+        requesterId: ann.id,
+        cursor: null,
+        now: pageNow,
+      }).items.find(
+        (entry) => entry.kind === "session" && entry.session.id === session.id,
+      ) as NewsFeedSessionItem;
+      return item.lines;
+    };
+    expect(build(closedAt)[0]).toEqual({
+      kind: "praise",
+      player: { id: ann.id, username: "ann", avatarUrl: undefined },
+      praiseCount: 6,
+      category: "winStreak",
+      value: 3,
+    });
+    expect(
+      build(at("2026-12-04T12:59:00.000Z")).some(
+        (line) => line.kind === "praise",
+      ),
+    ).toBe(false);
+  });
+});
