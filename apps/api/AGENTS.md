@@ -140,8 +140,9 @@
   - 랭킹 줄: 세션 참가자 중 복식 `rankAfter` ≤ 3이고 `rankBefore`가 null이거나 더 큰 회원, 순위 오름차순. `rankChange`는 `rankBefore - rankAfter`(`rankBefore` null이면 null).
   - 연승 줄: 그 세션에서 평점 반영 경기를 뛰었고, 세션 마지막 완료 경기까지 센 연승(랭킹 `winStreak` 규칙)이 `WIN_STREAK_DISPLAY_MIN` 이상인 회원. 연승 내림차순 → 아이디 순.
   - 칭찬 줄(`kind: 'praise'`): 칭찬 마감(`closed`) 뒤 칭찬을 5개 이상 받은 후보, 후보 순서. `lines` 맨 앞이다.
-    - 이 세션으로 칭찬 업적을 받은 회원은 칭찬 줄 대신 업적 줄만 나온다.
-  - 업적 줄: 세션 리포트 `achievements`와 같은 집합·순서, 개수 제한 없음.
+    - 이 세션으로 받은 칭찬 업적이 업적 줄에 보이는 회원은 칭찬 줄 대신 업적 줄만 나온다.
+  - 업적 줄: 세션 리포트 `achievements` 중에서 최대 3개(`NEWS_FEED_ACHIEVEMENT_LINE_LIMIT`).
+    - 업적 점수 내림차순 → 업적 이름 가나다순 → 아이디 순으로 앞에서부터 고른다.
     - 예외로 `topRiser`가 이 세션으로 받은 '세션 지배자'(`dominator-1`) 업적은 지배자 줄과 겹쳐 뺀다. '세션 지배자 10회'는 그대로 둔다.
 - 세션 리포트 `GET /api/session-reports/:sessionId`: 선수별 경기·승패와 복식 평점·순위 전후, 최대 상승자 `topRiser`
 - 세션 줄(`MatchSessionHistoryItem`)의 `startTime`은 정기 세션 "18:00", 시각 없는 회원 세션 null
@@ -151,7 +152,7 @@
 후보·자격·마감 규칙은 `docs/product.md` "세션 칭찬", 계산은 `packages/shared/src/sessionPraise.ts`와 `services/SessionPraiseService.ts`입니다. 칭찬은 `session_praises`(세션·보낸 회원당 한 줄, 바꾸거나 취소 불가)에 저장하고 후보는 저장 없이 조회 때 계산합니다.
 
 - 칭찬 조회 `GET /api/match-sessions/:sessionId/praise`: 응답 `SessionPraiseResponse`
-  - `status`는 세션 끝 시각(`getSessionEndsAt`) 전 `upcoming`, 그 뒤 24시간 `open`, 그 뒤 `closed`.
+  - `status`는 세션 끝 시각(`getSessionEndsAt`) 전 `upcoming`, 그 뒤 1시간 `open`, 그 뒤 `closed`.
   - `candidates`는 우선순위 순 최대 3명(지금 활성 정회원만)과 지금 받은 칭찬 수 `praiseCount`. 끝나기 전 세션과 `SESSION_PRAISE_START` 전에 끝난 세션은 빈 배열이다.
   - 후보 계산은 세션 완료 경기 전체(게스트가 낀 평점 미반영 경기 포함)로 하고, 세션 지배자·평점 변화·순위는 세션 리포트와 같다.
   - `myTargetPlayerId`는 요청자가 칭찬한 회원(안 했으면 null). id 형식 오류 400, 없는 세션 404.

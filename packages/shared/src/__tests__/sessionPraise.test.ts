@@ -180,14 +180,14 @@ describe("pickSessionPraiseCandidates", () => {
 
 describe("getSessionPraiseStatus", () => {
   const endsAt = new Date(BASE_MS);
-  it("끝나기 전·24시간 안·그 뒤를 나눈다", () => {
+  it("끝나기 전·1시간 안·그 뒤를 나눈다", () => {
     expect(getSessionPraiseStatus(endsAt, new Date(BASE_MS - 1))).toBe("upcoming");
     expect(getSessionPraiseStatus(endsAt, endsAt)).toBe("open");
     expect(
-      getSessionPraiseStatus(endsAt, new Date(BASE_MS + 24 * 3600_000 - 1)),
+      getSessionPraiseStatus(endsAt, new Date(BASE_MS + 3600_000 - 1)),
     ).toBe("open");
     expect(
-      getSessionPraiseStatus(endsAt, new Date(BASE_MS + 24 * 3600_000)),
+      getSessionPraiseStatus(endsAt, new Date(BASE_MS + 3600_000)),
     ).toBe("closed");
   });
 });

@@ -7,6 +7,7 @@ import {
   type MarkAchievementsSeenRequest,
   type SeenAchievementRef,
   type UnseenAchievementsResponse,
+  getAchievementDefinition,
   isBestStreakAchievement,
   isLowRatingAchievement,
   isRatingAchievement,
@@ -30,16 +31,11 @@ export interface EarnedAchievementItem {
   progress: AchievementProgressInfo;
 }
 
-const ACHIEVEMENT_BY_ID = new Map(
-  ACHIEVEMENTS.map((definition) => [definition.id, definition]),
-);
 const ACHIEVEMENT_ORDER = new Map(
   ACHIEVEMENTS.map((definition, index) => [definition.id, index]),
 );
 
-export const getAchievementDefinition = (
-  achievementId: string,
-): AchievementDefinition | null => ACHIEVEMENT_BY_ID.get(achievementId) ?? null;
+export { getAchievementDefinition };
 
 /**
  * 받은 업적을 최근 받은 순으로 돌려준다.
@@ -50,7 +46,7 @@ export const getEarnedAchievementsByRecent = (
 ): EarnedAchievementItem[] =>
   progress
     .flatMap((item) => {
-      const definition = ACHIEVEMENT_BY_ID.get(item.id);
+      const definition = getAchievementDefinition(item.id);
       return item.earned && definition ? [{ definition, progress: item }] : [];
     })
     .sort(
