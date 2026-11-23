@@ -11,6 +11,7 @@ import {
 } from "../services/NewsFeedService";
 import {
   buildSessionReport,
+  compareText,
   createRankingContext,
   findEndedSessions,
   type RankingMatch,
@@ -403,11 +404,12 @@ describe("buildNewsFeedPage 세션 항목", () => {
         const rightDefinition = definitionById.get(right.achievementId)!;
         return (
           rightDefinition.points - leftDefinition.points ||
-          leftDefinition.name.localeCompare(rightDefinition.name, "ko") ||
-          usernameById
-            .get(left.playerId)!
-            .localeCompare(usernameById.get(right.playerId)!) ||
-          left.playerId.localeCompare(right.playerId)
+          compareText(leftDefinition.name, rightDefinition.name) ||
+          compareText(
+            usernameById.get(left.playerId)!,
+            usernameById.get(right.playerId)!,
+          ) ||
+          compareText(left.playerId, right.playerId)
         );
       })
       .slice(0, NEWS_FEED_ACHIEVEMENT_LINE_LIMIT)
