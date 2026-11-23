@@ -314,8 +314,15 @@ export default function SessionPraisePopup({
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [requestClose]);
 
+  // 띄울 때 받은 칭찬은 방금 조회한 것이므로, 버전이 오른 뒤부터 다시 읽는다
+  const initialSessionsVersionRef = useRef(sessionsVersion);
   useEffect(() => {
-    if (phaseRef.current !== "idle") return;
+    if (
+      sessionsVersion === initialSessionsVersionRef.current ||
+      phaseRef.current !== "idle"
+    ) {
+      return;
+    }
     let isCancelled = false;
     fetchSessionPraise(praise.session.id)
       .then((next) => {

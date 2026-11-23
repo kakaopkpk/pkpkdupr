@@ -13,8 +13,10 @@ import {
   pickTopRiser,
   toRankingPlayer,
   type RankingContext,
+  type RankingMatch,
   type RankingSession,
 } from "./RankingService";
+import type { SessionPlayerReport } from "@pkpkdupr/shared/ranking";
 
 /** 세션 끝 시각(getSessionEndsAt). 칭찬은 이 시각부터 24시간 받는다 */
 export const getRankingSessionEndsAt = (session: RankingSession) =>
@@ -29,6 +31,11 @@ export const buildSessionPraiseCandidates = (
   context: RankingContext,
   session: RankingSession,
   now: Date,
+  /** 이미 계산한 세션 경기·세션 리포트(소식 피드). 없으면 여기서 계산한다 */
+  computed?: {
+    sessionMatches: RankingMatch[];
+    reports: SessionPlayerReport[] | null;
+  },
 ): SessionPraiseCandidate[] => {
   const endsAt = getRankingSessionEndsAt(session);
   if (
@@ -37,20 +44,15 @@ export const buildSessionPraiseCandidates = (
   ) {
     return [];
   }
-  const sessionMatches = context.matches.filter(
-    (match) => match.sessionId === session.id,
-  );
-  const reports = buildSessionPlayerReports(context, session, sessionMatches);
+  const sessionMatches =
+    computed?.sessionMatches ??
+    context.matches.filter((match) => match.sessionId === session.id);
+  const reports = computed
+    ? computed.reports
+    : buildSessionPlayerReports(context, session, sessionMatches);
   if (!reports) return [];
 
-  const statsByPlayerId = buildSessionPraisePlayerStats(
-    sessionMatches.map((match) => ({
-      id: match.id,
-      completedAt: match.completedAt,
-      teamPlayerIds: match.teamPlayerIds,
-      scores: match.scores,
-    })),
-  );
+  const statsByPlayerId = buildSessionPraisePlayerStats(sessionMatches);
   const praiseCounts = new Map<string, number>();
   for (const praise of session.praises ?? []) {
     praiseCounts.set(

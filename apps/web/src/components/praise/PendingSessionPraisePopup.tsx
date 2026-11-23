@@ -80,12 +80,12 @@ export default function PendingSessionPraisePopup({
       // 조회 실패는 알리지 않는다. 다음 조회 때 다시 시도한다
       .catch(() => {})
       .finally(() => {
-        if (!isCancelled) setCheckedKey(`${playerId}:${dataVersion}`);
+        if (!isCancelled) setCheckedKey(checkKey);
       });
     return () => {
       isCancelled = true;
     };
-  }, [dataVersion, isActive, isShowing, playerId]);
+  }, [checkKey, isActive, isShowing, playerId]);
 
   if (!shown || !playerId) return null;
 

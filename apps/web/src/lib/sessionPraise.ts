@@ -4,9 +4,8 @@ import type {
   SessionPraiseRequest,
   SessionPraiseResponse,
 } from "@pkpkdupr/shared/sessionPraise";
-import { apiFetch } from "@/lib/api";
 import { formatRatingDelta } from "@/lib/format";
-import { RequestError, requestJson } from "@/lib/rankings";
+import { requestJson } from "@/lib/rankings";
 
 const praisePath = (sessionId: string) =>
   `/api/match-sessions/${encodeURIComponent(sessionId)}/praise`;
@@ -25,23 +24,20 @@ export const fetchPendingSessionPraises = () =>
   );
 
 /** 칭찬을 보내고 저장이 반영된 칭찬 상태를 받는다. 후보가 아니면 400, 마감·이미 칭찬이면 409 */
-export const praiseSessionPlayer = async (
+export const praiseSessionPlayer = (
   sessionId: string,
   targetPlayerId: string,
 ): Promise<SessionPraiseResponse> => {
   const body: SessionPraiseRequest = { targetPlayerId };
-  const res = await apiFetch(praisePath(sessionId), {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
-  if (!res.ok) {
-    const errorData = (await res.json().catch(() => ({}))) as {
-      error?: string;
-    };
-    throw new RequestError(errorData.error || "칭찬하지 못했어요.", res.status);
-  }
-  return (await res.json()) as SessionPraiseResponse;
+  return requestJson<SessionPraiseResponse>(
+    praisePath(sessionId),
+    "칭찬하지 못했어요.",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    },
+  );
 };
 
 /** 칭찬 분류의 값: "+0.106"·"4연승"·"2번 저지"·"3승"·"▲4"·"58점" */
@@ -141,7 +137,7 @@ export const rememberSkippedSessionPraise = (playerId: string, sessionId: string
   }
 };
 
-/** 팝업으로 띄울 첫 세션: 넘기지 않았고 후보가 2명 이상 */
+/** 팝업으로 띄울 첫 세션: 넘기지 않은 세션(후보 2명 이상인 세션만 서버가 준다) */
 export const pickPendingSessionPraise = (
   items: readonly SessionPraiseResponse[],
   playerId: string,
@@ -149,6 +145,5 @@ export const pickPendingSessionPraise = (
 ): SessionPraiseResponse | null =>
   items.find(
     (item) =>
-      item.candidates.length >= 2 &&
       !skipped.includes(getSkippedSessionPraiseKey(playerId, item.session.id)),
   ) ?? null;

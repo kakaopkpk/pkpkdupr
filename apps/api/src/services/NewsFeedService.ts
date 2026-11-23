@@ -1,6 +1,7 @@
-import type {
-  EarnedAchievement,
-  EndedSessions,
+import {
+  PRAISE_ACHIEVEMENT_IDS,
+  type EarnedAchievement,
+  type EndedSessions,
 } from "@pkpkdupr/shared/achievements";
 import type {
   NewsFeedItem,
@@ -51,11 +52,14 @@ export const NEWS_FEED_WINDOW_MS = 28 * 24 * 60 * 60 * 1000;
 
 /** 지배자 줄과 겹쳐 소식 줄에서 빼는 업적(세션 지배자 1회) */
 const FIRST_DOMINATOR_ACHIEVEMENT_ID = "dominator-1";
-/** 칭찬 업적(이쁨받기·이 구역 사랑둥이). 이 세션으로 받았으면 그 회원의 칭찬 줄 대신 업적 줄만 둔다 */
-const PRAISE_ACHIEVEMENT_IDS: ReadonlySet<string> = new Set([
-  "praised-1",
-  "praised-10",
-]);
+/** 세션 칭찬의 받은 회원별 칭찬 수 */
+const countPraisesByTarget = (session: RankingSession) => {
+  const counts = new Map<string, number>();
+  for (const praise of session.praises ?? []) {
+    counts.set(praise.targetPlayerId, (counts.get(praise.targetPlayerId) ?? 0) + 1);
+  }
+  return [...counts.values()];
+};
 
 /** 복식 순위가 이 안에 든 회원만 랭킹 줄을 만든다 */
 const NEWS_FEED_RANK_LIMIT = 3;
@@ -202,7 +206,7 @@ const buildSessionItem = ({
       : [];
   });
 
-  // 칭찬 줄: 마감 뒤 칭찬을 기준 수 이상 받은 후보. 이 세션으로 칭찬 업적을 받은 회원은 업적 줄만 남긴다
+  // 칭찬 줄: 마감 뒤 칭찬을 기준 수 이상 받은 후보. 이 세션으로 칭찬 업적(이쁨받기·이 구역 사랑둥이)을 받은 회원은 업적 줄만 남긴다
   const praiseAchievementPlayerIds = new Set(
     achievementLines.flatMap((line) =>
       line.kind === "achievement" &&
@@ -211,24 +215,23 @@ const buildSessionItem = ({
         : [],
     ),
   );
+  const hasHighlightedPraise = countPraisesByTarget(session).some(
+    (count) => count >= SESSION_PRAISE_HIGHLIGHT_MIN,
+  );
   const praiseLines: NewsFeedLine[] =
+    hasHighlightedPraise &&
     getSessionPraiseStatus(getRankingSessionEndsAt(session), now) === "closed"
-      ? buildSessionPraiseCandidates(context, session, now).flatMap(
-          (candidate) =>
-            candidate.praiseCount >= SESSION_PRAISE_HIGHLIGHT_MIN &&
-            lineMembers.has(candidate.player.id) &&
-            !praiseAchievementPlayerIds.has(candidate.player.id)
-              ? [
-                  {
-                    kind: "praise" as const,
-                    player: candidate.player,
-                    praiseCount: candidate.praiseCount,
-                    category: candidate.category,
-                    value: candidate.value,
-                  },
-                ]
-              : [],
-        )
+      ? buildSessionPraiseCandidates(context, session, now, {
+          sessionMatches,
+          reports: players,
+        })
+          .filter(
+            (candidate) =>
+              candidate.praiseCount >= SESSION_PRAISE_HIGHLIGHT_MIN &&
+              lineMembers.has(candidate.player.id) &&
+              !praiseAchievementPlayerIds.has(candidate.player.id),
+          )
+          .map((candidate) => ({ kind: "praise" as const, ...candidate }))
       : [];
 
   return {

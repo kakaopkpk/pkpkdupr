@@ -3886,15 +3886,16 @@ app.post("/api/match-sessions/:sessionId/praise", async (req, res) => {
     ) {
       throw new RankingRequestError("이미 칭찬했어요.", 409);
     }
-    const response: SessionPraiseResponse = buildSessionPraiseResponse(
-      context,
-      {
-        ...session,
-        praises: [...(session.praises ?? []), { ...praise, createdAt: now }],
-      },
-      decoded.playerId,
-      now,
-    );
+    // 후보는 칭찬 수와 무관하므로 저장 전 계산에 방금 칭찬만 더해 돌려준다
+    const response: SessionPraiseResponse = {
+      ...current,
+      candidates: current.candidates.map((candidate) =>
+        candidate.player.id === targetPlayerId
+          ? { ...candidate, praiseCount: candidate.praiseCount + 1 }
+          : candidate,
+      ),
+      myTargetPlayerId: targetPlayerId,
+    };
     res.json(response);
   } catch (err) {
     sendRankingFailure(res, err);

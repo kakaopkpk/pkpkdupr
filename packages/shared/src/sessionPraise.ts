@@ -1,3 +1,4 @@
+import { compareCountedMatches, sumPoints } from "./achievements.js";
 import { getWinningTeamIndex, type MatchScore } from "./match.js";
 import type { RankingPlayer } from "./ranking.js";
 import type { MatchSessionKind } from "./session.js";
@@ -60,16 +61,6 @@ export interface SessionPraisePlayerStats {
   pointsAgainst: number;
 }
 
-const compareMatches = (left: SessionPraiseMatch, right: SessionPraiseMatch) =>
-  left.completedAt.getTime() - right.completedAt.getTime() ||
-  (left.id < right.id ? -1 : left.id > right.id ? 1 : 0);
-
-const sumTeamPoints = (scores: readonly MatchScore[], teamIndex: 0 | 1) =>
-  scores.reduce(
-    (total, score) => total + (teamIndex === 0 ? score.scoreA : score.scoreB),
-    0,
-  );
-
 /** 세션 완료 경기로 선수별 세션 기록을 센다(완료 시각 순) */
 export const buildSessionPraisePlayerStats = (
   matches: readonly SessionPraiseMatch[],
@@ -92,7 +83,7 @@ export const buildSessionPraisePlayerStats = (
     return stats;
   };
 
-  for (const match of [...matches].sort(compareMatches)) {
+  for (const match of [...matches].sort(compareCountedMatches)) {
     const winner = getWinningTeamIndex(match);
     const teams = match.teamPlayerIds.map((team) => [...new Set(team)]) as [
       string[],
@@ -110,8 +101,8 @@ export const buildSessionPraisePlayerStats = (
       for (const playerId of team) {
         const stats = getStats(playerId);
         stats.matchCount += 1;
-        stats.pointsFor += sumTeamPoints(match.scores, teamIndex);
-        stats.pointsAgainst += sumTeamPoints(
+        stats.pointsFor += sumPoints(match.scores, teamIndex);
+        stats.pointsAgainst += sumPoints(
           match.scores,
           teamIndex === 0 ? 1 : 0,
         );

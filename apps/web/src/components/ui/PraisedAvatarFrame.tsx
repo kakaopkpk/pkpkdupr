@@ -27,4 +27,3 @@ export const PraisedAvatarFrame: React.FC<{
   );
 };
 
-export default PraisedAvatarFrame;

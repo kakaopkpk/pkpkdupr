@@ -665,6 +665,13 @@ const ACHIEVEMENT_TABLE: readonly {
 export const ACHIEVEMENTS: readonly AchievementDefinition[] =
   ACHIEVEMENT_TABLE.map((row) => row.definition);
 
+/** 칭찬 업적(이쁨받기·이 구역 사랑둥이) id */
+export const PRAISE_ACHIEVEMENT_IDS: ReadonlySet<string> = new Set(
+  ACHIEVEMENT_TABLE.filter((row) => row.metric === "praisedSessions").map(
+    (row) => row.definition.id,
+  ),
+);
+
 const ACHIEVEMENT_POINTS_BY_ID = new Map(
   ACHIEVEMENTS.map((definition) => [definition.id, definition.points]),
 );
@@ -915,7 +922,8 @@ const findTeamIndex = (
   return index === 0 || index === 1 ? index : null;
 };
 
-const sumPoints = (scores: readonly MatchScore[], teamIndex: 0 | 1) =>
+/** 팀 득점 합계 */
+export const sumPoints = (scores: readonly MatchScore[], teamIndex: 0 | 1) =>
   scores.reduce(
     (total, score) => total + (teamIndex === 0 ? score.scoreA : score.scoreB),
     0,

@@ -181,4 +181,3 @@ export const SessionPraiseSection: React.FC<{
   );
 };
 
-export default SessionPraiseSection;

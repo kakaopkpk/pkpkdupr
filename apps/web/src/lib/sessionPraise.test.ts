@@ -98,14 +98,13 @@ describe("넘긴 칭찬 팝업 기록", () => {
 });
 
 describe("pickPendingSessionPraise", () => {
-  it("넘긴 세션과 후보 1명 이하 세션을 건너뛴 첫 세션이다", () => {
+  it("넘긴 세션을 건너뛴 첫 세션이다(후보 수는 서버가 거른다)", () => {
     const items = [
       makePraise("S1", ["A", "B"]),
-      makePraise("S2", ["A"]),
-      makePraise("S3", ["A", "B", "C"]),
+      makePraise("S2", ["A", "B", "C"]),
     ];
     const skipped = [getSkippedSessionPraiseKey("P1", "S1")];
-    expect(pickPendingSessionPraise(items, "P1", skipped)?.session.id).toBe("S3");
+    expect(pickPendingSessionPraise(items, "P1", skipped)?.session.id).toBe("S2");
   });
 
   it("다른 회원이 넘긴 기록은 보지 않는다", () => {
