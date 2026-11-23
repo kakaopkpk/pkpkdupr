@@ -31,6 +31,7 @@ import {
   type AdminCreateBracketMatchRequest,
   type AdminMatchDeletionLogsResponse,
   type AdminMatchEditLogsResponse,
+  getWinningTeamIndex,
 } from "@pkpkdupr/shared/match";
 import {
   addKstDays,
@@ -77,6 +78,7 @@ import {
   judgeRematchSpecialMatch,
   type SpecialMatch,
   type SpecialMatchCandidatePlayer,
+  type SpecialMatchCelebration,
 } from "@pkpkdupr/shared/specialMatch";
 import {
   isTournamentPlace,
@@ -172,7 +174,11 @@ import {
   selectRatingTrendWindow,
 } from "./services/PlayerRatingChartProjectionService";
 import { buildPlayerProfileSummary } from "./services/PlayerProfileSummaryService";
-import { buildSpecialMatchCandidatePlayers } from "./services/SpecialMatchService";
+import {
+  buildSpecialMatchCandidatePlayers,
+  judgeSpecialMatchOutcome,
+  settleSpecialMatch,
+} from "./services/SpecialMatchService";
 import {
   buildSessionPraiseResponse,
   findPendingSessionPraises,
@@ -1141,6 +1147,70 @@ const findAchievementsEarnedByMatch = async (
   } catch (err) {
     console.error("[MATCH] 경기 업적 계산 실패", err);
     return [];
+  }
+};
+
+/** 두 팀 구성이 팀별 선수 집합까지 같은지(팀 안 순서는 상관없음) */
+const hasSameTeamPlayers = (
+  left: readonly Team[],
+  right: readonly Team[],
+): boolean =>
+  left.length === right.length &&
+  left.every((team, index) => {
+    const leftIds = new Set(team.players.map((player) => player.id));
+    const rightIds = right[index].players.map((player) => player.id);
+    return (
+      leftIds.size === new Set(rightIds).size &&
+      rightIds.every((id) => leftIds.has(id))
+    );
+  });
+
+/**
+ * 평점 반영이 끝난 특수 매치의 결과를 정해 저장하고, 결과가 이번 저장으로 처음 도전 성공·연승 저지·최강자전 승리로
+ * 정해졌으면 큰 연출 데이터를 돌려준다. 처음 completed가 됐거나 수정으로 승패가 바뀐 경기만 다시 정한다.
+ * 평점 잠금 밖에서 반영 직후 랭킹을 다시 읽는다(동호회 규모라 그사이 다른 반영이 끼는 경우는 무시한다).
+ * 저장은 이미 끝났으므로 실패하면 결과를 바꾸지 않고 연출 없이 응답한다.
+ */
+const settleSpecialMatchForSavedMatch = async (
+  match: Match,
+  previous: Match | null,
+): Promise<{
+  match: Match;
+  specialMatchCelebration: SpecialMatchCelebration | null;
+}> => {
+  const specialMatch = match.specialMatch;
+  const completedAt = match.completedAt;
+  if (!specialMatch || match.status !== "completed" || !completedAt) {
+    return { match, specialMatchCelebration: null };
+  }
+  if (
+    previous?.status === "completed" &&
+    getWinningTeamIndex(previous) === getWinningTeamIndex(match)
+  ) {
+    return { match, specialMatchCelebration: null };
+  }
+  try {
+    const { context } = await loadRankingSource();
+    const target = { ...match, completedAt };
+    // 결과가 이미 정해져 있던 경기(수정으로 승패가 뒤집힘)는 연출하지 않으므로 결과만 다시 정한다
+    const { outcome, celebration } =
+      specialMatch.outcome == null
+        ? settleSpecialMatch(context, specialMatch, target)
+        : {
+            outcome: judgeSpecialMatchOutcome(context, specialMatch, target),
+            celebration: null,
+          };
+    const settled: SpecialMatch = { ...specialMatch, outcome };
+    if (outcome !== specialMatch.outcome) {
+      await matchRepository.updateSpecialMatch(match.id, settled);
+    }
+    return {
+      match: { ...match, specialMatch: settled },
+      specialMatchCelebration: celebration,
+    };
+  } catch (err) {
+    console.error("[MATCH] 특수 매치 결과 판정 실패", match.id, err);
+    return { match, specialMatchCelebration: null };
   }
 };
 
@@ -2250,6 +2320,8 @@ app.post("/api/matches", async (req, res) => {
       ...match,
       ratingChanges: ratingChangeLogs,
       ...(await findAchievementsForSavedMatch(match, null)),
+      // 직접 기록한 경기는 특수 매치가 아니다
+      specialMatchCelebration: null,
     };
     res.status(201).json(response);
   } catch (err) {
@@ -3406,6 +3478,11 @@ app.put("/api/matches/:matchId", async (req, res) => {
         existing,
         prepared.teams,
       ),
+      // 판정한 선수 구성이 아니게 되면 특수 매치가 아니다
+      ...(existing.specialMatch &&
+      !hasSameTeamPlayers(existing.teams, prepared.teams)
+        ? { specialMatch: null }
+        : {}),
       expectedUpdatedAt: expectedUpdatedAt ?? existing.updatedAt,
       // 완료 경기를 고칠 때만 저장소가 수정 기록을 남긴다(첫 점수 입력은 기록이라 남기지 않음)
       editLog: {
@@ -3437,10 +3514,12 @@ app.put("/api/matches/:matchId", async (req, res) => {
       ({ ratingChangeLogs: ratingChanges } =
         await authService.applyMatchResultToRatings(match));
     }
+    const settled = await settleSpecialMatchForSavedMatch(match, previous);
     const response: RecordedMatchResponse = {
-      ...match,
+      ...settled.match,
       ratingChanges,
       ...(await findAchievementsForSavedMatch(match, previous)),
+      specialMatchCelebration: settled.specialMatchCelebration,
     };
     res.json(response);
   } catch (err) {

@@ -1,4 +1,5 @@
 import type { SessionPraiseRecord } from "@pkpkdupr/shared/sessionPraise";
+import type { SpecialMatch } from "@pkpkdupr/shared/specialMatch";
 import type {
   AdminMatchDeletionLog,
   AdminMatchEditLog,
@@ -883,6 +884,14 @@ export class MatchRepository {
       throw new MatchRepositoryError("세션을 찾을 수 없습니다.", 404);
     }
     this.notifySessionsChanged([sessionId]);
+  }
+
+  /** 평점 반영 뒤 정한 특수 매치 결과를 저장한다 */
+  async updateSpecialMatch(
+    matchId: string,
+    specialMatch: SpecialMatch | null,
+  ): Promise<void> {
+    await db.matches.updateSpecialMatch(matchId, specialMatch);
   }
 
   /**
