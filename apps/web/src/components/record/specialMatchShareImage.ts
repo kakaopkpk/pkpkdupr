@@ -5,10 +5,12 @@ import {
   getSpecialMatchShareDateLabel,
   getSpecialMatchShareFileName,
   getSpecialMatchShareTitle,
+  STREAK_END_LABEL,
   type SpecialMatchCaptionPart,
   type SpecialMatchSharePlayer,
   type SpecialMatchShareRankRow,
   type SpecialMatchShareTarget,
+  VS_LABEL,
 } from "@/lib/specialMatchShare";
 import {
   drawShareAvatar,
@@ -46,11 +48,10 @@ const TITLE_LINE = 37;
 const TITLE_CARD_GAP = 18;
 const CARD_CAPTION_GAP = 16;
 const CAPTION_SIZE = 15;
+const CAPTION_WEIGHT = 700;
 const CAPTION_LINE = 22;
 const MIN_CAPTION_SIZE = 12;
 const MIN_CONTENT_TOP = 36;
-const STREAK_END_LABEL = "연승 끝";
-const VS_LABEL = "VS";
 
 const COLOR_VARS = {
   ink: "--color-pk-ink",
@@ -91,6 +92,14 @@ const drawAvatar = (
   colors: Colors,
   gray = false,
 ) => drawShareAvatar(ctx, avatars, player, { cx, cy, size, ink: colors.ink, gray });
+
+/** #rrggbb 토큰 색에 알파만 입힌다. 그 밖의 표기는 그대로 둔다 */
+const withAlpha = (color: string, alpha: number) => {
+  const hex = /^#([0-9a-f]{6})$/i.exec(color.trim())?.[1];
+  if (!hex) return color;
+  const value = Number.parseInt(hex, 16);
+  return `rgba(${(value >> 16) & 255}, ${(value >> 8) & 255}, ${value & 255}, ${alpha})`;
+};
 
 /** 캔버스 그림자는 변환 배율을 받지 않아 3배 캔버스에서는 값에 배율을 곱한다 */
 const setShadow = (
@@ -166,7 +175,7 @@ const drawStamp = (
   colors: Colors,
 ) => {
   ctx.save();
-  setShadow(ctx, "rgba(35, 70, 168, 0.35)", 24, 10);
+  setShadow(ctx, withAlpha(colors.primary, 0.35), 24, 10);
   fillCircle(ctx, cx, cy, size / 2 + ring, colors.white);
   ctx.restore();
 
@@ -225,7 +234,7 @@ const challengeCard = (
   ) => {
     if (isWinner) {
       ctx.save();
-      setShadow(ctx, "rgba(15, 23, 38, 0.12)", 16, 6);
+      setShadow(ctx, withAlpha(colors.ink, 0.12), 16, 6);
       fillRoundRect(ctx, rowX, y, rowWidth, rowHeight, 12, colors.primarySoft);
       ctx.restore();
     }
@@ -354,7 +363,7 @@ const kingWinCard = (
       // 이긴 쪽: 아바타 밖 7px에 3.5px 앰버 테두리와 빛
       drawAvatar(ctx, avatars, target.winner, winCx, avatarCy, avatarSize, colors);
       ctx.save();
-      setShadow(ctx, "rgba(255, 182, 39, 0.6)", 16);
+      setShadow(ctx, withAlpha(colors.amber, 0.6), 16);
       ctx.strokeStyle = colors.amber;
       ctx.lineWidth = 3.5;
       ctx.beginPath();
@@ -423,7 +432,7 @@ const getCardLayout = (target: SpecialMatchShareTarget, colors: Colors) => {
   }
 };
 
-/** 문구: 15 굵게 흰 글자, 강조 조각만 색. 한 줄에 안 들어가면 12까지 글자를 줄이고, 그래도 넘치면 아이디를 말줄임한다 */
+/** 문구: 15 굵게(700) 흰 글자, 강조 조각만 색(굵기는 같다). 한 줄에 안 들어가면 12까지 글자를 줄이고, 그래도 넘치면 아이디를 말줄임한다 */
 const drawCaption = (
   ctx: CanvasRenderingContext2D,
   parts: SpecialMatchCaptionPart[],
@@ -434,14 +443,12 @@ const drawCaption = (
   setLetterSpacing(ctx, "0px");
   ctx.textAlign = "left";
   ctx.textBaseline = "middle";
-  const partFont = (part: SpecialMatchCaptionPart, size: number) =>
-    shareFont(part.highlight ? 800 : 700, size);
   const sum = (values: number[]) => values.reduce((total, value) => total + value, 0);
   const texts = parts.map((part) => part.text);
   const measure = (size: number) =>
-    parts.map((part, index) => {
-      ctx.font = partFont(part, size);
-      return ctx.measureText(texts[index]).width;
+    texts.map((text) => {
+      ctx.font = shareFont(CAPTION_WEIGHT, size);
+      return ctx.measureText(text).width;
     });
   let size = CAPTION_SIZE;
   let widths = measure(size);
@@ -452,13 +459,13 @@ const drawCaption = (
   const overflow = sum(widths) - CARD_WIDTH;
   const fitIndex = parts.findIndex((part) => part.fit);
   if (overflow > 0 && fitIndex >= 0) {
-    ctx.font = partFont(parts[fitIndex], size);
+    ctx.font = shareFont(CAPTION_WEIGHT, size);
     texts[fitIndex] = fitLine(ctx, texts[fitIndex], widths[fitIndex] - overflow);
     widths[fitIndex] = ctx.measureText(texts[fitIndex]).width;
   }
   let x = (SHARE_WIDTH - sum(widths)) / 2;
   parts.forEach((part, index) => {
-    ctx.font = partFont(part, size);
+    ctx.font = shareFont(CAPTION_WEIGHT, size);
     ctx.fillStyle =
       part.highlight === "up" ? colors.upOnDeep : part.highlight === "amber" ? colors.amber : colors.white;
     ctx.fillText(texts[index], x, cy);
