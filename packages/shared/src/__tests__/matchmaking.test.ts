@@ -528,7 +528,7 @@ describe("recommendDoublesMatches 특수 유형 가산점", () => {
   });
 
   it("같은 대진에 연승 저지 코트와 최강자전·라이벌전 코트가 함께 있으면 가산점 코트가 표시된다", () => {
-    // 연승 회원 p01·p05(최강자전은 둘이 맞붙을 때)·p09 등 여러 코트가 겹치는 대진을 모두 훑는다
+    // p01·p02(5연승)·p07(6연승)을 연승 회원으로 두고, 연승 저지 코트와 최강자전·라이벌전 코트가 함께 나오는 대진을 모두 훑는다
     const participants = players(12);
     const specialPlayers = toSpecialPlayers(participants, {
       p01: 5,

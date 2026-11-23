@@ -539,6 +539,7 @@ export const recommendDoublesMatches = (
         specialCourt = { court, match, bonus };
       }
     } else if (!specialCourt && match.kind === "streak_stopper") {
+      // 가산점 0인 유형 중에서는 연승 저지만 보이고, 뒤에 가산점 코트가 나오면 위 분기가 덮어쓴다
       specialCourt = { court, match, bonus };
     }
   }
