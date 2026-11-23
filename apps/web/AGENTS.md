@@ -98,7 +98,9 @@
       - 끝난 세션 머리 카드는 `mine`을 넘기지 않는다(내 기록 띠·줄 없음). 내 기록은 `LastSessionMeCard` 하나만 보인다.
     - `record/`: 경기 기록 시트. 완료 단계는 이 경기로 참가자 전원이 받은 업적을 띠(`match/MatchAchievementRow`)로 보이고, 그중 내 새 업적만 화면 전체 축하 연출 `AchievementCelebration`으로 띄우고 닫으면 확인 처리
       - 완료 단계 한 판 더 버튼은 내가 진 팀이면 "같은 멤버로 리벤지", 그 밖(경기하지 않은 기록자 포함)은 "같은 멤버로 한 판 더"다. 어느 쪽이든 요청은 같다.
-      - 축하 연출과 내 받은 업적 상세 시트의 공유는 `hooks/useAchievementShare`가 열 때 공유 이미지(`profile/achievementShareImage`, canvas 2D)를 미리 만들어 두고, 누르면 바로 기기 공유 시트(못 하면 내려받기, `lib/achievementShare`)를 연다. iOS Safari는 사용자 동작 직후에만 공유 시트가 열려 누른 뒤에 만들지 않는다.
+      - 축하 연출과 내 받은 업적 상세 시트의 공유는 `hooks/useAchievementShare`가 열 때 공유 이미지(`profile/achievementShareImage`, canvas 2D)를 미리 만들어 두고, 누르면 바로 기기 공유 시트(못 하면 내려받기, 문구는 `lib/achievementShare`)를 연다. iOS Safari는 사용자 동작 직후에만 공유 시트가 열려 누른 뒤에 만들지 않는다.
+      - 특수 매치 큰 연출(도전 성공·연승 저지·최강자전 승리)의 "이미지로 공유"는 `hooks/useSpecialMatchShare`(이미지 `record/specialMatchShareImage`, 문구·파일 이름 `lib/specialMatchShare`)를 부른다.
+      - 두 공유 이미지의 틀(어두운 4:5 캔버스·빛줄기·후광·아래 줄)은 `lib/shareImageCanvas`, 미리 만들어 두는 훅은 `hooks/usePreparedShareImage`, 공유·내려받기는 `lib/shareImage`가 같이 맡는다.
     - `session/`: 세션 만들기(일정 탭과 같은 `MonthCalendar`로 고르는 날짜, `minDateKey`로 지난 날·오늘이 든 달 앞은 막음, 표시는 `schedule/useScheduleMonthMarks`·시작·종료 시각 칩 `SessionSchedulePicker`, 오늘 이후 어느 날이든)·참여자 시트 `ParticipantsSheet`(열면 참여자 보기, 오른쪽 위 "수정"으로 같은 시트에서 전체 회원 체크·게스트 추가 수정 모드, 완료·취소·뒤로가기는 보기로 돌아감)
     - `settings/`: 설정·비밀번호 변경·상태메시지 편집·프로필 사진 조정 `AvatarCropScreen`
       - 고른 사진을 끌어 옮기고 핀치로 1~4배, 두 번 탭 2배↔1배, 원 안을 512px JPEG로 잘라 저장. 좌표 계산은 `utils/avatarCrop.ts`

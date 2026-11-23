@@ -1,3 +1,5 @@
+import type { MatchTopLevelType } from "@pkpkdupr/shared/match";
+
 const KST_TIME_ZONE = "Asia/Seoul";
 
 export const MINUTE_MS = 60_000;
@@ -105,3 +107,9 @@ export const formatAchievementPoints = (value: number) =>
 /** 업적 하나의 점수 문구. 0점이면 "점수 없음" */
 export const formatAchievementPointsLabel = (points: number) =>
   points > 0 ? `${points}점` : "점수 없음";
+
+/** 종목 이름("복식"/"단식") */
+export const MATCH_CATEGORY_LABELS = {
+  doubles: "복식",
+  singles: "단식",
+} as const satisfies Record<MatchTopLevelType, string>;
