@@ -1114,7 +1114,7 @@ describe("PUT /api/matches/:matchId", () => {
       expect(response.body.specialMatchCelebration).toBeNull();
     });
 
-    it("완료된 특수 매치를 고쳐도 승패가 그대로면 결과를 다시 정하지 않는다", async () => {
+    it("완료된 특수 매치를 고쳐 다시 정한 결과가 그대로면 저장하지 않는다", async () => {
       existing = buildExistingMatch({
         scores: [{ scoreA: 5, scoreB: 11 }],
         specialMatch: { ...streakStopper!, outcome: "streak_stopped" },
@@ -1126,6 +1126,104 @@ describe("PUT /api/matches/:matchId", () => {
       expect(updateSpecialMatch).not.toHaveBeenCalled();
       expect(response.body.specialMatch.outcome).toBe("streak_stopped");
       expect(response.body.specialMatchCelebration).toBeNull();
+    });
+
+    describe("도전 매치", () => {
+      const challengeMatch: Match["specialMatch"] = {
+        kind: "challenge",
+        defendingTeamIndex: 1,
+        protagonistIds: [requester.id, opponentM.id],
+        challengePairs: [{ attackerId: requester.id, defenderId: opponentM.id }],
+        outcome: null,
+      };
+      // 요청자 팀이 이기는 수정 점수(승패는 기존 11:5와 같다)
+      const sameWinnerBody = { ...validBody, scores: [{ scoreA: 11, scoreB: 7 }] };
+
+      // 이 경기 반영 전 순위는 상대(3.52)가 요청자(3.48)보다 높고, 반영 직후 평점은 인자로 정한다
+      const mockRankingSource = (afterRequester: number, afterOpponent: number) => {
+        const completedAt = existing.completedAt ?? new Date();
+        const before = {
+          [requester.id]: 3.48,
+          [partner.id]: 3.2,
+          [opponentM.id]: 3.52,
+          [opponentF.id]: 3.8,
+        };
+        const after = {
+          ...before,
+          [requester.id]: afterRequester,
+          [opponentM.id]: afterOpponent,
+        };
+        vi.spyOn(AuthService.prototype, "getAllPlayers").mockResolvedValue(
+          Object.entries(after).map(([id, doubles]) => ({
+            ...buildPlayer(id, "M"),
+            duprRating: { singles: null, doubles },
+          })) as Player[],
+        );
+        vi.spyOn(
+          MatchRepository.prototype,
+          "getAllRatingChangeLogs",
+        ).mockResolvedValue(
+          Object.keys(before).map((id) => ({
+            id: `log-${id}`,
+            playerId: id,
+            source: "match_completed",
+            sourceLogId: `match-completed-${existing.id}-${completedAt.getTime()}`,
+            previousRating: { singles: 3, doubles: before[id]! },
+            nextRating: { singles: 3, doubles: after[id]! },
+            delta: { singles: 0, doubles: after[id]! - before[id]! },
+            createdAt: completedAt,
+          })),
+        );
+        findCompletedMatchOutcomes.mockResolvedValue([
+          {
+            ratingExcluded: false,
+            id: existing.id,
+            type: "mixed-doubles",
+            sessionId: null,
+            matchStartsAt: completedAt,
+            completedAt,
+            teamPlayerIds: [
+              [requester.id, partner.id],
+              [opponentM.id, opponentF.id],
+            ],
+            scores: [{ scoreA: 11, scoreB: 7 }],
+          },
+        ]);
+      };
+
+      it("승패가 같은 점수 수정으로 순위가 달라지면 결과를 다시 정하지만 연출은 하지 않는다", async () => {
+        mockRankingSource(3.5, 3.51);
+        existing = buildExistingMatch({
+          specialMatch: { ...challengeMatch!, outcome: "challenge_success" },
+        });
+
+        const response = await putMatch(sameWinnerBody);
+
+        expect(response.status).toBe(200);
+        expect(updateSpecialMatch).toHaveBeenCalledWith(existing.id, {
+          ...challengeMatch,
+          outcome: "defense_success",
+        });
+        expect(response.body.specialMatch.outcome).toBe("defense_success");
+        expect(response.body.specialMatchCelebration).toBeNull();
+      });
+
+      it("결과가 null로 남은 완료 경기는 승패가 같아도 수정 때 결과를 채우고 연출을 싣는다", async () => {
+        mockRankingSource(3.56, 3.44);
+        existing = buildExistingMatch({ specialMatch: challengeMatch });
+
+        const response = await putMatch(sameWinnerBody);
+
+        expect(response.status).toBe(200);
+        expect(updateSpecialMatch).toHaveBeenCalledWith(existing.id, {
+          ...challengeMatch,
+          outcome: "challenge_success",
+        });
+        expect(response.body.specialMatch.outcome).toBe("challenge_success");
+        expect(response.body.specialMatchCelebration).toMatchObject({
+          kind: "challenge",
+        });
+      });
     });
 
     it("참가자가 바뀌면 특수 매치를 지운다", async () => {

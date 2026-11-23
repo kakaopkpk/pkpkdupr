@@ -138,6 +138,9 @@ pnpm lint
   - 도전 매치: 이긴 팀에 공격자가 있는 도전 쌍 중 하나라도 반영 직후 그 경기 종류 랭킹(`rankPlayersAt`)에서 공격자 순위가 방어자보다 높아졌으면 `challenge_success`, 아니면 `defense_success`.
   - 연승 저지: 연승 회원 팀이 지면 `streak_stopped`, 이기면 `streak_defended`. 최강자전: `champions_won`.
   - 리벤지: 지키는 쪽이 아닌 팀이 이기면 `revenge_success`, 지면 `revenge_defended`.
+- 끝난 특수 매치를 고치면(회원·관리자 수정) 승패가 같아도 평점 재계산 뒤 결과를 다시 정하고, 결과가 null로 남은 경기도 이때 채운다. 판정 규칙·순위 기준은 처음 판정과 같다.
+  - 참가자(팀별 선수 구성)가 바뀌면 `specialMatch`를 지운다.
+  - 큰 연출은 결과가 처음 정해질 때만 만들고, 다시 정한 결과로는 만들지 않는다.
 - 큰 연출 데이터(`SpecialMatchCelebration`)의 순위는 그 경기 종류 랭킹의 이 경기 반영 전·직후 순위, 연승 수는 이 경기 직전까지 센 랭킹 연승이다(`apps/api/src/services/SpecialMatchService.ts`).
 
 ### 진행 중 경기

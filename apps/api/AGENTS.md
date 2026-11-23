@@ -46,8 +46,9 @@
   - 대진 예정 경기(`scheduled`)에 점수를 넣으면 진행 중 경기 첫 점수와 같은 규칙으로 completed가 되고, 수정 기록(`match_edit_logs`)은 남기지 않는다.
   - 대진 예정 경기에 바로 점수를 넣는 것은 관리자만 한다. 회원이면 409, `POST /api/matches/:matchId/start`로 시작한 뒤 넣는다.
   - 이미 completed인 경기를 고치면 같은 트랜잭션에서 수정 전·후 스냅샷을 `match_edit_logs`에 남긴다(관리자 수정 포함). 진행 중 경기의 첫 점수 입력과 종류·이름·장소·팀·점수·세션·경기 시각이 그대로인 저장은 남기지 않는다.
-  - 특수 매치(`specialMatch`)는 처음 completed가 되거나(첫 점수·관리자 정정) 수정으로 승패가 바뀌면 평점 반영·재계산 뒤 `SpecialMatchService.settleSpecialMatch`로 `outcome`을 정해 저장한다(`updated_at`은 그대로). 규칙은 루트 `AGENTS.md` "특수 매치".
+  - 특수 매치(`specialMatch`)는 처음 completed가 되거나(첫 점수·관리자 정정) completed 경기를 고칠 때마다(승패가 같아도) 평점 반영·재계산 뒤 `SpecialMatchService.settleSpecialMatch`로 `outcome`을 정해 저장한다(`updated_at`은 그대로). 규칙은 루트 `AGENTS.md` "특수 매치".
     - 평점 잠금 밖에서 반영 직후 랭킹을 다시 읽어 정한다. 판정이 실패해도 응답은 200이고 결과는 그대로 둔다.
+    - 결과가 null로 남은 completed 경기도 다음 수정 때 채운다(승패가 안 갈리면 그대로 null). 바뀐 결과는 저장하되 큰 연출은 결과가 처음 정해질 때만 싣는다.
     - 팀별 선수 구성이 바뀌는 저장은 `specialMatch`를 null로 지운다(팀 안 순서만 바뀌면 그대로).
   - 응답 `RecordedMatchResponse.specialMatchCelebration`은 결과가 이번 저장으로 처음 `challenge_success`·`streak_stopped`·`champions_won`으로 정해졌을 때만 큰 연출 데이터(`SpecialMatchCelebration`)이고, 그 밖은 null이다. 기록한 회원이 이긴 팀인지와 상관없이 싣는다.
 - 삭제 `DELETE /api/matches/:matchId`
