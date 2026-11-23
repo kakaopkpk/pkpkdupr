@@ -1,5 +1,6 @@
 import type { ManagedMatchSession, Match, Team } from "@pkpkdupr/shared/match";
 import type { MatchSessionRecommendationResponse } from "@pkpkdupr/shared/matchmaking";
+import type { CompletedMatchOutcome } from "@pkpkdupr/db";
 import type { Player } from "@pkpkdupr/shared/player";
 import request from "supertest";
 import {
@@ -70,6 +71,25 @@ const completedMatch = {
   ],
 } as Match;
 
+/** winnerId가 이긴 완료 복식 경기 count개(최근 경기가 뒤). 랭킹 연승 원천이다 */
+const winsFor = (winnerId: string, loserIds: string[], count: number) =>
+  Array.from({ length: count }, (_, index): CompletedMatchOutcome => {
+    const at = new Date(thursdayEvening.getTime() - (count - index) * 3_600_000);
+    return {
+      id: `Mwin-${winnerId}-${index}`,
+      type: "men-doubles",
+      sessionId: null,
+      matchStartsAt: at,
+      completedAt: at,
+      teamPlayerIds: [
+        [winnerId, `Pghost-${index}`],
+        loserIds,
+      ],
+      scores: [{ scoreA: 11, scoreB: 5 }],
+      ratingExcluded: false,
+    };
+  });
+
 const collectIds = (body: MatchSessionRecommendationResponse) => ({
   courtIds: body.courts.flatMap((court) =>
     court.teams.flatMap((team) => team.players.map((player) => player.id)),
@@ -82,6 +102,9 @@ describe("GET /api/match-sessions/:sessionId/recommendations", () => {
   let cleanupExpired: MockInstance<MatchRepository["cleanupExpired"]>;
   let findInProgressPlayerIds: MockInstance<
     MatchRepository["findInProgressPlayerIds"]
+  >;
+  let findCompletedMatchOutcomes: MockInstance<
+    MatchRepository["findCompletedMatchOutcomes"]
   >;
 
   const recommend = (sessionId: string, query = "") =>
@@ -123,6 +146,19 @@ describe("GET /api/match-sessions/:sessionId/recommendations", () => {
     vi.spyOn(MatchRepository.prototype, "findBySession").mockResolvedValue([
       completedMatch,
     ]);
+    // 특수 유형 판정·주인공 정보는 랭킹 원천(회원·평점 로그·완료 경기)으로 계산한다
+    vi.spyOn(AuthService.prototype, "getAllPlayers").mockResolvedValue(players);
+    vi.spyOn(
+      MatchRepository.prototype,
+      "getAllRatingChangeLogs",
+    ).mockResolvedValue([]);
+    findCompletedMatchOutcomes = vi
+      .spyOn(MatchRepository.prototype, "findCompletedMatchOutcomes")
+      .mockResolvedValue([]);
+    vi.spyOn(
+      MatchRepository.prototype,
+      "findSessionsWithParticipantIds",
+    ).mockResolvedValue([]);
   });
 
   afterEach(() => {
@@ -152,7 +188,65 @@ describe("GET /api/match-sessions/:sessionId/recommendations", () => {
       doublesRating: expect.toSatisfy(
         (value: unknown) => value === null || typeof value === "number",
       ),
+      doublesRank: expect.toSatisfy(
+        (value: unknown) => value === null || typeof value === "number",
+      ),
+      winStreak: 0,
     });
+    expect(body.courts.every((court) => court.specialMatch === null)).toBe(
+      true,
+    );
+  });
+
+  it("선수마다 복식 랭킹 순위와 지금 연승 수를 주고, NR은 순위가 null이다", async () => {
+    findCompletedMatchOutcomes.mockResolvedValue(
+      winsFor(playerIds[2], ["Pghost-a", "Pghost-b"], 3),
+    );
+
+    const response = await recommend("Stoday00", "?courts=4");
+
+    expect(response.status).toBe(200);
+    const body = response.body as MatchSessionRecommendationResponse;
+    const everyone = [
+      ...body.courts.flatMap((court) =>
+        court.teams.flatMap((team) => team.players),
+      ),
+      ...body.restingPlayers,
+    ];
+    const byId = new Map(everyone.map((player) => [player.id, player]));
+    // 평점이 높은 player8이 1위, NR인 player9는 랭킹에 없다
+    expect(byId.get(playerIds[8])?.doublesRank).toBe(1);
+    expect(byId.get(playerIds[0])?.doublesRank).toBe(9);
+    expect(byId.get(playerIds[9])?.doublesRank).toBeNull();
+    expect(byId.get(playerIds[2])?.winStreak).toBe(3);
+    expect(byId.get(playerIds[3])?.winStreak).toBe(0);
+  });
+
+  it("연승 회원이 있는 코트 하나만 특수 유형으로 판정해 준다", async () => {
+    // 두 코트 모두에 연승 회원이 있을 수 있게 두 사람을 5연승으로 만든다
+    findCompletedMatchOutcomes.mockResolvedValue([
+      ...winsFor(playerIds[1], ["Pghost-a", "Pghost-b"], 5),
+      ...winsFor(playerIds[6], ["Pghost-c", "Pghost-d"], 6),
+    ]);
+    sessions = [makeSession({ participantIds: playerIds.slice(0, 8) })];
+
+    const response = await recommend("Stoday00", "?courts=2");
+
+    expect(response.status).toBe(200);
+    const body = response.body as MatchSessionRecommendationResponse;
+    const specialCourts = body.courts.filter(
+      (court) => court.specialMatch !== null,
+    );
+    expect(specialCourts).toHaveLength(1);
+    const [court] = specialCourts;
+    expect(["streak_stopper", "champions"]).toContain(court.specialMatch?.kind);
+    expect(court.specialMatch?.outcome).toBeNull();
+    const courtIds = court.teams.flatMap((team) =>
+      team.players.map((player) => player.id),
+    );
+    expect(
+      courtIds.some((id) => id === playerIds[1] || id === playerIds[6]),
+    ).toBe(true);
   });
 
   it("팀 평균은 NR 선수를 기본 평점 3.0으로 친다", async () => {

@@ -336,7 +336,7 @@ describe("recommendDoublesMatches 특수 유형 가산점", () => {
 
   /** 가산점 없이 계산한 대진별 감점 */
   const basePenaltyByMatchup = (
-    input: RecommendDoublesMatchesInput,
+    input: Partial<RecommendDoublesMatchesInput>,
   ): Map<string, number> => {
     const first = recommend({ ...input, specialPlayers: undefined });
     const penalties = new Map<string, number>();

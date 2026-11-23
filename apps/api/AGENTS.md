@@ -97,6 +97,10 @@
   - rank(0부터, 기본 0)번째 후보를 돌려주고 후보 수를 넘으면 나머지로 순환한다. 0 이상 정수가 아니면 400. 응답 `rank`·`candidateCount`.
   - 진행 중 경기 선수 제외.
   - 팀 나누기는 NR을 참여자 평점 중앙값으로 대체하고, 응답 팀 `averageRating`은 NR(게스트 포함)을 3.0으로 친 표시용 평균.
+  - 대진마다 코트를 복식 랭킹·연승으로 `judgeRecommendedSpecialMatch` 판정해, 가산점(`SPECIAL_MATCH_RECOMMENDATION_BONUS`, 연승 저지·최강자전 2, 도전 매치 1.5)이 가장 큰 코트 하나의 가산점만 대진 감점에서 뺀다. 리벤지는 만들지 않는다.
+  - 후보 줄 세우기·여유폭은 가산점을 뺀 감점으로 한다.
+  - 응답 코트 `specialMatch`는 그 가산점 코트 하나만 판정 결과(`outcome` null)이고 나머지 코트는 null이다.
+  - 응답 선수(`RecommendationPlayer`)에 복식 랭킹 순위 `doublesRank`(랭킹에 없으면 null)와 지금 연승 수 `winStreak`(랭킹과 같은 규칙).
 - 참여자 한 명씩 추가 `POST /api/match-sessions/:sessionId/participants`·삭제 `DELETE /api/match-sessions/:sessionId/participants/:playerId`
   - 활성 회원 누구나·대리 가능, 오늘·미래 세션만(지난 세션 403), 멱등.
 - 게스트 추가 `POST /api/match-sessions/:sessionId/guests` `{ username }`

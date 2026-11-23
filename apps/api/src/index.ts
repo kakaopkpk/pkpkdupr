@@ -76,6 +76,7 @@ import {
   judgeRecommendedSpecialMatch,
   judgeRematchSpecialMatch,
   type SpecialMatch,
+  type SpecialMatchCandidatePlayer,
 } from "@pkpkdupr/shared/specialMatch";
 import {
   isTournamentPlace,
@@ -1810,11 +1811,14 @@ const getRecommendationDoublesRating = (member: MatchSessionMember) =>
 
 const toRecommendationPlayer = (
   member: MatchSessionMember,
+  special: SpecialMatchCandidatePlayer | undefined,
 ): RecommendationPlayer => ({
   id: member.id,
   username: member.username,
   avatarUrl: member.avatarUrl,
   doublesRating: getRecommendationDoublesRating(member),
+  doublesRank: special?.rank ?? null,
+  winStreak: special?.winStreak ?? 0,
 });
 
 app.get("/api/match-sessions/:sessionId/recommendations", async (req, res) => {
@@ -1840,10 +1844,17 @@ app.get("/api/match-sessions/:sessionId/recommendations", async (req, res) => {
       );
     }
 
-    const [busyPlayerIds, sessionMatches] = await Promise.all([
+    const [busyPlayerIds, sessionMatches, rankingSource] = await Promise.all([
       matchRepository.findInProgressPlayerIds(now),
       matchRepository.findBySession(sessionId),
+      loadRankingSource(),
     ]);
+    // 추천은 복식만이라 특수 유형 판정·주인공 순위는 복식 랭킹 기준이다
+    const specialPlayers = buildSpecialMatchCandidatePlayers(
+      rankingSource.context,
+      "doubles",
+      session.participants,
+    );
     const completedMatches: MatchmakingPlayedMatch[] = sessionMatches
       .filter((match) => match.status === "completed")
       .map((match) => ({
@@ -1862,13 +1873,14 @@ app.get("/api/match-sessions/:sessionId/recommendations", async (req, res) => {
       courts,
       seed: getMatchmakingSeed(sessionId, completedMatches.length),
       rank,
+      specialPlayers,
     });
 
     // 알고리즘은 participants 안의 id만 돌려주므로 조회가 항상 성공한다.
     const playersById = new Map(
       session.participants.map((member) => [
         member.id,
-        toRecommendationPlayer(member),
+        toRecommendationPlayer(member, specialPlayers.get(member.id)),
       ]),
     );
     const playerOf = (id: string) => playersById.get(id)!;
@@ -1901,6 +1913,7 @@ app.get("/api/match-sessions/:sessionId/recommendations", async (req, res) => {
         ],
         repeatedPartnerPairs: court.repeatedPartnerPairs,
         repeatedOpponentPairs: court.repeatedOpponentPairs,
+        specialMatch: court.specialMatch,
       })),
       restingPlayers: plan.restingPlayerIds.map(playerOf),
     };
