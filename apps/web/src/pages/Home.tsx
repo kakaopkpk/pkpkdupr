@@ -45,6 +45,7 @@ import { useTabNavigation } from "@/context/TabNavigationContext";
 import { useMinuteClock } from "@/hooks/useMinuteClock";
 import {
   type MatchSessionDetailInfo,
+  buildRecommendedMatchRequest,
   startSessionMatch,
 } from "@/lib/matchSessions";
 
@@ -239,18 +240,7 @@ const Home: React.FC = () => {
     const key = getCourtKey(court);
     const sessionId = liveSession.id;
     const run = async () => {
-      await startSessionMatch(sessionId, {
-        teams: [
-          {
-            name: "Team A",
-            playerIds: court.teams[0].players.map((member) => member.id),
-          },
-          {
-            name: "Team B",
-            playerIds: court.teams[1].players.map((member) => member.id),
-          },
-        ],
-      });
+      await startSessionMatch(sessionId, buildRecommendedMatchRequest(court));
       invalidateData(["matches"]);
     };
 

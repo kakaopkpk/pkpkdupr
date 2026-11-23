@@ -1,4 +1,7 @@
-import type { MatchSessionRecommendationResponse } from "@pkpkdupr/shared/matchmaking";
+import type {
+  MatchSessionRecommendationResponse,
+  RecommendedCourt,
+} from "@pkpkdupr/shared/matchmaking";
 import type { PlayerInfo } from "@/hooks/usePlayers";
 import type {
   AddMatchSessionGuestRequest,
@@ -186,6 +189,22 @@ export const startSessionMatch = async (
     jsonInit("POST", body),
   );
 };
+
+/**
+ * 추천 코트로 경기 시작 요청을 만든다. 팀 순서는 추천 응답 그대로이고(카드의 좌우 배치와 무관),
+ * 특수 유형 카드면 그 유형을 recommendedSpecialKind로 넘긴다(일반 카드면 생략)
+ */
+export const buildRecommendedMatchRequest = (
+  court: RecommendedCourt,
+): StartSessionMatchRequest => ({
+  teams: [
+    { name: "Team A", playerIds: court.teams[0].players.map((player) => player.id) },
+    { name: "Team B", playerIds: court.teams[1].players.map((player) => player.id) },
+  ],
+  ...(court.specialMatch
+    ? { recommendedSpecialKind: court.specialMatch.kind }
+    : {}),
+});
 
 const SESSION_KIND_SHORT_LABELS: Record<MatchSessionDetailInfo["kind"], string> = {
   regular: "정기",
