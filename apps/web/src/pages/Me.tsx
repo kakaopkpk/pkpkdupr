@@ -3,13 +3,11 @@ import type { MatchTopLevelType } from "@pkpkdupr/shared/match";
 import { IoSettingsOutline } from "react-icons/io5";
 import { cx } from "@/components/ui/cx";
 import { buttonPressClassName } from "@/components/ui/Button";
-import ListPushScreen from "@/components/ListPushScreen";
 import AchievementsScreen from "@/components/profile/AchievementsScreen";
 import AchievementsSection from "@/components/profile/AchievementsSection";
-import PartnerChemistryCard from "@/components/profile/PartnerChemistryCard";
+import PartnerRivalSections from "@/components/profile/PartnerRivalSections";
 import PlayerMatchesDrawer from "@/components/profile/PlayerMatchesDrawer";
 import ProfileHeader from "@/components/profile/ProfileHeader";
-import RivalCard from "@/components/profile/RivalCard";
 import {
   Last7DaysTile,
   ProfileBodySkeleton,
@@ -19,15 +17,12 @@ import {
   WinRateTile,
 } from "@/components/profile/ProfileSections";
 import { useProfileOverview } from "@/components/profile/useProfileOverview";
-import { PreviewSection } from "@/components/ui/Section";
 import { useAppNavigation } from "@/context/AppNavigationContext";
 import { useAuth } from "@/context/AuthContext";
 import { useTabNavigation } from "@/context/TabNavigationContext";
 
 const MATCH_HISTORY_DEPTH_ID = "me-match-history";
 const ACHIEVEMENTS_DEPTH_ID = "me-achievements";
-const PARTNERS_DEPTH_ID = "me-partners";
-const RIVALS_DEPTH_ID = "me-rivals";
 
 const Me: React.FC = () => {
   const { player, isAuthenticated, refreshMe } = useAuth();
@@ -39,8 +34,6 @@ const Me: React.FC = () => {
   const [category, setCategory] = useState<MatchTopLevelType>("doubles");
   const [isMatchHistoryRequested, setIsMatchHistoryRequested] = useState(false);
   const [isAchievementsRequested, setIsAchievementsRequested] = useState(false);
-  const [isPartnersRequested, setIsPartnersRequested] = useState(false);
-  const [isRivalsRequested, setIsRivalsRequested] = useState(false);
 
   useEffect(
     () =>
@@ -58,12 +51,8 @@ const Me: React.FC = () => {
     () => setIsAchievementsRequested(false),
     [],
   );
-  const closePartners = useCallback(() => setIsPartnersRequested(false), []);
-  const closeRivals = useCallback(() => setIsRivalsRequested(false), []);
 
   const username = player?.username ?? "";
-  const partners = overview?.summary.partners ?? [];
-  const rivals = overview?.summary.rivals ?? [];
   const achievements = overview?.summary.achievements ?? [];
 
   return (
@@ -105,24 +94,12 @@ const Me: React.FC = () => {
               <WinRateTile overview={overview} category={category} />
               <Last7DaysTile overview={overview} category={category} />
             </div>
-            {partners.length > 0 ? (
-              <PreviewSection
-                title="파트너 궁합"
-                items={partners}
-                renderPreview={(preview) => (
-                  <PartnerChemistryCard partners={preview} />
-                )}
-                onViewAll={() => setIsPartnersRequested(true)}
-              />
-            ) : null}
-            {rivals.length > 0 ? (
-              <PreviewSection
-                title="천적"
-                items={rivals}
-                renderPreview={(preview) => <RivalCard rivals={preview} />}
-                onViewAll={() => setIsRivalsRequested(true)}
-              />
-            ) : null}
+            <PartnerRivalSections
+              partners={overview.summary.partners}
+              rivals={overview.summary.rivals}
+              tabKey="me"
+              depthId="me"
+            />
             {playerId ? (
               <AchievementsSection
                 playerId={playerId}
@@ -155,24 +132,6 @@ const Me: React.FC = () => {
         depthId={MATCH_HISTORY_DEPTH_ID}
         onClose={closeMatchHistory}
       />
-      <ListPushScreen
-        isOpen={isPartnersRequested}
-        tabKey="me"
-        depthId={PARTNERS_DEPTH_ID}
-        title="파트너 궁합"
-        onClose={closePartners}
-      >
-        <PartnerChemistryCard partners={partners} ordered />
-      </ListPushScreen>
-      <ListPushScreen
-        isOpen={isRivalsRequested}
-        tabKey="me"
-        depthId={RIVALS_DEPTH_ID}
-        title="천적"
-        onClose={closeRivals}
-      >
-        <RivalCard rivals={rivals} ordered />
-      </ListPushScreen>
       <AchievementsScreen
         isOpen={isAchievementsRequested}
         tabKey="me"

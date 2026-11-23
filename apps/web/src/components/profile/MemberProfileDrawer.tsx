@@ -2,14 +2,12 @@ import React, { useCallback, useMemo, useState } from "react";
 import type { MatchTopLevelType } from "@pkpkdupr/shared/match";
 import { roundDuprRating } from "@pkpkdupr/shared/player";
 import type { HeadToHeadStat } from "@pkpkdupr/shared/profileStats";
-import ListPushScreen from "@/components/ListPushScreen";
 import PushScreen from "@/components/PushScreen";
 import AchievementsScreen from "@/components/profile/AchievementsScreen";
 import AchievementsSection from "@/components/profile/AchievementsSection";
-import PartnerChemistryCard from "@/components/profile/PartnerChemistryCard";
 import PlayerMatchesDrawer from "@/components/profile/PlayerMatchesDrawer";
+import PartnerRivalSections from "@/components/profile/PartnerRivalSections";
 import ProfileHeader from "@/components/profile/ProfileHeader";
-import RivalCard from "@/components/profile/RivalCard";
 import ProfileStatTile, {
   WinLossCount,
 } from "@/components/profile/ProfileStatTile";
@@ -29,7 +27,6 @@ import {
 } from "@/components/ui/CountUpNumber";
 import { cx } from "@/components/ui/cx";
 import { MoonIcon } from "@/components/ui/Icons";
-import { PreviewSection } from "@/components/ui/Section";
 import { useAuth } from "@/context/AuthContext";
 import {
   type TabKey,
@@ -123,8 +120,6 @@ export default function MemberProfileDrawer({
   const [category, setCategory] = useState<MatchTopLevelType>("doubles");
   const [isMatchHistoryRequested, setIsMatchHistoryRequested] = useState(false);
   const [isAchievementsRequested, setIsAchievementsRequested] = useState(false);
-  const [isPartnersRequested, setIsPartnersRequested] = useState(false);
-  const [isRivalsRequested, setIsRivalsRequested] = useState(false);
   // 데이터는 PushScreen 본문 밖에서 받으므로 보임은 PushScreen이 알려 준 값을 쓴다
   const [isScreenVisible, setIsScreenVisible] = useState(false);
   const { overview, hasError, loadErrorMessage, reload } = useProfileOverview(
@@ -148,8 +143,6 @@ export default function MemberProfileDrawer({
     () => setIsAchievementsRequested(false),
     [],
   );
-  const closePartners = useCallback(() => setIsPartnersRequested(false), []);
-  const closeRivals = useCallback(() => setIsRivalsRequested(false), []);
 
   const refreshProfile = useCallback(async () => {
     await Promise.all([reloadPlayers(), reload({ throwOnError: true })]);
@@ -175,8 +168,6 @@ export default function MemberProfileDrawer({
   const username = shownPlayer?.username ?? "";
 
   const headToHead = overview?.summary.headToHead?.[category] ?? null;
-  const partners = overview?.summary.partners ?? [];
-  const rivals = overview?.summary.rivals ?? [];
 
   return (
     <>
@@ -225,24 +216,14 @@ export default function MemberProfileDrawer({
                 <HeadToHeadTile stat={headToHead} />
                 <HeadToHeadRatingTile stat={headToHead} />
               </div>
-              {partners.length > 0 ? (
-                <PreviewSection
-                  title="파트너 궁합"
-                  items={partners}
-                  renderPreview={(preview) => (
-                    <PartnerChemistryCard partners={preview} />
-                  )}
-                  onViewAll={() => setIsPartnersRequested(true)}
-                />
-              ) : null}
-              {rivals.length > 0 ? (
-                <PreviewSection
-                  title="천적"
-                  items={rivals}
-                  renderPreview={(preview) => <RivalCard rivals={preview} />}
-                  onViewAll={() => setIsRivalsRequested(true)}
-                />
-              ) : null}
+              <PartnerRivalSections
+                partners={overview.summary.partners}
+                rivals={overview.summary.rivals}
+                tabKey={tabKey}
+                depthId={depthId}
+                titlePrefix={`${username} `}
+                isParentOpen={isRequested}
+              />
               <AchievementsSection
                 playerId={playerId}
                 progress={overview.summary.achievements}
@@ -275,24 +256,6 @@ export default function MemberProfileDrawer({
         depthId={`${depthId}:matches`}
         onClose={closeMatchHistory}
       />
-      <ListPushScreen
-        isOpen={isPartnersRequested && isRequested}
-        tabKey={tabKey}
-        depthId={`${depthId}:partners`}
-        title={`${username} 파트너 궁합`}
-        onClose={closePartners}
-      >
-        <PartnerChemistryCard partners={partners} ordered />
-      </ListPushScreen>
-      <ListPushScreen
-        isOpen={isRivalsRequested && isRequested}
-        tabKey={tabKey}
-        depthId={`${depthId}:rivals`}
-        title={`${username} 천적`}
-        onClose={closeRivals}
-      >
-        <RivalCard rivals={rivals} ordered />
-      </ListPushScreen>
       <AchievementsScreen
         isOpen={isAchievementsRequested && isRequested}
         tabKey={tabKey}
