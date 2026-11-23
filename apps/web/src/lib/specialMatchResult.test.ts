@@ -32,6 +32,12 @@ describe("getSpecialMatchResultName", () => {
       expect(name(defenseSuccess, teamBWins, "b1")).toEqual({ label: "라이벌전 승리", icon: "challenge", isWin: true });
       expect(name(defenseSuccess, teamBWins, "a1")).toEqual({ label: "라이벌전 패배", icon: "challenge", isWin: false });
     });
+
+    it("양쪽 다 공격(지키는 쪽 없음)이어도 이름은 승패를 따른다", () => {
+      const bothAttacking = { kind: "challenge", defendingTeamIndex: null, outcome: "challenge_success" } as const;
+      expect(name(bothAttacking, teamAWins, "a1")).toEqual({ label: "라이벌전 승리", icon: "challenge", isWin: true });
+      expect(name(bothAttacking, teamAWins, "b1")).toEqual({ label: "라이벌전 패배", icon: "challenge", isWin: false });
+    });
   });
 
   describe("연승 저지(팀 0 연승 회원 팀)", () => {
