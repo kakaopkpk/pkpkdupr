@@ -57,14 +57,21 @@ export const TEAM_AVATAR_OVERLAP = 6;
 /** 회원 id → 진행 중 세션 연승. 들어 있는 회원 아바타에 세션 연승 링(태그 없음)을 두른다 */
 export type SessionWinStreakByPlayer = ReadonlyMap<string, number>;
 
-/** 팀 아바타 쌍. 뒤 아바타는 TEAM_AVATAR_OVERLAP만큼 겹치고, 둘레의 2px 테로 구분한다 */
+/** 팀 아바타 쌍. 뒤 아바타는 overlap(기본 TEAM_AVATAR_OVERLAP)만큼 겹치고, 둘레의 2px 테로 구분한다 */
 export const TeamAvatars: React.FC<{
   players: readonly AvatarPlayer[];
   size: number;
   /** 테 색. 아바타가 놓인 바탕색과 맞춘다(기본 흰색) */
   ringColor?: string;
+  overlap?: number;
   sessionWinStreaks?: SessionWinStreakByPlayer;
-}> = ({ players, size, ringColor = "#ffffff", sessionWinStreaks }) => (
+}> = ({
+  players,
+  size,
+  ringColor = "#ffffff",
+  overlap = TEAM_AVATAR_OVERLAP,
+  sessionWinStreaks,
+}) => (
   <span aria-hidden="true" className="inline-flex shrink-0">
     {players.map((player, index) => (
       <span
@@ -72,7 +79,7 @@ export const TeamAvatars: React.FC<{
         className="inline-flex rounded-full"
         style={{
           boxShadow: `0 0 0 2px ${ringColor}`,
-          marginLeft: index > 0 ? -TEAM_AVATAR_OVERLAP : undefined,
+          marginLeft: index > 0 ? -overlap : undefined,
         }}
       >
         <SessionWinStreakFrame winStreak={sessionWinStreaks?.get(player.id)}>

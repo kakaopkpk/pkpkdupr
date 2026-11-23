@@ -11,6 +11,7 @@ import { WIN_STREAK_DISPLAY_MIN } from "@pkpkdupr/shared/streak";
 import { buttonPressClassName } from "@/components/ui/Button";
 import {
   PlayerAvatar,
+  TeamAvatars,
   type SessionWinStreakByPlayer,
 } from "@/components/ui/PlayerAvatar";
 import { SpecialMatchIcon } from "@/components/ui/SpecialMatchLabel";
@@ -109,23 +110,14 @@ const CellAvatars: React.FC<{
   const gapShadow = { boxShadow: `0 0 0 2px ${CELL_BACKGROUND[cell.tone]}` };
   if (!cell.protagonist) {
     return (
-      <span aria-hidden="true" className="mt-0.5 inline-flex shrink-0">
-        {cell.players.map((player, index) => (
-          <span
-            key={player.id}
-            className="inline-flex rounded-full"
-            style={{
-              ...gapShadow,
-              marginLeft: index === 0 ? undefined : -CELL_AVATAR_OVERLAP,
-            }}
-          >
-            <SessionAvatar
-              player={player}
-              size={PLAIN_AVATAR_SIZE}
-              sessionWinStreaks={sessionWinStreaks}
-            />
-          </span>
-        ))}
+      <span className="mt-0.5 inline-flex">
+        <TeamAvatars
+          players={cell.players}
+          size={PLAIN_AVATAR_SIZE}
+          ringColor={CELL_BACKGROUND[cell.tone]}
+          overlap={CELL_AVATAR_OVERLAP}
+          sessionWinStreaks={sessionWinStreaks}
+        />
       </span>
     );
   }
@@ -274,7 +266,7 @@ const RecommendationCard: React.FC<{
         </span>
         {/* 유형 알약은 아래 끝을 VS 원 중심에서 24px 위에 둔다 */}
         {kind ? (
-          <span className="pointer-events-none absolute top-[calc(50%-24px)] left-1/2 z-[2] inline-flex -translate-x-1/2 -translate-y-full items-center gap-1 rounded-full bg-white px-[9px] py-[3px] text-pk-12 font-extrabold whitespace-nowrap text-pk-primary shadow-[0_1px_4px_rgb(15_23_38/0.08)]">
+          <span className="pointer-events-none absolute top-[calc(50%-24px)] left-1/2 inline-flex -translate-x-1/2 -translate-y-full items-center gap-1 rounded-full bg-white px-[9px] py-[3px] text-pk-12 font-extrabold whitespace-nowrap text-pk-primary shadow-[0_1px_4px_rgb(15_23_38/0.08)]">
             <SpecialMatchIcon kind={kind} size={12} />
             {specialMatchKindLabels[kind]}
           </span>
