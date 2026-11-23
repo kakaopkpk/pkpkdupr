@@ -277,20 +277,10 @@ const canonicalKey = (arrangement: Arrangement, courtCount: number): string => {
   return courts.sort().join(" | ");
 };
 
-/** 추천 매칭에서 특수 유형 코트가 받는 가산점. 리벤지는 추천에서 만들지 않아 0이다 */
+/** 추천 매칭에서 특수 유형 코트가 받는 가산점 */
 export const getSpecialMatchRecommendationBonus = (
   kind: SpecialMatchKind,
-): number => {
-  switch (kind) {
-    case "streak_stopper":
-    case "champions":
-      return SPECIAL_MATCH_RECOMMENDATION_BONUS.streak;
-    case "challenge":
-      return SPECIAL_MATCH_RECOMMENDATION_BONUS.challenge;
-    case "revenge":
-      return 0;
-  }
-};
+): number => SPECIAL_MATCH_RECOMMENDATION_BONUS[kind];
 
 export const recommendDoublesMatches = (
   input: RecommendDoublesMatchesInput,
@@ -535,13 +525,21 @@ export const recommendDoublesMatches = (
   const rank = normalizeRank(input.rank) % candidateCount;
   const [, chosen] = ranked[rank];
 
-  // 가산점이 가장 큰 코트 하나만 특수 유형으로 보이고, 같으면 앞 코트다
+  // 특수 유형으로 보이는 코트는 하나다. 가산점이 가장 큰 코트(같으면 앞 코트), 가산점 코트가 없으면 앞 연승 저지 코트
   let specialCourt: { court: number; match: SpecialMatch; bonus: number } | null =
     null;
   for (let court = 0; court < courtCount; court += 1) {
     const match = judgeCourt(chosen.arrangement, court);
-    const bonus = match ? getSpecialMatchRecommendationBonus(match.kind) : 0;
-    if (match && bonus > 0 && (!specialCourt || bonus > specialCourt.bonus)) {
+    if (!match) {
+      continue;
+    }
+    const bonus = getSpecialMatchRecommendationBonus(match.kind);
+    if (bonus > 0) {
+      if (!specialCourt || bonus > specialCourt.bonus) {
+        specialCourt = { court, match, bonus };
+      }
+    } else if (!specialCourt && match.kind === "streak_stopper") {
+      // 가산점 0인 유형 중에서는 연승 저지만 보이고, 뒤에 가산점 코트가 나오면 위 분기가 덮어쓴다
       specialCourt = { court, match, bonus };
     }
   }

@@ -2,6 +2,7 @@ import { compareCountedMatches } from "@pkpkdupr/shared/achievements";
 import {
   getMatchTopLevelType,
   getWinningTeamIndex,
+  hasGuestPlayer,
   type Match,
   type MatchTopLevelType,
 } from "@pkpkdupr/shared/match";
@@ -24,7 +25,8 @@ import {
 
 /**
  * 랭킹 원천으로 특수 매치 판정 입력 선수를 만든다. category는 경기 종류 랭킹이다.
- * 랭킹에 없는 선수(게스트·평점 없음·비활성)는 rank·rating이 null이고, 연승은 랭킹 winStreak과 같은 규칙이다.
+ * 랭킹에 없는 선수(게스트·평점 없음·비활성)는 rank·rating이 null이고, 연승은 랭킹 winStreak과 같은 규칙이다
+ * (게스트가 낀 경기 포함). 게스트 본인의 연승은 보이지 않아 0이다.
  */
 export const buildSpecialMatchCandidatePlayers = (
   context: RankingContext,
@@ -48,7 +50,7 @@ export const buildSpecialMatchCandidatePlayers = (
           isGuest: player.isGuest,
           rank: ranked?.rank ?? null,
           rating: ranked?.rating ?? null,
-          winStreak: winStreaks.get(player.id) ?? 0,
+          winStreak: player.isGuest ? 0 : (winStreaks.get(player.id) ?? 0),
         },
       ];
     }),
@@ -79,15 +81,15 @@ type SpecialMatchEvaluation =
       outcome: SpecialMatchOutcome;
       winnerIndex: 0 | 1;
       loserIndex: 0 | 1;
-      /** 도전 성공 쌍(대표 쌍 먼저). 도전 매치가 아니면 빈 배열이다 */
+      /** 순위를 뒤집은 도전 쌍(대표 쌍 먼저). 라이벌전이 아니면 빈 배열이다 */
       successfulPairs: SpecialMatchChallengePair[];
-      /** 반영 직후 순위. 도전 매치가 아니면 계산하지 않아 비어 있다 */
+      /** 반영 직후 순위. 라이벌전이 아니면 계산하지 않아 비어 있다 */
       rankAfter: Map<string, number>;
     };
 
 /**
  * 평점 반영이 끝난 특수 매치의 결과. 순위는 그 경기 종류 랭킹에서 이 경기 반영 직후(rankAfter) 시점이다.
- * 승패가 갈리지 않으면 outcome null이다.
+ * 승패가 갈리지 않으면 outcome null이다. 게스트가 낀 연승 저지·최강자전·리벤지도 승패로 정한다.
  */
 const evaluateSpecialMatch = (
   context: RankingContext,
@@ -102,6 +104,11 @@ const evaluateSpecialMatch = (
 
   switch (specialMatch.kind) {
     case "challenge": {
+      // 게스트가 낀 경기는 평점에 반영하지 않아 순위가 뒤집히지 않으므로 라이벌전 결과를 정하지 않는다.
+      // 참가자가 바뀌는 수정은 specialMatch를 지우므로 지금 경로로는 생기지 않는 방어용이다
+      if (hasGuestPlayer(match.teams)) {
+        return { outcome: null };
+      }
       const rankAfter = getRankById(
         context,
         getMatchTopLevelType(match.type),
@@ -173,7 +180,7 @@ const toCelebrationPlayer = (
     : null;
 };
 
-/** 이 경기 직전까지(완료 순서상 앞선 평점 반영 경기만) 센 연승 */
+/** 이 경기 직전까지(완료 순서상 앞선 경기만, 게스트가 낀 경기 포함) 센 연승 */
 const computeWinStreaksBefore = (
   context: RankingContext,
   match: SpecialMatchSettleTarget,
@@ -189,7 +196,7 @@ const computeWinStreaksBefore = (
   );
 
 /**
- * 결과와 큰 연출 데이터. 연출은 결과가 도전 성공·연승 저지·최강자전 승리일 때만 만들고,
+ * 결과와 큰 연출 데이터. 연출은 결과가 라이벌전 승리·연승 저지·최강자전 승리일 때만 만들고,
  * 필요한 선수·순위를 찾지 못하면 null이다(결과는 그대로 정한다).
  */
 export const settleSpecialMatch = (

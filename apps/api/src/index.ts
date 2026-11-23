@@ -1139,8 +1139,8 @@ const findAchievementPointsForNewAchievements = (
 const findAchievementsEarnedByMatch = async (
   match: Match,
 ): Promise<EarnedAchievement[]> => {
-  // 진행 중·평점 미반영 경기는 업적 계산에서 빠져 결과가 늘 비므로 원천을 읽지 않는다
-  if (match.status !== "completed" || match.ratingExcluded) return [];
+  // 진행 중 경기는 업적 계산에서 빠져 결과가 늘 비므로 원천을 읽지 않는다
+  if (match.status !== "completed") return [];
   try {
     const { context, sessions } = await loadRankingSource();
     return findAchievementsEarnedByMatches(
@@ -1171,7 +1171,7 @@ const hasSameTeamPlayers = (
   });
 
 /**
- * 평점 반영이 끝난 특수 매치의 결과를 정해 저장하고, 결과가 이번 저장으로 처음 도전 성공·연승 저지·최강자전 승리로
+ * 평점 반영이 끝난 특수 매치의 결과를 정해 저장하고, 결과가 이번 저장으로 처음 라이벌전 승리·연승 저지·최강자전 승리로
  * 정해졌으면 큰 연출 데이터를 돌려준다. completed 특수 매치는 저장할 때마다 다시 정한다(승패가 같아도 점수 차로
  * 순위가 달라질 수 있고, 첫 판정이 실패해 결과가 null인 경기도 이때 채운다).
  * 평점 잠금 밖에서 반영 직후 랭킹을 다시 읽는다(동호회 규모라 그사이 다른 반영이 끼는 경우는 무시한다).
@@ -1285,7 +1285,10 @@ const findNewAchievementsForSavedMatch = (
       : []),
   ];
   return findNewAchievements({
-    playerIds: getTeamPlayerIds(match.teams),
+    // 게스트는 업적을 받지 않는다
+    playerIds: match.teams.flatMap((team) =>
+      team.players.flatMap((player) => (player.isGuest ? [] : [player.id])),
+    ),
     before,
     after,
   });

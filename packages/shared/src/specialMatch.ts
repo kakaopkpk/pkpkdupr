@@ -3,7 +3,7 @@ import type { Player } from "./player.js";
 import { WIN_STREAK_DISPLAY_MIN } from "./streak.js";
 
 /**
- * 특수 매치 유형. 추천 매칭 카드로 시작한 경기(도전 매치·연승 저지·최강자전)와
+ * 특수 매치 유형. 추천 매칭 카드로 시작한 경기(라이벌전·연승 저지·최강자전)와
  * '같은 멤버로 한 판 더'로 시작한 경기(리벤지)에만 붙는다(docs/product.md "특수 매치")
  */
 export type SpecialMatchKind =
@@ -21,7 +21,7 @@ export const specialMatchKindValues = [
 
 /** 화면 이름 */
 export const specialMatchKindLabels: Record<SpecialMatchKind, string> = {
-  challenge: "도전 매치",
+  challenge: "라이벌전",
   streak_stopper: "연승 저지",
   champions: "최강자전",
   revenge: "리벤지 매치",
@@ -50,16 +50,16 @@ export interface SpecialMatchChallengePair {
 export interface SpecialMatch {
   kind: SpecialMatchKind;
   /**
-   * 지키는 쪽 팀 index. 도전 매치 방어 쪽, 연승 저지 연승 회원 팀, 리벤지 직전 경기에서 이긴 팀.
-   * 최강자전과 양쪽 다 공격인 도전 매치는 null
+   * 지키는 쪽 팀 index. 라이벌전 방어 쪽, 연승 저지 연승 회원 팀, 리벤지 직전 경기에서 이긴 팀.
+   * 최강자전과 양쪽 다 공격인 라이벌전은 null
    */
   defendingTeamIndex: 0 | 1 | null;
   /**
-   * 팀별 주인공 선수 id(카드에서 40px로 앞세우는 사람). 도전 매치는 대표 도전 쌍의 두 사람,
+   * 팀별 주인공 선수 id(카드에서 40px로 앞세우는 사람). 라이벌전은 대표 도전 쌍의 두 사람,
    * 연승 저지는 연승 회원 팀만, 최강자전은 양쪽 연승 회원, 리벤지는 둘 다 null
    */
   protagonistIds: [string | null, string | null];
-  /** 도전 매치의 도전 쌍(대표 쌍이 첫 번째). 다른 유형은 빈 배열 */
+  /** 라이벌전의 도전 쌍(대표 쌍이 첫 번째). 다른 유형은 빈 배열 */
   challengePairs: SpecialMatchChallengePair[];
   /** 완료 전이거나 승패가 갈리지 않으면 null */
   outcome: SpecialMatchOutcome | null;
@@ -68,7 +68,7 @@ export interface SpecialMatch {
 export type SpecialMatchCelebrationPlayer = Pick<Player, "id" | "username" | "avatarUrl">;
 
 /**
- * 기록 완료 화면 큰 연출 데이터. 도전 성공·연승 저지·최강자전 승리가 그 저장으로 처음 정해졌을 때만 기록 응답에 실린다.
+ * 기록 완료 화면 큰 연출 데이터. 라이벌전 승리·연승 저지·최강자전 승리가 그 저장으로 처음 정해졌을 때만 기록 응답에 실린다.
  * 순위는 그 경기 종류 랭킹, 연승 수는 이 경기 직전까지 센 랭킹 연승 규칙이다
  */
 export type SpecialMatchCelebration =
@@ -100,14 +100,21 @@ export interface SpecialMatchCandidatePlayer {
   winStreak: number;
 }
 
-/** 도전 매치로 보는 상대 두 사람의 최대 평점 차 */
+/** 라이벌전으로 보는 상대 두 사람의 최대 평점 차 */
 export const CHALLENGE_MATCH_MAX_RATING_GAP = 0.05;
 
-/** 추천 매칭에서 특수 유형 코트에 주는 가산점 */
+/**
+ * 추천 매칭에서 특수 유형 코트에 주는 가산점.
+ * 연승 저지는 뛸 사람을 고른 뒤 대진을 탐색하므로 연승자가 뽑히면 모든 후보 대진에 생겨 후보를 가르지 못하고,
+ * 대진 감점은 코트 최대 가산점 하나만 빼서 최강자전·라이벌전 가산점을 가리기 때문에 0이다.
+ * 리벤지는 추천에서 만들지 않아 0이다.
+ */
 export const SPECIAL_MATCH_RECOMMENDATION_BONUS = {
-  streak: 2,
   challenge: 1.5,
-} as const;
+  streak_stopper: 0,
+  champions: 2,
+  revenge: 0,
+} as const satisfies Record<SpecialMatchKind, number>;
 
 /** 평점 차를 소수 여섯째 자리에서 반올림해 3.55 - 3.5 같은 부동소수 오차가 판정·정렬을 흔들지 않게 한다 */
 const toRatingGap = (left: number, right: number) =>
@@ -120,12 +127,16 @@ type CandidateTeams = readonly [
 
 const TEAM_INDEXES = [0, 1] as const;
 
-/** 팀에서 연승이 가장 긴 연승 회원(WIN_STREAK_DISPLAY_MIN 이상). 같으면 먼저 나온 사람 */
+/**
+ * 팀에서 연승이 가장 긴 연승 회원(WIN_STREAK_DISPLAY_MIN 이상). 같으면 먼저 나온 사람.
+ * 랭킹 연승은 정회원에게만 보이는 값이라 게스트는 winStreak과 상관없이 연승 회원이 아니다.
+ */
 const findStreakLeader = (
   team: readonly SpecialMatchCandidatePlayer[],
 ): SpecialMatchCandidatePlayer | null =>
   team.reduce<SpecialMatchCandidatePlayer | null>(
     (leader, player) =>
+      !player.isGuest &&
       player.winStreak >= WIN_STREAK_DISPLAY_MIN &&
       (!leader || player.winStreak > leader.winStreak)
         ? player
@@ -227,14 +238,18 @@ const judgeChallengeMatch = (teams: CandidateTeams): SpecialMatch | null => {
 };
 
 /**
- * 추천 카드 출처 경기 판정. 해당 없으면 null. outcome은 null.
- * 게스트가 한 명이라도 끼면 평점 미반영 경기라 특수 매치가 아니다. 우선순위는 연승(최강자전·연승 저지) > 도전이다.
+ * 추천 카드 출처 경기 판정. 해당 없으면 null. outcome은 null. 우선순위는 연승(최강자전·연승 저지) > 라이벌전이다.
+ * 게스트가 낀 코트도 정회원 연승 회원이 있으면 연승 저지·최강자전이고, 게스트는 연승 주인공이 되지 않는다.
+ * 라이벌전은 평점 반영 뒤 순위 역전으로 결과가 정해지는데 게스트가 낀 경기는 평점에 반영하지 않으므로,
+ * 게스트가 한 명이라도 있으면 같은 코트 정회원끼리도 라이벌전이 아니다.
  */
 export const judgeRecommendedSpecialMatch = (
   teams: CandidateTeams,
 ): SpecialMatch | null => {
+  const streakMatch = judgeStreakMatch(teams);
+  if (streakMatch) return streakMatch;
   if (teams.some((team) => team.some((player) => player.isGuest))) return null;
-  return judgeStreakMatch(teams) ?? judgeChallengeMatch(teams);
+  return judgeChallengeMatch(teams);
 };
 
 const isSamePlayerSet = (

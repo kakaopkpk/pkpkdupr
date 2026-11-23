@@ -248,6 +248,23 @@ describe("computeAchievements", () => {
     }
   });
 
+  it("게스트가 낀 경기(평점 미반영)도 경기 수·승 수·연승에 센다", () => {
+    const matches = repeat(3, () => ({
+      ...makeMatch({ partnerId: "guest" }),
+      ratingExcluded: true,
+    }));
+    const progress = compute(matches);
+    expect(progressOf(progress, "matches-1")).toMatchObject({
+      earned: true,
+      earnedMatchId: matches[0].id,
+    });
+    expect(progressOf(progress, "wins-1").earned).toBe(true);
+    expect(progressOf(progress, "streak-3")).toMatchObject({
+      earned: true,
+      earnedMatchId: matches[2].id,
+    });
+  });
+
   it.each([
     ["matches-1", 1],
     ["matches-10", 10],
@@ -675,23 +692,29 @@ describe("computeAchievements", () => {
       });
     });
 
-    it("사이에 이 회원이 뛰지 않은 경기와 업적에 세지 않는 경기는 무시한다", () => {
+    it("사이에 이 회원이 뛰지 않은 경기는 무시한다", () => {
       const othersMatch: AchievementMatch = {
         ...makeMatch({ completedAt: kst("19:10") }),
         teams: [{ players: [{ id: "x" }] }, { players: [{ id: "y" }] }],
-      };
-      const guestMatch: AchievementMatch = {
-        ...makeMatch({ partnerId: "guest", completedAt: kst("19:15") }),
-        ratingExcluded: true,
       };
       expect(
         revengeOf([
           lineup(false, kst("19:00")),
           othersMatch,
-          guestMatch,
           lineup(true, kst("19:20")),
         ]).earned,
       ).toBe(true);
+    });
+
+    it("게스트가 낀 경기도 같은 조합이면 리벤지로 센다", () => {
+      const win = {
+        ...lineup(true, kst("19:20")),
+        ratingExcluded: true,
+      };
+      expect(revengeOf([lineup(false, kst("19:00")), win])).toMatchObject({
+        earned: true,
+        earnedMatchId: win.id,
+      });
     });
 
     it("사이에 이 회원이 다른 조합으로 뛰었으면 받지 않는다", () => {
@@ -1450,6 +1473,16 @@ describe("언더독", () => {
     });
     expect(progressOf(compute([match]), "underdog").earned).toBe(false);
   });
+  it("게스트가 낀 경기(평점 미반영)는 평점에 묶인 업적이라 세지 않는다", () => {
+    const match = {
+      ...makeMatch({ partnerId: "partner", ratingBefore: RATED }),
+      ratingExcluded: true,
+    };
+    expect(progressOf(compute([match]), "underdog")).toMatchObject({
+      earned: false,
+      current: 0,
+    });
+  });
 });
 
 describe("연승 저지", () => {
@@ -1488,6 +1521,17 @@ describe("연승 저지", () => {
     expect(progressOf(progress, "streak-breaker").earned).toBe(false);
   });
 
+  it("상대의 연승은 게스트가 낀 경기도 세서 정한다", () => {
+    const streak = winStreakOf("hot", 5).map((match, index) =>
+      index % 2 === 0 ? { ...match, ratingExcluded: true } : match,
+    );
+    const breaker = { ...makeMatch({ opponentIds: ["hot"] }), ratingExcluded: true };
+    expect(progressOf(compute([...streak, breaker]), "streak-breaker")).toMatchObject({
+      earned: true,
+      earnedMatchId: breaker.id,
+    });
+  });
+
   it("상대의 연승은 중간에 진 경기에서 끊긴다", () => {
     const progress = compute([
       ...winStreakOf("hot", 3),
@@ -1517,7 +1561,7 @@ describe("환영 인사", () => {
     expect(progressOf(progress, "welcome").earned).toBe(false);
   });
 
-  it("게스트가 낀 경기는 파트너의 첫 경기로 보지 않는다", () => {
+  it("게스트가 낀 경기도 파트너의 첫 경기로 본다", () => {
     const guestMatch = {
       ...makeOthersMatch({ teamA: ["newbie", "guest"], teamB: ["a", "b"] }),
       ratingExcluded: true,
@@ -1525,7 +1569,16 @@ describe("환영 인사", () => {
     const match = makeMatch({ partnerId: "newbie" });
     expect(
       progressOf(compute([guestMatch, match]), "welcome").earned,
-    ).toBe(true);
+    ).toBe(false);
+
+    const firstWithGuest = {
+      ...makeMatch({ partnerId: "rookie", opponentIds: ["guest", "opp-1"] }),
+      ratingExcluded: true,
+    };
+    expect(progressOf(compute([firstWithGuest]), "welcome")).toMatchObject({
+      earned: true,
+      earnedMatchId: firstWithGuest.id,
+    });
   });
 });
 

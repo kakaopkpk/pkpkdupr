@@ -66,7 +66,10 @@ export interface RankingMatch {
   completedAt: Date;
   teamPlayerIds: [string[], string[]];
   scores: MatchScore[];
-  /** 게스트가 낀 경기. 랭킹 경기 수·순위 변동 기준 세션·세션 지배자·업적에서 뺀다 */
+  /**
+   * 게스트가 낀 경기. 평점에 묶인 순위 변동 기준 세션·평점 업적 복식 경기 수·언더독에서만 빼고,
+   * 랭킹 경기 수·연승·세션 지배자·업적에는 센다
+   */
   ratingExcluded?: boolean;
   /** 정기 세션 경기인지(개근상 업적) */
   regularSession?: boolean;
@@ -236,6 +239,12 @@ export const createRankingContext = (
 export const getRatedMatches = (matches: RankingMatch[]) =>
   matches.filter((match) => !match.ratingExcluded);
 
+/** 업적을 받는 회원: 게스트가 아닌 회원. 게스트는 계정이 없어 어느 응답에서도 업적을 받지 않는다 */
+export const canEarnAchievements = (
+  context: RankingContext,
+  playerId: string,
+): boolean => context.playersById.get(playerId)?.isGuest !== true;
+
 /** 랭킹 대상 회원: 활성 정회원. 게스트는 랭킹에 나오지 않는다 */
 export const isRankablePlayer = (player: RankingSourcePlayer) =>
   player.status === "active" && !player.isGuest;
@@ -259,7 +268,8 @@ const countCategoryMatches = (
   point: RankingPoint | null,
 ) => {
   const counts = new Map<string, number>();
-  for (const match of getRatedMatches(context.matches)) {
+  // 게스트가 낀 경기도 센다
+  for (const match of context.matches) {
     if (context.categoryByMatchId.get(match.id) !== category) continue;
     if (!isMatchApplied(match, point)) continue;
     for (const playerId of new Set(match.teamPlayerIds.flat())) {
@@ -662,9 +672,8 @@ export const findEndedSessions = (
   sessions: RankingSession[],
   now: Date,
 ): EndedSessions => {
-  const matchesBySession = groupMatchesBySession(
-    getRatedMatches(context.matches),
-  );
+  // 세션 리포트 topRiser와 같은 경기 집합(게스트가 낀 경기 포함)으로 지배자를 정한다
+  const matchesBySession = groupMatchesBySession(context.matches);
   const endedSessions = new Map<string, string | null>();
   for (const session of sessions) {
     if (getEmptySessionExpiresAt(session.kind, session.date, session) > now) {
@@ -858,14 +867,9 @@ export const findPlayerEarnedAchievements = (
   );
 
 /**
- * 세션 경기로 받은 업적. 각 참가자의 전체 완료 경기로 계산해, 받게 된 경기가
- * 이 세션 경기인 업적만 고른다. 받은 시각 → 업적 정의 순서 → 회원 id 순이다.
- * 업적 기준 시각 시점 평점으로 받은 평점 업적은 그 세션에서 받은 것이 아니므로 뺀다.
- */
-/**
  * 주어진 경기들로 참가자들이 받은 업적(세션 리포트·경기 상세 achievements 공통 규칙).
  * 지금 계산에서 받은 경기가 이 경기들인 업적만 남기고, 업적 기준 시각 전 경기로 받은 업적은 뺀다.
- * 받은 시각 → 업적 정의 순서 → 회원 id 순
+ * 게스트는 업적을 받지 않는다. 받은 시각 → 업적 정의 순서 → 회원 id 순
  */
 export const findAchievementsEarnedByMatches = (
   context: RankingContext,
@@ -875,9 +879,11 @@ export const findAchievementsEarnedByMatches = (
 ): EarnedAchievement[] => {
   const matches = toContextAchievementMatches(context);
   return selectAchievementsEarnedByMatches(
-    playerIds.flatMap((playerId) =>
-      findPlayerEarnedAchievements(matches, endedSessions, playerId),
-    ),
+    playerIds
+      .filter((playerId) => canEarnAchievements(context, playerId))
+      .flatMap((playerId) =>
+        findPlayerEarnedAchievements(matches, endedSessions, playerId),
+      ),
     matchIds,
   );
 };
@@ -901,7 +907,7 @@ export const selectAchievementsEarnedByMatches = (
         compareText(left.playerId, right.playerId),
     );
 
-/** 업적 id별 받은 활성 회원 수. 아무도 받지 않은 업적도 0으로 넣는다 */
+/** 업적 id별 받은 활성 회원 수(게스트 제외). 아무도 받지 않은 업적도 0으로 넣는다 */
 export const countAchievementHolders = (
   context: RankingContext,
   endedSessions: EndedSessions,
@@ -911,6 +917,7 @@ export const countAchievementHolders = (
   );
   const matches = toContextAchievementMatches(context);
   for (const playerId of getActivePlayerIds(context)) {
+    if (!canEarnAchievements(context, playerId)) continue;
     for (const item of computeAchievements(
       playerId,
       matches,

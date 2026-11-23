@@ -55,6 +55,97 @@ const makeMatch = (overrides: Partial<Match>): Match => ({
 });
 
 describe("buildPlayerProfileSummary", () => {
+  it("게스트가 낀 경기도 승패·최근 경기 수·파트너·상대 전적·연승에 세고, 평점 변화는 0으로 더한다", () => {
+    const guestPartner = { ...makePlayer("Pguest01"), isGuest: true };
+    const doublesMatch = (id: string, minutesAgo: number, won: boolean) =>
+      makeMatch({
+        id,
+        type: "unrestricted-doubles",
+        ratingExcluded: true,
+        teams: [
+          { id: "team-a", name: "Team A", players: [me, guestPartner] },
+          { id: "team-b", name: "Team B", players: [opponent, viewer] },
+        ],
+        scores: [won ? { scoreA: 11, scoreB: 7 } : { scoreA: 7, scoreB: 11 }],
+        completedAt: new Date(now.getTime() - minutesAgo * 60_000),
+      });
+    const matches = [
+      doublesMatch("Mguest01", 30, true),
+      doublesMatch("Mguest02", 20, true),
+      doublesMatch("Mguest03", 10, false),
+    ];
+
+    const summary = buildPlayerProfileSummary(
+      matches,
+      me.id,
+      emptyHistory,
+      viewer.id,
+      now,
+    );
+
+    expect(summary.matchStats.doubles).toMatchObject({
+      matchWins: 2,
+      matchLosses: 1,
+    });
+    expect(summary.ratingDelta.doubles).toMatchObject({
+      last7Days: 0,
+      last7DaysMatchCount: 3,
+    });
+    expect(summary.partners).toEqual([
+      expect.objectContaining({
+        partner: expect.objectContaining({ id: guestPartner.id }),
+        matchCount: 3,
+        wins: 2,
+      }),
+    ]);
+    expect(summary.headToHead?.doubles).toEqual({
+      matchCount: 3,
+      wins: 1,
+      losses: 2,
+      ratingDelta: 0,
+    });
+    expect(summary.winStreak).toBe(0);
+
+    const { winStreak } = buildPlayerProfileSummary(
+      matches.slice(0, 2),
+      me.id,
+      emptyHistory,
+      me.id,
+      now,
+    );
+    expect(winStreak).toBe(2);
+  });
+
+  it("게스트 본인 프로필은 업적을 받지 않은 상태이고 연승이 0이다", () => {
+    const guestPlayer = { ...makePlayer("Pguest01"), isGuest: true };
+    const matches = [1, 2, 3].map((index) =>
+      makeMatch({
+        id: `Mguest0${index}`,
+        ratingExcluded: true,
+        teams: [
+          { id: "team-a", name: "Team A", players: [guestPlayer] },
+          { id: "team-b", name: "Team B", players: [opponent] },
+        ],
+        completedAt: new Date(now.getTime() - (10 - index) * 60_000),
+      }),
+    );
+
+    const summary = buildPlayerProfileSummary(
+      matches,
+      guestPlayer.id,
+      emptyHistory,
+      me.id,
+      now,
+    );
+
+    expect(summary.matchStats.singles.matchWins).toBe(3);
+    expect(summary.winStreak).toBe(0);
+    expect(summary.achievements.every((item) => !item.earned)).toBe(true);
+    expect(summary.achievements.every((item) => item.current === 0)).toBe(
+      true,
+    );
+  });
+
   it("진행 중(점수 없는 created) 경기는 통계·최근 경기에 넣지 않는다", () => {
     const completed = makeMatch({ id: "Mcomplet" });
     const inProgress = makeMatch({

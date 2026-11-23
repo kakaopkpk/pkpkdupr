@@ -36,7 +36,7 @@ export type MatchInfo = Omit<
   newAchievements?: EarnedAchievementInfo[];
   /** 기록·수정 응답에만 있다. 새 업적을 받은 참가자별 지금 업적 점수 합 */
   achievementPoints?: Record<string, number>;
-  /** 기록·수정 응답에만 있다. 이 저장으로 도전 성공·연승 저지·최강자전 승리가 처음 정해졌을 때의 큰 연출 데이터 */
+  /** 기록·수정 응답에만 있다. 이 저장으로 라이벌전 승리·연승 저지·최강자전 승리가 처음 정해졌을 때의 큰 연출 데이터 */
   specialMatchCelebration?: SpecialMatchCelebration | null;
   /** 경기 상세 응답에만 있다. 이 경기로 참가자들이 받은 업적(지금 계산 기준) */
   achievements?: EarnedAchievementInfo[];

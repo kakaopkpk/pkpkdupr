@@ -214,7 +214,7 @@ interface CardLayout {
   draw: (ctx: CanvasRenderingContext2D, top: number, avatars: Avatars) => void;
 }
 
-/** 도전 성공: 랭킹 이름표 + 앱 랭킹 줄 두 개(순위·아바타 32·아이디·▲▼). 평점은 넣지 않는다 */
+/** 라이벌전 승리: 랭킹 이름표 + 앱 랭킹 줄 두 개(순위·아바타 32·아이디·▲▼). 평점은 넣지 않는다 */
 const challengeCard = (
   target: Extract<SpecialMatchShareTarget, { kind: "challenge" }>,
   colors: Colors,

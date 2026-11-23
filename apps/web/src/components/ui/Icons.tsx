@@ -320,7 +320,7 @@ export const SHIELD_ICON_PATH = "M12 3l7 3v5c0 4.5-3 8-7 10-4-2-7-5.5-7-10V6z";
 /** 체크가 든 방패(연승 문지기 칩·완벽한 승리 업적 배지) 선 모양 */
 export const SHIELD_CHECK_ICON_PATHS = [SHIELD_ICON_PATH, "M9 12l2 2 4-4"] as const;
 
-/** 교차한 칼(도전 매치·라이벌 업적 배지) 선 모양 */
+/** 교차한 칼(라이벌전·라이벌 업적 배지) 선 모양 */
 export const CROSSED_SWORDS_ICON_PATHS = [
   "M5 4l9.5 9.5M19 4L9.5 13.5M4 15.5l4.5 4.5M20 15.5L15.5 20M6.5 18L11 13.5M17.5 18L13 13.5",
 ] as const;

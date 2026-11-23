@@ -110,11 +110,21 @@ pnpm lint
   - 수정으로 게스트가 새로 들어오면 true가 됩니다.
   - 진행 중 경기에 첫 점수를 넣는 수정은 그 시점 게스트 여부로 정합니다.
   - 바뀐 completed 경기는 전체 재계산합니다.
-- 미반영 경기는 게스트가 끼면 같은 경기 정회원 평점도 바꾸지 않습니다.
-- 증분·일괄·전체 재계산 어디서도 평점·평점 이력에 들어가지 않습니다(정회원 승급 뒤에도 유지).
-- 업적·세션 지배자·랭킹 경기 수·순위 변동 기준 세션·프로필 요약 통계(승패·파트너 궁합·상대 전적·최근 경기 수)·`lastPlayedAt`·비활동 감쇠 기준 직전 경기에서도 빠집니다.
-- 경기 목록·피드·기록 탭·세션 경기 목록·세션 리포트에는 그대로 나옵니다.
-- 예외로 세션 칭찬 후보 계산(세션 안 연승·승리·득점·연승 저지)에는 셉니다(`docs/product.md` "세션 칭찬").
+- 원칙: 평점에 직접 묶인 것만 빼고 나머지는 셉니다(`docs/product.md` "평점").
+- 빼는 것
+  - 평점·평점 이력: 증분·일괄·전체 재계산 어디서도 넣지 않습니다(정회원 승급 뒤에도 유지). 게스트가 끼면 같은 경기 정회원 평점도 바꾸지 않습니다.
+  - 비활동 감쇠 기준 직전 경기(증분 `findPreviousCompletedAt`, 재계산 `replayMatches`).
+  - 랭킹 순위 변동 `rankChange`의 기준 세션(`selectBaselineSession`).
+  - 평점 업적의 복식 경기 수(`ratedDoublesMatches`, 10경기 조건)와 평점 진행도, 언더독.
+- 세는 것
+  - 연승(`computeCurrentWinStreaks`): 랭킹·진행 중 경기·추천·프로필 `winStreak`, 소식 연승 줄, 홈 세션 연승, 특수 매치 판정 입력·큰 연출 `streakBefore`.
+  - 업적 전부(연승 저지의 상대 직전 연승, 환영 인사의 파트너 첫 경기 포함)와 경기 상세·세션 리포트 `achievements`.
+  - 세션 지배자·무패 세션(`findEndedSessions`), 랭킹 경기 수(`countCategoryMatches`).
+  - 프로필 요약 통계(승패·최근 7일 경기 수·파트너 궁합·천적·상대 전적, 평점 변화는 0으로 더함), `lastPlayedAt`, 세션 칭찬 후보 계산.
+  - 경기 목록·피드·기록 탭·세션 경기 목록·세션 리포트에도 그대로 나옵니다.
+- 게스트 본인
+  - 어느 응답에서도 업적을 받지 않습니다(`newAchievements`·`achievementPoints`, 경기 상세·세션 리포트 `achievements`, 소식 업적 줄, 업적 holders 수, 게스트 프로필 `achievements`).
+  - 연승이 보이지 않습니다. 추천·특수 매치 판정 입력·프로필 `winStreak`은 0이고, 진행 중 경기 `winStreaks`·홈 세션 연승에는 없습니다.
 
 ### 경기 기록·수정·삭제
 
@@ -135,8 +145,13 @@ pnpm lint
 - 경기 시작 때 판정한 특수 매치는 `Match.specialMatch`(`matches.special_match` jsonb)에 저장한다. 판정 기준은 `docs/product.md` "특수 매치", 판정 함수는 `packages/shared/src/specialMatch.ts`다.
   - 추천 카드 출처 세션 시작(`recommendedSpecialKind`)은 서버 재판정 유형이 카드 유형과 같을 때만, 한 판 더 출처 시작(`rematchOfMatchId`)은 리벤지만 저장한다.
   - 그 밖의 시작·직접 기록·관리자 생성·대진 시작은 null이다.
+- 게스트가 낀 코트(`judgeRecommendedSpecialMatch`)
+  - 정회원 연승 회원이 있으면 연승 저지·최강자전으로 판정하고, 결과·큰 연출도 게스트가 없는 경기와 같다(연출 연승 수는 게스트가 낀 경기 포함).
+  - 게스트가 한 명이라도 있으면 라이벌전이 아니다. 결과 판정에서도 게스트가 있는 라이벌전은 결과 null·연출 없음이다.
+  - 게스트는 `winStreak`과 상관없이 연승 주인공(`protagonistIds`)이 되지 않는다.
+  - 리벤지는 게스트가 있어도 된다. 이미 기록된 경기에는 소급하지 않는다.
 - 결과(`SpecialMatch.outcome`)는 평점 반영 뒤 서버가 정한다. 승패가 갈리지 않으면 null이다.
-  - 도전 매치: 이긴 팀에 공격자가 있는 도전 쌍 중 하나라도 반영 직후 그 경기 종류 랭킹(`rankPlayersAt`)에서 공격자 순위가 방어자보다 높아졌으면 `challenge_success`, 아니면 `defense_success`.
+  - 라이벌전: 이긴 팀에 공격자가 있는 도전 쌍 중 하나라도 반영 직후 그 경기 종류 랭킹(`rankPlayersAt`)에서 공격자 순위가 방어자보다 높아졌으면 `challenge_success`, 아니면 `defense_success`.
   - 연승 저지: 연승 회원 팀이 지면 `streak_stopped`, 이기면 `streak_defended`. 최강자전: `champions_won`.
   - 리벤지: 지키는 쪽이 아닌 팀이 이기면 `revenge_success`, 지면 `revenge_defended`.
 - 끝난 특수 매치를 고치면(회원·관리자 수정) 승패가 같아도 평점 재계산 뒤 결과를 다시 정하고, 결과가 null로 남은 경기도 이때 채운다. 판정 규칙·순위 기준은 처음 판정과 같다.

@@ -265,8 +265,8 @@ export interface Match {
   completedAt: Date | null;
   updatedAt: Date;
   /**
-   * 완료 시점에 게스트가 낀 경기면 true. 평점·평점 이력·업적·랭킹 경기 수·프로필 통계·lastPlayedAt에서 빠지고,
-   * 경기 목록·피드·기록 탭·세션 경기 목록에는 그대로 나온다. 한 번 true가 되면 게스트가 나중에 정회원이 돼도,
+   * 완료 시점에 게스트가 낀 경기면 true. 평점에 직접 묶인 것(평점·평점 이력, 비활동 감쇠 직전 경기, 순위 변동 기준 세션,
+   * 평점 업적 복식 경기 수, 언더독)에서만 빠지고 연승·업적·통계·lastPlayedAt에는 센다. 한 번 true가 되면 게스트가 나중에 정회원이 돼도,
    * 수정(회원·관리자)으로 참가자가 바뀌어도 유지되고, 수정으로 게스트가 새로 들어오면 true가 된다.
    */
   ratingExcluded: boolean;
@@ -478,7 +478,7 @@ export type RecordedMatchResponse = Match & {
   newAchievements: EarnedAchievement[];
   /** 새 업적을 받은 참가자별 지금 업적 점수 합(새 업적 포함). 새 업적이 없으면 빈 객체 */
   achievementPoints: Record<string, number>;
-  /** 특수 매치 결과가 이 저장으로 처음 도전 성공·연승 저지·최강자전 승리로 정해졌을 때의 큰 연출 데이터. 그 밖은 null */
+  /** 특수 매치 결과가 이 저장으로 처음 라이벌전 승리·연승 저지·최강자전 승리로 정해졌을 때의 큰 연출 데이터. 그 밖은 null */
   specialMatchCelebration: SpecialMatchCelebration | null;
 };
 

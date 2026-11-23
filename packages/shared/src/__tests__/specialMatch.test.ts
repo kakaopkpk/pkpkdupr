@@ -67,7 +67,7 @@ describe("judgeRecommendedSpecialMatch", () => {
     });
   });
 
-  it("상대로 만나는 두 랭킹 회원의 평점 차가 0.05 이하면 도전 매치이고 순위가 낮은 쪽이 도전한다", () => {
+  it("상대로 만나는 두 랭킹 회원의 평점 차가 0.05 이하면 라이벌전이고 순위가 낮은 쪽이 도전한다", () => {
     expect(
       judgeRecommendedSpecialMatch([
         [player("a", { rank: 4, rating: 3.5 }), player("b")],
@@ -82,7 +82,7 @@ describe("judgeRecommendedSpecialMatch", () => {
     });
   });
 
-  it("평점 차가 0.05를 넘거나 랭킹에 없는 회원이면 도전 매치가 아니다", () => {
+  it("평점 차가 0.05를 넘거나 랭킹에 없는 회원이면 라이벌전이 아니다", () => {
     expect(
       judgeRecommendedSpecialMatch([
         [player("a", { rank: 4, rating: 3.5 }), player("b", { rating: 3.6 })],
@@ -135,11 +135,59 @@ describe("judgeRecommendedSpecialMatch", () => {
     ).toBe("streak_stopper");
   });
 
-  it("게스트가 한 명이라도 있으면 연승·도전 모두 아니다", () => {
+  it("게스트가 낀 코트도 정회원 연승 회원이 있으면 연승 저지다", () => {
     expect(
       judgeRecommendedSpecialMatch([
         [player("a", { rank: 4, rating: 3.5 }), player("g", { isGuest: true })],
         [player("c", { rank: 3, rating: 3.52 }), player("d", { winStreak: 9 })],
+      ]),
+    ).toEqual({
+      kind: "streak_stopper",
+      defendingTeamIndex: 1,
+      protagonistIds: [null, "d"],
+      challengePairs: [],
+      outcome: null,
+    });
+  });
+
+  it("게스트가 낀 코트도 양 팀에 정회원 연승 회원이 있으면 최강자전이다", () => {
+    expect(
+      judgeRecommendedSpecialMatch([
+        [player("a", { winStreak: 5 }), player("g", { isGuest: true })],
+        [player("c"), player("d", { winStreak: 6 })],
+      ]),
+    ).toMatchObject({
+      kind: "champions",
+      defendingTeamIndex: null,
+      protagonistIds: ["a", "d"],
+    });
+  });
+
+  it("게스트는 winStreak과 상관없이 연승 주인공이 아니다", () => {
+    expect(
+      judgeRecommendedSpecialMatch([
+        [player("a"), player("g", { isGuest: true, winStreak: 9 })],
+        [player("c"), player("d")],
+      ]),
+    ).toBeNull();
+    // 게스트 팀 쪽은 연승 회원이 없어 최강자전이 아니라 연승 저지다
+    expect(
+      judgeRecommendedSpecialMatch([
+        [player("a"), player("g", { isGuest: true, winStreak: 9 })],
+        [player("c", { winStreak: 5 }), player("d")],
+      ]),
+    ).toMatchObject({
+      kind: "streak_stopper",
+      defendingTeamIndex: 1,
+      protagonistIds: [null, "c"],
+    });
+  });
+
+  it("게스트가 한 명이라도 있으면 정회원끼리도 라이벌전이 아니다", () => {
+    expect(
+      judgeRecommendedSpecialMatch([
+        [player("a", { rank: 4, rating: 3.5 }), player("g", { isGuest: true })],
+        [player("c", { rank: 3, rating: 3.52 }), player("d")],
       ]),
     ).toBeNull();
   });

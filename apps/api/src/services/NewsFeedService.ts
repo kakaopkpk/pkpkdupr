@@ -156,16 +156,15 @@ const buildSessionItem = ({
       rankChange: rankBefore == null ? null : rankBefore - rank,
     }));
 
-  const ratedPlayerIds = new Set(
-    sessionMatches
-      .filter((match) => !match.ratingExcluded)
-      .flatMap((match) => match.teamPlayerIds.flat()),
+  // 그 세션에서 경기를 뛴 회원(게스트가 낀 경기 포함)
+  const sessionPlayerIds = new Set(
+    sessionMatches.flatMap((match) => match.teamPlayerIds.flat()),
   );
   const streaks = computeWinStreaksAt(context.matches, endAt);
   const winStreakLines: NewsFeedLine[] = [...lineMembers.values()]
     .flatMap((player) => {
       const winStreak = streaks.get(player.id) ?? 0;
-      return ratedPlayerIds.has(player.id) &&
+      return sessionPlayerIds.has(player.id) &&
         winStreak >= WIN_STREAK_DISPLAY_MIN
         ? [{ player, winStreak }]
         : [];

@@ -4,7 +4,7 @@ import { getObjectParticle } from "@/lib/korean";
 import { toShareFileName } from "@/lib/shareImage";
 
 /*
- * 특수 매치 큰 연출(도전 성공·연승 저지·최강자전 승리)의 "이미지로 공유" 내용.
+ * 특수 매치 큰 연출(라이벌전 승리·연승 저지·최강자전 승리)의 "이미지로 공유" 내용.
  * 모양은 docs/design.md "특수 매치 공유"를 따른다. 리벤지 성공은 큰 연출이 없어 대상이 아니다.
  */
 
@@ -73,7 +73,7 @@ export interface SpecialMatchCaptionPart {
 }
 
 const TITLES: Record<SpecialMatchShareKind, string> = {
-  challenge: "도전 성공!",
+  challenge: "라이벌전 승리!",
   "streak-break": "연승 저지!",
   "king-win": "최강자전 승리!",
 };
@@ -116,7 +116,7 @@ export const getSpecialMatchCaptionParts = (
 
 /**
  * 공유 시트에 함께 보내는 문구. 주어는 그 일을 한 회원이다
- * (도전 성공·최강자전은 순위·연승의 주인, 연승 저지는 공유한 회원)
+ * (라이벌전 승리·최강자전은 순위·연승의 주인, 연승 저지는 공유한 회원)
  */
 export const getSpecialMatchShareText = (target: SpecialMatchShareTarget) => {
   switch (target.kind) {

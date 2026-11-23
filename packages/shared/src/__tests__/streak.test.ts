@@ -40,13 +40,20 @@ describe("computeCurrentWinStreak", () => {
     expect(computeCurrentWinStreak(matches, "a")).toBe(1);
   });
 
-  it("평점 미반영 경기는 건너뛴다", () => {
-    const matches = [
+  it("게스트가 낀 경기(평점 미반영)도 센다", () => {
+    const lost = [
       match("m1", 0, [["a"], ["b"]], [11, 5]),
-      match("m2", 10, [["a"], ["g"]], [2, 11], { ratingExcluded: true }),
+      match("m2", 10, [["a"], ["guest"]], [2, 11]),
       match("m3", 20, [["a"], ["b"]], [11, 7]),
     ];
-    expect(computeCurrentWinStreak(matches, "a")).toBe(2);
+    expect(computeCurrentWinStreak(lost, "a")).toBe(1);
+
+    const won = [
+      match("m1", 0, [["a"], ["b"]], [11, 5]),
+      match("m2", 10, [["a"], ["guest"]], [11, 2]),
+      match("m3", 20, [["a"], ["b"]], [11, 7]),
+    ];
+    expect(computeCurrentWinStreak(won, "a")).toBe(3);
   });
 
   it("여러 회원을 한 번에 센다", () => {
