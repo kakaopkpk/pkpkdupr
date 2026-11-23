@@ -28,7 +28,7 @@ import {
 } from "@/lib/shareImageCanvas";
 
 /*
- * 업적 공유 이미지(4:5). 업적 축하 연출을 옮긴 어두운 카드이며 틀(빛줄기·후광·아래 줄)은 lib/shareImageCanvas와 같다.
+ * 업적 공유 이미지(4:5). 어두운 카드이며 틀(빛줄기·후광·아래 줄)은 lib/shareImageCanvas와 같다.
  */
 const BADGE_SIZE = 124;
 const BADGE_TOP = 40;
