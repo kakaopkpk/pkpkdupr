@@ -3,6 +3,7 @@ import type {
   RankingPlayer,
   SessionPlayerReport,
 } from "./ranking.js";
+import type { SessionPraiseCandidate } from "./sessionPraise.js";
 
 /** 세션 카드 소식 줄 */
 export type NewsFeedLine =
@@ -14,6 +15,11 @@ export type NewsFeedLine =
       earnedMatchId: string;
       earnedAt: Date;
     }
+  /**
+   * 마감 뒤 칭찬을 SESSION_PRAISE_HIGHLIGHT_MIN개 이상 받은 후보(세션 지배자 줄 다음, 후보 순서).
+   * 이 세션으로 칭찬 업적을 받은 회원은 이 줄 대신 업적 줄만 나온다
+   */
+  | ({ kind: "praise" } & SessionPraiseCandidate)
   /** 세션 마지막 완료 경기 직후 연승 수(WIN_STREAK_DISPLAY_MIN 이상) */
   | { kind: "winStreak"; player: RankingPlayer; winStreak: number }
   /**

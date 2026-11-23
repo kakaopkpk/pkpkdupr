@@ -7,9 +7,14 @@ import React, {
 } from "react";
 import { compareMatchesByRecordedAtDesc } from "@pkpkdupr/shared/match";
 import { getSessionEndsAt, toKstDateKey } from "@pkpkdupr/shared/session";
+import {
+  isSessionPraiseEnabled,
+  type SessionPraiseResponse,
+} from "@pkpkdupr/shared/sessionPraise";
 import { getMatchPlayerIds, type MatchInfo } from "@/types/match";
 import PushScreen from "@/components/PushScreen";
 import LastSessionMeCard from "@/components/home/LastSessionMeCard";
+import { SessionPraiseSection } from "@/components/praise/SessionPraiseSection";
 import { useLiveSessionHighlight } from "@/components/home/useLiveSessionHighlight";
 import {
   getPlayerSessionAchievements,
@@ -67,6 +72,7 @@ import {
   type MatchSessionReportInfo,
   RequestError,
 } from "@/lib/rankings";
+import { fetchSessionPraise } from "@/lib/sessionPraise";
 
 const EMPTY_IDS: readonly string[] = [];
 const LOAD_ERROR_MESSAGE = "세션을 불러오지 못했어요.";
@@ -85,6 +91,8 @@ type LoadState =
       matches: MatchInfo[];
       /** 끝난 세션의 리포트. 끝나기 전이거나 완료 경기가 없으면(404) null */
       report: MatchSessionReportInfo | null;
+      /** 끝난 세션의 칭찬. 칭찬하지 않는 세션(기능 전에 끝남)이거나 끝나기 전이면 null */
+      praise: SessionPraiseResponse | null;
       /** 불러올 때 세션이 끝났는지(getSessionEndsAt <= 지금). 끝난 세션만 리포트를 읽는다 */
       isEnded: boolean;
     }
@@ -92,6 +100,21 @@ type LoadState =
 
 const getSessionEndTime = (session: MatchSessionDetailInfo) =>
   getSessionEndsAt(session.kind, new Date(session.date), session).getTime();
+
+/**
+ * 끝난 세션의 칭찬. 칭찬하지 않는 세션이면 요청하지 않고 null.
+ * 불러오지 못하면 undefined라 호출부가 보이던 칭찬을 그대로 둔다(칭찬 섹션 때문에 화면 전체를 실패로 두지 않는다)
+ */
+const fetchEndedSessionPraise = async (
+  session: MatchSessionDetailInfo,
+): Promise<SessionPraiseResponse | null | undefined> => {
+  if (!isSessionPraiseEnabled(new Date(getSessionEndTime(session)))) return null;
+  try {
+    return await fetchSessionPraise(session.id);
+  } catch {
+    return undefined;
+  }
+};
 
 /** 끝난 세션의 리포트. 완료 경기가 없으면 서버가 404라 리포트 없이 그린다 */
 const fetchEndedSessionReport = async (sessionId: string) => {
@@ -118,7 +141,7 @@ export interface SessionReportDrawerProps {
  * 전역 세션 상세 화면. 다가오는·진행 중·끝난 세션 모두 열리고, 머리는 세션 카드다.
  * - 끝나기 전: 일정 탭 블루 카드(D-day 또는 LIVE, 참여자 시트, 참여 버튼) → 대회면 "대진", 아니면 "경기".
  *   진행 중 일반 세션이면 카드와 "경기" 사이에 홈과 같은 세션 지배자·세션 연승 카드
- * - 끝난 대회: 순위 카드 → 리포트(세션 지배자·내 평점·내 새 업적·평점 변화) → "대진"
+ * - 끝난 대회: 순위 카드 → 리포트(세션 지배자·칭찬·내 평점·내 새 업적·평점 변화) → "대진"
  * - 끝난 일반 세션: 일정 탭 지난 세션 카드(누를 수 없음) → 리포트 → "경기".
  *   리포트가 없으면(완료 경기 없이 끝남) 버튼 없는 블루 카드
  * 끝난 세션 머리 카드에는 내 기록을 넣지 않는다. 내 기록은 리포트의 내 평점 카드에만 있다.
@@ -191,11 +214,26 @@ export default function SessionReportDrawer({
           fetchSessionMatches(targetSessionId),
         ]);
         const isEnded = getSessionEndTime(session) <= Date.now();
-        const report = isEnded
-          ? await fetchEndedSessionReport(targetSessionId)
-          : null;
+        const [report, praise] = isEnded
+          ? await Promise.all([
+              fetchEndedSessionReport(targetSessionId),
+              fetchEndedSessionPraise(session),
+            ])
+          : [null, null];
         if (requestIdRef.current !== requestId) return;
-        setLoadState({ kind: "ready", session, matches, report, isEnded });
+        setLoadState((current) => ({
+          kind: "ready",
+          session,
+          matches,
+          report,
+          isEnded,
+          praise:
+            praise === undefined
+              ? current.kind === "ready" && current.session.id === session.id
+                ? current.praise
+                : null
+              : praise,
+        }));
         setLoadedVersion(version);
       } catch (err) {
         if (requestIdRef.current !== requestId) return;
@@ -276,6 +314,14 @@ export default function SessionReportDrawer({
   );
 
   const report = loadState.kind === "ready" ? loadState.report : null;
+  const praise = loadState.kind === "ready" ? loadState.praise : null;
+  const handlePraised = useCallback((next: SessionPraiseResponse) => {
+    setLoadState((current) =>
+      current.kind === "ready" && current.session.id === next.session.id
+        ? { ...current, praise: next }
+        : current,
+    );
+  }, []);
   const matches = loadState.kind === "ready" ? loadState.matches : null;
 
   const myReport = useMemo(
@@ -353,6 +399,9 @@ export default function SessionReportDrawer({
     return (
       <>
         {topRiser ? <TopRiserCard report={topRiser} /> : null}
+        {praise ? (
+          <SessionPraiseSection praise={praise} onPraised={handlePraised} />
+        ) : null}
         {myReport ? <LastSessionMeCard report={myReport} /> : null}
         {playerId && myAchievements.length > 0 ? (
           <MyNewAchievementsCard

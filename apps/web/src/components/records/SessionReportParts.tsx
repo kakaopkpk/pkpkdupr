@@ -16,6 +16,7 @@ import {
 import { CountUpText } from "@/components/ui/CountUpText";
 import { RankChange, RatingDelta } from "@/components/ui/Delta";
 import { PlayerAvatar } from "@/components/ui/PlayerAvatar";
+import { PraisedAvatarFrame } from "@/components/ui/PraisedAvatarFrame";
 import { SessionWinStreakFrame } from "@/components/ui/WinStreakAvatarFrame";
 import { cx } from "@/components/ui/cx";
 import { useAppNavigation } from "@/context/AppNavigationContext";
@@ -152,6 +153,8 @@ export const PlayerLineButton: React.FC<{
   hasFlameAura?: boolean;
   /** 세션 연승. 주면 아바타에 앰버 링과 숫자 태그를 붙인다 */
   sessionWinStreak?: number;
+  /** 그 세션에서 받은 칭찬 수. 5개 이상이면 아바타에 앰버 링과 엄지 배지를 붙인다 */
+  praiseCount?: number;
 }> = ({
   player,
   onPress,
@@ -159,6 +162,7 @@ export const PlayerLineButton: React.FC<{
   right,
   hasFlameAura = false,
   sessionWinStreak,
+  praiseCount = 0,
 }) => (
   <button
     type="button"
@@ -170,7 +174,9 @@ export const PlayerLineButton: React.FC<{
   >
     <span className={cx("inline-flex shrink-0", hasFlameAura && "pk-flame-aura")}>
       <SessionWinStreakFrame winStreak={sessionWinStreak} showTag>
-        <PlayerAvatar player={player} size={36} />
+        <PraisedAvatarFrame praiseCount={praiseCount}>
+          <PlayerAvatar player={player} size={36} />
+        </PraisedAvatarFrame>
       </SessionWinStreakFrame>
     </span>
     <span className="flex min-w-0 flex-1 flex-col gap-0.5">{children}</span>

@@ -89,8 +89,9 @@
         - 진행 중(`useLiveSession().liveSession?.id`가 이 세션)이면 D-day 대신 LIVE다. 대회도 진행 중에 모양이 같다.
         - 진행 중 일반 세션이면 카드와 "경기" 사이에 홈과 같은 `LiveSessionHighlightCard`(데이터도 홈과 같은 `home/useLiveSessionHighlight`)를 둔다.
         - 메타 줄은 홈 다음 세션 카드와 같은 `getSessionMetaLabel`(미래면 날짜까지).
-      - 끝난 대회: `TournamentRankCard`(누를 수 없음) → 세션 지배자·내 평점·내 새 업적·평점 변화 → `TournamentBracketSection`.
-      - 끝난 일반 세션: `RecordSessionCard`(`onPress` 없이 누를 수 없음, 메타 줄 앞에 날짜) → 세션 지배자·내 평점·내 새 업적·평점 변화 → "경기" 섹션. 리포트가 없으면 버튼 없는 블루 카드("종료").
+      - 끝난 대회: `TournamentRankCard`(누를 수 없음) → 세션 지배자·칭찬·내 평점·내 새 업적·평점 변화 → `TournamentBracketSection`.
+      - 끝난 일반 세션: `RecordSessionCard`(`onPress` 없이 누를 수 없음, 메타 줄 앞에 날짜) → 세션 지배자·칭찬·내 평점·내 새 업적·평점 변화 → "경기" 섹션. 리포트가 없으면 버튼 없는 블루 카드("종료").
+      - 칭찬은 `praise/SessionPraiseSection`이다. 끝난 세션이 칭찬하는 세션(`isSessionPraiseEnabled`)이면 리포트와 함께 `GET /api/match-sessions/:sessionId/praise`를 읽고, 후보가 없으면 섹션이 없다. 칭찬을 못 읽으면 보이던 칭찬을 두고 화면은 그대로 그린다.
       - 끝난 세션 머리 카드는 `mine`을 넘기지 않는다(내 기록 띠·줄 없음). 내 기록은 `LastSessionMeCard` 하나만 보인다.
     - `record/`: 경기 기록 시트. 완료 단계는 이 경기로 참가자 전원이 받은 업적을 띠(`match/MatchAchievementRow`)로 보이고, 그중 내 새 업적만 화면 전체 축하 연출 `AchievementCelebration`으로 띄우고 닫으면 확인 처리
       - 축하 연출과 내 받은 업적 상세 시트의 공유는 `hooks/useAchievementShare`가 열 때 공유 이미지(`profile/achievementShareImage`, canvas 2D)를 미리 만들어 두고, 누르면 바로 기기 공유 시트(못 하면 내려받기, `lib/achievementShare`)를 연다. iOS Safari는 사용자 동작 직후에만 공유 시트가 열려 누른 뒤에 만들지 않는다.
@@ -111,8 +112,16 @@
     - 묶기·라운드 이름·내 다음 경기·팀 평균은 `lib/tournament.ts`.
   - `ui/`: 새 디자인 공통 컴포넌트. 새 화면은 여기 것을 먼저 씁니다.
     - `Button.tsx`(`PkButton`, variant `primary`·`soft`·`outline`·`ghost`), `Card.tsx`, `SegmentedControl.tsx`, `MatchFilterControl.tsx`(섹션 제목 줄의 전체/내 경기 전환, 라벨에 경기 수), `Headers.tsx`(`TabHeader`·`DetailHeader`), `Form.tsx`(`TextField`·`ListRow`), `Section.tsx`(`Section`·`PreviewSection`·`TextLink`. 섹션 제목이 붙는 묶음은 `Section`으로 만든다), `SheetTitle.tsx`, `ConfirmDialog.tsx`(시트 위 가운데 확인 창. 바텀시트를 겹쳐 쌓지 않을 때 쓰고, 연 쪽이 `useLayerDepth` kind `dialog`로 뒤로가기에 묶는다)
-    - `MatchRow.tsx`(`MatchRow`), `PlayerAvatar.tsx`(`PlayerAvatar`·`TeamAvatars`), `Delta.tsx`(`RatingDelta`·`RankChange`), `RankBadge.tsx`, `Badges.tsx`(`LivePill`·`HighlightBadge`), `StatusMessageChip.tsx`, `StateMessage.tsx`(빈 상태 `empty`·불러오기 실패 `error`(항상 "다시 시도") 문구, size `panel` 탭·화면 전체·`inline` 카드·목록·시트 안), `CountUpText.tsx`(카운트업 숫자의 자리 폭을 최종 내용으로 고정), `SheenOverlay.tsx`(한 번 지나가는 흰 빛, 부모 `relative`·`overflow-hidden` 필요), `Icons.tsx`, `cx.ts`
+    - `MatchRow.tsx`(`MatchRow`), `PlayerAvatar.tsx`(`PlayerAvatar`·`TeamAvatars`), `Delta.tsx`(`RatingDelta`·`RankChange`), `RankBadge.tsx`, `Badges.tsx`(`LivePill`·`HighlightBadge`), `StatusMessageChip.tsx`, `StateMessage.tsx`(빈 상태 `empty`·불러오기 실패 `error`(항상 "다시 시도") 문구, size `panel` 탭·화면 전체·`inline` 카드·목록·시트 안), `CountUpText.tsx`(카운트업 숫자의 자리 폭을 최종 내용으로 고정), `PraisedAvatarFrame.tsx`(한 세션 칭찬 5개 이상 아바타의 앰버 링·엄지 배지, 세션 상세 칭찬 줄·홈 소식 칭찬 줄), `SheenOverlay.tsx`(한 번 지나가는 흰 빛, 부모 `relative`·`overflow-hidden` 필요), `Icons.tsx`, `cx.ts`
+  - `praise/`: 세션 칭찬. 모양·연출은 `docs/design.md` "세션 칭찬".
+    - `PendingSessionPraisePopup`: `BottomNav`가 렌더. 전역 화면·바텀시트·+ 메뉴·업적 축하가 없을 때 앱 진입·데이터 버전 변경·열린 화면이 모두 닫힐 때 `GET /api/me/session-praises/pending`을 조회해 첫 세션을 `SessionPraisePopup`으로 띄운다.
+      - 조회 중·표시 중에는 `onBusyChange`로 알려 업적 축하가 기다린다(칭찬 팝업이 먼저).
+      - 칭찬하지 않고 넘긴 세션은 `lib/sessionPraise`가 localStorage `pkpkdupr:session-praise-skipped`에 회원 id + 세션 id로 기억해 다시 띄우지 않는다. 칭찬한 세션은 서버가 뺀다.
+    - `SessionPraisePopup`: 후보 카드 팝업. 띄울 때 보던 탭에 `useLayerDepth` kind `dialog`를 쌓아 바깥 어두운 곳·뒤로가기·Esc로 넘기고, 카드를 누르면 칭찬 직후 연출 뒤 약 3초에 사라진다. 4xx 문구는 카드 아래, 네트워크 오류는 `showSaveFailure`다.
+    - `SessionPraiseSection`: 세션 상세 "칭찬" 섹션. 칭찬 전 줄 전체가 칭찬 버튼이고, 알약 상태는 `getSessionPraisePillState`다.
+    - `SessionPraiseParts`: 분류 칩(앰버, 분류 아이콘)·분류 아이콘. 값 표기는 `lib/sessionPraise`의 `formatSessionPraiseValue`다.
   - `profile/UnseenAchievementCelebration.tsx`: `BottomNav`가 렌더. 전역 화면·바텀시트·+ 메뉴가 하나도 열려 있지 않을 때 앱 진입·업적 데이터 버전 변경(무효화·앱 복귀 TTL)·열린 화면이 모두 닫힐 때 `GET /api/me/achievements/unseen`을 조회해, 아직 보지 않은 내 업적(남이 입력한 경기·세션 지배자·관리자 정정 포함)을 `AchievementCelebration`으로 한 장씩 띄우고 닫으면 `POST /api/me/achievements/seen`. 미확인 조회(`fetchUnseenAchievements`)는 진행 중인 확인 처리 요청이 끝난 뒤 보내 방금 본 업적이 다시 뜨지 않는다
+    - 칭찬 팝업이 조회·표시 중이면 기다리고, 축하 연출이 떠 있는 동안은 `onShowingChange`로 알려 칭찬 팝업이 기다린다.
   - 공용 레이어·상태: `BottomSheet.tsx`, `PushScreen.tsx`, `SkeletonBlock.tsx`, `TabPanelStatus.tsx`, `HoldToConfirmButton.tsx`, `SystemToast.tsx`, `OfflineBanner.tsx`, `PwaInstallPrompt.tsx`, `PwaUpdatePrompt.tsx`
 - `src/context/`
   - `AuthContext.tsx`: Supabase 세션 구독, `/api/me` 검증, `status`·`player`, 비밀번호 변경, `logout`
@@ -181,6 +190,7 @@
   - 나 탭·회원 프로필(`useProfileOverview`): `matches`·`ratings`·`achievements`·`players`
   - 랭킹 복식·단식: `ratings`·`players`, 업적 랭킹: `achievements`·`players`. 보고 있는 분류만 다시 받고 나머지는 볼 때 받습니다.
   - 회원 경기 전체: `matches`, 업적 전체 보기·업적 축하: `achievements`
+  - 칭찬 팝업: `sessions`·`matches`. 떠 있는 동안 고르기 전이면 `sessions`가 바뀔 때 그 세션 칭찬을 다시 읽어 칭찬 수를 갱신한다. 칭찬 저장은 `sessions`·`achievements`를 무효화한다(칭찬 수·칭찬 업적).
 - 참여 버튼은 무효화 뒤 그 화면의 `dataVersion`이 오른 값 이상으로 새로 받은 데이터가 올 때 풀립니다(`useSessionParticipation`의 `dataVersion`·`loadedVersion`).
 - 진행 중 세션은 이와 별개로 세션 시작·끝·만료 시각에 다시 읽고, 숨은 동안 그 시각이 지났으면 다시 보일 때 읽습니다.
   - 다시 보일 때는 잠깐 기다려 숨은 동안의 무효화·TTL로 이미 다시 읽기 시작했으면 한 번 더 읽지 않습니다.
@@ -235,7 +245,7 @@
   - `animate-pk-draw`는 요소에 `pathLength="1"`이 필요합니다.
   - transform·opacity만 움직이고 height·top·width·left는 애니메이션하지 않습니다.
   - 새 keyframes는 `@theme`에 `pk-` 접두로 추가하고 `cx.ts` 등록도 함께 고칩니다.
-- 여러 요소가 맞물려 끝없이 도는 장식(`pk-flame-aura`, 진행 중 경기 랠리 `pk-rally-*`)은 예외로 `index.css` utilities의 컴포넌트 클래스와 파일 끝 keyframes로 두고, 움직임 줄이기도 그 클래스의 `@media (prefers-reduced-motion: reduce)`에서 처리합니다.
+- 여러 요소가 맞물려 끝없이 도는 장식(`pk-flame-aura`, 진행 중 경기 랠리 `pk-rally-*`, 칭찬 엄지 배지 `pk-praise-badge`)은 예외로 `index.css` utilities의 컴포넌트 클래스와 파일 끝 keyframes로 두고, 움직임 줄이기도 그 클래스의 `@media (prefers-reduced-motion: reduce)`에서 처리합니다.
 - 움직임 줄이기는 소비처에서 `motion-reduce:`(`motion-reduce:animate-none`, `motion-reduce:transition-none`, 장식 요소는 `motion-reduce:hidden`)로 끄고 최종 상태를 바로 보입니다.
 - 화면 등장 연출(CSS 애니메이션·숫자 카운트업)은 화면이 보이게 될 때마다(처음 마운트 포함) 처음부터 한 번 재생합니다.
   - 보임은 `context/ScreenVisibilityContext.tsx` 기준입니다. 같은 보임 안의 데이터 재조회(`useDataVersion`)·리렌더·바텀시트 열고 닫기로는 다시 재생하지 않으며, 숨김 중이나 콘텐츠 준비 전(`isReady` false)에는 진행하지 않습니다.
@@ -252,6 +262,7 @@
 - 테두리가 필요한 곳(진행 중인 내 경기 카드, 테두리 버튼)은 옅은 파랑 `pk-primary-line`입니다.
 - 하이라이트 `pk-hl`(앰버 #ffb627)은 테두리 없이 LIVE 표시, 오늘의 급상승, 업적 축하 연출(`AchievementCelebration`)과 받은 업적 시트 머리의 배지 빛줄기·후광에만 씁니다. 예외로 경기 삭제 버튼의 길게 누르기 채움 앞 끝 선, 축하 연출·받은 업적 시트에서 한 번 퍼지는 고리, 연승 아바타(`WinStreakAvatarFrame`, `.pk-streak-ring`)의 링·태그, 진행 중 세션 연승 아바타(`SessionWinStreakFrame`)의 링·태그와 "N연승" 칩(`SessionWinStreakBadge`)에 씁니다. 평점 추세선 끝점은 블루 점입니다.
   - 대회 세션 예외로 달력의 대회 날 점과 대진 진행 중 경기의 앰버 점("진행 중" 앞)에도 씁니다.
+  - 세션 칭찬 예외로 칭찬 팝업의 "세션 종료" 글자, 칭찬 분류 칩, 칭찬 직후 고른 카드의 링·빛줄기, 칭찬 5개 이상 아바타의 링·엄지 배지에도 씁니다(`docs/design.md` "세션 칭찬").
 - 대회 세션 카드(대회 카드·순위 카드)는 짙은 남색 `pk-deep` 바탕입니다.
   - "트로피 + 대회" 칩은 `pk-gold` 바탕에 글자·트로피 아이콘 `pk-ink`이고, 오른쪽 위 원에 연한 금색 트로피 장식을 둡니다.
   - 남색 바탕 위 평점 상승은 `pk-up-on-deep`, 하락은 `pk-down-on-deep`입니다(`pk-up`·`pk-down`은 남색 위에서 읽히지 않음).

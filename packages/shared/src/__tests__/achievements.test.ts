@@ -144,7 +144,7 @@ const endedSessions = (
   ]);
 
 describe("ACHIEVEMENTS", () => {
-  it("업적 47개를 표 순서로 정의한다", () => {
+  it("업적 49개를 표 순서로 정의한다", () => {
     expect(ACHIEVEMENTS.map((definition) => definition.id)).toEqual([
       "matches-1",
       "matches-10",
@@ -193,8 +193,10 @@ describe("ACHIEVEMENTS", () => {
       "unbeaten-session",
       "dominator-1",
       "dominator-10",
+      "praised-1",
+      "praised-10",
     ]);
-    expect(new Set(ACHIEVEMENTS.map((item) => item.id)).size).toBe(47);
+    expect(new Set(ACHIEVEMENTS.map((item) => item.id)).size).toBe(49);
   });
 
   it("분류 이름은 경기 수·승리·연승·평점·특별·세션이다", () => {
@@ -227,9 +229,9 @@ describe("isBestStreakAchievement", () => {
 });
 
 describe("computeAchievements", () => {
-  it("경기가 없으면 47개 모두 진행도 0으로 받지 않은 상태다", () => {
+  it("경기가 없으면 49개 모두 진행도 0으로 받지 않은 상태다", () => {
     const progress = compute([]);
-    expect(progress).toHaveLength(47);
+    expect(progress).toHaveLength(49);
     expect(progress.map((item) => item.id)).toEqual(
       ACHIEVEMENTS.map((definition) => definition.id),
     );
@@ -1384,7 +1386,7 @@ describe("업적 점수", () => {
     for (const definition of ACHIEVEMENTS) {
       expect([10, 25, 50, 100]).toContain(definition.points);
     }
-    expect(ACHIEVEMENT_MAX_POINTS).toBe(1900);
+    expect(ACHIEVEMENT_MAX_POINTS).toBe(2025);
   });
 
   it("받은 업적 점수만 더하고 모르는 업적은 0점이다", () => {
@@ -1599,5 +1601,55 @@ describe("업적 이름", () => {
         (id) => ACHIEVEMENTS.find((definition) => definition.id === id)?.name,
       ),
     ).toEqual(["출석 10회", "출석 30회", "출석 100회"]);
+  });
+});
+
+describe("칭찬 업적", () => {
+  const praisedEndedSessions = (
+    sessions: { sessionId: string; matchId: string; reachedAt: Date }[],
+  ): EndedSessions =>
+    Object.assign(new Map<string, string | null>(), {
+      praisedSessionsByPlayerId: new Map([[ME, sessions]]),
+    });
+
+  const progressOf = (endedSessions: EndedSessions, id: string) =>
+    computeAchievements(ME, [], endedSessions).find((item) => item.id === id)!;
+
+  it("칭찬 5개 이상 받은 첫 세션으로 이쁨받기를 받는다(받은 시각은 닿은 칭찬 시각)", () => {
+    const reachedAt = new Date(BASE_MS + 60_000);
+    const progress = progressOf(
+      praisedEndedSessions([
+        { sessionId: "s-2", matchId: "m-2", reachedAt: new Date(BASE_MS + 120_000) },
+        { sessionId: "s-1", matchId: "m-1", reachedAt },
+      ]),
+      "praised-1",
+    );
+    expect(progress).toMatchObject({
+      earned: true,
+      earnedMatchId: "m-1",
+      earnedAt: reachedAt,
+      current: 2,
+    });
+  });
+
+  it("이 구역 사랑둥이는 10번째 세션으로 받고, 그 전에는 진행도만 쌓인다", () => {
+    const sessions = Array.from({ length: 10 }, (_, index) => ({
+      sessionId: `s-${index}`,
+      matchId: `m-${index}`,
+      reachedAt: new Date(BASE_MS + index * 60_000),
+    }));
+    expect(
+      progressOf(praisedEndedSessions(sessions.slice(0, 9)), "praised-10"),
+    ).toMatchObject({ earned: false, current: 9 });
+    expect(
+      progressOf(praisedEndedSessions(sessions), "praised-10"),
+    ).toMatchObject({ earned: true, earnedMatchId: "m-9", current: 10 });
+  });
+
+  it("칭찬 기록이 없으면 받지 않은 상태다", () => {
+    expect(progressOf(new Map(), "praised-1")).toMatchObject({
+      earned: false,
+      current: 0,
+    });
   });
 });

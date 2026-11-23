@@ -1,6 +1,7 @@
-import type {
-  EarnedAchievement,
-  EndedSessions,
+import {
+  PRAISE_ACHIEVEMENT_IDS,
+  type EarnedAchievement,
+  type EndedSessions,
 } from "@pkpkdupr/shared/achievements";
 import type {
   NewsFeedItem,
@@ -9,6 +10,10 @@ import type {
   NewsFeedSessionItem,
 } from "@pkpkdupr/shared/newsFeed";
 import { getPlayerJoinedAt, type Player } from "@pkpkdupr/shared/player";
+import {
+  getSessionPraiseStatus,
+  SESSION_PRAISE_HIGHLIGHT_MIN,
+} from "@pkpkdupr/shared/sessionPraise";
 import {
   WIN_STREAK_DISPLAY_MIN,
   computeCurrentWinStreaks,
@@ -32,6 +37,10 @@ import {
   type RankingSession,
   type RankingSourcePlayer,
 } from "./RankingService";
+import {
+  buildSessionPraiseCandidates,
+  getRankingSessionEndsAt,
+} from "./SessionPraiseService";
 
 /**
  * 홈 소식 피드. 저장 없이 랭킹 원천(세션·완료 경기·평점 로그·회원)으로 요청마다 계산한다.
@@ -43,6 +52,14 @@ export const NEWS_FEED_WINDOW_MS = 28 * 24 * 60 * 60 * 1000;
 
 /** 지배자 줄과 겹쳐 소식 줄에서 빼는 업적(세션 지배자 1회) */
 const FIRST_DOMINATOR_ACHIEVEMENT_ID = "dominator-1";
+/** 세션 칭찬의 받은 회원별 칭찬 수 */
+const countPraisesByTarget = (session: RankingSession) => {
+  const counts = new Map<string, number>();
+  for (const praise of session.praises ?? []) {
+    counts.set(praise.targetPlayerId, (counts.get(praise.targetPlayerId) ?? 0) + 1);
+  }
+  return [...counts.values()];
+};
 
 /** 복식 순위가 이 안에 든 회원만 랭킹 줄을 만든다 */
 const NEWS_FEED_RANK_LIMIT = 3;
@@ -93,6 +110,7 @@ const buildSessionItem = ({
   activePlayerIds,
   requesterId,
   earnedByPlayerId,
+  now,
 }: {
   context: RankingContext;
   session: RankingSession;
@@ -100,6 +118,7 @@ const buildSessionItem = ({
   activePlayerIds: Set<string>;
   requesterId: string;
   earnedByPlayerId: (playerId: string) => EarnedAchievement[];
+  now: Date;
 }): NewsFeedSessionItem | null => {
   const players = buildSessionPlayerReports(context, session, sessionMatches);
   const endAt = getSessionEndAt(sessionMatches);
@@ -187,6 +206,34 @@ const buildSessionItem = ({
       : [];
   });
 
+  // 칭찬 줄: 마감 뒤 칭찬을 기준 수 이상 받은 후보. 이 세션으로 칭찬 업적(이쁨받기·이 구역 사랑둥이)을 받은 회원은 업적 줄만 남긴다
+  const praiseAchievementPlayerIds = new Set(
+    achievementLines.flatMap((line) =>
+      line.kind === "achievement" &&
+      PRAISE_ACHIEVEMENT_IDS.has(line.achievementId)
+        ? [line.player.id]
+        : [],
+    ),
+  );
+  const hasHighlightedPraise = countPraisesByTarget(session).some(
+    (count) => count >= SESSION_PRAISE_HIGHLIGHT_MIN,
+  );
+  const praiseLines: NewsFeedLine[] =
+    hasHighlightedPraise &&
+    getSessionPraiseStatus(getRankingSessionEndsAt(session), now) === "closed"
+      ? buildSessionPraiseCandidates(context, session, now, {
+          sessionMatches,
+          reports: players,
+        })
+          .filter(
+            (candidate) =>
+              candidate.praiseCount >= SESSION_PRAISE_HIGHLIGHT_MIN &&
+              lineMembers.has(candidate.player.id) &&
+              !praiseAchievementPlayerIds.has(candidate.player.id),
+          )
+          .map((candidate) => ({ kind: "praise" as const, ...candidate }))
+      : [];
+
   return {
     kind: "session",
     session: toSessionHistoryItem(
@@ -196,7 +243,7 @@ const buildSessionItem = ({
     ),
     mine: players.find((report) => report.player.id === requesterId) ?? null,
     topRiser,
-    lines: [...rankLines, ...winStreakLines, ...achievementLines],
+    lines: [...praiseLines, ...rankLines, ...winStreakLines, ...achievementLines],
   };
 };
 
@@ -212,6 +259,7 @@ export const buildNewsFeedPage = ({
   endedSessions,
   requesterId,
   cursor,
+  now = new Date(),
 }: {
   context: RankingContext;
   sessions: RankingSession[];
@@ -221,6 +269,8 @@ export const buildNewsFeedPage = ({
   requesterId: string;
   /** 이전 페이지 nextCursor(ms). 첫 페이지는 null */
   cursor: number | null;
+  /** 칭찬 마감 판정 기준 시각 */
+  now?: Date;
 }): NewsFeedResponse => {
   const matchesBySession = groupMatchesBySession(context.matches);
   const remaining = sessions
@@ -290,6 +340,7 @@ export const buildNewsFeedPage = ({
       activePlayerIds,
       requesterId,
       earnedByPlayerId,
+      now,
     });
     return item ? [{ atMs: session.date.getTime(), item }] : [];
   });

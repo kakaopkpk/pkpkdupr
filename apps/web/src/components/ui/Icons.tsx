@@ -37,10 +37,13 @@ export const BackIcon: React.FC = () => (
 );
 
 /** 채운 왕관(밑줄 포함) */
-export const CrownIcon: React.FC<{ className?: string }> = ({ className }) => (
+export const CrownIcon: React.FC<{ className?: string; size?: number }> = ({
+  className,
+  size = 14,
+}) => (
   <svg
-    width="14"
-    height="14"
+    width={size}
+    height={size}
     viewBox="0 0 24 24"
     aria-hidden="true"
     className={className ?? "shrink-0"}
@@ -280,3 +283,39 @@ export const LockIcon: React.FC<{ size?: number; className?: string }> = ({
     <path d="M8 11V8a4 4 0 0 1 8 0v3" />
   </svg>
 );
+
+/** 엄지 척(칭찬) 선 모양. 칭찬 버튼·알약·배지와 칭찬 업적 배지가 같이 쓴다 */
+export const THUMB_UP_ICON_PATHS = [
+  "M7 10v12",
+  "M15 5.88 14 10h5.83a2 2 0 0 1 1.92 2.56l-2.33 8A2 2 0 0 1 17.5 22H4a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2h2.76a2 2 0 0 0 1.79-1.11L12 2a3.13 3.13 0 0 1 3 3.88Z",
+] as const;
+
+/** 엄지 척(칭찬) 선 아이콘 */
+export const ThumbUpIcon: React.FC<{
+  size?: number;
+  strokeWidth?: number;
+  className?: string;
+}> = ({ size = 16, strokeWidth = 2.4, className }) => (
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 24 24"
+    aria-hidden="true"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth={strokeWidth}
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    className={cx("shrink-0", className)}
+  >
+    {THUMB_UP_ICON_PATHS.map((d) => (
+      <path key={d} d={d} />
+    ))}
+  </svg>
+);
+
+/** 체크가 든 방패(연승 문지기 칩·완벽한 승리 업적 배지) 선 모양 */
+export const SHIELD_CHECK_ICON_PATHS = [
+  "M12 3l7 3v5c0 4.5-3 8-7 10-4-2-7-5.5-7-10V6z",
+  "M9 12l2 2 4-4",
+] as const;

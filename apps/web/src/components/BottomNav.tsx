@@ -21,6 +21,7 @@ import {
 } from "@/components/BottomDock";
 import PwaInstallPrompt from "@/components/PwaInstallPrompt";
 import UnseenAchievementCelebration from "@/components/profile/UnseenAchievementCelebration";
+import PendingSessionPraisePopup from "@/components/praise/PendingSessionPraisePopup";
 import {
   PUSH_SCREEN_TRANSITION_CLASS,
   PushScreenCoverDim,
@@ -295,6 +296,10 @@ const BottomNavShell: React.FC = () => {
   const [depthStacks, setDepthStacks] =
     useState<TabDepthStacks>(emptyDepthStacks);
   const [isGlobalMenuOpen, setIsGlobalMenuOpen] = useState(false);
+  // 칭찬 팝업 조회 중·표시 중이면 업적 축하가 기다린다. 첫 조회가 끝날 때까지 막아 칭찬 팝업이 먼저 뜬다
+  const [isSessionPraiseBusy, setIsSessionPraiseBusy] = useState(true);
+  const [isAchievementCelebrationShowing, setIsAchievementCelebrationShowing] =
+    useState(false);
   const [globalMenuTabKey, setGlobalMenuTabKey] = useState<TabKey>("home");
   const [globalScreens, setGlobalScreens] = useState<GlobalScreenEntry[]>([]);
   const [recordMatchLayer, setRecordMatchLayer] =
@@ -847,6 +852,8 @@ const BottomNavShell: React.FC = () => {
     (tabKey) => depthStacks[tabKey].length === 0,
   );
   const isHomeTabUncovered = selectedTab === "home" && isEveryTabUncovered;
+  // 전역 화면·바텀시트·메뉴가 하나도 열려 있지 않다(칭찬 팝업·업적 축하를 띄울 수 있다)
+  const isShellIdle = isEveryTabUncovered && !isGlobalMenuOpen;
 
   // 지금 탭 위에 화면이 열려 있으면 탭 셸(하단 바·미니바·알림 바·+ 버튼 포함)이 그 아래로 밀려 가려진다
   const isShellCovered = isPushScreenShown(pushScreenStack.entries);
@@ -1427,9 +1434,17 @@ const BottomNavShell: React.FC = () => {
             </div>
 
             <PwaInstallPrompt isActive={isHomeTabUncovered} />
+            {/* 칭찬 팝업과 업적 축하는 함께 뜨지 않고, 겹치면 칭찬 팝업이 먼저다 */}
+            <PendingSessionPraisePopup
+              playerId={player?.id ?? null}
+              isActive={isShellIdle && !isAchievementCelebrationShowing}
+              tabKey={selectedTab}
+              onBusyChange={setIsSessionPraiseBusy}
+            />
             <UnseenAchievementCelebration
               playerId={player?.id ?? null}
-              isActive={isEveryTabUncovered && !isGlobalMenuOpen}
+              isActive={isShellIdle && !isSessionPraiseBusy}
+              onShowingChange={setIsAchievementCelebrationShowing}
             />
 
             {globalScreens.map((screen) => {

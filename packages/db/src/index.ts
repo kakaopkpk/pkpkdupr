@@ -66,6 +66,7 @@ export {
   type MatchEditLog,
 } from "./repositories/MatchEditLogRepository";
 export { PlayerSeenAchievementRepository } from "./repositories/PlayerSeenAchievementRepository";
+export { SessionPraiseRepository } from "./repositories/SessionPraiseRepository";
 export {
   TestDataRepository,
   isDevMockDataEnabled,

@@ -39,6 +39,7 @@ describe("resolveDataChangeKinds", () => {
     ["DELETE", "/api/match-sessions/S1/participants/P1", ["sessions"]],
     ["POST", "/api/match-sessions/S1/guests", ["sessions", "players"]],
     ["POST", "/api/match-sessions/S1/complete", ["sessions", "achievements"]],
+    ["POST", "/api/match-sessions/S1/praise", ["sessions", "achievements"]],
     ["POST", "/api/cron/regular-sessions", ["sessions"]],
     ["POST", "/api/admin/matches/batch", MATCH_KINDS],
     ["PATCH", "/api/admin/matches/bulk-metadata", MATCH_KINDS],

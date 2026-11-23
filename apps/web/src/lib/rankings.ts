@@ -31,8 +31,9 @@ export class RequestError extends Error {
 export const requestJson = async <T>(
   path: string,
   fallbackMessage: string,
+  init?: RequestInit,
 ): Promise<T> => {
-  const res = await apiFetch(path);
+  const res = await apiFetch(path, init);
   if (!res.ok) {
     const errorData = (await res.json().catch(() => ({}))) as {
       error?: string;

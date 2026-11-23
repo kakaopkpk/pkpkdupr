@@ -76,6 +76,8 @@ export const GLOBAL_LAYER = {
   avatarZoom: 90,
   /** 업적 달성 축하 연출. 경기 기록 시트·업적 상세보다 위 */
   achievementCelebration: 100,
+  /** 세션 칭찬 팝업. 업적 축하와 같은 높이이고 둘이 함께 뜨지 않는다 */
+  sessionPraise: 100,
 } as const;
 
 const AppNavigationContext = createContext<AppNavigationContextValue | null>(
