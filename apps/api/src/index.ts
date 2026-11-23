@@ -121,6 +121,11 @@ import type {
   RecordsResponse,
 } from "@pkpkdupr/shared/ranking";
 import type { NewsFeedResponse } from "@pkpkdupr/shared/newsFeed";
+import type {
+  PendingSessionPraisesResponse,
+  SessionPraiseRequest,
+  SessionPraiseResponse,
+} from "@pkpkdupr/shared/sessionPraise";
 import {
   getScheduleMonthDateKeyRange,
   parseScheduleMonth,
@@ -161,6 +166,10 @@ import {
 } from "./services/PlayerRatingChartProjectionService";
 import { buildPlayerProfileSummary } from "./services/PlayerProfileSummaryService";
 import {
+  buildSessionPraiseResponse,
+  findPendingSessionPraises,
+} from "./services/SessionPraiseService";
+import {
   SESSION_HISTORY_DEFAULT_LIMIT,
   SESSION_HISTORY_MAX_LIMIT,
   buildAchievementRankingResponse,
@@ -176,6 +185,7 @@ import {
   findPlayerEarnedAchievements,
   parseRecordsCursor,
   type RecordsPageEntry,
+  type RankingSession,
   toContextAchievementMatches,
 } from "./services/RankingService";
 import {
@@ -3797,6 +3807,116 @@ app.get("/api/session-reports/:sessionId", async (req, res) => {
       throw new RankingRequestError("세션 리포트를 찾을 수 없습니다.", 404);
     }
     res.json(report);
+  } catch (err) {
+    sendRankingFailure(res, err);
+  }
+});
+
+/** 세션 칭찬 요청의 세션: id 형식 오류 400, 없으면 404 */
+const findPraiseSession = (
+  sessions: RankingSession[],
+  sessionId: string,
+): RankingSession => {
+  if (!isEntityId(sessionId, "session")) {
+    throw new RankingRequestError("유효한 세션 ID가 필요합니다.", 400);
+  }
+  const session = sessions.find((candidate) => candidate.id === sessionId);
+  if (!session) {
+    throw new RankingRequestError("세션을 찾을 수 없습니다.", 404);
+  }
+  return session;
+};
+
+app.get("/api/match-sessions/:sessionId/praise", async (req, res) => {
+  try {
+    const decoded = await getAuthPayload(req, res);
+    if (!decoded) {
+      return;
+    }
+    const { context, sessions } = await loadRankingSource();
+    const session = findPraiseSession(sessions, req.params.sessionId);
+    const response: SessionPraiseResponse = buildSessionPraiseResponse(
+      context,
+      session,
+      decoded.playerId,
+      new Date(),
+    );
+    res.json(response);
+  } catch (err) {
+    sendRankingFailure(res, err);
+  }
+});
+
+app.post("/api/match-sessions/:sessionId/praise", async (req, res) => {
+  try {
+    const decoded = await getAuthPayload(req, res);
+    if (!decoded) {
+      return;
+    }
+    const body = req.body as Partial<SessionPraiseRequest> | undefined;
+    const targetPlayerId =
+      typeof body?.targetPlayerId === "string" ? body.targetPlayerId : "";
+    const { context, sessions } = await loadRankingSource();
+    const session = findPraiseSession(sessions, req.params.sessionId);
+    const now = new Date();
+    const current = buildSessionPraiseResponse(
+      context,
+      session,
+      decoded.playerId,
+      now,
+    );
+    if (current.status !== "open" || current.candidates.length === 0) {
+      throw new RankingRequestError("지금은 칭찬할 수 없어요.", 409);
+    }
+    if (
+      !current.candidates.some(
+        (candidate) => candidate.player.id === targetPlayerId,
+      )
+    ) {
+      throw new RankingRequestError("칭찬 후보가 아니에요.", 400);
+    }
+    const praise = {
+      sessionId: session.id,
+      voterPlayerId: decoded.playerId,
+      targetPlayerId,
+    };
+    if (
+      current.myTargetPlayerId ||
+      !(await matchRepository.createSessionPraise(praise, now))
+    ) {
+      throw new RankingRequestError("이미 칭찬했어요.", 409);
+    }
+    const response: SessionPraiseResponse = buildSessionPraiseResponse(
+      context,
+      {
+        ...session,
+        praises: [...(session.praises ?? []), { ...praise, createdAt: now }],
+      },
+      decoded.playerId,
+      now,
+    );
+    res.json(response);
+  } catch (err) {
+    sendRankingFailure(res, err);
+  }
+});
+
+app.get("/api/me/session-praises/pending", async (req, res) => {
+  try {
+    const decoded = await getAuthPayload(req, res);
+    if (!decoded) {
+      return;
+    }
+    const { context, sessions } = await loadRankingSource();
+    const response: PendingSessionPraisesResponse = {
+      items: findPendingSessionPraises(
+        context,
+        sessions,
+        decoded.playerId,
+        new Date(),
+      ),
+    };
+    res.json(response);
   } catch (err) {
     sendRankingFailure(res, err);
   }

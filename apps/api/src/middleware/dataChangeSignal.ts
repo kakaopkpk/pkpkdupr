@@ -56,6 +56,12 @@ const SIGNAL_ROUTES: readonly SignalRoute[] = [
     pattern: /^\/api\/match-sessions\/[^/]+\/complete$/i,
     kinds: ["sessions", "achievements"],
   },
+  // 세션 칭찬은 칭찬 수와 칭찬 업적(이쁨받기·이 구역 사랑둥이)을 바꾼다
+  {
+    method: "POST",
+    pattern: /^\/api\/match-sessions\/[^/]+\/praise$/i,
+    kinds: ["sessions", "achievements"],
+  },
   { pattern: /^\/api\/match-sessions(\/.*)?$/i, kinds: ["sessions"] },
   // 경기
   { method: "POST", pattern: /^\/api\/matches\/start$/i, kinds: MATCH_START_KINDS },

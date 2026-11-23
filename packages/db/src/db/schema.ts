@@ -341,6 +341,26 @@ export const playerSeenAchievements = pgTable(
   }),
 );
 
+/** 세션 칭찬. 회원이 세션마다 한 번, 후보 한 명에게 보낸다(바꾸거나 취소할 수 없다). 세션·회원이 지워지면 함께 지워진다 */
+export const sessionPraises = pgTable(
+  "session_praises",
+  {
+    sessionId: id("session_id").notNull(),
+    voterPlayerId: id("voter_player_id").notNull(),
+    targetPlayerId: id("target_player_id").notNull(),
+    createdAt: unixTimestamp("created_at").notNull(),
+  },
+  (table) => ({
+    pk: primaryKey({
+      name: "session_praises_pkey",
+      columns: [table.sessionId, table.voterPlayerId],
+    }),
+    targetPlayerIdIndex: index("session_praises_target_player_id_idx").on(
+      table.targetPlayerId,
+    ),
+  }),
+);
+
 /**
  * 정기 회차를 만들지 않는 KST 날짜. holiday=공휴일(예약 작업이 구글 공휴일 캘린더로 채움),
  * canceled=정기 쉬는 날(관리자가 지정했거나 자동 정기 세션을 지운 날). 여기 있는 날짜의 정기 세션은 자동 경로로 새로 만들지 않는다.

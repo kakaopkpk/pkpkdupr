@@ -414,7 +414,7 @@ describe("buildNewsFeedPage 세션 항목", () => {
     expect(achievementLines).toEqual(expected);
 
     const kinds = item.lines.map((line) => line.kind);
-    const order = { rank: 0, winStreak: 1, achievement: 2 };
+    const order = { praise: 0, rank: 1, winStreak: 2, achievement: 3 };
     expect(kinds).toEqual(
       [...kinds].sort((left, right) => order[left] - order[right]),
     );

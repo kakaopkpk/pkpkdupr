@@ -9,7 +9,12 @@ import {
   type AchievementMatch,
   type EarnedAchievement,
   type EndedSessions,
+  type PraisedSession,
 } from "@pkpkdupr/shared/achievements";
+import {
+  findPraiseReachedSessions,
+  type SessionPraiseRecord,
+} from "@pkpkdupr/shared/sessionPraise";
 import { isEntityId } from "@pkpkdupr/shared/entityId";
 import {
   getMatchTopLevelType,
@@ -82,6 +87,8 @@ export interface RankingSession {
   completedAt?: Date | null;
   location: string;
   participantIds: string[];
+  /** 이 세션에 보낸 칭찬(칭찬 후보 칭찬 수·칭찬 업적). 없으면 칭찬이 없는 것으로 본다 */
+  praises?: readonly SessionPraiseRecord[];
 }
 
 export type RankingSourcePlayer = Pick<
@@ -670,7 +677,39 @@ export const findEndedSessions = (
     const topRiser = stats ? pickTopRiser(stats.players) : null;
     endedSessions.set(session.id, topRiser?.player.id ?? null);
   }
-  return endedSessions;
+  return Object.assign(endedSessions, {
+    praisedSessionsByPlayerId: findPraisedSessions(context, sessions),
+  });
+};
+
+/**
+ * 칭찬 업적 입력: 회원별 칭찬을 기준 수 이상 받은 세션. 칭찬은 세션이 끝난 뒤에만 받으므로 만료 여부는 보지 않는다.
+ * 받은 경기는 그 세션에서 그 회원의 마지막 완료 경기(게스트가 낀 경기 포함)이고, 경기가 없으면 세지 않는다.
+ */
+const findPraisedSessions = (
+  context: RankingContext,
+  sessions: RankingSession[],
+): Map<string, PraisedSession[]> => {
+  const praises = sessions.flatMap((session) => session.praises ?? []);
+  const result = new Map<string, PraisedSession[]>();
+  if (praises.length === 0) return result;
+  const matchesBySession = groupMatchesBySession(context.matches);
+  for (const [playerId, reached] of findPraiseReachedSessions(praises)) {
+    const items = reached.flatMap(({ sessionId, reachedAt }) => {
+      const lastMatch = (matchesBySession.get(sessionId) ?? [])
+        .filter((match) =>
+          match.teamPlayerIds.some((team) => team.includes(playerId)),
+        )
+        .sort(
+          (left, right) =>
+            right.completedAt.getTime() - left.completedAt.getTime() ||
+            compareText(right.id, left.id),
+        )[0];
+      return lastMatch ? [{ sessionId, matchId: lastMatch.id, reachedAt }] : [];
+    });
+    if (items.length > 0) result.set(playerId, items);
+  }
+  return result;
 };
 
 /**

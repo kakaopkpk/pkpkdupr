@@ -39,12 +39,14 @@ import {
   matches,
   matchScores,
   matchSessionParticipants,
+  sessionPraises,
   matchSessionPlacements,
   matchSessions,
   players,
   regularSessionSkips,
 } from "../db/schema";
 import { generateEntityId, isEntityId } from "@pkpkdupr/shared/entityId";
+import type { SessionPraiseRecord } from "@pkpkdupr/shared/sessionPraise";
 import {
   IN_PROGRESS_MATCH_TIMEOUT_MS,
   REGULAR_SESSION_LOCATION,
@@ -178,6 +180,8 @@ export interface SessionWithParticipantIds {
   /** 회원이 정기 세션을 완료한 시각. 완료 전이거나 정기 세션이 아니면 null */
   completedAt: Date | null;
   participantIds: string[];
+  /** 이 세션에 보낸 칭찬 전부(칭찬 업적·후보 칭찬 수). 저장소는 항상 채우고, 없으면 칭찬이 없는 것으로 본다 */
+  praises?: SessionPraiseRecord[];
 }
 
 export interface CreateMatchInput {
@@ -1197,7 +1201,7 @@ export class MatchRepository {
 
   /** 모든 세션과 참여자 id를 쿼리 2번으로 읽는다(세션 날짜 내림차순) */
   async findSessionsWithParticipantIds(): Promise<SessionWithParticipantIds[]> {
-    const [sessionRows, participantRows] = await Promise.all([
+    const [sessionRows, participantRows, praiseRows] = await Promise.all([
       this.db.select().from(matchSessions).orderBy(desc(matchSessions.date)),
       this.db
         .select({
@@ -1206,7 +1210,15 @@ export class MatchRepository {
         })
         .from(matchSessionParticipants)
         .orderBy(asc(matchSessionParticipants.id)),
+      this.db.select().from(sessionPraises),
     ]);
+
+    const praisesBySessionId = new Map<string, SessionPraiseRecord[]>();
+    for (const row of praiseRows as SessionPraiseRecord[]) {
+      const praises = praisesBySessionId.get(row.sessionId) ?? [];
+      praises.push(row);
+      praisesBySessionId.set(row.sessionId, praises);
+    }
 
     const participantIdsBySessionId = new Map<string, string[]>();
     for (const row of participantRows as Array<{
@@ -1227,6 +1239,7 @@ export class MatchRepository {
           location: session.location,
           ...toSessionKindAndTimes(session),
           participantIds: participantIdsBySessionId.get(session.id) ?? [],
+          praises: praisesBySessionId.get(session.id) ?? [],
         };
       },
     );

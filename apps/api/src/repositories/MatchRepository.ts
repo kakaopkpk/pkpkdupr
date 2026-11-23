@@ -1,3 +1,4 @@
+import type { SessionPraiseRecord } from "@pkpkdupr/shared/sessionPraise";
 import type {
   AdminMatchDeletionLog,
   AdminMatchEditLog,
@@ -996,6 +997,17 @@ export class MatchRepository {
   /** 랭킹·세션 리포트 계산용 완료 경기 요약 */
   async findCompletedMatchOutcomes(): Promise<CompletedMatchOutcome[]> {
     return await this.run(() => db.matches.findCompletedMatchOutcomes(), 500);
+  }
+
+  /** 세션 칭찬을 저장한다. 이미 이 세션에 칭찬했으면 저장하지 않고 false */
+  async createSessionPraise(
+    praise: Omit<SessionPraiseRecord, "createdAt">,
+    createdAt: Date,
+  ): Promise<boolean> {
+    return await this.run(
+      () => db.sessionPraises.create(praise, createdAt),
+      500,
+    );
   }
 
   /** 모든 세션과 참여자 id(세션 날짜 내림차순) */

@@ -13,6 +13,7 @@ import {
   PlayerRatingChartProjectionRepository,
   PlayerRepository,
   PlayerSeenAchievementRepository,
+  SessionPraiseRepository,
   PlayerStatusChangeLogRepository,
   RatingWriteLock,
   TestDataRepository,
@@ -49,6 +50,7 @@ export const db: {
   playerRatingChangeLogs: PlayerRatingChangeLogRepository;
   playerRatingChartProjections: PlayerRatingChartProjectionRepository;
   playerSeenAchievements: PlayerSeenAchievementRepository;
+  sessionPraises: SessionPraiseRepository;
   officialDuprAdjustmentLogs: OfficialDuprAdjustmentLogRepository;
   matches: MatchRepository;
   matchDeletionLogs: MatchDeletionLogRepository;
@@ -65,6 +67,7 @@ export const db: {
     client,
   ),
   playerSeenAchievements: new PlayerSeenAchievementRepository(client),
+  sessionPraises: new SessionPraiseRepository(client),
   officialDuprAdjustmentLogs: new OfficialDuprAdjustmentLogRepository(
     drizzleDb,
   ),
