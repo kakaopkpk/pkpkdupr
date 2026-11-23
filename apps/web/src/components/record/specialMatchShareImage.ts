@@ -442,12 +442,11 @@ const drawCaption = (
   setLetterSpacing(ctx, "0px");
   ctx.textAlign = "left";
   ctx.textBaseline = "middle";
-  const partFont = (size: number) => shareFont(700, size);
   const sum = (values: number[]) => values.reduce((total, value) => total + value, 0);
   const texts = parts.map((part) => part.text);
   const measure = (size: number) =>
     texts.map((text) => {
-      ctx.font = partFont(size);
+      ctx.font = shareFont(700, size);
       return ctx.measureText(text).width;
     });
   let size = CAPTION_SIZE;
@@ -459,13 +458,13 @@ const drawCaption = (
   const overflow = sum(widths) - CARD_WIDTH;
   const fitIndex = parts.findIndex((part) => part.fit);
   if (overflow > 0 && fitIndex >= 0) {
-    ctx.font = partFont(size);
+    ctx.font = shareFont(700, size);
     texts[fitIndex] = fitLine(ctx, texts[fitIndex], widths[fitIndex] - overflow);
     widths[fitIndex] = ctx.measureText(texts[fitIndex]).width;
   }
   let x = (SHARE_WIDTH - sum(widths)) / 2;
   parts.forEach((part, index) => {
-    ctx.font = partFont(size);
+    ctx.font = shareFont(700, size);
     ctx.fillStyle =
       part.highlight === "up" ? colors.upOnDeep : part.highlight === "amber" ? colors.amber : colors.white;
     ctx.fillText(texts[index], x, cy);
