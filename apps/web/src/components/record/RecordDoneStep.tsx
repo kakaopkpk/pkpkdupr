@@ -117,9 +117,10 @@ export default function RecordDoneStep({
       : null;
   const isSpecialMatchCelebrationShown =
     specialMatchCelebration != null && isSpecialMatchCelebrationOpen;
-  // 움직임 줄이기면 평점 세기가 없으므로 바로 띄운다. 특수 매치 연출을 닫은 뒤의 업적 축하도 바로 이어진다
-  const celebrationDelayMs =
-    prefersReducedMotion() || specialMatchCelebration ? 0 : CELEBRATION_DELAY_MS;
+  // 움직임 줄이기면 평점 세기가 없으므로 바로 띄운다
+  const reducedMotionDelayMs = prefersReducedMotion() ? 0 : CELEBRATION_DELAY_MS;
+  // 업적 축하는 특수 매치 연출을 닫은 뒤에 뜨므로 기다리지 않고 바로 이어진다
+  const celebrationDelayMs = specialMatchCelebration ? 0 : reducedMotionDelayMs;
 
   return (
     <>
@@ -248,7 +249,7 @@ export default function RecordDoneStep({
           celebration={specialMatchCelebration}
           match={match}
           username={viewer.username}
-          delayMs={prefersReducedMotion() ? 0 : CELEBRATION_DELAY_MS}
+          delayMs={reducedMotionDelayMs}
           onClose={() => setIsSpecialMatchCelebrationOpen(false)}
         />
       ) : null}

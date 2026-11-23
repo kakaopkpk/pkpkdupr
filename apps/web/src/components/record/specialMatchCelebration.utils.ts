@@ -14,17 +14,17 @@ export const SCENE_START_MS = 900;
 export const CHALLENGE_STEP_MS = 500;
 /** 도전 성공: 두 줄이 자리를 바꾸는 시간 */
 export const CHALLENGE_SWAP_MS = 350;
-/** 손바닥 도장이 떨어지는 시간 */
-export const STAMP_DROP_MS = 520;
+/** 손바닥 도장이 떨어지는 시간. index.css `--animate-pk-stamp-drop` 길이와 같아야 한다 */
+const STAMP_DROP_MS = 520;
 /** 도장이 박힌 뒤 연승 테두리가 흐려져 사라지는 시간 */
 export const STREAK_RING_FADE_MS = 500;
 /** 최강자전: 진 쪽에 도장이 박힌 뒤 이긴 쪽 테두리가 타오르기까지 */
-export const CHAMPIONS_FLARE_AFTER_IMPACT_MS = 600;
+const CHAMPIONS_FLARE_AFTER_IMPACT_MS = 600;
 const CHAMPIONS_FLARE_MS = 400;
 
 /** 도장이 박히는 시각 */
-export const STAMP_IMPACT_MS = SCENE_START_MS + STAMP_DROP_MS;
-export const CHAMPIONS_FLARE_START_MS = STAMP_IMPACT_MS + CHAMPIONS_FLARE_AFTER_IMPACT_MS;
+const STAMP_IMPACT_MS = SCENE_START_MS + STAMP_DROP_MS;
+const CHAMPIONS_FLARE_START_MS = STAMP_IMPACT_MS + CHAMPIONS_FLARE_AFTER_IMPACT_MS;
 
 /** 도전한 쪽이 지키던 쪽과 1 차이가 될 때까지 한 칸씩 오르는 횟수. 이미 1 차이 이내면 0 */
 export const getChallengeCountSteps = (
