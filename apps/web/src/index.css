@@ -77,6 +77,9 @@
   --animate-pk-slide-away: pk-slide-away 220ms var(--ease-pk-move) both;
   /* 한 번 나타났다 사라지는 반짝임(시작·끝 모두 투명) */
   --animate-pk-flash: pk-flash 1400ms var(--ease-pk-move) both;
+  /* 특수 매치 큰 연출: 손바닥 도장이 크게 떠 있다 점점 빨라지며 떨어져 박힌다 / 도장이 박힐 때 카드가 좌우로 흔들린다 */
+  --animate-pk-stamp-drop: pk-stamp-drop 520ms cubic-bezier(0.55, 0, 1, 0.45) both;
+  --animate-pk-shake: pk-shake 380ms var(--ease-pk-move) both;
 
   @keyframes nav-icon-pop {
     30% {
@@ -205,6 +208,32 @@
     to {
       opacity: 0;
       transform: translateX(-90px) scale(0.7);
+    }
+  }
+
+  @keyframes pk-stamp-drop {
+    from {
+      opacity: 0;
+      transform: translateY(-56px) scale(2.4);
+    }
+  }
+
+  @keyframes pk-shake {
+    0%,
+    100% {
+      transform: translateX(0);
+    }
+    20% {
+      transform: translateX(-7px) rotate(-1deg);
+    }
+    40% {
+      transform: translateX(6px) rotate(0.8deg);
+    }
+    60% {
+      transform: translateX(-4px);
+    }
+    80% {
+      transform: translateX(2px);
     }
   }
 
