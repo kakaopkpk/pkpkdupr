@@ -166,8 +166,8 @@ export const buildPlayerProfileSummary = (
       : { singles: createEmptyHeadToHead(), doubles: createEmptyHeadToHead() };
 
   for (const match of matches) {
-    // 게스트가 낀 경기는 승패·파트너 궁합·상대 전적·최근 경기 수에 세지 않는다(최근 경기 목록에는 나온다).
-    if (match.status !== "completed" || match.ratingExcluded) continue;
+    // 게스트가 낀 경기도 승패·파트너 궁합·상대 전적·최근 경기 수에 센다. 평점 로그가 없어 평점 변화는 0이다.
+    if (match.status !== "completed") continue;
 
     const playerTeamIndex = getPlayerTeamIndex(match, playerId);
     const winningTeamIndex = getWinningTeamIndex(match);
@@ -285,6 +285,20 @@ export const buildPlayerProfileSummary = (
   const recentMatches = [...completedMatches]
     .sort((left, right) => getMatchEndedAtMs(right) - getMatchEndedAtMs(left))
     .slice(0, 5);
+  // 게스트 본인은 업적·연승 표시 대상이 아니다(계정이 없어 업적을 받지 않는다)
+  const isGuestPlayer = matches.some((match) =>
+    match.teams.some((team) =>
+      team.players.some((player) => player.id === playerId && player.isGuest),
+    ),
+  );
+  const achievements = achievementMatches
+    ? computeAchievements(playerId, achievementMatches, endedSessions)
+    : computeAchievements(
+        playerId,
+        withDoublesRatingAfter(matches),
+        endedSessions,
+        { clubMatches: false },
+      );
 
   return {
     matchStats,
@@ -294,29 +308,34 @@ export const buildPlayerProfileSummary = (
     partners,
     rivals,
     headToHead,
-    achievements: achievementMatches
-      ? computeAchievements(playerId, achievementMatches, endedSessions)
-      : computeAchievements(
+    achievements: isGuestPlayer
+      ? achievements.map(toUnearnedProgress)
+      : achievements,
+    winStreak: isGuestPlayer
+      ? 0
+      : computeCurrentWinStreak(
+          completedMatches.map((match) => ({
+            id: match.id,
+            completedAt: getMatchRecordedAt(match),
+            teamPlayerIds: [
+              match.teams[0].players.map((player) => player.id),
+              match.teams[1].players.map((player) => player.id),
+            ],
+            scores: match.scores,
+          })),
           playerId,
-          withDoublesRatingAfter(matches),
-          endedSessions,
-          { clubMatches: false },
         ),
-    winStreak: computeCurrentWinStreak(
-      completedMatches.map((match) => ({
-          id: match.id,
-          completedAt: getMatchRecordedAt(match),
-          teamPlayerIds: [
-            match.teams[0].players.map((player) => player.id),
-            match.teams[1].players.map((player) => player.id),
-          ],
-          scores: match.scores,
-          ratingExcluded: match.ratingExcluded,
-        })),
-      playerId,
-    ),
   };
 };
+
+/** 게스트 프로필의 진행 상태: 업적 대상이 아니라 받지 않았고 진행도도 0이다 */
+const toUnearnedProgress = (item: AchievementProgress): AchievementProgress => ({
+  ...item,
+  current: 0,
+  earned: false,
+  earnedAt: null,
+  earnedMatchId: null,
+});
 
 /** 경기에 붙은 평점 변경 로그로 경기 직후 선수별 복식 평점(평점 업적 입력)을 붙인다 */
 const withDoublesRatingAfter = (
