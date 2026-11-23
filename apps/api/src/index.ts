@@ -829,10 +829,14 @@ const judgeRecommendedSpecialMatchForLineup = async (
       getMatchTopLevelType(lineup.type),
       lineup.teams.flatMap((team) => team.players),
     );
+    // 빠진 선수가 있으면 줄어든 팀으로 판정하지 않고 판정 실패(null)로 둔다
     const toCandidates = (team: Team) =>
-      team.players.flatMap((player) => {
+      team.players.map((player) => {
         const candidate = candidates.get(player.id);
-        return candidate ? [candidate] : [];
+        if (!candidate) {
+          throw new Error(`특수 매치 판정 후보 없음: ${player.id}`);
+        }
+        return candidate;
       });
     const judged = judgeRecommendedSpecialMatch([
       toCandidates(lineup.teams[0]),
