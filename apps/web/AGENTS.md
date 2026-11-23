@@ -42,7 +42,7 @@
         - 같은 연승을 진행 중 경기 카드·추천 매칭에 `sessionWinStreaks` prop으로 넘겨 아바타 링을 두른다(진행 중 경기 카드는 `TeamAvatars`).
       - 진행 중 경기는 경기마다 가로 vs 카드로 둔다. `home/LiveMatchCard`의 내 경기 `MyLiveMatchCard`는 테두리·"내 경기" 칩·점수 입력 버튼과 경기 상세 같은 랠리 팀 줄(`RallyTeamRow`)이 있고, 남의 경기 `LiveMatchCard`는 없다.
         - 특수 매치(`Match.specialMatch`)면 머리 줄에 `ui/SpecialMatchLabel`을 붙인다. 남의 경기는 경과 시간 뒤, 내 경기는 "내 경기" 칩(대회면 머리 글자) 뒤다.
-        - 남의 경기는 연승 저지·최강자전 경기의 연승 회원(`specialMatch.protagonistIds`)도 세션 연승 회원처럼 아바타에 연승 링(태그 없음)을 두른다.
+        - 남의 경기는 특수 매치 여부와 상관없이 지금 5연승 이상 회원(`useLiveSession().inProgressWinStreaks`, 진행 중 경기 응답 `winStreaks`)도 세션 연승 회원처럼 아바타에 연승 링(태그 없음)을 두른다. 둘 다면 링은 하나다. 내 경기 카드는 세션 연승만이다.
       - 진행 중 일반 세션이면 "추천 매칭 · 대기 N명" 섹션(`home/RecommendationSection`)을 둔다. 추천 코트마다 `home/RecommendationCard` 한 장이고 모양은 `docs/design.md` "특수 매치"의 추천 매칭 카드다.
         - 주인공·지키는 쪽 팀은 `RecommendedCourt.specialMatch`의 `protagonistIds`·`defendingTeamIndex`로만 정하고 웹이 다시 판정하지 않는다. 지키는 쪽 팀을 왼쪽 칸에 둔다.
         - "경기 시작"은 `lib/matchSessions`의 `buildRecommendedMatchRequest`로 추천 응답 팀 순서 그대로 `startSessionMatch`를 부르고, 특수 유형 카드면 `recommendedSpecialKind`를 넘긴다(일반이면 생략).
@@ -143,7 +143,7 @@
   - `TabNavigationContext.tsx`: 탭(`TabKey`: `home`·`schedule`·`ranking`·`me`)·깊이 스택(`pushDepth`/`closeDepth`, 브라우저 뒤로가기 연동)·스크롤 복원·당겨서 새로고침 등록
   - `AppNavigationContext.tsx`: `useAppNavigation()`으로 전역 화면 열기(`openMatchDetail`, `openMemberProfile`(내 id면 나 탭. `initialCategory`로 평점 카드·통계가 처음 보일 종목을 정하고 없으면 복식, 랭킹 탭 단식 줄은 단식으로 연다), `openRecordMatch`, `openCreateSession`(`dateKey`로 날짜를 골라 둔 채 열고, 만든 뒤 `onCreated`를 부름. + 메뉴는 홈 탭으로, 일정 탭은 만든 날로 옮김), `openSettings`, `openSessionReport`(지금 탭 위에 세션 상세 화면), `openAchievementDetail`(업적 상세 시트, 경기 기록 시트보다 위 레이어. 여는 곳이 받은 여부 `earned`를 넘겨 배지를 불러오기 전에 바로 그림), `openAchievements`(지금 탭 위에 업적 전체 보기 화면, 내 id여도 나 탭으로 바꾸지 않음. `focusAchievementId`를 주면 진행도 준비 뒤 그 업적 줄 위쪽 끝을 스크롤 영역 높이 40%에 두고 카드 폭 가득 `pk-primary-soft` 바탕을 한 번 반짝임, 움직임 줄이기면 스크롤만)), 전역 화면 레이어 번호 `GLOBAL_LAYER`
   - `DataSyncContext.tsx`: 데이터 종류별 무효화와 재조회 신호. 셸(`BottomNav`)이 `DataSyncProvider`로 감싼다(아래 "데이터 재조회")
-  - `LiveSessionContext.tsx`: `useLiveSession()`으로 오늘 진행 중 세션·그 경기, 세션과 상관없는 진행 중 경기(`GET /api/matches/in-progress`)와 그중 내 경기
+  - `LiveSessionContext.tsx`: `useLiveSession()`으로 오늘 진행 중 세션·그 경기, 세션과 상관없는 진행 중 경기(`GET /api/matches/in-progress`)와 그중 내 경기, 그 참가자 중 5연승 이상 회원의 연승 `inProgressWinStreaks`
     - 진행 중 세션 `liveSession`은 `getLiveSessionStartsAt` ≤ 지금 < 세션 끝 시각(`getSessionEndsAt`)인 세션(정기 우선)이다. 대회 세션만 시작 시각(`startTime`이 있으면 그날 그 시각)부터다.
     - 경기 기록 시트는 `recordingSession`(진행 중 세션이 있으면 그 세션, 없으면 빈 세션 만료 시각 전 세션)으로 새 경기를 세션에 붙여, 종료 시각이 지난 회원·대회 세션도 그날 자정까지 기록이 그 세션에 들어간다.
     - 완료할 수 있는 정기 세션 `completableSession`(`isSessionCompletable`)이 있으면 셸이 세션 완료 바를 띄운다.

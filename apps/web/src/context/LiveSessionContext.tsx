@@ -52,6 +52,8 @@ export interface LiveSessionState {
   inProgressMatches: MatchInfo[];
   /** inProgressMatches 중 내가 든 경기. 세션 밖 경기일 수 있다 */
   myInProgressMatch: MatchInfo | null;
+  /** inProgressMatches 참가자 중 지금 연승이 WIN_STREAK_DISPLAY_MIN 이상인 정회원의 연승 수(선수 id → 연승) */
+  inProgressWinStreaks: ReadonlyMap<string, number>;
   reload: () => Promise<void>;
 }
 
@@ -167,6 +169,8 @@ const fetchSessionMatches = async (sessionId: string) => {
 
 const LIVE_SESSION_DATA_KINDS = ["sessions", "matches"] as const;
 
+const EMPTY_WIN_STREAKS: ReadonlyMap<string, number> = new Map();
+
 /**
  * 셸이 진행 중 세션 상태를 만든다. 첫 로드, 세션·경기 무효화와 TTL(useDataVersion), 다음 세션 시작·종료·만료 시각에
  * 스스로 다시 읽고, 당겨서 새로고침은 셸이 reload를 부른다. 주기 폴링은 하지 않는다.
@@ -179,6 +183,9 @@ export const useLiveSessionState = (
     useState<MatchSessionDetailInfo | null>(null);
   const [matches, setMatches] = useState<MatchInfo[]>([]);
   const [inProgressMatches, setInProgressMatches] = useState<MatchInfo[]>([]);
+  const [inProgressWinStreaks, setInProgressWinStreaks] = useState<
+    ReadonlyMap<string, number>
+  >(EMPTY_WIN_STREAKS);
   /** 마지막으로 받은 오늘 세션. 다음 경계 시각 계산용 */
   const [todaySessions, setTodaySessions] = useState<MatchSessionDetailInfo[]>(
     [],
@@ -199,6 +206,7 @@ export const useLiveSessionState = (
       setLiveSession(null);
       setMatches([]);
       setInProgressMatches([]);
+      setInProgressWinStreaks(EMPTY_WIN_STREAKS);
       setTodaySessions([]);
       setStatus("ready");
       return;
@@ -210,7 +218,7 @@ export const useLiveSessionState = (
       const today = await fetchTodayMatchSessions();
       const nextLiveSession = pickLiveSession(today.sessions);
       // 세션 경기와 진행 중 경기를 같은 때 받아 둘의 시점 차이를 줄인다
-      const [nextMatches, nextInProgressMatches] = await Promise.all([
+      const [nextMatches, nextInProgress] = await Promise.all([
         nextLiveSession ? fetchSessionMatches(nextLiveSession.id) : [],
         inProgressRequest,
       ]);
@@ -218,7 +226,10 @@ export const useLiveSessionState = (
 
       setLiveSession(nextLiveSession);
       setMatches(nextMatches);
-      if (nextInProgressMatches) setInProgressMatches(nextInProgressMatches);
+      if (nextInProgress) {
+        setInProgressMatches(nextInProgress.matches);
+        setInProgressWinStreaks(new Map(Object.entries(nextInProgress.winStreaks)));
+      }
       setTodaySessions(today.sessions);
       setStatus("ready");
     } catch {
@@ -305,10 +316,12 @@ export const useLiveSessionState = (
       matches,
       inProgressMatches,
       myInProgressMatch,
+      inProgressWinStreaks,
       reload,
     };
   }, [
     inProgressMatches,
+    inProgressWinStreaks,
     liveSession,
     matches,
     playerId,
