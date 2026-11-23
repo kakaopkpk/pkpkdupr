@@ -316,7 +316,7 @@ const Schedule: React.FC = () => {
           onRetry={() => void loadMonth(selectedMonthKey)}
         />
       ) : (
-        <div aria-busy="true" aria-label="불러오는 중">
+        <div role="status" aria-busy="true" aria-label="불러오는 중">
           <RecordCardSkeleton />
         </div>
       );

@@ -95,7 +95,7 @@ const InfiniteScrollTrigger: React.FC<{
 };
 
 const MatchListSkeleton: React.FC = () => (
-  <div aria-busy="true" aria-label="불러오는 중" className="flex flex-col gap-2.5">
+  <div role="status" aria-busy="true" aria-label="불러오는 중" className="flex flex-col gap-2.5">
     <SkeletonBlock className="h-5 w-40" />
     <SkeletonBlock className="h-[200px] rounded-pk-lg" />
     <SkeletonBlock className="mt-1 h-5 w-40" />
