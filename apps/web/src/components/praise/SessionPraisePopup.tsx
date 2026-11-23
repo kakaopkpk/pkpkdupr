@@ -205,6 +205,7 @@ export default function SessionPraisePopup({
   const [result, setResult] = useState<SessionPraiseResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const cardsRef = useRef<HTMLDivElement>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
   const phaseRef = useRef<Phase>(phase);
   const isClosedRef = useRef(false);
   const callbacksRef = useRef({ onSkip, onExited });
@@ -284,12 +285,10 @@ export default function SessionPraisePopup({
     return () => window.clearTimeout(id);
   }, [phase, requestClose]);
 
-  // 열리면 첫 카드에 포커스를 옮기고, 닫히면(언마운트) 원래 포커스로 돌려준다
+  // 열리면 대화상자에 포커스를 옮기고(카드에 포커스 테두리가 먼저 보이지 않게), 닫히면(언마운트) 원래 포커스로 돌려준다
   useEffect(() => {
     const previousFocus = document.activeElement;
-    cardsRef.current
-      ?.querySelector<HTMLElement>(ENABLED_CARD_SELECTOR)
-      ?.focus({ preventScroll: true });
+    dialogRef.current?.focus({ preventScroll: true });
     return () => {
       if (previousFocus instanceof HTMLElement) previousFocus.focus({ preventScroll: true });
     };
@@ -318,11 +317,13 @@ export default function SessionPraisePopup({
 
   return createPortal(
     <div
+      ref={dialogRef}
       role="dialog"
       aria-modal="true"
       aria-label={`${praise.session.name} 칭찬`}
+      tabIndex={-1}
       className={cx(
-        "fixed inset-0",
+        "fixed inset-0 outline-none",
         isClosing && "animate-pk-fade-out motion-reduce:animate-none",
       )}
       style={{
