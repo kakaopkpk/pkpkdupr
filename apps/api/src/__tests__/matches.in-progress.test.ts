@@ -91,18 +91,9 @@ describe("GET /api/matches/in-progress", () => {
     findInProgress = vi
       .spyOn(MatchRepository.prototype, "findInProgress")
       .mockResolvedValue([inProgressMatch]);
-    vi.spyOn(AuthService.prototype, "getAllPlayers").mockResolvedValue([]);
-    vi.spyOn(
-      MatchRepository.prototype,
-      "getAllRatingChangeLogs",
-    ).mockResolvedValue([]);
     findCompletedMatchOutcomes = vi
       .spyOn(MatchRepository.prototype, "findCompletedMatchOutcomes")
       .mockResolvedValue([]);
-    vi.spyOn(
-      MatchRepository.prototype,
-      "findSessionsWithParticipantIds",
-    ).mockResolvedValue([]);
     findByIdWithRatingChanges = vi
       .spyOn(MatchRepository.prototype, "findByIdWithRatingChanges")
       .mockResolvedValue(undefined);
@@ -154,7 +145,7 @@ describe("GET /api/matches/in-progress", () => {
     expect(response.body.winStreaks).toEqual({});
   });
 
-  it("랭킹 원천을 못 읽어도 진행 중 경기는 돌려주고 winStreaks는 빈 객체다", async () => {
+  it("완료 경기를 못 읽어도 진행 중 경기는 돌려주고 winStreaks는 빈 객체다", async () => {
     findCompletedMatchOutcomes.mockRejectedValue(new Error("db down"));
     vi.spyOn(console, "error").mockImplementation(() => {});
 
@@ -167,7 +158,7 @@ describe("GET /api/matches/in-progress", () => {
     expect(response.body.winStreaks).toEqual({});
   });
 
-  it("진행 중 경기가 없으면 랭킹 원천을 읽지 않는다", async () => {
+  it("진행 중 경기가 없으면 완료 경기를 읽지 않는다", async () => {
     findInProgress.mockResolvedValue([]);
 
     const response = await request(app)

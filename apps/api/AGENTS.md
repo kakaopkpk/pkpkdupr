@@ -68,7 +68,7 @@
 - 진행 중 경기 전부 `GET /api/matches/in-progress`: 응답 `InProgressMatchesResponse`
   - `/api/matches/:matchId`보다 먼저 등록, 대진 예정 경기 제외.
   - `winStreaks`는 참가자 중 지금 연승(랭킹 `winStreak`과 같은 규칙)이 `WIN_STREAK_DISPLAY_MIN` 이상인 정회원의 선수 id → 연승 수이고, 없으면 빈 객체다.
-  - 랭킹 원천을 못 읽으면 `winStreaks`만 빈 객체로 응답한다. 진행 중 경기가 없으면 원천을 읽지 않는다.
+  - 연승은 완료 경기 결과만 읽어 센다. 못 읽으면 `winStreaks`만 빈 객체로 응답하고, 진행 중 경기가 없으면 읽지 않는다.
 - `GET /api/match-feed`: 대진 예정 경기 제외
 - 세션 조회 API
 

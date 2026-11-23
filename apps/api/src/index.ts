@@ -2286,18 +2286,18 @@ app.get("/api/matches/in-progress", async (req, res) => {
     const now = new Date();
     await matchRepository.cleanupExpired(now);
     const matches = await matchRepository.findInProgress(now);
-    // 연승은 부가 정보라 랭킹 원천을 못 읽어도 진행 중 경기는 돌려준다
-    const rankingSource =
+    // 연승은 완료 경기만으로 센다. 부가 정보라 못 읽어도 진행 중 경기는 돌려준다
+    const completedMatches =
       matches.length > 0
-        ? await loadRankingSource().catch((err) => {
-            console.error("[IN_PROGRESS] 랭킹 원천 조회 실패", err);
+        ? await matchRepository.findCompletedMatchOutcomes().catch((err) => {
+            console.error("[IN_PROGRESS] 완료 경기 조회 실패", err);
             return null;
           })
         : null;
     const response: InProgressMatchesResponse = {
       matches,
-      winStreaks: rankingSource
-        ? buildInProgressWinStreaks(matches, rankingSource.context.matches)
+      winStreaks: completedMatches
+        ? buildInProgressWinStreaks(matches, completedMatches)
         : {},
     };
     res.json(response);
