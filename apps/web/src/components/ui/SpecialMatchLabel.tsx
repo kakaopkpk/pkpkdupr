@@ -19,12 +19,17 @@ const SPECIAL_MATCH_ICON_PATHS: Record<SpecialMatchKind, readonly string[]> = {
   revenge: FIST_ICON_PATHS,
 };
 
+/** 유형 아이콘 기본 크기·선 굵기. 라벨은 이름 글자(12~13)에 맞춰 LABEL_ICON_SIZE로 한 단계 작게 쓴다 */
+const ICON_SIZE = 14;
+const LABEL_ICON_SIZE = 13;
+const ICON_STROKE_WIDTH = 2.4;
+
 /** 특수 매치 유형 아이콘(선). 색은 currentColor */
 export const SpecialMatchIcon: React.FC<{
   kind: SpecialMatchKind;
   size?: number;
   className?: string;
-}> = ({ kind, size = 14, className }) => (
+}> = ({ kind, size = ICON_SIZE, className }) => (
   <svg
     width={size}
     height={size}
@@ -32,7 +37,7 @@ export const SpecialMatchIcon: React.FC<{
     aria-hidden="true"
     fill="none"
     stroke="currentColor"
-    strokeWidth={2.4}
+    strokeWidth={ICON_STROKE_WIDTH}
     strokeLinecap="round"
     strokeLinejoin="round"
     className={cx("shrink-0", className)}
@@ -54,7 +59,7 @@ export const SpecialMatchLabel: React.FC<{
       className,
     )}
   >
-    <SpecialMatchIcon kind={kind} size={13} />
+    <SpecialMatchIcon kind={kind} size={LABEL_ICON_SIZE} />
     {specialMatchKindLabels[kind]}
   </span>
 );

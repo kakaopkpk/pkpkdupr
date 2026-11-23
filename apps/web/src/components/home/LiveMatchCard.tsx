@@ -25,14 +25,15 @@ const LiveMatchHeader: React.FC<{
   const specialLabel = specialKind ? (
     <SpecialMatchLabel kind={specialKind} className="text-pk-13" />
   ) : null;
+  const labelBeforeElapsed = Boolean(chip);
   return (
     <span className="flex w-full items-center gap-2">
       {chip}
-      {chip ? specialLabel : null}
+      {labelBeforeElapsed ? specialLabel : null}
       <span className="text-pk-13 text-pk-sub tabular-nums">
         {formatElapsed(match.matchStartsAt, now)}
       </span>
-      {chip ? null : specialLabel}
+      {labelBeforeElapsed ? null : specialLabel}
       <ChevronRightIcon className="ml-auto shrink-0 text-pk-quiet" />
     </span>
   );

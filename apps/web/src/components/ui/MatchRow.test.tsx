@@ -54,7 +54,9 @@ const getMetaText = (
       timeLabel={timeLabel}
     />,
   );
-  const meta = /<div class="flex min-w-0 items-center gap-2[^"]*">(.*?)<\/div>/.exec(markup)?.[1] ?? "";
+  const meta = /<div class="flex min-w-0 items-center gap-2[^"]*">(.*?)<\/div>/.exec(markup)?.[1];
+  // 메타 줄 class가 바뀌어 못 찾으면 빈 글자 비교로 흐려지지 않게 바로 실패시킨다
+  if (meta === undefined) throw new Error("MatchRow 메타 줄을 찾지 못했어요");
   return meta.replace(/<[^>]+>/g, "").replace(/<!-- -->/g, "");
 };
 
