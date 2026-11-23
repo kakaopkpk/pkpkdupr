@@ -1,3 +1,11 @@
+import {
+  judgeRecommendedSpecialMatch,
+  SPECIAL_MATCH_RECOMMENDATION_BONUS,
+  type SpecialMatch,
+  type SpecialMatchCandidatePlayer,
+  type SpecialMatchKind,
+} from "./specialMatch.js";
+
 export const MATCHMAKING_DEFAULT_COURTS = 3;
 export const MATCHMAKING_MIN_COURTS = 1;
 export const MATCHMAKING_MAX_COURTS = 4;
@@ -46,6 +54,11 @@ export interface RecommendDoublesMatchesInput {
   seed: number;
   /** 감점순 후보 중 몇 번째(0부터)를 고를지. 후보 수로 나눈 나머지로 순환한다 */
   rank: number;
+  /**
+   * 특수 유형 판정 입력 선수(복식 랭킹 기준). 주면 대진마다 특수 유형 코트 하나의 가산점을 총 감점에서 뺀다.
+   * 없으면 가산점이 없고 모든 코트의 specialMatch가 null이다
+   */
+  specialPlayers?: ReadonlyMap<string, SpecialMatchCandidatePlayer>;
 }
 
 export interface RecommendedCourtPlan {
@@ -54,13 +67,15 @@ export interface RecommendedCourtPlan {
   teamAverages: [number, number];
   repeatedPartnerPairs: Array<[string, string]>;
   repeatedOpponentPairs: Array<[string, string]>;
+  /** 이 대진에서 가산점을 받은 특수 유형 코트면 판정 결과(outcome null), 아니면 null. 한 대진에 최대 한 코트다 */
+  specialMatch: SpecialMatch | null;
 }
 
 export interface DoublesRecommendationPlan {
   courts: RecommendedCourtPlan[];
   /** 추천 대상 중 이번에 선발되지 않은 선수 id */
   restingPlayerIds: string[];
-  /** 고른 대진의 총 감점 */
+  /** 고른 대진의 총 감점(특수 유형 가산점을 뺀 값이라 음수일 수 있다) */
   penalty: number;
   /** 고른 대진의 후보 순번(0부터, 후보 수 미만) */
   rank: number;
@@ -75,6 +90,10 @@ export interface RecommendationPlayer {
   avatarUrl?: string;
   /** 복식 평점. NR이면 null */
   doublesRating: number | null;
+  /** 복식 랭킹 순위. 랭킹에 없으면(게스트·NR·비활성) null */
+  doublesRank: number | null;
+  /** 지금 연승 수(랭킹 winStreak과 같은 규칙) */
+  winStreak: number;
 }
 
 export interface RecommendedTeam {
@@ -87,6 +106,8 @@ export interface RecommendedCourt {
   teams: [RecommendedTeam, RecommendedTeam];
   repeatedPartnerPairs: Array<[string, string]>;
   repeatedOpponentPairs: Array<[string, string]>;
+  /** 특수 유형 코트면 판정 결과(outcome null), 아니면 null. 한 추천에 최대 한 코트다 */
+  specialMatch: SpecialMatch | null;
 }
 
 /** GET /api/match-sessions/:sessionId/recommendations?courts=N&rank=R 응답 */
@@ -235,15 +256,36 @@ const courtSlice = (
   ];
 };
 
+/** 팀 순서·팀 안 순서를 무시한 코트 식별 키 */
+const courtKey = (arrangement: Arrangement, court: number): string => {
+  const [a1, a2, b1, b2] = courtSlice(arrangement, court);
+  return [[a1, a2].sort().join("+"), [b1, b2].sort().join("+")]
+    .sort()
+    .join(" vs ");
+};
+
 /** 코트 순서·팀 순서·팀 안 순서를 무시한 대진 식별 키 */
 const canonicalKey = (arrangement: Arrangement, courtCount: number): string => {
   const courts: string[] = [];
   for (let court = 0; court < courtCount; court += 1) {
-    const [a1, a2, b1, b2] = courtSlice(arrangement, court);
-    const teams = [[a1, a2].sort().join("+"), [b1, b2].sort().join("+")].sort();
-    courts.push(teams.join(" vs "));
+    courts.push(courtKey(arrangement, court));
   }
   return courts.sort().join(" | ");
+};
+
+/** 추천 매칭에서 특수 유형 코트가 받는 가산점. 리벤지는 추천에서 만들지 않아 0이다 */
+export const getSpecialMatchRecommendationBonus = (
+  kind: SpecialMatchKind,
+): number => {
+  switch (kind) {
+    case "streak_stopper":
+    case "champions":
+      return SPECIAL_MATCH_RECOMMENDATION_BONUS.streak;
+    case "challenge":
+      return SPECIAL_MATCH_RECOMMENDATION_BONUS.challenge;
+    case "revenge":
+      return 0;
+  }
 };
 
 export const recommendDoublesMatches = (
@@ -331,6 +373,47 @@ export const recommendDoublesMatches = (
       (Math.max(...ratings) - Math.min(...ratings)) * weights.courtRatingSpread
     );
   };
+  // 특수 유형 판정. 판정 입력에 없는 선수가 있으면 그 코트는 특수 유형이 아니다
+  const specialPlayers = input.specialPlayers;
+  const judgeCourt = (
+    arrangement: Arrangement,
+    court: number,
+  ): SpecialMatch | null => {
+    if (!specialPlayers) {
+      return null;
+    }
+    const players = courtSlice(arrangement, court).map((id) =>
+      specialPlayers.get(id),
+    );
+    const [a1, a2, b1, b2] = players;
+    if (!a1 || !a2 || !b1 || !b2) {
+      return null;
+    }
+    return judgeRecommendedSpecialMatch([
+      [a1, a2],
+      [b1, b2],
+    ]);
+  };
+  // 유형은 팀 순서와 상관없으므로 코트 키로 가산점을 캐시한다
+  const bonusByCourtKey = new Map<string, number>();
+  const courtBonus = (arrangement: Arrangement, court: number): number => {
+    if (!specialPlayers) {
+      return 0;
+    }
+    const key = courtKey(arrangement, court);
+    const cached = bonusByCourtKey.get(key);
+    if (cached !== undefined) {
+      return cached;
+    }
+    const special = judgeCourt(arrangement, court);
+    const bonus = special ? getSpecialMatchRecommendationBonus(special.kind) : 0;
+    bonusByCourtKey.set(key, bonus);
+    return bonus;
+  };
+  /** 대진 전체에서 가산점이 가장 큰 코트 하나만 뺀다 */
+  const maxBonus = (bonuses: readonly number[]): number =>
+    Math.max(0, ...bonuses);
+
   const courtOf = (slot: number): number =>
     Math.floor(slot / MATCHMAKING_PLAYERS_PER_COURT);
   const teamOf = (slot: number): number => Math.floor(slot / 2);
@@ -374,7 +457,11 @@ export const recommendDoublesMatches = (
     const perCourt = Array.from({ length: courtCount }, (_, court) =>
       courtPenalty(arrangement, court),
     );
-    let total = perCourt.reduce((sum, value) => sum + value, 0);
+    const perBonus = Array.from({ length: courtCount }, (_, court) =>
+      courtBonus(arrangement, court),
+    );
+    let penaltySum = perCourt.reduce((sum, value) => sum + value, 0);
+    let total = penaltySum - maxBonus(perBonus);
     record(arrangement, total);
 
     // 두 자리 교환 국소 탐색(최선 개선). 같은 팀 안 교환은 같은 대진이라 건너뛴다
@@ -390,12 +477,16 @@ export const recommendDoublesMatches = (
           const courtI = courtOf(i);
           const courtJ = courtOf(j);
           [arrangement[i], arrangement[j]] = [arrangement[j], arrangement[i]];
-          let swappedTotal = total - perCourt[courtI];
-          swappedTotal += courtPenalty(arrangement, courtI);
+          let swappedPenaltySum = penaltySum - perCourt[courtI];
+          swappedPenaltySum += courtPenalty(arrangement, courtI);
           if (courtJ !== courtI) {
-            swappedTotal +=
+            swappedPenaltySum +=
               courtPenalty(arrangement, courtJ) - perCourt[courtJ];
           }
+          const swappedBonuses = [...perBonus];
+          swappedBonuses[courtI] = courtBonus(arrangement, courtI);
+          swappedBonuses[courtJ] = courtBonus(arrangement, courtJ);
+          const swappedTotal = swappedPenaltySum - maxBonus(swappedBonuses);
           record(arrangement, swappedTotal);
           [arrangement[i], arrangement[j]] = [arrangement[j], arrangement[i]];
           if (
@@ -409,9 +500,12 @@ export const recommendDoublesMatches = (
       if (bestSwap) {
         const { i, j } = bestSwap;
         [arrangement[i], arrangement[j]] = [arrangement[j], arrangement[i]];
-        perCourt[courtOf(i)] = courtPenalty(arrangement, courtOf(i));
-        perCourt[courtOf(j)] = courtPenalty(arrangement, courtOf(j));
-        total = perCourt.reduce((sum, value) => sum + value, 0);
+        for (const court of [courtOf(i), courtOf(j)]) {
+          perCourt[court] = courtPenalty(arrangement, court);
+          perBonus[court] = courtBonus(arrangement, court);
+        }
+        penaltySum = perCourt.reduce((sum, value) => sum + value, 0);
+        total = penaltySum - maxBonus(perBonus);
         improved = true;
       }
     }
@@ -434,6 +528,17 @@ export const recommendDoublesMatches = (
   );
   const rank = normalizeRank(input.rank) % candidateCount;
   const [, chosen] = ranked[rank];
+
+  // 가산점이 가장 큰 코트 하나만 특수 유형으로 보이고, 같으면 앞 코트다
+  let specialCourt: { court: number; match: SpecialMatch; bonus: number } | null =
+    null;
+  for (let court = 0; court < courtCount; court += 1) {
+    const match = judgeCourt(chosen.arrangement, court);
+    const bonus = match ? getSpecialMatchRecommendationBonus(match.kind) : 0;
+    if (match && bonus > 0 && (!specialCourt || bonus > specialCourt.bonus)) {
+      specialCourt = { court, match, bonus };
+    }
+  }
 
   const courts: RecommendedCourtPlan[] = [];
   for (let court = 0; court < courtCount; court += 1) {
@@ -466,6 +571,8 @@ export const recommendDoublesMatches = (
       ],
       repeatedPartnerPairs,
       repeatedOpponentPairs,
+      specialMatch:
+        specialCourt?.court === court ? specialCourt.match : null,
     });
   }
 
