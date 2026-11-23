@@ -470,14 +470,17 @@ const findFirstBusyPlayerId = async (
   return playerIds.find((id) => busyPlayerIds.has(id));
 };
 
+/** 트랜잭션처럼 raw SQL 한 문장을 실행하는 대상 */
+type SqlExecutor = {
+  execute: (statement: { sql: string; args: unknown[] }) => Promise<RawQueryResult>;
+};
+
 /**
  * 세션 참여자를 넣는다. 이미 있는 참여자는 그대로 두고, 새로 들어간 참여자가 있을 때만 세션 updated_at을 올린다.
  * 경기 저장과 같은 트랜잭션에서 부르면 저장이 실패할 때 참여자도 남지 않는다. 새로 들어갔으면 true
  */
 const insertSessionParticipants = async (
-  executor: {
-    execute: (statement: { sql: string; args: unknown[] }) => Promise<RawQueryResult>;
-  },
+  executor: SqlExecutor,
   sessionId: string,
   playerIds: string[],
   nowSeconds: number,
@@ -535,9 +538,7 @@ const validateSessionInput = (session: Session) => {
 
 /** 세션 행이 없으면 회원 세션으로 만든다. 같은 id가 동시에 만들어졌으면 그 행을 그대로 쓴다 */
 const insertSessionIfMissing = async (
-  executor: {
-    execute: (statement: { sql: string; args: unknown[] }) => Promise<RawQueryResult>;
-  },
+  executor: SqlExecutor,
   session: Session,
   nowSeconds: number,
 ) => {
@@ -1779,13 +1780,19 @@ export class MatchRepository {
       }
 
       // 저장된 세션 경기의 선수는 항상 참여자다. 경기와 같은 트랜잭션이라 저장이 실패하면 참여자도 남지 않는다.
-      for (const sessionId of sessionIds) {
+      const playerIdsBySessionId = new Map<string, string[]>();
+      for (const match of data) {
+        const sessionId = match.session!.id;
+        playerIdsBySessionId.set(sessionId, [
+          ...(playerIdsBySessionId.get(sessionId) ?? []),
+          ...getTeamPlayerIds(match.teams),
+        ]);
+      }
+      for (const [sessionId, playerIds] of playerIdsBySessionId) {
         await insertSessionParticipants(
           transaction,
           sessionId,
-          data
-            .filter((match) => match.session!.id === sessionId)
-            .flatMap((match) => getTeamPlayerIds(match.teams)),
+          playerIds,
           nowSeconds,
         );
       }
@@ -3139,8 +3146,8 @@ export class MatchRepository {
         "session_date = NULL",
       );
     } else if (
-      targetSessionId !== undefined &&
-      !isEntityId(targetSessionId, "session")
+      "sessionId" in data &&
+      (targetSessionId === undefined || !isEntityId(targetSessionId, "session"))
     ) {
       throw new Error("유효한 세션 ID가 필요합니다.");
     }
