@@ -59,7 +59,7 @@ describe("admin match metadata", () => {
     vi.restoreAllMocks();
   });
 
-  it("선택한 매치를 하나의 세션 ID로 일괄 연결하고 선수를 세션 참여자로 넣는다", async () => {
+  it("선택한 매치를 하나의 세션 ID로 일괄 연결한다(참여자는 저장소가 함께 넣음)", async () => {
     const addSessionParticipants = vi
       .spyOn(MatchRepository.prototype, "addSessionParticipants")
       .mockResolvedValue(undefined);
@@ -93,11 +93,8 @@ describe("admin match metadata", () => {
     expect(updateMetadata).toHaveBeenNthCalledWith(2, "match-002", {
       sessionId: "Ssession",
     });
-    expect(addSessionParticipants).toHaveBeenCalledTimes(2);
-    expect(addSessionParticipants).toHaveBeenNthCalledWith(1, "Ssession", [
-      admin.id,
-      admin.id,
-    ]);
+    // 참여자는 저장소 updateMetadata가 경기마다 같은 트랜잭션에서 넣는다
+    expect(addSessionParticipants).not.toHaveBeenCalled();
   });
 
   it("일괄 세션 연결 해제(sessionId null)는 참여자를 건드리지 않는다", async () => {
