@@ -54,7 +54,7 @@ const getMetaText = (
       timeLabel={timeLabel}
     />,
   );
-  const meta = /<div class="whitespace-nowrap[^"]*">(.*?)<\/div>/.exec(markup)?.[1] ?? "";
+  const meta = /<div class="flex min-w-0 items-center gap-2[^"]*">(.*?)<\/div>/.exec(markup)?.[1] ?? "";
   return meta.replace(/<[^>]+>/g, "").replace(/<!-- -->/g, "");
 };
 
@@ -68,6 +68,26 @@ describe("MatchRow 메타 줄", () => {
 
   it("정상 경기는 붙이지 않는다", () => {
     expect(getMetaText(makeMatch(false), "alice")).toBe("21:50 · 내 경기");
+  });
+});
+
+describe("MatchRow 특수 매치", () => {
+  it("특수 매치면 메타 줄 끝에 유형 이름만 붙이고 결과는 쓰지 않는다", () => {
+    const match: MatchInfo = {
+      ...makeMatch(false),
+      specialMatch: {
+        kind: "challenge",
+        defendingTeamIndex: 1,
+        protagonistIds: ["alice", "carol"],
+        challengePairs: [{ attackerId: "alice", defenderId: "carol" }],
+        outcome: "challenge_success",
+      },
+    };
+    expect(getMetaText(match, "alice")).toBe("21:50 · 내 경기도전 매치");
+  });
+
+  it("일반 매치는 유형 이름이 없다", () => {
+    expect(getMetaText({ ...makeMatch(false), specialMatch: null })).toBe("21:50");
   });
 });
 

@@ -1,29 +1,66 @@
 import React from "react";
+import { WIN_STREAK_DISPLAY_MIN } from "@pkpkdupr/shared/streak";
 import type { MatchInfo } from "@/types/match";
 import { RallyTeamRow } from "@/components/match/LiveMatchRally";
 import { PkButton, rowPressClassName } from "@/components/ui/Button";
 import type { SessionWinStreakByPlayer } from "@/components/ui/PlayerAvatar";
 import { ChevronRightIcon } from "@/components/ui/Icons";
+import { SpecialMatchLabel } from "@/components/ui/SpecialMatchLabel";
 import { cx } from "@/components/ui/cx";
 import { useIsMatchScheduled } from "@/hooks/useIsMatchScheduled";
 import { formatElapsed } from "@/lib/format";
 import { formatBracketRoundLabel } from "@/lib/tournament";
 import { TeamsVersus } from "./TeamBlock";
 
-/** 카드 머리 줄. 앞 칩·경과 시간·꺾쇠 */
+/**
+ * 카드 머리 줄. 앞 칩·경과 시간·꺾쇠. 특수 매치면 유형 이름을 칩이 있으면 칩 뒤(내 경기),
+ * 없으면 경과 시간 뒤(남의 경기)에 붙인다
+ */
 const LiveMatchHeader: React.FC<{
   match: MatchInfo;
   now: Date;
   chip?: React.ReactNode;
-}> = ({ match, now, chip }) => (
-  <span className="flex w-full items-center gap-2">
-    {chip}
-    <span className="text-pk-13 text-pk-sub tabular-nums">
-      {formatElapsed(match.matchStartsAt, now)}
+}> = ({ match, now, chip }) => {
+  const specialKind = match.specialMatch?.kind;
+  const specialLabel = specialKind ? (
+    <SpecialMatchLabel kind={specialKind} className="text-pk-13" />
+  ) : null;
+  return (
+    <span className="flex w-full items-center gap-2">
+      {chip}
+      {chip ? specialLabel : null}
+      <span className="text-pk-13 text-pk-sub tabular-nums">
+        {formatElapsed(match.matchStartsAt, now)}
+      </span>
+      {chip ? null : specialLabel}
+      <ChevronRightIcon className="ml-auto shrink-0 text-pk-quiet" />
     </span>
-    <ChevronRightIcon className="ml-auto shrink-0 text-pk-quiet" />
-  </span>
-);
+  );
+};
+
+/**
+ * 남의 경기 아바타 연승 링 대상. 세션 연승 회원에 더해, 연승 저지·최강자전 경기의 연승 회원(주인공,
+ * 지금 WIN_STREAK_DISPLAY_MIN 이상 연승)을 넣는다. 경기 아바타 링은 태그가 없어 연승 수 값은 보이지 않는다
+ */
+const withSpecialMatchStreakPlayers = (
+  match: MatchInfo,
+  sessionWinStreaks: SessionWinStreakByPlayer | undefined,
+): SessionWinStreakByPlayer | undefined => {
+  const special = match.specialMatch;
+  if (
+    !special ||
+    (special.kind !== "streak_stopper" && special.kind !== "champions")
+  ) {
+    return sessionWinStreaks;
+  }
+  const merged = new Map(sessionWinStreaks);
+  for (const playerId of special.protagonistIds) {
+    if (playerId && !merged.has(playerId)) {
+      merged.set(playerId, WIN_STREAK_DISPLAY_MIN);
+    }
+  }
+  return merged;
+};
 
 /** 머리 줄 앞 굵은 글자(칩 대신). 대회 홈 "내 경기" 섹션 카드에 쓴다 */
 const HeaderTitle: React.FC<{ children: React.ReactNode }> = ({ children }) => (
@@ -172,7 +209,10 @@ export const MyNextBracketMatchCard: React.FC<{
   </div>
 );
 
-/** 진행 중인 남의 경기. 내 경기 카드에서 "내 경기" 칩·테두리·점수 입력 버튼을 뺀 모양이고, 누르면 경기 상세를 연다 */
+/**
+ * 진행 중인 남의 경기. 내 경기 카드에서 "내 경기" 칩·테두리·점수 입력 버튼을 뺀 모양이고, 누르면 경기 상세를 연다.
+ * 연승 저지·최강자전 경기의 연승 회원은 세션 연승이 아니어도 아바타에 연승 링(태그 없음)을 두른다
+ */
 export const LiveMatchCard: React.FC<{
   match: MatchInfo;
   now: Date;
@@ -191,7 +231,10 @@ export const LiveMatchCard: React.FC<{
     <LiveMatchHeader match={match} now={now} />
     <TeamsVersus
       teams={[match.teams[0].players, match.teams[1].players]}
-      sessionWinStreaks={sessionWinStreaks}
+      sessionWinStreaks={withSpecialMatchStreakPlayers(
+        match,
+        sessionWinStreaks,
+      )}
     />
   </button>
 );
