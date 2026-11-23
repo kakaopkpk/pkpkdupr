@@ -29,19 +29,21 @@ import {
 } from "@/lib/achievements";
 import AchievementCelebration from "./AchievementCelebration";
 import { FooterError } from "./RecordMatchParts";
+import SpecialMatchCelebrationScreen from "./SpecialMatchCelebrationScreen";
+import { isViewerOnWinningTeam } from "./specialMatchCelebration.utils";
 import { CheckIcon } from "@/components/ui/Icons";
 
 /*
  * 완료 화면 연출 시각(ms, 완료 단계가 보이게 된 시점 기준).
  * 체크 그리기 0 → 점수 세기(첫 박자) → 이긴 쪽 색 전환 → 평점 세기(둘째 박자)와 업적 띠 동시
- * → 업적 축하 연출
+ * → 특수 매치 큰 연출(내가 이긴 팀일 때) → 업적 축하 연출
  */
 const SCORE_COUNT = COUNT_UP;
 const RATING_COUNT = COUNT_UP_SECOND;
 // 업적 띠는 평점이 오르기 시작할 때 함께 등장한다
 const ACHIEVEMENT_DELAY_MS = RATING_COUNT.delayMs;
 const ACHIEVEMENT_BADGE_POP_MS = 420;
-// 평점을 다 센 뒤 화면 전체 축하 연출을 띄운다
+// 평점을 다 센 뒤 화면 전체 축하 연출(특수 매치 큰 연출이 있으면 그것부터)을 띄운다
 const CELEBRATION_DELAY_MS = getCountUpEndMs(RATING_COUNT);
 
 export interface RecordDoneStepProps {
@@ -68,6 +70,7 @@ export default function RecordDoneStep({
   const { isPlaying, finish } = usePlayOnShow();
   // 완료 단계가 마운트된 동안 한 번만 띄운다(업적 상세를 열었다 닫아도 다시 띄우지 않는다)
   const [isCelebrationOpen, setIsCelebrationOpen] = useState(true);
+  const [isSpecialMatchCelebrationOpen, setIsSpecialMatchCelebrationOpen] = useState(true);
   const score = match.scores?.[0];
   const scoreACount = useCountUp(score?.scoreA ?? 0, SCORE_COUNT);
   const scoreBCount = useCountUp(score?.scoreB ?? 0, SCORE_COUNT);
@@ -107,6 +110,16 @@ export default function RecordDoneStep({
     () => myNewAchievementItems.map(({ definition }) => definition),
     [myNewAchievementItems],
   );
+  // 특수 매치 큰 연출은 기록한 내가 이긴 팀일 때만, 이 완료 화면에서만 띄운다(다른 화면에서 나중에 띄우지 않음)
+  const specialMatchCelebration =
+    viewer && match.specialMatchCelebration && isViewerOnWinningTeam(match, viewer.id)
+      ? match.specialMatchCelebration
+      : null;
+  const isSpecialMatchCelebrationShown =
+    specialMatchCelebration != null && isSpecialMatchCelebrationOpen;
+  // 움직임 줄이기면 평점 세기가 없으므로 바로 띄운다. 특수 매치 연출을 닫은 뒤의 업적 축하도 바로 이어진다
+  const celebrationDelayMs =
+    prefersReducedMotion() || specialMatchCelebration ? 0 : CELEBRATION_DELAY_MS;
 
   return (
     <>
@@ -230,13 +243,25 @@ export default function RecordDoneStep({
           </PkButton>
         </div>
       </BottomSheet.Footer>
-      {viewer && myNewAchievements.length > 0 && isCelebrationOpen ? (
+      {viewer && specialMatchCelebration && isSpecialMatchCelebrationShown ? (
+        <SpecialMatchCelebrationScreen
+          celebration={specialMatchCelebration}
+          match={match}
+          username={viewer.username}
+          delayMs={prefersReducedMotion() ? 0 : CELEBRATION_DELAY_MS}
+          onClose={() => setIsSpecialMatchCelebrationOpen(false)}
+        />
+      ) : null}
+      {/* 특수 매치 큰 연출과 겹치면 그 연출을 닫은 뒤에 띄운다 */}
+      {viewer &&
+      myNewAchievements.length > 0 &&
+      isCelebrationOpen &&
+      !isSpecialMatchCelebrationShown ? (
         <AchievementCelebration
           achievements={myNewAchievements}
           earnedAts={myNewAchievementItems.map(({ item }) => item.earnedAt)}
           totalPoints={viewer ? match.achievementPoints?.[viewer.id] : null}
-          // 움직임 줄이기면 평점 세기가 없으므로 바로 띄운다
-          delayMs={prefersReducedMotion() ? 0 : CELEBRATION_DELAY_MS}
+          delayMs={celebrationDelayMs}
           onClose={() => {
             setIsCelebrationOpen(false);
             // 여기서 본 업적은 홈에서 다시 띄우지 않는다. 실패하면 다음 미확인 조회 때 다시 뜬다
