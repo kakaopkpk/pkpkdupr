@@ -463,9 +463,9 @@ describe("buildNewsFeedPage 세션 항목", () => {
 });
 
 describe("buildNewsFeedPage 칭찬 줄", () => {
-  // 12월 3일(목) 정기 세션: 22:00 KST에 끝나고 12월 4일 22:00 KST(13:00Z)에 칭찬이 마감된다
+  // 12월 3일(목) 정기 세션: 22:00 KST(13:00Z)에 끝나고 1시간 뒤 23:00 KST(14:00Z)에 칭찬이 마감된다
   const sessionDate = at("2026-12-03T09:00:00.000Z");
-  const closedAt = at("2026-12-04T13:00:00.000Z");
+  const closedAt = at("2026-12-03T14:00:00.000Z");
   const ann = makePlayer("Pann0001", "ann", 3.2);
   const ben = makePlayer("Pben0001", "ben", 3.2);
   const cal = makePlayer("Pcal0001", "cal", 3.2);
@@ -491,7 +491,7 @@ describe("buildNewsFeedPage 칭찬 줄", () => {
       sessionId: session.id,
       voterPlayerId: `Pv${String(offset + index).padStart(6, "0")}`,
       targetPlayerId: targetId,
-      createdAt: at("2026-12-03T14:00:00.000Z"),
+      createdAt: at("2026-12-03T13:30:00.000Z"),
     }));
 
   const lines = (
@@ -548,7 +548,7 @@ describe("buildNewsFeedPage 칭찬 줄", () => {
           praises: praises(ann.id, 5, 20).map((praise) => ({
             ...praise,
             sessionId: earlier.id,
-            createdAt: at("2026-11-30T14:00:00.000Z"),
+            createdAt: at("2026-11-30T13:30:00.000Z"),
           })),
         },
       ];
@@ -577,7 +577,7 @@ describe("buildNewsFeedPage 칭찬 줄", () => {
       value: 3,
     });
     expect(
-      build(at("2026-12-04T12:59:00.000Z")).some(
+      build(at("2026-12-03T13:59:00.000Z")).some(
         (line) => line.kind === "praise",
       ),
     ).toBe(false);

@@ -18,7 +18,7 @@ import {
 } from "./RankingService";
 import type { SessionPlayerReport } from "@pkpkdupr/shared/ranking";
 
-/** 세션 끝 시각(getSessionEndsAt). 칭찬은 이 시각부터 24시간 받는다 */
+/** 세션 끝 시각(getSessionEndsAt). 칭찬은 이 시각부터 1시간 받는다 */
 export const getRankingSessionEndsAt = (session: RankingSession) =>
   getSessionEndsAt(session.kind, session.date, session);
 

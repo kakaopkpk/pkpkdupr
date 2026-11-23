@@ -36,7 +36,7 @@ const authSession: AuthenticatedSession = {
   isFirstLogin: false,
 };
 
-// 12월 3일(목) 정기 세션: 22:00 KST(13:00Z)에 끝나고 다음 날 같은 시각에 칭찬이 마감된다
+// 12월 3일(목) 정기 세션: 22:00 KST(13:00Z)에 끝나고 1시간 뒤(14:00Z)에 칭찬이 마감된다
 const session: SessionWithParticipantIds = {
   id: "Ssessio1",
   name: "목요 정기운동",
@@ -49,8 +49,8 @@ const session: SessionWithParticipantIds = {
   participantIds: [alice.id, bob.id, carol.id],
   praises: [],
 };
-const openAt = new Date("2026-12-03T14:00:00.000Z");
-const closedAt = new Date("2026-12-04T13:00:00.000Z");
+const openAt = new Date("2026-12-03T13:30:00.000Z");
+const closedAt = new Date("2026-12-03T14:00:00.000Z");
 
 let sequence = 0;
 /** 단식. a가 이기면 11:7 */

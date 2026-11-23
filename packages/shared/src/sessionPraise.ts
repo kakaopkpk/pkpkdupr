@@ -36,8 +36,8 @@ export const SESSION_PRAISE_STREAK_GUARD_MIN = 2;
 export const SESSION_PRAISE_RANK_JUMP_MIN = 3;
 /** 이 수 이상 칭찬받으면 세션 상세·소식에서 강조하고 칭찬 업적에 센다 */
 export const SESSION_PRAISE_HIGHLIGHT_MIN = 5;
-/** 칭찬 마감: 세션 끝 시각부터 24시간 */
-export const SESSION_PRAISE_WINDOW_MS = 24 * 60 * 60 * 1000;
+/** 칭찬 마감: 세션 끝 시각부터 1시간 */
+export const SESSION_PRAISE_WINDOW_MS = 60 * 60 * 1000;
 /** 이 시각 뒤에 끝난 세션부터 칭찬한다(기능 배포일 00:00 KST). 그 전 세션에는 칭찬 섹션이 없다 */
 export const SESSION_PRAISE_START = new Date("2026-11-23T15:00:00.000Z");
 
@@ -265,7 +265,7 @@ export const pickSessionPraiseCandidates = ({
   return picked;
 };
 
-/** 칭찬 마감 시각: 세션 끝 시각(getSessionEndsAt) + 24시간 */
+/** 칭찬 마감 시각: 세션 끝 시각(getSessionEndsAt) + 1시간 */
 export const getSessionPraiseClosesAt = (sessionEndsAt: Date) =>
   new Date(sessionEndsAt.getTime() + SESSION_PRAISE_WINDOW_MS);
 

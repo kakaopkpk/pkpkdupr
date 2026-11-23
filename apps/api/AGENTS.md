@@ -152,7 +152,7 @@
 후보·자격·마감 규칙은 `docs/product.md` "세션 칭찬", 계산은 `packages/shared/src/sessionPraise.ts`와 `services/SessionPraiseService.ts`입니다. 칭찬은 `session_praises`(세션·보낸 회원당 한 줄, 바꾸거나 취소 불가)에 저장하고 후보는 저장 없이 조회 때 계산합니다.
 
 - 칭찬 조회 `GET /api/match-sessions/:sessionId/praise`: 응답 `SessionPraiseResponse`
-  - `status`는 세션 끝 시각(`getSessionEndsAt`) 전 `upcoming`, 그 뒤 24시간 `open`, 그 뒤 `closed`.
+  - `status`는 세션 끝 시각(`getSessionEndsAt`) 전 `upcoming`, 그 뒤 1시간 `open`, 그 뒤 `closed`.
   - `candidates`는 우선순위 순 최대 3명(지금 활성 정회원만)과 지금 받은 칭찬 수 `praiseCount`. 끝나기 전 세션과 `SESSION_PRAISE_START` 전에 끝난 세션은 빈 배열이다.
   - 후보 계산은 세션 완료 경기 전체(게스트가 낀 평점 미반영 경기 포함)로 하고, 세션 지배자·평점 변화·순위는 세션 리포트와 같다.
   - `myTargetPlayerId`는 요청자가 칭찬한 회원(안 했으면 null). id 형식 오류 400, 없는 세션 404.
