@@ -127,12 +127,16 @@ type CandidateTeams = readonly [
 
 const TEAM_INDEXES = [0, 1] as const;
 
-/** 팀에서 연승이 가장 긴 연승 회원(WIN_STREAK_DISPLAY_MIN 이상). 같으면 먼저 나온 사람 */
+/**
+ * 팀에서 연승이 가장 긴 연승 회원(WIN_STREAK_DISPLAY_MIN 이상). 같으면 먼저 나온 사람.
+ * 랭킹 연승은 정회원에게만 보이는 값이라 게스트는 winStreak과 상관없이 연승 회원이 아니다.
+ */
 const findStreakLeader = (
   team: readonly SpecialMatchCandidatePlayer[],
 ): SpecialMatchCandidatePlayer | null =>
   team.reduce<SpecialMatchCandidatePlayer | null>(
     (leader, player) =>
+      !player.isGuest &&
       player.winStreak >= WIN_STREAK_DISPLAY_MIN &&
       (!leader || player.winStreak > leader.winStreak)
         ? player
@@ -234,14 +238,18 @@ const judgeChallengeMatch = (teams: CandidateTeams): SpecialMatch | null => {
 };
 
 /**
- * 추천 카드 출처 경기 판정. 해당 없으면 null. outcome은 null.
- * 게스트가 한 명이라도 끼면 평점 미반영 경기라 특수 매치가 아니다. 우선순위는 연승(최강자전·연승 저지) > 도전이다.
+ * 추천 카드 출처 경기 판정. 해당 없으면 null. outcome은 null. 우선순위는 연승(최강자전·연승 저지) > 라이벌전이다.
+ * 게스트가 낀 코트도 정회원 연승 회원이 있으면 연승 저지·최강자전이고, 게스트는 연승 주인공이 되지 않는다.
+ * 라이벌전은 평점 반영 뒤 순위 역전으로 결과가 정해지는데 게스트가 낀 경기는 평점에 반영하지 않으므로,
+ * 게스트가 한 명이라도 있으면 같은 코트 정회원끼리도 라이벌전이 아니다.
  */
 export const judgeRecommendedSpecialMatch = (
   teams: CandidateTeams,
 ): SpecialMatch | null => {
+  const streakMatch = judgeStreakMatch(teams);
+  if (streakMatch) return streakMatch;
   if (teams.some((team) => team.some((player) => player.isGuest))) return null;
-  return judgeStreakMatch(teams) ?? judgeChallengeMatch(teams);
+  return judgeChallengeMatch(teams);
 };
 
 const isSamePlayerSet = (

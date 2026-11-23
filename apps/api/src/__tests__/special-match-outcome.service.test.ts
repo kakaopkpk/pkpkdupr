@@ -48,24 +48,29 @@ const teamB = ["d1", "d2"];
 const teamAWin: MatchScore[] = [{ scoreA: 11, scoreB: 7 }];
 const teamBWin: MatchScore[] = [{ scoreA: 7, scoreB: 11 }];
 
-const toTarget = (scores: MatchScore[]): SpecialMatchSettleTarget => ({
-  id: "match-special",
-  type: "mixed-doubles",
-  completedAt,
-  scores,
-  teams: [
-    {
-      id: "team-a",
-      name: "A",
-      players: teamA.map((id) => ({ id, username: id, avatarUrl: `https://example.com/${id}.png` }) as Player),
-    },
-    {
-      id: "team-b",
-      name: "B",
-      players: teamB.map((id) => ({ id, username: id, avatarUrl: `https://example.com/${id}.png` }) as Player),
-    },
-  ] as Match["teams"],
-});
+/** guestIds에 든 선수는 게스트(isGuest)로 싣는다 */
+const toTarget = (
+  scores: MatchScore[],
+  guestIds: readonly string[] = [],
+): SpecialMatchSettleTarget => {
+  const toPlayer = (id: string) =>
+    ({
+      id,
+      username: id,
+      avatarUrl: `https://example.com/${id}.png`,
+      isGuest: guestIds.includes(id),
+    }) as Player;
+  return {
+    id: "match-special",
+    type: "mixed-doubles",
+    completedAt,
+    scores,
+    teams: [
+      { id: "team-a", name: "A", players: teamA.map(toPlayer) },
+      { id: "team-b", name: "B", players: teamB.map(toPlayer) },
+    ] as Match["teams"],
+  };
+};
 
 const toRankingMatch = (
   id: string,
@@ -251,6 +256,78 @@ describe("특수 매치 결과 판정", () => {
     expect(judgeSpecialMatchOutcome(context, revenge, toTarget(teamAWin))).toBe(
       "revenge_defended",
     );
+  });
+
+  it("게스트가 낀 연승 저지도 승패로 결과를 정하고, 끊기기 직전 연승은 게스트가 낀 경기까지 센다", () => {
+    const streakStopper: SpecialMatch = {
+      kind: "streak_stopper",
+      defendingTeamIndex: 1,
+      protagonistIds: [null, "d1"],
+      challengePairs: [],
+      outcome: null,
+    };
+    // 직전 5연승 중 2경기는 게스트 g1이 낀 경기다
+    const priorWins = [
+      ...[5, 4, 3].map((hours) =>
+        toRankingMatch(`prior-${hours}`, hoursBefore(hours), [["d1", "x1"], ["x2", "x3"]], teamAWin),
+      ),
+      ...[2, 1].map((hours) =>
+        toRankingMatch(`prior-guest-${hours}`, hoursBefore(hours), [["d1", "g1"], ["x2", "x3"]], teamAWin),
+      ),
+    ];
+    const context = buildContext(
+      { a1: 3.48, a2: 3.2, d1: 3.52, d2: 3.8 },
+      teamAWin,
+      priorWins,
+    );
+
+    expect(
+      settleSpecialMatch(context, streakStopper, toTarget(teamAWin, ["a2"])),
+    ).toEqual({
+      outcome: "streak_stopped",
+      celebration: {
+        kind: "streak_stopper",
+        stopped: {
+          player: { id: "d1", username: "d1", avatarUrl: "https://example.com/d1.png" },
+          streakBefore: 5,
+        },
+      },
+    });
+    expect(
+      settleSpecialMatch(context, streakStopper, toTarget(teamBWin, ["a2"])),
+    ).toEqual({ outcome: "streak_defended", celebration: null });
+  });
+
+  it("게스트가 낀 최강자전도 승패가 갈리면 최강자전 승리다", () => {
+    const champions: SpecialMatch = {
+      kind: "champions",
+      defendingTeamIndex: null,
+      protagonistIds: ["a1", "d1"],
+      challengePairs: [],
+      outcome: null,
+    };
+    const context = buildContext(
+      { a1: 3.48, a2: 3.2, d1: 3.52, d2: 3.8 },
+      teamBWin,
+    );
+
+    expect(
+      settleSpecialMatch(context, champions, toTarget(teamBWin, ["d2"])),
+    ).toMatchObject({
+      outcome: "champions_won",
+      celebration: { kind: "champions" },
+    });
+  });
+
+  it("게스트가 있는 라이벌전은 결과가 null이고 연출이 없다", () => {
+    const context = buildContext(
+      { a1: 3.6, a2: 3.2, d1: 3.4, d2: 3.8 },
+      teamAWin,
+    );
+
+    expect(
+      settleSpecialMatch(context, challenge, toTarget(teamAWin, ["a2"])),
+    ).toEqual({ outcome: null, celebration: null });
   });
 
   it("승패가 갈리지 않으면 결과가 null이다", () => {
