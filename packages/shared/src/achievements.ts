@@ -846,7 +846,10 @@ export interface AchievementMatch {
   scores?: readonly MatchScore[] | null;
   /** regular: 정기 세션 경기인지(개근상) */
   session?: { id: string; regular?: boolean } | null;
-  /** 게스트가 낀 경기(Match.ratingExcluded)는 업적에 세지 않는다 */
+  /**
+   * 게스트가 낀 경기(Match.ratingExcluded). 업적에는 세고, 평점 값에 묶인 것(평점 업적의 복식 경기 수·
+   * 평점 진행도, 언더독)에만 넣지 않는다
+   */
   ratingExcluded?: boolean;
   /**
    * 이 경기 직후 선수별 복식 평점(평점 변경 로그의 nextRating.doubles). 평점 업적에 쓴다.
@@ -878,16 +881,14 @@ export const compareCountedMatches = (
 const isOnOrAfterCountStart = (at: Date) =>
   at.getTime() >= ACHIEVEMENT_COUNT_START.getTime();
 
-/** 완료 시각이 있는 평점 반영 완료 경기 */
-const isRatedCompletedMatch = (
+/** 완료 시각이 있는 완료 경기. 게스트가 낀 경기(ratingExcluded)도 포함한다 */
+const isCountedCompletedMatch = (
   match: AchievementMatch,
 ): match is CountedMatch =>
-  match.status === "completed" &&
-  !match.ratingExcluded &&
-  match.completedAt != null;
+  match.status === "completed" && match.completedAt != null;
 
 /**
- * 업적 계산에 넣는 경기: 이 회원이 뛴 평점 반영 완료 경기 전부(compareCountedMatches 순).
+ * 업적 계산에 넣는 경기: 이 회원이 뛴 완료 경기 전부(compareCountedMatches 순).
  * 집계 시작 시각마다 다시 거른다(computeProgressSince).
  */
 const getPlayerCountedMatches = (
@@ -897,7 +898,8 @@ const getPlayerCountedMatches = (
   matches
     .filter(
       (match): match is CountedMatch =>
-        isRatedCompletedMatch(match) && findTeamIndex(match, playerId) !== null,
+        isCountedCompletedMatch(match) &&
+        findTeamIndex(match, playerId) !== null,
     )
     .sort(compareCountedMatches);
 
@@ -909,10 +911,14 @@ const getPlayerCountedMatches = (
 export const isEarnedByCountedMatch = (achievement: EarnedAchievement) =>
   isOnOrAfterCountStart(achievement.earnedAt);
 
-/** 복식 경기 직후 이 회원의 복식 평점(평점 업적 입력). 단식이거나 평점이 없으면 null */
+/** 평점 업적 경기 수에 세는 평점 반영 복식 경기 */
+const isRatedDoublesMatch = (match: AchievementMatch) =>
+  isDoublesMatchType(match.type) && !match.ratingExcluded;
+
+/** 평점 반영 복식 경기 직후 이 회원의 복식 평점(평점 업적 입력). 아니거나 평점이 없으면 null */
 const getDoublesRatingAfter = (match: AchievementMatch, playerId: string) => {
   const rating = match.doublesRatingAfter?.[playerId];
-  return isDoublesMatchType(match.type) && rating != null
+  return isRatedDoublesMatch(match) && rating != null
     ? roundDuprRating(rating)
     : null;
 };
@@ -978,10 +984,10 @@ const getTeamAverageRatingBefore = (
     0,
   ) / team.players.length;
 
-/** 경기 직전 상대 팀 평균 평점이 우리 팀보다 UNDERDOG_MIN_RATING_GAP 이상 높았다 */
+/** 평점 반영 경기에서 경기 직전 상대 팀 평균 평점이 우리 팀보다 UNDERDOG_MIN_RATING_GAP 이상 높았다 */
 const isUnderdogMatch = (match: AchievementMatch, teamIndex: 0 | 1) => {
   const ratingBefore = match.ratingBefore;
-  if (!ratingBefore) return false;
+  if (!ratingBefore || match.ratingExcluded) return false;
   const mine = getTeamAverageRatingBefore(ratingBefore, match.teams[teamIndex]);
   const theirs = getTeamAverageRatingBefore(
     ratingBefore,
@@ -998,7 +1004,7 @@ const isUnderdogMatch = (match: AchievementMatch, teamIndex: 0 | 1) => {
 interface ClubFacts {
   /** 경기 id → 그 경기 직전 선수별 연승 수(streak.ts와 같은 규칙) */
   streaksBeforeByMatchId: Map<string, Map<string, number>>;
-  /** 회원 id → 그 회원의 첫 평점 반영 완료 경기 id */
+  /** 회원 id → 그 회원의 첫 완료 경기 id(게스트가 낀 경기 포함) */
   firstMatchIdByPlayerId: Map<string, string>;
   /** 정기 세션 id → 경기가 열린 정기 회차 중 몇 번째인지(0부터, 첫 경기 완료 순) */
   regularSessionOrdinalById: Map<string, number>;
@@ -1024,7 +1030,7 @@ const getClubFacts = (matches: readonly AchievementMatch[]): ClubFacts => {
   };
   const streaks = new Map<string, number>();
   const ordered = matches
-    .filter(isRatedCompletedMatch)
+    .filter(isCountedCompletedMatch)
     .sort(compareCountedMatches);
   for (const match of ordered) {
     const winningTeamIndex = getWinningTeamIndex(match);
@@ -1203,7 +1209,7 @@ const computeProgressSince = (
     start == null || match.completedAt.getTime() >= start.getTime();
   const countedMatches = playerMatches.filter(isCounted);
   const preStartDoublesMatches = playerMatches.filter(
-    (match) => !isCounted(match) && isDoublesMatchType(match.type),
+    (match) => !isCounted(match) && isRatedDoublesMatch(match),
   );
 
   let ratedDoublesMatches = preStartDoublesMatches.length;
@@ -1283,8 +1289,8 @@ const computeProgressSince = (
     if (brokeStreak) metrics.streakBreaks += 1;
     metrics.distinctBeatenOpponents = beatenOpponents.size;
 
+    if (isRatedDoublesMatch(match)) ratedDoublesMatches += 1;
     if (isDoublesMatchType(match.type)) {
-      ratedDoublesMatches += 1;
       const partnerIds = new Set(
         match.teams[teamIndex].players
           .map((player) => player.id)
@@ -1419,6 +1425,7 @@ const computeProgressSince = (
  * 한 회원의 업적 진행 상태(ACHIEVEMENTS 순서).
  * 완료 경기만(진행 중·취소 제외) 완료 시각 순으로 훑어, 진행도가 목표에 처음 닿은
  * 경기를 받게 된 경기로, 그 경기 완료 시각을 받은 날로 정한다.
+ * 게스트가 낀 경기(ratingExcluded)도 세고, 평점 값에 묶인 평점 업적(복식 경기 수·평점)과 언더독만 평점 반영 경기로 센다.
  * 각 업적은 자기 지표의 집계 시작 시각(METRIC_COUNT_START) 이후 경기만 센다. 시작 시각마다
  * computeProgressSince를 따로 돌려, 지표를 추가할 때 시작 시각만 적으면 되게 한다.
  * 승패가 갈리지 않은 경기는 승리에는 세지 않고 연승·콤비 연승·무패 세션·리벤지는 끊는다.
