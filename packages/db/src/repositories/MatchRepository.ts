@@ -1959,13 +1959,15 @@ export class MatchRepository {
   /**
    * 특수 매치(결과 포함)만 바꾼다. 서버가 평점 반영 뒤 정하는 파생 값이라 updated_at은 올리지 않는다
    * (기록한 회원이 받은 updatedAt으로 바로 다시 고쳐도 409가 나지 않게).
+   * 이미 special_match가 NULL인 경기는 바꾸지 않는다. 평점 반영 중에 다른 회원이 팀 구성을 바꿔
+   * 특수 매치를 지웠다면 이전 팀 구성 기준의 값을 되살리지 않는다.
    */
   async updateSpecialMatch(
     matchId: string,
     specialMatch: SpecialMatch | null,
   ): Promise<void> {
     await this.client.execute({
-      sql: `UPDATE matches SET special_match = $2::jsonb WHERE id = $1`,
+      sql: `UPDATE matches SET special_match = $2::jsonb WHERE id = $1 AND special_match IS NOT NULL`,
       args: [matchId, specialMatch ? JSON.stringify(specialMatch) : null],
     });
   }
