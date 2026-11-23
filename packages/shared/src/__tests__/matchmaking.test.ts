@@ -367,8 +367,12 @@ describe("recommendDoublesMatches 특수 유형 가산점", () => {
     expect(getSpecialMatchRecommendationBonus("streak_stopper")).toBe(
       SPECIAL_MATCH_RECOMMENDATION_BONUS.streak,
     );
-    expect(getSpecialMatchRecommendationBonus("champions")).toBe(2);
-    expect(getSpecialMatchRecommendationBonus("challenge")).toBe(1.5);
+    expect(getSpecialMatchRecommendationBonus("champions")).toBe(
+      SPECIAL_MATCH_RECOMMENDATION_BONUS.streak,
+    );
+    expect(getSpecialMatchRecommendationBonus("challenge")).toBe(
+      SPECIAL_MATCH_RECOMMENDATION_BONUS.challenge,
+    );
     expect(getSpecialMatchRecommendationBonus("revenge")).toBe(0);
   });
 
@@ -427,7 +431,9 @@ describe("recommendDoublesMatches 특수 유형 가산점", () => {
       const plan = recommend({ ...input, rank });
       const [court] = plan.courts;
       // 같은 실력끼리 한 팀(a+b vs c+d)이면 평점 0.05 이내 맞상대가 없다
-      const isChallenge = matchupKey(plan) !== "a+b vs c+d";
+      const isChallenge = !court.teams.some(
+        (team) => team.includes("a") && team.includes("b"),
+      );
       expect(court.specialMatch?.kind ?? null).toBe(
         isChallenge ? "challenge" : null,
       );

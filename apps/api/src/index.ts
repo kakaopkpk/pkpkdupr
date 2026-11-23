@@ -1847,14 +1847,20 @@ app.get("/api/match-sessions/:sessionId/recommendations", async (req, res) => {
     const [busyPlayerIds, sessionMatches, rankingSource] = await Promise.all([
       matchRepository.findInProgressPlayerIds(now),
       matchRepository.findBySession(sessionId),
-      loadRankingSource(),
+      // 특수 유형·주인공 정보는 부가 정보라 원천 조회가 실패하면 가산점 없이 추천한다
+      loadRankingSource().catch((err) => {
+        console.error("[RECOMMENDATION] 랭킹 원천 조회 실패", sessionId, err);
+        return null;
+      }),
     ]);
     // 추천은 복식만이라 특수 유형 판정·주인공 순위는 복식 랭킹 기준이다
-    const specialPlayers = buildSpecialMatchCandidatePlayers(
-      rankingSource.context,
-      "doubles",
-      session.participants,
-    );
+    const specialPlayers = rankingSource
+      ? buildSpecialMatchCandidatePlayers(
+          rankingSource.context,
+          "doubles",
+          session.participants,
+        )
+      : undefined;
     const completedMatches: MatchmakingPlayedMatch[] = sessionMatches
       .filter((match) => match.status === "completed")
       .map((match) => ({
@@ -1880,7 +1886,7 @@ app.get("/api/match-sessions/:sessionId/recommendations", async (req, res) => {
     const playersById = new Map(
       session.participants.map((member) => [
         member.id,
-        toRecommendationPlayer(member, specialPlayers.get(member.id)),
+        toRecommendationPlayer(member, specialPlayers?.get(member.id)),
       ]),
     );
     const playerOf = (id: string) => playersById.get(id)!;

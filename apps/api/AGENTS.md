@@ -101,6 +101,7 @@
   - 후보 줄 세우기·여유폭은 가산점을 뺀 감점으로 한다.
   - 응답 코트 `specialMatch`는 그 가산점 코트 하나만 판정 결과(`outcome` null)이고 나머지 코트는 null이다.
   - 응답 선수(`RecommendationPlayer`)에 복식 랭킹 순위 `doublesRank`(랭킹에 없으면 null)와 지금 연승 수 `winStreak`(랭킹과 같은 규칙).
+  - 랭킹 원천을 못 읽으면 가산점 없이 추천하고, 코트 `specialMatch`는 모두 null, 선수 `doublesRank`는 null·`winStreak`는 0이다.
 - 참여자 한 명씩 추가 `POST /api/match-sessions/:sessionId/participants`·삭제 `DELETE /api/match-sessions/:sessionId/participants/:playerId`
   - 활성 회원 누구나·대리 가능, 오늘·미래 세션만(지난 세션 403), 멱등.
 - 게스트 추가 `POST /api/match-sessions/:sessionId/guests` `{ username }`

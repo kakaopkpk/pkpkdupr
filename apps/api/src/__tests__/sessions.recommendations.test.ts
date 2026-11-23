@@ -249,6 +249,31 @@ describe("GET /api/match-sessions/:sessionId/recommendations", () => {
     ).toBe(true);
   });
 
+  it("랭킹 원천을 못 읽으면 특수 유형·순위·연승 없이 추천한다", async () => {
+    findCompletedMatchOutcomes.mockRejectedValue(new Error("db down"));
+    vi.spyOn(console, "error").mockImplementation(() => {});
+
+    const response = await recommend("Stoday00", "?courts=2");
+
+    expect(response.status).toBe(200);
+    const body = response.body as MatchSessionRecommendationResponse;
+    expect(body.courts).toHaveLength(2);
+    expect(body.courts.every((court) => court.specialMatch === null)).toBe(
+      true,
+    );
+    const everyone = [
+      ...body.courts.flatMap((court) =>
+        court.teams.flatMap((team) => team.players),
+      ),
+      ...body.restingPlayers,
+    ];
+    expect(
+      everyone.every(
+        (player) => player.doublesRank === null && player.winStreak === 0,
+      ),
+    ).toBe(true);
+  });
+
   it("팀 평균은 NR 선수를 기본 평점 3.0으로 친다", async () => {
     // 참여자 평점 중앙값(3.1)으로 대체하는 팀 나누기와 달리, 표시용 평균은 NR을 3.0으로 계산한다.
     sessions = [
