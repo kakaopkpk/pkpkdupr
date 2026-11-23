@@ -9,7 +9,7 @@ import { FlameIcon } from "@/components/ui/Icons";
 import { PlayerAvatar } from "@/components/ui/PlayerAvatar";
 import { SpecialMatchIcon } from "@/components/ui/SpecialMatchLabel";
 import { cx } from "@/components/ui/cx";
-import { getRankingCategoryLabel } from "@/lib/specialMatchShare";
+import { getRankingCategoryLabel, STREAK_END_LABEL, VS_LABEL } from "@/lib/specialMatchShare";
 import {
   CHALLENGE_SWAP_MS,
   STREAK_RING_FADE_MS,
@@ -23,7 +23,6 @@ import {
  */
 
 const ms = (value: number) => `${value}ms`;
-const STREAK_END_LABEL = "연승 끝";
 
 // ------------------------------------------------------------------ 도전 성공 --
 
@@ -342,7 +341,7 @@ export const ChampionsScene: React.FC<{
         aria-hidden="true"
         className="mt-6 inline-flex size-8 shrink-0 items-center justify-center rounded-full bg-pk-bg text-pk-12 font-extrabold text-pk-muted"
       >
-        VS
+        {VS_LABEL}
       </span>
       <ChampionsColumn name={loser.player.username}>
         <StreakProfileAvatar

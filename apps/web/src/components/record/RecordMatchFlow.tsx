@@ -122,7 +122,12 @@ export default function RecordMatchFlow({
   const { showSaveFailure } = useSystemNotice();
   const showStartedMatchToast = useStartedMatchToast();
   const { closeDepth } = useTabNavigation();
-  const { players, status: playersStatus } = usePlayers();
+  const {
+    players,
+    status: playersStatus,
+    error: playersError,
+    reload: reloadPlayers,
+  } = usePlayers();
 
   const [step, setStep] = useState<Step>(initial.step);
   const [slots, setSlots] = useState(initial.slots);
@@ -386,6 +391,8 @@ export default function RecordMatchFlow({
       }}
       players={players}
       playersStatus={playersStatus}
+      playersError={playersError}
+      onRetryPlayers={() => void reloadPlayers()}
       playerById={playerById}
       participantIds={participantIds}
       busyIds={busyIds}

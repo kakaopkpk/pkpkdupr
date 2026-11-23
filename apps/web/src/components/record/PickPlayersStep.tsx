@@ -7,6 +7,7 @@ import { PlayerAvatar, type AvatarPlayer } from "@/components/ui/PlayerAvatar";
 import { SearchField } from "@/components/ui/SearchField";
 import { SheetTitle } from "@/components/ui/SheetTitle";
 import { StateMessage } from "@/components/ui/StateMessage";
+import { getUserErrorMessage } from "@/lib/errors";
 import { cx } from "@/components/ui/cx";
 import type { MemberListPlayerInfo } from "@/hooks/usePlayers";
 import {
@@ -33,6 +34,10 @@ export interface PickPlayersStepProps {
   onSlotsChange: (slots: RecordSlots) => void;
   players: MemberListPlayerInfo[];
   playersStatus: "loading" | "ready" | "error";
+  /** 회원 목록을 불러오지 못한 원인. playersStatus가 "error"일 때만 있다 */
+  playersError: unknown;
+  /** 회원 목록 불러오기를 다시 시도한다 */
+  onRetryPlayers: () => void;
   /** 자리에 그릴 플레이어. 회원 목록에 없는 플레이어(불러오는 중 등)도 찾을 수 있게 셸이 모아 준다 */
   playerById: ReadonlyMap<string, SlotPlayer>;
   participantIds: readonly string[];
@@ -86,6 +91,8 @@ export default function PickPlayersStep({
   onSlotsChange,
   players,
   playersStatus,
+  playersError,
+  onRetryPlayers,
   playerById,
   participantIds,
   busyIds,
@@ -320,10 +327,19 @@ export default function PickPlayersStep({
       </BottomSheet.Header>
       <BottomSheet.Body className="pb-2">
         {playersStatus === "error" && players.length === 0 ? (
-          <p className="px-1 text-pk-13 font-bold text-pk-down" role="alert">
-            회원 목록을 불러오지 못했어요.
+          <StateMessage
+            kind="error"
+            message={getUserErrorMessage(
+              playersError,
+              "회원 목록을 불러오지 못했어요",
+            )}
+            onRetry={onRetryPlayers}
+          />
+        ) : list.length === 0 && playersStatus === "loading" ? (
+          <p className="py-6 text-center text-pk-13 text-pk-muted">
+            회원 목록을 불러오는 중…
           </p>
-        ) : list.length === 0 && playersStatus !== "loading" ? (
+        ) : list.length === 0 ? (
           <StateMessage kind="empty" message="검색 결과가 없어요" />
         ) : (
           <div className="grid shrink-0 grid-cols-2 gap-2 pt-0.5">

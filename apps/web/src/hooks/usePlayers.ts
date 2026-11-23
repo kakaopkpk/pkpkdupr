@@ -26,12 +26,15 @@ interface PlayersState {
   ownerId: string | null;
   players: MemberListPlayerInfo[];
   status: PlayersStatus;
+  /** 마지막 불러오기 실패 원인. status가 "error"가 아니면 null */
+  error: unknown;
 }
 
 const INITIAL_STATE: PlayersState = {
   ownerId: null,
   players: [],
   status: "loading",
+  error: null,
 };
 
 // 여러 화면이 같은 회원 목록을 쓰므로 모듈 단위로 한 벌만 둔다.
@@ -51,7 +54,7 @@ const subscribe = (listener: () => void) => {
   };
 };
 
-const getSnapshot = () => state;
+export const getSnapshot = () => state;
 
 const readCachedPlayers = (): MemberListPlayerInfo[] | null => {
   try {
@@ -74,7 +77,7 @@ const writeCachedPlayers = (players: MemberListPlayerInfo[]) => {
 };
 
 /** 계정이 바뀌었으면 이전 목록을 버리고, 같은 계정의 오프라인 캐시가 있으면 먼저 보여 준다 */
-const ensureOwner = (ownerId: string) => {
+export const ensureOwner = (ownerId: string) => {
   if (state.ownerId === ownerId) return;
   inFlight = null;
   const cached = readCachedPlayers();
@@ -82,11 +85,19 @@ const ensureOwner = (ownerId: string) => {
     ownerId,
     players: cached ?? [],
     status: cached ? "ready" : "loading",
+    error: null,
   });
 };
 
-const fetchPlayers = (ownerId: string): Promise<void> => {
+/** 실패 상태에서 재요청을 시작하면 불러오는 중으로 돌려 실패 표시를 걷는다 */
+const markLoadingAfterError = (ownerId: string) => {
+  if (state.ownerId !== ownerId || state.status !== "error") return;
+  setState({ ...state, status: "loading", error: null });
+};
+
+export const fetchPlayers = (ownerId: string): Promise<void> => {
   if (inFlight) return inFlight;
+  markLoadingAfterError(ownerId);
 
   const request = (async () => {
     try {
@@ -97,12 +108,12 @@ const fetchPlayers = (ownerId: string): Promise<void> => {
       const players = (await res.json()) as MemberListPlayerInfo[];
       if (state.ownerId !== ownerId) return;
       writeCachedPlayers(players);
-      setState({ ownerId, players, status: "ready" });
-    } catch {
+      setState({ ownerId, players, status: "ready", error: null });
+    } catch (err) {
       if (state.ownerId !== ownerId) return;
       // 이미 보여 줄 목록(이전 응답·오프라인 캐시)이 있으면 그대로 둔다.
       if (state.players.length === 0) {
-        setState({ ...state, status: "error" });
+        setState({ ...state, status: "error", error: err });
       }
     }
   })();
@@ -118,6 +129,7 @@ const fetchPlayers = (ownerId: string): Promise<void> => {
 export const usePlayers = (): {
   players: MemberListPlayerInfo[];
   status: PlayersStatus;
+  error: unknown;
   reload: () => Promise<void>;
 } => {
   const { player, isAuthenticated } = useAuth();
@@ -151,6 +163,7 @@ export const usePlayers = (): {
   return {
     players: isCurrentOwner ? snapshot.players : INITIAL_STATE.players,
     status: isCurrentOwner ? snapshot.status : INITIAL_STATE.status,
+    error: isCurrentOwner ? snapshot.error : INITIAL_STATE.error,
     reload,
   };
 };

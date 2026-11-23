@@ -254,7 +254,7 @@
 - Tailwind v4 기준이라 별도 `tailwind.config.*` 없이 Vite 플러그인으로 동작합니다.
 - 모바일 중심 화면이므로 고정 폭/하단 탭/오버레이가 깨지지 않게 확인합니다.
 - HeroUI를 사용할 때도 기존 Tailwind 클래스 기반 레이아웃 규칙과 충돌하지 않게 유지합니다.
-- 색·둥글기·글자 크기는 `src/index.css` `@theme`의 `pk-*` 토큰만 씁니다(예: `bg-pk-primary`, `text-pk-sub`, `rounded-pk-lg`, `text-pk-15`, `font-num`). 16진수 색을 클래스에 직접 쓰지 않습니다.
+- 색·둥글기·글자 크기는 `src/index.css` `@theme`의 `pk-*` 토큰만 씁니다(예: `bg-pk-primary`, `text-pk-sub`, `rounded-pk-lg`, `text-pk-15`, `font-num`). 16진수 색을 클래스에 직접 쓰지 않습니다. 글자 크기 예외는 디자인 규칙의 글자 크기 항목에 있습니다.
 - 기본 클래스에 className prop을 합칠 때는 `components/ui/cx.ts`의 `cx`를 씁니다. tailwind-merge 기반이라 충돌하는 클래스는 뒤에 온 것만 남으므로 넘겨받은 className을 뒤에 둡니다. `!` 접두(important)로 우회하지 않습니다.
 - `@theme`에 `pk-*` 토큰(색·둥글기·글자 크기)을 추가하거나 바꾸면 `cx.ts`의 tailwind-merge 토큰 등록도 함께 고칩니다. 빠지면 `text-pk-15`와 `text-pk-ink`처럼 접두가 같은 클래스를 같은 종류로 오인하거나 충돌을 못 정리합니다.
 - 누름 피드백은 `components/ui/Button.tsx`의 `buttonPressClassName`(버튼·아이콘·글자 버튼)·`rowPressClassName`(목록 줄·카드)만 씁니다.
@@ -299,6 +299,11 @@
 - 랭킹 1~3위는 금·은·동(`pk-gold`·`pk-silver`·`pk-bronze`) 원입니다. 상승은 `pk-up`, 하락은 모두 `pk-down`, 보합은 회색입니다. 빨강(`pk-down`) 채움 버튼은 경기 삭제 확인 시트의 "길게 눌러 삭제"(`HoldToConfirmButton` `danger`, 1초)뿐입니다.
 - 평점 없음은 "–"로 표기하고 NR 글자·알약을 쓰지 않습니다(`formatRating`도 값이 없으면 "–"). 랭킹의 평점 없는 회원 줄은 순위·평점 모두 "–", 세션 평점 변화 줄은 세션 후 평점이 없으면 평점 부분 없이 승패만, 내 변동 카드는 큰 "–" 하나만(변화 표시 없음) 보입니다. 처음 평점을 받은 회원도 다른 회원처럼 시작 평점 3.000 → 새 평점과 3.000 기준 변화량으로 보이며 NEW 같은 별도 표시는 붙이지 않습니다(평점 로그·세션 리포트의 이전 평점에 3.0이 들어 있음). 세션 전 평점이 없는 경우(첫 평점이 공식 DUPR 조정)만 새 평점만 보이고 변화는 "–"입니다. 팀 평균 등 평균 표시는 NR을 3.0으로 칩니다.
 - 카드에는 테두리가 없습니다. 둥글기는 12/20/999만, 글자 크기는 12/13/15/17/22/26만 씁니다.
+  - 예외로 입력칸은 16px입니다(`ui/Form.tsx`·`ui/SearchField.tsx`의 `text-[16px]`, `index.css`의 iOS 뷰포트 잠금 입력칸 `max(16px, 1em)`). iOS는 16px보다 작은 입력칸에 포커스하면 화면을 확대하므로 줄이지 않습니다.
+  - 예외로 화면 주인공 큰 숫자(`font-num`)는 `ScoreStep` 52, `MatchDetailViews`·`RecordDoneStep` 64, `ProfileRatingCard` 56, `AchievementPointsSummary` 34, `AchievementCelebration` 40입니다.
+  - 예외로 큰 제목은 `Login` 28, `SpecialMatchCelebrationScreen` 40입니다.
+  - 예외로 그림 안 글자는 `PwaInstallPrompt` 10, `RatingTrendChart` 10·11, `AchievementBadge` 11, `PlayerAvatar` 이니셜(지름×0.42)입니다.
+  - 예외로 공유 이미지 canvas(`shareFont`)는 `specialMatchShareImage` 제목 34, `sessionReportShareImage` 큰 평점 56, 특수 매치 캡션(15에서 한 줄에 안 들어가면 12까지 줄임), `lib/shareImageAvatar` 이니셜(지름×0.42)입니다.
 - Barlow Condensed(`font-num`)는 화면당 주인공 큰 숫자 하나에만 쓰고, 본문은 Pretendard입니다.
 - 경기 행은 팀 아바타 쌍을 넣고 이긴 쪽만 강조합니다(A·B팀 색 구분·승 배지 없음). 줄 맨 위 메타 줄에 시간을 두고 내 경기면 시간 뒤에 " · 내 경기" 글자만 붙으며(바탕 강조 없음), 시간 열은 따로 없고, 코트 번호는 어디에도 표시하지 않습니다.
 - 바텀시트는 고정 높이(화면의 약 3/4)이고 헤더·하단 버튼은 고정, 가운데만 스크롤합니다.

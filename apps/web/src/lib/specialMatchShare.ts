@@ -8,6 +8,10 @@ import { toShareFileName } from "@/lib/shareImage";
  * 모양은 docs/design.md "특수 매치 공유"를 따른다. 리벤지 성공은 큰 연출이 없어 대상이 아니다.
  */
 
+/** 큰 연출 화면과 공유 이미지가 같이 쓰는 문구 */
+export const STREAK_END_LABEL = "연승 끝";
+export const VS_LABEL = "VS";
+
 export interface SpecialMatchSharePlayer {
   id: string;
   username: string;

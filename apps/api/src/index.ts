@@ -2324,13 +2324,7 @@ app.post("/api/matches", async (req, res) => {
     // 시작 시각은 24시간 수정 기한·정기 세션 판정의 기준이므로 클라이언트 값을 받지 않고 서버 now로 정한다.
     const now = new Date();
     const session = await resolveSessionForNewMatch(requestedSessionId, now);
-    if (session) {
-      // 경기 저장 전에 참여자를 넣어, 저장된 세션 경기의 선수는 항상 참여자이게 한다.
-      await matchRepository.addSessionParticipants(
-        session.id,
-        getTeamPlayerIds(prepared.teams),
-      );
-    }
+    // 세션이 있으면 저장소가 경기 저장과 같은 트랜잭션에서 팀 선수를 세션 참여자로 넣는다.
     match = await matchRepository.create({
       ...prepared,
       session: session
@@ -2696,11 +2690,7 @@ app.post(
       }
       const lineup = await prepareBracketTeams(body?.teams);
 
-      // 경기 저장 전에 참여자를 넣어, 저장된 세션 경기의 선수는 항상 참여자이게 한다.
-      await matchRepository.addSessionParticipants(
-        session.id,
-        getTeamPlayerIds(lineup.teams),
-      );
+      // 저장소가 경기 저장과 같은 트랜잭션에서 팀 선수를 세션 참여자로 넣는다.
       const match = await matchRepository.create({
         type: lineup.type,
         teams: lineup.teams,
@@ -3097,13 +3087,7 @@ app.post("/api/admin/matches/batch", requireAdmin, async (req, res) => {
       };
     });
 
-    if (commonSession) {
-      // 경기 저장 전에 참여자를 넣어, 저장된 세션 경기의 선수는 항상 참여자이게 한다.
-      await matchRepository.addSessionParticipants(
-        commonSession.id,
-        matchesToCreate.flatMap((match) => getTeamPlayerIds(match.teams)),
-      );
-    }
+    // 세션이 있으면 저장소가 경기 저장과 같은 트랜잭션에서 팀 선수를 세션 참여자로 넣는다.
     const createdMatches = commonSession
       ? await matchRepository.createCompletedBatch(matchesToCreate)
       : await Promise.all(matchesToCreate.map((match) => matchRepository.create(match)));
@@ -3207,16 +3191,10 @@ app.patch("/api/admin/matches/bulk-metadata", requireAdmin, async (req, res) => 
     const update = parseAdminMatchMetadataUpdate(body);
     const matches = [];
     for (const matchId of matchIds) {
+      // 세션에 연결하면 저장소가 경기마다 같은 트랜잭션에서 선수를 세션 참여자로 넣는다. 연결 해제(null)는 참여자를 그대로 둔다.
       const match = await matchRepository.updateMetadata(matchId, update);
       if (!match) {
         return res.status(404).json({ error: `매치를 찾을 수 없습니다: ${matchId}` });
-      }
-      if (typeof update.sessionId === "string") {
-        // 세션 경기의 선수는 세션 참여자다. 연결 해제(null)는 참여자를 그대로 둔다.
-        await matchRepository.addSessionParticipants(
-          update.sessionId,
-          getTeamPlayerIds(match.teams),
-        );
       }
       matches.push(match);
     }
@@ -3484,32 +3462,19 @@ app.put("/api/matches/:matchId", async (req, res) => {
       // 관리자 정정은 이 경기에 이미 있던 선수를 지금 비활성이어도 그대로 둘 수 있다
       decoded.isAdmin ? existing.teams.flatMap((team) => team.players) : [],
     );
-    let targetSessionId = existing.session?.id;
-    if (adminEdit.sessionId === null) {
-      targetSessionId = undefined;
-    } else if (adminEdit.sessionId !== undefined) {
-      const targetSession = await matchRepository.findSessionById(
-        adminEdit.sessionId,
-      );
-      if (!targetSession) {
-        return res.status(400).json({ error: MATCH_SESSION_NOT_FOUND_MESSAGE });
-      }
-      targetSessionId = targetSession.id;
-    }
-    if (targetSessionId) {
-      // 바뀐 팀의 새 선수(세션을 옮기면 팀 전원)도 세션 참여자로 넣는다. 빠진 선수는 참여자에서 지우지 않는다.
-      // 참여자 추가는 경기 UPDATE와 따로 먼저 커밋된다. 그래서 아래 저장이 409로 막혀도 참여자는 남지만,
-      // 저장된 세션 경기의 선수가 참여자에서 빠지는 일은 없다.
-      await matchRepository.addSessionParticipants(
-        targetSessionId,
-        getTeamPlayerIds(prepared.teams),
-      );
+    if (
+      typeof adminEdit.sessionId === "string" &&
+      !(await matchRepository.findSessionById(adminEdit.sessionId))
+    ) {
+      return res.status(400).json({ error: MATCH_SESSION_NOT_FOUND_MESSAGE });
     }
     wasCompleted = existing.status === "completed";
     previous = existing;
     // 요청에 없어도 미리 읽은 updatedAt을 조건으로 저장해, 그사이 다른 회원이 고쳤으면 409로 막는다.
     // 그래서 아래 재계산 여부(wasCompleted)는 실제로 고친 행의 이전 상태와 같다.
     // 관리자의 세션·시각 컬럼 변경도 같은 UPDATE로 저장돼 점수·팀과 함께 반영되거나 함께 막힌다.
+    // 저장 뒤 경기 세션이 있으면 팀 선수 전원(세션을 옮기면 새 세션)을 같은 트랜잭션에서 세션 참여자로 넣는다.
+    // 빠진 선수는 참여자에서 지우지 않는다.
     match = await matchRepository.updateRecordedMatch(matchId, {
       ...prepared,
       ...adminEdit,

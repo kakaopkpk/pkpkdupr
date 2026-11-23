@@ -562,7 +562,7 @@ describe("PUT /api/matches/:matchId", () => {
     expect(response.body.courtName).toBe("1번 코트");
   });
 
-  it("세션 경기 팀이 바뀌면 새 선수를 세션 참여자로 추가한다", async () => {
+  it("세션 경기 팀이 바뀌면 새 팀으로 저장을 넘기고 참여자는 저장소에 맡긴다", async () => {
     existing = buildExistingMatch({
       session: {
         id: "Ssession1",
@@ -581,12 +581,12 @@ describe("PUT /api/matches/:matchId", () => {
     });
 
     expect(response.status).toBe(200);
-    expect(addSessionParticipants).toHaveBeenCalledWith("Ssession1", [
-      requester.id,
-      partner.id,
-      substitute.id,
-      opponentF.id,
-    ]);
+    // 참여자는 저장소 updateRecordedMatch가 경기 UPDATE와 같은 트랜잭션에서 넣는다
+    expect(addSessionParticipants).not.toHaveBeenCalled();
+    const [, input] = updateRecordedMatch.mock.calls[0]!;
+    expect(
+      input.teams.flatMap((team) => team.players.map((player) => player.id)),
+    ).toEqual([requester.id, partner.id, substitute.id, opponentF.id]);
   });
 
   it("세션 없는 경기는 참여자를 추가하지 않는다", async () => {
@@ -852,7 +852,7 @@ describe("PUT /api/matches/:matchId", () => {
       expect(recalculate).toHaveBeenCalledTimes(1);
     });
 
-    it("세션을 옮기고 경기 시각을 바꾸면 같은 저장 호출로 넘기고 새 세션에 선수를 넣는다", async () => {
+    it("세션을 옮기고 경기 시각을 바꾸면 같은 저장 호출로 넘긴다", async () => {
       existing = buildExistingMatch({
         session: {
           id: "Ssession1",
@@ -873,13 +873,7 @@ describe("PUT /api/matches/:matchId", () => {
 
       expect(response.status).toBe(200);
       expect(findSessionById).toHaveBeenCalledWith(movedSession.id);
-      expect(addSessionParticipants).toHaveBeenCalledTimes(1);
-      expect(addSessionParticipants).toHaveBeenCalledWith(movedSession.id, [
-        requester.id,
-        partner.id,
-        opponentM.id,
-        opponentF.id,
-      ]);
+      expect(addSessionParticipants).not.toHaveBeenCalled();
       expect(updateRecordedMatch).toHaveBeenCalledTimes(1);
       const [, input] = updateRecordedMatch.mock.calls[0]!;
       expect(input.sessionId).toBe(movedSession.id);

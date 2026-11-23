@@ -24,7 +24,7 @@ import {
   removeMatchSessionParticipant,
 } from "@/lib/matchSessions";
 import { getGuestAddOption, GUEST_USERNAME_FORMAT_HINT } from "./guestAdd";
-import { isNetworkError } from "@/lib/errors";
+import { getUserErrorMessage, isNetworkError } from "@/lib/errors";
 import { getErrorMessage } from "./saveError";
 
 export interface ParticipantsSheetProps {
@@ -145,6 +145,7 @@ const ParticipantsEditForm: React.FC<ParticipantsEditFormProps> = ({
   const {
     players,
     status: playersStatus,
+    error: playersError,
     reload: reloadPlayers,
   } = usePlayers();
   const { showSaveFailure } = useSystemNotice();
@@ -377,11 +378,18 @@ const ParticipantsEditForm: React.FC<ParticipantsEditFormProps> = ({
       </BottomSheet.Header>
       <BottomSheet.Body className="min-w-0 gap-0 overflow-y-auto">
         {rows.length === 0 ? (
-          playersStatus !== "ready" ? (
+          playersStatus === "error" ? (
+            <StateMessage
+              kind="error"
+              message={getUserErrorMessage(
+                playersError,
+                "회원 목록을 불러오지 못했어요",
+              )}
+              onRetry={() => void reloadPlayers()}
+            />
+          ) : playersStatus === "loading" ? (
             <p className="py-6 text-center text-pk-13 text-pk-muted">
-              {playersStatus === "error"
-                ? "회원 목록을 불러오지 못했어요."
-                : "회원 목록을 불러오는 중…"}
+              회원 목록을 불러오는 중…
             </p>
           ) : guestAddOption ? null : (
             <StateMessage kind="empty" message="검색 결과가 없어요" />

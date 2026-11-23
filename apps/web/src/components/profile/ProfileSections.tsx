@@ -156,7 +156,7 @@ export const ProfileBodySkeleton: React.FC<{
   /** 통계 타일 수(2칸 한 줄씩). 기본 2 */
   tileCount?: number;
 }> = ({ tileCount = 2 }) => (
-  <div aria-busy="true" aria-label="불러오는 중" className="flex flex-col gap-2.5">
+  <div role="status" aria-busy="true" aria-label="불러오는 중" className="flex flex-col gap-2.5">
     <SkeletonBlock className="h-[268px] rounded-pk-lg" />
     <div className="grid grid-cols-2 gap-2.5">
       {Array.from({ length: tileCount }, (_, index) => (

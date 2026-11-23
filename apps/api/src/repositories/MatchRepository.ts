@@ -359,7 +359,7 @@ export class MatchRepository {
     };
   }
 
-  /** 신규 경기 추가 */
+  /** 신규 경기 추가. 세션이 있으면 저장소가 같은 트랜잭션에서 팀 선수를 세션 참여자로 넣는다 */
   async create(match: NewMatchInput): Promise<Match> {
     for (let attempt = 0; attempt < 8; attempt += 1) {
       try {
@@ -388,7 +388,7 @@ export class MatchRepository {
     throw new Error("매치 ID 생성에 실패했습니다.");
   }
 
-  /** 세션이 지정된 완료 경기를 저장소의 단일 transaction으로 생성한다. */
+  /** 세션이 지정된 완료 경기를 저장소의 단일 transaction으로 생성한다(팀 선수의 세션 참여자 추가 포함). */
   async createCompletedBatch(matches: NewMatchInput[]): Promise<Match[]> {
     const inputs = matches.map(toCreateMatchInput);
     if (inputs.length === 0) {
@@ -897,12 +897,13 @@ export class MatchRepository {
   /**
    * 경기 기록 수정(관리자의 세션·시작 시각 정정 포함). 그사이 지워졌으면 404, expectedUpdatedAt이 저장된 값과 다르거나
    * cancelled 등 수정할 수 없는 상태로 바뀌었으면 409, 옮길 세션이 없으면 400으로 응답한다.
+   * 저장 뒤 경기에 세션이 있으면 저장소가 같은 트랜잭션에서 팀 선수를 세션 참여자로 넣는다.
    */
   async updateRecordedMatch(
     matchId: string,
     input: UpdateRecordedMatchInput,
   ): Promise<Match> {
-    const updated = await this.run(
+    const { match: updated, sessionParticipantsAdded } = await this.run(
       () => db.matches.updateRecordedMatch(matchId, input),
       400,
       (error) =>
@@ -914,7 +915,11 @@ export class MatchRepository {
             : undefined,
     );
 
-    return hydrateMatch(updated);
+    const hydrated = hydrateMatch(updated);
+    if (sessionParticipantsAdded) {
+      this.notifySessionsChanged([hydrated.session?.id]);
+    }
+    return hydrated;
   }
 
   /** 경기 삭제 감사 로그. 지운 시각 내림차순이고 match는 지운 시점의 경기 스냅샷이다 */
@@ -1168,7 +1173,7 @@ export class MatchRepository {
       matchStartsAt?: string;
     },
   ): Promise<Match> {
-    const updated = await this.run(
+    const { match: updated, sessionParticipantsAdded } = await this.run(
       () =>
         db.matches.updateMetadata(
           matchId,
@@ -1180,6 +1185,10 @@ export class MatchRepository {
       throw new MatchRepositoryError("매치를 찾을 수 없습니다.", 404);
     }
 
-    return hydrateMatch(updated);
+    const hydrated = hydrateMatch(updated);
+    if (sessionParticipantsAdded) {
+      this.notifySessionsChanged([hydrated.session?.id]);
+    }
+    return hydrated;
   }
 }

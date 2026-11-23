@@ -36,9 +36,12 @@ export function usePreparedShareImage<T>(
   const [prepared, setPrepared] = useState<PreparedState | null>(null);
   const [isSharing, setIsSharing] = useState(false);
   const key = target === null ? null : source.getKey(target);
-  // target 객체는 렌더마다 새로 만들어지므로 최신 것을 ref로 들고, 내용이 같은지는 key로 본다
+  // target 객체는 렌더마다 새로 만들어지므로 최신 것을 ref로 들고, 내용이 같은지는 key로 본다.
+  // 아래 이미지 만들기 effect보다 먼저 선언해 같은 커밋에서 그 effect가 최신 target을 읽게 한다
   const targetRef = useRef(target);
-  targetRef.current = target;
+  useEffect(() => {
+    targetRef.current = target;
+  });
 
   useEffect(() => {
     const current = targetRef.current;
