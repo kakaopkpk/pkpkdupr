@@ -470,6 +470,106 @@ const findFirstBusyPlayerId = async (
   return playerIds.find((id) => busyPlayerIds.has(id));
 };
 
+/** 트랜잭션처럼 raw SQL 한 문장을 실행하는 대상 */
+type SqlExecutor = {
+  execute: (statement: { sql: string; args: unknown[] }) => Promise<RawQueryResult>;
+};
+
+/**
+ * 세션 참여자를 넣는다. 이미 있는 참여자는 그대로 두고, 새로 들어간 참여자가 있을 때만 세션 updated_at을 올린다.
+ * 경기 저장과 같은 트랜잭션에서 부르면 저장이 실패할 때 참여자도 남지 않는다. 새로 들어갔으면 true
+ */
+const insertSessionParticipants = async (
+  executor: SqlExecutor,
+  sessionId: string,
+  playerIds: string[],
+  nowSeconds: number,
+): Promise<boolean> => {
+  const uniquePlayerIds = [...new Set(playerIds)];
+  if (uniquePlayerIds.length === 0) {
+    return false;
+  }
+  const inserted = await executor.execute({
+    sql: `
+      INSERT INTO match_session_participants (
+        id,
+        session_id,
+        player_id,
+        created_at
+      )
+      VALUES ${uniquePlayerIds
+        .map((_, index) => `(${placeholders(4, index * 4 + 1)})`)
+        .join(", ")}
+      ON CONFLICT DO NOTHING
+    `,
+    args: uniquePlayerIds.flatMap((playerId) => [
+      `${sessionId}-${playerId}`,
+      sessionId,
+      playerId,
+      nowSeconds,
+    ]),
+  });
+  if (inserted.rowsAffected === 0) {
+    return false;
+  }
+  await executor.execute({
+    sql: "UPDATE match_sessions SET updated_at = $1 WHERE id = $2",
+    args: [nowSeconds, sessionId],
+  });
+  return true;
+};
+
+const getTeamPlayerIds = (teams: Team[]) =>
+  teams.flatMap((team) => team.players.map((player) => player.id));
+
+/** 경기에 붙일 세션 정보(id·이름·장소·날짜)가 유효한지 확인한다 */
+const validateSessionInput = (session: Session) => {
+  if (!isEntityId(session.id, "session")) {
+    throw new Error("유효한 세션 ID가 필요합니다.");
+  }
+  if (
+    !session.name?.trim() ||
+    !session.location?.trim() ||
+    Number.isNaN(toDate(session.date).getTime())
+  ) {
+    throw new Error("유효한 세션 정보가 필요합니다.");
+  }
+};
+
+/** 세션 행이 없으면 회원 세션으로 만든다. 같은 id가 동시에 만들어졌으면 그 행을 그대로 쓴다 */
+const insertSessionIfMissing = async (
+  executor: SqlExecutor,
+  session: Session,
+  nowSeconds: number,
+) => {
+  const existing = await executor.execute({
+    sql: "SELECT id FROM match_sessions WHERE id = $1",
+    args: [session.id],
+  });
+  if (existing.rows.length > 0) {
+    return;
+  }
+  await executor.execute({
+    sql: `
+      INSERT INTO match_sessions (
+        id, name, "date", location, kind, start_time, end_time, created_at, updated_at
+      ) VALUES (${placeholders(9)})
+      ON CONFLICT (id) DO NOTHING
+    `,
+    args: [
+      session.id,
+      session.name!.trim(),
+      toUnixTimestampSeconds(toDate(session.date)),
+      session.location!.trim(),
+      "custom",
+      session.startTime ?? null,
+      session.endTime ?? null,
+      nowSeconds,
+      nowSeconds,
+    ],
+  });
+};
+
 /** 회원 세션 종료 시각("HH:MM")이 시작보다 이르거나 같아 다음 날 끝나는 행 */
 const OVERNIGHT_SESSION_SQL =
   "(s.start_time IS NOT NULL AND s.end_time IS NOT NULL AND s.end_time <= s.start_time)";
@@ -650,41 +750,12 @@ export class MatchRepository {
     if (!isEntityId(sessionId, "session")) {
       throw new Error("유효한 세션 ID가 필요합니다.");
     }
-    const uniquePlayerIds = [...new Set(playerIds)];
-    if (uniquePlayerIds.length === 0) {
-      return false;
-    }
-
-    const now = toUnixTimestampSeconds(new Date());
-    const values = uniquePlayerIds
-      .map((_, index) => `(${placeholders(4, index * 4 + 1)})`)
-      .join(", ");
-    const inserted = await this.client.execute({
-      sql: `
-        INSERT INTO match_session_participants (
-          id,
-          session_id,
-          player_id,
-          created_at
-        )
-        VALUES ${values}
-        ON CONFLICT DO NOTHING
-      `,
-      args: uniquePlayerIds.flatMap((playerId) => [
-        `${sessionId}-${playerId}`,
-        sessionId,
-        playerId,
-        now,
-      ]),
-    });
-    if (inserted.rowsAffected === 0) {
-      return false;
-    }
-    await this.client.execute({
-      sql: "UPDATE match_sessions SET updated_at = $1 WHERE id = $2",
-      args: [now, sessionId],
-    });
-    return true;
+    return await insertSessionParticipants(
+      this.client,
+      sessionId,
+      playerIds,
+      toUnixTimestampSeconds(new Date()),
+    );
   }
 
   /**
@@ -1408,9 +1479,11 @@ export class MatchRepository {
     return allMatches.filter((match) => match.session?.id === sessionId);
   }
 
+  /**
+   * 경기를 만든다. data.session이 있으면 세션 확인(없으면 만듦)·팀 선수의 세션 참여자 추가·경기·참가자·점수를
+   * 한 트랜잭션으로 저장해, 저장이 실패하면(id 충돌 포함) 참여자도 남지 않는다.
+   */
   async create(data: CreateMatchInput): Promise<Match> {
-    const now = new Date();
-
     if (!isEntityId(data.id, "match")) {
       throw new Error("유효한 매치 ID가 필요합니다.");
     }
@@ -1419,35 +1492,121 @@ export class MatchRepository {
       validateMatchScores(data.scores ?? []);
     }
 
-    const sessionId = data.session
-      ? await this.ensureSession(data.session)
-      : null;
+    const session = data.session;
+    if (session) {
+      validateSessionInput(session);
+    }
 
-    await this.db.insert(matches).values({
-      id: data.id,
-      type: data.type,
-      source: data.source ?? "player_created",
-      creatorPlayerId: data.creatorPlayerId,
-      name: data.name?.trim() || null,
-      sessionId,
-      sessionName: data.session?.name?.trim() || null,
-      sessionDate: toDateOrNull(data.session?.date),
-      status: data.status,
-      location: data.location,
-      courtName: data.courtName?.trim() || null,
-      matchStartsAt: new Date(data.matchStartsAt),
-      completedAt: toDateOrNull(data.completedAt),
-      resultSubmittedByPlayerId: data.resultSubmittedByPlayerId ?? null,
-      resultSubmittedAt: toDateOrNull(data.resultSubmittedAt),
-      ratingExcluded: data.ratingExcluded ?? false,
-      round: data.round ?? null,
-      specialMatch: data.specialMatch ?? null,
-      createdAt: now,
-      updatedAt: now,
-    });
+    const scoreColumns = await this.getMatchScoreColumns();
+    const transaction = await this.client.transaction("write");
+    let committed = false;
+    try {
+      const nowSeconds = toUnixTimestampSeconds(new Date());
+      if (session) {
+        await insertSessionIfMissing(transaction, session, nowSeconds);
+        // 경기 저장 전에 참여자를 넣어, 저장된 세션 경기의 선수는 항상 참여자이게 한다.
+        await insertSessionParticipants(
+          transaction,
+          session.id,
+          getTeamPlayerIds(data.teams),
+          nowSeconds,
+        );
+      }
 
-    await this.createParticipants(data.id, data.teams);
-    await this.replaceScores(data.id, data.scores ?? []);
+      await transaction.execute({
+        sql: `
+          INSERT INTO matches (
+            id,
+            type,
+            source,
+            creator_player_id,
+            name,
+            session_id,
+            session_name,
+            session_date,
+            status,
+            location,
+            court_name,
+            match_starts_at,
+            completed_at,
+            result_submitted_by_player_id,
+            result_submitted_at,
+            rating_excluded,
+            round,
+            special_match,
+            created_at,
+            updated_at
+          )
+          VALUES (${placeholders(17)}, $18::jsonb, $19, $20)
+        `,
+        args: [
+          data.id,
+          data.type,
+          data.source ?? "player_created",
+          data.creatorPlayerId,
+          data.name?.trim() || null,
+          session?.id ?? null,
+          session?.name?.trim() || null,
+          session ? toUnixTimestampSeconds(toDate(session.date)) : null,
+          data.status,
+          data.location,
+          data.courtName?.trim() || null,
+          toUnixTimestampSeconds(new Date(data.matchStartsAt)),
+          data.completedAt
+            ? toUnixTimestampSeconds(new Date(data.completedAt))
+            : null,
+          data.resultSubmittedByPlayerId ?? null,
+          data.resultSubmittedAt
+            ? toUnixTimestampSeconds(new Date(data.resultSubmittedAt))
+            : null,
+          data.ratingExcluded ?? false,
+          data.round ?? null,
+          data.specialMatch ? JSON.stringify(data.specialMatch) : null,
+          nowSeconds,
+          nowSeconds,
+        ],
+      });
+
+      for (const [teamIndex, team] of data.teams.entries()) {
+        for (const player of team.players) {
+          await transaction.execute({
+            sql: `
+              INSERT INTO match_participants (
+                id,
+                match_id,
+                team_index,
+                player_id,
+                dupr_rating_json
+              )
+              VALUES ($1, $2, $3, $4, $5)
+            `,
+            args: [
+              `${data.id}-team-${teamIndex}-${player.id}`,
+              data.id,
+              teamIndex,
+              player.id,
+              JSON.stringify(player.duprRating ?? null),
+            ],
+          });
+        }
+      }
+      for (const [scoreIndex, score] of (data.scores ?? []).entries()) {
+        await this.insertScore({
+          id: `${data.id}-score-${scoreIndex + 1}`,
+          matchId: data.id,
+          score,
+          columns: scoreColumns,
+          executor: transaction,
+        });
+      }
+
+      await transaction.commit();
+      committed = true;
+    } finally {
+      if (!committed) {
+        transaction.close();
+      }
+    }
 
     const created = await this.findById(data.id);
     if (!created) {
@@ -1620,6 +1779,24 @@ export class MatchRepository {
         }
       }
 
+      // 저장된 세션 경기의 선수는 항상 참여자다. 경기와 같은 트랜잭션이라 저장이 실패하면 참여자도 남지 않는다.
+      const playerIdsBySessionId = new Map<string, string[]>();
+      for (const match of data) {
+        const sessionId = match.session!.id;
+        playerIdsBySessionId.set(sessionId, [
+          ...(playerIdsBySessionId.get(sessionId) ?? []),
+          ...getTeamPlayerIds(match.teams),
+        ]);
+      }
+      for (const [sessionId, playerIds] of playerIdsBySessionId) {
+        await insertSessionParticipants(
+          transaction,
+          sessionId,
+          playerIds,
+          nowSeconds,
+        );
+      }
+
       await transaction.commit();
       committed = true;
     } finally {
@@ -1688,30 +1865,12 @@ export class MatchRepository {
       const session = data.session;
       if (session) {
         // 경기 저장 전에 참여자를 넣어, 저장된 세션 경기의 선수는 항상 참여자이게 한다.
-        const inserted = await transaction.execute({
-          sql: `
-            INSERT INTO match_session_participants (
-              id, session_id, player_id, created_at
-            )
-            VALUES ${playerIds
-              .map((_, index) => `(${placeholders(4, index * 4 + 1)})`)
-              .join(", ")}
-            ON CONFLICT DO NOTHING
-          `,
-          args: playerIds.flatMap((playerId) => [
-            `${session.id}-${playerId}`,
-            session.id,
-            playerId,
-            nowSeconds,
-          ]),
-        });
-        if (inserted.rowsAffected > 0) {
-          sessionParticipantsAdded = true;
-          await transaction.execute({
-            sql: "UPDATE match_sessions SET updated_at = $1 WHERE id = $2",
-            args: [nowSeconds, session.id],
-          });
-        }
+        sessionParticipantsAdded = await insertSessionParticipants(
+          transaction,
+          session.id,
+          playerIds,
+          nowSeconds,
+        );
       }
 
       await transaction.execute({
@@ -1978,11 +2137,17 @@ export class MatchRepository {
    * 세션·시작 시각(관리자 정정)도 주면 같은 UPDATE·같은 updated_at 조건으로 바꾼다.
    * 옮길 세션이 없으면 아무것도 바꾸지 않고 예외를 던진다.
    * 남는 참가자는 기존 평점 스냅샷을 유지하고, 새 참가자는 비워 두어 평점 반영 때 채워지게 한다.
+   * 저장 뒤 경기에 세션이 있으면 팀 선수 전원을 같은 트랜잭션에서 세션 참여자로 넣는다(빠진 선수는 지우지 않음).
+   * 그래서 낙관적 잠금 등으로 저장이 막히면 참여자도 남지 않는다.
    */
   async updateRecordedMatch(
     matchId: string,
     data: UpdateRecordedMatchInput,
-  ): Promise<Match> {
+  ): Promise<{
+    match: Match;
+    /** 이 수정으로 세션 참여자가 새로 들어갔으면 true */
+    sessionParticipantsAdded: boolean;
+  }> {
     validateMatchScores(data.scores);
     const location = data.location.trim();
     if (!location) {
@@ -1994,6 +2159,7 @@ export class MatchRepository {
     let committed = false;
     // 수정 기록용으로 트랜잭션 안에서 읽은 수정 후 경기. 있으면 커밋 뒤 다시 읽지 않고 돌려준다
     let after: Match | undefined;
+    let sessionParticipantsAdded = false;
 
     try {
       // 수정 기록용 수정 전 스냅샷. 행을 잠그고 읽어 아래 UPDATE와 사이에 다른 수정이 끼지 않게 한다.
@@ -2089,6 +2255,7 @@ export class MatchRepository {
           WHERE id = $6
             AND status IN ('scheduled', 'created', 'completed')
             AND ($7::bigint IS NULL OR updated_at = $7)
+          RETURNING session_id
         `,
         args,
       });
@@ -2100,6 +2267,16 @@ export class MatchRepository {
         throw toRecordedMatchWriteError(
           current.rows[0],
           data.expectedUpdatedAt,
+        );
+      }
+
+      const savedSessionId = updateResult.rows[0]?.session_id;
+      if (savedSessionId) {
+        sessionParticipantsAdded = await insertSessionParticipants(
+          transaction,
+          String(savedSessionId),
+          getTeamPlayerIds(data.teams),
+          submittedAtSeconds,
         );
       }
 
@@ -2176,7 +2353,7 @@ export class MatchRepository {
     if (!updated) {
       throw new Error("매치 기록 저장에 실패했습니다.");
     }
-    return updated;
+    return { match: updated, sessionParticipantsAdded };
   }
 
   /**
@@ -2911,16 +3088,28 @@ export class MatchRepository {
     return result.rows.length > 0;
   }
 
+  /**
+   * 경기의 이름·장소·코트·시작 시각·세션을 바꾼다. 없는 경기면 match가 undefined다.
+   * sessionId가 문자열이면 같은 트랜잭션에서 그 경기의 팀 선수 전원을 세션 참여자로 넣는다(null로 빼면 참여자는 그대로).
+   */
   async updateMetadata(
     id: string,
     data: UpdateMatchMetadataInput,
-  ): Promise<Match | undefined> {
-    const updatePayload: Partial<typeof matches.$inferInsert> = {
-      updatedAt: new Date(),
+  ): Promise<{
+    match: Match | undefined;
+    /** 세션 연결로 세션 참여자가 새로 들어갔으면 true */
+    sessionParticipantsAdded: boolean;
+  }> {
+    const nowSeconds = toUnixTimestampSeconds(new Date());
+    const args: unknown[] = [id, nowSeconds];
+    const addArg = (value: unknown) => {
+      args.push(value);
+      return `$${args.length}`;
     };
+    const assignments = ["updated_at = $2"];
 
     if ("name" in data) {
-      updatePayload.name = data.name?.trim() || null;
+      assignments.push(`name = ${addArg(data.name?.trim() || null)}`);
     }
 
     if ("location" in data) {
@@ -2929,11 +3118,11 @@ export class MatchRepository {
       if (!location) {
         throw new Error("매치 장소를 입력해주세요.");
       }
-      updatePayload.location = location;
+      assignments.push(`location = ${addArg(location)}`);
     }
 
     if ("courtName" in data) {
-      updatePayload.courtName = data.courtName?.trim() || null;
+      assignments.push(`court_name = ${addArg(data.courtName?.trim() || null)}`);
     }
 
     if ("matchStartsAt" in data) {
@@ -2941,35 +3130,83 @@ export class MatchRepository {
       if (!matchStartsAt || Number.isNaN(matchStartsAt.getTime())) {
         throw new Error("유효한 경기 예정 일시가 필요합니다.");
       }
-      updatePayload.matchStartsAt = matchStartsAt;
+      assignments.push(
+        `match_starts_at = ${addArg(toUnixTimestampSeconds(matchStartsAt))}`,
+      );
     }
 
-    if ("sessionId" in data) {
-      if (data.sessionId === null) {
-        updatePayload.sessionId = null;
-        updatePayload.sessionName = null;
-        updatePayload.sessionDate = null;
-      } else {
-        if (!isEntityId(data.sessionId, "session")) {
-          throw new Error("유효한 세션 ID가 필요합니다.");
-        }
-        const session = await this.db
-          .select()
-          .from(matchSessions)
-          .where(eq(matchSessions.id, data.sessionId))
-          .limit(1)
-          .then(firstRow);
+    const targetSessionId =
+      "sessionId" in data && typeof data.sessionId === "string"
+        ? data.sessionId
+        : undefined;
+    if ("sessionId" in data && data.sessionId === null) {
+      assignments.push(
+        "session_id = NULL",
+        "session_name = NULL",
+        "session_date = NULL",
+      );
+    } else if (
+      "sessionId" in data &&
+      (targetSessionId === undefined || !isEntityId(targetSessionId, "session"))
+    ) {
+      throw new Error("유효한 세션 ID가 필요합니다.");
+    }
+
+    const transaction = await this.client.transaction("write");
+    let committed = false;
+    let found = false;
+    let sessionParticipantsAdded = false;
+    try {
+      if (targetSessionId !== undefined) {
+        const session = (
+          await transaction.execute({
+            sql: `SELECT id, name, "date" FROM match_sessions WHERE id = $1`,
+            args: [targetSessionId],
+          })
+        ).rows[0];
         if (!session) {
           throw new Error("세션을 찾을 수 없습니다.");
         }
-        updatePayload.sessionId = session.id;
-        updatePayload.sessionName = session.name;
-        updatePayload.sessionDate = toDate(session.date);
+        assignments.push(
+          `session_id = ${addArg(String(session.id))}`,
+          `session_name = ${addArg(String(session.name))}`,
+          `session_date = ${addArg(Number(session.date))}`,
+        );
+      }
+
+      const updateResult = await transaction.execute({
+        sql: `UPDATE matches SET ${assignments.join(", ")} WHERE id = $1`,
+        args,
+      });
+      found = updateResult.rowsAffected > 0;
+
+      if (found && targetSessionId !== undefined) {
+        const participants = await transaction.execute({
+          sql: `SELECT player_id FROM match_participants WHERE match_id = $1`,
+          args: [id],
+        });
+        sessionParticipantsAdded = await insertSessionParticipants(
+          transaction,
+          targetSessionId,
+          participants.rows.map((row: Record<string, unknown>) =>
+            String(row.player_id),
+          ),
+          nowSeconds,
+        );
+      }
+
+      await transaction.commit();
+      committed = true;
+    } finally {
+      if (!committed) {
+        transaction.close();
       }
     }
 
-    await this.db.update(matches).set(updatePayload).where(eq(matches.id, id));
-    return await this.findById(id);
+    return {
+      match: found ? await this.findById(id) : undefined,
+      sessionParticipantsAdded,
+    };
   }
 
   /**
@@ -3180,20 +3417,6 @@ export class MatchRepository {
     );
   }
 
-  private async createParticipants(matchId: string, teams: [Team, Team]) {
-    for (const [teamIndex, team] of teams.entries()) {
-      for (const player of team.players) {
-        await this.db.insert(matchParticipants).values({
-          id: `${matchId}-team-${teamIndex}-${player.id}`,
-          matchId,
-          teamIndex,
-          playerId: player.id,
-          duprRatingJson: JSON.stringify(player.duprRating ?? null),
-        });
-      }
-    }
-  }
-
   private async ensureSession(
     session: Session,
     kind: NonRegularSessionKind = "custom",
@@ -3248,20 +3471,6 @@ export class MatchRepository {
     }
 
     throw new Error("세션 ID 생성에 실패했습니다.");
-  }
-
-  private async replaceScores(matchId: string, scores: MatchScore[]) {
-    await this.db.delete(matchScores).where(eq(matchScores.matchId, matchId));
-    const scoreColumns = await this.getMatchScoreColumns();
-
-    for (const [index, score] of scores.entries()) {
-      await this.insertScore({
-        id: `${matchId}-score-${index + 1}`,
-        matchId,
-        score,
-        columns: scoreColumns,
-      });
-    }
   }
 
   private async replaceScoresWithExecutor(

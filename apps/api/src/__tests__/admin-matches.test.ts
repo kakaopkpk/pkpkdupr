@@ -306,18 +306,12 @@ describe("관리자 경기 API", () => {
         .mockResolvedValue({ ratingChangeLogs: [], changedPlayerCount: 4 });
     });
 
-    it("sessionId를 주면 경기를 모두 그 세션에 넣고 선수들을 참여자로 넣는다", async () => {
+    it("sessionId를 주면 경기를 모두 그 세션에 넣어 한 번에 저장한다", async () => {
       const response = await postBatch(batchBody);
 
       expect(response.status).toBe(201);
-      expect(addSessionParticipants).toHaveBeenCalledWith(session.id, [
-        playerA.id,
-        playerC.id,
-        playerA.id,
-        playerB.id,
-        playerC.id,
-        playerD.id,
-      ]);
+      // 참여자는 저장소 createCompletedBatch가 경기 저장과 같은 트랜잭션에서 넣는다
+      expect(addSessionParticipants).not.toHaveBeenCalled();
       expect(createCompletedBatch).toHaveBeenCalledTimes(1);
       const [created] = createCompletedBatch.mock.calls[0]!;
       expect(created.map((match) => match.session)).toEqual([

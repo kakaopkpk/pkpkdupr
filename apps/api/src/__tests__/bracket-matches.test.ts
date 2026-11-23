@@ -156,7 +156,7 @@ describe("대회 대진 예정 경기", () => {
         }));
     });
 
-    it("대회 세션에 세션 시작 시각의 점수 없는 예정 경기를 만들고 선수를 참여자로 넣는다", async () => {
+    it("대회 세션에 세션 시작 시각의 점수 없는 예정 경기를 세션 선수와 함께 저장소에 넘긴다", async () => {
       const response = await createBracketMatch({
         round: 2,
         teams: doublesTeams,
@@ -179,15 +179,11 @@ describe("대회 대진 예정 경기", () => {
       expect(input.matchStartsAt).toEqual(
         new Date("2026-11-21T09:00:00+09:00"),
       );
-      expect(addSessionParticipants).toHaveBeenCalledWith("Stourney", [
-        playerA.id,
-        playerB.id,
-        playerC.id,
-        playerD.id,
-      ]);
-      expect(addSessionParticipants.mock.invocationCallOrder[0]).toBeLessThan(
-        create.mock.invocationCallOrder[0]!,
-      );
+      // 참여자는 저장소 create가 경기 저장과 같은 트랜잭션에서 넣는다
+      expect(addSessionParticipants).not.toHaveBeenCalled();
+      expect(
+        input.teams.flatMap((team) => team.players.map((player) => player.id)),
+      ).toEqual([playerA.id, playerB.id, playerC.id, playerD.id]);
       expect(response.body).toMatchObject({
         id: "Mbracket",
         status: "scheduled",

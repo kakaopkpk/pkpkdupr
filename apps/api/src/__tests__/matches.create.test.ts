@@ -674,7 +674,7 @@ describe("POST /api/matches", () => {
 
     const allPlayerIds = [creator.id, "player-f-1", "player-m-1", "player-f-2"];
 
-    it("정기 시간대에 기록하면 그날 정기 세션에 넣고 선수 전원을 참여자로 추가한다", async () => {
+    it("정기 시간대에 기록하면 그날 정기 세션에 넣어 저장소에 넘긴다(참여자는 저장소가 같은 트랜잭션에서 추가)", async () => {
       // 2026-11-12(목) 19:00 KST
       setNow("2026-11-12T10:00:00.000Z");
       const regularSession = buildManagedSession();
@@ -684,10 +684,13 @@ describe("POST /api/matches", () => {
 
       expect(response.status).toBe(201);
       expect(findOrCreateRegularSession).toHaveBeenCalledWith("2026-11-12");
-      expect(addSessionParticipants).toHaveBeenCalledWith(
-        regularSession.id,
-        allPlayerIds,
-      );
+      // 참여자는 저장소 create가 경기 저장과 같은 트랜잭션에서 넣는다
+      expect(addSessionParticipants).not.toHaveBeenCalled();
+      expect(
+        capturedCreatePayload?.teams.flatMap((team) =>
+          team.players.map((player) => player.id),
+        ),
+      ).toEqual(allPlayerIds);
       expect(capturedCreatePayload?.session).toEqual({
         id: regularSession.id,
         name: regularSession.name,
@@ -754,10 +757,7 @@ describe("POST /api/matches", () => {
       expect(response.status).toBe(201);
       expect(findSessionById).toHaveBeenCalledWith(customSession.id);
       expect(findOrCreateRegularSession).not.toHaveBeenCalled();
-      expect(addSessionParticipants).toHaveBeenCalledWith(
-        customSession.id,
-        allPlayerIds,
-      );
+      expect(addSessionParticipants).not.toHaveBeenCalled();
       expect(capturedCreatePayload?.session).toMatchObject({
         id: customSession.id,
         name: "번개",
