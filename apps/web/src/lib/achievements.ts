@@ -175,7 +175,7 @@ export interface MatchEarnedAchievement<P extends { id: string }> {
 
 /**
  * 경기로 받은 업적을 정의·받은 참가자와 함께 고른다(정의를 모르거나 참가자가 아닌 업적은 뺀다).
- * 평점 미반영 경기는 서버 계산에서 빠져 업적이 오지 않는다
+ * 게스트가 낀 경기도 업적이 오고, 게스트 본인 업적은 서버가 보내지 않는다
  */
 export const pickMatchEarnedAchievements = <P extends { id: string }>(
   items: readonly EarnedAchievementInfo[],

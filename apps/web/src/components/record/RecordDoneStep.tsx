@@ -102,7 +102,7 @@ export default function RecordDoneStep({
         return change ? [{ player: teamPlayer, change }] : [];
       });
   }, [match]);
-  // 참가자 전원이 받은 업적을 띠로 보인다. 게스트가 낀 경기는 업적이 없으므로 띠·축하 연출도 없다
+  // 참가자 전원이 받은 업적을 띠로 보인다(게스트 본인 업적은 서버가 보내지 않는다)
   const matchAchievements = useMemo(
     () => pickMatchEarnedAchievements(match.newAchievements ?? [], match),
     [match],
