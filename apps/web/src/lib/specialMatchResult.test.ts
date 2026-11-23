@@ -79,11 +79,10 @@ describe("getSpecialMatchResultName", () => {
     });
   });
 
-  it("경기하지 않은 회원이 기록하면 이긴 팀 기준 이름이다", () => {
+  it("보는 회원이 경기하지 않았으면 null", () => {
     const streakStopped = { kind: "streak_stopper", defendingTeamIndex: 0, outcome: "streak_stopped" } as const;
-    expect(name(streakStopped, teamBWins, "z")).toEqual({ label: "연승 저지", icon: "streak_stopper", isWin: true });
-    const revengeDefended = { kind: "revenge", defendingTeamIndex: 1, outcome: "revenge_defended" } as const;
-    expect(name(revengeDefended, teamBWins, null)).toEqual({ label: "방어 성공", icon: "shield", isWin: true });
+    expect(name(streakStopped, teamBWins, "z")).toBeNull();
+    expect(name(streakStopped, teamBWins, null)).toBeNull();
   });
 
   it("일반 매치·결과 없음·승패가 갈리지 않은 경기는 null", () => {

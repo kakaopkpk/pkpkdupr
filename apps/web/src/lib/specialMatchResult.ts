@@ -10,7 +10,7 @@ export type SpecialMatchResultIcon = SpecialMatchKind | "shield";
 export interface SpecialMatchResultName {
   label: string;
   icon: SpecialMatchResultIcon;
-  /** 기록한 회원 쪽(경기하지 않았으면 이긴 팀)이 이겼는지. 이기면 블루, 지면 회색이다 */
+  /** 보는 회원 팀이 이겼는지. 이기면 블루, 지면 회색이다 */
   isWin: boolean;
 }
 
@@ -23,9 +23,8 @@ interface SpecialMatchResultInput {
 }
 
 /**
- * 기록 완료 점수 아래 결과 이름(docs/design.md "경기 기록·수정").
- * 기록한 회원이 낀 팀의 역할과 승패로 정하고, 경기하지 않은 회원이면 이긴 팀 기준이다.
- * 일반 매치·결과가 없는 경기(승패가 갈리지 않음)는 null
+ * 특수 매치 결과 이름(docs/design.md "경기 기록·수정"). 보는 회원이 낀 팀의 역할과 승패로 정한다.
+ * 일반 매치·결과가 없는 경기(승패가 갈리지 않음)·보는 회원이 경기하지 않은 경기는 null
  */
 export const getSpecialMatchResultName = (
   match: SpecialMatchResultInput,
@@ -39,10 +38,10 @@ export const getSpecialMatchResultName = (
   const viewerTeamIndex = match.teams.findIndex((team) =>
     team.players.some((player) => player.id === viewerId),
   );
-  const teamIndex = viewerTeamIndex >= 0 ? viewerTeamIndex : winningTeamIndex;
-  const isWin = teamIndex === winningTeamIndex;
+  if (viewerTeamIndex < 0) return null;
+  const isWin = viewerTeamIndex === winningTeamIndex;
   // 최강자전과 양쪽 다 도전인 도전 매치는 지키는 쪽이 없다
-  const isDefending = specialMatch.defendingTeamIndex === teamIndex;
+  const isDefending = specialMatch.defendingTeamIndex === viewerTeamIndex;
 
   const name = ((): Omit<SpecialMatchResultName, "isWin"> => {
     switch (specialMatch.kind) {

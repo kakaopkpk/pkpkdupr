@@ -17,7 +17,7 @@ import {
 } from "@/components/ui/CountUpNumber";
 import { CountUpText } from "@/components/ui/CountUpText";
 import { PlayerAvatar, TeamAvatars } from "@/components/ui/PlayerAvatar";
-import { SpecialMatchResultLabel } from "@/components/ui/SpecialMatchLabel";
+import { MatchResultLabel } from "@/components/ui/SpecialMatchLabel";
 import { cx } from "@/components/ui/cx";
 import { useAppNavigation } from "@/context/AppNavigationContext";
 import { useAuth } from "@/context/AuthContext";
@@ -28,7 +28,7 @@ import {
   markAchievementsSeen,
   pickMatchEarnedAchievements,
 } from "@/lib/achievements";
-import { getSpecialMatchResultName } from "@/lib/specialMatchResult";
+import { getMatchResultName } from "@/lib/matchResult";
 import AchievementCelebration from "./AchievementCelebration";
 import { FooterError } from "./RecordMatchParts";
 import SpecialMatchCelebrationScreen from "./SpecialMatchCelebrationScreen";
@@ -85,9 +85,9 @@ export default function RecordDoneStep({
       (teamPlayer) => teamPlayer.id === viewer.id,
     );
   }, [match, viewer]);
-  // 특수 매치면 점수 아래에 기록한 회원 기준 결과 이름을 둔다. 일반 매치는 null
-  const specialMatchResult = useMemo(
-    () => getSpecialMatchResultName(match, viewer?.id),
+  // 점수 아래 내 기준 결과 이름. 경기하지 않은 기록자는 null
+  const matchResult = useMemo(
+    () => getMatchResultName(match, viewer?.id),
     [match, viewer],
   );
   const ratingRows = useMemo(() => {
@@ -170,8 +170,8 @@ export default function RecordDoneStep({
                   isWinner={score.scoreB > score.scoreA}
                 />
               </div>
-              {specialMatchResult ? (
-                <SpecialMatchResultLabel result={specialMatchResult} className="mt-1.5" />
+              {matchResult ? (
+                <MatchResultLabel result={matchResult} className="mt-1.5" />
               ) : null}
             </div>
             <ScoreSide

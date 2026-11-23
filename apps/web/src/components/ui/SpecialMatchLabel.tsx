@@ -3,7 +3,8 @@ import {
   specialMatchKindLabels,
   type SpecialMatchKind,
 } from "@pkpkdupr/shared/specialMatch";
-import type { SpecialMatchResultIcon, SpecialMatchResultName } from "@/lib/specialMatchResult";
+import type { MatchResultName } from "@/lib/matchResult";
+import type { SpecialMatchResultIcon } from "@/lib/specialMatchResult";
 import {
   CROSSED_SWORDS_ICON_PATHS,
   FIST_ICON_PATHS,
@@ -22,9 +23,13 @@ const SPECIAL_MATCH_ICON_PATHS: Record<SpecialMatchResultIcon, readonly string[]
   shield: [SHIELD_ICON_PATH],
 };
 
-/** 유형 아이콘 기본 크기·선 굵기. 라벨은 이름 글자(12~13)에 맞춰 LABEL_ICON_SIZE로 한 단계 작게 쓴다 */
+/**
+ * 유형 아이콘 기본 크기·선 굵기. 라벨은 이름 글자(12~13)에 맞춰 LABEL_ICON_SIZE로 한 단계 작게,
+ * 점수 아래 결과 이름은 이름 글자(17)에 맞춰 RESULT_ICON_SIZE로 쓴다
+ */
 const ICON_SIZE = 14;
 const LABEL_ICON_SIZE = 13;
+const RESULT_ICON_SIZE = 18;
 const ICON_STROKE_WIDTH = 2.4;
 
 /** 특수 매치 유형 아이콘(선)과 결과 이름의 방패. 색은 currentColor */
@@ -67,19 +72,21 @@ export const SpecialMatchLabel: React.FC<{
   </span>
 );
 
-/** 기록 완료 점수 아래 결과 이름. 아이콘 14 + 이름 13 굵게, 이긴 쪽 블루·진 쪽 회색 */
-export const SpecialMatchResultLabel: React.FC<{
-  result: SpecialMatchResultName;
+/**
+ * 기록 완료·경기 상세 점수 아래 결과 이름. 이름 17 굵게(특수 매치면 아이콘 18을 앞에), 이긴 쪽 블루·진 쪽 회색
+ */
+export const MatchResultLabel: React.FC<{
+  result: MatchResultName;
   className?: string;
 }> = ({ result, className }) => (
   <span
     className={cx(
-      "flex items-center justify-center gap-1 text-pk-13 font-bold whitespace-nowrap",
+      "flex items-center justify-center gap-1 text-pk-17 font-bold whitespace-nowrap",
       result.isWin ? "text-pk-primary" : "text-pk-sub",
       className,
     )}
   >
-    <SpecialMatchIcon kind={result.icon} />
+    {result.icon ? <SpecialMatchIcon kind={result.icon} size={RESULT_ICON_SIZE} /> : null}
     {result.label}
   </span>
 );
