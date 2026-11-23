@@ -342,6 +342,7 @@ export default function RecordMatchFlow({
               teams: toTeamRequests(getMatchTeamPlayerIds(recordedMatch)),
               sessionId: recordedMatch.session?.id,
               location: recordedMatch.location,
+              rematchOfMatchId: recordedMatch.id,
             },
             showStartedMatchToast,
           )

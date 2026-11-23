@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from "react";
 import {
   getMatchTopLevelType,
+  getWinningTeamIndex,
   type MatchTopLevelType,
 } from "@pkpkdupr/shared/match";
 import type { Player, PlayerRatingChangeLog } from "@pkpkdupr/shared/player";
@@ -48,7 +49,7 @@ export interface RecordDoneStepProps {
   isBusy: boolean;
   /** 버튼 위에 보일 서버 문구(같은 선수가 다른 경기 중이면 409 문구) */
   error: string | null;
-  /** 같은 팀으로 진행 중 경기를 시작한다(세션과 상관없음) */
+  /** 같은 팀으로 진행 중 경기를 시작한다(세션과 상관없음). 원래 경기로 서버가 리벤지 매치를 판정한다 */
   onPlayAgain: () => void;
   /** 시트를 닫는다 */
   onDone: () => void;
@@ -71,6 +72,14 @@ export default function RecordDoneStep({
   const scoreACount = useCountUp(score?.scoreA ?? 0, SCORE_COUNT);
   const scoreBCount = useCountUp(score?.scoreB ?? 0, SCORE_COUNT);
   const ratingCategory = getMatchTopLevelType(match.type);
+  // 내가 진 팀이면 한 판 더 버튼 문구만 "리벤지"다. 이긴 팀·경기하지 않은 기록자는 그대로다
+  const isViewerOnLosingTeam = useMemo(() => {
+    const winningTeamIndex = getWinningTeamIndex(match);
+    if (winningTeamIndex == null || !viewer) return false;
+    return match.teams[winningTeamIndex === 0 ? 1 : 0].players.some(
+      (teamPlayer) => teamPlayer.id === viewer.id,
+    );
+  }, [match, viewer]);
   const ratingRows = useMemo(() => {
     const changeByPlayerId = new Map<string, PlayerRatingChangeLog>(
       (match.ratingChanges ?? []).map((change) => [change.playerId, change]),
@@ -214,7 +223,7 @@ export default function RecordDoneStep({
             disabled={isBusy}
             onClick={onPlayAgain}
           >
-            같은 멤버로 한 판 더
+            {isViewerOnLosingTeam ? "같은 멤버로 리벤지" : "같은 멤버로 한 판 더"}
           </PkButton>
           <PkButton size="lg" fullWidth disabled={isBusy} onClick={onDone}>
             닫기

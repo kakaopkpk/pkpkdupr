@@ -41,6 +41,8 @@
         - 데이터는 `home/useLiveSessionHighlight`다. 지배자는 `home/useSessionTopRiser`, 연승은 셸의 세션 경기로 `lib/sessionWinStreak`의 `getSessionWinStreaks`가 센다.
         - 같은 연승을 진행 중 경기 카드·추천 매칭에 `sessionWinStreaks` prop으로 넘겨 `TeamAvatars`가 아바타 링을 두른다.
       - 진행 중 경기는 경기마다 가로 vs 카드로 둔다. `home/LiveMatchCard`의 내 경기 `MyLiveMatchCard`는 테두리·"내 경기" 칩·점수 입력 버튼과 경기 상세 같은 랠리 팀 줄(`RallyTeamRow`)이 있고, 남의 경기 `LiveMatchCard`는 없다.
+        - 특수 매치(`Match.specialMatch`)면 머리 줄에 `ui/SpecialMatchLabel`을 붙인다. 남의 경기는 경과 시간 뒤, 내 경기는 "내 경기" 칩(대회면 머리 글자) 뒤다.
+        - 남의 경기는 연승 저지·최강자전 경기의 연승 회원(`specialMatch.protagonistIds`)도 세션 연승 회원처럼 아바타에 연승 링(태그 없음)을 두른다.
       - 진행 중 일반 세션이면 추천 매칭 아래 "경기 기록" 섹션(세션의 끝난 경기, 제목 줄 오른쪽 전체/내 경기 전환 `ui/MatchFilterControl`)을 둔다.
       - 진행 중 세션이 대회 세션이면 진행 화면이 대회 카드(`LiveSessionCard`) → "내 경기" 섹션 → 라운드별 대진(`TournamentBracketSection`, `showFilter` false)이다.
         - 세션 지배자·"진행 중" 섹션·추천 매칭·"경기 기록"은 없고, 남의 진행 중 경기는 대진 안 제자리에만 있다.
@@ -80,6 +82,7 @@
       - 예정 경기면 vs 글자만, 화면이 안 보이면 멈춘다. 공·패들·충격선은 `index.css`의 `pk-rally-*`, 움직임 줄이기면 공이 네트 위에 멈춘다.
       - 완료 경기는 평점 변화 아래 '이 경기로 받은 업적'(응답 `achievements`)을 기록 완료 띠와 같은 줄 `MatchAchievementRow`로 보인다.
       - 완료 경기 하단 "같은 멤버로 한 판 더"는 기록(`completedAt`, 없으면 시작 시각) 1시간 안에만 보인다(`isWithinRematchWindow`). 지나면 수정 버튼만 전체 너비로 남는다.
+      - 한 판 더(경기 상세·기록 완료)는 `startMatch`에 `rematchOfMatchId`(원래 경기 id)를 넘기고, 리벤지 매치 판정은 서버가 한다.
       - 대진 예정 경기(`status: "scheduled"`)는 vs 글자만·시각 없이 보이고 점수 입력·수정·삭제·한 판 더가 없다. 세션 날짜가 오늘(KST)이면 하단 "경기 시작"(`startScheduledMatch`)만 있다.
     - `profile/`: 회원 프로필·경기 목록, 나 탭과 같이 쓰는 머리 `ProfileHeader`. 사진을 불러온 아바타를 누르면 그 자리에서 가운데 240px 원으로 커지는 확대 보기 `AvatarZoomViewer`(누르기·아래로 끌기·Escape·뒤로가기로 닫힘)
     - `records/`: 세션 상세 `SessionReportDrawer`와 그 위 평점 변화 전체 `SessionRatingChangesScreen`
@@ -94,6 +97,7 @@
       - 칭찬은 `praise/SessionPraiseSection`이다. 끝난 세션이 칭찬하는 세션(`isSessionPraiseEnabled`)이면 리포트와 함께 `GET /api/match-sessions/:sessionId/praise`를 읽고, 후보가 없으면 섹션이 없다. 칭찬을 못 읽으면 보이던 칭찬을 두고 화면은 그대로 그린다.
       - 끝난 세션 머리 카드는 `mine`을 넘기지 않는다(내 기록 띠·줄 없음). 내 기록은 `LastSessionMeCard` 하나만 보인다.
     - `record/`: 경기 기록 시트. 완료 단계는 이 경기로 참가자 전원이 받은 업적을 띠(`match/MatchAchievementRow`)로 보이고, 그중 내 새 업적만 화면 전체 축하 연출 `AchievementCelebration`으로 띄우고 닫으면 확인 처리
+      - 완료 단계 한 판 더 버튼은 내가 진 팀이면 "같은 멤버로 리벤지", 그 밖(경기하지 않은 기록자 포함)은 "같은 멤버로 한 판 더"다. 어느 쪽이든 요청은 같다.
       - 축하 연출과 내 받은 업적 상세 시트의 공유는 `hooks/useAchievementShare`가 열 때 공유 이미지(`profile/achievementShareImage`, canvas 2D)를 미리 만들어 두고, 누르면 바로 기기 공유 시트(못 하면 내려받기, `lib/achievementShare`)를 연다. iOS Safari는 사용자 동작 직후에만 공유 시트가 열려 누른 뒤에 만들지 않는다.
     - `session/`: 세션 만들기(일정 탭과 같은 `MonthCalendar`로 고르는 날짜, `minDateKey`로 지난 날·오늘이 든 달 앞은 막음, 표시는 `schedule/useScheduleMonthMarks`·시작·종료 시각 칩 `SessionSchedulePicker`, 오늘 이후 어느 날이든)·참여자 시트 `ParticipantsSheet`(열면 참여자 보기, 오른쪽 위 "수정"으로 같은 시트에서 전체 회원 체크·게스트 추가 수정 모드, 완료·취소·뒤로가기는 보기로 돌아감)
     - `settings/`: 설정·비밀번호 변경·상태메시지 편집·프로필 사진 조정 `AvatarCropScreen`
@@ -113,6 +117,9 @@
   - `ui/`: 새 디자인 공통 컴포넌트. 새 화면은 여기 것을 먼저 씁니다.
     - `Button.tsx`(`PkButton`, variant `primary`·`soft`·`outline`·`ghost`), `Card.tsx`, `SegmentedControl.tsx`, `MatchFilterControl.tsx`(섹션 제목 줄의 전체/내 경기 전환, 라벨에 경기 수), `Headers.tsx`(`TabHeader`·`DetailHeader`), `Form.tsx`(`TextField`·`ListRow`), `Section.tsx`(`Section`·`PreviewSection`·`TextLink`. 섹션 제목이 붙는 묶음은 `Section`으로 만든다), `SheetTitle.tsx`, `ConfirmDialog.tsx`(시트 위 가운데 확인 창. 바텀시트를 겹쳐 쌓지 않을 때 쓰고, 연 쪽이 `useLayerDepth` kind `dialog`로 뒤로가기에 묶는다)
     - `MatchRow.tsx`(`MatchRow`), `PlayerAvatar.tsx`(`PlayerAvatar`·`TeamAvatars`), `Delta.tsx`(`RatingDelta`·`RankChange`), `RankBadge.tsx`, `Badges.tsx`(`LivePill`·`HighlightBadge`), `StatusMessageChip.tsx`, `StateMessage.tsx`(빈 상태 `empty`·불러오기 실패 `error`(항상 "다시 시도") 문구, size `panel` 탭·화면 전체·`inline` 카드·목록·시트 안), `CountUpText.tsx`(카운트업 숫자의 자리 폭을 최종 내용으로 고정), `PraisedAvatarFrame.tsx`(한 세션 칭찬 5개 이상 아바타의 앰버 링·엄지 배지, 세션 상세 칭찬 줄·홈 소식 칭찬 줄), `SheenOverlay.tsx`(한 번 지나가는 흰 빛, 부모 `relative`·`overflow-hidden` 필요), `Icons.tsx`, `cx.ts`
+      - `MatchRow`는 특수 매치(`Match.specialMatch`)면 메타 줄 오른쪽 끝에 `SpecialMatchLabel`로 유형 이름을 둔다(결과는 쓰지 않음).
+      - `SpecialMatchLabel.tsx`: 특수 매치 유형 아이콘 `SpecialMatchIcon`(currentColor)과 아이콘 + 굵은 블루 이름 `SpecialMatchLabel`.
+        - 손바닥·주먹·칼 선 모양은 `Icons.tsx`의 경로를 업적 배지와 같이 쓴다.
   - `praise/`: 세션 칭찬. 모양·연출은 `docs/design.md` "세션 칭찬".
     - `PendingSessionPraisePopup`: `BottomNav`가 렌더. 전역 화면·바텀시트·+ 메뉴·업적 축하가 없을 때 앱 진입·데이터 버전 변경·열린 화면이 모두 닫힐 때 `GET /api/me/session-praises/pending`을 조회해 첫 세션을 `SessionPraisePopup`으로 띄운다.
       - 조회 중·표시 중에는 `onBusyChange`로 알려 업적 축하가 기다린다(칭찬 팝업이 먼저).
