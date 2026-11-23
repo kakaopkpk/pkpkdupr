@@ -22,13 +22,19 @@ import {
 import { cx } from "@/components/ui/cx";
 import { formatRating } from "@/utils/dupr";
 
-type CellTone = "defending" | "plain";
+/** highlight: 연한 파랑 칸(지키는 쪽, 최강자전은 두 칸 모두). plain: 회색 칸 */
+type CellTone = "highlight" | "plain";
 type CellSide = "left" | "right";
 
 const CELL_BACKGROUND: Record<CellTone, string> = {
-  defending: "var(--color-pk-primary-soft)",
+  highlight: "var(--color-pk-primary-soft)",
   plain: "var(--color-pk-bg)",
 };
+
+const PROTAGONIST_AVATAR_SIZE = 40;
+const PROTAGONIST_TEAMMATE_AVATAR_SIZE = 28;
+/** 주인공 없는 칸의 두 아바타 크기 */
+const PLAIN_AVATAR_SIZE = 32;
 
 /** 두 칸을 대각선으로 나눈다. 가운데 2% 폭의 흰 틈을 남긴다 */
 const CELL_CLIP_PATH: Record<CellSide, string> = {
@@ -59,12 +65,13 @@ const buildCells = (court: RecommendedCourt): [CourtCell, CourtCell] => {
     const protagonist =
       players.find((player) => player.id === protagonistId) ?? null;
     const isDefending = special?.defendingTeamIndex === teamIndex;
+    // 최강자전은 지키는 쪽이 없어도 두 칸 모두 연한 파랑이다
     const tone: CellTone =
-      special?.kind === "champions" || isDefending ? "defending" : "plain";
+      special?.kind === "champions" || isDefending ? "highlight" : "plain";
+    const [first, second] = players;
     return {
-      players: protagonist
-        ? [protagonist, players.find((player) => player !== protagonist)!]
-        : players,
+      // 주인공을 앞(첫 번째)에 둔다
+      players: protagonist === second ? [second, first] : players,
       protagonist,
       tone,
       rankChip:
@@ -100,8 +107,12 @@ const CellAvatars: React.FC<{
   sessionWinStreaks?: SessionWinStreakByPlayer;
 }> = ({ cell, side, sessionWinStreaks }) => {
   const [front, back] = cell.players;
-  const frontSize = cell.protagonist ? 40 : 32;
-  const backSize = cell.protagonist ? 28 : 32;
+  const frontSize = cell.protagonist
+    ? PROTAGONIST_AVATAR_SIZE
+    : PLAIN_AVATAR_SIZE;
+  const backSize = cell.protagonist
+    ? PROTAGONIST_TEAMMATE_AVATAR_SIZE
+    : PLAIN_AVATAR_SIZE;
   const gapColor = CELL_BACKGROUND[cell.tone];
   // 연승 링(WIN_STREAK_DISPLAY_MIN 이상)을 두르는 주인공은 세션 연승 링을 겹쳐 두르지 않는다
   const frontAvatar =
@@ -150,10 +161,10 @@ const CellAvatars: React.FC<{
   );
 };
 
-const RankChip: React.FC<{ rank: number; tone: "defending" | "attacking" }> = ({
-  rank,
-  tone,
-}) => (
+const RankChip: React.FC<{
+  rank: number;
+  tone: "defending" | "attacking";
+}> = ({ rank, tone }) => (
   <span
     className={cx(
       "inline-flex h-[18px] shrink-0 items-center rounded-full px-1.5 text-pk-12 leading-none font-bold tabular-nums",
@@ -172,10 +183,15 @@ const CourtCellContent: React.FC<{
   sessionWinStreaks?: SessionWinStreakByPlayer;
 }> = ({ cell, side, sessionWinStreaks }) => {
   const [front, back] = cell.players;
-  const alignClassName = side === "left" ? "items-start text-left" : "items-end text-right";
+  const alignClassName =
+    side === "left" ? "items-start text-left" : "items-end text-right";
   return (
     <div className={cx("flex min-w-0 flex-col gap-2", alignClassName)}>
-      <CellAvatars cell={cell} side={side} sessionWinStreaks={sessionWinStreaks} />
+      <CellAvatars
+        cell={cell}
+        side={side}
+        sessionWinStreaks={sessionWinStreaks}
+      />
       <div className={cx("flex w-full min-w-0 flex-col", alignClassName)}>
         {cell.protagonist ? (
           <>

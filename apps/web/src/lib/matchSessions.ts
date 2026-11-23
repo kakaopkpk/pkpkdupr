@@ -198,8 +198,14 @@ export const buildRecommendedMatchRequest = (
   court: RecommendedCourt,
 ): StartSessionMatchRequest => ({
   teams: [
-    { name: "Team A", playerIds: court.teams[0].players.map((player) => player.id) },
-    { name: "Team B", playerIds: court.teams[1].players.map((player) => player.id) },
+    {
+      name: "Team A",
+      playerIds: court.teams[0].players.map((player) => player.id),
+    },
+    {
+      name: "Team B",
+      playerIds: court.teams[1].players.map((player) => player.id),
+    },
   ],
   ...(court.specialMatch
     ? { recommendedSpecialKind: court.specialMatch.kind }
