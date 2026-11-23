@@ -1,7 +1,5 @@
-import { STOP_HAND_ICON_PATHS } from "@/components/profile/AchievementBadge";
-import { FLAME_ICON_PATH } from "@/components/ui/Icons";
+import { FLAME_ICON_PATH, STOP_HAND_ICON_PATHS } from "@/components/ui/Icons";
 import { resolveAssetUrl } from "@/lib/api";
-import { getAvatarBackground, getAvatarInitial } from "@/lib/avatar";
 import {
   getRankingCategoryLabel,
   getSpecialMatchCaptionParts,
@@ -10,6 +8,7 @@ import {
   getSpecialMatchShareTitle,
   type SpecialMatchCaptionPart,
   type SpecialMatchSharePlayer,
+  type SpecialMatchShareRankRow,
   type SpecialMatchShareTarget,
 } from "@/lib/specialMatchShare";
 import {
@@ -20,8 +19,8 @@ import {
   drawShareFooter,
   fitLine,
   loadShareFonts,
+  loadShareImage,
   readTokenColors,
-  SHARE_BRAND,
   SHARE_CONTENT_BOTTOM,
   SHARE_EDGE,
   SHARE_SCALE,
@@ -29,6 +28,7 @@ import {
   setLetterSpacing,
   shareFont,
 } from "@/lib/shareImageCanvas";
+import { getAvatarBackground, getAvatarInitial } from "@/utils/avatar";
 
 /*
  * 특수 매치 공유 이미지(4:5). 틀은 업적 공유 이미지와 같고, 가운데는 큰 연출 끝 화면 그대로
@@ -46,6 +46,8 @@ const CAPTION_LINE = 22;
 const MIN_CAPTION_SIZE = 12;
 const MIN_CONTENT_TOP = 36;
 const AVATAR_TIMEOUT_MS = 5000;
+const STREAK_END_LABEL = "연승 끝";
+const VS_LABEL = "VS";
 
 const COLOR_VARS = {
   ink: "--color-pk-ink",
@@ -65,27 +67,6 @@ const COLOR_VARS = {
 type Colors = Record<keyof typeof COLOR_VARS, string>;
 type Avatars = Map<string, HTMLImageElement | null>;
 
-/** 사진을 캔버스에 그릴 수 있게(CORS) 불러온다. 못 불러오거나 오래 걸리면 null이고 이니셜로 그린다 */
-const loadAvatarImage = (url: string | undefined) =>
-  new Promise<HTMLImageElement | null>((resolve) => {
-    if (!url) {
-      resolve(null);
-      return;
-    }
-    const image = new Image();
-    const timer = window.setTimeout(() => resolve(null), AVATAR_TIMEOUT_MS);
-    image.crossOrigin = "anonymous";
-    image.onload = () => {
-      window.clearTimeout(timer);
-      resolve(image);
-    };
-    image.onerror = () => {
-      window.clearTimeout(timer);
-      resolve(null);
-    };
-    image.src = url;
-  });
-
 const getPlayers = (target: SpecialMatchShareTarget): SpecialMatchSharePlayer[] => {
   switch (target.kind) {
     case "challenge":
@@ -99,7 +80,17 @@ const getPlayers = (target: SpecialMatchShareTarget): SpecialMatchSharePlayer[] 
 
 const loadAvatars = async (players: SpecialMatchSharePlayer[]): Promise<Avatars> => {
   const entries = await Promise.all(
-    players.map(async (player) => [player.id, await loadAvatarImage(resolveAssetUrl(player.avatarUrl))] as const),
+    players.map(
+      async (player) =>
+        [
+          player.id,
+          // 못 불러오거나 오래 걸리면 이니셜로 그린다
+          await loadShareImage(resolveAssetUrl(player.avatarUrl), {
+            crossOrigin: true,
+            timeoutMs: AVATAR_TIMEOUT_MS,
+          }),
+        ] as const,
+    ),
   );
   return new Map(entries);
 };
@@ -194,6 +185,19 @@ const fillRoundRect = (
   ctx.fill();
 };
 
+const fillCircle = (
+  ctx: CanvasRenderingContext2D,
+  cx: number,
+  cy: number,
+  radius: number,
+  color: string,
+) => {
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+  ctx.fill();
+};
+
 /** 아바타 아래 끝에 걸친 태그("N연승"·"연승 끝"). bottom은 태그 아래 끝(아바타 아래 + 12) */
 const drawTag = (
   ctx: CanvasRenderingContext2D,
@@ -256,17 +260,11 @@ const drawStamp = (
 ) => {
   ctx.save();
   setShadow(ctx, "rgba(35, 70, 168, 0.35)", 24, 10);
-  ctx.fillStyle = colors.white;
-  ctx.beginPath();
-  ctx.arc(cx, cy, size / 2 + ring, 0, Math.PI * 2);
-  ctx.fill();
+  fillCircle(ctx, cx, cy, size / 2 + ring, colors.white);
   ctx.restore();
 
   ctx.save();
-  ctx.fillStyle = colors.primary;
-  ctx.beginPath();
-  ctx.arc(cx, cy, size / 2, 0, Math.PI * 2);
-  ctx.fill();
+  fillCircle(ctx, cx, cy, size / 2, colors.primary);
   ctx.translate(cx, cy);
   ctx.rotate((-10 * Math.PI) / 180);
   ctx.scale(iconSize / 24, iconSize / 24);
@@ -295,13 +293,14 @@ const drawCenteredText = (
 
 interface CardLayout {
   height: number;
-  draw: (ctx: CanvasRenderingContext2D, top: number) => void;
+  /** 카드에 그리는 글자. 폰트 글자 묶음을 미리 받는 데 쓴다 */
+  texts: string[];
+  draw: (ctx: CanvasRenderingContext2D, top: number, avatars: Avatars) => void;
 }
 
 /** 도전 성공: 랭킹 이름표 + 앱 랭킹 줄 두 개(순위·아바타 32·아이디·▲▼). 평점은 넣지 않는다 */
 const challengeCard = (
   target: Extract<SpecialMatchShareTarget, { kind: "challenge" }>,
-  avatars: Avatars,
   colors: Colors,
 ): CardLayout => {
   const paddingTop = 12;
@@ -312,8 +311,9 @@ const challengeCard = (
   const rowWidth = CARD_WIDTH - 20;
   const drawRow = (
     ctx: CanvasRenderingContext2D,
+    avatars: Avatars,
     y: number,
-    { player, rank, change }: (typeof target)["winner"],
+    { player, rank, change }: SpecialMatchShareRankRow,
     isWinner: boolean,
   ) => {
     if (isWinner) {
@@ -347,18 +347,23 @@ const challengeCard = (
       cy,
     );
   };
+  const label = getRankingCategoryLabel(target.category);
   return {
     height: paddingTop + labelHeight + rowGap + rowHeight + rowGap + rowHeight + 10,
-    draw: (ctx, top) => {
+    texts: [
+      label,
+      ...[target.winner, target.passed].map((row) => `${row.rank}${row.player.username}▲▼${row.change}`),
+    ],
+    draw: (ctx, top, avatars) => {
       ctx.save();
       ctx.textBaseline = "middle";
       ctx.font = shareFont(700, 12);
       ctx.fillStyle = colors.muted;
       ctx.textAlign = "left";
-      ctx.fillText(getRankingCategoryLabel(target.category), rowX + 8, top + paddingTop + 9);
+      ctx.fillText(label, rowX + 8, top + paddingTop + 9);
       const firstRowY = top + paddingTop + labelHeight + rowGap;
-      drawRow(ctx, firstRowY, target.winner, true);
-      drawRow(ctx, firstRowY + rowHeight + rowGap, target.passed, false);
+      drawRow(ctx, avatars, firstRowY, target.winner, true);
+      drawRow(ctx, avatars, firstRowY + rowHeight + rowGap, target.passed, false);
       ctx.restore();
     },
   };
@@ -367,16 +372,17 @@ const challengeCard = (
 /** 연승 저지: 회색 얼굴(112) + 손바닥 도장(72) + "연승 끝" 태그 + 아이디 22 */
 const streakBreakCard = (
   target: Extract<SpecialMatchShareTarget, { kind: "streak-break" }>,
-  avatars: Avatars,
   colors: Colors,
 ): CardLayout => {
   const paddingTop = 30;
   const avatarSize = 112;
   const nameGap = 22;
   const nameLine = 26;
+  const stampSize = 72;
   return {
     height: paddingTop + avatarSize + nameGap + nameLine + 24,
-    draw: (ctx, top) => {
+    texts: [STREAK_END_LABEL, target.loser.username],
+    draw: (ctx, top, avatars) => {
       ctx.save();
       const cx = SHARE_WIDTH / 2;
       const avatarTop = top + paddingTop;
@@ -385,7 +391,7 @@ const streakBreakCard = (
       drawTag(ctx, {
         cx,
         bottom: avatarBottom + 12,
-        label: "연승 끝",
+        label: STREAK_END_LABEL,
         size: 13,
         background: colors.neutral,
         color: colors.sub,
@@ -394,7 +400,13 @@ const streakBreakCard = (
       // 아바타 오른쪽 끝에서 26 밖, 아래 끝에서 18 위에 도장 끝이 오도록
       drawStamp(
         ctx,
-        { cx: cx + avatarSize / 2 + 26 - 36, cy: avatarBottom - 18 - 36, size: 72, iconSize: 38, ring: 4 },
+        {
+          cx: cx + avatarSize / 2 + 26 - stampSize / 2,
+          cy: avatarBottom - 18 - stampSize / 2,
+          size: stampSize,
+          iconSize: 38,
+          ring: 4,
+        },
         colors,
       );
       ctx.font = shareFont(800, 22);
@@ -408,7 +420,6 @@ const streakBreakCard = (
 /** 최강자전 승리: 두 프로필(80)과 VS. 이긴 쪽 앰버 테두리 + "N연승", 진 쪽 회색·도장(46)·"연승 끝" */
 const kingWinCard = (
   target: Extract<SpecialMatchShareTarget, { kind: "king-win" }>,
-  avatars: Avatars,
   colors: Colors,
 ): CardLayout => {
   const paddingTop = 30;
@@ -419,11 +430,15 @@ const kingWinCard = (
   const vsSize = 32;
   const columnGap = 6;
   const columnWidth = (CARD_WIDTH - paddingX * 2 - vsSize - columnGap * 2) / 2;
+  const stampSize = 46;
+  const winnerLabel = `${target.winnerStreak}연승`;
   return {
     height: Math.round(paddingTop + avatarSize + nameGap + nameLine + 22),
-    draw: (ctx, top) => {
+    texts: [winnerLabel, STREAK_END_LABEL, VS_LABEL, target.winner.username, target.loser.username],
+    draw: (ctx, top, avatars) => {
       ctx.save();
-      const avatarCy = top + paddingTop + avatarSize / 2;
+      const columnTop = top + paddingTop;
+      const avatarCy = columnTop + avatarSize / 2;
       const avatarBottom = avatarCy + avatarSize / 2;
       const nameCy = avatarBottom + nameGap + nameLine / 2;
       const winCx = CARD_X + paddingX + columnWidth / 2;
@@ -442,7 +457,7 @@ const kingWinCard = (
       drawTag(ctx, {
         cx: winCx,
         bottom: avatarBottom + 12,
-        label: `${target.winnerStreak}연승`,
+        label: winnerLabel,
         size: 12,
         background: colors.amber,
         color: colors.ink,
@@ -454,7 +469,7 @@ const kingWinCard = (
       drawTag(ctx, {
         cx: loseCx,
         bottom: avatarBottom + 12,
-        label: "연승 끝",
+        label: STREAK_END_LABEL,
         size: 12,
         background: colors.neutral,
         color: colors.sub,
@@ -463,21 +478,23 @@ const kingWinCard = (
       // 아바타 오른쪽 끝에서 18 밖, 위 끝에서 10 아래에 도장 끝이 오도록
       drawStamp(
         ctx,
-        { cx: loseCx + avatarSize / 2 + 18 - 23, cy: avatarCy - avatarSize / 2 + 10 + 23, size: 46, iconSize: 24, ring: 3 },
+        {
+          cx: loseCx + avatarSize / 2 + 18 - stampSize / 2,
+          cy: columnTop + 10 + stampSize / 2,
+          size: stampSize,
+          iconSize: 24,
+          ring: 3,
+        },
         colors,
       );
 
       // VS: 프로필 묶음(아바타 + 이름) 세로 가운데에서 아래 여백 36만큼 올린 자리
-      const columnTop = top + paddingTop;
       const columnHeight = avatarSize + nameGap + nameLine;
       const vsCy = columnTop + (columnHeight - vsSize - 36) / 2 + vsSize / 2;
-      ctx.fillStyle = colors.bg;
-      ctx.beginPath();
-      ctx.arc(SHARE_WIDTH / 2, vsCy, vsSize / 2, 0, Math.PI * 2);
-      ctx.fill();
+      fillCircle(ctx, SHARE_WIDTH / 2, vsCy, vsSize / 2, colors.bg);
       ctx.font = shareFont(800, 12);
       ctx.fillStyle = colors.muted;
-      drawCenteredText(ctx, "VS", SHARE_WIDTH / 2, vsCy, vsSize);
+      drawCenteredText(ctx, VS_LABEL, SHARE_WIDTH / 2, vsCy, vsSize);
 
       ctx.font = shareFont(800, 17);
       ctx.fillStyle = colors.ink;
@@ -488,14 +505,14 @@ const kingWinCard = (
   };
 };
 
-const getCardLayout = (target: SpecialMatchShareTarget, avatars: Avatars, colors: Colors) => {
+const getCardLayout = (target: SpecialMatchShareTarget, colors: Colors) => {
   switch (target.kind) {
     case "challenge":
-      return challengeCard(target, avatars, colors);
+      return challengeCard(target, colors);
     case "streak-break":
-      return streakBreakCard(target, avatars, colors);
+      return streakBreakCard(target, colors);
     case "king-win":
-      return kingWinCard(target, avatars, colors);
+      return kingWinCard(target, colors);
   }
 };
 
@@ -510,31 +527,34 @@ const drawCaption = (
   setLetterSpacing(ctx, "0px");
   ctx.textAlign = "left";
   ctx.textBaseline = "middle";
+  const partFont = (part: SpecialMatchCaptionPart, size: number) =>
+    shareFont(part.highlight ? 800 : 700, size);
+  const sum = (values: number[]) => values.reduce((total, value) => total + value, 0);
+  const texts = parts.map((part) => part.text);
   const measure = (size: number) =>
-    parts.map((part) => {
-      ctx.font = shareFont(part.highlight ? 800 : 700, size);
-      return ctx.measureText(part.text).width;
+    parts.map((part, index) => {
+      ctx.font = partFont(part, size);
+      return ctx.measureText(texts[index]).width;
     });
   let size = CAPTION_SIZE;
   let widths = measure(size);
-  while (size > MIN_CAPTION_SIZE && widths.reduce((sum, width) => sum + width, 0) > CARD_WIDTH) {
+  while (size > MIN_CAPTION_SIZE && sum(widths) > CARD_WIDTH) {
     size -= 1;
     widths = measure(size);
   }
-  const overflow = widths.reduce((sum, width) => sum + width, 0) - CARD_WIDTH;
+  const overflow = sum(widths) - CARD_WIDTH;
   const fitIndex = parts.findIndex((part) => part.fit);
-  const lines = parts.map((part) => part.text);
   if (overflow > 0 && fitIndex >= 0) {
-    ctx.font = shareFont(parts[fitIndex].highlight ? 800 : 700, size);
-    lines[fitIndex] = fitLine(ctx, lines[fitIndex], widths[fitIndex] - overflow);
-    widths[fitIndex] = ctx.measureText(lines[fitIndex]).width;
+    ctx.font = partFont(parts[fitIndex], size);
+    texts[fitIndex] = fitLine(ctx, texts[fitIndex], widths[fitIndex] - overflow);
+    widths[fitIndex] = ctx.measureText(texts[fitIndex]).width;
   }
-  let x = (SHARE_WIDTH - widths.reduce((sum, width) => sum + width, 0)) / 2;
+  let x = (SHARE_WIDTH - sum(widths)) / 2;
   parts.forEach((part, index) => {
-    ctx.font = shareFont(part.highlight ? 800 : 700, size);
+    ctx.font = partFont(part, size);
     ctx.fillStyle =
       part.highlight === "up" ? colors.upOnDeep : part.highlight === "amber" ? colors.amber : colors.white;
-    ctx.fillText(lines[index], x, cy);
+    ctx.fillText(texts[index], x, cy);
     x += widths[index];
   });
   ctx.restore();
@@ -545,25 +565,16 @@ export const createSpecialMatchShareImage = async (target: SpecialMatchShareTarg
   const title = getSpecialMatchShareTitle(target.kind);
   const captionParts = getSpecialMatchCaptionParts(target);
   const dateLabel = getSpecialMatchShareDateLabel(target.playedAt, target.sessionName);
-  const players = getPlayers(target);
+  const card = getCardLayout(target, colors);
   const [avatars] = await Promise.all([
-    loadAvatars(players),
+    loadAvatars(getPlayers(target)),
     loadShareFonts(
-      [
-        title,
-        ...captionParts.map((part) => part.text),
-        ...players.map((player) => player.username),
-        target.username,
-        dateLabel,
-        SHARE_BRAND,
-        "복식 단식 랭킹 연승 끝 VS ▲▼0123456789",
-      ],
+      [title, ...captionParts.map((part) => part.text), ...card.texts, target.username, dateLabel],
       [400, 700, 800],
     ),
   ]);
 
   const { canvas, ctx } = createShareCanvas(colors.ink);
-  const card = getCardLayout(target, avatars, colors);
   const blockHeight = TITLE_LINE + TITLE_CARD_GAP + card.height + CARD_CAPTION_GAP + CAPTION_LINE;
   // 묶음은 아래 줄 위 공간에서 세로 가운데에 둔다
   const titleTop = Math.max(
@@ -584,7 +595,7 @@ export const createSpecialMatchShareImage = async (target: SpecialMatchShareTarg
   ctx.restore();
 
   fillRoundRect(ctx, CARD_X, cardTop, CARD_WIDTH, card.height, CARD_RADIUS, colors.white);
-  card.draw(ctx, cardTop);
+  card.draw(ctx, cardTop, avatars);
 
   drawCaption(
     ctx,

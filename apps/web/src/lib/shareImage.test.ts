@@ -1,6 +1,16 @@
 import { describe, expect, it } from "vitest";
-import { wrapText } from "@/lib/shareImage";
-import { toTransparent } from "@/lib/shareImageCanvas";
+import { toShareFileName } from "@/lib/shareImage";
+import { toTransparent, wrapText } from "@/lib/shareImageCanvas";
+
+describe("toShareFileName", () => {
+  it("조각을 -로 이어 PNG 파일 이름을 만든다", () => {
+    expect(toShareFileName("king-win", "m-1")).toBe("pkpkdupr-king-win-m-1.png");
+  });
+
+  it("파일 이름에 못 쓰는 글자는 -로 바꾼다", () => {
+    expect(toShareFileName("a/b c")).toBe("pkpkdupr-a-b-c.png");
+  });
+});
 
 describe("wrapText", () => {
   // 글자 하나를 너비 1로 잰다

@@ -11,7 +11,6 @@ import {
 } from "@/components/profile/AchievementBadge";
 import { getAchievementShareFileName } from "@/lib/achievementShare";
 import { formatKstFullDate } from "@/lib/format";
-import { wrapText } from "@/lib/shareImage";
 import {
   canvasToPngFile,
   createShareCanvas,
@@ -19,12 +18,13 @@ import {
   drawRays,
   drawShareFooter,
   loadShareFonts,
+  loadShareImage,
   readTokenColors,
-  SHARE_BRAND,
   SHARE_LINE_HEIGHT,
   SHARE_WIDTH,
   setLetterSpacing,
   shareFont,
+  wrapText,
 } from "@/lib/shareImageCanvas";
 
 /*
@@ -86,13 +86,11 @@ const renderBadgeSvg = (definition: AchievementDefinition, color: string, iconCo
   return markup;
 };
 
-const loadSvgImage = (markup: string) =>
-  new Promise<HTMLImageElement>((resolve, reject) => {
-    const image = new Image();
-    image.onload = () => resolve(image);
-    image.onerror = () => reject(new Error("업적 배지를 그리지 못했어요"));
-    image.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(markup)}`;
-  });
+const loadSvgImage = async (markup: string) => {
+  const image = await loadShareImage(`data:image/svg+xml;charset=utf-8,${encodeURIComponent(markup)}`);
+  if (!image) throw new Error("업적 배지를 그리지 못했어요");
+  return image;
+};
 
 /** AchievementBadge의 큰 숫자 꼬리표(높이 28, 최소 너비 36, 좌우 9px, 테두리 2.5, 배지 아래로 9px 걸침, 17 굵게)와 같다 */
 const drawBadgeTag = (
@@ -157,7 +155,7 @@ export const createAchievementShareImage = async ({
   const [badgeImage] = await Promise.all([
     loadSvgImage(renderBadgeSvg(definition, badgeColor, colors.white)),
     loadShareFonts(
-      [headline, definition.name, definition.condition, username, dateLabel, SHARE_BRAND],
+      [headline, definition.name, definition.condition, username, dateLabel],
       [400, 800],
     ),
   ]);

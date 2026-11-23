@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { resolveAssetUrl } from "@/lib/api";
-import { getAvatarBackground, getAvatarInitial } from "@/lib/avatar";
+import { getAvatarBackground, getAvatarInitial } from "@/utils/avatar";
 import { cx } from "./cx";
 import { SessionWinStreakFrame } from "./WinStreakAvatarFrame";
 

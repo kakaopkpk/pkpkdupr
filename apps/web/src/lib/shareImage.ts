@@ -1,38 +1,6 @@
-/**
- * 글자를 maxWidth 안에 들어가게 줄로 나눈다. 띄어쓰기 단위로 나누고,
- * 띄어쓰기 없이 한 줄을 넘는 낱말은 글자 단위로 자른다
- */
-export const wrapText = (
-  text: string,
-  maxWidth: number,
-  measure: (value: string) => number,
-): string[] => {
-  const lines: string[] = [];
-  let line = "";
-  const pushWord = (word: string) => {
-    const candidate = line ? `${line} ${word}` : word;
-    if (measure(candidate) <= maxWidth) {
-      line = candidate;
-      return;
-    }
-    if (line) lines.push(line);
-    line = "";
-    if (measure(word) <= maxWidth) {
-      line = word;
-      return;
-    }
-    for (const char of Array.from(word)) {
-      if (line && measure(line + char) > maxWidth) {
-        lines.push(line);
-        line = "";
-      }
-      line += char;
-    }
-  };
-  text.split(/\s+/).filter(Boolean).forEach(pushWord);
-  if (line) lines.push(line);
-  return lines;
-};
+/** 공유·내려받기 파일 이름 "pkpkdupr-<조각>-<조각>.png". 파일 이름으로 못 쓰는 글자는 -로 바꾼다 */
+export const toShareFileName = (...slugs: string[]) =>
+  `pkpkdupr-${slugs.map((slug) => slug.replace(/[^A-Za-z0-9.-]/g, "-")).join("-")}.png`;
 
 /**
  * 기기 공유 시트로 이미지를 보낸다. 파일 공유를 못 하는 브라우저(PC 등)는 내려받고, 사용자가 공유 시트를 닫은 것은 무시한다.

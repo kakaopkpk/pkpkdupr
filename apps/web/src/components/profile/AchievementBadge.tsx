@@ -6,17 +6,10 @@ import {
 import {
   FLAME_ICON_PATH,
   SHIELD_CHECK_ICON_PATHS,
+  STOP_HAND_ICON_PATHS,
   THUMB_UP_ICON_PATHS,
 } from "@/components/ui/Icons";
 import { cx } from "@/components/ui/cx";
-
-/** 멈춤 손바닥(연승 저지 배지·특수 매치 공유 이미지 도장) 선 모양, 24 viewBox */
-export const STOP_HAND_ICON_PATHS = [
-  "M18 11V6a2 2 0 0 0-4 0",
-  "M14 10V4a2 2 0 0 0-4 0v2",
-  "M10 10.5V6a2 2 0 0 0-4 0v8",
-  "M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15",
-] as const;
 
 const EARNED_COLOR = "var(--color-pk-primary)";
 // 낮은 평점 업적(심해 탐사·마리아나 해구)은 받은 배지를 짙은 남색으로 구분한다
@@ -214,13 +207,7 @@ const BADGE_ICON_PATHS: Record<BadgeIconKind, React.ReactNode> = {
     </>
   ),
   // 멈춤 손바닥
-  stopHand: (
-    <>
-      {STOP_HAND_ICON_PATHS.map((d) => (
-        <path key={d} d={d} />
-      ))}
-    </>
-  ),
+  stopHand: STOP_HAND_ICON_PATHS.map((d) => <path key={d} d={d} />),
   handshake: (
     <>
       <path d="M11 17l2 2a1 1 0 1 0 3-3" />

@@ -1,6 +1,7 @@
 import type { MatchTopLevelType } from "@pkpkdupr/shared/match";
-import { formatKstFullDate } from "@/lib/format";
+import { formatKstFullDate, MATCH_CATEGORY_LABELS } from "@/lib/format";
 import { getObjectParticle } from "@/lib/korean";
+import { toShareFileName } from "@/lib/shareImage";
 
 /*
  * 특수 매치 큰 연출(도전 성공·연승 저지·최강자전 승리)의 "이미지로 공유" 내용.
@@ -73,15 +74,10 @@ const TITLES: Record<SpecialMatchShareKind, string> = {
   "king-win": "최강자전 승리!",
 };
 
-const CATEGORY_LABELS: Record<MatchTopLevelType, string> = {
-  doubles: "복식",
-  singles: "단식",
-};
-
 export const getSpecialMatchShareTitle = (kind: SpecialMatchShareKind) => TITLES[kind];
 
 export const getRankingCategoryLabel = (category: MatchTopLevelType) =>
-  `${CATEGORY_LABELS[category]} 랭킹`;
+  `${MATCH_CATEGORY_LABELS[category]} 랭킹`;
 
 /** 흰 카드 아래 문구. 큰 연출 끝 화면의 문구와 같다 */
 export const getSpecialMatchCaptionParts = (
@@ -122,7 +118,7 @@ export const getSpecialMatchShareText = (target: SpecialMatchShareTarget) => {
   switch (target.kind) {
     case "challenge": {
       const passed = target.passed.player.username;
-      return `${target.winner.player.username}님이 ${passed}${getObjectParticle(passed)} 넘어 ${CATEGORY_LABELS[target.category]} ${target.winner.rank}위가 됐어요`;
+      return `${target.winner.player.username}님이 ${passed}${getObjectParticle(passed)} 넘어 ${MATCH_CATEGORY_LABELS[target.category]} ${target.winner.rank}위가 됐어요`;
     }
     case "streak-break":
       return `${target.username}님이 ${target.loser.username}의 ${target.brokenStreak}연승을 끊었어요`;
@@ -140,7 +136,7 @@ export const getSpecialMatchShareDateLabel = (playedAt: string, sessionName: str
 
 /** 공유·내려받기 파일 이름 */
 export const getSpecialMatchShareFileName = (target: SpecialMatchShareTarget) =>
-  `pkpkdupr-${target.kind}-${target.matchId.replace(/[^A-Za-z0-9.-]/g, "-")}.png`;
+  toShareFileName(target.kind, target.matchId);
 
 /** 같은 이미지인지 가르는 값. 이 값이 바뀔 때만 이미지를 다시 만든다 */
 export const getSpecialMatchShareKey = (target: SpecialMatchShareTarget) =>
