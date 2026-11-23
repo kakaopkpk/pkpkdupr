@@ -1,6 +1,7 @@
 import React, { useEffect, useRef } from "react";
 import type { AchievementDefinition } from "@pkpkdupr/shared/achievements";
 import type { SessionPlayerReport } from "@pkpkdupr/shared/ranking";
+import { SESSION_PRAISE_CATEGORY_LABEL } from "@pkpkdupr/shared/sessionPraise";
 import AchievementBadge from "@/components/profile/AchievementBadge";
 import {
   hasRatingBeforeAndAfter,
@@ -31,6 +32,7 @@ import {
   type NewsFeedNewMemberItemInfo,
   type NewsFeedSessionItemInfo,
 } from "@/lib/newsFeed";
+import { formatSessionPraiseValue } from "@/lib/sessionPraise";
 import { formatRating } from "@/utils/dupr";
 import type { NewsFeedState } from "@/components/home/useNewsFeed";
 
@@ -110,6 +112,26 @@ const FeedLine: React.FC<{ entry: FeedLineEntry }> = ({ entry }) => {
   }
 
   const { line } = entry;
+  if (line.kind === "praise") {
+    // 오른쪽 끝은 비운다
+    return (
+      <PlayerLineButton
+        player={player}
+        praiseCount={line.praiseCount}
+        onPress={() => openMemberProfile(player.id)}
+      >
+        <span className={lineTextClassName}>
+          <LineStrong>{player.username}</LineStrong>님이{" "}
+          <LineStrong>칭찬 {line.praiseCount}개</LineStrong>를 받았어요
+        </span>
+        <span className="text-pk-13 text-pk-sub tabular-nums">
+          {SESSION_PRAISE_CATEGORY_LABEL[line.category]} ·{" "}
+          {formatSessionPraiseValue(line.category, line.value)}
+        </span>
+      </PlayerLineButton>
+    );
+  }
+
   if (line.kind === "winStreak") {
     return (
       <PlayerLineButton player={player} onPress={() => openMemberProfile(player.id)}>

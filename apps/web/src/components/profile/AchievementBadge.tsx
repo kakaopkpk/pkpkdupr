@@ -3,7 +3,11 @@ import {
   isLowRatingAchievement,
   type AchievementDefinition,
 } from "@pkpkdupr/shared/achievements";
-import { FLAME_ICON_PATH } from "@/components/ui/Icons";
+import {
+  FLAME_ICON_PATH,
+  SHIELD_CHECK_ICON_PATHS,
+  THUMB_UP_ICON_PATHS,
+} from "@/components/ui/Icons";
 import { cx } from "@/components/ui/cx";
 
 const EARNED_COLOR = "var(--color-pk-primary)";
@@ -44,7 +48,8 @@ type BadgeIconKind =
   | "stopHand"
   | "handshake"
   | "rosette"
-  | "shark";
+  | "shark"
+  | "thumbUp";
 
 /** 24 viewBox 선 아이콘. 글자는 아이콘 색(currentColor)으로 채운다 */
 const BADGE_ICON_PATHS: Record<BadgeIconKind, React.ReactNode> = {
@@ -71,8 +76,9 @@ const BADGE_ICON_PATHS: Record<BadgeIconKind, React.ReactNode> = {
   ),
   shield: (
     <>
-      <path d="M12 3l7 3v5c0 4.5-3 8-7 10-4-2-7-5.5-7-10V6z" />
-      <path d="M9 12l2 2 4-4" />
+      {SHIELD_CHECK_ICON_PATHS.map((d) => (
+        <path key={d} d={d} />
+      ))}
     </>
   ),
   bandage: (
@@ -232,6 +238,14 @@ const BADGE_ICON_PATHS: Record<BadgeIconKind, React.ReactNode> = {
       <path d="M7 15.5C9 10 12 6 17 4.5c-1 4-1 8 .5 11" />
     </>
   ),
+  // 엄지 척(칭찬)
+  thumbUp: (
+    <>
+      {THUMB_UP_ICON_PATHS.map((d) => (
+        <path key={d} d={d} />
+      ))}
+    </>
+  ),
 };
 
 /** 특별·세션·평점 분류와 연승 저지는 업적마다 아이콘이 다르다 */
@@ -256,6 +270,8 @@ const BADGE_ICON_BY_ID: Partial<Record<string, BadgeIconKind>> = {
   "unbeaten-session": "star",
   "dominator-1": "crown",
   "dominator-10": "crown",
+  "praised-1": "thumbUp",
+  "praised-10": "thumbUp",
   "rating-3.0": "sunrise",
   "rating-3.5": "cloud",
   "rating-4.0": "balloon",

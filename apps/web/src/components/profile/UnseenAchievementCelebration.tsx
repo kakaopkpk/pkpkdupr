@@ -18,8 +18,10 @@ interface UnseenState {
 
 export interface UnseenAchievementCelebrationProps {
   playerId: string | null;
-  /** 전역 화면·바텀시트·메뉴가 하나도 열려 있지 않을 때만 true. 그동안만 조회하고 띄운다 */
+  /** 전역 화면·바텀시트·메뉴가 하나도 열려 있지 않고 칭찬 팝업이 대기·표시 중이 아닐 때만 true. 그동안만 조회하고 띄운다 */
   isActive: boolean;
+  /** 축하 연출이 떠 있는지. 떠 있는 동안 칭찬 팝업이 기다린다 */
+  onShowingChange?: (isShowing: boolean) => void;
 }
 
 /**
@@ -31,11 +33,16 @@ export interface UnseenAchievementCelebrationProps {
 export default function UnseenAchievementCelebration({
   playerId,
   isActive,
+  onShowingChange,
 }: UnseenAchievementCelebrationProps): React.ReactElement | null {
   // 셸이 그리므로 화면 보임은 늘 참이고 문서가 숨은 동안만 미룬다
   const dataVersion = useDataVersion(ACHIEVEMENT_DATA_KINDS);
   const [unseen, setUnseen] = useState<UnseenState | null>(null);
   const isShowing = unseen !== null;
+
+  useEffect(() => {
+    onShowingChange?.(isShowing);
+  }, [isShowing, onShowingChange]);
 
   // 다른 회원으로 바뀌면 띄우던 연출을 버린다
   useEffect(() => {

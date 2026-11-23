@@ -672,6 +672,20 @@
   }
 
   /*
+   * 칭찬 5개 이상 아바타(PraisedAvatarFrame)의 앰버 엄지 배지. 3.2초마다 톡 튀며(1.3배) 기운다.
+   * 움직임 줄이기면 멈춰 있다.
+   */
+  .pk-praise-badge {
+    animation: pk-praise-badge-pop 3.2s ease-in-out infinite;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .pk-praise-badge {
+      animation: none;
+    }
+  }
+
+  /*
    * 업적 달성 축하 연출(AchievementCelebration).
    * 색종이 색은 캔버스가 --pk-confetti-1~6을 읽어 쓴다.
    */
@@ -888,5 +902,22 @@
   }
   94% {
     transform: translateX(calc(var(--pk-rally-lunge) * -0.6));
+  }
+}
+
+@keyframes pk-praise-badge-pop {
+  0%,
+  62%,
+  100% {
+    transform: scale(1) rotate(0);
+  }
+  70% {
+    transform: scale(1.3) rotate(-14deg);
+  }
+  78% {
+    transform: scale(0.94) rotate(4deg);
+  }
+  86% {
+    transform: scale(1) rotate(0);
   }
 }
