@@ -462,6 +462,47 @@ describe("buildNewsFeedPage 세션 항목", () => {
   });
 });
 
+describe("buildNewsFeedPage 게스트가 낀 경기", () => {
+  it("게스트가 낀 경기만 뛴 세션도 연승 줄에 나오고, 게스트 본인 줄은 없다", () => {
+    const alice = makePlayer("Palice01", "alice", 3.5);
+    const bob = makePlayer("Pbob0001", "bob", 3.5);
+    const guest = makePlayer("Pguest01", "guest_kim", null, { isGuest: true });
+    const session = makeSession("Ssession1", at("2026-11-16T09:00:00.000Z"));
+    const matches = Array.from({ length: 5 }, (_, index) =>
+      makeMatch(
+        `Mguest0${index + 1}`,
+        at(`2026-11-16T10:0${index}:00.000Z`),
+        [
+          [alice.id, guest.id],
+          [bob.id, "Pother01"],
+        ],
+        { sessionId: session.id, ratingExcluded: true },
+      ),
+    );
+
+    const page = buildPage({
+      players: [alice, bob, guest],
+      matches,
+      sessions: [session],
+      requesterId: alice.id,
+    });
+    const item = page.items.find(
+      (candidate): candidate is NewsFeedSessionItem =>
+        candidate.kind === "session",
+    );
+
+    expect(
+      item?.lines.filter((line) => line.kind === "winStreak"),
+    ).toEqual([
+      {
+        kind: "winStreak",
+        player: { id: alice.id, username: "alice", avatarUrl: undefined },
+        winStreak: 5,
+      },
+    ]);
+  });
+});
+
 describe("buildNewsFeedPage 칭찬 줄", () => {
   // 12월 3일(목) 정기 세션: 22:00 KST(13:00Z)에 끝나고 1시간 뒤 23:00 KST(14:00Z)에 칭찬이 마감된다
   const sessionDate = at("2026-12-03T09:00:00.000Z");
