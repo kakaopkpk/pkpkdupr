@@ -19,7 +19,7 @@ export type MemberListPlayerInfo = Omit<
   lastPlayedAt: string | null;
 };
 
-export type PlayersStatus = "loading" | "ready" | "error";
+type PlayersStatus = "loading" | "ready" | "error";
 
 interface PlayersState {
   /** 이 상태를 채운 로그인 회원. 계정이 바뀌면 상태를 버린다 */
@@ -129,7 +129,6 @@ export const fetchPlayers = (ownerId: string): Promise<void> => {
 export const usePlayers = (): {
   players: MemberListPlayerInfo[];
   status: PlayersStatus;
-  /** 마지막 불러오기 실패 원인. status가 "error"가 아니면 null */
   error: unknown;
   reload: () => Promise<void>;
 } => {
