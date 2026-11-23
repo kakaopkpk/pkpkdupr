@@ -127,7 +127,8 @@
   - 기본 doubles, 게스트 제외.
   - 순위·완료 경기 수·가장 최근 세션 시작 직전 대비 순위 변동 `rankChange`, NR 회원은 `unrated`.
   - 회원(`player`)에 상태메시지 `statusMessage`·`statusMessageBackgroundColor` 포함.
-  - 세 분류 모두 줄마다 지금 연승 수 `winStreak`(`unrated` 포함). 평점 반영 완료 경기를 단식·복식 합쳐 마지막 경기부터 세고, 승패가 안 갈린 경기는 끊고 게스트 낀 경기는 건너뛴다(`packages/shared/src/streak.ts`).
+  - 세 분류 모두 줄마다 지금 연승 수 `winStreak`(`unrated` 포함). 완료 경기(게스트가 낀 경기 포함)를 단식·복식 합쳐 마지막 경기부터 세고, 승패가 안 갈린 경기는 끊는다(`packages/shared/src/streak.ts`).
+  - 완료 경기 수 `matchCount`도 게스트가 낀 경기를 센다. 순위 변동 기준 세션만 평점 반영 경기가 있는 세션으로 고른다.
   - achievements면 업적 점수 순위 `AchievementRankingResponse`: 활성 정회원 전원, 점수 내림차순 → 그 점수에 먼저 도달한 순 → 아이디 순, 0점은 맨 아래, 순위 변동 없음.
 - 세션 기록 목록 `GET /api/session-reports?limit=&playerId=`: 완료 경기가 있는 세션 최신순, limit 기본 20·최대 100, 지금 웹은 쓰지 않음
 - 기록 목록 `GET /api/records?limit=&cursor=&playerId=`
@@ -154,7 +155,7 @@
   - 세션 항목의 `session`·`mine`(요청자 줄, 안 뛰었으면 null)·`topRiser`는 세션 리포트와 같은 값이다.
   - 세션 항목 `lines`는 지금 활성 정회원만, 칭찬 → 랭킹 → 연승 → 업적 순이다.
   - 랭킹 줄: 세션 참가자 중 복식 `rankAfter` ≤ 3이고 `rankBefore`가 null이거나 더 큰 회원, 순위 오름차순. `rankChange`는 `rankBefore - rankAfter`(`rankBefore` null이면 null).
-  - 연승 줄: 그 세션에서 평점 반영 경기를 뛰었고, 세션 마지막 완료 경기까지 센 연승(랭킹 `winStreak` 규칙)이 `WIN_STREAK_DISPLAY_MIN` 이상인 회원. 연승 내림차순 → 아이디 순.
+  - 연승 줄: 그 세션에서 경기(게스트가 낀 경기 포함)를 뛰었고, 세션 마지막 완료 경기까지 센 연승(랭킹 `winStreak` 규칙)이 `WIN_STREAK_DISPLAY_MIN` 이상인 회원. 연승 내림차순 → 아이디 순.
   - 칭찬 줄(`kind: 'praise'`): 칭찬 마감(`closed`) 뒤 칭찬을 5개 이상 받은 후보, 후보 순서. `lines` 맨 앞이다.
     - 이 세션으로 받은 칭찬 업적이 업적 줄에 보이는 회원은 칭찬 줄 대신 업적 줄만 나온다.
   - 업적 줄: 세션 리포트 `achievements` 중에서 최대 3개(`NEWS_FEED_ACHIEVEMENT_LINE_LIMIT`).
@@ -182,6 +183,8 @@
 
 저장 없이 완료 경기로 조회 시 계산합니다. 정의·계산은 `packages/shared/src/achievements.ts`입니다.
 
+- 게스트가 낀 완료 경기도 센다. 평점 업적의 복식 경기 수·평점과 언더독만 평점 반영 경기로 센다.
+- 게스트 본인은 어느 응답에서도 업적을 받지 않는다(`newAchievements`·`achievementPoints`·`achievements`·holders 수, 게스트 프로필은 모두 미획득·진행도 0).
 - 점수
   - 업적 점수는 정의의 `points`(10·25·50·100점)이다.
   - 회원 점수는 받은 업적 점수 합(`sumAchievementPoints`, 만점 `ACHIEVEMENT_MAX_POINTS`)이라 업적을 잃으면 점수도 빠진다.
@@ -213,7 +216,7 @@
 - 언더독: 경기 직전 상대 팀 평균 평점이 우리 팀보다 0.5 이상 높은데 이긴 경기다.
   - 경기 직전 평점은 그 경기 평점 변경 로그의 `previousRating`(경기 분류 평점, 업적 입력 `ratingBefore`)이고, 로그가 없는 선수는 3.0으로 친다.
 - 연승 저지: 경기 직전 5연승 이상이던 상대(상대 팀 중 누구든)를 이긴 경기다. 상대 연승은 전체 기록으로 랭킹 연승과 같은 규칙으로 센다.
-- 환영 인사: 같은 팀 파트너의 첫 평점 반영 완료 경기에 함께 뛴 경기다(승패 무관).
+- 환영 인사: 같은 팀 파트너의 첫 완료 경기(게스트가 낀 경기 포함)에 함께 뛴 경기다(승패 무관).
 - 개근상: 경기가 열린 정기 세션 회차에 8번 연달아 경기한 것이다.
   - 정기 세션 여부는 완료 경기 요약의 `regularSession`(업적 입력 `session.regular`)이다.
   - 경기가 열린 정기 회차에 빠지면 1부터 다시 세고, 진행도는 최고 연속 참여 수다.
