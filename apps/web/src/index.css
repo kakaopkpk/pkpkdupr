@@ -52,6 +52,8 @@
   --ease-pk-move: cubic-bezier(0.32, 0.72, 0, 1);
   /* 튀어나오는 등장 곡선 */
   --ease-pk-pop: cubic-bezier(0.34, 1.56, 0.64, 1);
+  /* 점점 빨라지며 떨어지는 가속 곡선(떨어지는 연출 전용) */
+  --ease-pk-drop: cubic-bezier(0.55, 0, 1, 0.45);
   /*
    * 공용 모션. 모두 fill-mode both라 inline style animationDelay 동안 시작 상태로 머문다.
    * 지연·길이는 inline style(animationDelay·animationDuration)로 덮어쓴다.
@@ -79,7 +81,7 @@
   --animate-pk-flash: pk-flash 1400ms var(--ease-pk-move) both;
   /* 특수 매치 큰 연출: 손바닥 도장이 크게 떠 있다 점점 빨라지며 떨어져 박힌다 / 도장이 박힐 때 카드가 좌우로 흔들린다.
      도장 길이는 specialMatchCelebration.utils.ts STAMP_DROP_MS(박히는 시각 계산)와 같아야 한다 */
-  --animate-pk-stamp-drop: pk-stamp-drop 520ms cubic-bezier(0.55, 0, 1, 0.45) both;
+  --animate-pk-stamp-drop: pk-stamp-drop 520ms var(--ease-pk-drop) both;
   --animate-pk-shake: pk-shake 380ms var(--ease-pk-move) both;
 
   @keyframes nav-icon-pop {
