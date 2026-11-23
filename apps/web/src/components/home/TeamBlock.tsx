@@ -50,7 +50,7 @@ export const TeamsVersus: React.FC<{
   </div>
 );
 
-/** 위에 두 팀 평균 평점(양 끝 정렬), 아래에 팀 vs 팀. 추천 매칭 줄·대진 예정 경기 줄의 왼쪽 열 */
+/** 위에 두 팀 평균 평점(양 끝 정렬), 아래에 팀 vs 팀. 대진 예정·진행 중 경기 줄의 왼쪽 열 */
 export const TeamsVersusWithAverages: React.FC<{
   teams: readonly [readonly AvatarPlayer[], readonly AvatarPlayer[]];
   averages: readonly [number, number];
