@@ -3,7 +3,7 @@ import {
   specialMatchKindLabels,
   type SpecialMatchKind,
 } from "@pkpkdupr/shared/specialMatch";
-import type { SpecialMatchResultIcon, SpecialMatchResultName } from "@/lib/specialMatchResult";
+import type { SpecialMatchResultIcon } from "@/lib/specialMatchResult";
 import {
   CROSSED_SWORDS_ICON_PATHS,
   FIST_ICON_PATHS,
@@ -64,22 +64,5 @@ export const SpecialMatchLabel: React.FC<{
   >
     <SpecialMatchIcon kind={kind} size={LABEL_ICON_SIZE} />
     {specialMatchKindLabels[kind]}
-  </span>
-);
-
-/** 기록 완료 점수 아래 결과 이름. 아이콘 14 + 이름 13 굵게, 이긴 쪽 블루·진 쪽 회색 */
-export const SpecialMatchResultLabel: React.FC<{
-  result: SpecialMatchResultName;
-  className?: string;
-}> = ({ result, className }) => (
-  <span
-    className={cx(
-      "flex items-center justify-center gap-1 text-pk-13 font-bold whitespace-nowrap",
-      result.isWin ? "text-pk-primary" : "text-pk-sub",
-      className,
-    )}
-  >
-    <SpecialMatchIcon kind={result.icon} />
-    {result.label}
   </span>
 );

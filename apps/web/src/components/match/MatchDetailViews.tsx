@@ -24,11 +24,13 @@ import {
 } from "@/components/ui/CountUpNumber";
 import { rowDividerClassName } from "@/components/ui/MatchRow";
 import { PlayerAvatar, TeamAvatars } from "@/components/ui/PlayerAvatar";
+import { MatchResultLabel } from "@/components/ui/MatchResultLabel";
 import { LinkChevron, Section } from "@/components/ui/Section";
 import { cx } from "@/components/ui/cx";
 import { useIsMatchScheduled } from "@/hooks/useIsMatchScheduled";
 import { useMinuteClock } from "@/hooks/useMinuteClock";
 import { pickMatchEarnedAchievements } from "@/lib/achievements";
+import { getMatchResultName } from "@/lib/matchResult";
 import { formatBracketRoundLabel } from "@/lib/tournament";
 import {
   formatElapsed,
@@ -217,11 +219,16 @@ export const ScheduledMatchActions: React.FC<{
   </>
 );
 
-/** 큰 점수 블록. 이긴 쪽 점수는 블루, 진 쪽은 회색. 점수는 0부터 센다(평점 변화보다 한 박자 먼저) */
+/**
+ * 큰 점수 블록. 이긴 쪽 점수는 블루, 진 쪽은 회색. 점수는 0부터 센다(평점 변화보다 한 박자 먼저).
+ * 점수 아래에는 내 기준 결과 이름을 두고, 내가 경기하지 않았으면 없다
+ */
 const ScoreBlock: React.FC<{
   match: MatchInfo;
+  viewerId: string | null;
   onOpenPlayer: (playerId: string) => void;
-}> = ({ match, onOpenPlayer }) => {
+}> = ({ match, viewerId, onOpenPlayer }) => {
+  const matchResult = getMatchResultName(match, viewerId);
   const hasScores = (match.scores?.length ?? 0) > 0;
   const [scoreA, scoreB] = getTeamResultScores(match);
   const winnerIndex = !hasScores || scoreA === scoreB ? null : scoreA > scoreB ? 0 : 1;
@@ -235,19 +242,22 @@ const ScoreBlock: React.FC<{
         tone={winnerIndex === 1 ? "weak" : "strong"}
         onOpenPlayer={onOpenPlayer}
       />
-      <div className="font-num text-[64px] leading-none font-bold tabular-nums">
-        <span className="sr-only">
-          {hasScores ? `${scoreA} 대 ${scoreB}` : "점수 없음"}
-        </span>
-        <span aria-hidden="true">
-          <span className={scoreClassName(0)}>
-            {hasScores ? <CountUpNumber value={scoreA} {...COUNT_UP} /> : "–"}
+      <div className="flex flex-col items-center">
+        <div className="font-num text-[64px] leading-none font-bold tabular-nums">
+          <span className="sr-only">
+            {hasScores ? `${scoreA} 대 ${scoreB}` : "점수 없음"}
           </span>
-          <span className="px-2 text-[#c5ccda]">:</span>
-          <span className={scoreClassName(1)}>
-            {hasScores ? <CountUpNumber value={scoreB} {...COUNT_UP} /> : "–"}
+          <span aria-hidden="true">
+            <span className={scoreClassName(0)}>
+              {hasScores ? <CountUpNumber value={scoreA} {...COUNT_UP} /> : "–"}
+            </span>
+            <span className="px-2 text-[#c5ccda]">:</span>
+            <span className={scoreClassName(1)}>
+              {hasScores ? <CountUpNumber value={scoreB} {...COUNT_UP} /> : "–"}
+            </span>
           </span>
-        </span>
+        </div>
+        {matchResult ? <MatchResultLabel result={matchResult} className="mt-1.5" /> : null}
       </div>
       <TeamColumn
         team={match.teams[1]}
@@ -358,6 +368,8 @@ const MatchAchievementsCard: React.FC<{
 export interface CompletedMatchDetailProps {
   match: MatchInfo;
   recorderUsername: string | null;
+  /** 보는 회원. 점수 아래 결과 이름의 기준 팀을 정한다 */
+  viewerId: string | null;
   onOpenSession: (sessionId: string) => void;
   onOpenPlayer: (playerId: string) => void;
   onOpenAchievement: (playerId: string, achievementId: string) => void;
@@ -367,6 +379,7 @@ export interface CompletedMatchDetailProps {
 export const CompletedMatchDetail: React.FC<CompletedMatchDetailProps> = ({
   match,
   recorderUsername,
+  viewerId,
   onOpenSession,
   onOpenPlayer,
   onOpenAchievement,
@@ -383,7 +396,7 @@ export const CompletedMatchDetail: React.FC<CompletedMatchDetailProps> = ({
         </>
       ) : null}
     </p>
-    <ScoreBlock match={match} onOpenPlayer={onOpenPlayer} />
+    <ScoreBlock match={match} viewerId={viewerId} onOpenPlayer={onOpenPlayer} />
     <RatingChangeCard match={match} onOpenPlayer={onOpenPlayer} />
     <MatchAchievementsCard match={match} onOpenAchievement={onOpenAchievement} />
     <Card className="mt-1.5">

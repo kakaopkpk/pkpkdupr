@@ -1,4 +1,3 @@
-import { getWinningTeamIndex, type MatchScore } from "@pkpkdupr/shared/match";
 import type { SpecialMatch, SpecialMatchKind } from "@pkpkdupr/shared/specialMatch";
 
 /**
@@ -10,56 +9,36 @@ export type SpecialMatchResultIcon = SpecialMatchKind | "shield";
 export interface SpecialMatchResultName {
   label: string;
   icon: SpecialMatchResultIcon;
-  /** 기록한 회원 쪽(경기하지 않았으면 이긴 팀)이 이겼는지. 이기면 블루, 지면 회색이다 */
-  isWin: boolean;
 }
 
 export type SpecialMatchResultSource = Pick<SpecialMatch, "kind" | "defendingTeamIndex" | "outcome">;
 
-interface SpecialMatchResultInput {
-  specialMatch?: SpecialMatchResultSource | null;
-  teams: readonly { players: readonly { id: string }[] }[];
-  scores?: readonly MatchScore[] | null;
-}
-
 /**
- * 기록 완료 점수 아래 결과 이름(docs/design.md "경기 기록·수정").
- * 기록한 회원이 낀 팀의 역할과 승패로 정하고, 경기하지 않은 회원이면 이긴 팀 기준이다.
- * 일반 매치·결과가 없는 경기(승패가 갈리지 않음)는 null
+ * 특수 매치 결과 이름(docs/design.md "경기 기록·수정"). 보는 회원 팀의 역할과 승패로 정한다.
+ * 결과(`outcome`)가 아직 없으면 null
  */
 export const getSpecialMatchResultName = (
-  match: SpecialMatchResultInput,
-  viewerId: string | null | undefined,
+  specialMatch: SpecialMatchResultSource,
+  viewerTeamIndex: 0 | 1,
+  isWin: boolean,
 ): SpecialMatchResultName | null => {
-  const specialMatch = match.specialMatch;
-  if (!specialMatch?.outcome) return null;
-  const winningTeamIndex = getWinningTeamIndex(match);
-  if (winningTeamIndex == null) return null;
-
-  const viewerTeamIndex = match.teams.findIndex((team) =>
-    team.players.some((player) => player.id === viewerId),
-  );
-  const teamIndex = viewerTeamIndex >= 0 ? viewerTeamIndex : winningTeamIndex;
-  const isWin = teamIndex === winningTeamIndex;
+  if (!specialMatch.outcome) return null;
   // 최강자전은 지키는 쪽이 없다
-  const isDefending = specialMatch.defendingTeamIndex === teamIndex;
+  const isDefending = specialMatch.defendingTeamIndex === viewerTeamIndex;
 
-  const name = ((): Omit<SpecialMatchResultName, "isWin"> => {
-    switch (specialMatch.kind) {
-      case "challenge":
-        // 라이벌전은 공격·방어 구분 없이 승패만 따른다
-        return { label: isWin ? "라이벌전 승리" : "라이벌전 패배", icon: "challenge" };
-      case "streak_stopper":
-        return isDefending
-          ? { label: isWin ? "연승 연장" : "연승 끝", icon: "champions" }
-          : { label: isWin ? "연승 저지" : "저지 실패", icon: "streak_stopper" };
-      case "champions":
-        return { label: isWin ? "최강자전 승리" : "최강자전 패배", icon: "champions" };
-      case "revenge":
-        return isDefending
-          ? { label: isWin ? "방어 성공" : "방어 실패", icon: "shield" }
-          : { label: isWin ? "리벤지 성공" : "리벤지 실패", icon: "revenge" };
-    }
-  })();
-  return { ...name, isWin };
+  switch (specialMatch.kind) {
+    case "challenge":
+      // 라이벌전은 공격·방어 구분 없이 승패만 따른다
+      return { label: isWin ? "라이벌전 승리" : "라이벌전 패배", icon: "challenge" };
+    case "streak_stopper":
+      return isDefending
+        ? { label: isWin ? "연승 연장" : "연승 끝", icon: "champions" }
+        : { label: isWin ? "연승 저지" : "저지 실패", icon: "streak_stopper" };
+    case "champions":
+      return { label: isWin ? "최강자전 승리" : "최강자전 패배", icon: "champions" };
+    case "revenge":
+      return isDefending
+        ? { label: isWin ? "방어 성공" : "방어 실패", icon: "shield" }
+        : { label: isWin ? "리벤지 성공" : "리벤지 실패", icon: "revenge" };
+  }
 };

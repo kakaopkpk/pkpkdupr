@@ -89,7 +89,7 @@ export default function MatchDetailDrawer({
   onClose,
   onExited,
 }: MatchDetailDrawerProps): React.ReactElement {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, player: viewer } = useAuth();
   const {
     openAchievementDetail,
     openMemberProfile,
@@ -456,6 +456,7 @@ export default function MatchDetailDrawer({
             match,
             match.resultSubmittedByPlayerId ?? match.creatorPlayerId,
           )}
+          viewerId={viewer?.id ?? null}
           onOpenSession={openSessionReport}
           onOpenPlayer={openMemberProfile}
           onOpenAchievement={(playerId, achievementId) =>
