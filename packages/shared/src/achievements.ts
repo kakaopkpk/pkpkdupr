@@ -58,6 +58,7 @@ type AchievementMetric =
   | "bestPartnerStreak"
   | "unbeatenSessions"
   | "dominatedSessions"
+  | "praisedSessions"
   | "peakDoublesRating"
   | "lowestDoublesRating"
   | "underdogWins"
@@ -635,6 +636,30 @@ const ACHIEVEMENT_TABLE: readonly {
       points: 100,
     },
   },
+  {
+    metric: "praisedSessions",
+    definition: {
+      id: "praised-1",
+      category: "session",
+      name: "이쁨받기",
+      condition: "한 세션에서 칭찬 5개 받기",
+      badgeNumber: null,
+      target: 1,
+      points: 25,
+    },
+  },
+  {
+    metric: "praisedSessions",
+    definition: {
+      id: "praised-10",
+      category: "session",
+      name: "이 구역 사랑둥이",
+      condition: "한 세션에서 칭찬 5개 받기 10번",
+      badgeNumber: "10",
+      target: 10,
+      points: 100,
+    },
+  },
 ];
 
 export const ACHIEVEMENTS: readonly AchievementDefinition[] =
@@ -700,6 +725,8 @@ const METRIC_COUNT_START: Record<AchievementMetric, Date | null> = {
   bestPartnerStreak: ACHIEVEMENT_COUNT_START,
   unbeatenSessions: ACHIEVEMENT_COUNT_START,
   dominatedSessions: ACHIEVEMENT_COUNT_START,
+  // 칭찬은 경기가 아니라 칭찬 기록으로 세므로 시작 시각을 쓰지 않는다(칭찬 기능 배포 뒤 기록뿐이다)
+  praisedSessions: null,
   peakDoublesRating: ACHIEVEMENT_COUNT_START,
   lowestDoublesRating: ACHIEVEMENT_COUNT_START,
   underdogWins: SECOND_ACHIEVEMENT_SET_COUNT_START,
@@ -1056,7 +1083,21 @@ const isSessionEventMetric = (
  * 세션 만료는 경기만으로 알 수 없어 서버가 세션 만료 시각으로 정한다.
  * 진행 중이거나 아직 만료되지 않은 세션은 결과가 바뀔 수 있어 넣지 않는다.
  */
-export type EndedSessions = ReadonlyMap<string, string | null>;
+export type EndedSessions = ReadonlyMap<string, string | null> & {
+  /**
+   * 회원 id → 칭찬을 SESSION_PRAISE_HIGHLIGHT_MIN개 이상 받은 세션(칭찬 업적). 서버가 칭찬 기록으로 붙인다.
+   * matchId는 그 세션에서 그 회원의 마지막 완료 경기(받은 경기), reachedAt은 그 수에 닿은 칭찬 시각(받은 시각)이다.
+   * 없으면 칭찬 업적은 받지 않은 상태다
+   */
+  readonly praisedSessionsByPlayerId?: ReadonlyMap<string, readonly PraisedSession[]>;
+};
+
+/** 칭찬 업적 입력: 칭찬을 기준 수 이상 받은 세션 하나 */
+export interface PraisedSession {
+  sessionId: string;
+  matchId: string;
+  reachedAt: Date;
+}
 
 const NO_ENDED_SESSIONS: EndedSessions = new Map();
 
@@ -1085,7 +1126,7 @@ const markReachedAchievements = (
   for (const item of progress) {
     if (item.earned) continue;
     const metric = ACHIEVEMENT_METRIC_BY_ID.get(item.id)!;
-    if (isSessionEventMetric(metric)) continue;
+    if (isSessionEventMetric(metric) || metric === "praisedSessions") continue;
     if (isTargetReached(metric, metrics[metric], item.target)) {
       item.earned = true;
       item.earnedAt = match.completedAt;
@@ -1126,6 +1167,7 @@ const computeProgressSince = (
     bestPartnerStreak: 0,
     unbeatenSessions: 0,
     dominatedSessions: 0,
+    praisedSessions: 0,
     peakDoublesRating: 0,
     // 센 평점이 없으면 Infinity이고, 진행도에는 0으로 넣는다
     lowestDoublesRating: Infinity,
@@ -1328,6 +1370,15 @@ const computeProgressSince = (
     sessionEventMatches[metric].sort(compareCountedMatches);
     metrics[metric] = sessionEventMatches[metric].length;
   }
+  // 칭찬 업적: 칭찬을 기준 수 이상 받은 세션을 닿은 시각 순으로 세어, target번째 세션으로 받는다
+  const praisedSessions = [
+    ...(endedSessions.praisedSessionsByPlayerId?.get(playerId) ?? []),
+  ].sort(
+    (left, right) =>
+      left.reachedAt.getTime() - right.reachedAt.getTime() ||
+      (left.sessionId < right.sessionId ? -1 : left.sessionId > right.sessionId ? 1 : 0),
+  );
+  metrics.praisedSessions = praisedSessions.length;
 
   for (const item of progress) {
     const metric = ACHIEVEMENT_METRIC_BY_ID.get(item.id)!;
@@ -1340,6 +1391,12 @@ const computeProgressSince = (
       item.earned = true;
       item.earnedAt = earnedMatch.completedAt;
       item.earnedMatchId = earnedMatch.id;
+    }
+    if (metric === "praisedSessions" && item.current >= item.target) {
+      const earnedSession = praisedSessions[item.target - 1];
+      item.earned = true;
+      item.earnedAt = earnedSession.reachedAt;
+      item.earnedMatchId = earnedSession.matchId;
     }
   }
   return progress;
