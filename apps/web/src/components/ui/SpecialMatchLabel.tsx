@@ -3,20 +3,23 @@ import {
   specialMatchKindLabels,
   type SpecialMatchKind,
 } from "@pkpkdupr/shared/specialMatch";
+import type { SpecialMatchResultIcon, SpecialMatchResultName } from "@/lib/specialMatchResult";
 import {
   CROSSED_SWORDS_ICON_PATHS,
   FIST_ICON_PATHS,
   FLAME_ICON_PATH,
+  SHIELD_ICON_PATH,
   STOP_HAND_ICON_PATHS,
 } from "./Icons";
 import { cx } from "./cx";
 
 /** 유형별 24 viewBox 선 모양. 손바닥·주먹·칼은 업적 배지와 같은 그림이다 */
-const SPECIAL_MATCH_ICON_PATHS: Record<SpecialMatchKind, readonly string[]> = {
+const SPECIAL_MATCH_ICON_PATHS: Record<SpecialMatchResultIcon, readonly string[]> = {
   challenge: CROSSED_SWORDS_ICON_PATHS,
   streak_stopper: STOP_HAND_ICON_PATHS,
   champions: [FLAME_ICON_PATH],
   revenge: FIST_ICON_PATHS,
+  shield: [SHIELD_ICON_PATH],
 };
 
 /** 유형 아이콘 기본 크기·선 굵기. 라벨은 이름 글자(12~13)에 맞춰 LABEL_ICON_SIZE로 한 단계 작게 쓴다 */
@@ -24,9 +27,9 @@ const ICON_SIZE = 14;
 const LABEL_ICON_SIZE = 13;
 const ICON_STROKE_WIDTH = 2.4;
 
-/** 특수 매치 유형 아이콘(선). 색은 currentColor */
+/** 특수 매치 유형 아이콘(선)과 결과 이름의 방패. 색은 currentColor */
 export const SpecialMatchIcon: React.FC<{
-  kind: SpecialMatchKind;
+  kind: SpecialMatchResultIcon;
   size?: number;
   className?: string;
 }> = ({ kind, size = ICON_SIZE, className }) => (
@@ -61,5 +64,22 @@ export const SpecialMatchLabel: React.FC<{
   >
     <SpecialMatchIcon kind={kind} size={LABEL_ICON_SIZE} />
     {specialMatchKindLabels[kind]}
+  </span>
+);
+
+/** 기록 완료 점수 아래 결과 이름. 아이콘 14 + 이름 13 굵게, 이긴 쪽 블루·진 쪽 회색 */
+export const SpecialMatchResultLabel: React.FC<{
+  result: SpecialMatchResultName;
+  className?: string;
+}> = ({ result, className }) => (
+  <span
+    className={cx(
+      "flex items-center justify-center gap-1 text-pk-13 font-bold whitespace-nowrap",
+      result.isWin ? "text-pk-primary" : "text-pk-sub",
+      className,
+    )}
+  >
+    <SpecialMatchIcon kind={result.icon} />
+    {result.label}
   </span>
 );
