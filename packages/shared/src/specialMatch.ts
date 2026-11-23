@@ -1,4 +1,5 @@
 import { getWinningTeamIndex, type Match } from "./match.js";
+import type { Player } from "./player.js";
 import { WIN_STREAK_DISPLAY_MIN } from "./streak.js";
 
 /**
@@ -63,6 +64,30 @@ export interface SpecialMatch {
   /** 완료 전이거나 승패가 갈리지 않으면 null */
   outcome: SpecialMatchOutcome | null;
 }
+
+export type SpecialMatchCelebrationPlayer = Pick<Player, "id" | "username" | "avatarUrl">;
+
+/**
+ * 기록 완료 화면 큰 연출 데이터. 도전 성공·연승 저지·최강자전 승리가 그 저장으로 처음 정해졌을 때만 기록 응답에 실린다.
+ * 순위는 그 경기 종류 랭킹, 연승 수는 이 경기 직전까지 센 랭킹 연승 규칙이다
+ */
+export type SpecialMatchCelebration =
+  | {
+      kind: "challenge";
+      /** 지키던 쪽 */
+      defender: { player: SpecialMatchCelebrationPlayer; rankBefore: number; rankAfter: number };
+      /** 도전한 쪽 */
+      challenger: { player: SpecialMatchCelebrationPlayer; rankBefore: number; rankAfter: number };
+    }
+  | {
+      kind: "streak_stopper";
+      stopped: { player: SpecialMatchCelebrationPlayer; streakBefore: number };
+    }
+  | {
+      kind: "champions";
+      winner: { player: SpecialMatchCelebrationPlayer; streakBefore: number };
+      loser: { player: SpecialMatchCelebrationPlayer; streakBefore: number };
+    };
 
 /** 판정 입력 선수. rank·rating은 그 경기 종류 랭킹(복식 경기면 복식, 단식이면 단식) 기준 */
 export interface SpecialMatchCandidatePlayer {

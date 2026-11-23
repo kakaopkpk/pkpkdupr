@@ -1009,6 +1009,162 @@ describe("PUT /api/matches/:matchId", () => {
       expect(addSessionParticipants).not.toHaveBeenCalled();
     });
   });
+
+  describe("특수 매치 결과", () => {
+    const hoursAgo = (hours: number) =>
+      new Date(Date.now() - hours * 60 * 60 * 1000);
+    // 요청자 팀 연승 저지 경기. validBody(9:11)는 상대 팀이 이긴다
+    const streakStopper: Match["specialMatch"] = {
+      kind: "streak_stopper",
+      defendingTeamIndex: 0,
+      protagonistIds: [requester.id, null],
+      challengePairs: [],
+      outcome: null,
+    };
+    const requesterWin = (id: string, completedAt: Date): CompletedMatchOutcome => ({
+      ratingExcluded: false,
+      id,
+      type: "mixed-doubles",
+      sessionId: null,
+      matchStartsAt: completedAt,
+      completedAt,
+      teamPlayerIds: [
+        [requester.id, partner.id],
+        [opponentM.id, opponentF.id],
+      ],
+      scores: [{ scoreA: 11, scoreB: 5 }],
+    });
+    let updateSpecialMatch: MockInstance<MatchRepository["updateSpecialMatch"]>;
+
+    beforeEach(() => {
+      updateSpecialMatch = vi
+        .spyOn(MatchRepository.prototype, "updateSpecialMatch")
+        .mockResolvedValue(undefined);
+      // 요청자는 이 경기 전 5연승이다
+      findCompletedMatchOutcomes.mockImplementation(async () => [
+        ...[6, 5, 4, 3, 2].map((hours) =>
+          requesterWin(`match-prior-${hours}`, hoursAgo(hours)),
+        ),
+        {
+          ...requesterWin(existing.id, existing.completedAt ?? new Date()),
+          scores: [{ scoreA: 9, scoreB: 11 }],
+        },
+      ]);
+    });
+
+    it("진행 중 특수 매치에 첫 점수를 넣으면 결과를 저장하고 큰 연출 데이터를 응답한다", async () => {
+      existing = buildExistingMatch({
+        status: "created",
+        scores: [],
+        completedAt: null,
+        resultSubmittedByPlayerId: null,
+        resultSubmittedAt: null,
+        matchStartsAt: hoursAgo(0.5),
+        specialMatch: streakStopper,
+      });
+      updateRecordedMatch.mockImplementation(async (matchId, input) => ({
+        ...existing,
+        teams: input.teams,
+        scores: input.scores,
+        status: "completed",
+        completedAt: hoursAgo(0.1),
+      }));
+
+      const response = await putMatch();
+
+      expect(response.status).toBe(200);
+      expect(updateRecordedMatch.mock.calls[0]![1]).not.toHaveProperty(
+        "specialMatch",
+      );
+      expect(updateSpecialMatch).toHaveBeenCalledWith(existing.id, {
+        ...streakStopper,
+        outcome: "streak_stopped",
+      });
+      expect(response.body.specialMatch.outcome).toBe("streak_stopped");
+      expect(response.body.specialMatchCelebration).toEqual({
+        kind: "streak_stopper",
+        stopped: {
+          player: { id: requester.id, username: requester.username },
+          streakBefore: 5,
+        },
+      });
+    });
+
+    it("특수 매치가 아닌 경기는 큰 연출 데이터가 null이고 결과를 저장하지 않는다", async () => {
+      const response = await putMatch();
+
+      expect(response.status).toBe(200);
+      expect(response.body.specialMatchCelebration).toBeNull();
+      expect(updateSpecialMatch).not.toHaveBeenCalled();
+    });
+
+    it("완료된 특수 매치를 고쳐 승패가 바뀌면 결과를 다시 정하지만 연출은 하지 않는다", async () => {
+      existing = buildExistingMatch({
+        specialMatch: { ...streakStopper!, outcome: "streak_defended" },
+      });
+
+      const response = await putMatch();
+
+      expect(response.status).toBe(200);
+      expect(updateSpecialMatch).toHaveBeenCalledWith(existing.id, {
+        ...streakStopper,
+        outcome: "streak_stopped",
+      });
+      expect(response.body.specialMatch.outcome).toBe("streak_stopped");
+      expect(response.body.specialMatchCelebration).toBeNull();
+    });
+
+    it("완료된 특수 매치를 고쳐도 승패가 그대로면 결과를 다시 정하지 않는다", async () => {
+      existing = buildExistingMatch({
+        scores: [{ scoreA: 5, scoreB: 11 }],
+        specialMatch: { ...streakStopper!, outcome: "streak_stopped" },
+      });
+
+      const response = await putMatch();
+
+      expect(response.status).toBe(200);
+      expect(updateSpecialMatch).not.toHaveBeenCalled();
+      expect(response.body.specialMatch.outcome).toBe("streak_stopped");
+      expect(response.body.specialMatchCelebration).toBeNull();
+    });
+
+    it("참가자가 바뀌면 특수 매치를 지운다", async () => {
+      existing = buildExistingMatch({
+        specialMatch: { ...streakStopper!, outcome: "streak_defended" },
+      });
+
+      const response = await putMatch({
+        ...validBody,
+        teams: [
+          { name: "Team A", playerIds: [requester.id, substitute.id] },
+          { name: "Team B", playerIds: [opponentM.id, opponentF.id] },
+        ],
+      });
+
+      expect(response.status).toBe(200);
+      expect(updateRecordedMatch.mock.calls[0]![1]).toMatchObject({
+        specialMatch: null,
+      });
+    });
+
+    it("팀 안 순서만 바뀐 수정은 특수 매치를 지우지 않는다", async () => {
+      existing = buildExistingMatch({
+        specialMatch: { ...streakStopper!, outcome: "streak_defended" },
+      });
+
+      await putMatch({
+        ...validBody,
+        teams: [
+          { name: "Team A", playerIds: [partner.id, requester.id] },
+          { name: "Team B", playerIds: [opponentM.id, opponentF.id] },
+        ],
+      });
+
+      expect(updateRecordedMatch.mock.calls[0]![1]).not.toHaveProperty(
+        "specialMatch",
+      );
+    });
+  });
 });
 
 describe("삭제된 합의·자동 합의 라우트", () => {
