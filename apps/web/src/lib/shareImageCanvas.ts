@@ -4,7 +4,7 @@
  */
 export const SHARE_WIDTH = 360;
 export const SHARE_HEIGHT = 450;
-const SCALE = 3;
+export const SHARE_SCALE = 3;
 export const SHARE_EDGE = 24;
 export const SHARE_LINE_HEIGHT = 1.5;
 const FONT_FAMILY = '"Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont, sans-serif';
@@ -47,11 +47,11 @@ export const loadShareFonts = async (texts: string[], weights: number[]) => {
 /** 360×450 좌표로 그리는 3배 캔버스와 바탕을 만든다 */
 export const createShareCanvas = (background: string) => {
   const canvas = document.createElement("canvas");
-  canvas.width = SHARE_WIDTH * SCALE;
-  canvas.height = SHARE_HEIGHT * SCALE;
+  canvas.width = SHARE_WIDTH * SHARE_SCALE;
+  canvas.height = SHARE_HEIGHT * SHARE_SCALE;
   const ctx = canvas.getContext("2d");
   if (!ctx) throw new Error("이미지를 만들지 못했어요");
-  ctx.scale(SCALE, SCALE);
+  ctx.scale(SHARE_SCALE, SHARE_SCALE);
   ctx.fillStyle = background;
   ctx.fillRect(0, 0, SHARE_WIDTH, SHARE_HEIGHT);
   return { canvas, ctx };
@@ -61,6 +61,17 @@ export const canvasToPngFile = async (canvas: HTMLCanvasElement, fileName: strin
   const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/png"));
   if (!blob) throw new Error("이미지를 만들지 못했어요");
   return new File([blob], fileName, { type: "image/png" });
+};
+
+/**
+ * 같은 색의 완전 투명. 그라데이션 끝을 "transparent"(검정 투명)로 두면 중간이 검게 섞여
+ * CSS 빛줄기(색은 그대로, 투명도만 줄어듦)보다 칙칙해진다
+ */
+export const toTransparent = (color: string) => {
+  const hex = /^#([0-9a-f]{6})$/i.exec(color.trim())?.[1];
+  if (!hex) return "transparent";
+  const value = Number.parseInt(hex, 16);
+  return `rgba(${(value >> 16) & 255}, ${(value >> 8) & 255}, ${value & 255}, 0)`;
 };
 
 export const drawRays = (ctx: CanvasRenderingContext2D, cx: number, cy: number, color: string) => {
@@ -77,7 +88,7 @@ export const drawRays = (ctx: CanvasRenderingContext2D, cx: number, cy: number, 
   const gradient = ctx.createRadialGradient(cx, cy, RAYS_FADE_START, cx, cy, RAYS_FADE_END);
   ctx.globalAlpha = 0.22;
   gradient.addColorStop(0, color);
-  gradient.addColorStop(1, "transparent");
+  gradient.addColorStop(1, toTransparent(color));
   ctx.fillStyle = gradient;
   ctx.fill();
   ctx.restore();
@@ -87,7 +98,7 @@ export const drawGlow = (ctx: CanvasRenderingContext2D, cx: number, cy: number, 
   ctx.save();
   const gradient = ctx.createRadialGradient(cx, cy, 0, cx, cy, GLOW_FADE_END);
   gradient.addColorStop(0, color);
-  gradient.addColorStop(1, "transparent");
+  gradient.addColorStop(1, toTransparent(color));
   ctx.globalAlpha = 0.42;
   ctx.fillStyle = gradient;
   ctx.beginPath();

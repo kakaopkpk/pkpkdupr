@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { wrapText } from "@/lib/shareImage";
+import { toTransparent } from "@/lib/shareImageCanvas";
 
 describe("wrapText", () => {
   // 글자 하나를 너비 1로 잰다
@@ -19,5 +20,15 @@ describe("wrapText", () => {
 
   it("한 줄보다 긴 낱말은 글자 단위로 자른다", () => {
     expect(wrapText("가나다라마바사", 3, measure)).toEqual(["가나다", "라마바", "사"]);
+  });
+});
+
+describe("toTransparent", () => {
+  it("6자리 16진 색은 같은 색의 투명으로", () => {
+    expect(toTransparent("#ffb627")).toBe("rgba(255, 182, 39, 0)");
+  });
+
+  it("그 밖의 표기는 transparent", () => {
+    expect(toTransparent("oklch(0.8 0.1 80)")).toBe("transparent");
   });
 });
