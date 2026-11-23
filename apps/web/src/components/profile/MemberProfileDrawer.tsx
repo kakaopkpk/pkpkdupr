@@ -6,6 +6,7 @@ import PushScreen from "@/components/PushScreen";
 import AchievementsScreen from "@/components/profile/AchievementsScreen";
 import AchievementsSection from "@/components/profile/AchievementsSection";
 import PlayerMatchesDrawer from "@/components/profile/PlayerMatchesDrawer";
+import PartnerRivalSections from "@/components/profile/PartnerRivalSections";
 import ProfileHeader from "@/components/profile/ProfileHeader";
 import ProfileStatTile, {
   WinLossCount,
@@ -106,7 +107,7 @@ const InactiveMemberNotice: React.FC = () => (
   </div>
 );
 
-/** 전역 회원 프로필 화면. 평점 카드·통계 4칸(승률·최근 7일·맞대결 승패·상대가 바꾼 내 평점)·받은 업적·최근 경기 */
+/** 전역 회원 프로필 화면. 평점 카드·통계 4칸(승률·최근 7일·맞대결 승패·상대가 바꾼 내 평점)·파트너 궁합·천적·받은 업적·최근 경기 */
 export default function MemberProfileDrawer({
   playerId,
   initialCategory = "doubles",
@@ -218,6 +219,14 @@ export default function MemberProfileDrawer({
                 <HeadToHeadTile stat={headToHead} />
                 <HeadToHeadRatingTile stat={headToHead} />
               </div>
+              <PartnerRivalSections
+                partners={overview.summary.partners}
+                rivals={overview.summary.rivals}
+                tabKey={tabKey}
+                depthId={depthId}
+                titlePrefix={`${username} `}
+                isParentOpen={isRequested}
+              />
               <AchievementsSection
                 playerId={playerId}
                 progress={overview.summary.achievements}
