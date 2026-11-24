@@ -338,7 +338,7 @@ describe("POST /api/match-sessions/:sessionId/matches", () => {
       expect(response.body.specialMatch.kind).toBe("rival");
     });
 
-    it("연승 회원이 있으면 연승 저지로 판정해 저장한다", async () => {
+    it("연승 회원이 있으면 연승 매치로 판정해 저장한다", async () => {
       mockRankingSource(winsOfPlayerC(5));
 
       const response = await startMatch("Scustom1", {
@@ -365,7 +365,7 @@ describe("POST /api/match-sessions/:sessionId/matches", () => {
         );
       });
 
-      it("정회원 연승 회원이 있으면 연승 저지로 판정해 저장한다", async () => {
+      it("정회원 연승 회원이 있으면 연승 매치로 판정해 저장한다", async () => {
         mockRankingSource(winsOfPlayerC(5));
 
         const response = await startMatch("Scustom1", {

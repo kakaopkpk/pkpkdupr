@@ -10,7 +10,7 @@ export const WIN_STREAK_DISPLAY_MIN = 5;
  */
 export const SESSION_WIN_STREAK_DISPLAY_MIN = 3;
 
-/** 이 연승부터 특수 매치 연승 저지·최강자전의 연승 회원이다 */
+/** 이 연승부터 특수 매치 연승 매치·최강자전의 연승 회원이다 */
 export const SPECIAL_MATCH_STREAK_MIN = 3;
 
 export interface WinStreakMatch {

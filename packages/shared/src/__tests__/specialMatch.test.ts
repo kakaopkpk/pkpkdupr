@@ -28,7 +28,7 @@ describe("judgeRecommendedSpecialMatch", () => {
     ).toBeNull();
   });
 
-  it("한 팀에만 3연승 이상 회원이 있으면 연승 저지이고 그 팀이 지킨다", () => {
+  it("한 팀에만 3연승 이상 회원이 있으면 연승 매치이고 그 팀이 지킨다", () => {
     expect(
       judgeRecommendedSpecialMatch([
         [player("a"), player("b")],
@@ -153,7 +153,7 @@ describe("judgeRecommendedSpecialMatch", () => {
     ).toBe("streak_stopper");
   });
 
-  it("게스트가 낀 코트도 정회원 연승 회원이 있으면 연승 저지다", () => {
+  it("게스트가 낀 코트도 정회원 연승 회원이 있으면 연승 매치다", () => {
     expect(
       judgeRecommendedSpecialMatch([
         [player("a", { rank: 4, rating: 3.5 }), player("g", { isGuest: true })],
@@ -188,7 +188,7 @@ describe("judgeRecommendedSpecialMatch", () => {
         [player("c"), player("d")],
       ]),
     ).toBeNull();
-    // 게스트 팀 쪽은 연승 회원이 없어 최강자전이 아니라 연승 저지다
+    // 게스트 팀 쪽은 연승 회원이 없어 최강자전이 아니라 연승 매치다
     expect(
       judgeRecommendedSpecialMatch([
         [player("a"), player("g", { isGuest: true, winStreak: 9 })],

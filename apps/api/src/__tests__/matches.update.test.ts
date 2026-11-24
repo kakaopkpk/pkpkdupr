@@ -1008,7 +1008,7 @@ describe("PUT /api/matches/:matchId", () => {
   describe("특수 매치 결과", () => {
     const hoursAgo = (hours: number) =>
       new Date(Date.now() - hours * 60 * 60 * 1000);
-    // 요청자 팀 연승 저지 경기. validBody(9:11)는 상대 팀이 이긴다
+    // 요청자 팀 연승 매치 경기. validBody(9:11)는 상대 팀이 이긴다
     const streakStopper: Match["specialMatch"] = {
       kind: "streak_stopper",
       defendingTeamIndex: 0,
