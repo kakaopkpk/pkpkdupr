@@ -33,6 +33,9 @@
   - 요청자 기준 분류별 상대 전적과 그 경기들에서 바뀐 요청자 평점 합 `headToHead[분류].ratingDelta`
   - 업적 진행 상태 `achievements`(아래 "업적")
   - 지금 연승 수 `winStreak`(아래 "랭킹"과 같은 규칙)
+  - 분류별 시즌 최고 평점 `peakRating`(`buildPeakRating`)
+    - 시즌 구분이 아직 없어 시즌 1 = 전체 기록이다.
+    - 그 분류 평점이 바뀐 평점 변경 로그(`delta[분류] ≠ 0`)의 `nextRating`과 지금 평점 중 최댓값이고, 지금 평점이 없는 분류는 null이다.
 
 ## 경기
 

@@ -11,10 +11,12 @@ import {
   type Match,
   type MatchTopLevelType,
 } from "@pkpkdupr/shared/match";
-import type {
-  Player,
-  PlayerRatingChangeLog,
-  PlayerRatingHistory,
+import {
+  roundDuprRating,
+  type Player,
+  type PlayerRatingChangeLog,
+  type PlayerRatingHistory,
+  type PublicPlayerDupr,
 } from "@pkpkdupr/shared/player";
 import {
   PARTNER_STAT_MIN_MATCHES,
@@ -47,6 +49,9 @@ export type PlayerProfileRatingDelta = Record<
   }
 >;
 
+/** 분류별 시즌 최고 평점. 지금 평점이 없는(NR) 분류는 null */
+export type PlayerPeakRating = Record<MatchTopLevelType, number | null>;
+
 export type MatchWithRatingChanges = Match & {
   ratingChanges?: PlayerRatingChangeLog[];
 };
@@ -66,6 +71,30 @@ export interface PlayerProfileSummary {
   /** 지금 이어지는 연승 수(단식·복식 합, `computeCurrentWinStreak`) */
   winStreak: number;
 }
+
+/**
+ * 분류별 시즌 최고 평점. 아직 시즌 구분이 없어 시즌 1 = 전체 기록이다.
+ * 그 분류 평점이 실제로 바뀐 변경 로그(`delta[분류] ≠ 0`)의 바뀐 뒤 평점과 지금 평점 중 최댓값이다.
+ * 평점 미반영 경기는 변경 로그가 없어 들어가지 않는다
+ */
+export const buildPeakRating = (
+  /** 그 회원의 평점 변경 로그 */
+  ratingChangeLogs: readonly PlayerRatingChangeLog[],
+  currentRating: PublicPlayerDupr | null | undefined,
+): PlayerPeakRating => {
+  const peakOf = (category: MatchTopLevelType) => {
+    const current = currentRating?.[category];
+    if (typeof current !== "number" || !Number.isFinite(current)) return null;
+    let peak = current;
+    for (const log of ratingChangeLogs) {
+      if (log.delta[category] === 0) continue;
+      const rating = log.nextRating[category];
+      if (Number.isFinite(rating) && rating > peak) peak = rating;
+    }
+    return roundDuprRating(peak);
+  };
+  return { singles: peakOf("singles"), doubles: peakOf("doubles") };
+};
 
 const createEmptyMatchStats = (): PlayerProfileMatchStats => ({
   singles: { matchWins: 0, matchLosses: 0, setWins: 0, setLosses: 0 },

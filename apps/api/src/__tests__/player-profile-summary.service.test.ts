@@ -1,7 +1,10 @@
 import type { Match } from "@pkpkdupr/shared/match";
 import type { Player, PlayerRatingChangeLog } from "@pkpkdupr/shared/player";
 import { describe, expect, it, vi } from "vitest";
-import { buildPlayerProfileSummary } from "../services/PlayerProfileSummaryService";
+import {
+  buildPeakRating,
+  buildPlayerProfileSummary,
+} from "../services/PlayerProfileSummaryService";
 
 // 이 파일의 고정 데이터는 업적 기준 시각(2026-11-17 KST) 전 경기라, 업적은 기준 시각 없이 센다.
 vi.mock("@pkpkdupr/shared/achievementCountStart", () => ({
@@ -676,6 +679,60 @@ describe("buildPlayerProfileSummary", () => {
       expect(summary.ratingDelta.singles.last7Days).toBeCloseTo(0.1);
       expect(summary.ratingDelta.singles.last30Days).toBeCloseTo(0.3);
       expect(summary.ratingDelta.singles.last90Days).toBeCloseTo(0.6);
+    });
+  });
+});
+
+describe("buildPeakRating", () => {
+  const makeLog = (
+    nextRating: { singles: number; doubles: number },
+    delta: { singles: number; doubles: number },
+  ): PlayerRatingChangeLog => ({
+    id: `log-${nextRating.singles}-${nextRating.doubles}`,
+    playerId: me.id,
+    source: "match_completed",
+    sourceLogId: "match-completed-Mmatch01-1",
+    previousRating: {
+      singles: nextRating.singles - delta.singles,
+      doubles: nextRating.doubles - delta.doubles,
+    },
+    nextRating,
+    delta,
+    createdAt: now,
+  });
+
+  it("그 분류 평점이 바뀐 로그와 지금 평점 중 최댓값을 분류별로 고른다", () => {
+    const logs = [
+      makeLog({ singles: 3.0, doubles: 3.214 }, { singles: 0, doubles: 0.05 }),
+      // 복식 경기 로그의 단식 값은 바뀌지 않았으므로 단식 최고에 넣지 않는다
+      makeLog({ singles: 3.9, doubles: 3.1 }, { singles: 0, doubles: -0.114 }),
+      makeLog({ singles: 3.3, doubles: 3.1 }, { singles: 0.3, doubles: 0 }),
+    ];
+
+    expect(
+      buildPeakRating(logs, { singles: 3.25, doubles: 3.077 }),
+    ).toEqual({ singles: 3.3, doubles: 3.214 });
+  });
+
+  it("지금 평점이 가장 높으면 지금 평점이다", () => {
+    const logs = [
+      makeLog({ singles: 3.0, doubles: 3.1 }, { singles: 0, doubles: 0.1 }),
+    ];
+    expect(
+      buildPeakRating(logs, { singles: 3.0, doubles: 3.135 }),
+    ).toEqual({ singles: 3.0, doubles: 3.135 });
+  });
+
+  it("지금 평점이 없는 분류는 null이다", () => {
+    const logs = [
+      makeLog({ singles: 3.5, doubles: 3.2 }, { singles: 0.5, doubles: 0.2 }),
+    ];
+    expect(
+      buildPeakRating(logs, { singles: null, doubles: 3.1 }),
+    ).toEqual({ singles: null, doubles: 3.2 });
+    expect(buildPeakRating(logs, null)).toEqual({
+      singles: null,
+      doubles: null,
     });
   });
 });
