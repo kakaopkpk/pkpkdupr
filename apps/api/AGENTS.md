@@ -33,6 +33,9 @@
   - 요청자 기준 분류별 상대 전적과 그 경기들에서 바뀐 요청자 평점 합 `headToHead[분류].ratingDelta`
   - 업적 진행 상태 `achievements`(아래 "업적")
   - 지금 연승 수 `winStreak`(아래 "랭킹"과 같은 규칙)
+  - 분류별 시즌 최고 평점 `peakRating`(`buildPeakRating`)
+    - 시즌 구분이 아직 없어 시즌 1 = 전체 기록이다.
+    - 그 분류 평점이 바뀐 평점 변경 로그(`delta[분류] ≠ 0`)의 `nextRating`과 지금 평점 중 최댓값이고, 지금 평점이 없는 분류는 null이다.
 
 ## 경기
 
@@ -113,9 +116,9 @@
   - 진행 중 경기 선수 제외.
   - 게스트는 팀 나누기·응답 팀 `averageRating` 모두 2.5(`MATCHMAKING_GUEST_RATING`)로 치고, 응답 선수 `doublesRating`은 null이다.
   - 팀 나누기는 NR 정회원을 게스트를 뺀 참여자 평점 중앙값(전원 NR이면 3.5)으로 대체하고, 응답 팀 `averageRating`은 NR 정회원을 3.0으로 친 표시용 평균.
-  - 대진마다 코트를 복식 랭킹·연승으로 `judgeRecommendedSpecialMatch` 판정해, 가산점(`SPECIAL_MATCH_RECOMMENDATION_BONUS`, 최강자전 2, 라이벌전 1.5, 연승 저지·리벤지 0)이 가장 큰 코트 하나의 가산점만 대진 감점에서 뺀다. 리벤지는 만들지 않는다.
+  - 대진마다 코트를 복식 랭킹·연승으로 `judgeRecommendedSpecialMatch` 판정해, 가산점(`SPECIAL_MATCH_RECOMMENDATION_BONUS`, 최강자전 2, 라이벌전 1.5, 연승 매치·리벤지 0)이 가장 큰 코트 하나의 가산점만 대진 감점에서 뺀다. 리벤지는 만들지 않는다.
   - 후보 줄 세우기·여유폭은 가산점을 뺀 감점으로 한다.
-  - 응답 코트 `specialMatch`는 코트 하나만 판정 결과(`outcome` null)이고 나머지 코트는 null이다. 가산점 코트(가장 큰 코트, 같으면 앞 코트)가 있으면 그 코트, 없으면 앞 연승 저지 코트다.
+  - 응답 코트 `specialMatch`는 코트 하나만 판정 결과(`outcome` null)이고 나머지 코트는 null이다. 가산점 코트(가장 큰 코트, 같으면 앞 코트)가 있으면 그 코트, 없으면 앞 연승 매치 코트다.
   - 응답 선수(`RecommendationPlayer`)에 복식 랭킹 순위 `doublesRank`(랭킹에 없으면 null)와 지금 연승 수 `winStreak`(랭킹과 같은 규칙).
   - 랭킹 원천을 못 읽으면 가산점 없이 추천하고, 코트 `specialMatch`는 모두 null, 선수 `doublesRank`는 null·`winStreak`는 0이다.
 - 참여자 한 명씩 추가 `POST /api/match-sessions/:sessionId/participants`·삭제 `DELETE /api/match-sessions/:sessionId/participants/:playerId`

@@ -690,7 +690,7 @@ const ACHIEVEMENT_TABLE: readonly {
       id: "praised-10",
       category: "session",
       name: "이 구역 사랑둥이",
-      condition: "한 세션에서 칭찬 5개 받기 10번",
+      condition: "칭찬 5개 받은 세션 10번",
       badgeNumber: "10",
       target: 10,
       points: 100,

@@ -89,7 +89,7 @@ type SpecialMatchEvaluation =
 
 /**
  * 평점 반영이 끝난 특수 매치의 결과. 순위는 그 경기 종류 랭킹에서 이 경기 반영 직후(rankAfter) 시점이다.
- * 승패가 갈리지 않으면 outcome null이다. 게스트가 낀 연승 저지·최강자전·리벤지도 승패로 정한다.
+ * 승패가 갈리지 않으면 outcome null이다. 게스트가 낀 연승 매치·최강자전·리벤지도 승패로 정한다.
  */
 const evaluateSpecialMatch = (
   context: RankingContext,

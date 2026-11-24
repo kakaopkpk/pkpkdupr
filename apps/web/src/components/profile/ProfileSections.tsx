@@ -49,6 +49,7 @@ export const ProfileRatingSection: React.FC<{
       rank={rank}
       rating={rating}
       last30Days={overview.summary.ratingDelta[category].last30Days}
+      peakRating={overview.summary.peakRating?.[category] ?? null}
       history={overview.summary.ratingHistory[category]}
     />
   );

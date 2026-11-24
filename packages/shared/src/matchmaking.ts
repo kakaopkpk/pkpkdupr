@@ -582,7 +582,7 @@ export const recommendDoublesMatches = (
     result = runStep(step, result);
   }
 
-  // 특수 유형으로 보이는 코트는 하나다. 가산점이 가장 큰 코트(같으면 앞 코트), 가산점 코트가 없으면 앞 연승 저지 코트
+  // 특수 유형으로 보이는 코트는 하나다. 가산점이 가장 큰 코트(같으면 앞 코트), 가산점 코트가 없으면 앞 연승 매치 코트
   let specialCourt: { court: number; match: SpecialMatch; bonus: number } | null =
     null;
   for (let court = 0; court < courtCount; court += 1) {
@@ -596,7 +596,7 @@ export const recommendDoublesMatches = (
         specialCourt = { court, match, bonus };
       }
     } else if (!specialCourt && match.kind === "streak_stopper") {
-      // 가산점 0인 유형 중에서는 연승 저지만 보이고, 뒤에 가산점 코트가 나오면 위 분기가 덮어쓴다
+      // 가산점 0인 유형 중에서는 연승 매치만 보이고, 뒤에 가산점 코트가 나오면 위 분기가 덮어쓴다
       specialCourt = { court, match, bonus };
     }
   }

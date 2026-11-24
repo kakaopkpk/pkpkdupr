@@ -166,7 +166,7 @@ describe("특수 매치 결과 판정", () => {
     );
   });
 
-  it("연승 저지는 연승 회원 팀이 지면 저지 성공이고 끊기기 직전 연승 수를 싣는다", () => {
+  it("연승 매치는 연승 회원 팀이 지면 저지 성공이고 끊기기 직전 연승 수를 싣는다", () => {
     const streakStopper: SpecialMatch = {
       kind: "streak_stopper",
       defendingTeamIndex: 1,
@@ -258,7 +258,7 @@ describe("특수 매치 결과 판정", () => {
     );
   });
 
-  it("게스트가 낀 연승 저지도 승패로 결과를 정하고, 끊기기 직전 연승은 게스트가 낀 경기까지 센다", () => {
+  it("게스트가 낀 연승 매치도 승패로 결과를 정하고, 끊기기 직전 연승은 게스트가 낀 경기까지 센다", () => {
     const streakStopper: SpecialMatch = {
       kind: "streak_stopper",
       defendingTeamIndex: 1,

@@ -146,13 +146,13 @@ pnpm lint
   - 추천 카드 출처 세션 시작(`recommendedSpecialKind`)은 서버 재판정 유형이 카드 유형과 같을 때만, 한 판 더 출처 시작(`rematchOfMatchId`)은 리벤지만 저장한다.
   - 그 밖의 시작·직접 기록·관리자 생성·대진 시작은 null이다.
 - 게스트가 낀 코트(`judgeRecommendedSpecialMatch`)
-  - 정회원 연승 회원이 있으면 연승 저지·최강자전으로 판정하고, 결과·큰 연출도 게스트가 없는 경기와 같다(연출 연승 수는 게스트가 낀 경기 포함).
+  - 정회원 연승 회원이 있으면 연승 매치·최강자전으로 판정하고, 결과·큰 연출도 게스트가 없는 경기와 같다(연출 연승 수는 게스트가 낀 경기 포함).
   - 게스트가 한 명이라도 있으면 라이벌전이 아니다. 결과 판정에서도 게스트가 있는 라이벌전은 결과 null·연출 없음이다.
   - 게스트는 `winStreak`과 상관없이 연승 주인공(`protagonistIds`)이 되지 않는다.
   - 리벤지는 게스트가 있어도 된다. 이미 기록된 경기에는 소급하지 않는다.
 - 결과(`SpecialMatch.outcome`)는 평점 반영 뒤 서버가 정한다. 승패가 갈리지 않으면 null이다.
   - 라이벌전: 이긴 팀에 공격자가 있는 라이벌 쌍 중 하나라도 반영 직후 그 경기 종류 랭킹(`rankPlayersAt`)에서 공격자 순위가 방어자보다 높아졌으면 `rival_overtaken`, 아니면 `rival_held`.
-  - 연승 저지: 연승 회원 팀이 지면 `streak_stopped`, 이기면 `streak_defended`. 최강자전: `champions_won`.
+  - 연승 매치: 연승 회원 팀이 지면 `streak_stopped`, 이기면 `streak_defended`. 최강자전: `champions_won`.
   - 리벤지: 지키는 쪽이 아닌 팀이 이기면 `revenge_success`, 지면 `revenge_defended`.
 - 끝난 특수 매치를 고치면(회원·관리자 수정) 승패가 같아도 평점 재계산 뒤 결과를 다시 정하고, 결과가 null로 남은 경기도 이때 채운다. 판정 규칙·순위 기준은 처음 판정과 같다.
   - 참가자(팀별 선수 구성)가 바뀌면 `specialMatch`를 지운다.
