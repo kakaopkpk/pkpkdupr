@@ -35,6 +35,11 @@ const PROTAGONIST_TEAMMATE_AVATAR_SIZE = 28;
 /** 주인공 없는 칸의 두 아바타 크기 */
 const PLAIN_AVATAR_SIZE = 32;
 const CELL_AVATAR_OVERLAP = 8;
+/**
+ * 판 최소 높이. 가장 높은 칸(라이벌전 주인공 칸: 아바타 + 이름 두 줄 + 순위 칩 줄)에 맞춰
+ * 유형이 바뀌어도 카드 높이가 그대로이게 한다
+ */
+const BOARD_MIN_HEIGHT = 134;
 
 /** 두 칸을 104° 사선으로 나누고 가운데에 0.8% 폭의 흰 틈을 남긴다 */
 const getBoardBackground = ([left, right]: [CourtCell, CourtCell]) =>
@@ -179,7 +184,7 @@ const RankChip: React.FC<{
   </span>
 );
 
-/** 칸 내용은 가운데 정렬이다. 주인공 없는 칸은 세로로도 가운데다 */
+/** 칸 내용은 가로·세로 모두 가운데 정렬이다 */
 const CourtCellContent: React.FC<{
   cell: CourtCell;
   sessionWinStreaks?: SessionWinStreakByPlayer;
@@ -188,8 +193,7 @@ const CourtCellContent: React.FC<{
   return (
     <div
       className={cx(
-        "flex min-w-0 flex-col items-center gap-1 px-2 py-2.5 text-center",
-        !cell.protagonist && "justify-center",
+        "flex min-w-0 flex-col items-center justify-center gap-1 px-2 py-2.5 text-center",
       )}
     >
       <CellAvatars cell={cell} sessionWinStreaks={sessionWinStreaks} />
@@ -253,7 +257,10 @@ const RecommendationCard: React.FC<{
     <article className="flex flex-col gap-2.5 rounded-pk-lg bg-white p-3">
       <div
         className="relative grid grid-cols-2 overflow-hidden rounded-pk-sm"
-        style={{ background: getBoardBackground(cells) }}
+        style={{
+          background: getBoardBackground(cells),
+          minHeight: BOARD_MIN_HEIGHT,
+        }}
       >
         {cells.map((cell, index) => (
           <CourtCellContent
