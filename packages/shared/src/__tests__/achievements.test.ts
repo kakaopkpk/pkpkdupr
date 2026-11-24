@@ -144,7 +144,7 @@ const endedSessions = (
   ]);
 
 describe("ACHIEVEMENTS", () => {
-  it("업적 49개를 표 순서로 정의한다", () => {
+  it("업적 52개를 표 순서로 정의한다", () => {
     expect(ACHIEVEMENTS.map((definition) => definition.id)).toEqual([
       "matches-1",
       "matches-10",
@@ -165,6 +165,7 @@ describe("ACHIEVEMENTS", () => {
       "streak-10",
       "streak-20",
       "streak-breaker",
+      "streak-breaker-10",
       "rating-3.0",
       "rating-3.5",
       "rating-4.0",
@@ -184,7 +185,7 @@ describe("ACHIEVEMENTS", () => {
       "dojo-15",
       "underdog",
       "revenge",
-      "revenge-5",
+      "revenge-10",
       "attendance-10",
       "attendance-30",
       "attendance-100",
@@ -193,10 +194,12 @@ describe("ACHIEVEMENTS", () => {
       "unbeaten-session",
       "dominator-1",
       "dominator-10",
+      "dominator-25",
+      "dominator-50",
       "praised-1",
       "praised-10",
     ]);
-    expect(new Set(ACHIEVEMENTS.map((item) => item.id)).size).toBe(49);
+    expect(new Set(ACHIEVEMENTS.map((item) => item.id)).size).toBe(52);
   });
 
   it("분류 이름은 경기 수·승리·연승·평점·특별·세션이다", () => {
@@ -229,9 +232,9 @@ describe("isBestStreakAchievement", () => {
 });
 
 describe("computeAchievements", () => {
-  it("경기가 없으면 49개 모두 진행도 0으로 받지 않은 상태다", () => {
+  it("경기가 없으면 52개 모두 진행도 0으로 받지 않은 상태다", () => {
     const progress = compute([]);
-    expect(progress).toHaveLength(49);
+    expect(progress).toHaveLength(52);
     expect(progress.map((item) => item.id)).toEqual(
       ACHIEVEMENTS.map((definition) => definition.id),
     );
@@ -549,7 +552,7 @@ describe("computeAchievements", () => {
     });
   });
 
-  it("단짝 50경기는 같은 파트너와 복식 50경기에서 받는다", () => {
+  it("찰떡궁합은 같은 파트너와 복식 50경기에서 받는다", () => {
     const below = repeat(49, () => makeMatch({ partnerId: "partner-a" }));
     expect(progressOf(compute(below), "partner-50")).toMatchObject({
       earned: false,
@@ -786,7 +789,7 @@ describe("computeAchievements", () => {
       });
     });
 
-    it("리벤지 5회는 다섯 번째 리벤지 경기로 받는다", () => {
+    it("뒤끝 작렬은 열 번째 리벤지 경기로 받는다", () => {
       const revenges = (count: number) =>
         Array.from({ length: count }, (_, index) => {
           const day = `2026-12-${String(3 + index).padStart(2, "0")}`;
@@ -795,18 +798,18 @@ describe("computeAchievements", () => {
             lineup(true, kst("19:20", day)),
           ];
         }).flat();
-      const four = compute(revenges(4));
-      expect(progressOf(four, "revenge-5")).toMatchObject({
+      const nine = compute(revenges(9));
+      expect(progressOf(nine, "revenge-10")).toMatchObject({
         earned: false,
-        current: 4,
-        target: 5,
+        current: 9,
+        target: 10,
       });
 
-      const five = revenges(5);
-      expect(progressOf(compute(five), "revenge-5")).toMatchObject({
+      const ten = revenges(10);
+      expect(progressOf(compute(ten), "revenge-10")).toMatchObject({
         earned: true,
-        earnedMatchId: five[9].id,
-        current: 5,
+        earnedMatchId: ten[19].id,
+        current: 10,
       });
     });
   });
@@ -970,18 +973,37 @@ describe("computeAchievements", () => {
     });
   });
 
-  it("세션 지배자 10회는 열 번째 지배 세션에서 받는다", () => {
-    const matches = Array.from({ length: 10 }, (_, index) =>
+  it("세션 왕·세션 황제·세션 절대 군주는 열·스물다섯·쉰 번째 지배 세션에서 받는다", () => {
+    const matches = Array.from({ length: 50 }, (_, index) =>
       makeMatch({ sessionId: `session-${index}` }),
     );
-    const sessionIds = matches.map((_, index) => `session-${index}`);
-    const dominated = endedSessions([], sessionIds);
-    expect(
-      progressOf(computeAchievements(ME, matches, dominated), "dominator-10"),
-    ).toMatchObject({
+    const dominatedUpTo = (count: number) =>
+      endedSessions(
+        [],
+        matches.slice(0, count).map((_, index) => `session-${index}`),
+      );
+    const progressAt = (count: number, id: string) =>
+      progressOf(computeAchievements(ME, matches, dominatedUpTo(count)), id);
+
+    expect(progressAt(10, "dominator-10")).toMatchObject({
       earned: true,
       earnedMatchId: matches[9].id,
       current: 10,
+    });
+    expect(progressAt(24, "dominator-25")).toMatchObject({
+      earned: false,
+      current: 24,
+      target: 25,
+    });
+    expect(progressAt(25, "dominator-25")).toMatchObject({
+      earned: true,
+      earnedMatchId: matches[24].id,
+    });
+    expect(progressAt(49, "dominator-50").earned).toBe(false);
+    expect(progressAt(50, "dominator-50")).toMatchObject({
+      earned: true,
+      earnedMatchId: matches[49].id,
+      current: 50,
     });
   });
 
@@ -1409,7 +1431,7 @@ describe("업적 점수", () => {
     for (const definition of ACHIEVEMENTS) {
       expect([10, 25, 50, 100]).toContain(definition.points);
     }
-    expect(ACHIEVEMENT_MAX_POINTS).toBe(2025);
+    expect(ACHIEVEMENT_MAX_POINTS).toBe(2250);
   });
 
   it("받은 업적 점수만 더하고 모르는 업적은 0점이다", () => {
@@ -1540,6 +1562,27 @@ describe("연승 저지", () => {
       makeMatch({ opponentIds: ["hot"] }),
     ]);
     expect(progressOf(progress, "streak-breaker").earned).toBe(false);
+  });
+
+  it("수문장은 열 번째 연승 저지 경기로 받는다", () => {
+    const breaks = (count: number) =>
+      Array.from({ length: count }, () => [
+        ...winStreakOf("hot", 3),
+        makeMatch({ opponentIds: ["hot"] }),
+      ]).flat();
+    const nine = breaks(9);
+    expect(progressOf(compute(nine), "streak-breaker-10")).toMatchObject({
+      earned: false,
+      current: 9,
+      target: 10,
+    });
+
+    const ten = breaks(10);
+    expect(progressOf(compute(ten), "streak-breaker-10")).toMatchObject({
+      earned: true,
+      earnedMatchId: ten[ten.length - 1].id,
+      current: 10,
+    });
   });
 });
 
