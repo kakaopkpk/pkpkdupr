@@ -1,6 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { getMatchTopLevelType } from "@pkpkdupr/shared/match";
 import type { SpecialMatchCelebration } from "@pkpkdupr/shared/specialMatch";
 import { buttonPressClassName, PkButton } from "@/components/ui/Button";
 import { ShareIcon } from "@/components/ui/Icons";
@@ -27,8 +26,8 @@ import {
   toSpecialMatchShareTarget,
 } from "./specialMatchCelebration.utils";
 
-// 딤이 깔린 뒤 카드가 튀어나온다
-const CARD_DELAY_MS = 150;
+// 딤이 깔린 뒤 제목이 떠오른다
+const TITLE_DELAY_MS = 150;
 // 버튼이 나타나는 시각. 그 전의 탭(시트 버튼을 누르려던 손가락 등)으로 닫히지 않게 이때부터 입력을 받는다
 const ACTIONS_DELAY_MS = 820;
 // index.css `.pk-celebration-dim`의 딤 투명도와 같다
@@ -56,7 +55,7 @@ const useBeatCount = (beatTimes: readonly number[], isRunning: boolean, isReduce
 
 export interface SpecialMatchCelebrationScreenProps {
   celebration: SpecialMatchCelebration;
-  /** 공유 이미지·랭킹 종류에 쓰는 기록한 경기 */
+  /** 공유 이미지·공유 문구에 쓰는 기록한 경기 */
   match: Pick<MatchInfo, "id" | "type" | "completedAt" | "matchStartsAt" | "session">;
   /** 연출을 본(공유하는) 회원 아이디 */
   username: string;
@@ -67,7 +66,7 @@ export interface SpecialMatchCelebrationScreenProps {
 
 /**
  * 특수 매치(라이벌전 승리·연승 저지·최강자전 승리) 큰 연출. 틀은 업적 축하 연출과 같은 어두운 전체 화면이고,
- * 가운데에 40px 흰 제목 → 흰 카드 그림 → 15 흰 설명 한 줄을 둔다(docs/design.md "특수 매치").
+ * 흰 카드 없이 가운데에 그림(주인공 얼굴 뒤 빛줄기·후광) → 26 흰 제목 → 15 흰 78% 설명 한 줄을 둔다(docs/design.md "특수 매치").
  * 확인(또는 배경 누르기·Esc)으로만 닫히고, "이미지로 공유"는 지금 연출을 공유하며 닫지 않는다.
  * 움직임 줄이기면 연출 없이 마지막 장면을 바로 보인다.
  */
@@ -96,8 +95,6 @@ export default function SpecialMatchCelebrationScreen({
   const title = getSpecialMatchShareTitle(shareTarget.kind);
   // 이미지는 버튼이 나타날 때 만들어 등장 연출과 겹치지 않게 한다
   const shareState = useSpecialMatchShare(isAcceptingInput ? shareTarget : null);
-  // 도장이 박히는 순간 카드가 흔들린다
-  const isShaking = celebration.kind !== "rival" && beatCount >= 2 && !isReducedMotion;
   useDimmedThemeColor(isOpen && !isClosing, DIM_OPACITY);
 
   useEffect(() => {
@@ -164,54 +161,41 @@ export default function SpecialMatchCelebrationScreen({
         onClick={confirm}
       />
       <div className="app-shell-width pointer-events-none absolute inset-y-0 right-0 left-0 mx-auto">
-        <div className="absolute inset-x-0 top-0 bottom-[calc(96px+env(safe-area-inset-bottom))] flex flex-col items-center justify-center gap-[18px] px-6">
-          <h2
-            className="animate-pk-fade-up text-center text-[40px] leading-[1.15] font-extrabold tracking-[-0.02em] text-white motion-reduce:animate-none"
-            style={{ animationDuration: ms(380) }}
-          >
-            {title}
-          </h2>
-          <div
-            className="w-full animate-pk-celebrate-pop motion-reduce:animate-none"
-            style={{ animationDelay: ms(CARD_DELAY_MS) }}
-          >
-            <div
-              className={cx(
-                "w-full rounded-pk-lg bg-white",
-                isShaking && "animate-pk-shake motion-reduce:animate-none",
-              )}
+        <div className="absolute inset-x-0 top-0 bottom-[calc(96px+env(safe-area-inset-bottom))] flex flex-col items-center justify-center gap-[30px] px-6">
+          {celebration.kind === "rival" ? (
+            <RivalScene celebration={celebration} beatCount={beatCount} />
+          ) : celebration.kind === "streak_stopper" ? (
+            <StreakStopperScene celebration={celebration} beatCount={beatCount} />
+          ) : (
+            <ChampionsScene celebration={celebration} beatCount={beatCount} />
+          )}
+          {/* relative는 그림의 빛줄기보다 위에 그리기 위해서다 */}
+          <div className="relative flex w-full flex-col items-center gap-1.5 text-center">
+            <h2
+              className="animate-pk-fade-up text-pk-26 leading-[1.5] font-extrabold tracking-[-0.02em] text-white motion-reduce:animate-none"
+              style={{ animationDelay: ms(TITLE_DELAY_MS), animationDuration: ms(380) }}
             >
-              {celebration.kind === "rival" ? (
-                <RivalScene
-                  celebration={celebration}
-                  category={getMatchTopLevelType(match.type)}
-                  beatCount={beatCount}
-                />
-              ) : celebration.kind === "streak_stopper" ? (
-                <StreakStopperScene celebration={celebration} beatCount={beatCount} />
-              ) : (
-                <ChampionsScene celebration={celebration} beatCount={beatCount} />
-              )}
-            </div>
+              {title}
+            </h2>
+            {/* 장면이 끝나면 떠오른다. 아이디만 넘치면 말줄임한다 */}
+            <p
+              className="flex w-full animate-pk-fade-up justify-center text-pk-15 leading-[1.45] text-white/78 motion-reduce:animate-none"
+              style={{ animationDelay: ms(sceneEndMs), animationDuration: ms(380) }}
+            >
+              {captionParts.map((part, index) => (
+                <span
+                  key={index}
+                  className={cx(
+                    // 조각 끝 띄어쓰기가 flex 안에서 사라지지 않게 그대로 둔다
+                    part.fit ? "min-w-0 truncate" : "shrink-0 whitespace-pre",
+                    part.highlight && cx("font-extrabold", CAPTION_HIGHLIGHT_CLASS_NAMES[part.highlight]),
+                  )}
+                >
+                  {part.text}
+                </span>
+              ))}
+            </p>
           </div>
-          {/* 장면이 끝나면 떠오른다. 아이디만 넘치면 말줄임한다 */}
-          <p
-            className="flex w-full animate-pk-fade-up justify-center text-pk-15 leading-[22px] font-bold text-white motion-reduce:animate-none"
-            style={{ animationDelay: ms(sceneEndMs), animationDuration: ms(380) }}
-          >
-            {captionParts.map((part, index) => (
-              <span
-                key={index}
-                className={cx(
-                  // 조각 끝 띄어쓰기가 flex 안에서 사라지지 않게 그대로 둔다
-                  part.fit ? "min-w-0 truncate" : "shrink-0 whitespace-pre",
-                  part.highlight && CAPTION_HIGHLIGHT_CLASS_NAMES[part.highlight],
-                )}
-              >
-                {part.text}
-              </span>
-            ))}
-          </p>
         </div>
         <div
           ref={actionsRef}

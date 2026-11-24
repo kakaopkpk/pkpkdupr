@@ -1,6 +1,5 @@
 import { FLAME_ICON_PATH, STOP_HAND_ICON_PATHS } from "@/components/ui/Icons";
 import {
-  getRankingCategoryLabel,
   getSpecialMatchCaptionParts,
   getSpecialMatchShareDateLabel,
   getSpecialMatchShareFileName,
@@ -38,31 +37,36 @@ import {
 
 /*
  * 특수 매치 공유 이미지(4:5). 틀은 업적 공유 이미지와 같고, 가운데는 큰 연출 끝 화면 그대로
- * 제목(34) → 흰 카드 → 문구다. 배치 값은 docs/design.md "특수 매치 공유"와 큰 연출 카드(EC1·EL10·KW1)를 따른다.
+ * 흰 카드 없이 그림 → 제목(26) → 문구다. 빛줄기·후광의 중심은 주인공 얼굴이다.
+ * 배치 값은 docs/design.md "특수 매치 공유"와 큰 연출 그림(SpecialMatchCelebrationScenes)을 따른다.
  */
-const CARD_X = SHARE_EDGE;
-const CARD_WIDTH = SHARE_WIDTH - SHARE_EDGE * 2;
-const CARD_RADIUS = 20;
-const TITLE_SIZE = 34;
-const TITLE_LINE = 37;
-const TITLE_CARD_GAP = 18;
-const CARD_CAPTION_GAP = 16;
+const CONTENT_WIDTH = SHARE_WIDTH - SHARE_EDGE * 2;
+const SCENE_TITLE_GAP = 30;
+const TITLE_SIZE = 26;
+const TITLE_LINE = TITLE_SIZE * 1.5;
+const TITLE_CAPTION_GAP = 6;
 const CAPTION_SIZE = 15;
-const CAPTION_WEIGHT = 700;
-const CAPTION_LINE = 22;
+const CAPTION_LINE = CAPTION_SIZE * 1.45;
+const CAPTION_WEIGHT = 400;
+const CAPTION_HIGHLIGHT_WEIGHT = 800;
 const MIN_CAPTION_SIZE = 12;
 const MIN_CONTENT_TOP = 36;
+// 얼굴과 이름 사이
+const NAME_GAP = 22;
+// 칩·태그 아래 끝이 아바타 아래 끝보다 이만큼 내려온다
+const BADGE_DROP = 12;
+// 칩·태그와 아바타 사이 바탕색 틈
+const BADGE_RING = 3;
+const WHITE_78 = "rgba(255, 255, 255, 0.78)";
+const WHITE_45 = "rgba(255, 255, 255, 0.45)";
 
 const COLOR_VARS = {
   ink: "--color-pk-ink",
   amber: "--color-pk-hl",
   primary: "--color-pk-primary",
-  primarySoft: "--color-pk-primary-soft",
   white: "--color-white",
   sub: "--color-pk-sub",
-  muted: "--color-pk-muted",
   neutral: "--color-pk-neutral",
-  bg: "--color-pk-bg",
   up: "--color-pk-up",
   down: "--color-pk-down",
   upOnDeep: "--color-pk-up-on-deep",
@@ -90,8 +94,13 @@ const drawAvatar = (
   cy: number,
   size: number,
   colors: Colors,
-  gray = false,
-) => drawShareAvatar(ctx, avatars, player, { cx, cy, size, ink: colors.ink, gray });
+  { gray = false, alpha = 1 }: { gray?: boolean; alpha?: number } = {},
+) => {
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  drawShareAvatar(ctx, avatars, player, { cx, cy, size, ink: colors.ink, gray });
+  ctx.restore();
+};
 
 /** #rrggbb 토큰 색에 알파만 입힌다. 그 밖의 표기는 그대로 둔다 */
 const withAlpha = (color: string, alpha: number) => {
@@ -114,7 +123,7 @@ const setShadow = (
   ctx.shadowOffsetY = offsetY * SHARE_SCALE;
 };
 
-/** 아바타 아래 끝에 걸친 태그("N연승"·"연승 끝"). bottom은 태그 아래 끝(아바타 아래 + 12) */
+/** 아바타 아래 끝에 걸친 태그("N연승"·"연승 끝"). bottom은 태그 아래 끝(아바타 아래 + 12), 둘레는 바탕색 틈이다 */
 const drawTag = (
   ctx: CanvasRenderingContext2D,
   {
@@ -140,16 +149,24 @@ const drawTag = (
   ctx.save();
   ctx.font = shareFont(800, size);
   setLetterSpacing(ctx, "0px");
-  const flameSize = size - 1;
+  const flameSize = size;
   const textWidth = ctx.measureText(label).width;
-  const paddingLeft = flame ? 6 : 9;
-  const paddingRight = flame ? 8 : 9;
+  const paddingLeft = flame ? 6 : 8;
+  const paddingRight = 8;
   const contentWidth = (flame ? flameSize + 1 : 0) + textWidth;
   const width = paddingLeft + contentWidth + paddingRight;
-  const height = size * 1.5 + 4;
+  const height = 24;
   const x = cx - width / 2;
   const y = bottom - height;
-  fillRoundRect(ctx, x - 3, y - 3, width + 6, height + 6, (height + 6) / 2, ring);
+  fillRoundRect(
+    ctx,
+    x - BADGE_RING,
+    y - BADGE_RING,
+    width + BADGE_RING * 2,
+    height + BADGE_RING * 2,
+    (height + BADGE_RING * 2) / 2,
+    ring,
+  );
   fillRoundRect(ctx, x, y, width, height, height / 2, background);
   let contentX = x + paddingLeft;
   if (flame) {
@@ -205,234 +222,281 @@ const drawCenteredText = (
   ctx.fillText(fitLine(ctx, text, maxWidth), cx, cy);
 };
 
-// ------------------------------------------------------------------------- 카드 --
+/** 연승 테두리: 아바타 밖 gap 틈(투명)에 width 굵기 앰버 원과 바깥 빛 */
+const drawStreakRing = (
+  ctx: CanvasRenderingContext2D,
+  { cx, cy, size, gap, width, blur }: { cx: number; cy: number; size: number; gap: number; width: number; blur: number },
+  colors: Colors,
+) => {
+  ctx.save();
+  setShadow(ctx, withAlpha(colors.amber, 0.6), blur);
+  ctx.strokeStyle = colors.amber;
+  ctx.lineWidth = width;
+  ctx.beginPath();
+  ctx.arc(cx, cy, size / 2 + gap + width / 2, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.restore();
+};
 
-interface CardLayout {
+/** 이름 한 줄. 넘치면 말줄임한다 */
+const drawName = (
+  ctx: CanvasRenderingContext2D,
+  name: string,
+  { cx, cy, size, maxWidth, color }: { cx: number; cy: number; size: number; maxWidth: number; color: string },
+) => {
+  ctx.save();
+  ctx.font = shareFont(800, size);
+  ctx.fillStyle = color;
+  drawCenteredText(ctx, name, cx, cy, maxWidth);
+  ctx.restore();
+};
+
+// ------------------------------------------------------------------------- 그림 --
+
+interface SceneLayout {
   height: number;
-  /** 카드에 그리는 글자. 폰트 글자 묶음을 미리 받는 데 쓴다 */
+  /** 그림에 그리는 글자. 폰트 글자 묶음을 미리 받는 데 쓴다 */
   texts: string[];
+  /** 빛줄기·후광 중심(주인공 얼굴 가운데). y는 그림 위 끝 기준이다 */
+  hero: { cx: number; cy: number };
   draw: (ctx: CanvasRenderingContext2D, top: number, avatars: Avatars) => void;
 }
 
-/** 라이벌전 승리: 랭킹 이름표 + 앱 랭킹 줄 두 개(순위·아바타 32·아이디·▲▼). 평점은 넣지 않는다 */
-const rivalCard = (
+const RIVAL_WIDTH = 300;
+const RIVAL_COLUMN_GAP = 24;
+const RIVAL_AVATAR = 88;
+const RIVAL_NAME_LINE = 22;
+const CHIP_HEIGHT = 22;
+const CHIP_PADDING_X = 8;
+const CHIP_GAP = 4;
+
+const getChipTexts = ({ rank, change }: SpecialMatchShareRankRow, isWinner: boolean) => [
+  `${rank}위`,
+  `${isWinner ? "▲" : "▼"}${change}`,
+];
+
+/** 얼굴 아래에 걸친 "N위 ▲n" 칩. 이긴 쪽은 흰 바탕, 넘은 쪽은 회색 바탕이다 */
+const drawRankChip = (
+  ctx: CanvasRenderingContext2D,
+  row: SpecialMatchShareRankRow,
+  { cx, bottom, isWinner }: { cx: number; bottom: number; isWinner: boolean },
+  colors: Colors,
+) => {
+  ctx.save();
+  ctx.font = shareFont(800, 12);
+  setLetterSpacing(ctx, "0px");
+  const [rankText, changeText] = getChipTexts(row, isWinner);
+  const hasChange = row.change !== 0;
+  const rankWidth = ctx.measureText(rankText).width;
+  const changeWidth = hasChange ? ctx.measureText(changeText).width : 0;
+  const width = CHIP_PADDING_X * 2 + rankWidth + (hasChange ? CHIP_GAP + changeWidth : 0);
+  const x = cx - width / 2;
+  const y = bottom - CHIP_HEIGHT;
+  fillRoundRect(
+    ctx,
+    x - BADGE_RING,
+    y - BADGE_RING,
+    width + BADGE_RING * 2,
+    CHIP_HEIGHT + BADGE_RING * 2,
+    (CHIP_HEIGHT + BADGE_RING * 2) / 2,
+    colors.ink,
+  );
+  fillRoundRect(ctx, x, y, width, CHIP_HEIGHT, CHIP_HEIGHT / 2, isWinner ? colors.white : colors.neutral);
+  ctx.textAlign = "left";
+  ctx.textBaseline = "middle";
+  ctx.fillStyle = isWinner ? colors.ink : colors.sub;
+  ctx.fillText(rankText, x + CHIP_PADDING_X, y + CHIP_HEIGHT / 2);
+  if (hasChange) {
+    ctx.fillStyle = isWinner ? colors.up : colors.down;
+    ctx.fillText(changeText, x + CHIP_PADDING_X + rankWidth + CHIP_GAP, y + CHIP_HEIGHT / 2);
+  }
+  ctx.restore();
+};
+
+/** 라이벌전 승리: 두 얼굴(88) 나란히. 왼쪽 이긴 사람(흰 칩 "N위 ▲n"), 오른쪽 넘은 사람(흐린 얼굴·회색 칩 "N위 ▼n") */
+const rivalScene = (
   target: Extract<SpecialMatchShareTarget, { kind: "rival" }>,
   colors: Colors,
-): CardLayout => {
-  const paddingTop = 12;
-  const labelHeight = 18 + 4;
-  const rowGap = 4;
-  const rowHeight = 56;
-  const rowX = CARD_X + 10;
-  const rowWidth = CARD_WIDTH - 20;
-  const drawRow = (
-    ctx: CanvasRenderingContext2D,
-    avatars: Avatars,
-    y: number,
-    { player, rank, change }: SpecialMatchShareRankRow,
-    isWinner: boolean,
-  ) => {
-    if (isWinner) {
-      ctx.save();
-      setShadow(ctx, withAlpha(colors.ink, 0.12), 16, 6);
-      fillRoundRect(ctx, rowX, y, rowWidth, rowHeight, 12, colors.primarySoft);
-      ctx.restore();
-    }
-    const cy = y + rowHeight / 2;
-    ctx.font = shareFont(800, 15);
-    ctx.fillStyle = isWinner ? colors.primary : colors.muted;
-    drawCenteredText(ctx, String(rank), rowX + 8 + 13, cy, 26);
-
-    const avatarX = rowX + 8 + 26 + 10;
-    drawAvatar(ctx, avatars, player, avatarX + 16, cy, 32, colors);
-
-    const changeLabel = `${isWinner ? "▲" : "▼"}${change}`;
-    ctx.font = shareFont(800, 13);
-    ctx.fillStyle = isWinner ? colors.up : colors.down;
-    ctx.textAlign = "right";
-    ctx.fillText(changeLabel, rowX + rowWidth - 12, cy);
-    const changeWidth = ctx.measureText(changeLabel).width;
-
-    const nameX = avatarX + 32 + 10;
-    ctx.font = shareFont(700, 15);
-    ctx.fillStyle = colors.ink;
-    ctx.textAlign = "left";
-    ctx.fillText(
-      fitLine(ctx, player.username, rowX + rowWidth - 12 - changeWidth - 10 - nameX),
-      nameX,
-      cy,
-    );
-  };
-  const label = getRankingCategoryLabel(target.category);
+): SceneLayout => {
+  const columnWidth = (RIVAL_WIDTH - RIVAL_COLUMN_GAP) / 2;
+  const winCx = (SHARE_WIDTH - RIVAL_WIDTH) / 2 + columnWidth / 2;
+  const passCx = SHARE_WIDTH - winCx;
+  const avatarCy = RIVAL_AVATAR / 2;
   return {
-    height: paddingTop + labelHeight + rowGap + rowHeight + rowGap + rowHeight + 10,
+    height: RIVAL_AVATAR + NAME_GAP + RIVAL_NAME_LINE,
     texts: [
-      label,
-      ...[target.winner, target.passed].map((row) => `${row.rank}${row.player.username}▲▼${row.change}`),
+      ...getChipTexts(target.winner, true),
+      ...getChipTexts(target.passed, false),
+      target.winner.player.username,
+      target.passed.player.username,
     ],
+    hero: { cx: winCx, cy: avatarCy },
     draw: (ctx, top, avatars) => {
-      ctx.save();
-      ctx.textBaseline = "middle";
-      ctx.font = shareFont(700, 12);
-      ctx.fillStyle = colors.muted;
-      ctx.textAlign = "left";
-      ctx.fillText(label, rowX + 8, top + paddingTop + 9);
-      const firstRowY = top + paddingTop + labelHeight + rowGap;
-      drawRow(ctx, avatars, firstRowY, target.winner, true);
-      drawRow(ctx, avatars, firstRowY + rowHeight + rowGap, target.passed, false);
-      ctx.restore();
+      const avatarBottom = top + RIVAL_AVATAR;
+      const nameCy = avatarBottom + NAME_GAP + RIVAL_NAME_LINE / 2;
+      drawAvatar(ctx, avatars, target.winner.player, winCx, top + avatarCy, RIVAL_AVATAR, colors);
+      drawRankChip(ctx, target.winner, { cx: winCx, bottom: avatarBottom + BADGE_DROP, isWinner: true }, colors);
+      drawName(ctx, target.winner.player.username, {
+        cx: winCx,
+        cy: nameCy,
+        size: 17,
+        maxWidth: columnWidth,
+        color: colors.white,
+      });
+
+      drawAvatar(ctx, avatars, target.passed.player, passCx, top + avatarCy, RIVAL_AVATAR, colors, { alpha: 0.55 });
+      drawRankChip(ctx, target.passed, { cx: passCx, bottom: avatarBottom + BADGE_DROP, isWinner: false }, colors);
+      drawName(ctx, target.passed.player.username, {
+        cx: passCx,
+        cy: nameCy,
+        size: 17,
+        maxWidth: columnWidth,
+        color: WHITE_78,
+      });
     },
   };
 };
 
-/** 연승 저지: 회색 얼굴(112) + 손바닥 도장(72) + "연승 끝" 태그 + 아이디 22 */
-const streakBreakCard = (
+const STOPPER_AVATAR = 112;
+const STOPPER_STAMP = 72;
+const STOPPER_NAME_LINE = 26;
+
+/** 연승 저지: 회색 얼굴(112) + 손바닥 도장(72) + "연승 끝" 태그 + 이름 22 */
+const streakBreakScene = (
   target: Extract<SpecialMatchShareTarget, { kind: "streak-break" }>,
   colors: Colors,
-): CardLayout => {
-  const paddingTop = 30;
-  const avatarSize = 112;
-  const nameGap = 22;
-  const nameLine = 26;
-  const stampSize = 72;
+): SceneLayout => {
+  const cx = SHARE_WIDTH / 2;
   return {
-    height: paddingTop + avatarSize + nameGap + nameLine + 24,
+    height: STOPPER_AVATAR + NAME_GAP + STOPPER_NAME_LINE,
     texts: [STREAK_END_LABEL, target.loser.username],
+    hero: { cx, cy: STOPPER_AVATAR / 2 },
     draw: (ctx, top, avatars) => {
-      ctx.save();
-      const cx = SHARE_WIDTH / 2;
-      const avatarTop = top + paddingTop;
-      const avatarBottom = avatarTop + avatarSize;
-      drawAvatar(ctx, avatars, target.loser, cx, avatarTop + avatarSize / 2, avatarSize, colors, true);
+      const avatarBottom = top + STOPPER_AVATAR;
+      drawAvatar(ctx, avatars, target.loser, cx, top + STOPPER_AVATAR / 2, STOPPER_AVATAR, colors, { gray: true });
       drawTag(ctx, {
         cx,
-        bottom: avatarBottom + 12,
+        bottom: avatarBottom + BADGE_DROP,
         label: STREAK_END_LABEL,
         size: 13,
         background: colors.neutral,
         color: colors.sub,
-        ring: colors.white,
+        ring: colors.ink,
       });
       // 아바타 오른쪽 끝에서 26 밖, 아래 끝에서 18 위에 도장 끝이 오도록
       drawStamp(
         ctx,
         {
-          cx: cx + avatarSize / 2 + 26 - stampSize / 2,
-          cy: avatarBottom - 18 - stampSize / 2,
-          size: stampSize,
+          cx: cx + STOPPER_AVATAR / 2 + 26 - STOPPER_STAMP / 2,
+          cy: avatarBottom - 18 - STOPPER_STAMP / 2,
+          size: STOPPER_STAMP,
           iconSize: 38,
           ring: 4,
         },
         colors,
       );
-      ctx.font = shareFont(800, 22);
-      ctx.fillStyle = colors.ink;
-      drawCenteredText(ctx, target.loser.username, cx, avatarBottom + nameGap + nameLine / 2, CARD_WIDTH - 28);
-      ctx.restore();
+      drawName(ctx, target.loser.username, {
+        cx,
+        cy: avatarBottom + NAME_GAP + STOPPER_NAME_LINE / 2,
+        size: 22,
+        maxWidth: CONTENT_WIDTH,
+        color: colors.white,
+      });
     },
   };
 };
 
-/** 최강자전 승리: 두 프로필(80)과 VS. 이긴 쪽 앰버 테두리 + "N연승", 진 쪽 회색·도장(46)·"연승 끝" */
-const kingWinCard = (
+const KING_WIDTH = 310;
+const KING_COLUMN_GAP = 12;
+const KING_AVATAR = 96;
+const KING_STAMP = 54;
+const KING_NAME_LINE = 22;
+// "VS"(15 굵게, 자간 0.5)의 대략 너비. 두 칸 폭 계산에만 쓴다
+const VS_WIDTH = 22;
+
+/** 최강자전 승리: 같은 크기 두 얼굴(96)과 가운데 "VS" 글자. 이긴 쪽 앰버 테두리 + "N연승", 진 쪽 회색·도장(54)·"연승 끝" */
+const kingWinScene = (
   target: Extract<SpecialMatchShareTarget, { kind: "king-win" }>,
   colors: Colors,
-): CardLayout => {
-  const paddingTop = 30;
-  const paddingX = 12;
-  const avatarSize = 80;
-  const nameGap = 20;
-  const nameLine = 25.5;
-  const vsSize = 32;
-  const columnGap = 6;
-  const columnWidth = (CARD_WIDTH - paddingX * 2 - vsSize - columnGap * 2) / 2;
-  const stampSize = 46;
+): SceneLayout => {
+  const columnWidth = (KING_WIDTH - VS_WIDTH - KING_COLUMN_GAP * 2) / 2;
+  const winCx = (SHARE_WIDTH - KING_WIDTH) / 2 + columnWidth / 2;
+  const loseCx = SHARE_WIDTH - winCx;
+  const avatarCy = KING_AVATAR / 2;
   const winnerLabel = `${target.winnerStreak}연승`;
   return {
-    height: Math.round(paddingTop + avatarSize + nameGap + nameLine + 22),
+    height: KING_AVATAR + NAME_GAP + KING_NAME_LINE,
     texts: [winnerLabel, STREAK_END_LABEL, VS_LABEL, target.winner.username, target.loser.username],
+    hero: { cx: winCx, cy: avatarCy },
     draw: (ctx, top, avatars) => {
-      ctx.save();
-      const columnTop = top + paddingTop;
-      const avatarCy = columnTop + avatarSize / 2;
-      const avatarBottom = avatarCy + avatarSize / 2;
-      const nameCy = avatarBottom + nameGap + nameLine / 2;
-      const winCx = CARD_X + paddingX + columnWidth / 2;
-      const loseCx = SHARE_WIDTH - CARD_X - paddingX - columnWidth / 2;
+      const cy = top + avatarCy;
+      const avatarBottom = top + KING_AVATAR;
+      const nameCy = avatarBottom + NAME_GAP + KING_NAME_LINE / 2;
 
-      // 이긴 쪽: 아바타 밖 7px에 3.5px 앰버 테두리와 빛
-      drawAvatar(ctx, avatars, target.winner, winCx, avatarCy, avatarSize, colors);
-      ctx.save();
-      setShadow(ctx, withAlpha(colors.amber, 0.6), 16);
-      ctx.strokeStyle = colors.amber;
-      ctx.lineWidth = 3.5;
-      ctx.beginPath();
-      ctx.arc(winCx, avatarCy, avatarSize / 2 + 7 - 1.75, 0, Math.PI * 2);
-      ctx.stroke();
-      ctx.restore();
+      drawStreakRing(ctx, { cx: winCx, cy, size: KING_AVATAR, gap: 3.5, width: 3.5, blur: 18 }, colors);
+      drawAvatar(ctx, avatars, target.winner, winCx, cy, KING_AVATAR, colors);
       drawTag(ctx, {
         cx: winCx,
-        bottom: avatarBottom + 12,
+        bottom: avatarBottom + BADGE_DROP,
         label: winnerLabel,
-        size: 12,
+        size: 13,
         background: colors.amber,
         color: colors.ink,
-        ring: colors.white,
+        ring: colors.ink,
         flame: true,
       });
 
-      drawAvatar(ctx, avatars, target.loser, loseCx, avatarCy, avatarSize, colors, true);
+      drawAvatar(ctx, avatars, target.loser, loseCx, cy, KING_AVATAR, colors, { gray: true });
       drawTag(ctx, {
         cx: loseCx,
-        bottom: avatarBottom + 12,
+        bottom: avatarBottom + BADGE_DROP,
         label: STREAK_END_LABEL,
-        size: 12,
+        size: 13,
         background: colors.neutral,
         color: colors.sub,
-        ring: colors.white,
+        ring: colors.ink,
       });
-      // 아바타 오른쪽 끝에서 18 밖, 위 끝에서 10 아래에 도장 끝이 오도록
+      // 아바타 오른쪽 끝에서 22 밖, 아래 끝에서 14 위에 도장 끝이 오도록
       drawStamp(
         ctx,
         {
-          cx: loseCx + avatarSize / 2 + 18 - stampSize / 2,
-          cy: columnTop + 10 + stampSize / 2,
-          size: stampSize,
-          iconSize: 24,
+          cx: loseCx + KING_AVATAR / 2 + 22 - KING_STAMP / 2,
+          cy: avatarBottom - 14 - KING_STAMP / 2,
+          size: KING_STAMP,
+          iconSize: 28,
           ring: 3,
         },
         colors,
       );
 
-      // VS: 프로필 묶음(아바타 + 이름) 세로 가운데에서 아래 여백 36만큼 올린 자리
-      const columnHeight = avatarSize + nameGap + nameLine;
-      const vsCy = columnTop + (columnHeight - vsSize - 36) / 2 + vsSize / 2;
-      fillCircle(ctx, SHARE_WIDTH / 2, vsCy, vsSize / 2, colors.bg);
-      ctx.font = shareFont(800, 12);
-      ctx.fillStyle = colors.muted;
-      drawCenteredText(ctx, VS_LABEL, SHARE_WIDTH / 2, vsCy, vsSize);
-
-      ctx.font = shareFont(800, 17);
-      ctx.fillStyle = colors.ink;
-      drawCenteredText(ctx, target.winner.username, winCx, nameCy, columnWidth);
-      drawCenteredText(ctx, target.loser.username, loseCx, nameCy, columnWidth);
+      ctx.save();
+      ctx.font = shareFont(800, 15);
+      setLetterSpacing(ctx, "0.5px");
+      ctx.fillStyle = WHITE_45;
+      drawCenteredText(ctx, VS_LABEL, SHARE_WIDTH / 2, cy, VS_WIDTH * 2);
       ctx.restore();
+
+      drawName(ctx, target.winner.username, { cx: winCx, cy: nameCy, size: 18, maxWidth: columnWidth, color: colors.white });
+      drawName(ctx, target.loser.username, { cx: loseCx, cy: nameCy, size: 18, maxWidth: columnWidth, color: WHITE_78 });
     },
   };
 };
 
-const getCardLayout = (target: SpecialMatchShareTarget, colors: Colors) => {
+const getSceneLayout = (target: SpecialMatchShareTarget, colors: Colors) => {
   switch (target.kind) {
     case "rival":
-      return rivalCard(target, colors);
+      return rivalScene(target, colors);
     case "streak-break":
-      return streakBreakCard(target, colors);
+      return streakBreakScene(target, colors);
     case "king-win":
-      return kingWinCard(target, colors);
+      return kingWinScene(target, colors);
   }
 };
 
-/** 문구: 15 굵게(700) 흰 글자, 강조 조각만 색(굵기는 같다). 한 줄에 안 들어가면 12까지 글자를 줄이고, 그래도 넘치면 아이디를 말줄임한다 */
+/**
+ * 문구: 15 보통 굵기 흰 78% 글자, 강조 조각만 굵게(800) 색을 입힌다.
+ * 한 줄에 안 들어가면 12까지 글자를 줄이고, 그래도 넘치면 아이디를 말줄임한다
+ */
 const drawCaption = (
   ctx: CanvasRenderingContext2D,
   parts: SpecialMatchCaptionPart[],
@@ -445,29 +509,31 @@ const drawCaption = (
   ctx.textBaseline = "middle";
   const sum = (values: number[]) => values.reduce((total, value) => total + value, 0);
   const texts = parts.map((part) => part.text);
+  const fontOf = (part: SpecialMatchCaptionPart, size: number) =>
+    shareFont(part.highlight ? CAPTION_HIGHLIGHT_WEIGHT : CAPTION_WEIGHT, size);
   const measure = (size: number) =>
-    texts.map((text) => {
-      ctx.font = shareFont(CAPTION_WEIGHT, size);
+    texts.map((text, index) => {
+      ctx.font = fontOf(parts[index], size);
       return ctx.measureText(text).width;
     });
   let size = CAPTION_SIZE;
   let widths = measure(size);
-  while (size > MIN_CAPTION_SIZE && sum(widths) > CARD_WIDTH) {
+  while (size > MIN_CAPTION_SIZE && sum(widths) > CONTENT_WIDTH) {
     size -= 1;
     widths = measure(size);
   }
-  const overflow = sum(widths) - CARD_WIDTH;
+  const overflow = sum(widths) - CONTENT_WIDTH;
   const fitIndex = parts.findIndex((part) => part.fit);
   if (overflow > 0 && fitIndex >= 0) {
-    ctx.font = shareFont(CAPTION_WEIGHT, size);
+    ctx.font = fontOf(parts[fitIndex], size);
     texts[fitIndex] = fitLine(ctx, texts[fitIndex], widths[fitIndex] - overflow);
     widths[fitIndex] = ctx.measureText(texts[fitIndex]).width;
   }
   let x = (SHARE_WIDTH - sum(widths)) / 2;
   parts.forEach((part, index) => {
-    ctx.font = shareFont(CAPTION_WEIGHT, size);
+    ctx.font = fontOf(part, size);
     ctx.fillStyle =
-      part.highlight === "up" ? colors.upOnDeep : part.highlight === "amber" ? colors.amber : colors.white;
+      part.highlight === "up" ? colors.upOnDeep : part.highlight === "amber" ? colors.amber : WHITE_78;
     ctx.fillText(texts[index], x, cy);
     x += widths[index];
   });
@@ -479,42 +545,40 @@ export const createSpecialMatchShareImage = async (target: SpecialMatchShareTarg
   const title = getSpecialMatchShareTitle(target.kind);
   const captionParts = getSpecialMatchCaptionParts(target);
   const dateLabel = getSpecialMatchShareDateLabel(target.playedAt, target.sessionName);
-  const card = getCardLayout(target, colors);
+  const scene = getSceneLayout(target, colors);
   const [avatars] = await Promise.all([
     loadShareAvatars(getPlayers(target)),
     loadShareFonts(
-      [title, ...captionParts.map((part) => part.text), ...card.texts, target.username, dateLabel],
-      [400, 700, 800],
+      [title, ...captionParts.map((part) => part.text), ...scene.texts, target.username, dateLabel],
+      [400, 800],
     ),
   ]);
 
   const { canvas, ctx } = createShareCanvas(colors.ink);
-  const blockHeight = TITLE_LINE + TITLE_CARD_GAP + card.height + CARD_CAPTION_GAP + CAPTION_LINE;
+  const blockHeight = scene.height + SCENE_TITLE_GAP + TITLE_LINE + TITLE_CAPTION_GAP + CAPTION_LINE;
   // 묶음은 아래 줄 위 공간에서 세로 가운데에 둔다
-  const titleTop = Math.max(
+  const sceneTop = Math.max(
     MIN_CONTENT_TOP,
     Math.round(SHARE_EDGE + (SHARE_CONTENT_BOTTOM - SHARE_EDGE - blockHeight) / 2),
   );
-  const cardTop = titleTop + TITLE_LINE + TITLE_CARD_GAP;
-  const cardCy = cardTop + card.height / 2;
+  const titleTop = sceneTop + scene.height + SCENE_TITLE_GAP;
 
-  drawRays(ctx, SHARE_WIDTH / 2, cardCy, colors.amber);
-  drawGlow(ctx, SHARE_WIDTH / 2, cardCy, colors.amber);
+  drawRays(ctx, scene.hero.cx, sceneTop + scene.hero.cy, colors.amber);
+  drawGlow(ctx, scene.hero.cx, sceneTop + scene.hero.cy, colors.amber);
+
+  scene.draw(ctx, sceneTop, avatars);
 
   ctx.save();
   ctx.font = shareFont(800, TITLE_SIZE);
-  setLetterSpacing(ctx, "-0.68px");
+  setLetterSpacing(ctx, "-0.52px");
   ctx.fillStyle = colors.white;
-  drawCenteredText(ctx, title, SHARE_WIDTH / 2, titleTop + TITLE_LINE / 2, CARD_WIDTH);
+  drawCenteredText(ctx, title, SHARE_WIDTH / 2, titleTop + TITLE_LINE / 2, CONTENT_WIDTH);
   ctx.restore();
-
-  fillRoundRect(ctx, CARD_X, cardTop, CARD_WIDTH, card.height, CARD_RADIUS, colors.white);
-  card.draw(ctx, cardTop, avatars);
 
   drawCaption(
     ctx,
     captionParts,
-    cardTop + card.height + CARD_CAPTION_GAP + CAPTION_LINE / 2,
+    titleTop + TITLE_LINE + TITLE_CAPTION_GAP + CAPTION_LINE / 2,
     colors,
   );
 

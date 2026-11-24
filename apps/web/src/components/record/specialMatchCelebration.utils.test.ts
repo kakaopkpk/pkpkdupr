@@ -3,7 +3,7 @@ import type { SpecialMatchCelebration } from "@pkpkdupr/shared/specialMatch";
 import type { MatchInfo } from "@/types/match";
 import {
   RIVAL_STEP_MS,
-  RIVAL_SWAP_MS,
+  RIVAL_PASS_MS,
   SCENE_START_MS,
   getRivalCountSteps,
   getSceneBeatTimes,
@@ -36,21 +36,21 @@ describe("getRivalCountSteps", () => {
     expect(getRivalCountSteps(rival(7, 3))).toBe(3);
   });
 
-  it("이미 1 차이면 오르지 않고 바로 자리를 바꾼다", () => {
+  it("이미 1 차이면 오르지 않고 바로 넘어선다", () => {
     expect(getRivalCountSteps(rival(4, 3))).toBe(0);
     expect(getSceneBeatTimes(rival(4, 3))).toEqual([SCENE_START_MS]);
   });
 });
 
 describe("getSceneBeatTimes·getSceneEndMs", () => {
-  it("라이벌전 승리는 오르는 박자들 뒤 자리 바꿈 한 번이고 자리를 다 바꾸면 끝난다", () => {
+  it("라이벌전 승리는 오르는 박자들 뒤 넘어서기 한 번이고 지키던 쪽 얼굴이 다 흐려지면 끝난다", () => {
     const celebration = rival(6, 3);
     expect(getSceneBeatTimes(celebration)).toEqual([
       SCENE_START_MS,
       SCENE_START_MS + RIVAL_STEP_MS,
       SCENE_START_MS + RIVAL_STEP_MS * 2,
     ]);
-    expect(getSceneEndMs(celebration)).toBe(SCENE_START_MS + RIVAL_STEP_MS * 2 + RIVAL_SWAP_MS);
+    expect(getSceneEndMs(celebration)).toBe(SCENE_START_MS + RIVAL_STEP_MS * 2 + RIVAL_PASS_MS);
   });
 
   it("최강자전은 연승 저지 박자 뒤에 이긴 쪽 타오름이 한 번 더 있다", () => {
@@ -91,7 +91,7 @@ describe("isViewerOnWinningTeam", () => {
 });
 
 describe("toSpecialMatchShareTarget", () => {
-  it("라이벌전 승리는 공격 쪽이 위 줄(▲), 지키던 쪽이 넘어선 회원(▼)이다", () => {
+  it("라이벌전 승리는 공격 쪽이 이긴 회원(▲), 지키던 쪽이 넘어선 회원(▼)이다", () => {
     expect(toSpecialMatchShareTarget(rival(5, 3), match, "me")).toEqual({
       matchId: "m1",
       username: "me",
