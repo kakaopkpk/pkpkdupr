@@ -305,7 +305,7 @@ const ACHIEVEMENT_TABLE: readonly {
     definition: {
       id: "streak-breaker-10",
       category: "streak",
-      name: "연승 저지 10회",
+      name: "수문장",
       condition: "연승 저지 10번",
       badgeNumber: "10",
       target: 10,
@@ -437,7 +437,7 @@ const ACHIEVEMENT_TABLE: readonly {
     definition: {
       id: "partner-50",
       category: "special",
-      name: "단짝 50경기",
+      name: "찰떡궁합",
       condition: "같은 파트너와 복식 50경기",
       badgeNumber: "50",
       target: 50,
@@ -545,7 +545,7 @@ const ACHIEVEMENT_TABLE: readonly {
     definition: {
       id: "revenge-10",
       category: "special",
-      name: "리벤지 10회",
+      name: "뒤끝 작렬",
       condition: "리벤지 10번",
       badgeNumber: "10",
       target: 10,
@@ -641,10 +641,34 @@ const ACHIEVEMENT_TABLE: readonly {
     definition: {
       id: "dominator-10",
       category: "session",
-      name: "세션 지배자 10회",
+      name: "세션 왕",
       condition: "세션 지배자 10번",
       badgeNumber: "10",
       target: 10,
+      points: 50,
+    },
+  },
+  {
+    metric: "dominatedSessions",
+    definition: {
+      id: "dominator-25",
+      category: "session",
+      name: "세션 황제",
+      condition: "세션 지배자 25번",
+      badgeNumber: "25",
+      target: 25,
+      points: 100,
+    },
+  },
+  {
+    metric: "dominatedSessions",
+    definition: {
+      id: "dominator-50",
+      category: "session",
+      name: "세션 절대 군주",
+      condition: "세션 지배자 50번",
+      badgeNumber: "50",
+      target: 50,
       points: 100,
     },
   },

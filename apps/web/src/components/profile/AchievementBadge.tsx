@@ -272,6 +272,8 @@ const BADGE_ICON_BY_ID: Partial<Record<string, BadgeIconKind>> = {
   "unbeaten-session": "star",
   "dominator-1": "crown",
   "dominator-10": "crown",
+  "dominator-25": "crown",
+  "dominator-50": "crown",
   "praised-1": "thumbUp",
   "praised-10": "thumbUp",
   "rating-3.0": "sunrise",
