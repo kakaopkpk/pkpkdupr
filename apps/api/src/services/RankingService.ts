@@ -9,6 +9,7 @@ import {
   type AchievementMatch,
   type EarnedAchievement,
   type EndedSessions,
+  type PlacedSession,
   type PraisedSession,
 } from "@pkpkdupr/shared/achievements";
 import {
@@ -73,6 +74,8 @@ export interface RankingMatch {
   ratingExcluded?: boolean;
   /** 정기 세션 경기인지(개근상 업적) */
   regularSession?: boolean;
+  /** 대회 세션 경기인지(출사표 업적) */
+  tournamentSession?: boolean;
 }
 
 export interface RankingSession {
@@ -92,6 +95,8 @@ export interface RankingSession {
   participantIds: string[];
   /** 이 세션에 보낸 칭찬(칭찬 후보 칭찬 수·칭찬 업적). 없으면 칭찬이 없는 것으로 본다 */
   praises?: readonly SessionPraiseRecord[];
+  /** 대회 최종 순위에 든 선수(순위 업적). 대회 세션만 쓰고, 없으면 순위가 없는 것으로 본다 */
+  placements?: readonly { playerId: string; place: number }[];
 }
 
 export type RankingSourcePlayer = Pick<
@@ -687,8 +692,55 @@ export const findEndedSessions = (
     endedSessions.set(session.id, topRiser?.player.id ?? null);
   }
   return Object.assign(endedSessions, {
-    praisedSessionsByPlayerId: findPraisedSessions(context, sessions),
+    praisedSessionsByPlayerId: findPraisedSessions(matchesBySession, sessions),
+    placedSessionsByPlayerId: findPlacedSessions(matchesBySession, sessions),
   });
+};
+
+/** 그 세션에서 그 회원의 마지막 완료 경기(게스트가 낀 경기 포함). 없으면 undefined */
+const findLastSessionMatch = (
+  sessionMatches: readonly RankingMatch[],
+  playerId: string,
+) =>
+  sessionMatches
+    .filter((match) =>
+      match.teamPlayerIds.some((team) => team.includes(playerId)),
+    )
+    .sort(
+      (left, right) =>
+        right.completedAt.getTime() - left.completedAt.getTime() ||
+        compareText(right.id, left.id),
+    )[0];
+
+/**
+ * 순위 업적 입력: 회원별 대회 최종 순위에 든 대회. 지금 대회 세션인 세션의 순위만 센다(종류가 바뀌어 남은 행은 뺀다).
+ * 받은 경기는 그 대회에서 그 회원의 마지막 완료 경기이고, 경기가 없으면 세지 않는다.
+ */
+const findPlacedSessions = (
+  matchesBySession: ReadonlyMap<string, RankingMatch[]>,
+  sessions: RankingSession[],
+): Map<string, PlacedSession[]> => {
+  const result = new Map<string, PlacedSession[]>();
+  const placedTournaments = sessions.filter(
+    (session) => session.kind === "tournament" && session.placements?.length,
+  );
+  if (placedTournaments.length === 0) return result;
+  for (const session of placedTournaments) {
+    const sessionMatches = matchesBySession.get(session.id) ?? [];
+    for (const { playerId, place } of session.placements ?? []) {
+      const lastMatch = findLastSessionMatch(sessionMatches, playerId);
+      if (!lastMatch) continue;
+      const items = result.get(playerId) ?? [];
+      items.push({
+        sessionId: session.id,
+        place,
+        matchId: lastMatch.id,
+        completedAt: lastMatch.completedAt,
+      });
+      result.set(playerId, items);
+    }
+  }
+  return result;
 };
 
 /**
@@ -696,24 +748,18 @@ export const findEndedSessions = (
  * 받은 경기는 그 세션에서 그 회원의 마지막 완료 경기(게스트가 낀 경기 포함)이고, 경기가 없으면 세지 않는다.
  */
 const findPraisedSessions = (
-  context: RankingContext,
+  matchesBySession: ReadonlyMap<string, RankingMatch[]>,
   sessions: RankingSession[],
 ): Map<string, PraisedSession[]> => {
   const praises = sessions.flatMap((session) => session.praises ?? []);
   const result = new Map<string, PraisedSession[]>();
   if (praises.length === 0) return result;
-  const matchesBySession = groupMatchesBySession(context.matches);
   for (const [playerId, reached] of findPraiseReachedSessions(praises)) {
     const items = reached.flatMap(({ sessionId, reachedAt }) => {
-      const lastMatch = (matchesBySession.get(sessionId) ?? [])
-        .filter((match) =>
-          match.teamPlayerIds.some((team) => team.includes(playerId)),
-        )
-        .sort(
-          (left, right) =>
-            right.completedAt.getTime() - left.completedAt.getTime() ||
-            compareText(right.id, left.id),
-        )[0];
+      const lastMatch = findLastSessionMatch(
+        matchesBySession.get(sessionId) ?? [],
+        playerId,
+      );
       return lastMatch ? [{ sessionId, matchId: lastMatch.id, reachedAt }] : [];
     });
     if (items.length > 0) result.set(playerId, items);
@@ -834,7 +880,11 @@ export const toAchievementMatch = (
   ],
   scores: match.scores,
   session: match.sessionId
-    ? { id: match.sessionId, regular: match.regularSession === true }
+    ? {
+        id: match.sessionId,
+        regular: match.regularSession === true,
+        tournament: match.tournamentSession === true,
+      }
     : null,
   ratingExcluded: match.ratingExcluded ?? false,
   doublesRatingAfter,

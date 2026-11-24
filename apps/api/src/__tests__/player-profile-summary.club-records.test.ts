@@ -8,6 +8,7 @@ import { buildPlayerProfileSummary } from "../services/PlayerProfileSummaryServi
 vi.mock("@pkpkdupr/shared/achievementCountStart", () => ({
   ACHIEVEMENT_COUNT_START: new Date(0),
   SECOND_ACHIEVEMENT_SET_COUNT_START: new Date(0),
+  TOURNAMENT_ACHIEVEMENT_COUNT_START: new Date(0),
 }));
 
 const now = new Date("2026-11-12T12:00:00.000Z");

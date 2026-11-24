@@ -52,7 +52,10 @@ type BadgeIconKind =
   | "handshake"
   | "rosette"
   | "shark"
-  | "thumbUp";
+  | "thumbUp"
+  | "flag"
+  | "podium"
+  | "laurel";
 
 /** 24 viewBox 선 아이콘. 글자는 아이콘 색(currentColor)으로 채운다 */
 const BADGE_ICON_PATHS: Record<BadgeIconKind, React.ReactNode> = {
@@ -247,6 +250,31 @@ const BADGE_ICON_PATHS: Record<BadgeIconKind, React.ReactNode> = {
       ))}
     </>
   ),
+  // 깃대에 꽂은 깃발(대회 출사표)
+  flag: (
+    <>
+      <path d="M6 21V3.5" />
+      <path d="M6 4.5c2.3-1.4 4.6-1.4 6.5 0s4.2 1.4 6.5 0v8.5c-2.3 1.4-4.6 1.4-6.5 0s-4.2-1.4-6.5 0" />
+    </>
+  ),
+  // 가운데가 가장 높은 3단 시상대
+  podium: (
+    <>
+      <path d="M3 20.5V13h6V8.5h6V15h6v5.5z" />
+      <path d="M9 13v7.5M15 15v5.5" />
+    </>
+  ),
+  // 숫자 1을 품은 월계관(대회 우승). 잎은 가는 선으로 그려 작은 배지에서 뭉치지 않게 한다
+  laurel: (
+    <>
+      <path d="M10 20.5C5.5 19 3.3 14.8 4.3 9.5M14 20.5c4.5-1.5 6.7-5.7 5.7-11" />
+      <path
+        d="M4.3 9.5C3.2 8 3.4 6.3 4.8 5c.9 1.6.8 3.2-.5 4.5zM4.8 14C3 13.6 2 12.2 2.1 10.6c1.7.4 2.7 1.8 2.7 3.4zM7.6 18.1c-1.7.5-3.3-.1-4.2-1.5 1.7-.5 3.3.1 4.2 1.5zM19.7 9.5c1.1-1.5.9-3.2-.5-4.5-.9 1.6-.8 3.2.5 4.5zM19.2 14c1.8-.4 2.8-1.8 2.7-3.4-1.7.4-2.7 1.8-2.7 3.4zM16.4 18.1c1.7.5 3.3-.1 4.2-1.5-1.7-.5-3.3.1-4.2 1.5z"
+        strokeWidth={1.6}
+      />
+      <path d="M10.6 9.4l1.9-1.3V16" />
+    </>
+  ),
 };
 
 /** 특별·세션·평점 분류와 연승 저지는 업적마다 아이콘이 다르다 */
@@ -282,6 +310,8 @@ const BADGE_ICON_BY_ID: Partial<Record<string, BadgeIconKind>> = {
   "rating-4.5": "rocket",
   "rating-low-2.5": "submarine",
   "rating-low-2.0": "trench",
+  "tournament-entry": "flag",
+  "tournament-podium": "podium",
 };
 
 const BADGE_ICON_BY_CATEGORY: Record<
@@ -294,6 +324,7 @@ const BADGE_ICON_BY_CATEGORY: Record<
   rating: "sunrise",
   special: "shield",
   session: "calendar",
+  tournament: "laurel",
 };
 
 const getBadgeIconKind = (achievement: AchievementDefinition): BadgeIconKind =>

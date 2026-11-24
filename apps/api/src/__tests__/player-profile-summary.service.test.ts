@@ -11,6 +11,7 @@ vi.mock("@pkpkdupr/shared/achievementCountStart", () => ({
   ACHIEVEMENT_COUNT_START: new Date(0),
   // 언더독·연승 저지 등 새 업적 지표는 이 파일에서 검증하지 않으므로 세지 않는다.
   SECOND_ACHIEVEMENT_SET_COUNT_START: new Date("2100-01-01T00:00:00.000Z"),
+  TOURNAMENT_ACHIEVEMENT_COUNT_START: new Date("2100-01-01T00:00:00.000Z"),
 }));
 
 const now = new Date("2026-11-12T12:00:00.000Z");
@@ -180,7 +181,7 @@ describe("buildPlayerProfileSummary", () => {
     ]);
   });
 
-  it("업적 52개 진행 상태를 정의 순서로 넣고 진행 중 경기는 세지 않는다", () => {
+  it("업적 56개 진행 상태를 정의 순서로 넣고 진행 중 경기는 세지 않는다", () => {
     const completed = makeMatch({ id: "Mcomplet" });
     const inProgress = makeMatch({
       id: "Minprogr",
@@ -197,7 +198,7 @@ describe("buildPlayerProfileSummary", () => {
       now,
     );
 
-    expect(achievements).toHaveLength(52);
+    expect(achievements).toHaveLength(56);
     expect(achievements[0]).toEqual({
       id: "matches-1",
       earned: true,

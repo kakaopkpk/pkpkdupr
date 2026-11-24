@@ -8,6 +8,7 @@ import {
 import {
   ACHIEVEMENT_COUNT_START,
   SECOND_ACHIEVEMENT_SET_COUNT_START,
+  TOURNAMENT_ACHIEVEMENT_COUNT_START,
 } from "./achievementCountStart.js";
 import { DUPR_DEFAULT_RATING, roundDuprRating } from "./player.js";
 import { toKstDateKey } from "./session.js";
@@ -23,7 +24,8 @@ export type AchievementCategory =
   | "streak"
   | "rating"
   | "special"
-  | "session";
+  | "session"
+  | "tournament";
 
 export interface AchievementDefinition {
   id: string;
@@ -65,7 +67,10 @@ type AchievementMetric =
   | "streakBreaks"
   | "welcomes"
   | "bestRegularSessionStreak"
-  | "bestOpponentWins";
+  | "bestOpponentWins"
+  | "tournamentSessions"
+  | "podiumPlacements"
+  | "championships";
 
 /** 업적 정의와 진행도 지표를 한 행에 함께 둔 표(표 순서) */
 const ACHIEVEMENT_TABLE: readonly {
@@ -696,6 +701,54 @@ const ACHIEVEMENT_TABLE: readonly {
       points: 100,
     },
   },
+  {
+    metric: "tournamentSessions",
+    definition: {
+      id: "tournament-entry",
+      category: "tournament",
+      name: "출사표",
+      condition: "대회 참가",
+      badgeNumber: null,
+      target: 1,
+      points: 10,
+    },
+  },
+  {
+    metric: "podiumPlacements",
+    definition: {
+      id: "tournament-podium",
+      category: "tournament",
+      name: "포디움",
+      condition: "대회 3위 이내 입상",
+      badgeNumber: null,
+      target: 1,
+      points: 25,
+    },
+  },
+  {
+    metric: "championships",
+    definition: {
+      id: "tournament-champion-1",
+      category: "tournament",
+      name: "우승",
+      condition: "대회 1위",
+      badgeNumber: null,
+      target: 1,
+      points: 50,
+    },
+  },
+  {
+    metric: "championships",
+    definition: {
+      id: "tournament-champion-3",
+      category: "tournament",
+      name: "3관왕",
+      condition: "대회 우승 3번",
+      badgeNumber: "3",
+      target: 3,
+      points: 100,
+    },
+  },
 ];
 
 export const ACHIEVEMENTS: readonly AchievementDefinition[] =
@@ -782,6 +835,10 @@ const METRIC_COUNT_START: Record<AchievementMetric, Date | null> = {
   welcomes: SECOND_ACHIEVEMENT_SET_COUNT_START,
   bestRegularSessionStreak: SECOND_ACHIEVEMENT_SET_COUNT_START,
   bestOpponentWins: SECOND_ACHIEVEMENT_SET_COUNT_START,
+  tournamentSessions: TOURNAMENT_ACHIEVEMENT_COUNT_START,
+  // 순위 지표는 받은 경기(그 대회에서 이 회원의 마지막 완료 경기) 완료 시각으로 시작 시각을 본다
+  podiumPlacements: TOURNAMENT_ACHIEVEMENT_COUNT_START,
+  championships: TOURNAMENT_ACHIEVEMENT_COUNT_START,
 };
 
 const BEST_STREAK_METRICS: ReadonlySet<AchievementMetric> = new Set([
@@ -814,6 +871,7 @@ export const ACHIEVEMENT_CATEGORY_LABEL: Record<AchievementCategory, string> = {
   rating: "평점",
   special: "특별",
   session: "세션",
+  tournament: "대회",
 };
 
 /** 듀스 승부사에서 두 팀 모두 넘어야 하는 점수 */
@@ -880,8 +938,8 @@ export interface AchievementMatch {
   completedAt: Date | null;
   teams: readonly [AchievementTeam, AchievementTeam];
   scores?: readonly MatchScore[] | null;
-  /** regular: 정기 세션 경기인지(개근상) */
-  session?: { id: string; regular?: boolean } | null;
+  /** regular: 정기 세션 경기인지(개근상), tournament: 대회 세션 경기인지(출사표) */
+  session?: { id: string; regular?: boolean; tournament?: boolean } | null;
   /**
    * 게스트가 낀 경기(Match.ratingExcluded). 업적에는 세고, 평점 값에 묶인 것(평점 업적의 복식 경기 수·
    * 평점 진행도, 언더독)에만 넣지 않는다
@@ -1145,6 +1203,12 @@ export type EndedSessions = ReadonlyMap<string, string | null> & {
    * 없으면 칭찬 업적은 받지 않은 상태다
    */
   readonly praisedSessionsByPlayerId?: ReadonlyMap<string, readonly PraisedSession[]>;
+  /**
+   * 회원 id → 대회 최종 순위에 든 대회(포디움·우승·3관왕). 서버가 대회 세션의 순위로 붙인다.
+   * matchId는 그 대회에서 그 회원의 마지막 완료 경기(받은 경기), completedAt은 그 경기 완료 시각(받은 시각)이다.
+   * 없으면 순위 업적은 받지 않은 상태다
+   */
+  readonly placedSessionsByPlayerId?: ReadonlyMap<string, readonly PlacedSession[]>;
 };
 
 /** 칭찬 업적 입력: 칭찬을 기준 수 이상 받은 세션 하나 */
@@ -1154,7 +1218,35 @@ export interface PraisedSession {
   reachedAt: Date;
 }
 
+/** 순위 업적 입력: 대회 최종 순위(1~3위)에 든 대회 하나 */
+export interface PlacedSession {
+  sessionId: string;
+  place: number;
+  matchId: string;
+  completedAt: Date;
+}
+
+/** 순위 업적 지표. 경기가 아니라 관리자가 입력한 대회 순위로 센다 */
+const PLACEMENT_METRICS = [
+  "podiumPlacements",
+  "championships",
+] as const satisfies readonly AchievementMetric[];
+
+type PlacementMetric = (typeof PLACEMENT_METRICS)[number];
+
+const isPlacementMetric = (
+  metric: AchievementMetric,
+): metric is PlacementMetric =>
+  (PLACEMENT_METRICS as readonly AchievementMetric[]).includes(metric);
+
 const NO_ENDED_SESSIONS: EndedSessions = new Map();
+
+/** 세션 단위 업적 입력(칭찬·순위) 정렬: 그 시각 → 세션 id 순 */
+const compareSessionEventsBy =
+  <T extends { sessionId: string }>(getAt: (item: T) => Date) =>
+  (left: T, right: T) =>
+    getAt(left).getTime() - getAt(right).getTime() ||
+    (left.sessionId < right.sessionId ? -1 : left.sessionId > right.sessionId ? 1 : 0);
 
 /** 평점 진행도에 경기 직후 복식 평점을 반영한다 */
 const applyDoublesRating = (
@@ -1181,7 +1273,13 @@ const markReachedAchievements = (
   for (const item of progress) {
     if (item.earned) continue;
     const metric = ACHIEVEMENT_METRIC_BY_ID.get(item.id)!;
-    if (isSessionEventMetric(metric) || metric === "praisedSessions") continue;
+    if (
+      isSessionEventMetric(metric) ||
+      isPlacementMetric(metric) ||
+      metric === "praisedSessions"
+    ) {
+      continue;
+    }
     if (isTargetReached(metric, metrics[metric], item.target)) {
       item.earned = true;
       item.earnedAt = match.completedAt;
@@ -1231,6 +1329,9 @@ const computeProgressSince = (
     welcomes: 0,
     bestRegularSessionStreak: 0,
     bestOpponentWins: 0,
+    tournamentSessions: 0,
+    podiumPlacements: 0,
+    championships: 0,
   };
   const progress: AchievementProgress[] = ACHIEVEMENTS.map((definition) => ({
     id: definition.id,
@@ -1372,6 +1473,7 @@ const computeProgressSince = (
       }
       if (session.matches === 1) {
         metrics.attendedSessions += 1;
+        if (match.session?.tournament) metrics.tournamentSessions += 1;
         // 개근상: 바로 앞 정기 회차에도 참여했으면 이어 세고, 빠진 회차가 있으면 1부터 다시 센다
         const ordinal = facts.regularSessionOrdinalById.get(sessionId);
         if (ordinal != null) {
@@ -1428,12 +1530,25 @@ const computeProgressSince = (
   // 칭찬 업적: 칭찬을 기준 수 이상 받은 세션을 닿은 시각 순으로 세어, target번째 세션으로 받는다
   const praisedSessions = [
     ...(endedSessions.praisedSessionsByPlayerId?.get(playerId) ?? []),
-  ].sort(
-    (left, right) =>
-      left.reachedAt.getTime() - right.reachedAt.getTime() ||
-      (left.sessionId < right.sessionId ? -1 : left.sessionId > right.sessionId ? 1 : 0),
-  );
+  ].sort(compareSessionEventsBy((session) => session.reachedAt));
   metrics.praisedSessions = praisedSessions.length;
+  // 순위 업적: 시작 시각 이후 받은 경기로 든 순위를 받은 경기 순으로 세어, target번째 대회로 받는다
+  const placedSessions = [
+    ...(endedSessions.placedSessionsByPlayerId?.get(playerId) ?? []),
+  ]
+    .filter(
+      (placed) =>
+        start == null || placed.completedAt.getTime() >= start.getTime(),
+    )
+    .sort(compareSessionEventsBy((placed) => placed.completedAt));
+  // 저장된 순위는 1~3위뿐이라 순위에 든 대회는 모두 포디움이다
+  const placementSessions: Record<PlacementMetric, PlacedSession[]> = {
+    podiumPlacements: placedSessions,
+    championships: placedSessions.filter((placed) => placed.place === 1),
+  };
+  for (const metric of PLACEMENT_METRICS) {
+    metrics[metric] = placementSessions[metric].length;
+  }
 
   for (const item of progress) {
     const metric = ACHIEVEMENT_METRIC_BY_ID.get(item.id)!;
@@ -1446,6 +1561,12 @@ const computeProgressSince = (
       item.earned = true;
       item.earnedAt = earnedMatch.completedAt;
       item.earnedMatchId = earnedMatch.id;
+    }
+    if (isPlacementMetric(metric) && item.current >= item.target) {
+      const earnedSession = placementSessions[metric][item.target - 1];
+      item.earned = true;
+      item.earnedAt = earnedSession.completedAt;
+      item.earnedMatchId = earnedSession.matchId;
     }
     if (metric === "praisedSessions" && item.current >= item.target) {
       const earnedSession = praisedSessions[item.target - 1];
@@ -1470,6 +1591,8 @@ const computeProgressSince = (
  * 무패 세션은 만료 세션의 모든 경기가 전승이고 4경기 이상일 때, 전승 4번째 경기를 받은 경기로 정한다.
  * 세션 지배자는 이 회원이 지배자인 만료 세션에서 이 회원의 마지막 경기를 받은 경기로 정한다.
  * endedSessions를 넘기지 않으면 둘 다 받지 않은 상태다.
+ * 출사표는 대회 세션(session.tournament)에서 한 첫 경기로 받는다. 포디움·우승·3관왕은 endedSessions의
+ * 대회 순위(placedSessionsByPlayerId)로 세고, 그 대회에서 이 회원의 마지막 경기를 받은 경기로 정한다.
  * 평점 업적은 평점 반영 복식 경기가 RATING_ACHIEVEMENT_MIN_DOUBLES_MATCHES개 이상인 뒤의 복식 경기 직후
  * 복식 평점(doublesRatingAfter)의 최고치(낮은 평점 업적은 최저치)로 세므로, 받은 뒤 평점이 바뀌어도 유지된다.
  * 복식 경기 수는 집계 시작 시각 전 경기도 센다. 평점은 집계 시작 시각 시점 평점(그 전 마지막
@@ -1529,7 +1652,8 @@ export const toEarnedAchievements = (
 /**
  * 경기 저장 전후 계산 차이로 새로 받은 업적을 구한다.
  * 저장 후에 받았고 저장 전에는 받지 않은 업적만 돌려준다(회원 순서 → ACHIEVEMENTS 순서).
- * 무패 세션·세션 지배자는 세션이 만료된 뒤 정해지므로 넣지 않는다(만료 뒤 미확인 업적으로 축하한다).
+ * 무패 세션·세션 지배자는 세션이 만료된 뒤, 순위 업적(포디움·우승·3관왕)은 관리자가 순위를 입력한 뒤
+ * 정해지므로 넣지 않는다(그 뒤 미확인 업적으로 축하한다).
  * 업적 기준 시각 전 경기로 받은 업적(isEarnedByCountedMatch가 아닌 것)도 넣지 않는다.
  */
 export const findNewAchievements = ({

@@ -167,6 +167,8 @@ export interface CompletedMatchOutcome {
   ratingExcluded: boolean;
   /** 정기 세션 경기인지(개근상 업적). 테스트 데이터처럼 없으면 정기 세션이 아니다 */
   regularSession?: boolean;
+  /** 대회 세션 경기인지(출사표 업적). 없으면 대회 세션이 아니다 */
+  tournamentSession?: boolean;
 }
 
 export interface SessionWithParticipantIds {
@@ -183,6 +185,17 @@ export interface SessionWithParticipantIds {
   participantIds: string[];
   /** 이 세션에 보낸 칭찬 전부(칭찬 업적·후보 칭찬 수). 저장소는 항상 채우고, 없으면 칭찬이 없는 것으로 본다 */
   praises?: SessionPraiseRecord[];
+  /**
+   * 대회 최종 순위에 든 선수(순위 업적). 저장소는 항상 채우고, 세션 종류가 대회에서 바뀌어 남은 행도 담으므로
+   * 쓰는 쪽이 대회 세션만 본다. 없으면 순위가 없는 것으로 본다
+   */
+  placements?: SessionPlacementRecord[];
+}
+
+/** 대회 최종 순위 한 줄(선수 한 명) */
+export interface SessionPlacementRecord {
+  playerId: string;
+  place: number;
 }
 
 export interface CreateMatchInput {
@@ -306,6 +319,22 @@ const toSessionKind = (
     : stored.regularDateKey
       ? "regular"
       : "custom";
+
+/** 완료 경기 요약의 세션 종류 표시(정기 세션은 개근상, 대회 세션은 출사표 업적) */
+const toCompletedMatchSessionKind = (row: {
+  sessionId: string | null;
+  sessionKind: string | null;
+  regularDateKey: string | null;
+}): Pick<CompletedMatchOutcome, "regularSession" | "tournamentSession"> => {
+  const kind =
+    row.sessionId != null && row.sessionKind != null
+      ? toSessionKind({ kind: row.sessionKind, regularDateKey: row.regularDateKey })
+      : null;
+  return {
+    regularSession: kind === "regular",
+    tournamentSession: kind === "tournament",
+  };
+};
 
 /** 세션 종류·시작/종료 시각·완료 시각. 정기 세션 시각은 저장하지 않고 정해진 18:00~21:00으로 채운다 */
 const toSessionKindAndTimes = (
@@ -1262,19 +1291,13 @@ export class MatchRepository {
       teamPlayerIds: teamsByMatchId.get(row.id) ?? [[], []],
       scores: scoresByMatchId.get(row.id) ?? [],
       ratingExcluded: row.ratingExcluded === true,
-      regularSession:
-        row.sessionId != null &&
-        row.sessionKind != null &&
-        toSessionKind({
-          kind: row.sessionKind,
-          regularDateKey: row.regularDateKey,
-        }) === "regular",
+      ...toCompletedMatchSessionKind(row),
     }));
   }
 
   /** 모든 세션과 참여자 id를 쿼리 2번으로 읽는다(세션 날짜 내림차순) */
   async findSessionsWithParticipantIds(): Promise<SessionWithParticipantIds[]> {
-    const [sessionRows, participantRows, praiseRows] = await Promise.all([
+    const [sessionRows, participantRows, praiseRows, placementRows] = await Promise.all([
       this.db.select().from(matchSessions).orderBy(desc(matchSessions.date)),
       this.db
         .select({
@@ -1284,7 +1307,23 @@ export class MatchRepository {
         .from(matchSessionParticipants)
         .orderBy(asc(matchSessionParticipants.id)),
       this.db.select().from(sessionPraises),
+      this.db
+        .select({
+          sessionId: matchSessionPlacements.sessionId,
+          playerId: matchSessionPlacements.playerId,
+          place: matchSessionPlacements.place,
+        })
+        .from(matchSessionPlacements),
     ]);
+
+    const placementsBySessionId = new Map<string, SessionPlacementRecord[]>();
+    for (const row of placementRows as Array<
+      SessionPlacementRecord & { sessionId: string }
+    >) {
+      const placements = placementsBySessionId.get(row.sessionId) ?? [];
+      placements.push({ playerId: row.playerId, place: row.place });
+      placementsBySessionId.set(row.sessionId, placements);
+    }
 
     const praisesBySessionId = new Map<string, SessionPraiseRecord[]>();
     for (const row of praiseRows as SessionPraiseRecord[]) {
@@ -1313,6 +1352,7 @@ export class MatchRepository {
           ...toSessionKindAndTimes(session),
           participantIds: participantIdsBySessionId.get(session.id) ?? [],
           praises: praisesBySessionId.get(session.id) ?? [],
+          placements: placementsBySessionId.get(session.id) ?? [],
         };
       },
     );

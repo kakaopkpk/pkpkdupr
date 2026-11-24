@@ -331,6 +331,43 @@ describe("PUT /api/matches/:matchId", () => {
     ).toEqual([]);
   });
 
+  it("이미 완료된 대회 경기를 수정하면 그 경기로 받은 출사표를 다시 새 업적으로 응답하지 않는다", async () => {
+    existing = buildExistingMatch({
+      session: {
+        id: "Scup0001",
+        name: "가을 대회",
+        date: now,
+        location: "야탑초등학교",
+        kind: "tournament",
+      },
+    });
+    findCompletedMatchOutcomes.mockResolvedValue([
+      {
+        ratingExcluded: false,
+        id: existing.id,
+        type: "mixed-doubles",
+        sessionId: "Scup0001",
+        matchStartsAt: existing.matchStartsAt,
+        completedAt: existing.completedAt ?? new Date(),
+        teamPlayerIds: [
+          [requester.id, partner.id],
+          [opponentM.id, opponentF.id],
+        ],
+        scores: [{ scoreA: 9, scoreB: 11 }],
+        tournamentSession: true,
+      },
+    ]);
+
+    const response = await putMatch();
+
+    expect(response.status).toBe(200);
+    expect(
+      (response.body.newAchievements as { achievementId: string }[]).filter(
+        (item) => item.achievementId === "tournament-entry",
+      ),
+    ).toEqual([]);
+  });
+
   it("새로 받은 업적이 없으면 newAchievements는 빈 배열이다", async () => {
     const response = await putMatch();
 

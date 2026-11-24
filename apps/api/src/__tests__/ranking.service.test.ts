@@ -24,6 +24,8 @@ vi.mock("@pkpkdupr/shared/achievementCountStart", () => ({
   ACHIEVEMENT_COUNT_START: new Date(0),
   // 언더독·연승 저지 등 새 업적 지표는 이 파일에서 검증하지 않으므로 세지 않는다.
   SECOND_ACHIEVEMENT_SET_COUNT_START: new Date("2100-01-01T00:00:00.000Z"),
+  // 대회 업적은 이 파일에서 순위 입력을 검증하므로 처음부터 센다.
+  TOURNAMENT_ACHIEVEMENT_COUNT_START: new Date(0),
 }));
 
 const at = (iso: string) => new Date(iso);
@@ -768,10 +770,110 @@ describe("언더독·개근상 업적 입력", () => {
       [makeLog("Palice01", "Mdouble1", first, 3.3, 3.35), singlesLog],
     );
     expect(doubles.ratingBefore).toEqual({ Palice01: 3.3 });
-    expect(doubles.session).toEqual({ id: "Sregular1", regular: true });
+    expect(doubles.session).toEqual({
+      id: "Sregular1",
+      regular: true,
+      tournament: false,
+    });
     expect(singles.ratingBefore).toEqual({ Palice01: 2.8 });
-    expect(singles.session).toEqual({ id: "Scustom01", regular: false });
+    expect(singles.session).toEqual({
+      id: "Scustom01",
+      regular: false,
+      tournament: false,
+    });
     expect(custom.ratingBefore).toBeUndefined();
+  });
+});
+
+describe("대회 업적 입력", () => {
+  const players = [
+    makePlayer("Palice01", "alice", 3.2),
+    makePlayer("Pbob0001", "bob", 3.1),
+    makePlayer("Pcarol01", "carol", 3.0),
+    makePlayer("Pdave001", "dave", 2.9),
+  ];
+  const first = at("2026-11-10T10:00:00Z");
+  const last = at("2026-11-10T11:00:00Z");
+  const cupMatches = [
+    makeMatch(
+      "Mcup0001",
+      first,
+      [
+        ["Palice01", "Pbob0001"],
+        ["Pcarol01", "Pdave001"],
+      ],
+      { sessionId: "Scup0001", tournamentSession: true },
+    ),
+    makeMatch("Mcup0002", last, [["Palice01"], ["Pcarol01"]], {
+      type: "singles",
+      sessionId: "Scup0001",
+      tournamentSession: true,
+    }),
+  ];
+  const cup = makeSession("Scup0001", at("2026-11-09T15:00:00Z"), {
+    kind: "tournament",
+    placements: [
+      { playerId: "Palice01", place: 1 },
+      { playerId: "Pbob0001", place: 1 },
+      { playerId: "Pdave001", place: 3 },
+    ],
+  });
+
+  it("대회 세션 경기는 tournament로 표시한다", () => {
+    const [match] = toAchievementMatches(cupMatches, []);
+    expect(match.session).toEqual({
+      id: "Scup0001",
+      regular: false,
+      tournament: true,
+    });
+  });
+
+  it("순위에 든 회원마다 그 대회 마지막 경기를 받은 경기로 모은다", () => {
+    const context = createRankingContext(players, [], cupMatches);
+    const placed = findEndedSessions(context, [cup], now).placedSessionsByPlayerId;
+    expect(placed?.get("Palice01")).toEqual([
+      { sessionId: "Scup0001", place: 1, matchId: "Mcup0002", completedAt: last },
+    ]);
+    expect(placed?.get("Pbob0001")).toEqual([
+      { sessionId: "Scup0001", place: 1, matchId: "Mcup0001", completedAt: first },
+    ]);
+    expect(placed?.get("Pdave001")?.[0]).toMatchObject({ place: 3 });
+    expect(placed?.has("Pcarol01")).toBe(false);
+  });
+
+  it("대회가 아닌 세션에 남은 순위와 경기가 없는 회원은 세지 않는다", () => {
+    const context = createRankingContext(players, [], cupMatches);
+    const changedKind = { ...cup, kind: "custom" as const };
+    expect(
+      findEndedSessions(context, [changedKind], now).placedSessionsByPlayerId
+        ?.size,
+    ).toBe(0);
+    const noMatches = createRankingContext(players, [], []);
+    expect(
+      findEndedSessions(noMatches, [cup], now).placedSessionsByPlayerId?.size,
+    ).toBe(0);
+  });
+
+  it("세션 리포트 업적에 그 대회로 받은 순위 업적이 나온다", () => {
+    const context = createRankingContext(players, [], cupMatches);
+    const report = buildSessionReport({
+      context,
+      session: cup,
+      endedSessions: findEndedSessions(context, [cup], now),
+    });
+    expect(
+      report?.achievements
+        .filter((item) => item.achievementId.startsWith("tournament-"))
+        .map((item) => [item.playerId, item.achievementId]),
+    ).toEqual(
+      expect.arrayContaining([
+        ["Palice01", "tournament-entry"],
+        ["Palice01", "tournament-podium"],
+        ["Palice01", "tournament-champion-1"],
+        ["Pbob0001", "tournament-champion-1"],
+        ["Pdave001", "tournament-podium"],
+      ]),
+    );
   });
 });
 
