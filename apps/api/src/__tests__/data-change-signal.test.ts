@@ -47,7 +47,7 @@ describe("resolveDataChangeKinds", () => {
     ["POST", "/api/admin/match-sessions", MATCH_KINDS],
     ["PATCH", "/api/admin/match-sessions/S1", MATCH_KINDS],
     ["POST", "/api/admin/match-sessions/S1/bracket-matches", ["sessions", "matches"]],
-    ["PUT", "/api/admin/match-sessions/S1/placements", ["sessions"]],
+    ["PUT", "/api/admin/match-sessions/S1/placements", ["sessions", "achievements"]],
     ["DELETE", "/api/admin/regular-session-skips/2026-11-23", ["sessions"]],
     ["PATCH", "/api/me/profile", ["players"]],
     ["POST", "/api/me/avatar", ["players"]],

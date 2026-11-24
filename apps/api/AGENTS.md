@@ -198,11 +198,12 @@
   - 나머지 지표는 업적 기준 시각 `ACHIEVEMENT_COUNT_START`(2026-11-17 00:00 KST, `achievementCountStart.ts`) 뒤 완료 경기만 센다.
   - 새 지표를 쓰는 업적을 추가하면 그 지표는 추가 배포일 00:00 KST부터 센다.
   - 언더독·연승 저지·환영 인사·개근상·천적 지표는 `SECOND_ACHIEVEMENT_SET_COUNT_START`(2026-11-18 00:00 KST)부터 센다.
+  - 대회 업적 지표는 `TOURNAMENT_ACHIEVEMENT_COUNT_START`(2026-11-24 00:00 KST)부터 센다. 순위 업적은 받은 경기의 완료 시각으로 본다.
   - 기존 지표에 단계만 늘리는 업적(예: 1000경기 다음 5000경기)은 그 지표의 시작 시각을 따른다.
   - 기존 업적의 조건 수정은 원래 시작 시각부터 다시 계산한다.
   - 업적 기준 시각 전 경기로 받은 업적은 받은 업적으로 치지만 세션 리포트·경기 상세 `achievements`와 `newAchievements`에는 나오지 않는다(`isEarnedByCountedMatch`).
 - 응답에 나오는 곳
-  - 프로필 요약의 `achievements`: 52개 진행 상태, 평점 업적은 평점 반영 복식 경기 수 `ratedDoublesMatches` 포함. 랭킹 원천(전체 완료 경기·평점 로그)으로 계산하고, 원천을 못 읽으면 그 회원 경기로만 계산하며 연승 저지·환영 인사·개근상·무패 세션·세션 지배자는 받지 않은 상태로 둔다.
+  - 프로필 요약의 `achievements`: 56개 진행 상태, 평점 업적은 평점 반영 복식 경기 수 `ratedDoublesMatches` 포함. 랭킹 원천(전체 완료 경기·평점 로그)으로 계산하고, 원천을 못 읽으면 그 회원 경기로만 계산하며 연승 저지·환영 인사·개근상·무패 세션·세션 지배자는 받지 않은 상태로 둔다.
   - 경기 기록·수정 응답의 `newAchievements`(이 저장으로 참가자 전원이 새로 받은 업적)와 `achievementPoints`(새 업적을 받은 참가자별 지금 업적 점수 합). 새 업적은 전체 완료 경기·전원의 평점 로그로 계산한다.
   - 세션 리포트의 `achievements`: 그 세션 경기로 받은 업적.
   - 경기 상세의 `achievements`: 그 경기로 참가자 전원이 받은 업적(세션 리포트와 같은 규칙, 세션 없는 경기 포함). 완료 경기가 아니면 빈 배열이고, 계산이 실패해도 빈 배열로 응답한다.
@@ -230,6 +231,12 @@
   - 받은 시각은 5번째 칭찬 시각, 받은 경기는 그 세션에서 그 회원의 마지막 완료 경기(게스트가 낀 경기 포함)다. 그 세션에 경기가 없으면 세지 않는다.
   - 칭찬 기록은 `findEndedSessions`가 세션 원천의 `praises`로 업적 입력(`praisedSessionsByPlayerId`)에 붙인다.
   - `newAchievements`에는 나오지 않고 미확인 업적으로 축하한다.
+- 대회 업적
+  - 출사표는 대회 세션에서 한 첫 완료 경기로 받는다. 대회 여부는 완료 경기 요약의 `tournamentSession`(업적 입력 `session.tournament`)이다.
+  - 포디움(3위 이내)·우승(1위)·3관왕(우승 3번)은 지금 대회 세션인 세션의 최종 순위(`match_session_placements`)로 센다. 종류가 바뀌어 남은 순위 행은 세지 않는다.
+  - 순위 업적은 순위 단위의 선수마다 받고, 받은 경기는 그 대회에서 그 회원의 마지막 완료 경기(받은 시각은 그 경기 완료 시각)다. 그 대회에 경기가 없으면 세지 않는다.
+  - 순위는 `findEndedSessions`가 세션 원천의 `placements`로 업적 입력(`placedSessionsByPlayerId`)에 붙인다. 세션 만료 여부는 보지 않는다.
+  - 순위 업적은 `newAchievements`에 나오지 않고 미확인 업적으로 축하한다.
 - 평점 업적
   - 높은 평점 3.0·3.5·4.0·4.5(수면 위로·구름 위 산책·성층권·궤도 진입)와 낮은 평점 2.5·2.0 이하(심해 탐사·마리아나 해구) 6개다.
   - 평점 반영 복식 경기가 10경기(`RATING_ACHIEVEMENT_MIN_DOUBLES_MATCHES`, 업적 기준 시각 전 경기 포함) 이상이 된 뒤의 복식 경기 직후 복식 평점(그 경기의 평점 변경 로그, 경기 업적 입력의 `doublesRatingAfter`)만 센다.
@@ -251,7 +258,8 @@
   - `sessions`·`players`: `POST /api/match-sessions/:sessionId/guests`
   - `sessions`·`achievements`(세션 지배자·무패 세션 확정): `POST /api/match-sessions/:sessionId/complete`
   - `sessions`·`achievements`(칭찬 수·칭찬 업적): `POST /api/match-sessions/:sessionId/praise`
-  - `sessions`: 그 밖의 `/api/match-sessions*`, `/api/cron/*`, `/api/admin/regular-session-skips*`, `PUT /api/admin/match-sessions/:sessionId/placements`
+  - `sessions`: 그 밖의 `/api/match-sessions*`, `/api/cron/*`, `/api/admin/regular-session-skips*`
+  - `sessions`·`achievements`(순위 업적): `PUT /api/admin/match-sessions/:sessionId/placements`
   - `sessions`·`matches`: `POST /api/admin/match-sessions/:sessionId/bracket-matches`
   - `sessions`·`matches`·`ratings`·`achievements`: 그 밖의 `/api/matches*`, `/api/admin/matches*`, 그 밖의 `/api/admin/match-sessions*`(세션 종류·날짜가 경기 응답의 세션 정보와 개근상·순위 변동 기준에 쓰임)
   - `matches`·`ratings`·`achievements`: `POST /api/admin/ratings/recalculate`, `POST /api/admin/players/:playerId/official-dupr`

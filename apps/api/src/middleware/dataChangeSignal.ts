@@ -81,10 +81,11 @@ const SIGNAL_ROUTES: readonly SignalRoute[] = [
     pattern: /^\/api\/admin\/match-sessions\/[^/]+\/bracket-matches$/i,
     kinds: ["sessions", "matches"],
   },
+  // 대회 순위는 순위 업적(포디움·우승·3관왕)을 바꾼다
   {
     method: "PUT",
     pattern: /^\/api\/admin\/match-sessions\/[^/]+\/placements$/i,
-    kinds: ["sessions"],
+    kinds: ["sessions", "achievements"],
   },
   // 세션 종류·날짜는 경기 응답의 세션 정보와 개근상·순위 변동 기준 세션에도 쓰인다
   { pattern: /^\/api\/admin\/match-sessions(\/.*)?$/i, kinds: MATCH_KINDS },

@@ -13,3 +13,11 @@ export const ACHIEVEMENT_COUNT_START = new Date("2026-11-16T15:00:00.000Z");
 export const SECOND_ACHIEVEMENT_SET_COUNT_START = new Date(
   "2026-11-17T15:00:00.000Z",
 );
+
+/**
+ * 대회 업적(출사표·포디움·우승·3관왕) 지표의 집계 시작 시각(2026-11-24 00:00 KST, 이 업적들을 추가한 날).
+ * 새 지표라 그 전 대회로 업적이 한꺼번에 생기지 않게 한다.
+ */
+export const TOURNAMENT_ACHIEVEMENT_COUNT_START = new Date(
+  "2026-11-23T15:00:00.000Z",
+);

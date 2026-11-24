@@ -36,6 +36,7 @@ const makeMatch = ({
   type,
   sessionId,
   regular,
+  tournament,
   ratingBefore,
   status = "completed",
   completedAt,
@@ -50,6 +51,8 @@ const makeMatch = ({
   sessionId?: string;
   /** 정기 세션 경기 */
   regular?: boolean;
+  /** 대회 세션 경기 */
+  tournament?: boolean;
   ratingBefore?: Record<string, number | null>;
   status?: MatchStatus;
   completedAt?: Date | null;
@@ -82,7 +85,7 @@ const makeMatch = ({
         scoreB: scoreB ?? (won ? 5 : 11),
       },
     ],
-    session: sessionId ? { id: sessionId, regular } : null,
+    session: sessionId ? { id: sessionId, regular, tournament } : null,
     ratingBefore,
   };
 };
@@ -198,11 +201,15 @@ describe("ACHIEVEMENTS", () => {
       "dominator-50",
       "praised-1",
       "praised-10",
+      "tournament-entry",
+      "tournament-podium",
+      "tournament-champion-1",
+      "tournament-champion-3",
     ]);
-    expect(new Set(ACHIEVEMENTS.map((item) => item.id)).size).toBe(52);
+    expect(new Set(ACHIEVEMENTS.map((item) => item.id)).size).toBe(56);
   });
 
-  it("분류 이름은 경기 수·승리·연승·평점·특별·세션이다", () => {
+  it("분류 이름은 경기 수·승리·연승·평점·특별·세션·대회다", () => {
     expect(ACHIEVEMENT_CATEGORY_LABEL).toEqual({
       matches: "경기 수",
       wins: "승리",
@@ -210,6 +217,7 @@ describe("ACHIEVEMENTS", () => {
       rating: "평점",
       special: "특별",
       session: "세션",
+      tournament: "대회",
     });
   });
 });
@@ -232,9 +240,9 @@ describe("isBestStreakAchievement", () => {
 });
 
 describe("computeAchievements", () => {
-  it("경기가 없으면 52개 모두 진행도 0으로 받지 않은 상태다", () => {
+  it("경기가 없으면 56개 모두 진행도 0으로 받지 않은 상태다", () => {
     const progress = compute([]);
-    expect(progress).toHaveLength(52);
+    expect(progress).toHaveLength(56);
     expect(progress.map((item) => item.id)).toEqual(
       ACHIEVEMENTS.map((definition) => definition.id),
     );
@@ -1431,7 +1439,7 @@ describe("업적 점수", () => {
     for (const definition of ACHIEVEMENTS) {
       expect([10, 25, 50, 100]).toContain(definition.points);
     }
-    expect(ACHIEVEMENT_MAX_POINTS).toBe(2250);
+    expect(ACHIEVEMENT_MAX_POINTS).toBe(2435);
   });
 
   it("받은 업적 점수만 더하고 모르는 업적은 0점이다", () => {
@@ -1747,5 +1755,110 @@ describe("칭찬 업적", () => {
       earned: false,
       current: 0,
     });
+  });
+});
+
+describe("대회 업적", () => {
+  const placedEndedSessions = (
+    sessions: { sessionId: string; place: number; matchId: string; completedAt: Date }[],
+  ): EndedSessions =>
+    Object.assign(new Map<string, string | null>(), {
+      placedSessionsByPlayerId: new Map([[ME, sessions]]),
+    });
+
+  const placementProgressOf = (endedSessions: EndedSessions, id: string) =>
+    computeAchievements(ME, [], endedSessions).find((item) => item.id === id)!;
+
+  it("대회 세션에서 한 첫 경기로 출사표를 받고, 대회가 아닌 세션 경기는 세지 않는다", () => {
+    const regular = makeMatch({ sessionId: "s-regular", regular: true });
+    const first = makeMatch({ won: false, sessionId: "s-cup", tournament: true });
+    const second = makeMatch({ sessionId: "s-cup", tournament: true });
+    expect(progressOf(compute([regular]), "tournament-entry")).toMatchObject({
+      earned: false,
+      current: 0,
+    });
+    expect(
+      progressOf(compute([regular, first, second]), "tournament-entry"),
+    ).toMatchObject({
+      earned: true,
+      earnedMatchId: first.id,
+      earnedAt: first.completedAt,
+      current: 1,
+    });
+  });
+
+  it("출사표는 경기 저장으로 새로 받은 업적에 나온다", () => {
+    const match = makeMatch({ sessionId: "s-cup", tournament: true });
+    expect(
+      findNewAchievements({ playerIds: [ME], before: [], after: [match] })
+        .filter((item) => item.achievementId.startsWith("tournament-"))
+        .map((item) => item.achievementId),
+    ).toEqual(["tournament-entry"]);
+  });
+
+  it("3위 이내에 든 첫 대회로 포디움을, 1위인 첫 대회로 우승을 받는다(받은 경기·시각은 그 대회 내 마지막 경기)", () => {
+    const thirdAt = new Date(BASE_MS + 60_000);
+    const firstAt = new Date(BASE_MS + 120_000);
+    const endedSessions = placedEndedSessions([
+      { sessionId: "s-2", place: 1, matchId: "m-2", completedAt: firstAt },
+      { sessionId: "s-1", place: 3, matchId: "m-1", completedAt: thirdAt },
+    ]);
+    expect(placementProgressOf(endedSessions, "tournament-podium")).toMatchObject({
+      earned: true,
+      earnedMatchId: "m-1",
+      earnedAt: thirdAt,
+      current: 2,
+    });
+    expect(
+      placementProgressOf(endedSessions, "tournament-champion-1"),
+    ).toMatchObject({
+      earned: true,
+      earnedMatchId: "m-2",
+      earnedAt: firstAt,
+      current: 1,
+    });
+  });
+
+  it("3관왕은 세 번째 우승 대회로 받고, 그 전에는 진행도만 쌓인다", () => {
+    const wins = Array.from({ length: 3 }, (_, index) => ({
+      sessionId: `s-${index}`,
+      place: 1,
+      matchId: `m-${index}`,
+      completedAt: new Date(BASE_MS + index * 60_000),
+    }));
+    expect(
+      placementProgressOf(placedEndedSessions(wins.slice(0, 2)), "tournament-champion-3"),
+    ).toMatchObject({ earned: false, current: 2 });
+    expect(
+      placementProgressOf(placedEndedSessions(wins), "tournament-champion-3"),
+    ).toMatchObject({ earned: true, earnedMatchId: "m-2", current: 3 });
+  });
+
+  it("집계 시작 전 경기로 든 순위는 세지 않는다", () => {
+    expect(
+      placementProgressOf(
+        placedEndedSessions([
+          {
+            sessionId: "s-old",
+            place: 1,
+            matchId: "m-old",
+            completedAt: new Date("2026-11-20T00:00:00.000Z"),
+          },
+        ]),
+        "tournament-champion-1",
+      ),
+    ).toMatchObject({ earned: false, current: 0 });
+  });
+
+  it("순위 업적은 경기 저장으로 새로 받은 업적에 나오지 않는다", () => {
+    expect(
+      findNewAchievements({
+        playerIds: [ME],
+        before: [],
+        after: [makeMatch({ sessionId: "s-cup", tournament: true })],
+      }).some((item) =>
+        ["tournament-podium", "tournament-champion-1"].includes(item.achievementId),
+      ),
+    ).toBe(false);
   });
 });
