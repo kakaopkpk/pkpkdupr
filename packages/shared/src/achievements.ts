@@ -510,7 +510,7 @@ const ACHIEVEMENT_TABLE: readonly {
       id: "underdog",
       category: "special",
       name: "언더독",
-      condition: "평균 평점이 0.5 이상 높은 팀에게 승리",
+      condition: "평균 평점이 0.3 이상 높은 팀에게 승리",
       badgeNumber: null,
       target: 1,
       points: 50,
@@ -966,7 +966,7 @@ const isHardWon = (scores: readonly MatchScore[], teamIndex: 0 | 1) =>
 export const UNBEATEN_SESSION_MIN_MATCHES = 4;
 
 /** 언더독: 상대 팀 평균 평점이 우리 팀보다 이만큼 이상 높을 때 이기면 받는다 */
-export const UNDERDOG_MIN_RATING_GAP = 0.5;
+export const UNDERDOG_MIN_RATING_GAP = 0.3;
 
 /** 연승 저지: 경기 직전 이 연승 이상이던 상대를 이기면 받는다 */
 export const STREAK_BREAKER_MIN_STREAK = 3;
