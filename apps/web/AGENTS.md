@@ -108,7 +108,7 @@
         - 보는 회원이 경기하지 않았거나 승패가 갈리지 않으면(점수 없음 포함) null이라 줄이 없다.
         - 특수 매치 결과(`specialMatch.outcome`)가 있으면 `lib/specialMatchResult`의 `getSpecialMatchResultName`이 보는 회원 팀의 `defendingTeamIndex` 역할·`outcome`·승패로 정한 이름이 먼저고, 웹이 판정을 다시 하지 않는다.
         - 라이벌전은 공격·방어 구분 없이 승패로 라이벌전 승리·라이벌전 패배다.
-        - 아니면 첫 점수로 완승·참패(진 팀 0점) → 힘겹게 쟁취한 승리·아쉬운 패배(이긴 팀 `MATCH_RESULT_DEUCE_WINNING_SCORE` 12점 이상) → 승리·패배다.
+        - 아니면 첫 점수로 완승·참패(진 팀 0점) → 진땀승·아쉬운 패배(이긴 팀 `MATCH_RESULT_DEUCE_WINNING_SCORE` 12점 이상) → 승리·패배다.
       - 축하 연출과 내 받은 업적 상세 시트의 공유는 `hooks/useAchievementShare`가 열 때 공유 이미지(`profile/achievementShareImage`, canvas 2D)를 미리 만들어 두고, 누르면 바로 기기 공유 시트(못 하면 내려받기, 문구는 `lib/achievementShare`)를 연다. iOS Safari는 사용자 동작 직후에만 공유 시트가 열려 누른 뒤에 만들지 않는다.
       - 특수 매치 큰 연출 `SpecialMatchCelebrationScreen`(그림 `SpecialMatchCelebrationScenes`, 시각·공유 대상 변환 `specialMatchCelebration.utils`)은 기록 응답 `specialMatchCelebration`이 있고 기록한 내가 이긴 팀일 때만 완료 단계에서 띄운다. 진 팀·경기하지 않은 기록자·null이면 없고, 경기 상세·홈 등 다른 화면에서 나중에 띄우지 않는다.
         - 순위·연승 수는 응답 값만 쓰고 다시 계산하지 않는다. 내 새 업적 축하와 겹치면 이 연출이 먼저이고, 닫으면 업적 축하가 바로 이어진다.

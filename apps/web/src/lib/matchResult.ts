@@ -26,7 +26,7 @@ interface MatchResultInput {
 const getGeneralResultLabels = ({ scoreA, scoreB }: MatchScore): [string, string] => {
   if (Math.min(scoreA, scoreB) === 0) return ["완승", "참패"];
   if (Math.max(scoreA, scoreB) >= MATCH_RESULT_DEUCE_WINNING_SCORE) {
-    return ["힘겹게 쟁취한 승리", "아쉬운 패배"];
+    return ["진땀승", "아쉬운 패배"];
   }
   return ["승리", "패배"];
 };
