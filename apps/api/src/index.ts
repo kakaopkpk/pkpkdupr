@@ -1865,16 +1865,16 @@ const parseUnsignedIntegerQuery = (value: unknown): number => {
   return Number.isSafeInteger(parsed) ? parsed : NaN;
 };
 
-/** rank 쿼리: 생략이면 0(1등), 0 이상 정수가 아니면 400. 후보 수를 넘으면 추천 함수가 나머지로 순환한다 */
-const parseRecommendationRank = (value: unknown): number => {
+/** reroll 쿼리: 생략이면 0(첫 추천), 0 이상 정수가 아니면 400. 순환 주기를 넘으면 추천 함수가 순환한다 */
+const parseRecommendationReroll = (value: unknown): number => {
   if (value === undefined) {
     return 0;
   }
-  const rank = parseUnsignedIntegerQuery(value);
-  if (Number.isNaN(rank)) {
-    throw new MatchSessionRequestError("rank는 0 이상 정수여야 합니다.", 400);
+  const reroll = parseUnsignedIntegerQuery(value);
+  if (Number.isNaN(reroll)) {
+    throw new MatchSessionRequestError("reroll은 0 이상 정수여야 합니다.", 400);
   }
-  return rank;
+  return reroll;
 };
 
 /** 추천 매칭 응답·입력의 복식 평점. 게스트는 평점을 보이지 않고(null), 알고리즘은 isGuest로 게스트 평점을 쓴다 */
@@ -1904,7 +1904,8 @@ app.get("/api/match-sessions/:sessionId/recommendations", async (req, res) => {
       throw new MatchSessionRequestError("유효한 세션 ID가 필요합니다.", 400);
     }
     const courts = parseRecommendationCourts(req.query.courts);
-    const rank = parseRecommendationRank(req.query.rank);
+    // 옛 rank 쿼리는 읽지 않는다. 업데이트 전 캐시된 웹이 보내도 첫 추천을 돌려준다
+    const reroll = parseRecommendationReroll(req.query.reroll);
 
     const now = new Date();
     await matchRepository.cleanupExpired(now);
@@ -1951,7 +1952,7 @@ app.get("/api/match-sessions/:sessionId/recommendations", async (req, res) => {
       completedMatches,
       courts,
       seed: getMatchmakingSeed(sessionId, completedMatches.length),
-      rank,
+      reroll,
       specialPlayers,
     });
 
@@ -1992,7 +1993,7 @@ app.get("/api/match-sessions/:sessionId/recommendations", async (req, res) => {
     const response: MatchSessionRecommendationResponse = {
       sessionId,
       requestedCourts: courts,
-      rank: plan.rank,
+      reroll: plan.reroll,
       candidateCount: plan.candidateCount,
       courts: plan.courts.map((court) => ({
         teams: [

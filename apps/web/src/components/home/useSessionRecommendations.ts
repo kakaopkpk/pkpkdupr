@@ -110,14 +110,14 @@ export const useSessionRecommendations = (
   const loadedSessionIdRef = useRef<string | null>(null);
   const isLoadingRef = useRef(false);
   /**
-   * 마지막으로 받은 후보 순번. 다시 추천은 이 다음 순번을 요청하므로,
-   * 받는 중에 또 누르거나 요청이 실패해도 순번이 건너뛰지 않는다(늦은 응답은 requestId로 버린다).
+   * 마지막으로 받은 다시 추천 횟수. 다시 추천은 이 값 + 1을 요청하므로,
+   * 받는 중에 또 누르거나 요청이 실패해도 횟수가 건너뛰지 않는다(늦은 응답은 requestId로 버린다).
    */
-  const shownRankRef = useRef(0);
+  const shownRerollRef = useRef(0);
   const { liveSession, inProgressMatches } = useLiveSession();
 
   const load = useCallback(
-    async (rank: number) => {
+    async (reroll: number) => {
       const requestId = ++requestIdRef.current;
       if (!sessionId) {
         loadedSessionIdRef.current = null;
@@ -140,12 +140,12 @@ export const useSessionRecommendations = (
         const data = await fetchSessionRecommendations(
           sessionId,
           MATCHMAKING_DEFAULT_COURTS,
-          rank,
+          reroll,
         );
         if (requestIdRef.current !== requestId) return;
         isLoadingRef.current = false;
         setIsRerolling(false);
-        shownRankRef.current = data.rank;
+        shownRerollRef.current = data.reroll;
         setRecommendation(data);
         setStatus("ready");
         setError(null);
@@ -165,7 +165,7 @@ export const useSessionRecommendations = (
   );
 
   useEffect(() => {
-    shownRankRef.current = 0;
+    shownRerollRef.current = 0;
     void load(0);
   }, [load, dataVersion]);
 
@@ -190,7 +190,7 @@ export const useSessionRecommendations = (
     if (isLoadingRef.current) return;
     if (handledStaleKeyRef.current === staleKey) return;
     handledStaleKeyRef.current = staleKey;
-    void load(shownRankRef.current);
+    void load(shownRerollRef.current);
   }, [load, recommendation, staleKey]);
 
   const expandableCourts = useMemo(
@@ -216,16 +216,16 @@ export const useSessionRecommendations = (
     if (isLoadingRef.current) return;
     if (handledExpandableCourtsRef.current === expandableCourts) return;
     handledExpandableCourtsRef.current = expandableCourts;
-    void load(shownRankRef.current);
+    void load(shownRerollRef.current);
   }, [expandableCourts, load, recommendation]);
 
   // 보던 추천을 비우지 않고 새 추천이 오면 바꿔 끼워, 스켈레톤으로 카드 높이가 흔들리지 않게 한다
   const recommendAgain = useCallback(() => {
     setIsRerolling(true);
-    void load(shownRankRef.current + 1);
+    void load(shownRerollRef.current + 1);
   }, [load]);
 
-  const reload = useCallback(() => load(shownRankRef.current), [load]);
+  const reload = useCallback(() => load(shownRerollRef.current), [load]);
 
   return { recommendation, status, error, isRerolling, recommendAgain, reload };
 };

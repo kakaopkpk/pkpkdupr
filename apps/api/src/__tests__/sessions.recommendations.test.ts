@@ -1,6 +1,7 @@
 import type { ManagedMatchSession, Match, Team } from "@pkpkdupr/shared/match";
 import {
   MATCHMAKING_GUEST_RATING,
+  MATCHMAKING_REROLL_CYCLE,
   type MatchSessionRecommendationResponse,
 } from "@pkpkdupr/shared/matchmaking";
 import type { CompletedMatchOutcome } from "@pkpkdupr/db";
@@ -169,14 +170,15 @@ describe("GET /api/match-sessions/:sessionId/recommendations", () => {
     vi.restoreAllMocks();
   });
 
-  it("courts·rank 생략 시 기본 3코트의 1등 후보를 돌려준다", async () => {
+  it("courts·reroll 생략 시 기본 3코트의 첫 추천을 돌려준다", async () => {
     const response = await recommend("Stoday00");
 
     expect(response.status).toBe(200);
     const body = response.body as MatchSessionRecommendationResponse;
     expect(body.sessionId).toBe("Stoday00");
     expect(body.requestedCourts).toBe(3);
-    expect(body.rank).toBe(0);
+    expect(body.reroll).toBe(0);
+    expect(body).not.toHaveProperty("rank");
     expect(body.candidateCount).toBeGreaterThan(1);
     // 10명이라 2코트만 채워지고 2명이 쉰다
     expect(body.courts).toHaveLength(2);
@@ -339,26 +341,45 @@ describe("GET /api/match-sessions/:sessionId/recommendations", () => {
 
   it("같은 상황이면 누가 요청해도 같은 결과를 낸다", async () => {
     const first = await recommend("Stoday00", "?courts=2");
-    const second = await recommend("Stoday00", "?courts=2&rank=0");
+    const second = await recommend("Stoday00", "?courts=2&reroll=0");
 
     expect(first.status).toBe(200);
     expect(second.body).toEqual(first.body);
   });
 
-  it("rank번째 후보를 돌려주고 후보 수를 넘으면 처음으로 돌아간다", async () => {
+  it("다시 추천은 직전 횟수와 다른 대진이고, 같은 횟수면 같은 결과다", async () => {
     const first = await recommend("Stoday00", "?courts=2");
-    const next = await recommend("Stoday00", "?courts=2&rank=1");
-    const { candidateCount } = first.body as MatchSessionRecommendationResponse;
-    const wrapped = await recommend(
-      "Stoday00",
-      `?courts=2&rank=${candidateCount}`,
-    );
+    const next = await recommend("Stoday00", "?courts=2&reroll=1");
+    const again = await recommend("Stoday00", "?courts=2&reroll=1");
 
     expect(next.status).toBe(200);
-    expect(next.body.rank).toBe(1);
-    expect(next.body.candidateCount).toBe(candidateCount);
+    expect(next.body.reroll).toBe(1);
+    expect(next.body.candidateCount).toBeGreaterThan(0);
     expect(next.body.courts).not.toEqual(first.body.courts);
-    expect(wrapped.body).toEqual(first.body);
+    expect(again.body).toEqual(next.body);
+  });
+
+  it("reroll이 순환 주기를 넘으면 순환한 값으로 계산해 돌려준다", async () => {
+    const cycled = await recommend(
+      "Stoday00",
+      `?courts=2&reroll=${MATCHMAKING_REROLL_CYCLE + 2}`,
+    );
+    const second = await recommend("Stoday00", "?courts=2&reroll=2");
+
+    expect(cycled.status).toBe(200);
+    expect(cycled.body.reroll).toBe(2);
+    expect(cycled.body).toEqual(second.body);
+  });
+
+  it("rank 쿼리는 읽지 않는다", async () => {
+    const first = await recommend("Stoday00", "?courts=2");
+    const withRank = await recommend("Stoday00", "?courts=2&rank=3");
+    const invalidRank = await recommend("Stoday00", "?courts=2&rank=abc");
+
+    expect(withRank.status).toBe(200);
+    expect(withRank.body).toEqual(first.body);
+    expect(invalidRank.status).toBe(200);
+    expect(invalidRank.body).toEqual(first.body);
   });
 
   it("진행 중 경기에 들어간 선수는 코트와 쉬는 사람 모두에서 뺀다", async () => {
@@ -393,12 +414,19 @@ describe("GET /api/match-sessions/:sessionId/recommendations", () => {
   it.each([
     ["courts가 숫자가 아니면", "?courts=abc"],
     ["courts가 비어 있으면", "?courts="],
-    ["rank가 정수가 아니면", "?rank=1.5"],
-    ["rank가 음수면", "?rank=-1"],
-    ["rank가 숫자가 아니면", "?rank=abc"],
+    ["reroll이 정수가 아니면", "?reroll=1.5"],
+    ["reroll이 음수면", "?reroll=-1"],
+    ["reroll이 숫자가 아니면", "?reroll=abc"],
   ])("%s 400", async (_label, query) => {
     const response = await recommend("Stoday00", query);
     expect(response.status).toBe(400);
+  });
+
+  it("reroll이 0 이상 정수가 아니면 안내 문구로 400", async () => {
+    const response = await recommend("Stoday00", "?reroll=abc");
+    expect(response.body).toMatchObject({
+      error: "reroll은 0 이상 정수여야 합니다.",
+    });
   });
 
   it("지난 세션이면 403, 없는 세션이면 404", async () => {
