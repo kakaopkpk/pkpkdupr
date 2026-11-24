@@ -78,8 +78,8 @@ export interface PlayerProfileSummary {
  * 평점 미반영 경기는 변경 로그가 없어 들어가지 않는다
  */
 export const buildPeakRating = (
+  /** 그 회원의 평점 변경 로그 */
   ratingChangeLogs: readonly PlayerRatingChangeLog[],
-  playerId: string,
   currentRating: PublicPlayerDupr | null | undefined,
 ): PlayerPeakRating => {
   const peakOf = (category: MatchTopLevelType) => {
@@ -87,7 +87,7 @@ export const buildPeakRating = (
     if (typeof current !== "number" || !Number.isFinite(current)) return null;
     let peak = current;
     for (const log of ratingChangeLogs) {
-      if (log.playerId !== playerId || log.delta[category] === 0) continue;
+      if (log.delta[category] === 0) continue;
       const rating = log.nextRating[category];
       if (Number.isFinite(rating) && rating > peak) peak = rating;
     }

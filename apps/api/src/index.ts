@@ -1490,7 +1490,7 @@ app.get("/api/players/:playerId/profile-summary", async (req, res) => {
       : undefined;
     res.json({
       player,
-      peakRating: buildPeakRating(ratingChangeLogs, playerId, player.duprRating),
+      peakRating: buildPeakRating(ratingChangeLogs, player.duprRating),
       ...buildPlayerProfileSummary(
         matches,
         playerId,

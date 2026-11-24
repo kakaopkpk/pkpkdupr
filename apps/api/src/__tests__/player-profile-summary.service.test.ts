@@ -687,10 +687,9 @@ describe("buildPeakRating", () => {
   const makeLog = (
     nextRating: { singles: number; doubles: number },
     delta: { singles: number; doubles: number },
-    playerId = me.id,
   ): PlayerRatingChangeLog => ({
     id: `log-${nextRating.singles}-${nextRating.doubles}`,
-    playerId,
+    playerId: me.id,
     source: "match_completed",
     sourceLogId: "match-completed-Mmatch01-1",
     previousRating: {
@@ -708,16 +707,10 @@ describe("buildPeakRating", () => {
       // 복식 경기 로그의 단식 값은 바뀌지 않았으므로 단식 최고에 넣지 않는다
       makeLog({ singles: 3.9, doubles: 3.1 }, { singles: 0, doubles: -0.114 }),
       makeLog({ singles: 3.3, doubles: 3.1 }, { singles: 0.3, doubles: 0 }),
-      // 다른 회원 로그는 보지 않는다
-      makeLog(
-        { singles: 4.4, doubles: 4.4 },
-        { singles: 0.1, doubles: 0.1 },
-        opponent.id,
-      ),
     ];
 
     expect(
-      buildPeakRating(logs, me.id, { singles: 3.25, doubles: 3.077 }),
+      buildPeakRating(logs, { singles: 3.25, doubles: 3.077 }),
     ).toEqual({ singles: 3.3, doubles: 3.214 });
   });
 
@@ -726,7 +719,7 @@ describe("buildPeakRating", () => {
       makeLog({ singles: 3.0, doubles: 3.1 }, { singles: 0, doubles: 0.1 }),
     ];
     expect(
-      buildPeakRating(logs, me.id, { singles: 3.0, doubles: 3.135 }),
+      buildPeakRating(logs, { singles: 3.0, doubles: 3.135 }),
     ).toEqual({ singles: 3.0, doubles: 3.135 });
   });
 
@@ -735,9 +728,9 @@ describe("buildPeakRating", () => {
       makeLog({ singles: 3.5, doubles: 3.2 }, { singles: 0.5, doubles: 0.2 }),
     ];
     expect(
-      buildPeakRating(logs, me.id, { singles: null, doubles: 3.1 }),
+      buildPeakRating(logs, { singles: null, doubles: 3.1 }),
     ).toEqual({ singles: null, doubles: 3.2 });
-    expect(buildPeakRating(logs, me.id, null)).toEqual({
+    expect(buildPeakRating(logs, null)).toEqual({
       singles: null,
       doubles: null,
     });

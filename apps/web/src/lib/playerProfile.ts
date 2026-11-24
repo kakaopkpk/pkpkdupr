@@ -28,8 +28,8 @@ export interface PlayerProfileSummaryInfo {
     }
   >;
   ratingHistory: PlayerRatingHistory;
-  /** 분류별 시즌 최고 평점(시즌 1 = 전체 기록). 지금 평점이 없는 분류는 null */
-  peakRating: Record<MatchTopLevelType, number | null>;
+  /** 분류별 시즌 최고 평점(시즌 1 = 전체 기록). 지금 평점이 없는 분류는 null. 배포 직후 이전 API 응답에는 없다 */
+  peakRating?: Record<MatchTopLevelType, number | null>;
   recentMatches: MatchInfo[];
   partners: PartnerStat[];
   /** 자주 진 상대(천적) */
