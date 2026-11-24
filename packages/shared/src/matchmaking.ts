@@ -2,10 +2,12 @@ import {
   getSameGenderCourtGender,
   judgeRecommendedSpecialMatch,
   SPECIAL_MATCH_RECOMMENDATION_BONUS,
+  SPECIAL_MATCH_RECOMMENDATION_DISPLAY_RANK,
   type SpecialMatch,
   type SpecialMatchCandidatePlayer,
   type SpecialMatchKind,
 } from "./specialMatch.js";
+import type { Player } from "./player.js";
 
 export const MATCHMAKING_DEFAULT_COURTS = 3;
 export const MATCHMAKING_MIN_COURTS = 1;
@@ -42,7 +44,7 @@ export interface MatchmakingParticipant {
   doublesRating: number | null;
   isGuest?: boolean;
   /** 성별. 없거나 null(성별 없는 게스트)이면 남복·여복 가산점 판정에서 빠진다 */
-  gender?: "M" | "F" | null;
+  gender?: Player["gender"];
 }
 
 /** 오늘 이 세션에서 완료된 경기의 팀 구성(선수 id) */
@@ -362,7 +364,7 @@ export const recommendDoublesMatches = (
   );
   const ratingOf = (id: string): number => ratingById.get(id) ?? nrRating;
   const genderById = new Map(
-    eligible.map((participant) => [participant.id, participant.gender ?? null]),
+    eligible.map((participant) => [participant.id, participant.gender]),
   );
   const partnerCount = (a: string, b: string): number =>
     history.partnerCounts.get(pairKey(a, b)) ?? 0;
@@ -599,35 +601,14 @@ export const recommendDoublesMatches = (
     result = runStep(step, result);
   }
 
-  // 특수 유형으로 보이는 코트는 하나다. 가산점이 가장 큰 코트(같으면 앞 코트) → 앞 연승 매치 코트 → 앞 남복·여복 매치 코트 순이다
-  const displayTier = (match: SpecialMatch, bonus: number): number => {
-    if (bonus > 0) return 0;
-    if (match.kind === "streak_stopper") return 1;
-    if (match.kind === "men_doubles" || match.kind === "women_doubles") return 2;
-    return Number.POSITIVE_INFINITY;
-  };
-  let specialCourt: {
-    court: number;
-    match: SpecialMatch;
-    bonus: number;
-    tier: number;
-  } | null = null;
+  // 특수 유형으로 보이는 코트는 하나다. 표시 순위가 가장 큰 코트(같으면 앞 코트)다
+  let specialCourt: { court: number; match: SpecialMatch; rank: number } | null =
+    null;
   for (let court = 0; court < courtCount; court += 1) {
     const match = judgeCourt(result.arrangement, court);
-    if (!match) {
-      continue;
-    }
-    const bonus = getSpecialMatchRecommendationBonus(match.kind);
-    const tier = displayTier(match, bonus);
-    if (!Number.isFinite(tier)) {
-      continue;
-    }
-    if (
-      !specialCourt ||
-      tier < specialCourt.tier ||
-      (tier === specialCourt.tier && bonus > specialCourt.bonus)
-    ) {
-      specialCourt = { court, match, bonus, tier };
+    const rank = match ? SPECIAL_MATCH_RECOMMENDATION_DISPLAY_RANK[match.kind] : null;
+    if (match && rank !== null && (!specialCourt || rank > specialCourt.rank)) {
+      specialCourt = { court, match, rank };
     }
   }
 

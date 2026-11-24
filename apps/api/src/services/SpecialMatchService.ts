@@ -50,7 +50,7 @@ export const buildSpecialMatchCandidatePlayers = (
           rank: ranked?.rank ?? null,
           rating: ranked?.rating ?? null,
           winStreak: player.isGuest ? 0 : (winStreaks.get(player.id) ?? 0),
-          gender: player.gender ?? null,
+          gender: player.gender,
         },
       ];
     }),

@@ -33,6 +33,10 @@ export const specialMatchKindLabels: Record<SpecialMatchKind, string> = {
   women_doubles: "여복 매치",
 };
 
+/** 결과(승리·저지 등)가 정해지는 유형인지. 남복·여복 매치는 결과·큰 연출이 없다 */
+export const hasSpecialMatchOutcome = (kind: SpecialMatchKind): boolean =>
+  kind !== "men_doubles" && kind !== "women_doubles";
+
 export const isSpecialMatchKind = (value: unknown): value is SpecialMatchKind =>
   specialMatchKindValues.includes(value as SpecialMatchKind);
 
@@ -105,7 +109,7 @@ export interface SpecialMatchCandidatePlayer {
   /** 지금 연승 수(computeCurrentWinStreak 규칙) */
   winStreak: number;
   /** 성별. 성별 없는 게스트는 null */
-  gender: "M" | "F" | null;
+  gender: Player["gender"];
 }
 
 /** 라이벌전으로 보는 상대 두 사람의 최대 평점 차 */
@@ -129,6 +133,19 @@ export const SPECIAL_MATCH_RECOMMENDATION_BONUS = {
   men_doubles: 0,
   women_doubles: 0,
 } as const satisfies Record<SpecialMatchKind, number>;
+
+/**
+ * 추천 한 번에 특수 유형은 한 코트만 보인다. 이 순위가 큰 코트(같으면 앞 코트)를 보이고, null인 유형은 보이지 않는다.
+ * 가산점 코트(최강자전 > 라이벌전) → 연승 매치 → 남복·여복 매치 순이다
+ */
+export const SPECIAL_MATCH_RECOMMENDATION_DISPLAY_RANK = {
+  champions: 4,
+  rival: 3,
+  streak_stopper: 2,
+  men_doubles: 1,
+  women_doubles: 1,
+  revenge: null,
+} as const satisfies Record<SpecialMatchKind, number | null>;
 
 /** 평점 차를 소수 여섯째 자리에서 반올림해 3.55 - 3.5 같은 부동소수 오차가 판정·정렬을 흔들지 않게 한다 */
 const toRatingGap = (left: number, right: number) =>
@@ -270,8 +287,8 @@ const judgeRivalMatch = (teams: CandidateTeams): SpecialMatch | null => {
 
 /** 네 명(복식) 성별이 모두 같은 코트의 성별. 성별 없는 선수가 있거나 섞이면 null */
 export const getSameGenderCourtGender = (
-  genders: readonly ("M" | "F" | null | undefined)[],
-): "M" | "F" | null => {
+  genders: readonly (Player["gender"] | undefined)[],
+): Player["gender"] => {
   const [first] = genders;
   if (first !== "M" && first !== "F") return null;
   return genders.every((gender) => gender === first) ? first : null;
