@@ -8,7 +8,9 @@ import type {
 } from "@pkpkdupr/shared/matchmaking";
 import {
   getExpandableCourtCount,
+  getRequestedCourtCount,
   getStaleRecommendedPlayerIds,
+  removeRecommendedCourt,
 } from "@/components/home/useSessionRecommendations";
 
 const player = (id: string): RecommendationPlayer => ({
@@ -26,7 +28,7 @@ const team = (a: string, b: string) => ({
 const recommendation: MatchSessionRecommendationResponse = {
   sessionId: "S1",
   requestedCourts: 1,
-  rank: 0,
+  reroll: 0,
   candidateCount: 1,
   courts: [
     {
@@ -140,5 +142,100 @@ describe("getExpandableCourtCount", () => {
         3,
       ),
     ).toBe(0);
+  });
+});
+
+describe("getRequestedCourtCount", () => {
+  const sessionMatch = (sessionId: string | null) => ({
+    session: sessionId ? { id: sessionId } : undefined,
+  });
+
+  it("기본 코트 수에서 이 세션 진행 중 경기 수를 뺀다", () => {
+    expect(getRequestedCourtCount("S1", [])).toBe(3);
+    expect(getRequestedCourtCount("S1", [sessionMatch("S1")] as never)).toBe(2);
+    expect(
+      getRequestedCourtCount("S1", [sessionMatch("S1"), sessionMatch("S1")] as never),
+    ).toBe(1);
+  });
+
+  it("다른 세션·세션 없는 진행 중 경기는 세지 않는다", () => {
+    expect(
+      getRequestedCourtCount("S1", [
+        sessionMatch("S2"),
+        sessionMatch(null),
+        sessionMatch("S1"),
+      ] as never),
+    ).toBe(2);
+  });
+
+  it("0보다 작지 않다", () => {
+    const matches = Array.from({ length: 4 }, () => sessionMatch("S1"));
+    expect(getRequestedCourtCount("S1", matches as never)).toBe(0);
+  });
+
+  it("이 세션 경기가 끝나 진행 중 경기가 줄면 늘어난다", () => {
+    const three = Array.from({ length: 3 }, () => sessionMatch("S1"));
+    expect(getRequestedCourtCount("S1", three as never)).toBe(0);
+    expect(getRequestedCourtCount("S1", three.slice(1) as never)).toBe(1);
+  });
+
+  it("세션이 없으면 0이다", () => {
+    expect(getRequestedCourtCount(null, [])).toBe(0);
+  });
+});
+
+describe("removeRecommendedCourt", () => {
+  const court = (ids: [string, string, string, string]) => ({
+    teams: [team(ids[0], ids[1]), team(ids[2], ids[3])] as [
+      ReturnType<typeof team>,
+      ReturnType<typeof team>,
+    ],
+    repeatedPartnerPairs: [] as Array<[string, string]>,
+    repeatedOpponentPairs: [] as Array<[string, string]>,
+    specialMatch: null,
+  });
+  const three: MatchSessionRecommendationResponse = {
+    ...recommendation,
+    requestedCourts: 3,
+    reroll: 2,
+    courts: [
+      court(["a", "b", "c", "d"]),
+      court(["e", "f", "g", "h"]),
+      court(["i", "j", "k", "l"]),
+    ],
+  };
+
+  it("시작한 코트만 빼고 나머지 코트·순서·쉬는 선수·다시 추천 횟수는 그대로다", () => {
+    const result = removeRecommendedCourt(three, court(["e", "f", "g", "h"]));
+    expect(result.courts).toEqual([three.courts[0], three.courts[2]]);
+    expect(result.courts[0]).toBe(three.courts[0]);
+    expect(result.restingPlayers).toBe(three.restingPlayers);
+    expect(result.reroll).toBe(2);
+    expect(result.candidateCount).toBe(three.candidateCount);
+  });
+
+  it("같은 선수 구성의 코트가 없으면 코트를 그대로 둔다", () => {
+    expect(
+      removeRecommendedCourt(three, court(["a", "b", "x", "y"])).courts,
+    ).toEqual(three.courts);
+  });
+
+  it("시작한 코트를 빼고 그 선수를 진행 중으로 치면 stale·코트 늘리기 재조회가 없다", () => {
+    const ids = Array.from({ length: 12 }, (_, i) => "abcdefghijkl"[i]);
+    const started = court(["a", "b", "c", "d"]);
+    const removed = removeRecommendedCourt(three, started);
+    const busy = [inProgress(["a", "b", "c", "d"])];
+    expect(
+      getStaleRecommendedPlayerIds(removed, session(ids) as never, busy as never),
+    ).toEqual([]);
+    expect(
+      getExpandableCourtCount(removed, session(ids) as never, busy as never, 2),
+    ).toBe(0);
+  });
+
+  it("이 세션 경기가 끝나 요청 코트 수가 늘면 채울 수 있는 코트가 보이는 코트보다 많아져 다시 받는다", () => {
+    const ids = Array.from({ length: 12 }, (_, i) => "abcdefghijkl"[i]);
+    const removed = removeRecommendedCourt(three, court(["a", "b", "c", "d"]));
+    expect(getExpandableCourtCount(removed, session(ids) as never, [], 3)).toBe(3);
   });
 });
