@@ -9,12 +9,12 @@ import { cx } from "@/components/ui/cx";
 import { Section, TextLink } from "@/components/ui/Section";
 import type { SessionWinStreakByPlayer } from "@/components/ui/PlayerAvatar";
 import RecommendationCard from "./RecommendationCard";
-import type { SessionRecommendationsState } from "./useSessionRecommendations";
+import {
+  getCourtKey,
+  type SessionRecommendationsState,
+} from "./useSessionRecommendations";
 
-export const getCourtKey = (court: RecommendedCourt) =>
-  court.teams
-    .flatMap((team) => team.players.map((player) => player.id))
-    .join(":");
+export { getCourtKey };
 
 const RecommendationSkeleton: React.FC = () => (
   <Card className="flex flex-col gap-3 py-4">
@@ -42,9 +42,24 @@ const RecommendationSection: React.FC<{
   sessionWinStreaks,
   onStart,
 }) => {
-  const { recommendation, status, error, isRerolling, recommendAgain } = state;
+  const {
+    recommendation,
+    status,
+    error,
+    isRerolling,
+    requestedCourts,
+    recommendAgain,
+  } = state;
+  const isAllCourtsBusy = requestedCourts === 0;
 
   const renderBody = () => {
+    if (isAllCourtsBusy) {
+      return (
+        <Card className="py-4">
+          <p className="text-pk-13 text-pk-sub">코트가 모두 경기 중이에요.</p>
+        </Card>
+      );
+    }
     if (
       status === "loading" ||
       (status === "idle" && !recommendation) ||
@@ -107,7 +122,7 @@ const RecommendationSection: React.FC<{
     <Section
       title={`추천 매칭 · 대기 ${waitingCount}명`}
       right={
-        startingKey === null ? (
+        startingKey === null && !isAllCourtsBusy ? (
           <TextLink onPress={recommendAgain}>다시 추천</TextLink>
         ) : null
       }
