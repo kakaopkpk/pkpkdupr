@@ -33,10 +33,6 @@ export const specialMatchKindLabels: Record<SpecialMatchKind, string> = {
   women_doubles: "여복 매치",
 };
 
-/** 결과(승리·저지 등)가 없는 유형. 결과 판정·큰 연출·공유 이미지가 없다 */
-export const isOutcomelessSpecialMatchKind = (kind: SpecialMatchKind): boolean =>
-  kind === "men_doubles" || kind === "women_doubles";
-
 export const isSpecialMatchKind = (value: unknown): value is SpecialMatchKind =>
   specialMatchKindValues.includes(value as SpecialMatchKind);
 
