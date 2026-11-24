@@ -15,7 +15,64 @@ const player = (
   rank: null,
   rating: null,
   winStreak: 0,
+  gender: null,
   ...overrides,
+});
+
+describe("judgeRecommendedSpecialMatch 남복·여복 매치", () => {
+  const team = (gender: "M" | "F" | null, ids: [string, string], extra: Partial<SpecialMatchCandidatePlayer> = {}) =>
+    ids.map((id) => player(id, { gender, ...extra }));
+
+  it("네 명 모두 남자면 남복 매치, 모두 여자면 여복 매치이고 결과·주인공이 없다", () => {
+    const expected = {
+      defendingTeamIndex: null,
+      protagonistIds: [null, null],
+      rivalPairs: [],
+      outcome: null,
+    };
+    expect(
+      judgeRecommendedSpecialMatch([team("M", ["a", "b"]), team("M", ["c", "d"])]),
+    ).toEqual({ kind: "men_doubles", ...expected });
+    expect(
+      judgeRecommendedSpecialMatch([team("F", ["a", "b"]), team("F", ["c", "d"])]),
+    ).toEqual({ kind: "women_doubles", ...expected });
+  });
+
+  it("성별이 섞이거나 성별 없는 게스트가 끼면 아니다", () => {
+    expect(
+      judgeRecommendedSpecialMatch([team("F", ["a", "b"]), [player("c", { gender: "F" }), player("d", { gender: "M" })]]),
+    ).toBeNull();
+    expect(
+      judgeRecommendedSpecialMatch([
+        team("F", ["a", "b"]),
+        [player("c", { gender: "F" }), player("d", { gender: null, isGuest: true })],
+      ]),
+    ).toBeNull();
+  });
+
+  it("성별이 있는 게스트는 같은 성별이면 남복·여복 매치에 든다", () => {
+    expect(
+      judgeRecommendedSpecialMatch([
+        team("F", ["a", "b"]),
+        [player("c", { gender: "F" }), player("d", { gender: "F", isGuest: true })],
+      ])?.kind,
+    ).toBe("women_doubles");
+  });
+
+  it("연승 매치·라이벌전이 남복·여복 매치보다 먼저다", () => {
+    expect(
+      judgeRecommendedSpecialMatch([
+        [player("a", { gender: "M", winStreak: 3 }), player("b", { gender: "M" })],
+        team("M", ["c", "d"]),
+      ])?.kind,
+    ).toBe("streak_stopper");
+    expect(
+      judgeRecommendedSpecialMatch([
+        [player("a", { gender: "F", rank: 9, rating: 3.011 }), player("b", { gender: "F", rank: 18, rating: 2.889 })],
+        [player("c", { gender: "F", rank: 10, rating: 3.007 }), player("d", { gender: "F", rank: 14, rating: 2.969 })],
+      ])?.kind,
+    ).toBe("rival");
+  });
 });
 
 describe("judgeRecommendedSpecialMatch", () => {

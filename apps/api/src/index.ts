@@ -77,6 +77,7 @@ import {
   type WinStreakMatch,
 } from "@pkpkdupr/shared/streak";
 import {
+  hasSpecialMatchOutcome,
   isSpecialMatchKind,
   judgeRecommendedSpecialMatch,
   judgeRematchSpecialMatch,
@@ -1188,7 +1189,13 @@ const settleSpecialMatchForSavedMatch = async (
 }> => {
   const specialMatch = match.specialMatch;
   const completedAt = match.completedAt;
-  if (!specialMatch || match.status !== "completed" || !completedAt) {
+  // 결과가 없는 유형(남복·여복 매치)은 랭킹을 읽지 않는다
+  if (
+    !specialMatch ||
+    !hasSpecialMatchOutcome(specialMatch.kind) ||
+    match.status !== "completed" ||
+    !completedAt
+  ) {
     return { match, specialMatchCelebration: null };
   }
   try {
@@ -1951,6 +1958,7 @@ app.get("/api/match-sessions/:sessionId/recommendations", async (req, res) => {
         id: member.id,
         doublesRating: getRecommendationDoublesRating(member),
         isGuest: member.isGuest,
+        gender: member.gender,
       })),
       busyPlayerIds,
       completedMatches,

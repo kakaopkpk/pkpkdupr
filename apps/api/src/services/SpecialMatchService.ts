@@ -13,7 +13,6 @@ import type {
   SpecialMatchCelebration,
   SpecialMatchCelebrationPlayer,
   SpecialMatchRivalPair,
-  SpecialMatchKind,
   SpecialMatchOutcome,
 } from "@pkpkdupr/shared/specialMatch";
 import { computeCurrentWinStreaks } from "@pkpkdupr/shared/streak";
@@ -31,7 +30,7 @@ import {
 export const buildSpecialMatchCandidatePlayers = (
   context: RankingContext,
   category: MatchTopLevelType,
-  players: readonly Pick<Player, "id" | "isGuest">[],
+  players: readonly Pick<Player, "id" | "isGuest" | "gender">[],
 ): Map<string, SpecialMatchCandidatePlayer> => {
   const rankedById = new Map(
     rankPlayersAt(context, category, null).map((entry) => [
@@ -51,6 +50,7 @@ export const buildSpecialMatchCandidatePlayers = (
           rank: ranked?.rank ?? null,
           rating: ranked?.rating ?? null,
           winStreak: player.isGuest ? 0 : (winStreaks.get(player.id) ?? 0),
+          gender: player.gender,
         },
       ];
     }),
@@ -142,7 +142,7 @@ const evaluateSpecialMatch = (
     case "revenge": {
       const defendingTeamLost = specialMatch.defendingTeamIndex === loserIndex;
       const outcomeByKind: Record<
-        Exclude<SpecialMatchKind, "rival">,
+        "streak_stopper" | "champions" | "revenge",
         SpecialMatchOutcome
       > = {
         streak_stopper: defendingTeamLost ? "streak_stopped" : "streak_defended",
@@ -157,6 +157,10 @@ const evaluateSpecialMatch = (
         rankAfter: new Map(),
       };
     }
+    // 남복·여복 매치는 결과가 없다
+    case "men_doubles":
+    case "women_doubles":
+      return { outcome: null };
   }
 };
 

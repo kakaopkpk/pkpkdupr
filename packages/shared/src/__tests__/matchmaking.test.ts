@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   MATCHMAKING_ALL_NR_FALLBACK_RATING,
+  MATCHMAKING_SAME_GENDER_COURT_BONUS,
   MATCHMAKING_GUEST_RATING,
   MATCHMAKING_CANDIDATE_PENALTY_MARGIN,
   MATCHMAKING_DEFAULT_COURTS,
@@ -414,6 +415,7 @@ describe("recommendDoublesMatches 특수 유형 가산점", () => {
             rank: isGuest || rankIndex < 0 ? null : rankIndex + 1,
             rating: isGuest ? null : participant.doublesRating,
             winStreak: winStreaks[participant.id] ?? 0,
+            gender: participant.gender ?? null,
           },
         ];
       }),
@@ -474,6 +476,8 @@ describe("recommendDoublesMatches 특수 유형 가산점", () => {
       streak_stopper: 0,
       champions: 2,
       revenge: 0,
+      men_doubles: 0,
+      women_doubles: 0,
     });
   });
 
@@ -666,5 +670,93 @@ describe("recommendDoublesMatches 특수 유형 가산점", () => {
       specialPlayers: toSpecialPlayers(participants, { p03: 5 }),
     };
     expect(recommend(input)).toEqual(recommend(input));
+  });
+});
+
+describe("recommendDoublesMatches 남복·여복", () => {
+  /** 평점이 모두 같은 남녀 참여자. 평점 차 감점이 없어 성별 가산점만 대진을 가른다 */
+  const genderedPlayers = (
+    genders: readonly ("M" | "F" | null)[],
+  ): MatchmakingParticipant[] =>
+    genders.map((gender, index) => ({
+      id: `g${String(index + 1).padStart(2, "0")}`,
+      doublesRating: 3,
+      gender,
+    }));
+
+  const courtGenders = (
+    plan: DoublesRecommendationPlan,
+    participants: MatchmakingParticipant[],
+  ) => {
+    const genderOf = new Map(participants.map((p) => [p.id, p.gender]));
+    return plan.courts.map((court) =>
+      court.teams.flat().map((id) => genderOf.get(id)),
+    );
+  };
+
+  /** 랭킹·연승 없는 판정 입력(성별만) */
+  const genderSpecialPlayers = (
+    participants: MatchmakingParticipant[],
+    winStreaks: Record<string, number> = {},
+  ): Map<string, SpecialMatchCandidatePlayer> =>
+    new Map(
+      participants.map((p) => [
+        p.id,
+        {
+          id: p.id,
+          isGuest: false,
+          rank: null,
+          rating: null,
+          winStreak: winStreaks[p.id] ?? 0,
+          gender: p.gender ?? null,
+        },
+      ]),
+    );
+
+  it("가산점은 남복·여복 코트마다 2를 빼고 성별이 섞인 코트는 0이다", () => {
+    const participants = genderedPlayers(["M", "M", "M", "M", "F", "F", "F", "F"]);
+    const plan = recommend({ participants, courts: 2 });
+    for (const genders of courtGenders(plan, participants)) {
+      expect(new Set(genders).size).toBe(1);
+    }
+    expect(plan.penalty).toBeCloseTo(-2 * MATCHMAKING_SAME_GENDER_COURT_BONUS);
+  });
+
+  it("성별 없는 게스트가 낀 코트는 남복·여복 가산점이 없다", () => {
+    const participants = genderedPlayers(["F", "F", "F", null]);
+    expect(recommend({ participants, courts: 1 }).penalty).toBeCloseTo(0);
+  });
+
+  it("다른 특수 유형이 없으면 앞 남복·여복 코트 하나만 남복·여복 매치로 보인다", () => {
+    const participants = genderedPlayers(["M", "M", "M", "M", "F", "F", "F", "F"]);
+    const plan = recommend({
+      participants,
+      courts: 2,
+      specialPlayers: genderSpecialPlayers(participants),
+    });
+    const genders = courtGenders(plan, participants);
+    expect(plan.courts[0].specialMatch?.kind).toBe(
+      genders[0][0] === "M" ? "men_doubles" : "women_doubles",
+    );
+    expect(plan.courts[0].specialMatch).toMatchObject({
+      defendingTeamIndex: null,
+      protagonistIds: [null, null],
+      rivalPairs: [],
+      outcome: null,
+    });
+    expect(plan.courts[1].specialMatch).toBeNull();
+  });
+
+  it("연승 매치 코트가 있으면 남복·여복 코트보다 연승 매치 코트가 보인다", () => {
+    const participants = genderedPlayers(["M", "M", "M", "M", "F", "F", "F", "F"]);
+    const plan = recommend({
+      participants,
+      courts: 2,
+      specialPlayers: genderSpecialPlayers(participants, { g08: 4 }),
+    });
+    const shown = plan.courts.filter((court) => court.specialMatch !== null);
+    expect(shown).toHaveLength(1);
+    expect(shown[0].specialMatch?.kind).toBe("streak_stopper");
+    expect(shown[0].teams.flat()).toContain("g08");
   });
 });

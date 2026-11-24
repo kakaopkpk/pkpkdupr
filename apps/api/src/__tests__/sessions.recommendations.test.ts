@@ -198,9 +198,11 @@ describe("GET /api/match-sessions/:sessionId/recommendations", () => {
       ),
       winStreak: 0,
     });
-    expect(body.courts.every((court) => court.specialMatch === null)).toBe(
-      true,
-    );
+    // 참여자가 모두 남자라 두 코트 모두 남복이고, 특수 유형은 앞 코트 하나만 남복 매치로 보인다
+    expect(body.courts.map((court) => court.specialMatch?.kind ?? null)).toEqual([
+      "men_doubles",
+      null,
+    ]);
   });
 
   it("선수마다 복식 랭킹 순위와 지금 연승 수를 주고, NR은 순위가 null이다", async () => {
