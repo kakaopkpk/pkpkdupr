@@ -52,6 +52,7 @@ const makeReport = (
   players,
   topRiser: players[0] ?? null,
   achievements,
+  winStreaks: {},
 });
 
 const candidate = (

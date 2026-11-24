@@ -117,7 +117,7 @@ pnpm lint
   - 랭킹 순위 변동 `rankChange`의 기준 세션(`selectBaselineSession`).
   - 평점 업적의 복식 경기 수(`ratedDoublesMatches`, 10경기 조건)와 평점 진행도, 언더독.
 - 세는 것
-  - 연승(`computeCurrentWinStreaks`): 랭킹·진행 중 경기·추천·프로필 `winStreak`, 소식 연승 줄, 홈 세션 연승, 특수 매치 판정 입력·큰 연출 `streakBefore`.
+  - 연승(`computeCurrentWinStreaks`): 랭킹·진행 중 경기·추천·프로필 `winStreak`, 소식 연승 줄, 세션 리포트 `winStreaks`(홈 세션 연승), 특수 매치 판정 입력·큰 연출 `streakBefore`.
   - 업적 전부(연승 저지의 상대 직전 연승, 환영 인사의 파트너 첫 경기 포함)와 경기 상세·세션 리포트 `achievements`.
   - 세션 지배자·무패 세션(`findEndedSessions`), 랭킹 경기 수(`countCategoryMatches`).
   - 프로필 요약 통계(승패·최근 7일 경기 수·파트너 궁합·천적·상대 전적, 평점 변화는 0으로 더함), `lastPlayedAt`, 세션 칭찬 후보 계산.

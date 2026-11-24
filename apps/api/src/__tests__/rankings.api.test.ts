@@ -253,6 +253,34 @@ describe("랭킹·세션 리포트 API", () => {
     expect(response.status).toBe(400);
   });
 
+  it("GET /api/session-reports/:sessionId의 winStreaks는 지난 경기부터 이어진 연승을 세션 마지막 완료 경기까지 센다", async () => {
+    const before = (id: string, at: string): CompletedMatchOutcome => ({
+      ...match,
+      id,
+      sessionId: null,
+      matchStartsAt: new Date(at),
+      completedAt: new Date(at),
+    });
+    vi.mocked(
+      MatchRepository.prototype.findCompletedMatchOutcomes,
+    ).mockResolvedValue([
+      before("Mprev001", "2026-11-05T10:00:00.000Z"),
+      before("Mprev002", "2026-11-05T11:00:00.000Z"),
+      match,
+      // 세션 뒤에 진 경기는 이 세션 연승에 들어가지 않는다
+      {
+        ...before("Mafter01", "2026-11-11T10:00:00.000Z"),
+        teamPlayerIds: [[bob.id], [alice.id]],
+      },
+    ]);
+
+    const response = await authorized(`/api/session-reports/${session.id}`);
+
+    expect(response.status).toBe(200);
+    // 진 bob(연승 0)은 넣지 않는다
+    expect(response.body.winStreaks).toEqual({ [alice.id]: 3 });
+  });
+
   it("GET /api/session-reports/:sessionId는 선수별 리포트와 topRiser를 돌려준다", async () => {
     const response = await authorized(`/api/session-reports/${session.id}`);
 

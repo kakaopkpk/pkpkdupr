@@ -87,13 +87,13 @@ const buildCells = (court: RecommendedCourt): [CourtCell, CourtCell] => {
     : [toCell(0), toCell(1)];
 };
 
-/** 세션 연승 링(태그 없음). 들지 않은 회원은 아바타만 */
+/** 세션 연승 링(태그 없음). winStreak이 없으면 아바타만 */
 const SessionAvatar: React.FC<{
   player: RecommendationPlayer;
   size: number;
-  sessionWinStreaks?: SessionWinStreakByPlayer;
-}> = ({ player, size, sessionWinStreaks }) => (
-  <SessionWinStreakFrame winStreak={sessionWinStreaks?.get(player.id)}>
+  winStreak: number | undefined;
+}> = ({ player, size, winStreak }) => (
+  <SessionWinStreakFrame winStreak={winStreak}>
     <PlayerAvatar player={player} size={size} />
   </SessionWinStreakFrame>
 );
@@ -122,7 +122,7 @@ const CellAvatars: React.FC<{
     );
   }
   // 연승 링(WIN_STREAK_DISPLAY_MIN 이상)을 두르는 주인공은 세션 연승 링을 겹쳐 두르지 않는다.
-  // 링 아래 숫자 태그만큼 띄워 뒤 아바타와 아래 끝을 맞춘다
+  // 링 아래 숫자 태그만큼 띄워 뒤 아바타와 아래 끝을 맞춘다. 그보다 짧은 연승 주인공은 세션 연승 링을 두른다
   const frontAvatar =
     cell.showsStreak && front.winStreak >= WIN_STREAK_DISPLAY_MIN ? (
       <span className="relative z-10 mb-1 inline-flex">
@@ -138,7 +138,11 @@ const CellAvatars: React.FC<{
         <SessionAvatar
           player={front}
           size={PROTAGONIST_AVATAR_SIZE}
-          sessionWinStreaks={sessionWinStreaks}
+          // 아직 세션 경기를 안 뛰어 세션 연승에 없는 연승 주인공도 링을 두른다
+          winStreak={
+            sessionWinStreaks?.get(front.id) ??
+            (cell.showsStreak ? front.winStreak : undefined)
+          }
         />
       </span>
     );
@@ -152,7 +156,7 @@ const CellAvatars: React.FC<{
         <SessionAvatar
           player={back}
           size={PROTAGONIST_TEAMMATE_AVATAR_SIZE}
-          sessionWinStreaks={sessionWinStreaks}
+          winStreak={sessionWinStreaks?.get(back.id)}
         />
       </span>
     </span>

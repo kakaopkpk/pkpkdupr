@@ -32,15 +32,16 @@ const match = (
 };
 
 describe("getSessionWinStreaks", () => {
-  it("가장 최근 경기부터 이어지는 3연승 이상만 세션 전적과 함께 돌려준다", () => {
-    const streaks = getSessionWinStreaks([
-      match(1, ["martin", "joel"], ["brad", "colin"], [7, 11]),
-      match(2, ["martin", "joel"], ["ed", "jackie"], [11, 6]),
-      match(3, ["martin", "sean"], ["scarlett", "andrew"], [11, 6]),
-      match(4, ["martin", "sean"], ["scarlett", "andrew"], [11, 6]),
-      match(5, ["brad", "colin"], ["wes", "andrew"], [11, 9]),
-      match(6, ["brad", "joel"], ["ed", "jackie"], [15, 14]),
-    ]);
+  it("세션 경기를 뛴 회원 중 누적 연승 3 이상만 세션 전적과 함께 돌려준다", () => {
+    const streaks = getSessionWinStreaks(
+      [
+        match(1, ["martin", "joel"], ["brad", "colin"], [7, 11]),
+        match(2, ["martin", "joel"], ["ed", "jackie"], [11, 6]),
+        match(3, ["brad", "colin"], ["wes", "andrew"], [11, 9]),
+      ],
+      // 지난 세션부터 이어진 누적 연승(세션 리포트 winStreaks). 세션 경기가 없는 sean은 빠진다
+      { brad: 5, martin: 3, joel: 2, colin: 4, sean: 7 },
+    );
 
     expect(
       streaks.map(({ player: { id }, winStreak, matchCount, wins }) => ({
@@ -50,42 +51,26 @@ describe("getSessionWinStreaks", () => {
         wins,
       })),
     ).toEqual([
-      { id: "brad", winStreak: 3, matchCount: 3, wins: 3 },
-      { id: "martin", winStreak: 3, matchCount: 4, wins: 3 },
+      { id: "brad", winStreak: 5, matchCount: 2, wins: 2 },
+      { id: "colin", winStreak: 4, matchCount: 2, wins: 2 },
+      { id: "martin", winStreak: 3, matchCount: 2, wins: 1 },
     ]);
   });
 
-  it("진 경기에서 연승이 끊기고, 진행 중 경기는 세지 않는다", () => {
-    const streaks = getSessionWinStreaks([
-      match(1, ["a"], ["b"], [11, 3]),
-      match(2, ["a"], ["c"], [11, 3]),
-      match(3, ["a"], ["d"], [11, 3]),
-      match(4, ["a"], ["e"], [5, 11]),
-      match(5, ["a"], ["f"], [0, 0], { status: "created", completedAt: null, scores: [] }),
-    ]);
+  it("진행 중 경기만 뛴 회원은 넣지 않는다", () => {
+    const streaks = getSessionWinStreaks(
+      [match(1, ["a"], ["b"], [0, 0], { status: "created", completedAt: null, scores: [] })],
+      { a: 4 },
+    );
 
     expect(streaks).toEqual([]);
   });
 
-  it("게스트가 낀 경기(평점 미반영)도 연승에 센다", () => {
-    const streaks = getSessionWinStreaks([
-      match(1, ["a"], ["b"], [3, 11]),
-      match(2, ["a"], ["c"], [11, 3]),
-      match(3, ["a"], ["guest1"], [11, 3], { ratingExcluded: true }),
-      match(4, ["a"], ["d"], [11, 3]),
-    ]);
-
-    expect(streaks).toMatchObject([
-      { player: { id: "a" }, winStreak: 3, matchCount: 4, wins: 3 },
-    ]);
-  });
-
-  it("게스트 본인의 연승은 넣지 않는다", () => {
-    const streaks = getSessionWinStreaks([
-      match(1, ["guest1"], ["b"], [11, 3], { ratingExcluded: true }),
-      match(2, ["guest1"], ["c"], [11, 3], { ratingExcluded: true }),
-      match(3, ["guest1"], ["d"], [11, 3], { ratingExcluded: true }),
-    ]);
+  it("게스트는 연승 값이 있어도 넣지 않는다", () => {
+    const streaks = getSessionWinStreaks(
+      [match(1, ["guest1"], ["b"], [11, 3], { ratingExcluded: true })],
+      { guest1: 3 },
+    );
 
     expect(streaks).toEqual([]);
   });

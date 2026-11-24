@@ -1491,8 +1491,8 @@ describe("연승 저지", () => {
       makeOthersMatch({ teamA: [playerId], teamB: ["someone"] }),
     );
 
-  it("경기 직전 5연승 이상이던 상대를 이기면 받는다", () => {
-    const streak = winStreakOf("hot", 5);
+  it("경기 직전 3연승 이상이던 상대를 이기면 받는다", () => {
+    const streak = winStreakOf("hot", 3);
     const breaker = makeMatch({ opponentIds: ["hot"] });
     const progress = compute([...streak, breaker]);
     expect(progressOf(progress, "streak-breaker")).toMatchObject({
@@ -1501,7 +1501,7 @@ describe("연승 저지", () => {
     });
   });
 
-  it("상대 팀 중 한 명만 5연승이어도 받는다", () => {
+  it("상대 팀 중 한 명만 3연승이어도 받는다", () => {
     const streak = winStreakOf("hot", 6);
     const breaker = makeMatch({
       partnerId: "partner",
@@ -1511,12 +1511,12 @@ describe("연승 저지", () => {
     expect(progressOf(progress, "streak-breaker").earned).toBe(true);
   });
 
-  it("4연승인 상대를 이기거나 5연승인 상대에게 지면 받지 않는다", () => {
+  it("2연승인 상대를 이기거나 3연승인 상대에게 지면 받지 않는다", () => {
     const progress = compute([
-      ...winStreakOf("four", 4),
-      makeMatch({ opponentIds: ["four"] }),
-      ...winStreakOf("five", 5),
-      makeMatch({ opponentIds: ["five"], won: false }),
+      ...winStreakOf("two", 2),
+      makeMatch({ opponentIds: ["two"] }),
+      ...winStreakOf("three", 3),
+      makeMatch({ opponentIds: ["three"], won: false }),
     ]);
     expect(progressOf(progress, "streak-breaker").earned).toBe(false);
   });

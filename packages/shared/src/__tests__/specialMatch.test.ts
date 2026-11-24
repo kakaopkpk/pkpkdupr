@@ -22,17 +22,17 @@ describe("judgeRecommendedSpecialMatch", () => {
   it("해당 유형이 없으면 null이다", () => {
     expect(
       judgeRecommendedSpecialMatch([
-        [player("a", { rank: 1, rating: 4 }), player("b", { winStreak: 4 })],
+        [player("a", { rank: 1, rating: 4 }), player("b", { winStreak: 2 })],
         [player("c", { rank: 5, rating: 3.5 }), player("d")],
       ]),
     ).toBeNull();
   });
 
-  it("한 팀에만 5연승 이상 회원이 있으면 연승 저지이고 그 팀이 지킨다", () => {
+  it("한 팀에만 3연승 이상 회원이 있으면 연승 저지이고 그 팀이 지킨다", () => {
     expect(
       judgeRecommendedSpecialMatch([
         [player("a"), player("b")],
-        [player("c", { winStreak: 5 }), player("d")],
+        [player("c", { winStreak: 3 }), player("d")],
       ]),
     ).toEqual({
       kind: "streak_stopper",
@@ -55,7 +55,7 @@ describe("judgeRecommendedSpecialMatch", () => {
   it("양쪽 팀에 모두 연승 회원이 있으면 최강자전이다", () => {
     expect(
       judgeRecommendedSpecialMatch([
-        [player("a", { winStreak: 5 }), player("b")],
+        [player("a", { winStreak: 3 }), player("b")],
         [player("c"), player("d", { winStreak: 7 })],
       ]),
     ).toEqual({
