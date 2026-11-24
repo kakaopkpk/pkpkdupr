@@ -79,19 +79,19 @@ export interface SessionRecommendationsState {
   error: string | null;
   /** 다시 추천을 받는 중. 그동안 보던 추천을 그대로 둔다 */
   isRerolling: boolean;
-  /** 감점순 다음 후보를 받는다. 마지막 후보 다음은 서버가 1등으로 돌린다 */
+  /** 다시 추천 횟수(reroll)를 하나 올려 받는다. 순환은 서버가 정한다 */
   recommendAgain: () => void;
-  /** 지금 순번 그대로 다시 받는다(당겨서 새로고침) */
+  /** 지금 다시 추천 횟수(reroll) 그대로 다시 받는다(당겨서 새로고침) */
   reload: () => Promise<void>;
 }
 
 /**
  * 진행 중 세션의 복식 추천. sessionId가 null이면 받지 않는다.
- * 코트 수는 API 기본값이고, 세션이 바뀌거나 내 세션·경기 변경(경기 시작·참여자 변경) 무효화가 오면 1등부터 다시 받는다.
+ * 코트 수는 API 기본값이고, 세션이 바뀌거나 내 세션·경기 변경(경기 시작·참여자 변경) 무효화가 오면 첫 추천(reroll 0)부터 다시 받는다.
  * 추천이 바뀌면 보던 매칭이 흔들리므로 TTL·남의 변경으로는 다시 받지 않는다(localOnly).
  * 예외로 추천 코트의 선수가 진행 중 경기(useLiveSession().inProgressMatches)에 들어가거나 세션 참여자에서 빠지면
- * 지금 순번 그대로 다시 받는다.
- * 또 대기 인원으로 채울 수 있는 코트 수(getExpandableCourtCount)가 보이는 추천 코트 수보다 많아지면 지금 순번 그대로 다시 받는다.
+ * 지금 다시 추천 횟수(reroll) 그대로 다시 받는다.
+ * 또 대기 인원으로 채울 수 있는 코트 수(getExpandableCourtCount)가 보이는 추천 코트 수보다 많아지면 지금 다시 추천 횟수(reroll) 그대로 다시 받는다.
  * 코트가 늘지 않는 변경(남의 경기 완료 등)으로는 보던 추천을 바꾸지 않는다.
  */
 export const useSessionRecommendations = (
