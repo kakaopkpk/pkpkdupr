@@ -20,8 +20,8 @@ describe("getMatchResultName", () => {
     expect(name(0, 11, "a1")).toEqual({ label: "참패", icon: null, isWin: false });
   });
 
-  it("이긴 팀 점수가 12점 이상(듀스)이면 힘겹게 쟁취한 승리·아쉬운 패배", () => {
-    expect(name(13, 11, "a2")).toEqual({ label: "힘겹게 쟁취한 승리", icon: null, isWin: true });
+  it("이긴 팀 점수가 12점 이상(듀스)이면 진땀승·아쉬운 패배", () => {
+    expect(name(13, 11, "a2")).toEqual({ label: "진땀승", icon: null, isWin: true });
     expect(name(13, 11, "b1")).toEqual({ label: "아쉬운 패배", icon: null, isWin: false });
     expect(name(11, 10, "a1")?.label).toBe("승리");
   });
