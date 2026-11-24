@@ -312,7 +312,7 @@ export const useLiveSessionState = (
       status,
       liveSession,
       recordingSession: liveSession ?? pickRecordingSession(todaySessions),
-      // todaySessions는 완료 가능 구간의 시작(21:00)·끝(22:00) 경계마다 다시 받아 새 배열이 된다
+      // todaySessions는 완료 가능 구간의 시작(20:50)·끝(22:00) 경계마다 다시 받아 새 배열이 된다
       completableSession: pickCompletableSession(todaySessions),
       isParticipant: !!liveSession && isSessionParticipant(liveSession, playerId),
       matches,

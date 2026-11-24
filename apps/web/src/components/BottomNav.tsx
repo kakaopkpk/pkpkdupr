@@ -318,9 +318,13 @@ const BottomNavShell: React.FC = () => {
   const [joinLiveSessionError, setJoinLiveSessionError] = useState(false);
   const [isCompletingSession, setIsCompletingSession] = useState(false);
   const [completeSessionError, setCompleteSessionError] = useState(false);
-  // 세션 완료 확인 창을 연 탭. 닫혀 있으면 null
-  const [completeConfirmTabKey, setCompleteConfirmTabKey] =
-    useState<TabKey | null>(null);
+  // 세션 완료 확인 창. value는 확인할 세션 id
+  const [completeConfirmLayer, setCompleteConfirmLayer] =
+    useState<GlobalLayerState<string>>(closedLayer);
+  const closeCompleteConfirm = useCallback(
+    () => setCompleteConfirmLayer((current) => ({ ...current, value: null })),
+    [],
+  );
   const [pullToRefreshStore] = useState(createPullToRefreshStore);
   const [isPullRefreshSlow, setIsPullRefreshSlow] = useState(false);
   const handledDeepLinkRef = useRef(false);
@@ -835,9 +839,10 @@ const BottomNavShell: React.FC = () => {
     } finally {
       setIsCompletingSession(false);
       // 실패 문구는 완료 바에 보이므로 확인 창은 결과와 상관없이 닫는다
-      setCompleteConfirmTabKey(null);
+      closeCompleteConfirm();
     }
   }, [
+    closeCompleteConfirm,
     invalidateData,
     isCompletingSession,
     liveSessionState.completableSession?.id,
@@ -1407,7 +1412,12 @@ const BottomNavShell: React.FC = () => {
                     hasError={completeSessionError}
                     isActionDisabled={!isOnline}
                     isExiting={completeBar.isExiting}
-                    onComplete={() => setCompleteConfirmTabKey(selectedTab)}
+                    onComplete={() =>
+                      setCompleteConfirmLayer({
+                        value: completeBar.item.sessionId,
+                        tabKey: selectedTab,
+                      })
+                    }
                   />
                 ) : null}
                 {dockBar?.item.kind === "my-match" ? (
@@ -1446,12 +1456,14 @@ const BottomNavShell: React.FC = () => {
 
             <PwaInstallPrompt isActive={isHomeTabUncovered} />
             <CompleteSessionConfirmDialog
-              // 완료할 세션이 없어지면(22:00 자동 완료·남이 완료) 함께 닫힌다
-              isOpen={completeConfirmTabKey !== null && !!completableSession}
-              tabKey={completeConfirmTabKey ?? selectedTab}
-              selectedTab={selectedTab}
+              // 확인할 세션이 완료할 수 없게 되면(22:00 자동 완료·남이 완료) 함께 닫힌다
+              isOpen={
+                !!completeConfirmLayer.value &&
+                completeConfirmLayer.value === completableSession?.id
+              }
+              tabKey={completeConfirmLayer.tabKey}
               isConfirming={isCompletingSession}
-              onCancel={() => setCompleteConfirmTabKey(null)}
+              onCancel={closeCompleteConfirm}
               onConfirm={() => void completeSession()}
             />
             {/* 칭찬 팝업과 업적 축하는 함께 뜨지 않고, 겹치면 칭찬 팝업이 먼저다 */}

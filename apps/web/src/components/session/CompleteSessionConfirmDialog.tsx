@@ -1,7 +1,10 @@
 import React from "react";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { GLOBAL_LAYER } from "@/context/AppNavigationContext";
-import type { TabKey } from "@/context/TabNavigationContext";
+import {
+  type TabKey,
+  useTabNavigation,
+} from "@/context/TabNavigationContext";
 import { useLayerDepth } from "@/hooks/useLayerDepth";
 
 const DEPTH_ID = "complete-session-confirm";
@@ -10,7 +13,6 @@ interface CompleteSessionConfirmDialogProps {
   isOpen: boolean;
   /** 확인 창을 연 탭. 그 탭에 깊이를 쌓아 뒤로가기로 닫는다 */
   tabKey: TabKey;
-  selectedTab: TabKey;
   isConfirming: boolean;
   onCancel: () => void;
   onConfirm: () => void;
@@ -19,7 +21,8 @@ interface CompleteSessionConfirmDialogProps {
 /** 세션 완료 바의 "세션 완료"를 누르면 한 번 더 묻는 확인 창 */
 export const CompleteSessionConfirmDialog: React.FC<
   CompleteSessionConfirmDialogProps
-> = ({ isOpen, tabKey, selectedTab, isConfirming, onCancel, onConfirm }) => {
+> = ({ isOpen, tabKey, isConfirming, onCancel, onConfirm }) => {
+  const { selectedTab } = useTabNavigation();
   const isLayerOpen = useLayerDepth({
     isOpen,
     tabKey,

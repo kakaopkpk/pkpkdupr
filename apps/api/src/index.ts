@@ -2045,7 +2045,7 @@ app.post("/api/match-sessions/:sessionId/participants", async (req, res) => {
   }
 });
 
-// 정기 세션 완료: 종료(21:00)부터 자동 완료(22:00) 전까지 활성 회원 누구나, 이미 완료됐으면 그대로 돌려준다
+// 정기 세션 완료: 종료 10분 전(20:50)부터 자동 완료(22:00) 전까지 활성 회원 누구나, 이미 완료됐으면 그대로 돌려준다
 app.post("/api/match-sessions/:sessionId/complete", async (req, res) => {
   try {
     if (!(await getAuthPayload(req, res))) {

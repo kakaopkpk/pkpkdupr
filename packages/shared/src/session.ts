@@ -45,7 +45,8 @@ export const isMatchSessionKind = (value: unknown): value is MatchSessionKind =>
 
 // KST는 일광절약이 없는 고정 UTC+9다. Intl 시간대 데이터 없이 계산해 런타임마다 같게 동작한다.
 const KST_OFFSET_MS = 9 * 60 * 60 * 1000;
-const HOUR_MS = 60 * 60 * 1000;
+const MINUTE_MS = 60 * 1000;
+const HOUR_MS = 60 * MINUTE_MS;
 const DAY_MS = 24 * HOUR_MS;
 
 /** KST 벽시계 값을 UTC 필드로 읽을 수 있게 옮긴 Date */
@@ -331,7 +332,7 @@ export const getRegularSessionEndAt = (sessionDate: Date): Date =>
 export const getRegularSessionCompletableFrom = (sessionDate: Date): Date =>
   new Date(
     getRegularSessionEndAt(sessionDate).getTime() -
-      REGULAR_SESSION_COMPLETE_LEAD_MINUTES * 60 * 1000,
+      REGULAR_SESSION_COMPLETE_LEAD_MINUTES * MINUTE_MS,
   );
 
 /**
