@@ -1426,9 +1426,9 @@ describe("업적 점수", () => {
 });
 
 describe("언더독", () => {
-  const RATED = { [ME]: 3.0, partner: 3.0, "opp-1": 3.5, "opp-2": 3.5 };
+  const RATED = { [ME]: 3.0, partner: 3.0, "opp-1": 3.3, "opp-2": 3.3 };
 
-  it("경기 직전 상대 팀 평균 평점이 0.5 이상 높은데 이기면 받는다", () => {
+  it("경기 직전 상대 팀 평균 평점이 0.3 이상 높은데 이기면 받는다", () => {
     const match = makeMatch({ partnerId: "partner", ratingBefore: RATED });
     expect(progressOf(compute([match]), "underdog")).toMatchObject({
       earned: true,
@@ -1437,11 +1437,11 @@ describe("언더독", () => {
     });
   });
 
-  it("차이가 0.5보다 작거나, 지거나, 경기 직전 평점이 없으면 받지 않는다", () => {
+  it("차이가 0.3보다 작거나, 지거나, 경기 직전 평점이 없으면 받지 않는다", () => {
     const matches = [
       makeMatch({
         partnerId: "partner",
-        ratingBefore: { ...RATED, "opp-2": 3.48 },
+        ratingBefore: { ...RATED, "opp-2": 3.28 },
       }),
       makeMatch({ partnerId: "partner", won: false, ratingBefore: RATED }),
       makeMatch({ partnerId: "partner" }),
@@ -1455,13 +1455,13 @@ describe("언더독", () => {
   it("평점이 없는 선수는 3.0으로 친다", () => {
     const match = makeMatch({
       partnerId: "partner",
-      ratingBefore: { [ME]: null, "opp-1": 3.5, "opp-2": 3.5 },
+      ratingBefore: { [ME]: null, "opp-1": 3.3, "opp-2": 3.3 },
     });
     expect(progressOf(compute([match]), "underdog").earned).toBe(true);
   });
 
   it("단식은 두 선수 평점을 비교한다", () => {
-    const match = makeMatch({ ratingBefore: { [ME]: 2.9, "opp-1": 3.4 } });
+    const match = makeMatch({ ratingBefore: { [ME]: 2.9, "opp-1": 3.2 } });
     expect(progressOf(compute([match]), "underdog").earned).toBe(true);
   });
 
