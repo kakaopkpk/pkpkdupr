@@ -11,12 +11,13 @@ import {
 } from "@/components/home/LiveMatchCard";
 import NewsFeed from "@/components/home/NewsFeed";
 import NextSessionCarousel from "@/components/home/NextSessionCarousel";
-import RecommendationSection, {
-  getCourtKey,
-} from "@/components/home/RecommendationSection";
+import RecommendationSection from "@/components/home/RecommendationSection";
 import { useNewsFeed } from "@/components/home/useNewsFeed";
 import { usePreSessionData } from "@/components/home/usePreSessionData";
-import { useSessionRecommendations } from "@/components/home/useSessionRecommendations";
+import {
+  getCourtKey,
+  useSessionRecommendations,
+} from "@/components/home/useSessionRecommendations";
 import { useLiveSessionHighlight } from "@/components/home/useLiveSessionHighlight";
 import { LiveSessionHighlightCard } from "@/components/records/SessionReportParts";
 import ParticipantsSheet from "@/components/session/ParticipantsSheet";

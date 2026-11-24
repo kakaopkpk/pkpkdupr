@@ -14,8 +14,6 @@ import {
   type SessionRecommendationsState,
 } from "./useSessionRecommendations";
 
-export { getCourtKey };
-
 const RecommendationSkeleton: React.FC = () => (
   <Card className="flex flex-col gap-3 py-4">
     <SkeletonBlock className="h-24 w-full rounded-pk-sm" />

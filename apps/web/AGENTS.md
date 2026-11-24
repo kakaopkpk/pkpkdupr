@@ -197,7 +197,8 @@
   - `localOnly`면 내 변경 무효화에만 커지고 TTL·남의 변경에는 커지지 않습니다. 추천 매칭(`useSessionRecommendations`)이 씁니다.
   - 추천 매칭 요청 코트 수는 `max(0, MATCHMAKING_DEFAULT_COURTS − 이 세션 진행 중 경기 수)`입니다(`getRequestedCourtCount`, `inProgressMatches` 중 `session?.id`가 추천 세션인 경기만 셉니다). 0이면 요청하지 않고, 0에서 1 이상이 되면 받습니다.
   - 추천 코트로 시작에 성공하면(다시 시도 포함) Home이 `invalidateData(["matches"])`보다 먼저 `removeStartedCourt`를 불러 그 코트만 빼고(`removeRecommendedCourt`), 그 무효화로는 다시 받지 않습니다.
-    - 진행 중 경기 목록에 그 경기가 보이기 전에도 시작한 코트를 이 세션 진행 중 경기로 쳐서 stale·코트 늘리기 판정이 다시 받지 않습니다.
+    - 시작 뒤 진행 중 경기 목록이 처음 갱신되기 전까지 시작한 코트를 이 세션 진행 중 경기로 쳐서(요청 코트 수에서도 뺌) stale·코트 늘리기 판정이 다시 받지 않습니다.
+    - 시작 때 받는 중이던 추천 응답은 시작한 코트를 빼고 반영합니다.
   - 추천 매칭은 예외로 추천 코트의 선수가 진행 중 경기(`useLiveSession().inProgressMatches`)에 들어가거나 세션 참여자에서 빠지면 지금 다시 추천 횟수(`reroll`) 그대로 다시 받습니다. 같은 선수 조합이 이어서 걸려 있는 동안은 한 번만 다시 받고, 풀린 뒤 다시 걸리면 또 받습니다.
   - 추천 매칭은 또 대기 인원(진행 중 세션 참여자 중 진행 중 경기에 들지 않은 사람)으로 채울 수 있는 코트 수 `min(요청 코트 수, floor(대기 인원 / 4))`가 보이는 추천 코트 수보다 많아지면 지금 다시 추천 횟수(`reroll`) 그대로 다시 받습니다(`getExpandableCourtCount`).
     - `useLiveSession()` 실시간 데이터만으로 판정해 추가 요청이 없고, 같은 코트 수로는 한 번만 받으며, 받는 중이면 건너뜁니다.

@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   MATCHMAKING_DEFAULT_COURTS,
   MATCHMAKING_PLAYERS_PER_COURT,
@@ -17,6 +24,12 @@ const RECOMMENDATION_DATA_KINDS = ["sessions", "matches"] as const;
 
 /** 진행 중 경기에서 선수 id만 보는 모양. 시작했지만 진행 중 경기 목록에 아직 없는 코트도 이 모양으로 넣는다 */
 type PlayerTeams = { teams: readonly { players: readonly { id: string }[] }[] };
+
+/** 시작에 성공한 추천 코트와 그때 보던 진행 중 경기 목록 */
+interface PendingStartedCourt {
+  court: PlayerTeams;
+  inProgressAtStart: readonly PlayerTeams[];
+}
 
 /** 추천 코트 키. 선수 id를 팀 순서대로 이은 값이다 */
 export const getCourtKey = (court: RecommendedCourt) =>
@@ -169,32 +182,31 @@ export const useSessionRecommendations = (
   const { liveSession, inProgressMatches } = useLiveSession();
 
   /**
-   * 시작에 성공했지만 진행 중 경기 목록에 아직 없는 코트. 목록이 갱신되기 전에도 그 선수를 경기 중으로,
+   * 시작에 성공했지만 진행 중 경기 목록이 아직 그 뒤로 갱신되지 않은 코트. 그동안 그 선수를 경기 중으로,
    * 그 코트를 이 세션 진행 중 경기로 쳐서 stale·코트 늘리기 판정이 다시 받지 않게 한다.
-   * 목록에 같은 선수 구성의 경기가 보이거나, 시작 뒤에 보낸 추천 요청이 성공하면 뺀다
+   * 목록이 한 번이라도 갱신되면(시작 뒤 요청이라 그 경기가 있거나, 그새 끝나 없거나) 더 치지 않는다
    */
   const [pendingStartedCourts, setPendingStartedCourts] = useState<
-    readonly PlayerTeams[]
+    readonly PendingStartedCourt[]
   >([]);
-  const pendingSinceRequestIdRef = useRef(0);
-  const unseenStartedCourts = useMemo(() => {
-    if (pendingStartedCourts.length === 0) return pendingStartedCourts;
-    const inProgressKeys = new Set(inProgressMatches.map(getPlayerSetKey));
-    const unseen = pendingStartedCourts.filter(
-      (court) => !inProgressKeys.has(getPlayerSetKey(court)),
-    );
-    return unseen.length === pendingStartedCourts.length
-      ? pendingStartedCourts
-      : unseen;
-  }, [inProgressMatches, pendingStartedCourts]);
+  const unseenStartedCourts = useMemo(
+    () =>
+      pendingStartedCourts
+        .filter((pending) => pending.inProgressAtStart === inProgressMatches)
+        .map((pending) => pending.court),
+    [inProgressMatches, pendingStartedCourts],
+  );
   useEffect(() => {
-    if (unseenStartedCourts !== pendingStartedCourts) {
-      setPendingStartedCourts(unseenStartedCourts);
-    }
-  }, [pendingStartedCourts, unseenStartedCourts]);
-  useEffect(() => {
-    setPendingStartedCourts([]);
+    setPendingStartedCourts((courts) => (courts.length === 0 ? courts : []));
   }, [sessionId]);
+  /**
+   * 시작 때 받는 중이던 추천 요청과 그 뒤 시작한 코트의 선수 구성 키. 그 응답은 시작 전 상태로 만들었으므로
+   * 시작한 코트를 빼고 반영한다(시작한 선수가 다른 코트에 들었으면 stale 판정이 다시 받는다)
+   */
+  const startedDuringRequestRef = useRef<{
+    requestId: number;
+    playerSetKeys: string[];
+  } | null>(null);
 
   const busyMatches = useMemo<readonly PlayerTeams[]>(
     () =>
@@ -208,9 +220,13 @@ export const useSessionRecommendations = (
     getRequestedCourtCount(sessionId, inProgressMatches) -
       unseenStartedCourts.length,
   );
-  // load가 요청 코트 수를 바뀔 때마다 다시 만들지 않도록 ref로 읽는다
+  // load·removeStartedCourt가 이 값들이 바뀔 때마다 다시 만들어지지 않도록 ref로 읽는다
   const requestedCourtsRef = useRef(requestedCourts);
-  requestedCourtsRef.current = requestedCourts;
+  const inProgressMatchesRef = useRef(inProgressMatches);
+  useLayoutEffect(() => {
+    requestedCourtsRef.current = requestedCourts;
+    inProgressMatchesRef.current = inProgressMatches;
+  }, [inProgressMatches, requestedCourts]);
 
   const load = useCallback(
     async (reroll: number) => {
@@ -256,15 +272,20 @@ export const useSessionRecommendations = (
         isLoadingRef.current = false;
         setIsRerolling(false);
         shownRerollRef.current = data.reroll;
-        setRecommendation(data);
+        const startedDuringRequest = startedDuringRequestRef.current;
+        if (startedDuringRequest?.requestId === requestId) {
+          const startedKeys = new Set(startedDuringRequest.playerSetKeys);
+          setRecommendation({
+            ...data,
+            courts: data.courts.filter(
+              (court) => !startedKeys.has(getPlayerSetKey(court)),
+            ),
+          });
+        } else {
+          setRecommendation(data);
+        }
         setStatus("ready");
         setError(null);
-        // 시작 뒤에 보낸 요청이면 서버가 시작한 경기를 이미 반영했다
-        if (requestId > pendingSinceRequestIdRef.current) {
-          setPendingStartedCourts((courts) =>
-            courts.length === 0 ? courts : [],
-          );
-        }
       } catch (err) {
         if (requestIdRef.current !== requestId) return;
         isLoadingRef.current = false;
@@ -295,11 +316,27 @@ export const useSessionRecommendations = (
 
   const removeStartedCourt = useCallback((court: RecommendedCourt) => {
     skipNextDataVersionRef.current = true;
-    pendingSinceRequestIdRef.current = requestIdRef.current;
+    const requestId = requestIdRef.current;
+    const playerSetKey = getPlayerSetKey(court);
+    const startedDuringRequest = startedDuringRequestRef.current;
+    startedDuringRequestRef.current = {
+      requestId,
+      playerSetKeys:
+        startedDuringRequest?.requestId === requestId
+          ? [...startedDuringRequest.playerSetKeys, playerSetKey]
+          : [playerSetKey],
+    };
     setRecommendation((current) =>
       current ? removeRecommendedCourt(current, court) : current,
     );
-    setPendingStartedCourts((courts) => [...courts, court]);
+    const inProgressAtStart = inProgressMatchesRef.current;
+    // 목록이 갱신돼 더 치지 않는 코트는 이참에 버린다
+    setPendingStartedCourts((courts) => [
+      ...courts.filter(
+        (pending) => pending.inProgressAtStart === inProgressAtStart,
+      ),
+      { court, inProgressAtStart },
+    ]);
   }, []);
 
   // 코트가 모두 경기 중이다가 빈 코트가 생기면 받는다
