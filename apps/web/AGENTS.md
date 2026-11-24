@@ -255,6 +255,10 @@
 - CSS 파일 상단에는 `@import "tailwindcss";`를 사용합니다.
 - Tailwind v4 기준이라 별도 `tailwind.config.*` 없이 Vite 플러그인으로 동작합니다.
 - 모바일 중심 화면이므로 고정 폭/하단 탭/오버레이가 깨지지 않게 확인합니다.
+- 화면 확대(핀치·더블탭)는 모든 기기에서 막습니다.
+  - `index.html` viewport의 `minimum-scale=1, maximum-scale=1, user-scalable=no`가 기본 잠금입니다.
+  - iOS Safari는 이 값을 무시하므로 `App.tsx`가 iOS에서만 `gesturestart`·`gesturechange`·`dblclick`·멀티터치 `touchmove`를 막고 `html[data-ios-viewport-locked]`를 답니다.
+  - 핀치를 직접 쓰는 화면(`AvatarCropScreen`·`AvatarZoomViewer`)은 `touch-none`과 pointer 이벤트로 처리합니다.
 - HeroUI를 사용할 때도 기존 Tailwind 클래스 기반 레이아웃 규칙과 충돌하지 않게 유지합니다.
 - 색·둥글기·글자 크기는 `src/index.css` `@theme`의 `pk-*` 토큰만 씁니다(예: `bg-pk-primary`, `text-pk-sub`, `rounded-pk-lg`, `text-pk-15`, `font-num`). 16진수 색을 클래스에 직접 쓰지 않습니다. 글자 크기 예외는 디자인 규칙의 글자 크기 항목에 있습니다.
 - 기본 클래스에 className prop을 합칠 때는 `components/ui/cx.ts`의 `cx`를 씁니다. tailwind-merge 기반이라 충돌하는 클래스는 뒤에 온 것만 남으므로 넘겨받은 className을 뒤에 둡니다. `!` 접두(important)로 우회하지 않습니다.
