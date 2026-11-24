@@ -294,7 +294,7 @@ const ACHIEVEMENT_TABLE: readonly {
       id: "streak-breaker",
       category: "streak",
       name: "연승 저지",
-      condition: "5연승 이상인 상대에게 승리",
+      condition: "3연승 이상인 상대에게 승리",
       badgeNumber: null,
       target: 1,
       points: 25,
@@ -969,7 +969,7 @@ export const UNBEATEN_SESSION_MIN_MATCHES = 4;
 export const UNDERDOG_MIN_RATING_GAP = 0.5;
 
 /** 연승 저지: 경기 직전 이 연승 이상이던 상대를 이기면 받는다 */
-export const STREAK_BREAKER_MIN_STREAK = 5;
+export const STREAK_BREAKER_MIN_STREAK = 3;
 
 /** 평점 평균 비교의 부동소수 오차 허용치 */
 const RATING_EPSILON = 1e-9;
