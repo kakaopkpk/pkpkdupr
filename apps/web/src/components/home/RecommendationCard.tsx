@@ -47,7 +47,7 @@ interface CourtCell {
   tone: CellTone;
   /** 순위 칩 모양. 라이벌전 주인공만 있다 */
   rankChip: "defending" | "attacking" | null;
-  /** 주인공 아바타에 연승 링을 두르고 평점을 숨긴다(연승 저지·최강자전) */
+  /** 주인공 아바타에 연승 링을 두르고 평점을 숨긴다(연승 매치·최강자전) */
   showsStreak: boolean;
 }
 

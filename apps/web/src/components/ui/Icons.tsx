@@ -325,7 +325,7 @@ export const CROSSED_SWORDS_ICON_PATHS = [
   "M5 4l9.5 9.5M19 4L9.5 13.5M4 15.5l4.5 4.5M20 15.5L15.5 20M6.5 18L11 13.5M17.5 18L13 13.5",
 ] as const;
 
-/** 멈춤 손바닥(연승 저지 특수 매치·업적 배지·특수 매치 공유 이미지 도장) 선 모양, 24 viewBox */
+/** 멈춤 손바닥(연승 매치 특수 매치·업적 배지·특수 매치 공유 이미지 도장) 선 모양, 24 viewBox */
 export const STOP_HAND_ICON_PATHS = [
   "M18 11V6a2 2 0 0 0-4 0",
   "M14 10V4a2 2 0 0 0-4 0v2",

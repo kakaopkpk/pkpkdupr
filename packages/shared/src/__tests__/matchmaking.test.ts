@@ -383,7 +383,7 @@ describe("recommendDoublesMatches 특수 유형 가산점", () => {
       }),
     );
 
-  it("유형별 가산점은 최강자전 2, 라이벌전 1.5, 연승 저지·리벤지 0이다", () => {
+  it("유형별 가산점은 최강자전 2, 라이벌전 1.5, 연승 매치·리벤지 0이다", () => {
     expect(getSpecialMatchRecommendationBonus("champions")).toBe(2);
     expect(getSpecialMatchRecommendationBonus("rival")).toBe(1.5);
     expect(getSpecialMatchRecommendationBonus("streak_stopper")).toBe(0);
@@ -417,7 +417,7 @@ describe("recommendDoublesMatches 특수 유형 가산점", () => {
     }
   });
 
-  it("연승 회원이 있는 코트는 감점을 그대로 두고 연승 저지로 판정해 표시한다", () => {
+  it("연승 회원이 있는 코트는 감점을 그대로 두고 연승 매치로 판정해 표시한다", () => {
     const participants = players(4);
     const specialPlayers = toSpecialPlayers(participants, { p02: 5 });
     const input = { participants, courts: 1, specialPlayers };
@@ -465,7 +465,7 @@ describe("recommendDoublesMatches 특수 유형 가산점", () => {
     expect(penalties).toEqual([...penalties].sort((a, b) => a - b));
   });
 
-  it("게스트가 낀 코트도 연승 회원이 있으면 연승 저지다", () => {
+  it("게스트가 낀 코트도 연승 회원이 있으면 연승 매치다", () => {
     const participants = players(4);
     const plan = recommend({
       participants,
@@ -476,7 +476,7 @@ describe("recommendDoublesMatches 특수 유형 가산점", () => {
       kind: "streak_stopper",
       protagonistIds: expect.arrayContaining(["p01"]),
     });
-    // 연승 저지 가산점은 0이다
+    // 연승 매치 가산점은 0이다
     expect(plan.penalty).toBeCloseTo(
       recommend({ participants, courts: 1 }).penalty,
     );
@@ -513,7 +513,7 @@ describe("recommendDoublesMatches 특수 유형 가산점", () => {
       return judgeRecommendedSpecialMatch([teamA, teamB]);
     });
 
-  it("여러 코트가 해당해도 특수 유형은 한 코트이고 가산점이 가장 큰 코트(없으면 앞 연승 저지 코트)가 보이며 가산점은 한 번만 뺀다", () => {
+  it("여러 코트가 해당해도 특수 유형은 한 코트이고 가산점이 가장 큰 코트(없으면 앞 연승 매치 코트)가 보이며 가산점은 한 번만 뺀다", () => {
     const participants = players(12);
     const specialPlayers = toSpecialPlayers(participants, {
       p01: 5,
@@ -532,7 +532,7 @@ describe("recommendDoublesMatches 특수 유형 가산점", () => {
       );
       expect(specialCourts).toHaveLength(judged.some(Boolean) ? 1 : 0);
       if (specialCourts[0]?.specialMatch) {
-        // 가산점 코트가 있으면 가산점이 가장 큰 앞 코트, 없으면 앞 연승 저지 코트
+        // 가산점 코트가 있으면 가산점이 가장 큰 앞 코트, 없으면 앞 연승 매치 코트
         const bonuses = judged.map((match) =>
           match ? getSpecialMatchRecommendationBonus(match.kind) : 0,
         );
@@ -550,8 +550,8 @@ describe("recommendDoublesMatches 특수 유형 가산점", () => {
     }
   });
 
-  it("같은 대진에 연승 저지 코트와 최강자전·라이벌전 코트가 함께 있으면 가산점 코트가 표시된다", () => {
-    // p01·p02(5연승)·p07(6연승)을 연승 회원으로 두고, 연승 저지 코트와 최강자전·라이벌전 코트가 함께 나오는 대진을 모두 훑는다
+  it("같은 대진에 연승 매치 코트와 최강자전·라이벌전 코트가 함께 있으면 가산점 코트가 표시된다", () => {
+    // p01·p02(5연승)·p07(6연승)을 연승 회원으로 두고, 연승 매치 코트와 최강자전·라이벌전 코트가 함께 나오는 대진을 모두 훑는다
     const participants = players(12);
     const specialPlayers = toSpecialPlayers(participants, {
       p01: 5,

@@ -42,7 +42,7 @@ describe("getSpecialMatchResultName", () => {
     });
   });
 
-  describe("연승 저지(팀 0 연승 회원 팀)", () => {
+  describe("연승 매치(팀 0 연승 회원 팀)", () => {
     const streakStopped = { kind: "streak_stopper", defendingTeamIndex: 0, outcome: "streak_stopped" } as const;
     const streakDefended = { kind: "streak_stopper", defendingTeamIndex: 0, outcome: "streak_defended" } as const;
 
