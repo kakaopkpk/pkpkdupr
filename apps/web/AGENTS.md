@@ -38,7 +38,8 @@
         - 어느 카드에서든 참여하기·참여 취소.
       - 진행 중 세션이 없으면 캐러셀(과 진행 중 경기) 아래 "소식" 피드 `home/NewsFeed`(`GET /api/news-feed`, 무한 스크롤, 데이터는 `home/useNewsFeed`)를 둔다. 카드 모양·누르면 가는 곳은 `docs/design.md` "홈"을 따른다.
       - 진행 중 일반 세션이면 블루 카드 아래 `records/SessionReportParts`의 `LiveSessionHighlightCard`(세션 지배자 줄 + 세션 연승 줄)를 둔다. 모양은 `docs/design.md` "홈".
-        - 데이터는 `home/useLiveSessionHighlight`다. 지배자는 `home/useSessionTopRiser`, 연승은 셸의 세션 경기로 `lib/sessionWinStreak`의 `getSessionWinStreaks`가 센다.
+        - 데이터는 `home/useLiveSessionHighlight`다. 지배자와 누적 연승은 `home/useLiveSessionReport`(세션 리포트 `topRiser`·`winStreaks`)가 받는다.
+        - 연승 줄 대상·세션 전적은 셸의 세션 경기와 누적 연승으로 `lib/sessionWinStreak`의 `getSessionWinStreaks`가 고른다.
         - 같은 연승을 진행 중 경기 카드·추천 매칭에 `sessionWinStreaks` prop으로 넘겨 아바타 링을 두른다(진행 중 경기 카드는 `TeamAvatars`).
       - 진행 중 경기는 경기마다 가로 vs 카드로 둔다. `home/LiveMatchCard`의 내 경기 `MyLiveMatchCard`는 테두리·"내 경기" 칩·점수 입력 버튼과 경기 상세 같은 랠리 팀 줄(`RallyTeamRow`)이 있고, 남의 경기 `LiveMatchCard`는 없다.
         - 특수 매치(`Match.specialMatch`)면 머리 줄에 `ui/SpecialMatchLabel`을 붙인다. 남의 경기는 경과 시간 뒤, 내 경기는 "내 경기" 칩(대회면 머리 글자) 뒤다.
@@ -205,7 +206,7 @@
   - `CHANNEL_ERROR`·`TIMED_OUT`은 콘솔에 남깁니다. 끊김 대비 주기 폴링은 하지 않습니다.
 - 화면별 종류
   - 진행 중 세션(`LiveSessionContext`)·추천 매칭·일정: `sessions`·`matches`
-  - 세션 지배자(`useSessionTopRiser`): `ratings`(경기 완료·수정·삭제만 지배자를 바꾸므로 경기 시작 `matches` 신호로는 받지 않습니다)
+  - 세션 지배자·진행 중 세션 누적 연승(`useLiveSessionReport`): `ratings`(경기 완료·수정·삭제만 바꾸므로 경기 시작 `matches` 신호로는 받지 않습니다)
   - 홈 다가오는 세션(`usePreSessionData`): `sessions`·`matches`·`ratings`
   - 소식(`useNewsFeed`)·세션 상세: `sessions`·`matches`·`ratings`·`achievements`
   - 경기 상세: `matches`·`ratings`·`achievements`
