@@ -16,10 +16,6 @@ import PushScreen from "@/components/PushScreen";
 import LastSessionMeCard from "@/components/home/LastSessionMeCard";
 import { SessionPraiseSection } from "@/components/praise/SessionPraiseSection";
 import { useLiveSessionHighlight } from "@/components/home/useLiveSessionHighlight";
-import {
-  getPlayerSessionAchievements,
-  MyNewAchievementsCard,
-} from "@/components/records/MyNewAchievementsCard";
 import { RecordSessionCard } from "@/components/records/RecordCards";
 import SessionRatingChangesScreen from "@/components/records/SessionRatingChangesScreen";
 import SessionReportShareSheet, {
@@ -148,7 +144,7 @@ export interface SessionReportDrawerProps {
  * 전역 세션 상세 화면. 다가오는·진행 중·끝난 세션 모두 열리고, 머리는 세션 카드다.
  * - 끝나기 전: 일정 탭 블루 카드(D-day 또는 LIVE, 참여자 시트, 참여 버튼) → 대회면 "대진", 아니면 "경기".
  *   진행 중 일반 세션이면 카드와 "경기" 사이에 홈과 같은 세션 지배자·세션 연승 카드
- * - 끝난 대회: 순위 카드 → 리포트(세션 지배자·칭찬·내 평점·내 새 업적·평점 변화) → "대진"
+ * - 끝난 대회: 순위 카드 → 리포트(세션 지배자·내 평점·하이라이트(칭찬)·평점 변화) → "대진"
  * - 끝난 일반 세션: 일정 탭 지난 세션 카드(누를 수 없음) → 리포트 → "경기".
  *   리포트가 없으면(완료 경기 없이 끝남) 버튼 없는 블루 카드
  * 끝난 세션 머리 카드에는 내 기록을 넣지 않는다. 내 기록은 리포트의 내 평점 카드에만 있다.
@@ -356,10 +352,6 @@ export default function SessionReportDrawer({
         : null,
     [playerId, praise, report, username],
   );
-  const myAchievements = useMemo(
-    () => (report ? getPlayerSessionAchievements(report, playerId) : []),
-    [playerId, report],
-  );
 
   const completedMatches = useMemo(
     () =>
@@ -422,15 +414,9 @@ export default function SessionReportDrawer({
     return (
       <>
         {topRiser ? <TopRiserCard report={topRiser} /> : null}
+        {myReport ? <LastSessionMeCard report={myReport} /> : null}
         {praise ? (
           <SessionPraiseSection praise={praise} onPraised={handlePraised} />
-        ) : null}
-        {myReport ? <LastSessionMeCard report={myReport} /> : null}
-        {playerId && myAchievements.length > 0 ? (
-          <MyNewAchievementsCard
-            playerId={playerId}
-            achievements={myAchievements}
-          />
         ) : null}
         {players.length > 0 ? (
           <PreviewSection

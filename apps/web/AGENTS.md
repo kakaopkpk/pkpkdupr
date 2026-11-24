@@ -97,9 +97,10 @@
         - 진행 중(`useLiveSession().liveSession?.id`가 이 세션)이면 D-day 대신 LIVE다. 대회도 진행 중에 모양이 같다.
         - 진행 중 일반 세션이면 카드와 "경기" 사이에 홈과 같은 `LiveSessionHighlightCard`(데이터도 홈과 같은 `home/useLiveSessionHighlight`)를 둔다.
         - 메타 줄은 홈 다음 세션 카드와 같은 `getSessionMetaLabel`(미래면 날짜까지).
-      - 끝난 대회: `TournamentRankCard`(누를 수 없음) → 세션 지배자·칭찬·내 평점·내 새 업적·평점 변화 → `TournamentBracketSection`.
-      - 끝난 일반 세션: `RecordSessionCard`(`onPress` 없이 누를 수 없음, 메타 줄 앞에 날짜) → 세션 지배자·칭찬·내 평점·내 새 업적·평점 변화 → "경기" 섹션. 리포트가 없으면 버튼 없는 블루 카드("종료").
-      - 칭찬은 `praise/SessionPraiseSection`이다. 끝난 세션이 칭찬하는 세션(`isSessionPraiseEnabled`)이면 리포트와 함께 `GET /api/match-sessions/:sessionId/praise`를 읽고, 후보가 없으면 섹션이 없다. 칭찬을 못 읽으면 보이던 칭찬을 두고 화면은 그대로 그린다.
+      - 끝난 대회: `TournamentRankCard`(누를 수 없음) → 세션 지배자(`TopRiserCard`)·내 평점(`LastSessionMeCard`)·하이라이트·평점 변화 → `TournamentBracketSection`.
+      - 끝난 일반 세션: `RecordSessionCard`(`onPress` 없이 누를 수 없음, 메타 줄 앞에 날짜) → 세션 지배자·내 평점·하이라이트·평점 변화 → "경기" 섹션. 리포트가 없으면 버튼 없는 블루 카드("종료").
+      - 세션 상세에는 내 새 업적 카드가 없다. 업적은 홈 소식·업적 축하·나 탭에서 본다.
+      - 하이라이트는 칭찬 섹션 `praise/SessionPraiseSection`이다(섹션 제목만 "하이라이트"). 끝난 세션이 칭찬하는 세션(`isSessionPraiseEnabled`)이면 리포트와 함께 `GET /api/match-sessions/:sessionId/praise`를 읽고, 후보가 없으면 섹션이 없다. 칭찬을 못 읽으면 보이던 칭찬을 두고 화면은 그대로 그린다.
       - 끝난 세션 머리 카드는 `mine`을 넘기지 않는다(내 기록 띠·줄 없음). 내 기록은 `LastSessionMeCard` 하나만 보인다.
       - 리포트가 있는 끝난 세션은 머리 오른쪽 위 공유 아이콘으로 `records/SessionReportShareSheet`를 연다. 내용은 `lib/sessionReportShare`가 리포트·칭찬 응답으로 만들고(새 API 없음), 이미지는 `records/sessionReportShareImage`, 미리 만들기·공유는 `hooks/useSessionReportShare`다.
     - `record/`: 경기 기록 시트. 완료 단계는 이 경기로 참가자 전원이 받은 업적을 띠(`match/MatchAchievementRow`)로 보이고, 그중 내 새 업적만 화면 전체 축하 연출 `AchievementCelebration`으로 띄우고 닫으면 확인 처리
@@ -120,7 +121,7 @@
     - `session/`: 세션 만들기(일정 탭과 같은 `MonthCalendar`로 고르는 날짜, `minDateKey`로 지난 날·오늘이 든 달 앞은 막음, 표시는 `schedule/useScheduleMonthMarks`·시작·종료 시각 칩 `SessionSchedulePicker`, 오늘 이후 어느 날이든)·참여자 시트 `ParticipantsSheet`(열면 참여자 보기, 오른쪽 위 "수정"으로 같은 시트에서 전체 회원 체크·게스트 추가 수정 모드, 완료·취소·뒤로가기는 보기로 돌아감)
     - `settings/`: 설정·비밀번호 변경·상태메시지 편집·프로필 사진 조정 `AvatarCropScreen`
       - 고른 사진을 끌어 옮기고 핀치로 1~4배, 두 번 탭 2배↔1배, 원 안을 512px JPEG로 잘라 저장. 좌표 계산은 `utils/avatarCrop.ts`
-  - 탭 전용 조각: `home/`, `schedule/`, `records/`(세션 리포트 조각 `SessionReportParts`는 일정 탭·세션 상세·홈이 같이 씀, 끝난 세션·세션 없는 경기 카드 `RecordCards`, 세션 상세 내 새 업적 카드 `MyNewAchievementsCard`), `ranking/`. 세션 블루 카드 틀·참여 버튼 `session/SessionBlueCard`(오른쪽 위 피클볼 장식 `session/PickleballIllustration`, 첫 줄은 종류 칩 "정기"/"회원"/"대회"와 남은 날 `getSessionDDayLabel`("D-1"·오늘이면 "D-Day"), 참여 중이면 "✓ 참여 중 … 취소" 버튼 하나, 진행 중 세션 카드 `LiveSessionCard`)는 홈 다음 세션·진행 중 세션 카드와 일정 탭 세션 카드가 같이 씀
+  - 탭 전용 조각: `home/`, `schedule/`, `records/`(세션 리포트 조각 `SessionReportParts`는 일정 탭·세션 상세·홈이 같이 씀, 끝난 세션·세션 없는 경기 카드 `RecordCards`), `ranking/`. 세션 블루 카드 틀·참여 버튼 `session/SessionBlueCard`(오른쪽 위 피클볼 장식 `session/PickleballIllustration`, 첫 줄은 종류 칩 "정기"/"회원"/"대회"와 남은 날 `getSessionDDayLabel`("D-1"·오늘이면 "D-Day"), 참여 중이면 "✓ 참여 중 … 취소" 버튼 하나, 진행 중 세션 카드 `LiveSessionCard`)는 홈 다음 세션·진행 중 세션 카드와 일정 탭 세션 카드가 같이 씀
     - `session.kind`가 대회면 카드 안에서 남색 바탕·금색 "트로피 + 대회" 칩·연한 트로피 장식 `session/TrophyIllustration`으로 그린다.
     - 선택 `onPress`는 카드 빈 곳(안의 버튼 제외) 누르기다.
     - `onOpenParticipants`를 생략하면 참여자 줄은 누를 수 없다.
@@ -143,7 +144,7 @@
       - 조회 중·표시 중에는 `onBusyChange`로 알려 업적 축하가 기다린다(칭찬 팝업이 먼저).
       - 칭찬하지 않고 넘긴 세션은 `lib/sessionPraise`가 localStorage `pkpkdupr:session-praise-skipped`에 회원 id + 세션 id로 기억해 다시 띄우지 않는다. 칭찬한 세션은 서버가 뺀다.
     - `SessionPraisePopup`: 후보 카드 팝업. 띄울 때 보던 탭에 `useLayerDepth` kind `dialog`를 쌓아 바깥 어두운 곳·뒤로가기·Esc로 넘기고, 카드를 누르면 칭찬 직후 연출 뒤 약 3초에 사라진다. 4xx 문구는 카드 아래, 네트워크 오류는 `showSaveFailure`다.
-    - `SessionPraiseSection`: 세션 상세 "칭찬" 섹션. 칭찬 전 줄 전체가 칭찬 버튼이고, 알약 상태는 `getSessionPraisePillState`다.
+    - `SessionPraiseSection`: 세션 상세 "하이라이트" 섹션(내용은 칭찬 후보). 칭찬 전 줄 전체가 칭찬 버튼이고, 알약 상태는 `getSessionPraisePillState`다.
     - `SessionPraiseParts`: 분류 칩(앰버, 분류 아이콘)·분류 아이콘. 값 표기는 `lib/sessionPraise`의 `formatSessionPraiseValue`다.
   - `profile/UnseenAchievementCelebration.tsx`: `BottomNav`가 렌더. 전역 화면·바텀시트·+ 메뉴가 하나도 열려 있지 않을 때 앱 진입·업적 데이터 버전 변경(무효화·앱 복귀 TTL)·열린 화면이 모두 닫힐 때 `GET /api/me/achievements/unseen`을 조회해, 아직 보지 않은 내 업적(남이 입력한 경기·세션 지배자·관리자 정정 포함)을 `AchievementCelebration`으로 한 장씩 띄우고 닫으면 `POST /api/me/achievements/seen`. 미확인 조회(`fetchUnseenAchievements`)는 진행 중인 확인 처리 요청이 끝난 뒤 보내 방금 본 업적이 다시 뜨지 않는다
     - 칭찬 팝업이 조회·표시 중이면 기다리고, 축하 연출이 떠 있는 동안은 `onShowingChange`로 알려 칭찬 팝업이 기다린다.
