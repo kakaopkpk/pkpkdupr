@@ -178,7 +178,10 @@ import {
   PlayerRatingChartProjectionService,
   selectRatingTrendWindow,
 } from "./services/PlayerRatingChartProjectionService";
-import { buildPlayerProfileSummary } from "./services/PlayerProfileSummaryService";
+import {
+  buildPeakRating,
+  buildPlayerProfileSummary,
+} from "./services/PlayerProfileSummaryService";
 import {
   buildSpecialMatchCandidatePlayers,
   judgeSpecialMatchOutcome,
@@ -1487,6 +1490,7 @@ app.get("/api/players/:playerId/profile-summary", async (req, res) => {
       : undefined;
     res.json({
       player,
+      peakRating: buildPeakRating(ratingChangeLogs, playerId, player.duprRating),
       ...buildPlayerProfileSummary(
         matches,
         playerId,

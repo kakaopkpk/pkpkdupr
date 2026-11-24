@@ -49,6 +49,8 @@ export const ProfileRatingSection: React.FC<{
       rank={rank}
       rating={rating}
       last30Days={overview.summary.ratingDelta[category].last30Days}
+      // 배포 직후 이전 API 응답에는 없을 수 있다
+      peakRating={overview.summary.peakRating?.[category] ?? null}
       history={overview.summary.ratingHistory[category]}
     />
   );
