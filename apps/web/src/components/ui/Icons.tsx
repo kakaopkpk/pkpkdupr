@@ -325,6 +325,11 @@ export const CROSSED_SWORDS_ICON_PATHS = [
   "M5 4l9.5 9.5M19 4L9.5 13.5M4 15.5l4.5 4.5M20 15.5L15.5 20M6.5 18L11 13.5M17.5 18L13 13.5",
 ] as const;
 
+/** 두 사람(남복·여복 매치 특수 매치) 선 모양, 24 viewBox */
+export const PAIR_ICON_PATHS = [
+  "M9 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7zM2.5 20c.8-3.5 3.3-5.5 6.5-5.5s5.7 2 6.5 5.5M16 4.3a3.5 3.5 0 0 1 0 6.4M18 14.8c1.9.7 3 2.5 3.5 5.2",
+] as const;
+
 /** 멈춤 손바닥(연승 매치 특수 매치·업적 배지·특수 매치 공유 이미지 도장) 선 모양, 24 viewBox */
 export const STOP_HAND_ICON_PATHS = [
   "M18 11V6a2 2 0 0 0-4 0",

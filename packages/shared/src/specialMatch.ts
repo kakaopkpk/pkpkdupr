@@ -3,20 +3,24 @@ import type { Player } from "./player.js";
 import { SPECIAL_MATCH_STREAK_MIN } from "./streak.js";
 
 /**
- * 특수 매치 유형. 추천 매칭 카드로 시작한 경기(라이벌전·연승 매치·최강자전)와
+ * 특수 매치 유형. 추천 매칭 카드로 시작한 경기(라이벌전·연승 매치·최강자전·남복 매치·여복 매치)와
  * '같은 멤버로 한 판 더'로 시작한 경기(리벤지)에만 붙는다(docs/product.md "특수 매치")
  */
 export type SpecialMatchKind =
   | "rival"
   | "streak_stopper"
   | "champions"
-  | "revenge";
+  | "revenge"
+  | "men_doubles"
+  | "women_doubles";
 
 export const specialMatchKindValues = [
   "rival",
   "streak_stopper",
   "champions",
   "revenge",
+  "men_doubles",
+  "women_doubles",
 ] as const satisfies readonly SpecialMatchKind[];
 
 /** 화면 이름 */
@@ -25,7 +29,13 @@ export const specialMatchKindLabels: Record<SpecialMatchKind, string> = {
   streak_stopper: "연승 매치",
   champions: "최강자전",
   revenge: "리벤지 매치",
+  men_doubles: "남복 매치",
+  women_doubles: "여복 매치",
 };
+
+/** 결과(승리·저지 등)가 없는 유형. 결과 판정·큰 연출·공유 이미지가 없다 */
+export const isOutcomelessSpecialMatchKind = (kind: SpecialMatchKind): boolean =>
+  kind === "men_doubles" || kind === "women_doubles";
 
 export const isSpecialMatchKind = (value: unknown): value is SpecialMatchKind =>
   specialMatchKindValues.includes(value as SpecialMatchKind);
@@ -98,6 +108,8 @@ export interface SpecialMatchCandidatePlayer {
   rating: number | null;
   /** 지금 연승 수(computeCurrentWinStreak 규칙) */
   winStreak: number;
+  /** 성별. 성별 없는 게스트는 null */
+  gender: "M" | "F" | null;
 }
 
 /** 라이벌전으로 보는 상대 두 사람의 최대 평점 차 */
@@ -111,12 +123,15 @@ export const RIVAL_MATCH_MAX_TEAM_AVERAGE_GAP = 0.1;
  * 연승 매치는 뛸 사람을 고른 뒤 대진을 탐색하므로 연승자가 뽑히면 모든 후보 대진에 생겨 후보를 가르지 못하고,
  * 대진 감점은 코트 최대 가산점 하나만 빼서 최강자전·라이벌전 가산점을 가리기 때문에 0이다.
  * 리벤지는 추천에서 만들지 않아 0이다.
+ * 남복·여복 매치는 코트마다 더하는 성별 가산점(matchmaking MATCHMAKING_SAME_GENDER_COURT_BONUS)으로 따로 주어 0이다.
  */
 export const SPECIAL_MATCH_RECOMMENDATION_BONUS = {
   rival: 1.5,
   streak_stopper: 0,
   champions: 2,
   revenge: 0,
+  men_doubles: 0,
+  women_doubles: 0,
 } as const satisfies Record<SpecialMatchKind, number>;
 
 /** 평점 차를 소수 여섯째 자리에서 반올림해 3.55 - 3.5 같은 부동소수 오차가 판정·정렬을 흔들지 않게 한다 */
@@ -257,8 +272,34 @@ const judgeRivalMatch = (teams: CandidateTeams): SpecialMatch | null => {
   };
 };
 
+/** 네 명(복식) 성별이 모두 같은 코트의 성별. 성별 없는 선수가 있거나 섞이면 null */
+export const getSameGenderCourtGender = (
+  genders: readonly ("M" | "F" | null | undefined)[],
+): "M" | "F" | null => {
+  const [first] = genders;
+  if (first !== "M" && first !== "F") return null;
+  return genders.every((gender) => gender === first) ? first : null;
+};
+
+/** 복식 네 명이 모두 남자면 남복 매치, 모두 여자면 여복 매치. 성별 없는 게스트가 끼면 아니다 */
+const judgeSameGenderMatch = (teams: CandidateTeams): SpecialMatch | null => {
+  if (teams.some((team) => team.length !== 2)) return null;
+  const gender = getSameGenderCourtGender(
+    teams.flatMap((team) => team.map((player) => player.gender)),
+  );
+  if (!gender) return null;
+  return {
+    kind: gender === "M" ? "men_doubles" : "women_doubles",
+    defendingTeamIndex: null,
+    protagonistIds: [null, null],
+    rivalPairs: [],
+    outcome: null,
+  };
+};
+
 /**
- * 추천 카드 출처 경기 판정. 해당 없으면 null. outcome은 null. 우선순위는 연승(최강자전·연승 매치) > 라이벌전이다.
+ * 추천 카드 출처 경기 판정. 해당 없으면 null. outcome은 null.
+ * 우선순위는 연승(최강자전·연승 매치) > 라이벌전 > 남복·여복 매치다.
  * 게스트가 낀 코트도 정회원 연승 회원이 있으면 연승 매치·최강자전이고, 게스트는 연승 주인공이 되지 않는다.
  * 라이벌전은 평점 반영 뒤 순위 역전으로 결과가 정해지는데 게스트가 낀 경기는 평점에 반영하지 않으므로,
  * 게스트가 한 명이라도 있으면 같은 코트 정회원끼리도 라이벌전이 아니다.
@@ -268,8 +309,10 @@ export const judgeRecommendedSpecialMatch = (
 ): SpecialMatch | null => {
   const streakMatch = judgeStreakMatch(teams);
   if (streakMatch) return streakMatch;
-  if (teams.some((team) => team.some((player) => player.isGuest))) return null;
-  return judgeRivalMatch(teams);
+  const hasGuest = teams.some((team) => team.some((player) => player.isGuest));
+  const rivalMatch = hasGuest ? null : judgeRivalMatch(teams);
+  if (rivalMatch) return rivalMatch;
+  return judgeSameGenderMatch(teams);
 };
 
 const isSamePlayerSet = (

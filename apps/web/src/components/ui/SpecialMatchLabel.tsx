@@ -8,17 +8,20 @@ import {
   CROSSED_SWORDS_ICON_PATHS,
   FIST_ICON_PATHS,
   FLAME_ICON_PATH,
+  PAIR_ICON_PATHS,
   SHIELD_ICON_PATH,
   STOP_HAND_ICON_PATHS,
 } from "./Icons";
 import { cx } from "./cx";
 
-/** 유형별 24 viewBox 선 모양. 손바닥·주먹·칼은 업적 배지와 같은 그림이다 */
+/** 유형별 24 viewBox 선 모양. 손바닥·주먹·칼은 업적 배지와 같은 그림이고, 남복·여복은 같은 두 사람 그림이다 */
 const SPECIAL_MATCH_ICON_PATHS: Record<SpecialMatchResultIcon, readonly string[]> = {
   rival: CROSSED_SWORDS_ICON_PATHS,
   streak_stopper: STOP_HAND_ICON_PATHS,
   champions: [FLAME_ICON_PATH],
   revenge: FIST_ICON_PATHS,
+  men_doubles: PAIR_ICON_PATHS,
+  women_doubles: PAIR_ICON_PATHS,
   shield: [SHIELD_ICON_PATH],
 };
 

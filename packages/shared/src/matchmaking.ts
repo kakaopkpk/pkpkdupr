@@ -1,4 +1,5 @@
 import {
+  getSameGenderCourtGender,
   judgeRecommendedSpecialMatch,
   SPECIAL_MATCH_RECOMMENDATION_BONUS,
   type SpecialMatch,
@@ -20,6 +21,11 @@ export const MATCHMAKING_PENALTY_WEIGHTS = {
   /** 한 코트 최고·최저 평점 차 1.0당 */
   courtRatingSpread: 5,
 } as const;
+/**
+ * 네 명 성별이 모두 같은 코트(남복·여복)마다 대진 감점에서 빼는 가산점.
+ * 특수 유형 가산점(대진에서 가장 큰 코트 하나)과 달리 코트마다 더한다
+ */
+export const MATCHMAKING_SAME_GENDER_COURT_BONUS = 2;
 export const MATCHMAKING_RANDOM_STARTS = 40;
 /** 최저 감점 + 이 값 이하 대진을 후보로 모은다 */
 export const MATCHMAKING_CANDIDATE_PENALTY_MARGIN = 5;
@@ -35,6 +41,8 @@ export interface MatchmakingParticipant {
   /** 복식 평점. NR이면 null. 게스트면 무시하고 MATCHMAKING_GUEST_RATING으로 친다 */
   doublesRating: number | null;
   isGuest?: boolean;
+  /** 성별. 없거나 null(성별 없는 게스트)이면 남복·여복 가산점 판정에서 빠진다 */
+  gender?: "M" | "F" | null;
 }
 
 /** 오늘 이 세션에서 완료된 경기의 팀 구성(선수 id) */
@@ -79,7 +87,7 @@ export interface DoublesRecommendationPlan {
   courts: RecommendedCourtPlan[];
   /** 추천 대상 중 이번에 선발되지 않은 선수 id */
   restingPlayerIds: string[];
-  /** 고른 대진의 총 감점(특수 유형 가산점을 뺀 값이라 음수일 수 있다) */
+  /** 고른 대진의 총 감점(특수 유형·남복·여복 가산점을 뺀 값이라 음수일 수 있다) */
   penalty: number;
   /** 적용한 다시 추천 횟수(순환 반영) */
   reroll: number;
@@ -353,6 +361,9 @@ export const recommendDoublesMatches = (
     ]),
   );
   const ratingOf = (id: string): number => ratingById.get(id) ?? nrRating;
+  const genderById = new Map(
+    eligible.map((participant) => [participant.id, participant.gender ?? null]),
+  );
   const partnerCount = (a: string, b: string): number =>
     history.partnerCounts.get(pairKey(a, b)) ?? 0;
   const opponentCount = (a: string, b: string): number =>
@@ -371,11 +382,17 @@ export const recommendDoublesMatches = (
       opponentCount(a1, b2) +
       opponentCount(a2, b1) +
       opponentCount(a2, b2);
+    const sameGenderBonus = getSameGenderCourtGender(
+      [a1, a2, b1, b2].map((id) => genderById.get(id)),
+    )
+      ? MATCHMAKING_SAME_GENDER_COURT_BONUS
+      : 0;
     return (
       Math.abs(averageA - averageB) * weights.teamAverageGap +
       repeatedPartners * weights.repeatedPartner +
       repeatedOpponents * weights.repeatedOpponent +
-      (Math.max(...ratings) - Math.min(...ratings)) * weights.courtRatingSpread
+      (Math.max(...ratings) - Math.min(...ratings)) * weights.courtRatingSpread -
+      sameGenderBonus
     );
   };
   // 특수 유형 판정. 판정 입력에 없는 선수가 있으면 그 코트는 특수 유형이 아니다
@@ -582,22 +599,35 @@ export const recommendDoublesMatches = (
     result = runStep(step, result);
   }
 
-  // 특수 유형으로 보이는 코트는 하나다. 가산점이 가장 큰 코트(같으면 앞 코트), 가산점 코트가 없으면 앞 연승 매치 코트
-  let specialCourt: { court: number; match: SpecialMatch; bonus: number } | null =
-    null;
+  // 특수 유형으로 보이는 코트는 하나다. 가산점이 가장 큰 코트(같으면 앞 코트) → 앞 연승 매치 코트 → 앞 남복·여복 매치 코트 순이다
+  const displayTier = (match: SpecialMatch, bonus: number): number => {
+    if (bonus > 0) return 0;
+    if (match.kind === "streak_stopper") return 1;
+    if (match.kind === "men_doubles" || match.kind === "women_doubles") return 2;
+    return Number.POSITIVE_INFINITY;
+  };
+  let specialCourt: {
+    court: number;
+    match: SpecialMatch;
+    bonus: number;
+    tier: number;
+  } | null = null;
   for (let court = 0; court < courtCount; court += 1) {
     const match = judgeCourt(result.arrangement, court);
     if (!match) {
       continue;
     }
     const bonus = getSpecialMatchRecommendationBonus(match.kind);
-    if (bonus > 0) {
-      if (!specialCourt || bonus > specialCourt.bonus) {
-        specialCourt = { court, match, bonus };
-      }
-    } else if (!specialCourt && match.kind === "streak_stopper") {
-      // 가산점 0인 유형 중에서는 연승 매치만 보이고, 뒤에 가산점 코트가 나오면 위 분기가 덮어쓴다
-      specialCourt = { court, match, bonus };
+    const tier = displayTier(match, bonus);
+    if (!Number.isFinite(tier)) {
+      continue;
+    }
+    if (
+      !specialCourt ||
+      tier < specialCourt.tier ||
+      (tier === specialCourt.tier && bonus > specialCourt.bonus)
+    ) {
+      specialCourt = { court, match, bonus, tier };
     }
   }
 

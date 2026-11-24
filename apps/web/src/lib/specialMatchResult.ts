@@ -40,5 +40,9 @@ export const getSpecialMatchResultName = (
       return isDefending
         ? { label: isWin ? "방어 성공" : "방어 실패", icon: "shield" }
         : { label: isWin ? "리벤지 성공" : "리벤지 실패", icon: "revenge" };
+    // 남복·여복 매치는 결과가 없어 여기 오지 않는다
+    case "men_doubles":
+    case "women_doubles":
+      return null;
   }
 };

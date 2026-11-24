@@ -1951,6 +1951,7 @@ app.get("/api/match-sessions/:sessionId/recommendations", async (req, res) => {
         id: member.id,
         doublesRating: getRecommendationDoublesRating(member),
         isGuest: member.isGuest,
+        gender: member.gender,
       })),
       busyPlayerIds,
       completedMatches,
