@@ -301,6 +301,18 @@ const ACHIEVEMENT_TABLE: readonly {
     },
   },
   {
+    metric: "streakBreaks",
+    definition: {
+      id: "streak-breaker-10",
+      category: "streak",
+      name: "연승 저지 10회",
+      condition: "연승 저지 10번",
+      badgeNumber: "10",
+      target: 10,
+      points: 50,
+    },
+  },
+  {
     metric: "peakDoublesRating",
     definition: {
       id: "rating-3.0",
@@ -531,13 +543,13 @@ const ACHIEVEMENT_TABLE: readonly {
   {
     metric: "revenges",
     definition: {
-      id: "revenge-5",
+      id: "revenge-10",
       category: "special",
-      name: "리벤지 5회",
-      condition: "리벤지 5번",
-      badgeNumber: "5",
-      target: 5,
-      points: 25,
+      name: "리벤지 10회",
+      condition: "리벤지 10번",
+      badgeNumber: "10",
+      target: 10,
+      points: 50,
     },
   },
   {
