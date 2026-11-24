@@ -142,8 +142,12 @@ export default defineConfig({
             },
           },
           {
-            urlPattern:
-              /^https?:\/\/[^/]+\/storage\/v1\/object\/public\/avatars\/.+$/,
+            // 화면 <img>(no-cors)만 캐시한다. 공유 이미지가 crossOrigin(cors)으로 같은 사진을 부를 때
+            // 캐시된 opaque 응답을 돌려주면 로드가 실패하므로, cors 요청은 브라우저 HTTP 캐시·네트워크로 보낸다.
+            // workbox가 함수를 문자열로 옮겨 서비스 워커에 넣으므로 바깥 변수를 참조하지 않는다.
+            urlPattern: ({ url, request }) =>
+              request.mode !== "cors" &&
+              /^\/storage\/v1\/object\/public\/avatars\/.+$/.test(url.pathname),
             handler: "StaleWhileRevalidate",
             options: {
               cacheName: "pkpkdupr-avatar-v1",
