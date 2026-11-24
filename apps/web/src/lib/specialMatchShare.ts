@@ -41,9 +41,9 @@ export type SpecialMatchShareTarget = SpecialMatchShareBase &
     | {
         kind: "rival";
         category: MatchTopLevelType;
-        /** 순위가 올라 위 줄이 된 회원(▲) */
+        /** 순위가 올라 상대를 넘어선 회원(▲) */
         winner: SpecialMatchShareRankRow;
-        /** 넘어선 회원(▼) */
+        /** 이긴 회원이 넘어선 회원(▼) */
         passed: SpecialMatchShareRankRow;
       }
     | {
@@ -73,17 +73,14 @@ export interface SpecialMatchCaptionPart {
 }
 
 const TITLES: Record<SpecialMatchShareKind, string> = {
-  rival: "라이벌전 승리!",
-  "streak-break": "연승 저지!",
-  "king-win": "최강자전 승리!",
+  rival: "라이벌전 승리",
+  "streak-break": "연승 저지",
+  "king-win": "최강자전 승리",
 };
 
 export const getSpecialMatchShareTitle = (kind: SpecialMatchShareKind) => TITLES[kind];
 
-export const getRankingCategoryLabel = (category: MatchTopLevelType) =>
-  `${MATCH_CATEGORY_LABELS[category]} 랭킹`;
-
-/** 흰 카드 아래 문구. 큰 연출 끝 화면의 문구와 같다 */
+/** 제목 아래 문구. 큰 연출 끝 화면의 문구와 같다 */
 export const getSpecialMatchCaptionParts = (
   target: SpecialMatchShareTarget,
 ): SpecialMatchCaptionPart[] => {

@@ -43,9 +43,9 @@ const kingWin: SpecialMatchShareTarget = {
 
 describe("getSpecialMatchShareTitle", () => {
   it("연출 제목과 같다", () => {
-    expect(getSpecialMatchShareTitle("rival")).toBe("라이벌전 승리!");
-    expect(getSpecialMatchShareTitle("streak-break")).toBe("연승 저지!");
-    expect(getSpecialMatchShareTitle("king-win")).toBe("최강자전 승리!");
+    expect(getSpecialMatchShareTitle("rival")).toBe("라이벌전 승리");
+    expect(getSpecialMatchShareTitle("streak-break")).toBe("연승 저지");
+    expect(getSpecialMatchShareTitle("king-win")).toBe("최강자전 승리");
   });
 });
 

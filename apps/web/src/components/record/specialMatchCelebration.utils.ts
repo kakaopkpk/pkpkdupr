@@ -8,12 +8,12 @@ import type { MatchInfo } from "@/types/match";
  * 시각(ms)은 연출이 뜬 시점 기준이다. 모양은 docs/design.md "특수 매치"의 큰 연출을 따른다.
  */
 
-/** 카드가 튀어나와 자리 잡은 뒤 잠깐 멈췄다가 장면을 시작한다 */
+/** 얼굴 묶음이 튀어나와 자리 잡은 뒤 잠깐 멈췄다가 장면을 시작한다 */
 export const SCENE_START_MS = 900;
-/** 라이벌전 승리: 공격 쪽 순위가 한 칸 오르는 박자 */
+/** 라이벌전 승리: 공격 쪽 칩이 한 칸 오르는 박자 */
 export const RIVAL_STEP_MS = 500;
-/** 라이벌전 승리: 두 줄이 자리를 바꾸는 시간 */
-export const RIVAL_SWAP_MS = 350;
+/** 라이벌전 승리: 넘어서는 박자에 지키던 쪽 얼굴이 흐려지는 시간 */
+export const RIVAL_PASS_MS = 350;
 /** 손바닥 도장이 떨어지는 시간. index.css `--animate-pk-stamp-drop` 길이와 같아야 한다 */
 const STAMP_DROP_MS = 520;
 /** 도장이 박힌 뒤 연승 테두리가 흐려져 사라지는 시간 */
@@ -32,7 +32,7 @@ export const getRivalCountSteps = (
 ): number => Math.max(0, celebration.attacker.rankBefore - celebration.defender.rankBefore - 1);
 
 /**
- * 장면 박자 시각. 라이벌전 승리는 한 칸씩 오르는 박자들 뒤 자리 바꿈 한 번,
+ * 장면 박자 시각. 라이벌전 승리는 한 칸씩 오르는 박자들 뒤 넘어서기 한 번(두 칩이 경기 뒤 순위가 됨),
  * 연승 저지는 도장 떨어지기 시작·박힘, 최강자전은 그 뒤 이긴 쪽 테두리 타오름이다
  */
 export const getSceneBeatTimes = (celebration: SpecialMatchCelebration): number[] => {
@@ -54,7 +54,7 @@ export const getSceneEndMs = (celebration: SpecialMatchCelebration): number => {
   const lastBeat = beats[beats.length - 1];
   switch (celebration.kind) {
     case "rival":
-      return lastBeat + RIVAL_SWAP_MS;
+      return lastBeat + RIVAL_PASS_MS;
     case "streak_stopper":
       return lastBeat + STREAK_RING_FADE_MS;
     case "champions":
