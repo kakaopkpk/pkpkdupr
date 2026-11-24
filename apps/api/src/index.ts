@@ -1264,9 +1264,15 @@ const findNewAchievementsForSavedMatch = (
   // 수정 전 평점 로그는 재계산으로 덮어써져 없으므로, 이미 완료였던 경기는 지금 평점을 그대로 붙인다.
   // 그래서 완료 경기 수정으로는 평점 업적·언더독이 새 업적으로 나오지 않는다(미확인 업적 조회로 축하한다).
   const saved = after.find((candidate) => candidate.id === match.id);
+  // 저장 전 경기의 세션 표시(개근상 정기·출사표 대회)는 저장 후 목록의 같은 세션 값으로 맞춘다
   const regularSessionIds = new Set(
     after.flatMap((candidate) =>
       candidate.session?.regular ? [candidate.session.id] : [],
+    ),
+  );
+  const tournamentSessionIds = new Set(
+    after.flatMap((candidate) =>
+      candidate.session?.tournament ? [candidate.session.id] : [],
     ),
   );
   const before = [
@@ -1279,6 +1285,7 @@ const findNewAchievementsForSavedMatch = (
               ? {
                   id: previous.session.id,
                   regular: regularSessionIds.has(previous.session.id),
+                  tournament: tournamentSessionIds.has(previous.session.id),
                 }
               : null,
             doublesRatingAfter: saved?.doublesRatingAfter,
