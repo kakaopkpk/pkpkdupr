@@ -195,8 +195,8 @@
   - 화면이 보이게 될 때(탭 전환·덮인 화면 드러남·앱 복귀) 마지막으로 커진 뒤(처음은 마운트 뒤) `DATA_TTL_MS`(5분, 모든 데이터 공통)가 지났으면 커집니다.
   - 화면 보임은 `useIsScreenVisible()`입니다. 자기 `PushScreen` 본문 밖(래퍼 최상단)에서 받는 화면은 `PushScreen`의 `onVisibleChange` 값을 `isScreenVisible`로 넘깁니다. 셸(진행 중 세션·업적 축하)은 늘 보이는 것으로 봅니다.
   - `localOnly`면 내 변경 무효화에만 커지고 TTL·남의 변경에는 커지지 않습니다. 추천 매칭(`useSessionRecommendations`)이 씁니다.
-  - 추천 매칭은 예외로 추천 코트의 선수가 진행 중 경기(`useLiveSession().inProgressMatches`)에 들어가거나 세션 참여자에서 빠지면 지금 순번(`rank`) 그대로 다시 받습니다. 같은 선수 조합이 이어서 걸려 있는 동안은 한 번만 다시 받고, 풀린 뒤 다시 걸리면 또 받습니다.
-  - 추천 매칭은 또 대기 인원(진행 중 세션 참여자 중 진행 중 경기에 들지 않은 사람)으로 채울 수 있는 코트 수 `min(요청 코트 수, floor(대기 인원 / 4))`가 보이는 추천 코트 수보다 많아지면 지금 순번(`rank`) 그대로 다시 받습니다(`getExpandableCourtCount`).
+  - 추천 매칭은 예외로 추천 코트의 선수가 진행 중 경기(`useLiveSession().inProgressMatches`)에 들어가거나 세션 참여자에서 빠지면 지금 다시 추천 횟수(`reroll`) 그대로 다시 받습니다. 같은 선수 조합이 이어서 걸려 있는 동안은 한 번만 다시 받고, 풀린 뒤 다시 걸리면 또 받습니다.
+  - 추천 매칭은 또 대기 인원(진행 중 세션 참여자 중 진행 중 경기에 들지 않은 사람)으로 채울 수 있는 코트 수 `min(요청 코트 수, floor(대기 인원 / 4))`가 보이는 추천 코트 수보다 많아지면 지금 다시 추천 횟수(`reroll`) 그대로 다시 받습니다(`getExpandableCourtCount`).
     - `useLiveSession()` 실시간 데이터만으로 판정해 추가 요청이 없고, 같은 코트 수로는 한 번만 받으며, 받는 중이면 건너뜁니다.
     - 늘어날 코트가 없으면 남의 경기 완료로 추천이 바뀌지 않습니다.
 - 남의 변경은 Supabase Realtime 변경 신호로 받습니다(`context/useDataSyncRealtime.ts`, 셸이 한 번 부름).

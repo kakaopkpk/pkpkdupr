@@ -98,11 +98,18 @@
 - 세션 경기 `GET /api/match-sessions/:sessionId/matches`: 대진 예정 경기(`scheduled`, `round` 포함)도 포함
 - 점수 없이 진행 중 경기 시작 `POST /api/match-sessions/:sessionId/matches`: `POST /api/matches/start`와 같은 처리, 오늘 세션만, 이미 진행 중인 선수 포함 시 409, 선수 자동 참여
   - 추천 카드의 `recommendedSpecialKind`를 주면 지금 그 경기 종류 랭킹·연승으로 `judgeRecommendedSpecialMatch`를 다시 판정해 유형이 같을 때만 `specialMatch`에 저장하고, 다르거나 리벤지·모르는 값이면 null로 시작한다(요청은 실패하지 않는다).
-- 복식 추천 매칭 `GET /api/match-sessions/:sessionId/recommendations?courts=N&rank=R`
+- 복식 추천 매칭 `GET /api/match-sessions/:sessionId/recommendations?courts=N&reroll=R`
   - 오늘 세션만, courts 기본 3·1~4로 자름.
-  - 탐색 난수는 세션 id와 완료 경기 수로 서버가 정해, 같은 상황이면 누구에게나 같은 결과.
-  - 후보는 감점순으로 최저 + 5(`MATCHMAKING_CANDIDATE_PENALTY_MARGIN`) 이내 대진 전부이고, 5개(`MATCHMAKING_MIN_CANDIDATES`)보다 적으면 감점순으로 5개까지 채운다.
-  - rank(0부터, 기본 0)번째 후보를 돌려주고 후보 수를 넘으면 나머지로 순환한다. 0 이상 정수가 아니면 400. 응답 `rank`·`candidateCount`.
+  - `reroll`은 다시 추천 횟수(기본 0)이고 0 이상 정수가 아니면 400 "reroll은 0 이상 정수여야 합니다.". 옛 `rank` 쿼리는 읽지 않는다(보내도 400이 아니고 결과에 영향 없음).
+  - reroll이 10(`MATCHMAKING_REROLL_CYCLE`)을 넘으면 `((reroll - 1) mod 10) + 1`로 순환한다.
+  - 탐색 난수 seed는 세션 id와 완료 경기 수(`getMatchmakingSeed`)이고 다시 추천 단계별 난수는 seed와 단계 번호로 만든다. 같은 상황·같은 reroll이면 누구에게나 같은 결과.
+  - 선발은 오늘 경기 수 오름차순이고, 같은 경기 수끼리만 단계별 난수로 순서를 정한다(1판 차이도 뒤집히지 않는다).
+  - 후보는 최저 감점 + 5(`MATCHMAKING_CANDIDATE_PENALTY_MARGIN`) 이내 대진뿐이다.
+  - reroll 0은 후보 중 감점이 가장 낮은 대진(같으면 대진 키 순 첫 번째)이다.
+  - reroll 1 이상은 직전 대진을 빼고, 직전 대진과 같은 코트(두 팀 구성이 같은 코트) 수가 가장 적은 후보 중 무작위로 고른다.
+    - 직전 대진은 서버가 같은 입력으로 다시 계산한 reroll − 1 결과다. 그래서 한 요청은 0단계부터 차례로 최대 11회 계산한다.
+    - 후보가 직전 대진 하나뿐이면 그 대진을 돌려준다(여유폭 밖으로 가지 않는다).
+  - 응답 `reroll`(순환을 반영해 적용한 값)·`candidateCount`(고른 대진이 속한 단계의 후보 수, 대진이 없으면 0).
   - 진행 중 경기 선수 제외.
   - 게스트는 팀 나누기·응답 팀 `averageRating` 모두 2.5(`MATCHMAKING_GUEST_RATING`)로 치고, 응답 선수 `doublesRating`은 null이다.
   - 팀 나누기는 NR 정회원을 게스트를 뺀 참여자 평점 중앙값(전원 NR이면 3.5)으로 대체하고, 응답 팀 `averageRating`은 NR 정회원을 3.0으로 친 표시용 평균.
