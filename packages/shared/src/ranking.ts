@@ -112,6 +112,11 @@ export interface MatchSessionReport {
   topRiser: SessionPlayerReport | null;
   /** 이 세션 경기로 받은 업적(참가자 전원). 받은 시각 오름차순 */
   achievements: EarnedAchievement[];
+  /**
+   * 참가자 중 정회원의 선수 id → 세션 마지막 완료 경기까지 센 연승(랭킹 winStreak과 같은 누적 연승).
+   * 연승이 없는(0) 회원은 넣지 않는다
+   */
+  winStreaks: Record<string, number>;
 }
 
 /** 기록 탭 세션 줄: 완료 경기가 있는 세션 하나 */

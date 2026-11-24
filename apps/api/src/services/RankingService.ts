@@ -721,6 +721,12 @@ const findPraisedSessions = (
   return result;
 };
 
+/** 그 시각까지(포함) 완료된 경기로 센 연승(`computeCurrentWinStreaks`와 같은 규칙) */
+export const computeWinStreaksAt = (matches: RankingMatch[], endAt: Date) =>
+  computeCurrentWinStreaks(
+    matches.filter((match) => match.completedAt.getTime() <= endAt.getTime()),
+  );
+
 /**
  * 세션 리포트. 완료 경기가 없으면 null.
  * 평점·순위는 복식 기준, 경기 수·승패는 세션의 완료 경기 전체 기준이다.
@@ -739,7 +745,18 @@ export const buildSessionReport = ({
     (match) => match.sessionId === session.id,
   );
   const players = buildSessionPlayerReports(context, session, sessionMatches);
-  if (!players) return null;
+  const endAt = getSessionEndAt(sessionMatches);
+  if (!players || !endAt) return null;
+
+  const streaks = computeWinStreaksAt(context.matches, endAt);
+  const winStreaks = Object.fromEntries(
+    players.flatMap(({ player }) => {
+      const winStreak = streaks.get(player.id) ?? 0;
+      return winStreak > 0 && canEarnAchievements(context, player.id)
+        ? [[player.id, winStreak] as const]
+        : [];
+    }),
+  );
 
   return {
     session: toSessionHistoryItem(
@@ -755,6 +772,7 @@ export const buildSessionReport = ({
       new Set(sessionMatches.map((match) => match.id)),
       players.map((report) => report.player.id),
     ),
+    winStreaks,
   };
 };
 

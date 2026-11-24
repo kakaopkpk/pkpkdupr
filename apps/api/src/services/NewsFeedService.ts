@@ -15,14 +15,12 @@ import {
   getSessionPraiseStatus,
   SESSION_PRAISE_HIGHLIGHT_MIN,
 } from "@pkpkdupr/shared/sessionPraise";
-import {
-  WIN_STREAK_DISPLAY_MIN,
-  computeCurrentWinStreaks,
-} from "@pkpkdupr/shared/streak";
+import { WIN_STREAK_DISPLAY_MIN } from "@pkpkdupr/shared/streak";
 import {
   buildSessionPlayerReports,
   compareSessionsLatestFirst,
   compareText,
+  computeWinStreaksAt,
   findPlayerEarnedAchievements,
   getActivePlayerIds,
   getSessionEndAt,
@@ -98,14 +96,6 @@ const compareTimedItems = (left: TimedItem, right: TimedItem) => {
   }
   return 0;
 };
-
-/** 세션 마지막 완료 경기까지(포함) 완료된 경기로 센 연승(`computeCurrentWinStreaks`와 같은 규칙) */
-const computeWinStreaksAt = (matches: RankingMatch[], endAt: Date) =>
-  computeCurrentWinStreaks(
-    matches.filter(
-      (match) => match.completedAt.getTime() <= endAt.getTime(),
-    ),
-  );
 
 const buildSessionItem = ({
   context,
