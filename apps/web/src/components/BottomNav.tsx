@@ -8,7 +8,10 @@ import React, {
 import { createPortal } from "react-dom";
 import { Alert, CloseButton } from "@heroui/react";
 import type { MatchTopLevelType } from "@pkpkdupr/shared/match";
-import { getEmptySessionExpiresAt } from "@pkpkdupr/shared/session";
+import {
+  getEmptySessionExpiresAt,
+  getRegularSessionEndAt,
+} from "@pkpkdupr/shared/session";
 import {
   CompleteSessionBar,
   JoinSessionBar,
@@ -37,6 +40,7 @@ import MemberProfileDrawer from "@/components/profile/MemberProfileDrawer";
 import PlayerAchievementsDrawer from "@/components/profile/PlayerAchievementsDrawer";
 import RecordMatchSheet from "@/components/record/RecordMatchSheet";
 import SessionReportDrawer from "@/components/records/SessionReportDrawer";
+import { CompleteSessionConfirmDialog } from "@/components/session/CompleteSessionConfirmDialog";
 import CreateSessionSheet from "@/components/session/CreateSessionSheet";
 import SettingsDrawer from "@/components/settings/SettingsDrawer";
 import {
@@ -314,6 +318,13 @@ const BottomNavShell: React.FC = () => {
   const [joinLiveSessionError, setJoinLiveSessionError] = useState(false);
   const [isCompletingSession, setIsCompletingSession] = useState(false);
   const [completeSessionError, setCompleteSessionError] = useState(false);
+  // 세션 완료 확인 창. value는 확인할 세션 id
+  const [completeConfirmLayer, setCompleteConfirmLayer] =
+    useState<GlobalLayerState<string>>(closedLayer);
+  const closeCompleteConfirm = useCallback(
+    () => setCompleteConfirmLayer((current) => ({ ...current, value: null })),
+    [],
+  );
   const [pullToRefreshStore] = useState(createPullToRefreshStore);
   const [isPullRefreshSlow, setIsPullRefreshSlow] = useState(false);
   const handledDeepLinkRef = useRef(false);
@@ -827,8 +838,11 @@ const BottomNavShell: React.FC = () => {
       setCompleteSessionError(true);
     } finally {
       setIsCompletingSession(false);
+      // 실패 문구는 완료 바에 보이므로 확인 창은 결과와 상관없이 닫는다
+      closeCompleteConfirm();
     }
   }, [
+    closeCompleteConfirm,
     invalidateData,
     isCompletingSession,
     liveSessionState.completableSession?.id,
@@ -896,6 +910,7 @@ const BottomNavShell: React.FC = () => {
       completableSession
         ? {
             sessionId: completableSession.id,
+            endAt: getRegularSessionEndAt(new Date(completableSession.date)),
             // 완료 전 세션이라 만료 시각이 곧 자동 완료(22:00)다
             autoCompleteAt: getEmptySessionExpiresAt(
               completableSession.kind,
@@ -1391,12 +1406,18 @@ const BottomNavShell: React.FC = () => {
                 {completeBar ? (
                   <CompleteSessionBar
                     key={completeBar.key}
+                    endAt={completeBar.item.endAt}
                     autoCompleteAt={completeBar.item.autoCompleteAt}
                     isPending={isCompletingSession}
                     hasError={completeSessionError}
                     isActionDisabled={!isOnline}
                     isExiting={completeBar.isExiting}
-                    onComplete={() => void completeSession()}
+                    onComplete={() =>
+                      setCompleteConfirmLayer({
+                        value: completeBar.item.sessionId,
+                        tabKey: selectedTab,
+                      })
+                    }
                   />
                 ) : null}
                 {dockBar?.item.kind === "my-match" ? (
@@ -1434,6 +1455,17 @@ const BottomNavShell: React.FC = () => {
             </div>
 
             <PwaInstallPrompt isActive={isHomeTabUncovered} />
+            <CompleteSessionConfirmDialog
+              // 확인할 세션이 완료할 수 없게 되면(22:00 자동 완료·남이 완료) 함께 닫힌다
+              isOpen={
+                !!completeConfirmLayer.value &&
+                completeConfirmLayer.value === completableSession?.id
+              }
+              tabKey={completeConfirmLayer.tabKey}
+              isConfirming={isCompletingSession}
+              onCancel={closeCompleteConfirm}
+              onConfirm={() => void completeSession()}
+            />
             {/* 칭찬 팝업과 업적 축하는 함께 뜨지 않고, 겹치면 칭찬 팝업이 먼저다 */}
             <PendingSessionPraisePopup
               playerId={player?.id ?? null}

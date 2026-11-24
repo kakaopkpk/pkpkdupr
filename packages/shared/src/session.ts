@@ -12,8 +12,10 @@ import type { TournamentPlacement } from "./tournament.js";
 export const REGULAR_SESSION_WEEKDAYS: readonly number[] = [1, 4];
 /** 정기 세션 시작 시각(KST 시) */
 export const REGULAR_SESSION_START_HOUR = 18;
-/** 정기 세션 종료 시각(KST 시). 화면·캘린더의 끝 시각이고, 이때부터 자동 완료 전까지 회원이 세션을 완료할 수 있다 */
+/** 정기 세션 종료 시각(KST 시). 화면·캘린더의 끝 시각이다 */
 export const REGULAR_SESSION_END_HOUR = 21;
+/** 정기 세션 종료 몇 분 전부터 회원이 세션을 완료할 수 있는지 */
+export const REGULAR_SESSION_COMPLETE_LEAD_MINUTES = 10;
 /**
  * 정기 세션이 자동 완료되는 시각(KST 시). 종료 1시간 뒤다.
  * 정기 시간대 경기 묶기(isRegularSessionTime)와 오늘 정기 세션 만들기(canOpenRegularSession)도 이 시각 전까지다
@@ -43,7 +45,8 @@ export const isMatchSessionKind = (value: unknown): value is MatchSessionKind =>
 
 // KST는 일광절약이 없는 고정 UTC+9다. Intl 시간대 데이터 없이 계산해 런타임마다 같게 동작한다.
 const KST_OFFSET_MS = 9 * 60 * 60 * 1000;
-const HOUR_MS = 60 * 60 * 1000;
+const MINUTE_MS = 60 * 1000;
+const HOUR_MS = 60 * MINUTE_MS;
 const DAY_MS = 24 * HOUR_MS;
 
 /** KST 벽시계 값을 UTC 필드로 읽을 수 있게 옮긴 Date */
@@ -321,13 +324,20 @@ export const getEmptySessionExpiryCutoff = (
   return new Date(latestExpiredDayStart.getTime() + DAY_MS);
 };
 
-/** 정기 세션 종료 시각(그날 21:00 KST). 이때부터 자동 완료(22:00) 전까지 회원이 세션을 완료할 수 있다 */
+/** 정기 세션 종료 시각(그날 21:00 KST) */
 export const getRegularSessionEndAt = (sessionDate: Date): Date =>
   kstDateKeyToDate(toKstDateKey(sessionDate), REGULAR_SESSION_END_HOUR);
 
+/** 회원이 정기 세션을 완료할 수 있게 되는 시각(종료 10분 전, 그날 20:50 KST) */
+export const getRegularSessionCompletableFrom = (sessionDate: Date): Date =>
+  new Date(
+    getRegularSessionEndAt(sessionDate).getTime() -
+      REGULAR_SESSION_COMPLETE_LEAD_MINUTES * MINUTE_MS,
+  );
+
 /**
  * 지금 회원이 그 세션을 완료할 수 있으면 true.
- * 정기 세션이고 아직 완료 전이며 종료 시각(21:00) ≤ now < 자동 완료(22:00)일 때다
+ * 정기 세션이고 아직 완료 전이며 종료 10분 전(20:50) ≤ now < 자동 완료(22:00)일 때다
  */
 export const isSessionCompletable = (
   session: { kind: MatchSessionKind; date: Date } & Pick<
@@ -338,7 +348,7 @@ export const isSessionCompletable = (
 ): boolean =>
   session.kind === "regular" &&
   !session.completedAt &&
-  getRegularSessionEndAt(session.date).getTime() <= now.getTime() &&
+  getRegularSessionCompletableFrom(session.date).getTime() <= now.getTime() &&
   now.getTime() < getEmptySessionExpiresAt("regular", session.date).getTime();
 
 /** 점수 없는 진행 중 경기가 시작 2시간을 넘겨 무효(삭제 대상)면 true */

@@ -366,10 +366,12 @@ export const JoinSessionBar: React.FC<{
 );
 
 /**
- * 정기 세션 종료 시각(21:00)부터 자동 완료(22:00) 전까지 어느 탭에서나 보이는 세션 완료 바.
- * 누구든 "세션 완료"를 누르면 확인 없이 바로 완료한다
+ * 정기 세션 종료 10분 전(20:50)부터 자동 완료(22:00) 전까지 어느 탭에서나 보이는 세션 완료 바.
+ * "세션 완료"를 누르면 호출부가 확인 창을 띄운다
  */
 export const CompleteSessionBar: React.FC<{
+  /** 세션 종료 시각(21:00). 이 전이면 종료 전 문구를 보인다 */
+  endAt: Date;
   /** 자동 완료 시각 */
   autoCompleteAt: Date;
   isPending: boolean;
@@ -378,6 +380,7 @@ export const CompleteSessionBar: React.FC<{
   isExiting?: boolean;
   onComplete: () => void;
 }> = ({
+  endAt,
   autoCompleteAt,
   isPending,
   hasError,
@@ -396,7 +399,11 @@ export const CompleteSessionBar: React.FC<{
     <DockBar
       role="status"
       dotTone="primary"
-      title="세션 종료 시간이에요"
+      title={
+        now.getTime() < endAt.getTime()
+          ? "곧 세션 종료 시간이에요"
+          : "세션 종료 시간이에요"
+      }
       description={
         hasError
           ? "완료하지 못했어요. 다시 시도해 주세요"

@@ -5,6 +5,7 @@ import {
   getEmptySessionExpiresAt,
   getEmptySessionExpiryCutoff,
   getSessionEndsAt,
+  getRegularSessionCompletableFrom,
   getRegularSessionEndAt,
   isSessionCompletable,
   getNextRegularSessionDateKey,
@@ -506,15 +507,18 @@ describe("정기 세션 완료", () => {
     completedAt: null,
   };
 
-  it("종료 21:00부터 자동 완료 22:00 전까지 완료 전 정기 세션만 완료할 수 있다", () => {
+  it("종료 10분 전 20:50부터 자동 완료 22:00 전까지 완료 전 정기 세션만 완료할 수 있다", () => {
     expect(getRegularSessionEndAt(sessionDate)).toEqual(
       new Date("2026-11-12T21:00:00+09:00"),
     );
+    expect(getRegularSessionCompletableFrom(sessionDate)).toEqual(
+      new Date("2026-11-12T20:50:00+09:00"),
+    );
     expect(
-      isSessionCompletable(regular, new Date("2026-11-12T20:59:59+09:00")),
+      isSessionCompletable(regular, new Date("2026-11-12T20:49:59+09:00")),
     ).toBe(false);
     expect(
-      isSessionCompletable(regular, new Date("2026-11-12T21:00:00+09:00")),
+      isSessionCompletable(regular, new Date("2026-11-12T20:50:00+09:00")),
     ).toBe(true);
     expect(
       isSessionCompletable(regular, new Date("2026-11-12T22:00:00+09:00")),
