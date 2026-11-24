@@ -111,7 +111,7 @@ const SessionPraiseRow: React.FC<{
 };
 
 /**
- * 끝난 세션 상세의 "칭찬" 섹션. 후보가 없으면 그리지 않는다.
+ * 끝난 세션 상세의 "하이라이트" 섹션(내용은 칭찬 후보). 후보가 없으면 그리지 않는다.
  * 칭찬 전에는 줄을 눌러 칭찬하고, 칭찬한 뒤·마감 뒤에는 결과만 보인다(마감 시각·"마감" 글자는 보이지 않는다).
  * 줄 순서는 후보 순서 그대로다
  */
@@ -159,7 +159,7 @@ export const SessionPraiseSection: React.FC<{
   };
 
   return (
-    <Section title="칭찬">
+    <Section title="하이라이트">
       <Card>
         {praise.candidates.map((candidate) => (
           <SessionPraiseRow
