@@ -28,7 +28,8 @@ const GRAPHIC_DELAY_MS = 150;
 const NAME_DELAY_MS = 300;
 const NAME_FADE_MS = 380;
 const RAYS_IN_DELAY_MS = 100;
-const RAYS_SPIN_MS = 24000;
+// 업적 축하 연출의 빛줄기 회전과 같다
+const RAYS_SPIN_MS = 22000;
 
 /**
  * 주인공 얼굴 뒤 빛줄기·후광. 얼굴 크기 상자 안에 두면 그 가운데가 중심이다.
@@ -56,6 +57,15 @@ const SceneRays: React.FC<{ isPulsing?: boolean }> = ({ isPulsing = false }) => 
       style={{ animationDelay: ms(RAYS_IN_DELAY_MS) }}
     />
   </>
+);
+
+/** 얼굴 둘레에서 앰버 고리가 한 번 퍼진다(넘어서는 순간·테두리 타오름) */
+const AmberPingRing: React.FC<{ inset: number }> = ({ inset }) => (
+  <span
+    aria-hidden="true"
+    className="absolute animate-pk-ping rounded-full border-3 border-pk-hl opacity-0 motion-reduce:hidden"
+    style={{ inset, animationDuration: ms(700), animationIterationCount: 1, animationFillMode: "forwards" }}
+  />
 );
 
 /** 얼굴·칩 묶음. 딤이 깔린 뒤 튀어나온다 */
@@ -128,13 +138,7 @@ export const RivalScene: React.FC<{
         <span className="relative inline-flex" style={avatarBox}>
           <SceneRays isPulsing={isPassed} />
           <PopIn>
-            {isPassed ? (
-              <span
-                aria-hidden="true"
-                className="absolute -inset-1 animate-pk-ping rounded-full border-3 border-pk-hl opacity-0 motion-reduce:hidden"
-                style={{ animationDuration: ms(700), animationIterationCount: 1, animationFillMode: "forwards" }}
-              />
-            ) : null}
+            {isPassed ? <AmberPingRing inset={-4} /> : null}
             <PlayerAvatar player={attacker.player} size={RIVAL_AVATAR} className="relative" />
             <span className="absolute -bottom-3 left-1/2 flex -translate-x-1/2">
               <RankChip
@@ -282,18 +286,7 @@ const StreakProfileAvatar: React.FC<{
         )}
         style={{ inset: -outer, borderWidth: ring.width, animationDuration: ms(STREAK_RING_FADE_MS) }}
       />
-      {isFlaring ? (
-        <span
-          aria-hidden="true"
-          className="absolute animate-pk-ping rounded-full border-3 border-pk-hl opacity-0 motion-reduce:hidden"
-          style={{
-            inset: -outer,
-            animationDuration: ms(700),
-            animationIterationCount: 1,
-            animationFillMode: "forwards",
-          }}
-        />
-      ) : null}
+      {isFlaring ? <AmberPingRing inset={-outer} /> : null}
       <PlayerAvatar player={player} size={size} className={cx("relative", isEnded && "grayscale")} />
       <span className="absolute inset-x-0 flex justify-center" style={{ top: size + TAG_DROP - TAG_HEIGHT }}>
         <span

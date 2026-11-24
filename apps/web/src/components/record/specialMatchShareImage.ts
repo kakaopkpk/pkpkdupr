@@ -123,6 +123,24 @@ const setShadow = (
   ctx.shadowOffsetY = offsetY * SHARE_SCALE;
 };
 
+/** 바탕색 틈(BADGE_RING)을 두른 알약. 아바타 위에 걸친 태그·칩을 얼굴과 띄운다 */
+const fillRingedPill = (
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  fill: string,
+  ring: string,
+) => {
+  const outerHeight = height + BADGE_RING * 2;
+  fillRoundRect(ctx, x - BADGE_RING, y - BADGE_RING, width + BADGE_RING * 2, outerHeight, outerHeight / 2, ring);
+  fillRoundRect(ctx, x, y, width, height, height / 2, fill);
+};
+
+const TAG_HEIGHT = 24;
+const TAG_FONT_SIZE = 13;
+
 /** 아바타 아래 끝에 걸친 태그("N연승"·"연승 끝"). bottom은 태그 아래 끝(아바타 아래 + 12), 둘레는 바탕색 틈이다 */
 const drawTag = (
   ctx: CanvasRenderingContext2D,
@@ -130,7 +148,6 @@ const drawTag = (
     cx,
     bottom,
     label,
-    size,
     background,
     color,
     ring,
@@ -139,7 +156,6 @@ const drawTag = (
     cx: number;
     bottom: number;
     label: string;
-    size: number;
     background: string;
     color: string;
     ring: string;
@@ -147,27 +163,18 @@ const drawTag = (
   },
 ) => {
   ctx.save();
-  ctx.font = shareFont(800, size);
+  ctx.font = shareFont(800, TAG_FONT_SIZE);
   setLetterSpacing(ctx, "0px");
-  const flameSize = size;
+  const flameSize = TAG_FONT_SIZE;
   const textWidth = ctx.measureText(label).width;
   const paddingLeft = flame ? 6 : 8;
   const paddingRight = 8;
   const contentWidth = (flame ? flameSize + 1 : 0) + textWidth;
   const width = paddingLeft + contentWidth + paddingRight;
-  const height = 24;
+  const height = TAG_HEIGHT;
   const x = cx - width / 2;
   const y = bottom - height;
-  fillRoundRect(
-    ctx,
-    x - BADGE_RING,
-    y - BADGE_RING,
-    width + BADGE_RING * 2,
-    height + BADGE_RING * 2,
-    (height + BADGE_RING * 2) / 2,
-    ring,
-  );
-  fillRoundRect(ctx, x, y, width, height, height / 2, background);
+  fillRingedPill(ctx, x, y, width, height, background, ring);
   let contentX = x + paddingLeft;
   if (flame) {
     ctx.save();
@@ -292,16 +299,7 @@ const drawRankChip = (
   const width = CHIP_PADDING_X * 2 + rankWidth + (hasChange ? CHIP_GAP + changeWidth : 0);
   const x = cx - width / 2;
   const y = bottom - CHIP_HEIGHT;
-  fillRoundRect(
-    ctx,
-    x - BADGE_RING,
-    y - BADGE_RING,
-    width + BADGE_RING * 2,
-    CHIP_HEIGHT + BADGE_RING * 2,
-    (CHIP_HEIGHT + BADGE_RING * 2) / 2,
-    colors.ink,
-  );
-  fillRoundRect(ctx, x, y, width, CHIP_HEIGHT, CHIP_HEIGHT / 2, isWinner ? colors.white : colors.neutral);
+  fillRingedPill(ctx, x, y, width, CHIP_HEIGHT, isWinner ? colors.white : colors.neutral, colors.ink);
   ctx.textAlign = "left";
   ctx.textBaseline = "middle";
   ctx.fillStyle = isWinner ? colors.ink : colors.sub;
@@ -378,7 +376,6 @@ const streakBreakScene = (
         cx,
         bottom: avatarBottom + BADGE_DROP,
         label: STREAK_END_LABEL,
-        size: 13,
         background: colors.neutral,
         color: colors.sub,
         ring: colors.ink,
@@ -439,7 +436,6 @@ const kingWinScene = (
         cx: winCx,
         bottom: avatarBottom + BADGE_DROP,
         label: winnerLabel,
-        size: 13,
         background: colors.amber,
         color: colors.ink,
         ring: colors.ink,
@@ -451,7 +447,6 @@ const kingWinScene = (
         cx: loseCx,
         bottom: avatarBottom + BADGE_DROP,
         label: STREAK_END_LABEL,
-        size: 13,
         background: colors.neutral,
         color: colors.sub,
         ring: colors.ink,
