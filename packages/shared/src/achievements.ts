@@ -1239,10 +1239,14 @@ const isPlacementMetric = (
 ): metric is PlacementMetric =>
   (PLACEMENT_METRICS as readonly AchievementMetric[]).includes(metric);
 
-/** 포디움에 드는 순위(3위 이내) */
-const PODIUM_MAX_PLACE = 3;
-
 const NO_ENDED_SESSIONS: EndedSessions = new Map();
+
+/** 세션 단위 업적 입력(칭찬·순위) 정렬: 그 시각 → 세션 id 순 */
+const compareSessionEventsBy =
+  <T extends { sessionId: string }>(getAt: (item: T) => Date) =>
+  (left: T, right: T) =>
+    getAt(left).getTime() - getAt(right).getTime() ||
+    (left.sessionId < right.sessionId ? -1 : left.sessionId > right.sessionId ? 1 : 0);
 
 /** 평점 진행도에 경기 직후 복식 평점을 반영한다 */
 const applyDoublesRating = (
@@ -1526,11 +1530,7 @@ const computeProgressSince = (
   // 칭찬 업적: 칭찬을 기준 수 이상 받은 세션을 닿은 시각 순으로 세어, target번째 세션으로 받는다
   const praisedSessions = [
     ...(endedSessions.praisedSessionsByPlayerId?.get(playerId) ?? []),
-  ].sort(
-    (left, right) =>
-      left.reachedAt.getTime() - right.reachedAt.getTime() ||
-      (left.sessionId < right.sessionId ? -1 : left.sessionId > right.sessionId ? 1 : 0),
-  );
+  ].sort(compareSessionEventsBy((session) => session.reachedAt));
   metrics.praisedSessions = praisedSessions.length;
   // 순위 업적: 시작 시각 이후 받은 경기로 든 순위를 받은 경기 순으로 세어, target번째 대회로 받는다
   const placedSessions = [
@@ -1540,15 +1540,10 @@ const computeProgressSince = (
       (placed) =>
         start == null || placed.completedAt.getTime() >= start.getTime(),
     )
-    .sort(
-      (left, right) =>
-        left.completedAt.getTime() - right.completedAt.getTime() ||
-        (left.sessionId < right.sessionId ? -1 : left.sessionId > right.sessionId ? 1 : 0),
-    );
+    .sort(compareSessionEventsBy((placed) => placed.completedAt));
+  // 저장된 순위는 1~3위뿐이라 순위에 든 대회는 모두 포디움이다
   const placementSessions: Record<PlacementMetric, PlacedSession[]> = {
-    podiumPlacements: placedSessions.filter(
-      (placed) => placed.place <= PODIUM_MAX_PLACE,
-    ),
+    podiumPlacements: placedSessions,
     championships: placedSessions.filter((placed) => placed.place === 1),
   };
   for (const metric of PLACEMENT_METRICS) {

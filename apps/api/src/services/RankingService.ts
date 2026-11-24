@@ -692,8 +692,8 @@ export const findEndedSessions = (
     endedSessions.set(session.id, topRiser?.player.id ?? null);
   }
   return Object.assign(endedSessions, {
-    praisedSessionsByPlayerId: findPraisedSessions(context, sessions),
-    placedSessionsByPlayerId: findPlacedSessions(context, sessions),
+    praisedSessionsByPlayerId: findPraisedSessions(matchesBySession, sessions),
+    placedSessionsByPlayerId: findPlacedSessions(matchesBySession, sessions),
   });
 };
 
@@ -717,7 +717,7 @@ const findLastSessionMatch = (
  * 받은 경기는 그 대회에서 그 회원의 마지막 완료 경기이고, 경기가 없으면 세지 않는다.
  */
 const findPlacedSessions = (
-  context: RankingContext,
+  matchesBySession: ReadonlyMap<string, RankingMatch[]>,
   sessions: RankingSession[],
 ): Map<string, PlacedSession[]> => {
   const result = new Map<string, PlacedSession[]>();
@@ -725,7 +725,6 @@ const findPlacedSessions = (
     (session) => session.kind === "tournament" && session.placements?.length,
   );
   if (placedTournaments.length === 0) return result;
-  const matchesBySession = groupMatchesBySession(context.matches);
   for (const session of placedTournaments) {
     const sessionMatches = matchesBySession.get(session.id) ?? [];
     for (const { playerId, place } of session.placements ?? []) {
@@ -749,13 +748,12 @@ const findPlacedSessions = (
  * 받은 경기는 그 세션에서 그 회원의 마지막 완료 경기(게스트가 낀 경기 포함)이고, 경기가 없으면 세지 않는다.
  */
 const findPraisedSessions = (
-  context: RankingContext,
+  matchesBySession: ReadonlyMap<string, RankingMatch[]>,
   sessions: RankingSession[],
 ): Map<string, PraisedSession[]> => {
   const praises = sessions.flatMap((session) => session.praises ?? []);
   const result = new Map<string, PraisedSession[]>();
   if (praises.length === 0) return result;
-  const matchesBySession = groupMatchesBySession(context.matches);
   for (const [playerId, reached] of findPraiseReachedSessions(praises)) {
     const items = reached.flatMap(({ sessionId, reachedAt }) => {
       const lastMatch = findLastSessionMatch(
