@@ -108,16 +108,14 @@ function AppRoutes() {
 }
 
 function App() {
+  // 확대 잠금은 index.html viewport(user-scalable=no)가 맡지만 iOS Safari는 이를 무시하므로
+  // iOS에서만 핀치·더블탭 제스처를 직접 막는다.
   useEffect(() => {
     if (typeof window === "undefined" || !isIosLike()) {
       return;
     }
 
     const root = document.documentElement;
-    const viewportMeta = document.querySelector<HTMLMetaElement>(
-      'meta[name="viewport"]',
-    );
-    const previousViewportContent = viewportMeta?.getAttribute("content");
     const listenerOptions = { capture: true, passive: false };
     const preventGestureZoom = (event: Event) => {
       if (event.cancelable) {
@@ -131,12 +129,6 @@ function App() {
     };
 
     root.dataset.iosViewportLocked = "true";
-    if (viewportMeta) {
-      viewportMeta.setAttribute(
-        "content",
-        `${previousViewportContent ?? ""}, minimum-scale=1, maximum-scale=1, user-scalable=no`,
-      );
-    }
 
     document.addEventListener(
       "gesturestart",
@@ -161,14 +153,6 @@ function App() {
       document.removeEventListener("dblclick", preventGestureZoom, true);
       document.removeEventListener("touchmove", preventMultiTouchZoom, true);
       delete root.dataset.iosViewportLocked;
-
-      if (viewportMeta) {
-        if (previousViewportContent == null) {
-          viewportMeta.removeAttribute("content");
-        } else {
-          viewportMeta.setAttribute("content", previousViewportContent);
-        }
-      }
     };
   }, []);
 
