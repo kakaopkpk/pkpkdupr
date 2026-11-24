@@ -178,9 +178,9 @@ describe("정기 세션 완료", () => {
     completedAt: null,
   });
 
-  it("종료 21:00부터 22:00 전까지 완료할 수 있고, 그동안 LIVE는 이어진다", () => {
-    expect(pickCompletableSession([regular], at("20:59"))).toBeNull();
-    expect(pickCompletableSession([regular], at("21:00"))?.id).toBe("R");
+  it("종료 10분 전 20:50부터 22:00 전까지 완료할 수 있고, 그동안 LIVE는 이어진다", () => {
+    expect(pickCompletableSession([regular], at("20:49"))).toBeNull();
+    expect(pickCompletableSession([regular], at("20:50"))?.id).toBe("R");
     expect(pickLiveSession([regular], at("21:30"))?.id).toBe("R");
     expect(pickCompletableSession([regular], at("22:00"))).toBeNull();
   });
@@ -193,9 +193,9 @@ describe("정기 세션 완료", () => {
     expect(pickRecordingSession([completed], at("21:20"))).toBeNull();
   });
 
-  it("정기 세션 종료 시각(21:00)을 다음 경계로 쓴다", () => {
+  it("정기 세션 완료 가능 시각(20:50)을 다음 경계로 쓴다", () => {
     expect(getNextLiveSessionBoundary([regular], at("20:00"))).toEqual(
-      at("21:00"),
+      at("20:50"),
     );
   });
 });

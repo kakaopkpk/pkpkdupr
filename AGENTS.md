@@ -182,7 +182,7 @@ pnpm lint
   - 직접 만든 정기 세션은 지우거나 다른 종류로 바꿔도 정기 쉬는 날이 생기지 않는다.
 - 정기 세션은 월·목 18:00~21:00 KST 세션이며 이름은 요일별 `getRegularSessionName`("월요 정기운동"/"목요 정기운동")이다.
 - 정기 세션 완료
-  - 종료 시각(21:00)부터 자동 완료(22:00, `REGULAR_SESSION_AUTO_COMPLETE_HOUR`) 전까지 활성 회원 누구나 세션을 완료한다(`isSessionCompletable`, `POST /api/match-sessions/:sessionId/complete`).
+  - 종료 10분 전(20:50, `getRegularSessionCompletableFrom`)부터 자동 완료(22:00, `REGULAR_SESSION_AUTO_COMPLETE_HOUR`) 전까지 활성 회원 누구나 세션을 완료한다(`isSessionCompletable`, `POST /api/match-sessions/:sessionId/complete`).
   - 완료 시각은 `match_sessions.completed_at`(`completedAt`)에 저장하고, 22:00 자동 완료는 저장하지 않고 시각으로 판정한다.
   - 완료하면 그 시각이 세션 만료 시각(`getEmptySessionExpiresAt`)·끝 시각이 되어 LIVE·오늘 세션(`isSessionOnToday`)에서 빠지고 세션 지배자·무패 세션이 확정된다.
   - 완료 뒤 정기 시간대(22:00 전)에 기록·시작한 경기는 그 세션에 붙지 않고 세션 없이 저장된다.
