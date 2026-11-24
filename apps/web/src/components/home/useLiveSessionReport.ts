@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import type { SessionPlayerReport } from "@pkpkdupr/shared/ranking";
+import type { MatchSessionReport } from "@pkpkdupr/shared/ranking";
 import {
   type DataVersionOptions,
   useDataVersion,
@@ -8,12 +8,7 @@ import { fetchSessionReport, RequestError } from "@/lib/rankings";
 
 const LIVE_SESSION_REPORT_DATA_KINDS = ["ratings"] as const;
 
-export interface LiveSessionReport {
-  /** 지금까지 평점이 가장 많이 오른 회원(세션 리포트의 topRiser) */
-  topRiser: SessionPlayerReport | null;
-  /** 참가 정회원의 누적 연승(세션 리포트의 winStreaks, 랭킹 연승과 같은 규칙) */
-  winStreaks: Readonly<Record<string, number>>;
-}
+export type LiveSessionReport = Pick<MatchSessionReport, "topRiser" | "winStreaks">;
 
 const EMPTY_REPORT: LiveSessionReport = { topRiser: null, winStreaks: {} };
 

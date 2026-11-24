@@ -87,17 +87,13 @@ const buildCells = (court: RecommendedCourt): [CourtCell, CourtCell] => {
     : [toCell(0), toCell(1)];
 };
 
-/**
- * 세션 연승 링(태그 없음). 들지 않은 회원은 아바타만.
- * winStreak은 세션 연승에 들지 않아도 링을 두를 연승(아직 세션 경기를 안 뛴 연승 주인공)이다
- */
+/** 세션 연승 링(태그 없음). winStreak이 없으면 아바타만 */
 const SessionAvatar: React.FC<{
   player: RecommendationPlayer;
   size: number;
-  sessionWinStreaks?: SessionWinStreakByPlayer;
-  winStreak?: number;
-}> = ({ player, size, sessionWinStreaks, winStreak }) => (
-  <SessionWinStreakFrame winStreak={sessionWinStreaks?.get(player.id) ?? winStreak}>
+  winStreak: number | undefined;
+}> = ({ player, size, winStreak }) => (
+  <SessionWinStreakFrame winStreak={winStreak}>
     <PlayerAvatar player={player} size={size} />
   </SessionWinStreakFrame>
 );
@@ -142,8 +138,11 @@ const CellAvatars: React.FC<{
         <SessionAvatar
           player={front}
           size={PROTAGONIST_AVATAR_SIZE}
-          sessionWinStreaks={sessionWinStreaks}
-          winStreak={cell.showsStreak ? front.winStreak : undefined}
+          // 아직 세션 경기를 안 뛰어 세션 연승에 없는 연승 주인공도 링을 두른다
+          winStreak={
+            sessionWinStreaks?.get(front.id) ??
+            (cell.showsStreak ? front.winStreak : undefined)
+          }
         />
       </span>
     );
@@ -157,7 +156,7 @@ const CellAvatars: React.FC<{
         <SessionAvatar
           player={back}
           size={PROTAGONIST_TEAMMATE_AVATAR_SIZE}
-          sessionWinStreaks={sessionWinStreaks}
+          winStreak={sessionWinStreaks?.get(back.id)}
         />
       </span>
     </span>
