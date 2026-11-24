@@ -11,12 +11,13 @@ import {
 } from "@/components/home/LiveMatchCard";
 import NewsFeed from "@/components/home/NewsFeed";
 import NextSessionCarousel from "@/components/home/NextSessionCarousel";
-import RecommendationSection, {
-  getCourtKey,
-} from "@/components/home/RecommendationSection";
+import RecommendationSection from "@/components/home/RecommendationSection";
 import { useNewsFeed } from "@/components/home/useNewsFeed";
 import { usePreSessionData } from "@/components/home/usePreSessionData";
-import { useSessionRecommendations } from "@/components/home/useSessionRecommendations";
+import {
+  getCourtKey,
+  useSessionRecommendations,
+} from "@/components/home/useSessionRecommendations";
 import { useLiveSessionHighlight } from "@/components/home/useLiveSessionHighlight";
 import { LiveSessionHighlightCard } from "@/components/records/SessionReportParts";
 import ParticipantsSheet from "@/components/session/ParticipantsSheet";
@@ -85,14 +86,11 @@ interface ParticipantsTarget {
 interface StartState {
   startingKey: string | null;
   error: { key: string; message: string } | null;
-  /** 시작에 성공해 새 추천이 오기 전까지 숨길 추천 행 */
-  startedKeys: ReadonlySet<string>;
 }
 
 const INITIAL_START_STATE: StartState = {
   startingKey: null,
   error: null,
-  startedKeys: new Set(),
 };
 
 /** 대진 예정 경기 시작 요청 상태 */
@@ -225,15 +223,6 @@ const Home: React.FC = () => {
 
   const [startState, setStartState] = useState<StartState>(INITIAL_START_STATE);
 
-  // 새 추천이 오면 숨겨 둔 시작 완료 행을 비운다
-  useEffect(() => {
-    setStartState((state) =>
-      state.startedKeys.size === 0
-        ? state
-        : { ...state, startedKeys: new Set() },
-    );
-  }, [recommendations.recommendation]);
-
   const startRecommendedMatch = async (court: RecommendedCourt) => {
     if (!liveSession || startState.startingKey) return;
 
@@ -241,17 +230,15 @@ const Home: React.FC = () => {
     const sessionId = liveSession.id;
     const run = async () => {
       await startSessionMatch(sessionId, buildRecommendedMatchRequest(court));
+      // 무효화보다 먼저 빼야 훅이 그 무효화로 추천을 다시 받지 않는다(다시 시도 성공도 같다)
+      recommendations.removeStartedCourt(court);
       invalidateData(["matches"]);
     };
 
     setStartState((state) => ({ ...state, startingKey: key, error: null }));
     try {
       await run();
-      setStartState((state) => ({
-        ...state,
-        startingKey: null,
-        startedKeys: new Set([...state.startedKeys, key]),
-      }));
+      setStartState((state) => ({ ...state, startingKey: null }));
     } catch (err) {
       setStartState((state) => ({
         ...state,
@@ -263,22 +250,6 @@ const Home: React.FC = () => {
       if (isNetworkError(err)) showSaveFailure({ onRetry: run });
     }
   };
-
-  const visibleRecommendations = useMemo(() => {
-    const { recommendation } = recommendations;
-    if (!recommendation || startState.startedKeys.size === 0) {
-      return recommendations;
-    }
-    return {
-      ...recommendations,
-      recommendation: {
-        ...recommendation,
-        courts: recommendation.courts.filter(
-          (court) => !startState.startedKeys.has(getCourtKey(court)),
-        ),
-      },
-    };
-  }, [recommendations, startState.startedKeys]);
 
   // ── 대회 내 다음 대진 경기 ─────────────────────────
   // 내 진행 중 경기가 있으면 그 카드가 "내 경기"를 차지하므로 다음 경기를 보이지 않는다
@@ -406,7 +377,7 @@ const Home: React.FC = () => {
       )}
       {isLiveParticipant ? (
         <RecommendationSection
-          state={visibleRecommendations}
+          state={recommendations}
           waitingCount={waitingCount}
           startingKey={startState.startingKey}
           startError={startState.error}
