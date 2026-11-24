@@ -4,7 +4,7 @@ import {
   MATCHMAKING_GUEST_RATING,
   MATCHMAKING_CANDIDATE_PENALTY_MARGIN,
   MATCHMAKING_DEFAULT_COURTS,
-  MATCHMAKING_MIN_CANDIDATES,
+  MATCHMAKING_REROLL_CYCLE,
   clampMatchmakingCourts,
   getMatchmakingSeed,
   getSpecialMatchRecommendationBonus,
@@ -35,7 +35,7 @@ const recommend = (
     completedMatches: [],
     courts: 3,
     seed: 1,
-    rank: 0,
+    reroll: 0,
     ...overrides,
   });
 
@@ -52,6 +52,23 @@ const matchupKey = (plan: DoublesRecommendationPlan): string =>
     )
     .sort()
     .join(" | ");
+
+/** 대진의 코트 키 목록(팀 순서·팀 안 순서 무시) */
+const courtKeys = (plan: DoublesRecommendationPlan): string[] =>
+  plan.courts.map((court) =>
+    court.teams
+      .map((team) => [...team].sort().join("+"))
+      .sort()
+      .join(" vs "),
+  );
+
+/** reroll 0~CYCLE 결과 */
+const rerollPlans = (
+  input: Partial<RecommendDoublesMatchesInput>,
+): DoublesRecommendationPlan[] =>
+  Array.from({ length: MATCHMAKING_REROLL_CYCLE + 1 }, (_, reroll) =>
+    recommend({ ...input, reroll }),
+  );
 
 /** 해당 선수가 한 판씩 뛴 완료 경기 목록(상대는 참여자가 아닌 선수) */
 const gamesFor = (id: string, count: number): MatchmakingPlayedMatch[] =>
@@ -70,7 +87,7 @@ describe("recommendDoublesMatches", () => {
       completedMatches: [{ teams: [["p01", "p02"], ["p03", "p04"]] }],
       courts: 3,
       seed: 42,
-      rank: 2,
+      reroll: 2,
     };
     expect(recommendDoublesMatches(input)).toEqual(
       recommendDoublesMatches(input),
@@ -106,34 +123,56 @@ describe("recommendDoublesMatches", () => {
     expect(tooFew.courts).toEqual([]);
     expect(tooFew.restingPlayerIds).toEqual(["p01", "p02", "p03"]);
     expect(tooFew.penalty).toBe(0);
-    expect(tooFew.rank).toBe(0);
+    expect(tooFew.reroll).toBe(0);
     expect(tooFew.candidateCount).toBe(0);
   });
 
-  it("오늘 경기 수가 2판 이상 적은 사람은 어떤 seed에서도 더 많이 친 사람보다 늦게 뽑히지 않는다", () => {
+  it("오늘 경기 수가 적은 사람은 어떤 seed·reroll에서도 많이 친 사람보다 늦게 뽑히지 않는다(1판 차이 포함)", () => {
     const participants = players(5);
-    const completedMatches = gamesFor("p05", 2);
-    for (let seed = 0; seed < 300; seed += 1) {
-      const plan = recommend({ participants, completedMatches, courts: 1, seed });
-      expect(plan.restingPlayerIds).toEqual(["p05"]);
+    for (const games of [1, 2]) {
+      const completedMatches = gamesFor("p05", games);
+      for (let seed = 0; seed < 100; seed += 1) {
+        for (const reroll of [0, 1, 3]) {
+          const plan = recommend({
+            participants,
+            completedMatches,
+            courts: 1,
+            seed,
+            reroll,
+          });
+          expect(plan.restingPlayerIds).toEqual(["p05"]);
+        }
+      }
     }
   });
 
-  it("오늘 경기 수 1판 차이는 seed에 따라 뒤집히기도 한다", () => {
-    const participants = players(5);
-    const completedMatches = gamesFor("p05", 1);
-    let reversed = 0;
-    let kept = 0;
-    for (let seed = 0; seed < 300; seed += 1) {
-      const plan = recommend({ participants, completedMatches, courts: 1, seed });
-      if (plan.restingPlayerIds[0] === "p05") {
-        kept += 1;
-      } else {
-        reversed += 1;
-      }
+  it("오늘 경기 수가 같은 사람끼리만 reroll에 따라 쉬는 사람이 바뀐다", () => {
+    // 10명 2코트. p09·p10만 1판을 쳐서 0판 8명이 늘 뽑힌다
+    const completedMatches = [...gamesFor("p09", 1), ...gamesFor("p10", 1)];
+    for (const plan of rerollPlans({
+      participants: players(10),
+      completedMatches,
+      courts: 2,
+    })) {
+      expect(plan.restingPlayerIds).toEqual(["p09", "p10"]);
     }
-    expect(reversed).toBeGreaterThan(0);
-    expect(kept).toBeGreaterThan(reversed);
+    // 9명이 모두 0판이면 경계 동점자 중 누가 쉴지가 reroll마다 바뀐다
+    const resting = new Set(
+      rerollPlans({ participants: players(9), courts: 2 }).map((plan) =>
+        plan.restingPlayerIds.join(","),
+      ),
+    );
+    expect(resting.size).toBeGreaterThan(1);
+  });
+
+  it("오늘 경기 수가 같은 사람끼리의 선발 순서는 seed에 따라 바뀐다", () => {
+    const resting = new Set<string>();
+    for (let seed = 0; seed < 30; seed += 1) {
+      resting.add(
+        recommend({ participants: players(5), courts: 1, seed }).restingPlayerIds[0],
+      );
+    }
+    expect(resting.size).toBeGreaterThan(1);
   });
 
   it("NR은 진행 중인 사람을 포함한 참여자 전체 평점의 중앙값으로 대체한다", () => {
@@ -240,42 +279,7 @@ describe("recommendDoublesMatches", () => {
     expect(court.repeatedOpponentPairs).toEqual([]);
   });
 
-  it("rank를 올리면 감점이 줄지 않는 순서로 서로 다른 대진이 나오고, 후보 수를 넘으면 1등으로 돌아간다", () => {
-    const completedMatches: MatchmakingPlayedMatch[] = [
-      { teams: [["p01", "p02"], ["p03", "p04"]] },
-      { teams: [["p05", "p06"], ["p07", "p08"]] },
-    ];
-    const input = { participants: players(12), completedMatches, courts: 3 };
-    const first = recommend({ ...input, rank: 0 });
-    expect(first.rank).toBe(0);
-    expect(first.candidateCount).toBeGreaterThanOrEqual(
-      MATCHMAKING_MIN_CANDIDATES,
-    );
-
-    const plans = Array.from({ length: first.candidateCount }, (_, rank) =>
-      recommend({ ...input, rank }),
-    );
-    expect(new Set(plans.map(matchupKey)).size).toBe(first.candidateCount);
-    for (let rank = 1; rank < plans.length; rank += 1) {
-      expect(plans[rank].rank).toBe(rank);
-      expect(plans[rank].penalty).toBeGreaterThanOrEqual(
-        plans[rank - 1].penalty - 1e-9,
-      );
-    }
-    // 선발은 순번과 상관없이 같다
-    for (const plan of plans) {
-      expect(plan.restingPlayerIds).toEqual(first.restingPlayerIds);
-    }
-
-    const wrapped = recommend({ ...input, rank: first.candidateCount });
-    expect(wrapped.rank).toBe(0);
-    expect(matchupKey(wrapped)).toBe(matchupKey(first));
-    expect(
-      matchupKey(recommend({ ...input, rank: first.candidateCount + 1 })),
-    ).toBe(matchupKey(plans[1]));
-  });
-
-  it("여유폭 안 후보가 적으면 감점순으로 최소 개수까지 채우고, 가능한 대진이 적으면 그만큼만 둔다", () => {
+  it("reroll 0은 여유폭 안 후보 중 감점이 가장 낮은 대진이다", () => {
     // 4명 1코트는 팀 나누기가 3가지뿐이다. a+b vs c+d(15점)만 여유폭 안이고 나머지 둘은 60점이다
     const participants = [
       { id: "a", doublesRating: 5 },
@@ -283,28 +287,89 @@ describe("recommendDoublesMatches", () => {
       { id: "c", doublesRating: 3.5 },
       { id: "d", doublesRating: 3.5 },
     ];
-    const plan = recommend({ participants, courts: 1 });
-    expect(plan.candidateCount).toBe(3);
-    expect(plan.penalty).toBeCloseTo(15);
-
-    const second = recommend({ participants, courts: 1, rank: 1 });
-    expect(second.penalty).toBeCloseTo(60);
-    expect(second.penalty - plan.penalty).toBeGreaterThan(
-      MATCHMAKING_CANDIDATE_PENALTY_MARGIN,
-    );
+    for (let seed = 0; seed < 20; seed += 1) {
+      const plan = recommend({ participants, courts: 1, seed });
+      expect(plan.reroll).toBe(0);
+      expect(plan.penalty).toBeCloseTo(15);
+      expect(plan.candidateCount).toBe(1);
+    }
   });
 
-  it("여유폭 안 대진이 최소 개수보다 많으면 모두 후보다", () => {
-    // 평점이 모두 같고 오늘 기록이 없으면 모든 대진의 감점이 0이다
-    const plan = recommend({
-      participants: Array.from({ length: 8 }, (_, index) => ({
-        id: `p${index}`,
-        doublesRating: 3,
-      })),
-      courts: 2,
-    });
-    expect(plan.penalty).toBe(0);
-    expect(plan.candidateCount).toBeGreaterThan(MATCHMAKING_MIN_CANDIDATES);
+  it("다시 추천은 직전 대진과 다르고, 여유폭 안 후보에서만 고른다", () => {
+    const completedMatches: MatchmakingPlayedMatch[] = [
+      { teams: [["p01", "p02"], ["p03", "p04"]] },
+      { teams: [["p05", "p06"], ["p07", "p08"]] },
+    ];
+    for (const seed of [1, 2]) {
+      const plans = rerollPlans({
+        participants: players(12),
+        completedMatches,
+        courts: 3,
+        seed,
+      });
+      const best = plans[0].penalty;
+      for (let reroll = 1; reroll < plans.length; reroll += 1) {
+        const plan = plans[reroll];
+        expect(plan.reroll).toBe(reroll);
+        expect(plan.candidateCount).toBeGreaterThan(1);
+        expect(matchupKey(plan)).not.toBe(matchupKey(plans[reroll - 1]));
+        // 12명 3코트는 선발이 늘 같아 단계마다 최저 감점도 같다
+        expect(plan.penalty).toBeLessThanOrEqual(
+          best + MATCHMAKING_CANDIDATE_PENALTY_MARGIN + 1e-9,
+        );
+      }
+    }
+  });
+
+  it("다시 추천은 직전 대진과 같은 코트가 가장 적은 후보를 고른다", () => {
+    // 평점이 모두 같고 오늘 기록이 없으면 모든 대진의 감점이 0이라 직전 대진과 겹치는 코트가 없는 후보가 늘 있다
+    const participants = Array.from({ length: 12 }, (_, index) => ({
+      id: `p${index}`,
+      doublesRating: 3,
+    }));
+    const plans = rerollPlans({ participants, courts: 3 });
+    for (let reroll = 1; reroll < plans.length; reroll += 1) {
+      const previous = new Set(courtKeys(plans[reroll - 1]));
+      expect(courtKeys(plans[reroll]).filter((key) => previous.has(key))).toEqual(
+        [],
+      );
+    }
+  });
+
+  it("여유폭 안 후보가 직전 대진 하나뿐이면 같은 대진을 돌려주고 여유폭 밖으로 가지 않는다", () => {
+    const participants = [
+      { id: "a", doublesRating: 5 },
+      { id: "b", doublesRating: 2 },
+      { id: "c", doublesRating: 3.5 },
+      { id: "d", doublesRating: 3.5 },
+    ];
+    const plans = rerollPlans({ participants, courts: 1 });
+    for (const plan of plans) {
+      expect(plan.candidateCount).toBe(1);
+      expect(plan.penalty).toBeCloseTo(15);
+      expect(matchupKey(plan)).toBe(matchupKey(plans[0]));
+    }
+  });
+
+  it("candidateCount는 여유폭 안 대진 수이고 최소 개수를 채우지 않는다", () => {
+    // players(4)는 2.25점·6.75점·11.25점 대진이고 앞의 둘만 여유폭 안이다
+    const plan = recommend({ participants: players(4), courts: 1 });
+    expect(plan.penalty).toBeCloseTo(2.25);
+    expect(plan.candidateCount).toBe(2);
+
+    const next = recommend({ participants: players(4), courts: 1, reroll: 1 });
+    expect(next.penalty).toBeCloseTo(6.75);
+    expect(next.candidateCount).toBe(2);
+  });
+
+  it("reroll이 CYCLE을 넘으면 ((reroll - 1) mod CYCLE) + 1과 같다", () => {
+    const input = { participants: players(10), courts: 2, seed: 9 };
+    for (const reroll of [11, 12, 20, 21, 1_000_000]) {
+      const expected = ((reroll - 1) % MATCHMAKING_REROLL_CYCLE) + 1;
+      const plan = recommend({ ...input, reroll });
+      expect(plan.reroll).toBe(expected);
+      expect(plan).toEqual(recommend({ ...input, reroll: expected }));
+    }
   });
 
   it("탐색 seed는 세션과 완료 경기 수가 같으면 같고, 경기가 끝나면 바뀐다", () => {
@@ -314,13 +379,14 @@ describe("recommendDoublesMatches", () => {
     expect(Number.isInteger(getMatchmakingSeed("Sabc", 0))).toBe(true);
   });
 
-  it("rank가 음수·NaN이면 0, 소수면 내린다", () => {
+  it("reroll이 음수·NaN·Infinity면 0, 소수면 내린다", () => {
     const participants = players(8);
-    const at = (rank: number) =>
-      matchupKey(recommend({ participants, courts: 2, rank }));
-    expect(at(-3)).toBe(at(0));
-    expect(at(Number.NaN)).toBe(at(0));
-    expect(at(1.9)).toBe(at(1));
+    const at = (reroll: number) =>
+      recommend({ participants, courts: 2, reroll });
+    expect(at(-3)).toEqual(at(0));
+    expect(at(Number.NaN)).toEqual(at(0));
+    expect(at(Number.POSITIVE_INFINITY)).toEqual(at(0));
+    expect(at(1.9)).toEqual(at(1));
   });
 });
 
@@ -354,18 +420,33 @@ describe("recommendDoublesMatches 특수 유형 가산점", () => {
     );
   };
 
+  /** seed 0~14의 reroll 0~2 결과 중 대진이 서로 다른 것 */
+  const distinctPlans = (
+    input: Partial<RecommendDoublesMatchesInput>,
+  ): DoublesRecommendationPlan[] => {
+    const byMatchup = new Map<string, DoublesRecommendationPlan>();
+    for (let seed = 0; seed < 15; seed += 1) {
+      for (const plan of [0, 1, 2].map((reroll) =>
+        recommend({ ...input, seed, reroll }),
+      )) {
+        if (!byMatchup.has(matchupKey(plan))) {
+          byMatchup.set(matchupKey(plan), plan);
+        }
+      }
+    }
+    return [...byMatchup.values()];
+  };
+
   /** 가산점 없이 계산한 대진별 감점 */
   const basePenaltyByMatchup = (
     input: Partial<RecommendDoublesMatchesInput>,
-  ): Map<string, number> => {
-    const first = recommend({ ...input, specialPlayers: undefined });
-    const penalties = new Map<string, number>();
-    for (let rank = 0; rank < first.candidateCount; rank += 1) {
-      const plan = recommend({ ...input, specialPlayers: undefined, rank });
-      penalties.set(matchupKey(plan), plan.penalty);
-    }
-    return penalties;
-  };
+  ): Map<string, number> =>
+    new Map(
+      distinctPlans({ ...input, specialPlayers: undefined }).map((plan) => [
+        matchupKey(plan),
+        plan.penalty,
+      ]),
+    );
 
   /** 고른 대진의 코트마다 판정한 가산점 중 최대값 */
   const expectedBonus = (
@@ -399,11 +480,11 @@ describe("recommendDoublesMatches 특수 유형 가산점", () => {
   it("특수 유형 판정 입력이 없거나 아무도 해당하지 않으면 기존과 같은 결과이고 specialMatch는 모두 null이다", () => {
     const participants = players(10);
     const input = { participants, courts: 2, seed: 7 };
-    for (let rank = 0; rank < 5; rank += 1) {
-      const withoutSpecial = recommend({ ...input, rank });
+    for (let reroll = 0; reroll < 5; reroll += 1) {
+      const withoutSpecial = recommend({ ...input, reroll });
       const allGuests = recommend({
         ...input,
-        rank,
+        reroll,
         specialPlayers: toSpecialPlayers(
           participants,
           { p01: 6 },
@@ -435,7 +516,7 @@ describe("recommendDoublesMatches 특수 유형 가산점", () => {
     expect(court.specialMatch?.protagonistIds[streakTeam]).toBe("p02");
   });
 
-  it("라이벌전이 되는 대진만 감점에서 1.5를 빼고, 후보는 뺀 감점순이다", () => {
+  it("라이벌전이 되는 대진만 감점에서 1.5를 빼고, 후보는 뺀 감점 기준이다", () => {
     const participants: MatchmakingParticipant[] = [
       { id: "a", doublesRating: 3 },
       { id: "b", doublesRating: 3.02 },
@@ -445,10 +526,11 @@ describe("recommendDoublesMatches 특수 유형 가산점", () => {
     const specialPlayers = toSpecialPlayers(participants);
     const input = { participants, courts: 1, specialPlayers };
     const base = basePenaltyByMatchup(input);
-    const first = recommend(input);
-    const penalties: number[] = [];
-    for (let rank = 0; rank < first.candidateCount; rank += 1) {
-      const plan = recommend({ ...input, rank });
+    // a+d vs b+c(5.1 - 1.5), a+c vs b+d(5.4 - 1.5)만 여유폭 안이고 a+b vs c+d(34.8)는 밖이다
+    const plans = rerollPlans(input);
+    expect(plans[0].penalty).toBeCloseTo(3.6);
+    for (const plan of plans) {
+      expect(plan.candidateCount).toBe(2);
       const [court] = plan.courts;
       // 같은 실력끼리 한 팀(a+b vs c+d)이면 평점 0.05 이내 맞상대가 없다
       const isRival = !court.teams.some(
@@ -460,9 +542,7 @@ describe("recommendDoublesMatches 특수 유형 가산점", () => {
       expect(plan.penalty).toBeCloseTo(
         base.get(matchupKey(plan))! - (isRival ? 1.5 : 0),
       );
-      penalties.push(plan.penalty);
     }
-    expect(penalties).toEqual([...penalties].sort((a, b) => a - b));
   });
 
   it("게스트가 낀 코트도 연승 회원이 있으면 연승 저지다", () => {
@@ -492,8 +572,7 @@ describe("recommendDoublesMatches 특수 유형 가산점", () => {
     const specialPlayers = toSpecialPlayers(participants, {}, ["g"]);
     const input = { participants, courts: 1, specialPlayers };
     const first = recommend(input);
-    for (let rank = 0; rank < first.candidateCount; rank += 1) {
-      const plan = recommend({ ...input, rank });
+    for (const plan of rerollPlans(input)) {
       expect(plan.courts[0].specialMatch).toBeNull();
     }
     expect(first.penalty).toBeCloseTo(
@@ -522,9 +601,7 @@ describe("recommendDoublesMatches 특수 유형 가산점", () => {
     });
     const input = { participants, courts: 3, seed: 3, specialPlayers };
     const base = basePenaltyByMatchup(input);
-    const { candidateCount } = recommend(input);
-    for (let rank = 0; rank < candidateCount; rank += 1) {
-      const plan = recommend({ ...input, rank });
+    for (const plan of distinctPlans(input)) {
       const judged = judgeCourts(plan, specialPlayers);
       const bonus = expectedBonus(plan, specialPlayers);
       const specialCourts = plan.courts.filter(
@@ -558,11 +635,9 @@ describe("recommendDoublesMatches 특수 유형 가산점", () => {
       p02: 5,
       p07: 6,
     });
-    const input = { participants, courts: 3, seed: 5, specialPlayers };
-    const { candidateCount } = recommend(input);
+    const input = { participants, courts: 3, specialPlayers };
     let mixed = 0;
-    for (let rank = 0; rank < candidateCount; rank += 1) {
-      const plan = recommend({ ...input, rank });
+    for (const plan of distinctPlans(input)) {
       const kinds = judgeCourts(plan, specialPlayers).map(
         (match) => match?.kind ?? null,
       );
@@ -587,7 +662,7 @@ describe("recommendDoublesMatches 특수 유형 가산점", () => {
       participants,
       courts: 2,
       seed: 11,
-      rank: 2,
+      reroll: 2,
       specialPlayers: toSpecialPlayers(participants, { p03: 5 }),
     };
     expect(recommend(input)).toEqual(recommend(input));

@@ -155,15 +155,15 @@ export const removeMatchSessionParticipant = async (
   );
 };
 
-/** rank는 감점순 후보 순번(0부터). 후보 수를 넘으면 서버가 1등으로 돌린다 */
+/** reroll은 다시 추천 횟수(0 = 첫 추천). 순환 주기를 넘으면 서버가 순환한 값으로 계산해 응답 reroll에 담는다 */
 export const fetchSessionRecommendations = (
   sessionId: string,
   courts: number,
-  rank: number,
+  reroll: number,
 ) => {
   const searchParams = new URLSearchParams({
     courts: String(courts),
-    rank: String(rank),
+    reroll: String(reroll),
   });
   return requestJson<MatchSessionRecommendationResponse>(
     `${sessionPath(sessionId)}/recommendations?${searchParams.toString()}`,

@@ -79,19 +79,19 @@ export interface SessionRecommendationsState {
   error: string | null;
   /** 다시 추천을 받는 중. 그동안 보던 추천을 그대로 둔다 */
   isRerolling: boolean;
-  /** 감점순 다음 후보를 받는다. 마지막 후보 다음은 서버가 1등으로 돌린다 */
+  /** 다시 추천 횟수(reroll)를 하나 올려 받는다. 순환은 서버가 정한다 */
   recommendAgain: () => void;
-  /** 지금 순번 그대로 다시 받는다(당겨서 새로고침) */
+  /** 지금 다시 추천 횟수(reroll) 그대로 다시 받는다(당겨서 새로고침) */
   reload: () => Promise<void>;
 }
 
 /**
  * 진행 중 세션의 복식 추천. sessionId가 null이면 받지 않는다.
- * 코트 수는 API 기본값이고, 세션이 바뀌거나 내 세션·경기 변경(경기 시작·참여자 변경) 무효화가 오면 1등부터 다시 받는다.
+ * 코트 수는 API 기본값이고, 세션이 바뀌거나 내 세션·경기 변경(경기 시작·참여자 변경) 무효화가 오면 첫 추천(reroll 0)부터 다시 받는다.
  * 추천이 바뀌면 보던 매칭이 흔들리므로 TTL·남의 변경으로는 다시 받지 않는다(localOnly).
  * 예외로 추천 코트의 선수가 진행 중 경기(useLiveSession().inProgressMatches)에 들어가거나 세션 참여자에서 빠지면
- * 지금 순번 그대로 다시 받는다.
- * 또 대기 인원으로 채울 수 있는 코트 수(getExpandableCourtCount)가 보이는 추천 코트 수보다 많아지면 지금 순번 그대로 다시 받는다.
+ * 지금 다시 추천 횟수(reroll) 그대로 다시 받는다.
+ * 또 대기 인원으로 채울 수 있는 코트 수(getExpandableCourtCount)가 보이는 추천 코트 수보다 많아지면 지금 다시 추천 횟수(reroll) 그대로 다시 받는다.
  * 코트가 늘지 않는 변경(남의 경기 완료 등)으로는 보던 추천을 바꾸지 않는다.
  */
 export const useSessionRecommendations = (
@@ -110,14 +110,14 @@ export const useSessionRecommendations = (
   const loadedSessionIdRef = useRef<string | null>(null);
   const isLoadingRef = useRef(false);
   /**
-   * 마지막으로 받은 후보 순번. 다시 추천은 이 다음 순번을 요청하므로,
-   * 받는 중에 또 누르거나 요청이 실패해도 순번이 건너뛰지 않는다(늦은 응답은 requestId로 버린다).
+   * 마지막으로 받은 다시 추천 횟수. 다시 추천은 이 값 + 1을 요청하므로,
+   * 받는 중에 또 누르거나 요청이 실패해도 횟수가 건너뛰지 않는다(늦은 응답은 requestId로 버린다).
    */
-  const shownRankRef = useRef(0);
+  const shownRerollRef = useRef(0);
   const { liveSession, inProgressMatches } = useLiveSession();
 
   const load = useCallback(
-    async (rank: number) => {
+    async (reroll: number) => {
       const requestId = ++requestIdRef.current;
       if (!sessionId) {
         loadedSessionIdRef.current = null;
@@ -140,12 +140,12 @@ export const useSessionRecommendations = (
         const data = await fetchSessionRecommendations(
           sessionId,
           MATCHMAKING_DEFAULT_COURTS,
-          rank,
+          reroll,
         );
         if (requestIdRef.current !== requestId) return;
         isLoadingRef.current = false;
         setIsRerolling(false);
-        shownRankRef.current = data.rank;
+        shownRerollRef.current = data.reroll;
         setRecommendation(data);
         setStatus("ready");
         setError(null);
@@ -165,7 +165,7 @@ export const useSessionRecommendations = (
   );
 
   useEffect(() => {
-    shownRankRef.current = 0;
+    shownRerollRef.current = 0;
     void load(0);
   }, [load, dataVersion]);
 
@@ -190,7 +190,7 @@ export const useSessionRecommendations = (
     if (isLoadingRef.current) return;
     if (handledStaleKeyRef.current === staleKey) return;
     handledStaleKeyRef.current = staleKey;
-    void load(shownRankRef.current);
+    void load(shownRerollRef.current);
   }, [load, recommendation, staleKey]);
 
   const expandableCourts = useMemo(
@@ -216,16 +216,16 @@ export const useSessionRecommendations = (
     if (isLoadingRef.current) return;
     if (handledExpandableCourtsRef.current === expandableCourts) return;
     handledExpandableCourtsRef.current = expandableCourts;
-    void load(shownRankRef.current);
+    void load(shownRerollRef.current);
   }, [expandableCourts, load, recommendation]);
 
   // 보던 추천을 비우지 않고 새 추천이 오면 바꿔 끼워, 스켈레톤으로 카드 높이가 흔들리지 않게 한다
   const recommendAgain = useCallback(() => {
     setIsRerolling(true);
-    void load(shownRankRef.current + 1);
+    void load(shownRerollRef.current + 1);
   }, [load]);
 
-  const reload = useCallback(() => load(shownRankRef.current), [load]);
+  const reload = useCallback(() => load(shownRerollRef.current), [load]);
 
   return { recommendation, status, error, isRerolling, recommendAgain, reload };
 };
