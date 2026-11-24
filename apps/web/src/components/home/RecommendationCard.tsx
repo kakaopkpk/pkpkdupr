@@ -179,19 +179,14 @@ const RankChip: React.FC<{
   </span>
 );
 
-/** 칸 내용은 가운데 정렬이다. 주인공 없는 칸은 세로로도 가운데다 */
+/** 칸 내용은 가로·세로 모두 가운데 정렬이다 */
 const CourtCellContent: React.FC<{
   cell: CourtCell;
   sessionWinStreaks?: SessionWinStreakByPlayer;
 }> = ({ cell, sessionWinStreaks }) => {
   const [front, back] = cell.players;
   return (
-    <div
-      className={cx(
-        "flex min-w-0 flex-col items-center gap-1 px-2 py-2.5 text-center",
-        !cell.protagonist && "justify-center",
-      )}
-    >
+    <div className="flex min-w-0 flex-col items-center justify-center gap-1 px-2 py-2.5 text-center">
       <CellAvatars cell={cell} sessionWinStreaks={sessionWinStreaks} />
       {cell.protagonist ? (
         <>
@@ -251,8 +246,10 @@ const RecommendationCard: React.FC<{
   const kind = court.specialMatch?.kind;
   return (
     <article className="flex flex-col gap-2.5 rounded-pk-lg bg-white p-3">
+      {/* 판 최소 높이 134px는 가장 높은 칸(라이벌전 주인공 칸: 아바타 + 이름 두 줄 + 순위 칩 줄)이다.
+          유형이 바뀌어도 카드 높이가 그대로이게 한다. 로딩 스켈레톤(RecommendationSection)도 같은 높이다 */}
       <div
-        className="relative grid grid-cols-2 overflow-hidden rounded-pk-sm"
+        className="relative grid min-h-[134px] grid-cols-2 overflow-hidden rounded-pk-sm"
         style={{ background: getBoardBackground(cells) }}
       >
         {cells.map((cell, index) => (

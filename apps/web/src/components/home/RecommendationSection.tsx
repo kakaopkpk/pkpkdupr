@@ -18,7 +18,7 @@ export const getCourtKey = (court: RecommendedCourt) =>
 
 const RecommendationSkeleton: React.FC = () => (
   <Card className="flex flex-col gap-3 py-4">
-    <SkeletonBlock className="h-24 w-full rounded-pk-sm" />
+    <SkeletonBlock className="h-[134px] w-full rounded-pk-sm" />
     <SkeletonBlock className="h-10 w-full rounded-pk-sm" />
   </Card>
 );
