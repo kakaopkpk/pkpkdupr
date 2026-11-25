@@ -75,14 +75,17 @@ const singles = (
   };
 };
 
-// alice 3연승(최다 연승), bob 1승(최다 승리), carol·게스트는 득점만(게스트는 후보가 아님)
-const matches = [
+// alice 3승(최다 승리 5점), bob은 alice 3연승을 끊은 리벤지 성공(연승 수문장 6점 > 복수자 5점),
+// carol 12:10 듀스 승(승부사 3점), 게스트는 후보가 아니다
+const matches: CompletedMatchOutcome[] = [
   singles(alice, bob),
   singles(alice, carol),
   singles(alice, bob),
-  singles(bob, carol),
+  { ...singles(bob, alice), revengeSucceeded: true },
+  { ...singles(carol, bob), scores: [{ scoreA: 12, scoreB: 10 }] },
   { ...singles(guest, carol), ratingExcluded: true },
 ];
+const carolClutchMatch = matches[4];
 
 const praise = (
   voter: string,
@@ -137,7 +140,7 @@ describe("세션 칭찬 API", () => {
       .set("Authorization", "Bearer test-token")
       .send({ targetPlayerId });
 
-  it("GET은 우선순위 순 후보와 칭찬 수를 돌려준다(게스트 제외)", async () => {
+  it("GET은 점수 순 후보와 칭찬 수를 돌려준다(게스트 제외)", async () => {
     mockSessions([praise(bob.id, alice.id)]);
     const response = await get(`/api/match-sessions/${session.id}/praise`);
     expect(response.status).toBe(200);
@@ -154,13 +157,45 @@ describe("세션 칭찬 API", () => {
         ],
       ),
     ).toEqual([
-      [alice.id, "winStreak"],
-      [bob.id, "mostWins"],
-      [carol.id, "mostPoints"],
+      [bob.id, "streakGuard"],
+      [alice.id, "mostWins"],
+      [carol.id, "clutch"],
     ]);
     expect(response.body.candidates[0]).toMatchObject({
       value: 3,
-      praiseCount: 1,
+      streakBreaks: 1,
+      praiseCount: 0,
+    });
+    expect(response.body.candidates[1]).toMatchObject({ value: 3, praiseCount: 1 });
+    expect(response.body.candidates[1]).not.toHaveProperty("streakBreaks");
+  });
+
+  it("언더독은 평점 변경 로그의 경기 직전 평점으로 센다", async () => {
+    const createdAt = carolClutchMatch.completedAt;
+    const rating = (singles: number) => ({ singles, doubles: 3 });
+    vi.spyOn(
+      MatchRepository.prototype,
+      "getAllRatingChangeLogs",
+    ).mockResolvedValue(
+      [
+        { player: carol, before: 3.0, after: 3.05 },
+        { player: bob, before: 3.4, after: 3.35 },
+      ].map(({ player, before, after }) => ({
+        id: `log-${player.id}`,
+        playerId: player.id,
+        source: "match_completed" as const,
+        sourceLogId: `match-completed-${carolClutchMatch.id}-${createdAt.getTime()}`,
+        previousRating: rating(before),
+        nextRating: rating(after),
+        delta: { singles: after - before, doubles: 0 },
+        createdAt,
+      })),
+    );
+    const response = await get(`/api/match-sessions/${session.id}/praise`);
+    expect(response.body.candidates[0]).toMatchObject({
+      player: { id: carol.id },
+      category: "underdog",
+      value: 0.4,
     });
   });
 
@@ -181,7 +216,7 @@ describe("세션 칭찬 API", () => {
       openAt,
     );
     expect(response.body.myTargetPlayerId).toBe(alice.id);
-    expect(response.body.candidates[0].praiseCount).toBe(1);
+    expect(response.body.candidates[1].praiseCount).toBe(1);
   });
 
   it("후보가 아니면 400, 이미 칭찬했거나 마감 뒤면 409다", async () => {
@@ -246,7 +281,7 @@ describe("세션 칭찬 API", () => {
     );
     expect(praised).toMatchObject({
       playerId: alice.id,
-      earnedMatchId: matches[2].id,
+      earnedMatchId: matches[3].id,
       earnedAt: fifthAt.toISOString(),
     });
   });

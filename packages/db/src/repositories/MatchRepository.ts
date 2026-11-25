@@ -169,6 +169,8 @@ export interface CompletedMatchOutcome {
   regularSession?: boolean;
   /** 대회 세션 경기인지(출사표 업적). 없으면 대회 세션이 아니다 */
   tournamentSession?: boolean;
+  /** 특수 매치 리벤지 성공(outcome revenge_success) 경기인지(세션 칭찬 복수자). 없으면 아니다 */
+  revengeSucceeded?: boolean;
 }
 
 export interface SessionWithParticipantIds {
@@ -1218,6 +1220,7 @@ export class MatchRepository {
           matchStartsAt: matches.matchStartsAt,
           completedAt: matches.completedAt,
           ratingExcluded: matches.ratingExcluded,
+          specialMatch: matches.specialMatch,
           sessionKind: matchSessions.kind,
           regularDateKey: matchSessions.regularDateKey,
         })
@@ -1279,6 +1282,7 @@ export class MatchRepository {
         matchStartsAt: Date | string | number;
         completedAt: Date | string | number;
         ratingExcluded: boolean | null;
+        specialMatch: SpecialMatch | null;
         sessionKind: string | null;
         regularDateKey: string | null;
       }>
@@ -1291,6 +1295,9 @@ export class MatchRepository {
       teamPlayerIds: teamsByMatchId.get(row.id) ?? [[], []],
       scores: scoresByMatchId.get(row.id) ?? [],
       ratingExcluded: row.ratingExcluded === true,
+      revengeSucceeded:
+        row.specialMatch?.kind === "revenge" &&
+        row.specialMatch.outcome === "revenge_success",
       ...toCompletedMatchSessionKind(row),
     }));
   }

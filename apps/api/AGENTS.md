@@ -182,8 +182,11 @@
 
 - 칭찬 조회 `GET /api/match-sessions/:sessionId/praise`: 응답 `SessionPraiseResponse`
   - `status`는 세션 끝 시각(`getSessionEndsAt`) 전 `upcoming`, 그 뒤 1시간 `open`, 그 뒤 `closed`.
-  - `candidates`는 우선순위 순 최대 3명(지금 활성 정회원만)과 지금 받은 칭찬 수 `praiseCount`. 끝나기 전 세션과 `SESSION_PRAISE_START` 전에 끝난 세션은 빈 배열이다.
+  - `candidates`는 점수 순 최대 3명(지금 활성 정회원만)과 지금 받은 칭찬 수 `praiseCount`. 끝나기 전 세션과 `SESSION_PRAISE_START` 전에 끝난 세션은 빈 배열이다.
+    - 후보마다 분류 `category`와 값 `value`이고, 연승 수문장만 저지 횟수 `streakBreaks`가 붙는다(`value`는 끊은 가장 긴 연승).
   - 후보 계산은 세션 완료 경기 전체(게스트가 낀 평점 미반영 경기 포함)로 하고, 세션 지배자·평점 변화·순위는 세션 리포트와 같다.
+    - 언더독만 평점 반영 경기로 세고, 경기 직전 평점은 세션 참가자 평점 변경 로그의 `previousRating`(업적 언더독과 같은 입력)이다.
+    - 복수자는 완료 경기 요약의 `revengeSucceeded`(`special_match`가 리벤지이고 결과 `revenge_success`)로 센다.
   - `myTargetPlayerId`는 요청자가 칭찬한 회원(안 했으면 null). id 형식 오류 400, 없는 세션 404.
 - 칭찬하기 `POST /api/match-sessions/:sessionId/praise` `{ targetPlayerId }`: 200 `SessionPraiseResponse`(저장 반영)
   - 활성 회원 누구나(그 세션에서 경기하지 않았어도), 자기 자신도 된다.

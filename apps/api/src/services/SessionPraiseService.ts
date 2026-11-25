@@ -8,6 +8,7 @@ import {
   type SessionPraiseResponse,
 } from "@pkpkdupr/shared/sessionPraise";
 import {
+  buildRatingBeforeByMatchId,
   buildSessionPlayerReports,
   isRankablePlayer,
   pickTopRiser,
@@ -23,8 +24,9 @@ export const getRankingSessionEndsAt = (session: RankingSession) =>
   getSessionEndsAt(session.kind, session.date, session);
 
 /**
- * 세션 칭찬 후보(우선순위 순)와 지금 받은 칭찬 수.
- * 후보 계산은 세션 완료 경기 전체(게스트가 낀 평점 미반영 경기 포함)로 하고, 세션 지배자·평점 변화·순위는 세션 리포트와 같다.
+ * 세션 칭찬 후보(점수 순)와 지금 받은 칭찬 수.
+ * 후보 계산은 세션 완료 경기 전체(게스트가 낀 평점 미반영 경기 포함, 언더독만 평점 반영 경기)로 하고,
+ * 세션 지배자·평점 변화·순위는 세션 리포트와 같다.
  * 후보는 지금 활성 정회원만이다. 칭찬하지 않는 세션(배포 전에 끝남)·끝나기 전 세션은 빈 배열이다.
  */
 export const buildSessionPraiseCandidates = (
@@ -52,9 +54,24 @@ export const buildSessionPraiseCandidates = (
     : buildSessionPlayerReports(context, session, sessionMatches);
   if (!reports) return [];
 
+  // 언더독 입력: 세션 경기 직전 평점(그 경기 분류). 세션 참가자 로그만 훑는다
+  const sessionPlayerIds = new Set(
+    sessionMatches.flatMap((match) => match.teamPlayerIds.flat()),
+  );
+  const ratingBeforeByMatchId = buildRatingBeforeByMatchId(
+    [...sessionPlayerIds].flatMap(
+      (playerId) => context.logsByPlayerId.get(playerId) ?? [],
+    ),
+    context.categoryByMatchId,
+  );
+  const sessionMatchIds = new Set(sessionMatches.map((match) => match.id));
   const statsByPlayerId = buildSessionPraisePlayerStats(
     sessionMatches,
-    context.matches,
+    context.matches.map((match) =>
+      sessionMatchIds.has(match.id)
+        ? { ...match, ratingBefore: ratingBeforeByMatchId.get(match.id) }
+        : match,
+    ),
   );
   const praiseCounts = new Map<string, number>();
   for (const praise of session.praises ?? []) {
@@ -87,6 +104,7 @@ export const buildSessionPraiseCandidates = (
     player: toRankingPlayer(context.playersById.get(item.playerId)!),
     category: item.category,
     value: item.value,
+    ...(item.streakBreaks != null ? { streakBreaks: item.streakBreaks } : {}),
     praiseCount: praiseCounts.get(item.playerId) ?? 0,
   }));
 };

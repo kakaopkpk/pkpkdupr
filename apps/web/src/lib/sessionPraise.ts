@@ -1,5 +1,6 @@
 import type {
   PendingSessionPraisesResponse,
+  SessionPraiseCandidate,
   SessionPraiseCategory,
   SessionPraiseRequest,
   SessionPraiseResponse,
@@ -41,12 +42,13 @@ export const praiseSessionPlayer = (
 };
 
 /**
- * 칭찬 분류의 한 줄 값(세션 상세·소식). 팝업 카드의 큰 값 + 설명 줄을 읽기 자연스러운 순서로 붙인다.
+ * 칭찬 분류의 한 줄 값(세션 상세·홈 소식·세션 요약 공유 이미지).
  * "+0.106 상승"·"11연승 저지"·"연승 저지 2회"·"순위 상승 ▲9"·"5승"·"58점 득점"·"듀스 2승"·"+0.25 강팀 격파"·"리벤지 성공 1회"
  */
 export const formatSessionPraiseValue = (
   category: SessionPraiseCategory,
   value: number,
+  /** 연승 수문장의 저지 횟수(`SessionPraiseCandidate.streakBreaks`) */
   streakBreaks = 1,
 ): string => {
   switch (category) {
@@ -54,10 +56,10 @@ export const formatSessionPraiseValue = (
       return `${formatRatingDelta(value)} 상승`;
     case "streakGuard":
       return streakBreaks >= 2 ? `연승 저지 ${streakBreaks}회` : `${value}연승 저지`;
-    case "mostWins":
-      return `${value}승`;
     case "rankJump":
       return `순위 상승 ▲${value}`;
+    case "mostWins":
+      return `${value}승`;
     case "mostPoints":
       return `${value}점 득점`;
     case "clutch":
@@ -69,11 +71,36 @@ export const formatSessionPraiseValue = (
   }
 };
 
-/** 평점 상승색으로 보일 값인지(세션 지배자 평점 상승·순위 도약) */
-export const isSessionPraiseValueRising = (
-  category: SessionPraiseCategory,
-  value: number,
-) => (category === "dominator" || category === "rankJump") && value > 0;
+/** 칭찬 팝업 카드의 큰 값과 그 아래 설명 줄: "11연승"/"저지"·"2회"/"연승 저지"·"+0.33"/"강팀 격파" 등 */
+export const getSessionPraiseCardValue = ({
+  category,
+  value,
+  streakBreaks = 1,
+}: Pick<SessionPraiseCandidate, "category" | "value" | "streakBreaks">): {
+  main: string;
+  caption: string;
+} => {
+  switch (category) {
+    case "dominator":
+      return { main: formatRatingDelta(value), caption: "상승" };
+    case "streakGuard":
+      return streakBreaks >= 2
+        ? { main: `${streakBreaks}회`, caption: "연승 저지" }
+        : { main: `${value}연승`, caption: "저지" };
+    case "rankJump":
+      return { main: `▲${value}`, caption: "순위 상승" };
+    case "mostWins":
+      return { main: `${value}승`, caption: "승리" };
+    case "mostPoints":
+      return { main: `${value}점`, caption: "득점" };
+    case "clutch":
+      return { main: `${value}승`, caption: "듀스 승리" };
+    case "underdog":
+      return { main: `+${value.toFixed(2)}`, caption: "강팀 격파" };
+    case "revenge":
+      return { main: `${value}회`, caption: "리벤지 성공" };
+  }
+};
 
 /**
  * 세션 상세 칭찬 알약 상태.

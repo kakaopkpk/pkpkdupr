@@ -521,7 +521,7 @@ describe("buildNewsFeedPage 칭찬 줄", () => {
       [[winner], [loser]],
       { type: "singles", sessionId: session.id },
     );
-  // ann 3연승(최다 연승), ben 1승(최다 승리)
+  // ann 3승(최다 승리), ben·cal은 후보 조건에 못 미친다
   const matches = [
     match("Mpr00001", 1, ann.id, ben.id),
     match("Mpr00002", 2, ann.id, cal.id),
@@ -611,13 +611,12 @@ describe("buildNewsFeedPage 칭찬 줄", () => {
       ) as NewsFeedSessionItem;
       return item.lines;
     };
-    // 최다 연승은 누적 연승이라 지난 세션 승리(earlierMatch)까지 이어 4연승이다
     expect(build(closedAt)[0]).toEqual({
       kind: "praise",
       player: { id: ann.id, username: "ann", avatarUrl: undefined },
       praiseCount: 6,
-      category: "winStreak",
-      value: 4,
+      category: "mostWins",
+      value: 3,
     });
     expect(
       build(at("2026-12-03T13:59:00.000Z")).some(

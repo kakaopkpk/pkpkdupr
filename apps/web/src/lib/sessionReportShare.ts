@@ -54,6 +54,8 @@ export interface SessionReportSharePraise {
   player: SessionReportSharePlayer;
   category: SessionPraiseCategory;
   value: number;
+  /** 연승 수문장의 저지 횟수(`SessionPraiseCandidate.streakBreaks`) */
+  streakBreaks?: number;
   praiseCount: number;
 }
 
@@ -120,6 +122,7 @@ export const getSharedPraisedCandidates = (
           player: toSharePlayer(candidate.player),
           category: candidate.category,
           value: candidate.value,
+          ...(candidate.streakBreaks != null ? { streakBreaks: candidate.streakBreaks } : {}),
           praiseCount: candidate.praiseCount,
         }))
     : [];
@@ -188,6 +191,7 @@ export const buildMyRecordShareTarget = (
       ? {
           category: myPraise.category,
           value: myPraise.value,
+          ...(myPraise.streakBreaks != null ? { streakBreaks: myPraise.streakBreaks } : {}),
           praiseCount: myPraise.praiseCount,
         }
       : null,

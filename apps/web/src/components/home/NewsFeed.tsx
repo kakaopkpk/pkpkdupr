@@ -3,7 +3,6 @@ import type { AchievementDefinition } from "@pkpkdupr/shared/achievements";
 import type { SessionPlayerReport } from "@pkpkdupr/shared/ranking";
 import { SESSION_PRAISE_CATEGORY_LABEL } from "@pkpkdupr/shared/sessionPraise";
 import AchievementBadge from "@/components/profile/AchievementBadge";
-import { SessionPraiseCategoryIcon } from "@/components/praise/SessionPraiseParts";
 import {
   hasRatingBeforeAndAfter,
   LineStrong,
@@ -114,17 +113,12 @@ const FeedLine: React.FC<{ entry: FeedLineEntry }> = ({ entry }) => {
 
   const { line } = entry;
   if (line.kind === "praise") {
+    // 오른쪽 끝은 비운다
     return (
       <PlayerLineButton
         player={player}
         praiseCount={line.praiseCount}
         onPress={() => openMemberProfile(player.id)}
-        right={
-          // 업적 줄 배지(36) 자리에 앰버 원 + 칭찬 분류 아이콘
-          <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-pk-hl text-pk-ink">
-            <SessionPraiseCategoryIcon category={line.category} size={18} />
-          </span>
-        }
       >
         <span className={lineTextClassName}>
           <LineStrong>{player.username}</LineStrong>님이{" "}

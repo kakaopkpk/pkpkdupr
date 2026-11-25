@@ -18,7 +18,6 @@ import { RequestError } from "@/lib/rankings";
 import {
   formatSessionPraiseValue,
   getSessionPraisePillState,
-  isSessionPraiseValueRising,
   praiseSessionPlayer,
   type SessionPraisePillState,
 } from "@/lib/sessionPraise";

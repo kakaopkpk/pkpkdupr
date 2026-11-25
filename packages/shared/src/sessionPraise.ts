@@ -1,9 +1,12 @@
 import { compareCountedMatches, sumPoints, WIN_STREAK_MIN } from "./achievements.js";
 import { getWinningTeamIndex, type MatchScore } from "./match.js";
+import { DUPR_DEFAULT_RATING } from "./player.js";
 import type { RankingPlayer } from "./ranking.js";
 import type { MatchSessionKind } from "./session.js";
 
-/** 칭찬 후보 분류. 배열 순서가 우선순위다(위에서부터 최대 3장, 같은 사람은 높은 분류 한 장) */
+/**
+ * 칭찬 후보 분류. 후보는 점수 순으로 고르고, 배열 순서는 점수가 같을 때의 순서다(드문 분류 먼저)
+ */
 export const SESSION_PRAISE_CATEGORIES = [
   "revenge",
   "underdog",
@@ -30,10 +33,18 @@ export const SESSION_PRAISE_CATEGORY_LABEL: Record<SessionPraiseCategory, string
 
 /** 한 세션의 칭찬 후보 수 상한 */
 export const SESSION_PRAISE_MAX_CANDIDATES = 3;
-/** 연승 문지기 후보가 되는 최소 연승 저지 횟수 */
-export const SESSION_PRAISE_STREAK_GUARD_MIN = 2;
 /** 순위 도약 후보가 되는 최소 상승 계단 수 */
 export const SESSION_PRAISE_RANK_JUMP_MIN = 3;
+/** 최다 승리 후보가 되는 최소 승 수 */
+export const SESSION_PRAISE_MOST_WINS_MIN = 3;
+/** 최다 득점 후보가 되는 최소 득점 */
+export const SESSION_PRAISE_MOST_POINTS_MIN = 40;
+/** 승부사의 듀스 승: 이긴 게임에서 이긴 팀 점수가 이 점수 이상 */
+export const SESSION_PRAISE_CLUTCH_MIN_POINTS = 12;
+/** 언더독 후보가 되는 최소 평점 차(경기 직전 상대 팀 평균 − 우리 팀 평균) */
+export const SESSION_PRAISE_UNDERDOG_MIN_GAP = 0.15;
+/** 세션 지배자 점수: 평점 상승 이만큼당 1점 */
+export const SESSION_PRAISE_DOMINATOR_POINT_UNIT = 0.012;
 /** 이 수 이상 칭찬받으면 세션 상세·소식에서 강조하고 칭찬 업적에 센다 */
 export const SESSION_PRAISE_HIGHLIGHT_MIN = 5;
 /** 칭찬 마감: 세션 끝 시각부터 1시간 */
@@ -41,25 +52,73 @@ export const SESSION_PRAISE_WINDOW_MS = 60 * 60 * 1000;
 /** 이 시각 뒤에 끝난 세션부터 칭찬한다(기능 배포일 00:00 KST). 그 전 세션에는 칭찬 섹션이 없다 */
 export const SESSION_PRAISE_START = new Date("2026-11-23T15:00:00.000Z");
 
-/** 칭찬 후보 계산에 쓰는 세션 완료 경기(게스트가 낀 평점 미반영 경기 포함) */
+/** 칭찬 후보 계산에 쓰는 완료 경기(게스트가 낀 평점 미반영 경기 포함) */
 export interface SessionPraiseMatch {
   id: string;
   completedAt: Date;
   teamPlayerIds: readonly [readonly string[], readonly string[]];
   scores: readonly MatchScore[];
+  /** 게스트가 낀 평점 미반영 경기. 언더독에서만 뺀다 */
+  ratingExcluded?: boolean;
+  /** 특수 매치 리벤지 성공(outcome revenge_success) 경기. 이긴 팀이 복수자 횟수를 센다 */
+  revengeSucceeded?: boolean;
+  /**
+   * 경기 직전 선수별 평점(그 경기 분류, 평점 변경 로그의 previousRating). 언더독에 쓴다.
+   * 없으면 이 경기로 언더독을 세지 않고, 값이 없는 선수는 DUPR_DEFAULT_RATING(3.0)으로 친다
+   */
+  ratingBefore?: Readonly<Record<string, number | null>>;
 }
 
 /** 세션 안 선수별 기록 */
 export interface SessionPraisePlayerStats {
   matchCount: number;
   wins: number;
-  /** 세션 경기 직후 누적 연승(랭킹 연승과 같은 규칙, 지난 세션부터 이어짐)의 최댓값 */
-  bestStreak: number;
   /** 세션 경기에서 경기 직전 누적 연승이 WIN_STREAK_MIN 이상인 상대를 이긴 경기 수(경기마다 한 번) */
   streakBreaks: number;
+  /** 끊은 연승 중 가장 긴 것(경기마다 상대 중 큰 쪽). 끊은 적 없으면 0 */
+  bestBrokenStreak: number;
+  /** 이긴 게임에서 이긴 팀 점수가 SESSION_PRAISE_CLUTCH_MIN_POINTS 이상인 승리 경기 수 */
+  clutchWins: number;
+  /** 평점 반영 승리 경기의 경기 직전 평점 차(상대 팀 평균 − 우리 팀 평균, 0.01 단위 내림) 최댓값. 없으면 0 */
+  underdogGap: number;
+  /** 리벤지 성공 경기에서 이긴 수 */
+  revenges: number;
   pointsFor: number;
   pointsAgainst: number;
 }
+
+/** 평점 차 비교의 부동소수 오차 허용치 */
+const EPSILON = 1e-9;
+
+/** 경기 직전 팀 평균 평점. 평점이 없는 선수는 DUPR_DEFAULT_RATING으로 친다 */
+const getTeamAverageRatingBefore = (
+  ratingBefore: Readonly<Record<string, number | null>>,
+  team: readonly string[],
+) =>
+  team.reduce(
+    (sum, playerId) => sum + (ratingBefore[playerId] ?? DUPR_DEFAULT_RATING),
+    0,
+  ) / team.length;
+
+/** 평점 반영 경기에서 이긴 팀 기준 경기 직전 평점 차(0.01 단위 내림). 셀 수 없으면 0 */
+const getUnderdogGap = (match: SessionPraiseMatch, winner: 0 | 1) => {
+  const { ratingBefore } = match;
+  const teams = match.teamPlayerIds;
+  if (!ratingBefore || match.ratingExcluded) return 0;
+  if (teams[0].length === 0 || teams[1].length === 0) return 0;
+  const gap =
+    getTeamAverageRatingBefore(ratingBefore, teams[winner === 0 ? 1 : 0]) -
+    getTeamAverageRatingBefore(ratingBefore, teams[winner]);
+  return Math.max(0, Math.floor(gap * 100 + EPSILON * 100) / 100);
+};
+
+/** 이긴 팀 점수가 SESSION_PRAISE_CLUTCH_MIN_POINTS 이상인 게임을 이 팀이 이겼다 */
+const isClutchWin = (scores: readonly MatchScore[], teamIndex: 0 | 1) =>
+  scores.some((score) => {
+    const mine = teamIndex === 0 ? score.scoreA : score.scoreB;
+    const theirs = teamIndex === 0 ? score.scoreB : score.scoreA;
+    return mine > theirs && mine >= SESSION_PRAISE_CLUTCH_MIN_POINTS;
+  });
 
 /**
  * 세션 완료 경기로 선수별 세션 기록을 센다(완료 시각 순).
@@ -78,8 +137,11 @@ export const buildSessionPraisePlayerStats = (
       stats = {
         matchCount: 0,
         wins: 0,
-        bestStreak: 0,
         streakBreaks: 0,
+        bestBrokenStreak: 0,
+        clutchWins: 0,
+        underdogGap: 0,
+        revenges: 0,
         pointsFor: 0,
         pointsAgainst: 0,
       };
@@ -100,12 +162,18 @@ export const buildSessionPraisePlayerStats = (
       string[],
       string[],
     ];
-    const brokeStreak =
-      isSessionMatch &&
-      winner !== null &&
-      teams[winner === 0 ? 1 : 0].some(
-        (playerId) => (streakByPlayerId.get(playerId) ?? 0) >= WIN_STREAK_MIN,
-      );
+    // 진 팀 중 경기 직전 연승이 가장 긴 사람의 연승(기준점 전이면 저지가 아니다)
+    const brokenStreak =
+      isSessionMatch && winner !== null
+        ? Math.max(
+            0,
+            ...teams[winner === 0 ? 1 : 0].map(
+              (playerId) => streakByPlayerId.get(playerId) ?? 0,
+            ),
+          )
+        : 0;
+    const underdogGap =
+      isSessionMatch && winner !== null ? getUnderdogGap(match, winner) : 0;
     teams.forEach((team, index) => {
       const teamIndex = index as 0 | 1;
       const won = winner === teamIndex;
@@ -120,11 +188,15 @@ export const buildSessionPraisePlayerStats = (
           match.scores,
           teamIndex === 0 ? 1 : 0,
         );
-        if (won) {
-          stats.wins += 1;
-          if (brokeStreak) stats.streakBreaks += 1;
-          stats.bestStreak = Math.max(stats.bestStreak, streak);
+        if (!won) continue;
+        stats.wins += 1;
+        if (brokenStreak >= WIN_STREAK_MIN) {
+          stats.streakBreaks += 1;
+          stats.bestBrokenStreak = Math.max(stats.bestBrokenStreak, brokenStreak);
         }
+        if (isClutchWin(match.scores, teamIndex)) stats.clutchWins += 1;
+        stats.underdogGap = Math.max(stats.underdogGap, underdogGap);
+        if (match.revengeSucceeded) stats.revenges += 1;
       }
     });
   }
@@ -145,8 +217,14 @@ export interface SessionPraisePlayerInput {
 export interface PickedSessionPraiseCandidate {
   playerId: string;
   category: SessionPraiseCategory;
-  /** 분류의 값: 평점 상승폭·연승·저지 수·승 수·오른 계단 수·득점 */
+  /**
+   * 분류의 값: 평점 상승폭·끊은 가장 긴 연승·오른 계단 수·승 수·득점·듀스 승 수·평점 차·리벤지 성공 수
+   */
   value: number;
+  /** 연승 수문장의 저지 횟수(다른 분류는 없음) */
+  streakBreaks?: number;
+  /** 고르는 데 쓴 점수 */
+  score: number;
 }
 
 const getRankJump = (input: SessionPraisePlayerInput) =>
@@ -172,68 +250,112 @@ const compareRest = (
   compareText(left.username, right.username) ||
   compareText(left.playerId, right.playerId);
 
+/** 득실차 → compareRest */
+const compareByPointDiff = (
+  left: SessionPraisePlayerInput,
+  right: SessionPraisePlayerInput,
+) => getPointDiff(right) - getPointDiff(left) || compareRest(left, right);
+
 interface CategoryRule {
-  value: (input: SessionPraisePlayerInput) => number;
-  isEligible: (input: SessionPraisePlayerInput) => boolean;
-  /** 앞에 올 사람이 음수 */
+  /** 후보가 아니면 null */
+  pick: (
+    input: SessionPraisePlayerInput,
+  ) => { value: number; score: number; streakBreaks?: number } | null;
+  /** 같은 분류·같은 점수 안의 순서. 앞에 올 사람이 음수 */
   compare: (
     left: SessionPraisePlayerInput,
     right: SessionPraisePlayerInput,
   ) => number;
 }
 
+/** 분류별 후보 조건·값·점수(docs/product.md "세션 칭찬"). 세션 지배자는 dominatorId로 따로 고른다 */
 const CATEGORY_RULES: Record<
   Exclude<SessionPraiseCategory, "dominator">,
   CategoryRule
 > = {
-  winStreak: {
-    value: (input) => input.stats.bestStreak,
-    isEligible: (input) =>
-      input.stats.bestStreak >= WIN_STREAK_MIN,
-    compare: (left, right) =>
-      right.stats.bestStreak - left.stats.bestStreak ||
-      getPointDiff(right) - getPointDiff(left) ||
-      compareRest(left, right),
+  revenge: {
+    pick: ({ stats }) =>
+      stats.revenges >= 1
+        ? { value: stats.revenges, score: 5 + (stats.revenges - 1) * 8 }
+        : null,
+    compare: compareByPointDiff,
+  },
+  underdog: {
+    pick: ({ stats }) =>
+      stats.underdogGap >= SESSION_PRAISE_UNDERDOG_MIN_GAP - EPSILON
+        ? {
+            value: stats.underdogGap,
+            score: 3 + (stats.underdogGap - SESSION_PRAISE_UNDERDOG_MIN_GAP) * 100,
+          }
+        : null,
+    compare: compareByPointDiff,
+  },
+  clutch: {
+    pick: ({ stats }) =>
+      stats.clutchWins >= 1
+        ? { value: stats.clutchWins, score: 3 + (stats.clutchWins - 1) * 6 }
+        : null,
+    compare: compareByPointDiff,
   },
   streakGuard: {
-    value: (input) => input.stats.streakBreaks,
-    isEligible: (input) =>
-      input.stats.streakBreaks >= SESSION_PRAISE_STREAK_GUARD_MIN,
-    compare: (left, right) =>
-      right.stats.streakBreaks - left.stats.streakBreaks ||
-      getPointDiff(right) - getPointDiff(left) ||
-      compareRest(left, right),
-  },
-  mostWins: {
-    value: (input) => input.stats.wins,
-    isEligible: (input) => input.stats.wins > 0,
-    compare: (left, right) =>
-      right.stats.wins - left.stats.wins ||
-      getWinRate(right) - getWinRate(left) ||
-      getPointDiff(right) - getPointDiff(left) ||
-      compareRest(left, right),
+    pick: ({ stats }) => {
+      if (stats.streakBreaks < 1) return null;
+      return {
+        value: stats.bestBrokenStreak,
+        streakBreaks: stats.streakBreaks,
+        score:
+          stats.streakBreaks === 1
+            ? 6 + (stats.bestBrokenStreak - WIN_STREAK_MIN) * 2
+            : 6 + (stats.streakBreaks - 1) * 10,
+      };
+    },
+    compare: compareByPointDiff,
   },
   rankJump: {
-    value: getRankJump,
-    isEligible: (input) => getRankJump(input) >= SESSION_PRAISE_RANK_JUMP_MIN,
+    pick: (input) => {
+      const jump = getRankJump(input);
+      return jump >= SESSION_PRAISE_RANK_JUMP_MIN
+        ? { value: jump, score: 6 + (jump - SESSION_PRAISE_RANK_JUMP_MIN) * 2 }
+        : null;
+    },
     compare: (left, right) =>
-      getRankJump(right) - getRankJump(left) ||
       (left.rankAfter ?? Infinity) - (right.rankAfter ?? Infinity) ||
       compareText(left.username, right.username) ||
       compareText(left.playerId, right.playerId),
   },
-  mostPoints: {
-    value: (input) => input.stats.pointsFor,
-    isEligible: (input) => input.stats.pointsFor > 0,
+  mostWins: {
+    pick: ({ stats }) =>
+      stats.wins >= SESSION_PRAISE_MOST_WINS_MIN
+        ? {
+            value: stats.wins,
+            score: 5 + (stats.wins - SESSION_PRAISE_MOST_WINS_MIN) * 2,
+          }
+        : null,
     compare: (left, right) =>
-      right.stats.pointsFor - left.stats.pointsFor ||
-      getPointDiff(right) - getPointDiff(left) ||
-      compareRest(left, right),
+      getWinRate(right) - getWinRate(left) || compareByPointDiff(left, right),
+  },
+  mostPoints: {
+    pick: ({ stats }) =>
+      stats.pointsFor >= SESSION_PRAISE_MOST_POINTS_MIN
+        ? {
+            value: stats.pointsFor,
+            score:
+              5 +
+              Math.floor((stats.pointsFor - SESSION_PRAISE_MOST_POINTS_MIN) / 5),
+          }
+        : null,
+    compare: compareByPointDiff,
   },
 };
 
+const CATEGORY_ORDER = new Map<SessionPraiseCategory, number>(
+  SESSION_PRAISE_CATEGORIES.map((category, index) => [category, index]),
+);
+
 /**
- * 칭찬 후보를 고른다. 분류 우선순위대로 각 분류 1등(이미 뽑힌 사람은 건너뜀)을 뽑아 최대 3장이다.
+ * 칭찬 후보를 고른다. 후보 조건을 넘은 (회원, 분류)를 점수 높은 순으로 줄 세워 앞에서부터 뽑는다.
+ * 한 회원은 한 장, 한 분류도 한 회원만이고 최대 3장이며, 결과도 점수 순이다.
+ * 점수가 같으면 SESSION_PRAISE_CATEGORIES 순서, 같은 분류 안에서는 분류별 동점 규칙이다.
  * 세션 지배자는 세션 리포트 topRiser를 그대로 쓴다(dominatorId, 후보 입력에 없으면 건너뜀).
  */
 export const pickSessionPraiseCandidates = ({
@@ -243,34 +365,52 @@ export const pickSessionPraiseCandidates = ({
   players: readonly SessionPraisePlayerInput[];
   dominatorId: string | null;
 }): PickedSessionPraiseCandidate[] => {
+  const entries: (PickedSessionPraiseCandidate & {
+    input: SessionPraisePlayerInput;
+  })[] = [];
+  for (const input of players) {
+    if (input.playerId === dominatorId && input.ratingDelta > 0) {
+      entries.push({
+        input,
+        playerId: input.playerId,
+        category: "dominator",
+        value: input.ratingDelta,
+        score: input.ratingDelta / SESSION_PRAISE_DOMINATOR_POINT_UNIT,
+      });
+    }
+    for (const [category, rule] of Object.entries(CATEGORY_RULES) as [
+      Exclude<SessionPraiseCategory, "dominator">,
+      CategoryRule,
+    ][]) {
+      const result = rule.pick(input);
+      if (result) {
+        entries.push({ input, playerId: input.playerId, category, ...result });
+      }
+    }
+  }
+  entries.sort((left, right) => {
+    if (Math.abs(right.score - left.score) > EPSILON) {
+      return right.score - left.score;
+    }
+    if (left.category !== right.category) {
+      return CATEGORY_ORDER.get(left.category)! - CATEGORY_ORDER.get(right.category)!;
+    }
+    return left.category === "dominator"
+      ? 0
+      : CATEGORY_RULES[left.category].compare(left.input, right.input);
+  });
+
   const picked: PickedSessionPraiseCandidate[] = [];
   const pickedIds = new Set<string>();
-  for (const category of SESSION_PRAISE_CATEGORIES) {
+  const pickedCategories = new Set<SessionPraiseCategory>();
+  for (const { input, ...entry } of entries) {
     if (picked.length >= SESSION_PRAISE_MAX_CANDIDATES) break;
-    if (category === "dominator") {
-      const dominator = players.find((input) => input.playerId === dominatorId);
-      if (dominator) {
-        picked.push({
-          playerId: dominator.playerId,
-          category,
-          value: dominator.ratingDelta,
-        });
-        pickedIds.add(dominator.playerId);
-      }
+    if (pickedIds.has(input.playerId) || pickedCategories.has(entry.category)) {
       continue;
     }
-    const rule = CATEGORY_RULES[category];
-    const winner = players
-      .filter((input) => !pickedIds.has(input.playerId) && rule.isEligible(input))
-      .sort(rule.compare)[0];
-    if (winner) {
-      picked.push({
-        playerId: winner.playerId,
-        category,
-        value: rule.value(winner),
-      });
-      pickedIds.add(winner.playerId);
-    }
+    picked.push(entry);
+    pickedIds.add(entry.playerId);
+    pickedCategories.add(entry.category);
   }
   return picked;
 };
@@ -300,7 +440,7 @@ export interface SessionPraiseCandidate {
   player: RankingPlayer;
   category: SessionPraiseCategory;
   value: number;
-  /** 연승 수문장의 저지 횟수 */
+  /** 연승 수문장의 저지 횟수. 1번이면 value(끊은 연승)로, 2번 이상이면 이 횟수로 표기한다. 다른 분류는 없음 */
   streakBreaks?: number;
   /** 지금까지 받은 칭찬 수(실시간) */
   praiseCount: number;
@@ -310,7 +450,7 @@ export interface SessionPraiseCandidate {
 export interface SessionPraiseResponse {
   session: { id: string; name: string; kind: MatchSessionKind };
   status: SessionPraiseStatus;
-  /** 우선순위 순 후보. 세션이 끝나기 전이거나 칭찬하지 않는 세션이면 빈 배열 */
+  /** 점수 순 후보. 세션이 끝나기 전이거나 칭찬하지 않는 세션이면 빈 배열 */
   candidates: SessionPraiseCandidate[];
   /** 요청자가 칭찬한 회원. 아직 안 했으면 null */
   myTargetPlayerId: string | null;
