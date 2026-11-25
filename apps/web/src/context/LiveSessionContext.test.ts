@@ -27,7 +27,7 @@ const makeSession = (
 const at = (time: string) => new Date(`2026-11-19T${time}:00+09:00`);
 
 describe("pickLiveSession", () => {
-  it("대회 세션은 시작 시각부터 종료 시각 전까지 진행 중이다", () => {
+  it("대회 세션은 시작 시각부터 자동 완료(종료 1시간 뒤) 전까지 진행 중이다", () => {
     const tournament = makeSession({
       id: "T",
       kind: "tournament",
@@ -38,8 +38,8 @@ describe("pickLiveSession", () => {
 
     expect(pickLiveSession([tournament], at("09:59"))).toBeNull();
     expect(pickLiveSession([tournament], at("10:00"))?.id).toBe("T");
-    expect(pickLiveSession([tournament], at("16:59"))?.id).toBe("T");
-    expect(pickLiveSession([tournament], at("17:00"))).toBeNull();
+    expect(pickLiveSession([tournament], at("17:59"))?.id).toBe("T");
+    expect(pickLiveSession([tournament], at("18:00"))).toBeNull();
   });
 
   it("시작 시각 없는 대회 세션은 세션 시각(date)부터 진행 중이다", () => {
@@ -65,7 +65,7 @@ describe("pickLiveSession", () => {
     expect(pickLiveSession([custom], at("10:00"))?.id).toBe("C");
   });
 
-  it("회원 세션은 종료 시각에 끝나고, 종료 시각이 없으면 자정까지 진행 중이다", () => {
+  it("회원 세션은 종료 1시간 뒤에 끝나고, 종료 시각이 없으면 자정까지 진행 중이다", () => {
     const custom = makeSession({
       id: "C",
       kind: "custom",
@@ -79,8 +79,8 @@ describe("pickLiveSession", () => {
       date: at("10:00").toISOString(),
     });
 
-    expect(pickLiveSession([custom], at("11:59"))?.id).toBe("C");
-    expect(pickLiveSession([custom], at("12:00"))).toBeNull();
+    expect(pickLiveSession([custom], at("12:59"))?.id).toBe("C");
+    expect(pickLiveSession([custom], at("13:00"))).toBeNull();
     expect(pickLiveSession([untimed], at("23:59"))?.id).toBe("U");
   });
 
@@ -149,7 +149,7 @@ describe("getNextLiveSessionBoundary", () => {
     );
   });
 
-  it("회원 세션은 시작 시각이 아니라 세션 시각·완료 가능 시각·종료 시각을 경계로 쓴다", () => {
+  it("회원 세션은 시작 시각이 아니라 세션 시각·완료 가능 시각·자동 완료 시각을 경계로 쓴다", () => {
     const custom = makeSession({
       id: "C",
       kind: "custom",
@@ -162,10 +162,10 @@ describe("getNextLiveSessionBoundary", () => {
       at("11:50"),
     );
     expect(getNextLiveSessionBoundary([custom], at("11:50"))).toEqual(
-      at("12:00"),
+      at("13:00"),
     );
-    // 종료 뒤 회원 세션 만료(다음 날 0시) 전 가장 이른 경계는 정기 회차 시작(목요일 18:00)이다
-    expect(getNextLiveSessionBoundary([custom], at("12:00"))).toEqual(
+    // 자동 완료 뒤 회원 세션 만료(다음 날 0시) 전 가장 이른 경계는 정기 회차 시작(목요일 18:00)이다
+    expect(getNextLiveSessionBoundary([custom], at("13:00"))).toEqual(
       at("18:00"),
     );
   });
@@ -213,14 +213,15 @@ describe("회원·대회 세션 완료", () => {
     completedAt: null,
   });
 
-  it("종료 10분 전부터 종료 시각 전까지 완료할 수 있다", () => {
+  it("종료 10분 전부터 자동 완료(종료 1시간 뒤) 전까지 완료할 수 있고, 그동안 LIVE는 이어진다", () => {
     expect(pickCompletableSession([custom], at("13:49"))).toBeNull();
     expect(pickCompletableSession([custom], at("13:50"))?.id).toBe("C");
     expect(
-      pickCompletableSession([{ ...custom, kind: "tournament" }], at("13:55"))
+      pickCompletableSession([{ ...custom, kind: "tournament" }], at("14:30"))
         ?.id,
     ).toBe("C");
-    expect(pickCompletableSession([custom], at("14:00"))).toBeNull();
+    expect(pickLiveSession([custom], at("14:30"))?.id).toBe("C");
+    expect(pickCompletableSession([custom], at("15:00"))).toBeNull();
   });
 
   it("시각 없는 세션은 완료할 수 없다", () => {

@@ -602,8 +602,8 @@ describe("buildSessionReport", () => {
     ).toBe(false);
   });
 
-  it("자정을 넘기는 회원 세션은 다음 날 종료 시각이 지나야 지배자를 정한다", () => {
-    // 11월 9일 23:30~다음 날 01:30 세션은 11월 10일 01:30 KST(16:30Z)에 끝난다
+  it("자정을 넘기는 회원 세션은 다음 날 자동 완료(종료 1시간 뒤)가 지나야 지배자를 정한다", () => {
+    // 11월 9일 23:30~다음 날 01:30 세션은 11월 10일 02:30 KST(17:30Z)에 끝난다
     const overnight = {
       ...session,
       kind: "custom" as const,
@@ -615,8 +615,8 @@ describe("buildSessionReport", () => {
     const endedAt = (now: Date) =>
       findEndedSessions(context, [overnight], now);
 
-    expect(endedAt(at("2026-11-09T15:00:00Z"))).toEqual(new Map());
-    expect(endedAt(at("2026-11-09T16:30:00Z"))).toEqual(
+    expect(endedAt(at("2026-11-09T17:29:59Z"))).toEqual(new Map());
+    expect(endedAt(at("2026-11-09T17:30:00Z"))).toEqual(
       new Map([[overnight.id, "Palice01"]]),
     );
   });

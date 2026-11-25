@@ -184,24 +184,33 @@ describe("MatchRepository.deleteExpiredInProgressMatchesAndEmptySessions", () =>
     },
   );
 
-  it("자정을 넘기는 회원 세션은 SQL이 date + 하루 + 종료 시각을 now(epoch 초)와 비교한다", async () => {
+  it("종료 시각이 있는 회원 세션은 SQL이 max(date + 하루, 자동 완료)를 now(epoch 초)와 비교한다", async () => {
     const { repository, execute } = createRepository([]);
 
     await repository.deleteExpiredInProgressMatchesAndEmptySessions(now);
 
     const { sql, args } = executedStatement(execute);
     expect(sql).toMatch(/s\.end_time <= s\.start_time/);
-    expect(sql).toMatch(/s\."date" \+ 86400 \+/);
-    expect(sql).toMatch(/<= \$4/);
+    expect(sql).toMatch(/GREATEST\(s\."date" \+ 86400, /);
+    expect(sql).toMatch(/\+ 3600\)\) <= \$4/);
     expect(args[3]).toBe(toSeconds(now));
 
-    // SQL과 같은 계산: 11월 9일 23:30~다음 날 01:30 세션은 11월 10일 01:30 KST에 만료된다
+    // SQL과 같은 계산: 자정을 넘기면 date + 하루 + 종료 시각 + 1시간, 23시 넘어 끝나면 date + 종료 시각 + 1시간
     const sessionDate = new Date("2026-11-09T00:00:00+09:00");
-    const expiresAt = getEmptySessionExpiresAt("custom", sessionDate, {
+    const overnight = getEmptySessionExpiresAt("custom", sessionDate, {
       startTime: "23:30",
       endTime: "01:30",
     });
-    expect(toSeconds(sessionDate) + 86400 + 90 * 60).toBe(toSeconds(expiresAt));
+    expect(toSeconds(sessionDate) + 86400 + 90 * 60 + 3600).toBe(
+      toSeconds(overnight),
+    );
+    const late = getEmptySessionExpiresAt("custom", sessionDate, {
+      startTime: "22:00",
+      endTime: "23:30",
+    });
+    expect(toSeconds(sessionDate) + (23 * 60 + 30) * 60 + 3600).toBe(
+      toSeconds(late),
+    );
   });
 
   it.each([
