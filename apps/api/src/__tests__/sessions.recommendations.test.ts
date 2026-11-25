@@ -2,6 +2,7 @@ import type { ManagedMatchSession, Match, Team } from "@pkpkdupr/shared/match";
 import {
   MATCHMAKING_GUEST_RATING,
   MATCHMAKING_REROLL_CYCLE,
+  recommendDoublesMatches,
   type MatchSessionRecommendationResponse,
 } from "@pkpkdupr/shared/matchmaking";
 import type { CompletedMatchOutcome } from "@pkpkdupr/db";
@@ -22,6 +23,16 @@ import {
   AuthService,
   type AuthenticatedSession,
 } from "../services/AuthService";
+
+// 추천 입력을 확인할 수 있게 원래 구현을 그대로 부르는 spy로 감싼다
+vi.mock("@pkpkdupr/shared/matchmaking", async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import("@pkpkdupr/shared/matchmaking")>();
+  return {
+    ...actual,
+    recommendDoublesMatches: vi.fn(actual.recommendDoublesMatches),
+  };
+});
 
 const thursdayEvening = new Date("2026-11-12T19:00:00+09:00");
 
@@ -382,6 +393,59 @@ describe("GET /api/match-sessions/:sessionId/recommendations", () => {
     expect(withRank.body).toEqual(first.body);
     expect(invalidRank.status).toBe(200);
     expect(invalidRank.body).toEqual(first.body);
+  });
+
+  it("세션 완료 경기를 완료 시각 오름차순으로 넘기고 완료 전 경기는 뺀다", async () => {
+    const at = (minutes: number) =>
+      new Date(thursdayEvening.getTime() - minutes * 60_000);
+    const sessionMatch = (
+      id: string,
+      status: Match["status"],
+      completedAt: Date | null,
+      ids: [string, string, string, string],
+    ) =>
+      ({
+        id,
+        status,
+        matchStartsAt: at(120),
+        completedAt,
+        teams: [
+          makeTeam("Team A", [ids[0], ids[1]]),
+          makeTeam("Team B", [ids[2], ids[3]]),
+        ],
+      }) as Match;
+    // 저장소는 기록 시각 최신순으로 준다
+    vi.spyOn(MatchRepository.prototype, "findBySession").mockResolvedValue([
+      sessionMatch("Mlive", "created", null, [
+        playerIds[6],
+        playerIds[7],
+        playerIds[8],
+        playerIds[9],
+      ]),
+      sessionMatch("Mlate", "completed", at(10), [
+        playerIds[0],
+        playerIds[2],
+        playerIds[1],
+        playerIds[3],
+      ]),
+      sessionMatch("Mearly", "completed", at(40), [
+        playerIds[0],
+        playerIds[1],
+        playerIds[2],
+        playerIds[3],
+      ]),
+    ]);
+    const recommendSpy = vi.mocked(recommendDoublesMatches);
+    recommendSpy.mockClear();
+
+    const response = await recommend("Stoday00");
+
+    expect(response.status).toBe(200);
+    expect(recommendSpy).toHaveBeenCalledTimes(1);
+    expect(recommendSpy.mock.calls[0][0].completedMatches).toEqual([
+      { teams: [[playerIds[0], playerIds[1]], [playerIds[2], playerIds[3]]] },
+      { teams: [[playerIds[0], playerIds[2]], [playerIds[1], playerIds[3]]] },
+    ]);
   });
 
   it("진행 중 경기에 들어간 선수는 코트와 쉬는 사람 모두에서 뺀다", async () => {

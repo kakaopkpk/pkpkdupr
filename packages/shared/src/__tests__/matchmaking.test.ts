@@ -5,6 +5,7 @@ import {
   MATCHMAKING_GUEST_RATING,
   MATCHMAKING_CANDIDATE_PENALTY_MARGIN,
   MATCHMAKING_DEFAULT_COURTS,
+  MATCHMAKING_REPEAT_DECAY,
   MATCHMAKING_REROLL_CYCLE,
   clampMatchmakingCourts,
   getMatchmakingSeed,
@@ -758,5 +759,110 @@ describe("recommendDoublesMatches 남복·여복", () => {
     expect(shown).toHaveLength(1);
     expect(shown[0].specialMatch?.kind).toBe("streak_stopper");
     expect(shown[0].teams.flat()).toContain("g08");
+  });
+});
+
+describe("recommendDoublesMatches 같은 팀·맞대결 감쇠", () => {
+  // a+b vs c+d만 팀 평균이 같고(코트 평점 폭 3.0 → 15점) 나머지 팀 나누기는 60점이라 a·b가 늘 한 팀이다
+  const lopsided: MatchmakingParticipant[] = [
+    { id: "a", doublesRating: 5 },
+    { id: "b", doublesRating: 2 },
+    { id: "c", doublesRating: 3.5 },
+    { id: "d", doublesRating: 3.5 },
+  ];
+
+  it("같은 쌍의 지난 경기는 그 뒤 경기 수만큼 0.5씩 줄여 더한다", () => {
+    expect(MATCHMAKING_REPEAT_DECAY).toBe(0.5);
+    const participants = ["a", "b", "c", "d"].map((id) => ({
+      id,
+      doublesRating: 4,
+    }));
+    const plan = recommend({
+      participants,
+      completedMatches: [
+        { teams: [["a", "b"], ["c", "d"]] },
+        { teams: [["a", "b"], ["c", "d"]] },
+      ],
+      courts: 1,
+    });
+    // a+c vs b+d: 맞대결 반복 a–d·c–b가 각각 직전 1 + 그 전 0.5 = 1.5 → 2쌍 × 1.5 × 3 = 9점(누적이면 12점)
+    expect(plan.penalty).toBeCloseTo(9);
+    expect(plan.courts[0].repeatedPartnerPairs).toEqual([]);
+    expect(plan.courts[0].repeatedOpponentPairs).toHaveLength(2);
+  });
+
+  it("경과는 두 사람 중 그 뒤에 덜 뛴 사람 기준이다", () => {
+    // a·b가 같은 팀이었던 뒤 a만 2경기 더 뛰었다. b에게는 방금 일이라 가중치 1(6점)
+    const bRested = recommend({
+      participants: lopsided,
+      completedMatches: [
+        { teams: [["a", "b"], ["x", "y"]] },
+        { teams: [["a", "e"], ["z", "w"]] },
+        { teams: [["a", "f"], ["u", "v"]] },
+      ],
+      courts: 1,
+    });
+    expect(bRested.penalty).toBeCloseTo(15 + 6);
+    expect(
+      bRested.courts[0].repeatedPartnerPairs.map((pair) => [...pair].sort()),
+    ).toEqual([["a", "b"]]);
+
+    // 둘 다 2경기 더 뛰었으면 0.25(1.5점). 오래된 반복도 repeatedPartnerPairs에는 그대로 보인다
+    const bothPlayed = recommend({
+      participants: lopsided,
+      completedMatches: [
+        { teams: [["a", "b"], ["x", "y"]] },
+        { teams: [["a", "e"], ["b", "z"]] },
+        { teams: [["a", "f"], ["b", "w"]] },
+      ],
+      courts: 1,
+    });
+    expect(bothPlayed.penalty).toBeCloseTo(15 + 1.5);
+    expect(
+      bothPlayed.courts[0].repeatedPartnerPairs.map((pair) => [...pair].sort()),
+    ).toEqual([["a", "b"]]);
+  });
+
+  it("완료 경기 순서로 경과를 센다", () => {
+    // 같은 경기들이라도 a·b가 함께한 경기가 마지막이면 방금 일이다
+    const plan = recommend({
+      participants: lopsided,
+      completedMatches: [
+        { teams: [["a", "e"], ["b", "z"]] },
+        { teams: [["a", "f"], ["b", "w"]] },
+        { teams: [["a", "b"], ["x", "y"]] },
+      ],
+      courts: 1,
+    });
+    expect(plan.penalty).toBeCloseTo(15 + 6);
+  });
+
+  it("세션이 길어져도 반복 회피가 팀 평균 균형을 크게 깨지 않는다", () => {
+    // 2.5 넷을 섞으면 한 코트는 팀 평균 차 0.5가 생기는 구성. 반복을 누적으로 세면 후반에 1.0 차 대진을 고른다
+    const ratings = [2.5, 2.5, 2.5, 2.5, 3, 3.5, 3.5, 4];
+    const participants = ratings.map((doublesRating, index) => ({
+      id: `p${index}`,
+      doublesRating,
+    }));
+    const completedMatches: MatchmakingPlayedMatch[] = [];
+    let maxGap = 0;
+    for (let round = 0; round < 12; round += 1) {
+      const plan = recommend({
+        participants,
+        completedMatches,
+        courts: 2,
+        seed: getMatchmakingSeed("session", completedMatches.length),
+      });
+      for (const court of plan.courts) {
+        maxGap = Math.max(
+          maxGap,
+          Math.abs(court.teamAverages[0] - court.teamAverages[1]),
+        );
+        completedMatches.push({
+          teams: [[...court.teams[0]], [...court.teams[1]]],
+        });
+      }
+    }
+    expect(maxGap).toBeLessThanOrEqual(0.5 + 1e-9);
   });
 });
