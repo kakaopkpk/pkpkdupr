@@ -185,13 +185,16 @@ pnpm lint
   - 자동 정기 세션은 종류를 바꿀 수 없다(409). 이름·장소는 고친다.
   - 직접 만든 정기 세션은 지우거나 다른 종류로 바꿔도 정기 쉬는 날이 생기지 않는다.
 - 정기 세션은 월·목 18:00~21:00 KST 세션이며 이름은 요일별 `getRegularSessionName`("월요 정기운동"/"목요 정기운동")이다.
-- 정기 세션 완료
-  - 종료 10분 전(20:50, `getRegularSessionCompletableFrom`)부터 자동 완료(22:00, `REGULAR_SESSION_AUTO_COMPLETE_HOUR`) 전까지 활성 회원 누구나 세션을 완료한다(`isSessionCompletable`, `POST /api/match-sessions/:sessionId/complete`).
-  - 완료 시각은 `match_sessions.completed_at`(`completedAt`)에 저장하고, 22:00 자동 완료는 저장하지 않고 시각으로 판정한다.
+- 세션 완료
+  - 종료 10분 전(`SESSION_COMPLETE_LEAD_MINUTES`)부터 자동 완료 전까지 활성 회원 누구나 세션을 완료한다(`getSessionCompleteWindow`·`isSessionCompletable`, `POST /api/match-sessions/:sessionId/complete`).
+    - 정기 세션은 20:50부터 22:00(`REGULAR_SESSION_AUTO_COMPLETE_HOUR`) 전까지다.
+    - 종료 시각이 있는 회원·대회 세션은 종료 10분 전(시작 시각보다 이르면 시작 시각)부터 종료 시각(자정을 넘기면 다음 날 종료 시각) 전까지다. 종료 시각이 곧 자동 완료다.
+    - 시각 없는 회원·대회 세션은 완료할 수 없다.
+  - 완료 시각은 `match_sessions.completed_at`(`completedAt`)에 저장하고, 자동 완료는 저장하지 않고 시각으로 판정한다.
   - 완료하면 그 시각이 세션 만료 시각(`getEmptySessionExpiresAt`)·끝 시각이 되어 LIVE·오늘 세션(`isSessionOnToday`)에서 빠지고 세션 지배자·무패 세션이 확정된다.
-  - 완료 뒤 정기 시간대(22:00 전)에 기록·시작한 경기는 그 세션에 붙지 않고 세션 없이 저장된다.
-  - 정기 시간대 경기 묶기·오늘 정기 세션 만들기는 그대로 22:00 전까지다. 관리자가 정기 세션을 다른 종류로 바꾸면 완료 시각은 지운다.
-  - 완료한 빈 정기 세션도 22:00에 정리한다(일찍 지우면 22:00 전 다음 회차 보장이 같은 날 세션을 다시 만든다).
+  - 완료 뒤에는 그 세션에 경기를 기록·시작하지 않는다. 정기 시간대(22:00 전)에 기록·시작한 경기는 세션 없이 저장된다.
+  - 정기 시간대 경기 묶기·오늘 정기 세션 만들기는 그대로 22:00 전까지다. 관리자가 세션 종류를 바꾸면 완료 시각은 지운다.
+  - 완료한 빈 세션도 원래 만료 시각(정기 22:00, 회원·대회 다음 날 0시)에 정리한다(일찍 지우면 22:00 전 다음 회차 보장이 같은 날 정기 세션을 다시 만든다).
 - 회차 만들기
   - 매일 예약 작업이 오늘부터 28일(`REGULAR_SESSION_LOOKAHEAD_DAYS`) 안의 정기 요일(`getRegularSessionDateKeys`, 오늘은 22시 전만)을 미리 만든다.
   - `GET /upcoming` 조회도 다음 회차 1개를 보장한다.

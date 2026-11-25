@@ -8,10 +8,7 @@ import React, {
 import { createPortal } from "react-dom";
 import { Alert, CloseButton } from "@heroui/react";
 import type { MatchTopLevelType } from "@pkpkdupr/shared/match";
-import {
-  getEmptySessionExpiresAt,
-  getRegularSessionEndAt,
-} from "@pkpkdupr/shared/session";
+import { getSessionCompleteWindow } from "@pkpkdupr/shared/session";
 import {
   CompleteSessionBar,
   JoinSessionBar,
@@ -905,21 +902,21 @@ const BottomNavShell: React.FC = () => {
 
   // 세션 완료 바는 어느 탭에서나 위 바와 별도로 뜨고, 함께 뜨면 그 위에 쌓인다
   const completableSession = liveSessionState.completableSession;
-  const completeBarItem = useMemo(
-    () =>
-      completableSession
-        ? {
-            sessionId: completableSession.id,
-            endAt: getRegularSessionEndAt(new Date(completableSession.date)),
-            // 완료 전 세션이라 만료 시각이 곧 자동 완료(22:00)다
-            autoCompleteAt: getEmptySessionExpiresAt(
-              completableSession.kind,
-              new Date(completableSession.date),
-            ),
-          }
-        : null,
-    [completableSession],
-  );
+  const completeBarItem = useMemo(() => {
+    if (!completableSession) return null;
+    const completeWindow = getSessionCompleteWindow(
+      completableSession.kind,
+      new Date(completableSession.date),
+      completableSession,
+    );
+    return (
+      completeWindow && {
+        sessionId: completableSession.id,
+        endAt: completeWindow.endAt,
+        autoCompleteAt: completeWindow.autoCompleteAt,
+      }
+    );
+  }, [completableSession]);
   const completeBar = usePresence(completeBarItem, {
     key: completeBarItem?.sessionId,
   });
@@ -1456,7 +1453,7 @@ const BottomNavShell: React.FC = () => {
 
             <PwaInstallPrompt isActive={isHomeTabUncovered} />
             <CompleteSessionConfirmDialog
-              // 확인할 세션이 완료할 수 없게 되면(22:00 자동 완료·남이 완료) 함께 닫힌다
+              // 확인할 세션이 완료할 수 없게 되면(자동 완료·남이 완료) 함께 닫힌다
               isOpen={
                 !!completeConfirmLayer.value &&
                 completeConfirmLayer.value === completableSession?.id

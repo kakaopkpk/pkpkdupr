@@ -130,6 +130,8 @@ describe("PATCH /api/admin/match-sessions/:sessionId", () => {
       date: kstDateKeyToDate("2026-11-15"),
       startTime: "19:00",
       endTime: "21:00",
+      // 날짜·시각이 바뀌면 완료를 되돌린다
+      completedAt: null,
     });
     expect(response.body).toMatchObject({
       id: "Scustom1",
@@ -153,7 +155,11 @@ describe("PATCH /api/admin/match-sessions/:sessionId", () => {
     expect(cleared.status).toBe(200);
     expect(updateSession).toHaveBeenLastCalledWith(
       "Scustom1",
-      expect.objectContaining({ startTime: null, endTime: null }),
+      expect.objectContaining({
+        startTime: null,
+        endTime: null,
+        completedAt: null,
+      }),
     );
 
     const renamed = await asAdmin(
@@ -161,6 +167,7 @@ describe("PATCH /api/admin/match-sessions/:sessionId", () => {
     ).send({ location: "탄천 코트" });
     expect(renamed.status).toBe(200);
     expect(updateSession.mock.lastCall?.[1]).not.toHaveProperty("startTime");
+    expect(updateSession.mock.lastCall?.[1]).not.toHaveProperty("completedAt");
     expect(updateSession.mock.lastCall?.[1]).toMatchObject({
       location: "탄천 코트",
       date: undefined,

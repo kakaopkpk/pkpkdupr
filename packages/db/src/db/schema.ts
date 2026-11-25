@@ -196,7 +196,7 @@ export const matchSessions = pgTable(
     /** 회원 세션의 시작·종료 시각("HH:MM", KST). 시각 없이 만든 세션과 정기 세션은 null이다(정기 세션 시각은 저장소가 채운다). */
     startTime: varchar("start_time", { length: 5 }),
     endTime: varchar("end_time", { length: 5 }),
-    /** 회원이 정기 세션을 완료한 시각. 완료 전이거나 정기 세션이 아니면 null이다(22:00 자동 완료는 저장하지 않는다). */
+    /** 회원이 세션을 완료한 시각. 완료 전이면 null이다(자동 완료는 저장하지 않는다). */
     completedAt: unixTimestamp("completed_at"),
   },
   (table) => ({

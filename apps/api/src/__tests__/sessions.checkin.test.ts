@@ -844,7 +844,7 @@ describe("public match sessions", () => {
     it("완료하면 완료 시각을 담은 세션을 돌려주고 오늘 세션이 아니게 된다", async () => {
       useNow(completeNow);
       const complete = vi
-        .spyOn(db.matches, "completeRegularSession")
+        .spyOn(db.matches, "completeSession")
         .mockResolvedValue({
           updated: true,
           session: { ...regularSession, completedAt },
@@ -867,7 +867,7 @@ describe("public match sessions", () => {
 
     it("이미 완료된 세션이면 그대로 200", async () => {
       useNow(completeNow);
-      vi.spyOn(db.matches, "completeRegularSession").mockResolvedValue({
+      vi.spyOn(db.matches, "completeSession").mockResolvedValue({
         updated: false,
         session: { ...regularSession, completedAt },
       });
@@ -884,7 +884,7 @@ describe("public match sessions", () => {
     it("완료할 수 없는 세션이면 409, 없으면 404, 형식 오류면 400", async () => {
       useNow(thursdayMorning);
       const complete = vi
-        .spyOn(db.matches, "completeRegularSession")
+        .spyOn(db.matches, "completeSession")
         .mockResolvedValueOnce({ updated: false, session: regularSession })
         .mockResolvedValueOnce(undefined);
 

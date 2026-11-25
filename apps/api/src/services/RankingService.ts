@@ -92,7 +92,7 @@ export interface RankingSession {
    */
   startTime: string | null;
   endTime: string | null;
-  /** 회원이 정기 세션을 완료한 시각. 있으면 그 시각에 만료된다(세션 지배자·무패 세션 확정) */
+  /** 회원이 세션을 완료한 시각. 있으면 그 시각에 만료된다(세션 지배자·무패 세션 확정) */
   completedAt?: Date | null;
   location: string;
   participantIds: string[];

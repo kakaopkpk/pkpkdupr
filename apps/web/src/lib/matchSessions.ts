@@ -111,7 +111,7 @@ export const addMatchSessionParticipant = async (
   );
 };
 
-/** 정기 세션을 완료한다(POST /api/match-sessions/:sessionId/complete). 응답은 완료 시각을 담은 세션 */
+/** 세션을 완료한다(POST /api/match-sessions/:sessionId/complete). 응답은 완료 시각을 담은 세션 */
 export const completeMatchSession = (sessionId: string) =>
   requestJson<MatchSessionDetailInfo>(
     `${sessionPath(sessionId)}/complete`,

@@ -148,7 +148,7 @@ export interface ManagedMatchSession {
   /** 시작·종료 시각("HH:MM", KST). 정기 세션은 18:00~21:00, 시각 없이 만든 세션은 null */
   startTime: string | null;
   endTime: string | null;
-  /** 회원이 정기 세션을 완료한 시각. 완료 전이거나 정기 세션이 아니면 null */
+  /** 회원이 세션을 완료한 시각. 완료 전이면 null */
   completedAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
