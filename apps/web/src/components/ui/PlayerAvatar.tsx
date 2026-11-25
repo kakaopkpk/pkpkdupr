@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { resolveAssetUrl } from "@/lib/api";
 import { getAvatarBackground, getAvatarInitial } from "@/utils/avatar";
 import { cx } from "./cx";
-import { SessionWinStreakFrame } from "./WinStreakAvatarFrame";
+import { WinStreakAvatarFrame } from "./WinStreakAvatarFrame";
 
 export interface AvatarPlayer {
   id: string;
@@ -82,9 +82,12 @@ export const TeamAvatars: React.FC<{
           marginLeft: index > 0 ? -overlap : undefined,
         }}
       >
-        <SessionWinStreakFrame winStreak={sessionWinStreaks?.get(player.id)}>
+        <WinStreakAvatarFrame
+          winStreak={sessionWinStreaks?.get(player.id)}
+          showTag={false}
+        >
           <PlayerAvatar player={player} size={size} />
-        </SessionWinStreakFrame>
+        </WinStreakAvatarFrame>
       </span>
     ))}
   </span>
