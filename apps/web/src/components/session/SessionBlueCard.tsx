@@ -17,16 +17,19 @@ const AVATAR_SIZE = 28;
 
 export type ParticipationAction = "join" | "leave";
 
-/** 블루 카드 위 참여자 아바타 최대 4개 + "+N". 테두리는 카드 바탕색과 같다 */
-const ParticipantAvatars: React.FC<{
+/**
+ * 참여자 아바타 최대 4개 + "+N". 테두리는 카드 바탕색(ringColor, CSS 색 값)과 같다.
+ * 블루 카드와 끝난 세션 흰 카드(세션 상세 머리)가 같이 쓴다
+ */
+export const ParticipantAvatars: React.FC<{
   participants: MatchSessionDetailInfo["participants"];
-  isTournament: boolean;
-}> = ({ participants, isTournament }) => {
+  ringColor: string;
+  /** "+N" 원의 바탕·글자색 */
+  restClassName: string;
+}> = ({ participants, ringColor, restClassName }) => {
   const visible = participants.slice(0, MAX_VISIBLE_AVATARS);
   const restCount = participants.length - visible.length;
-  const ring = `0 0 0 2px var(${
-    isTournament ? "--color-pk-deep" : "--color-pk-primary"
-  })`;
+  const ring = `0 0 0 2px ${ringColor}`;
 
   return (
     <span aria-hidden="true" className="inline-flex">
@@ -41,7 +44,10 @@ const ParticipantAvatars: React.FC<{
       ))}
       {restCount > 0 ? (
         <span
-          className="-ml-1.5 inline-flex size-7 items-center justify-center rounded-full bg-white/[0.22] text-pk-12 font-bold tabular-nums"
+          className={cx(
+            "-ml-1.5 inline-flex size-7 items-center justify-center rounded-full text-pk-12 font-bold tabular-nums",
+            restClassName,
+          )}
           style={{ boxShadow: ring }}
         >
           +{restCount}
@@ -108,7 +114,10 @@ export const SessionBlueCard: React.FC<{
     <>
       <ParticipantAvatars
         participants={session.participants}
-        isTournament={isTournament}
+        ringColor={
+          isTournament ? "var(--color-pk-deep)" : "var(--color-pk-primary)"
+        }
+        restClassName="bg-white/[0.22]"
       />
       <span className="inline-flex items-center gap-0.5 text-pk-13 font-bold text-white/90 tabular-nums">
         {participantsLabel}

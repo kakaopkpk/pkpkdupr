@@ -10,10 +10,14 @@ import { WinLossCount } from "@/components/profile/ProfileStatTile";
 import { rowPressClassName } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { ChevronRightIcon } from "@/components/ui/Icons";
+import { ParticipantAvatars } from "@/components/session/SessionBlueCard";
 import { MatchRow } from "@/components/ui/MatchRow";
 import { cx } from "@/components/ui/cx";
 import { formatKstShortDate } from "@/lib/format";
-import { getSessionKindLabel } from "@/lib/matchSessions";
+import {
+  getSessionKindLabel,
+  type MatchSessionDetailInfo,
+} from "@/lib/matchSessions";
 import type { MatchSessionHistoryInfo } from "@/lib/rankings";
 import type { MatchInfo } from "@/types/match";
 
@@ -51,14 +55,24 @@ const SessionMineStrip: React.FC<{ mine: SessionPlayerReport }> = ({ mine }) => 
 /**
  * 끝난 세션 카드(일정 탭·세션 상세 머리). 맨 위 이름표는 세션 종류, 메타 줄은 장소·인원·경기 수다.
  * 일정 탭은 바깥 날짜 제목이 보이므로 날짜를 넣지 않고, 바깥 날짜 제목이 없는 곳(세션 상세 머리)은 showDate로 메타 줄 앞에 날짜를 붙인다.
- * onPress를 생략하면(세션 상세 머리) 누를 수 없고 화살표가 없다
+ * onPress를 생략하면(세션 상세 머리) 누를 수 없고 화살표가 없다.
+ * participants를 주면(세션 상세 머리) 메타 줄에서 인원을 빼고 맨 아래 참여자 줄을 두며, 누르면 onOpenParticipants
  */
 export const RecordSessionCard: React.FC<{
   session: MatchSessionHistoryInfo;
   mine: SessionPlayerReport | null;
   onPress?: () => void;
   showDate?: boolean;
-}> = ({ session, mine, onPress, showDate = false }) => {
+  participants?: MatchSessionDetailInfo["participants"];
+  onOpenParticipants?: () => void;
+}> = ({
+  session,
+  mine,
+  onPress,
+  showDate = false,
+  participants,
+  onOpenParticipants,
+}) => {
   const content = (
     <>
       <span className="flex w-full items-center justify-between gap-2">
@@ -76,13 +90,33 @@ export const RecordSessionCard: React.FC<{
         {[
           showDate ? formatKstShortDate(session.date) : null,
           session.location,
-          `${session.participantCount}명`,
+          participants ? null : `${session.participantCount}명`,
           `${session.matchCount}경기`,
         ]
           .filter(Boolean)
           .join(" · ")}
       </span>
       {mine ? <SessionMineStrip mine={mine} /> : null}
+      {participants ? (
+        <button
+          type="button"
+          onClick={onOpenParticipants}
+          className={cx(
+            "mt-2 -mb-1.5 flex min-h-11 items-center gap-2.5 text-left",
+            rowPressClassName,
+          )}
+        >
+          <ParticipantAvatars
+            participants={participants}
+            ringColor="var(--color-white)"
+            restClassName="bg-pk-bg text-pk-sub"
+          />
+          <span className="inline-flex items-center gap-0.5 text-pk-13 font-bold text-pk-sub tabular-nums">
+            {participants.length}명 참여
+            <ChevronRightIcon className="size-3.5 shrink-0 text-pk-quiet" />
+          </span>
+        </button>
+      ) : null}
     </>
   );
   const className = "flex w-full flex-col rounded-pk-lg bg-white px-4 py-3.5 text-left";

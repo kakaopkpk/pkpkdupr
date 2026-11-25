@@ -93,7 +93,9 @@ export const TournamentRankCard: React.FC<{
   mine: SessionPlayerReport | null;
   /** 카드를 누르면. 세션 상세 열기 */
   onPress?: () => void;
-}> = ({ session, mine, onPress }) => {
+  /** 참여 줄을 누르면(세션 상세). 생략하면 참여 줄은 누를 수 없다 */
+  onOpenParticipants?: () => void;
+}> = ({ session, mine, onPress, onOpenParticipants }) => {
   const placements = [...(session.placements ?? [])].sort(
     (a, b) => a.place - b.place,
   );
@@ -104,6 +106,7 @@ export const TournamentRankCard: React.FC<{
       meta={formatSessionTimePlace(session)}
       participantsLabel={`${session.participants.length}명 참여`}
       onPress={onPress}
+      onOpenParticipants={onOpenParticipants}
     >
       {placements.length > 0 ? (
         <ol

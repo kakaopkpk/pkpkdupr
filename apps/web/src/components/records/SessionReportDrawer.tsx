@@ -392,12 +392,27 @@ export default function SessionReportDrawer({
         />
       );
     }
+    const openParticipants = () => setIsParticipantsOpen(true);
     if (session.kind === "tournament") {
-      return <TournamentRankCard session={session} mine={null} />;
+      return (
+        <TournamentRankCard
+          session={session}
+          mine={null}
+          onOpenParticipants={openParticipants}
+        />
+      );
     }
     if (report) {
       // 일정 탭과 달리 바깥 날짜 제목이 없어 날짜를 앞에 붙인다
-      return <RecordSessionCard session={report.session} mine={null} showDate />;
+      return (
+        <RecordSessionCard
+          session={report.session}
+          mine={null}
+          showDate
+          participants={session.participants}
+          onOpenParticipants={openParticipants}
+        />
+      );
     }
     return (
       <SessionBlueCard
@@ -405,6 +420,7 @@ export default function SessionReportDrawer({
         dDayLabel="종료"
         meta={formatSessionDateTimePlace(session)}
         participantsLabel={`${session.participants.length}명 참여`}
+        onOpenParticipants={openParticipants}
       />
     );
   };
@@ -557,6 +573,7 @@ export default function SessionReportDrawer({
           lockedPlayerIds={busyPlayerIds}
           onClose={closeParticipants}
           onChanged={invalidateSessions}
+          isReadOnly={loadState.kind === "ready" && loadState.isEnded}
         />
       ) : null}
     </>
