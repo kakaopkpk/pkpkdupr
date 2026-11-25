@@ -135,24 +135,30 @@ describe("buildSessionPraisePlayerStats", () => {
 
   it("언더독은 평점 반영 승리의 직전 평점 차 최댓값(0.01 내림)이고, 평점이 없으면 3.0이다", () => {
     const rated = (
-      teamA: string[],
-      teamB: string[],
       ratingBefore: Record<string, number | null> | undefined,
       ratingExcluded = false,
-    ): SessionPraiseMatch => ({
-      ...match(teamA, teamB, true),
-      ratingBefore,
-      ratingExcluded,
-    });
-    const result = buildSessionPraisePlayerStats([
-      rated(["a", "b"], ["c", "d"], { a: 3.0, b: 3.2, c: 3.3, d: 3.4 }),
+      teamA = ["a", "b"],
+      teamB = ["c", "d"],
+    ) => ({ match: { ...match(teamA, teamB, true), ratingExcluded }, ratingBefore });
+    const games = [
+      rated({ a: 3.0, b: 3.2, c: 3.3, d: 3.4 }),
       // 게스트가 낀 경기는 세지 않는다
-      rated(["a", "b"], ["c", "d"], { a: 2.0, b: 2.0, c: 4.0, d: 4.0 }, true),
+      rated({ a: 2.0, b: 2.0, c: 4.0, d: 4.0 }, true),
       // 평점 입력이 없으면 세지 않는다
-      rated(["a", "b"], ["c", "d"], undefined),
+      rated(undefined),
       // 로그가 없는 선수(e)는 3.0
-      rated(["e"], ["c"], { c: 3.3456 }),
-    ]);
+      rated({ c: 3.3456 }, false, ["e"], ["c"]),
+    ];
+    const matches = games.map((game) => game.match);
+    const result = buildSessionPraisePlayerStats(
+      matches,
+      matches,
+      new Map(
+        games.flatMap((game) =>
+          game.ratingBefore ? [[game.match.id, game.ratingBefore] as const] : [],
+        ),
+      ),
+    );
     expect(result.get("a")?.underdogGap).toBe(0.25);
     expect(result.get("e")?.underdogGap).toBe(0.34);
     expect(result.get("c")?.underdogGap).toBe(0);
@@ -160,8 +166,8 @@ describe("buildSessionPraisePlayerStats", () => {
 
   it("리벤지 성공 경기의 이긴 팀만 복수자 횟수를 센다", () => {
     const result = buildSessionPraisePlayerStats([
-      { ...match(["a"], ["b"], true), revengeSucceeded: true },
-      { ...match(["a"], ["b"], true), revengeSucceeded: false },
+      { ...match(["a"], ["b"], true), specialMatchOutcome: "revenge_success" },
+      { ...match(["a"], ["b"], true), specialMatchOutcome: "revenge_defended" },
     ]);
     expect(result.get("a")?.revenges).toBe(1);
     expect(result.get("b")?.revenges).toBe(0);

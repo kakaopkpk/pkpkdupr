@@ -5,15 +5,12 @@ import {
   isLowRatingAchievement,
   type AchievementDefinition,
 } from "@pkpkdupr/shared/achievements";
-import {
-  SESSION_PRAISE_CATEGORY_LABEL,
-  type SessionPraiseCategory,
-} from "@pkpkdupr/shared/sessionPraise";
+import { SESSION_PRAISE_CATEGORY_LABEL } from "@pkpkdupr/shared/sessionPraise";
 import { loadSvgImage, renderBadgeSvg } from "@/components/profile/achievementShareImage";
 import { ThumbUpIcon } from "@/components/ui/Icons";
 import { getAchievementDefinition } from "@/lib/achievements";
 import { formatRatingDelta } from "@/lib/format";
-import { formatSessionPraiseValue } from "@/lib/sessionPraise";
+import { formatSessionPraiseValue, type SessionPraiseValue } from "@/lib/sessionPraise";
 import {
   formatRiserRecord,
   getSessionReportShareFileName,
@@ -48,7 +45,9 @@ import {
   SHARE_SCALE,
   SHARE_WIDTH,
   setLetterSpacing,
+  setShadow,
   shareFont,
+  withAlpha,
   wrapText,
 } from "@/lib/shareImageCanvas";
 import { formatRating } from "@/utils/dupr";
@@ -132,13 +131,13 @@ const renderIconSvg = (icon: React.ReactElement, size: number, color: string) =>
 };
 
 const THUMB_BADGE_SIZE = 11;
-const THUMB_PILL_SIZE = 15;
+const THUMB_BLUE_SIZE = 15;
 const THUMB_CIRCLE_SIZE = 18;
 const ACHIEVEMENT_BADGE_SIZE = 36;
 
 const iconKey = {
   thumbBadge: "thumb-badge",
-  thumbPill: "thumb-pill",
+  thumbBlue: "thumb-blue",
   thumbCircle: "thumb-circle",
   badge: (achievementId: string) => `badge-${achievementId}`,
 };
@@ -149,7 +148,7 @@ const loadIcons = async (
 ): Promise<Icons> => {
   const sources: [string, string][] = [
     [iconKey.thumbBadge, renderIconSvg(<ThumbUpIcon size={THUMB_BADGE_SIZE} strokeWidth={2.6} />, THUMB_BADGE_SIZE, colors.ink)],
-    [iconKey.thumbPill, renderIconSvg(<ThumbUpIcon size={THUMB_PILL_SIZE} />, THUMB_PILL_SIZE, colors.primary)],
+    [iconKey.thumbBlue, renderIconSvg(<ThumbUpIcon size={THUMB_BLUE_SIZE} />, THUMB_BLUE_SIZE, colors.primary)],
     [iconKey.thumbCircle, renderIconSvg(<ThumbUpIcon size={THUMB_CIRCLE_SIZE} strokeWidth={2.6} />, THUMB_CIRCLE_SIZE, colors.ink)],
     ...achievements.map(
       (definition): [string, string] => [
@@ -246,20 +245,16 @@ const headerBlock = (
 /** 칭찬 분류 줄(13 굵게 `pk-sub`): 분류 이름 → · → 값. 조각 사이 6 */
 const drawPraiseCategoryLine = (
   draw: DrawContext,
-  {
-    category,
-    value,
-    streakBreaks,
-  }: { category: SessionPraiseCategory; value: number; streakBreaks?: number },
+  praise: SessionPraiseValue,
   x: number,
   cy: number,
 ) => {
   const { ctx, colors } = draw;
   let cursor = x;
   const parts: [string, string][] = [
-    [SESSION_PRAISE_CATEGORY_LABEL[category], colors.sub],
+    [SESSION_PRAISE_CATEGORY_LABEL[praise.category], colors.sub],
     ["·", colors.muted],
-    [formatSessionPraiseValue(category, value, streakBreaks), colors.sub],
+    [formatSessionPraiseValue(praise), colors.sub],
   ];
   parts.forEach(([text, color]) => {
     setText(ctx, 700, 13, color);
@@ -348,16 +343,12 @@ const risersBlock = (target: SessionSummaryShareTarget): Block => {
  */
 const drawPraisedAvatarRing = (draw: DrawContext, cx: number, cy: number, size: number) => {
   const { ctx, colors } = draw;
-  const amber = colors.amber;
-  const glow = /^#[0-9a-f]{6}$/i.test(amber) ? `${amber}8c` : amber;
-  // shadowBlur는 변환 배율을 받지 않으므로 지금 배율을 곱한다
-  const scale = ctx.getTransform().a;
+  const glow = withAlpha(colors.amber, 0.55);
   ctx.save();
-  ctx.shadowColor = glow;
-  ctx.shadowBlur = 16 * scale;
+  setShadow(ctx, glow, 16);
   fillCircle(ctx, cx, cy, size / 2 + 4, glow);
   ctx.restore();
-  fillCircle(ctx, cx, cy, size / 2 + 2, amber);
+  fillCircle(ctx, cx, cy, size / 2 + 2, colors.amber);
 };
 
 /** 아바타 오른쪽 아래 앰버 엄지 배지(지름 19, 흰 링 2). PraisedAvatarFrame과 같이 오른쪽 5·아래 4 밖으로 걸친다 */
@@ -396,8 +387,8 @@ const praisedBlock = (target: SessionSummaryShareTarget): Block => {
         const label = String(item.praiseCount);
         const labelWidth = ctx.measureText(label).width;
         ctx.fillText(label, CONTENT_RIGHT, cy);
-        drawIcon(draw, iconKey.thumbPill, CONTENT_RIGHT - labelWidth - 4 - THUMB_PILL_SIZE / 2, cy, THUMB_PILL_SIZE);
-        const rightWidth = labelWidth + 4 + THUMB_PILL_SIZE;
+        drawIcon(draw, iconKey.thumbBlue, CONTENT_RIGHT - labelWidth - 4 - THUMB_BLUE_SIZE / 2, cy, THUMB_BLUE_SIZE);
+        const rightWidth = labelWidth + 4 + THUMB_BLUE_SIZE;
 
         const textX = CONTENT_X + avatarSize + 12;
         const textMaxWidth = CONTENT_RIGHT - rightWidth - 12 - textX;
@@ -647,7 +638,7 @@ const getPraiseTexts = (target: SessionReportShareTarget): string[] =>
   (target.kind === "summary" ? target.praised : target.praise ? [target.praise] : []).flatMap(
     (item) => [
       SESSION_PRAISE_CATEGORY_LABEL[item.category],
-      formatSessionPraiseValue(item.category, item.value, item.streakBreaks),
+      formatSessionPraiseValue(item),
     ],
   );
 

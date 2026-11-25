@@ -91,7 +91,7 @@ const SessionPraiseRow: React.FC<{
         </span>
       </span>
       <span className="shrink-0 text-pk-15 font-semibold tabular-nums text-pk-ink">
-        {formatSessionPraiseValue(candidate.category, candidate.value, candidate.streakBreaks)}
+        {formatSessionPraiseValue(candidate)}
       </span>
       <SessionPraisePill
         state={state}

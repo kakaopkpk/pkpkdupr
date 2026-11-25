@@ -64,14 +64,10 @@ export const buildSessionPraiseCandidates = (
     ),
     context.categoryByMatchId,
   );
-  const sessionMatchIds = new Set(sessionMatches.map((match) => match.id));
   const statsByPlayerId = buildSessionPraisePlayerStats(
     sessionMatches,
-    context.matches.map((match) =>
-      sessionMatchIds.has(match.id)
-        ? { ...match, ratingBefore: ratingBeforeByMatchId.get(match.id) }
-        : match,
-    ),
+    context.matches,
+    ratingBeforeByMatchId,
   );
   const praiseCounts = new Map<string, number>();
   for (const praise of session.praises ?? []) {
@@ -104,7 +100,7 @@ export const buildSessionPraiseCandidates = (
     player: toRankingPlayer(context.playersById.get(item.playerId)!),
     category: item.category,
     value: item.value,
-    ...(item.streakBreaks != null ? { streakBreaks: item.streakBreaks } : {}),
+    streakBreaks: item.streakBreaks,
     praiseCount: praiseCounts.get(item.playerId) ?? 0,
   }));
 };

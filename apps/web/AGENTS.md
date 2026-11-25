@@ -147,7 +147,7 @@
     - `SessionPraiseSection`: 세션 상세 "하이라이트" 섹션(내용은 칭찬 후보). 칭찬 전 줄 전체가 칭찬 버튼이고, 알약 상태는 `getSessionPraisePillState`다.
     - `SessionPraiseParts`: 분류 칩(앰버, 분류 아이콘)·분류 아이콘. 복수자 주먹은 `Icons.tsx`의 `FIST_ICON_PATHS`, 언더독·승부사는 업적 배지 `BADGE_ICON_PATHS`의 `dog`·`bandage`를 같이 쓴다.
     - 값 표기는 `lib/sessionPraise`가 맡는다. 팝업 카드는 큰 값 + 설명 줄 `getSessionPraiseCardValue`, 세션 상세·홈 소식·공유 이미지는 한 줄 `formatSessionPraiseValue`다.
-      - 연승 수문장은 응답 `streakBreaks`(저지 횟수)로 1번(끊은 연승)과 2번 이상(횟수) 표기를 고르므로 두 함수에 함께 넘긴다.
+      - 두 함수는 후보의 `category`·`value`·`streakBreaks`(`SessionPraiseValue`)를 받는다. 연승 수문장은 `streakBreaks`(저지 횟수)로 1번(끊은 연승)과 2번 이상(횟수) 표기를 고른다.
   - `profile/UnseenAchievementCelebration.tsx`: `BottomNav`가 렌더. 전역 화면·바텀시트·+ 메뉴가 하나도 열려 있지 않을 때 앱 진입·업적 데이터 버전 변경(무효화·앱 복귀 TTL)·열린 화면이 모두 닫힐 때 `GET /api/me/achievements/unseen`을 조회해, 아직 보지 않은 내 업적(남이 입력한 경기·세션 지배자·관리자 정정 포함)을 `AchievementCelebration`으로 한 장씩 띄우고 닫으면 `POST /api/me/achievements/seen`. 미확인 조회(`fetchUnseenAchievements`)는 진행 중인 확인 처리 요청이 끝난 뒤 보내 방금 본 업적이 다시 뜨지 않는다
     - 칭찬 팝업이 조회·표시 중이면 기다리고, 축하 연출이 떠 있는 동안은 `onShowingChange`로 알려 칭찬 팝업이 기다린다.
   - 공용 레이어·상태: `BottomSheet.tsx`, `PushScreen.tsx`, `SkeletonBlock.tsx`, `TabPanelStatus.tsx`, `HoldToConfirmButton.tsx`, `SystemToast.tsx`, `OfflineBanner.tsx`, `PwaInstallPrompt.tsx`, `PwaUpdatePrompt.tsx`

@@ -1,8 +1,14 @@
-import { compareCountedMatches, sumPoints, WIN_STREAK_MIN } from "./achievements.js";
+import {
+  compareCountedMatches,
+  getRatingGapBefore,
+  RATING_EPSILON,
+  sumPoints,
+  WIN_STREAK_MIN,
+} from "./achievements.js";
 import { getWinningTeamIndex, type MatchScore } from "./match.js";
-import { DUPR_DEFAULT_RATING } from "./player.js";
 import type { RankingPlayer } from "./ranking.js";
 import type { MatchSessionKind } from "./session.js";
+import type { SpecialMatchOutcome } from "./specialMatch.js";
 
 /**
  * 칭찬 후보 분류. 후보는 점수 순으로 고르고, 배열 순서는 점수가 같을 때의 순서다(드문 분류 먼저)
@@ -60,13 +66,8 @@ export interface SessionPraiseMatch {
   scores: readonly MatchScore[];
   /** 게스트가 낀 평점 미반영 경기. 언더독에서만 뺀다 */
   ratingExcluded?: boolean;
-  /** 특수 매치 리벤지 성공(outcome revenge_success) 경기. 이긴 팀이 복수자 횟수를 센다 */
-  revengeSucceeded?: boolean;
-  /**
-   * 경기 직전 선수별 평점(그 경기 분류, 평점 변경 로그의 previousRating). 언더독에 쓴다.
-   * 없으면 이 경기로 언더독을 세지 않고, 값이 없는 선수는 DUPR_DEFAULT_RATING(3.0)으로 친다
-   */
-  ratingBefore?: Readonly<Record<string, number | null>>;
+  /** 특수 매치 결과. revenge_success면 이긴 팀이 복수자 횟수를 센다 */
+  specialMatchOutcome?: SpecialMatchOutcome | null;
 }
 
 /** 세션 안 선수별 기록 */
@@ -87,29 +88,17 @@ export interface SessionPraisePlayerStats {
   pointsAgainst: number;
 }
 
-/** 평점 차 비교의 부동소수 오차 허용치 */
-const EPSILON = 1e-9;
-
-/** 경기 직전 팀 평균 평점. 평점이 없는 선수는 DUPR_DEFAULT_RATING으로 친다 */
-const getTeamAverageRatingBefore = (
-  ratingBefore: Readonly<Record<string, number | null>>,
-  team: readonly string[],
-) =>
-  team.reduce(
-    (sum, playerId) => sum + (ratingBefore[playerId] ?? DUPR_DEFAULT_RATING),
-    0,
-  ) / team.length;
-
-/** 평점 반영 경기에서 이긴 팀 기준 경기 직전 평점 차(0.01 단위 내림). 셀 수 없으면 0 */
-const getUnderdogGap = (match: SessionPraiseMatch, winner: 0 | 1) => {
-  const { ratingBefore } = match;
-  const teams = match.teamPlayerIds;
+/** 이긴 팀 기준 경기 직전 평점 차(0.01 단위 내림). 평점 미반영 경기·평점 입력이 없는 경기는 0 */
+const getUnderdogGap = (
+  match: SessionPraiseMatch,
+  winner: 0 | 1,
+  ratingBefore: Readonly<Record<string, number | null>> | undefined,
+) => {
   if (!ratingBefore || match.ratingExcluded) return 0;
-  if (teams[0].length === 0 || teams[1].length === 0) return 0;
-  const gap =
-    getTeamAverageRatingBefore(ratingBefore, teams[winner === 0 ? 1 : 0]) -
-    getTeamAverageRatingBefore(ratingBefore, teams[winner]);
-  return Math.max(0, Math.floor(gap * 100 + EPSILON * 100) / 100);
+  const teams = match.teamPlayerIds;
+  const gap = getRatingGapBefore(ratingBefore, teams[winner], teams[winner === 0 ? 1 : 0]);
+  // 빈 팀이면 NaN이라 0이 된다
+  return gap > 0 ? Math.floor(gap * 100 + RATING_EPSILON * 100) / 100 : 0;
 };
 
 /** 이긴 팀 점수가 SESSION_PRAISE_CLUTCH_MIN_POINTS 이상인 게임을 이 팀이 이겼다 */
@@ -123,11 +112,17 @@ const isClutchWin = (scores: readonly MatchScore[], teamIndex: 0 | 1) =>
 /**
  * 세션 완료 경기로 선수별 세션 기록을 센다(완료 시각 순).
  * 연승은 누적 연승이라 allMatches(세션 밖 경기 포함 전체 완료 경기)를 처음부터 훑어 잇고,
- * 기록은 세션 경기에서만 쌓는다. 승패가 갈리지 않은 경기는 연승을 끊는다
+ * 기록은 세션 경기에서만 쌓는다. 승패가 갈리지 않은 경기는 연승을 끊는다.
+ * ratingBeforeByMatchId는 경기 id별 경기 직전 선수별 평점(그 경기 분류, 평점 변경 로그의 previousRating)이고
+ * 언더독에만 쓴다. 없는 경기는 언더독을 세지 않고, 값이 없는 선수는 DUPR_DEFAULT_RATING(3.0)으로 친다
  */
 export const buildSessionPraisePlayerStats = (
   sessionMatches: readonly SessionPraiseMatch[],
   allMatches: readonly SessionPraiseMatch[] = sessionMatches,
+  ratingBeforeByMatchId: ReadonlyMap<
+    string,
+    Readonly<Record<string, number | null>>
+  > = new Map(),
 ): Map<string, SessionPraisePlayerStats> => {
   const statsByPlayerId = new Map<string, SessionPraisePlayerStats>();
   const streakByPlayerId = new Map<string, number>();
@@ -173,7 +168,9 @@ export const buildSessionPraisePlayerStats = (
           )
         : 0;
     const underdogGap =
-      isSessionMatch && winner !== null ? getUnderdogGap(match, winner) : 0;
+      isSessionMatch && winner !== null
+        ? getUnderdogGap(match, winner, ratingBeforeByMatchId.get(match.id))
+        : 0;
     teams.forEach((team, index) => {
       const teamIndex = index as 0 | 1;
       const won = winner === teamIndex;
@@ -196,7 +193,7 @@ export const buildSessionPraisePlayerStats = (
         }
         if (isClutchWin(match.scores, teamIndex)) stats.clutchWins += 1;
         stats.underdogGap = Math.max(stats.underdogGap, underdogGap);
-        if (match.revengeSucceeded) stats.revenges += 1;
+        if (match.specialMatchOutcome === "revenge_success") stats.revenges += 1;
       }
     });
   }
@@ -257,9 +254,10 @@ const compareByPointDiff = (
 ) => getPointDiff(right) - getPointDiff(left) || compareRest(left, right);
 
 interface CategoryRule {
-  /** 후보가 아니면 null */
+  /** 후보가 아니면 null. dominatorId는 세션 리포트 topRiser다 */
   pick: (
     input: SessionPraisePlayerInput,
+    dominatorId: string | null,
   ) => { value: number; score: number; streakBreaks?: number } | null;
   /** 같은 분류·같은 점수 안의 순서. 앞에 올 사람이 음수 */
   compare: (
@@ -268,11 +266,8 @@ interface CategoryRule {
   ) => number;
 }
 
-/** 분류별 후보 조건·값·점수(docs/product.md "세션 칭찬"). 세션 지배자는 dominatorId로 따로 고른다 */
-const CATEGORY_RULES: Record<
-  Exclude<SessionPraiseCategory, "dominator">,
-  CategoryRule
-> = {
+/** 분류별 후보 조건·값·점수(docs/product.md "세션 칭찬") */
+const CATEGORY_RULES: Record<SessionPraiseCategory, CategoryRule> = {
   revenge: {
     pick: ({ stats }) =>
       stats.revenges >= 1
@@ -282,7 +277,7 @@ const CATEGORY_RULES: Record<
   },
   underdog: {
     pick: ({ stats }) =>
-      stats.underdogGap >= SESSION_PRAISE_UNDERDOG_MIN_GAP - EPSILON
+      stats.underdogGap >= SESSION_PRAISE_UNDERDOG_MIN_GAP - RATING_EPSILON
         ? {
             value: stats.underdogGap,
             score: 3 + (stats.underdogGap - SESSION_PRAISE_UNDERDOG_MIN_GAP) * 100,
@@ -323,6 +318,16 @@ const CATEGORY_RULES: Record<
       compareText(left.username, right.username) ||
       compareText(left.playerId, right.playerId),
   },
+  dominator: {
+    pick: (input, dominatorId) =>
+      input.playerId === dominatorId && input.ratingDelta > 0
+        ? {
+            value: input.ratingDelta,
+            score: input.ratingDelta / SESSION_PRAISE_DOMINATOR_POINT_UNIT,
+          }
+        : null,
+    compare: compareRest,
+  },
   mostWins: {
     pick: ({ stats }) =>
       stats.wins >= SESSION_PRAISE_MOST_WINS_MIN
@@ -356,7 +361,7 @@ const CATEGORY_ORDER = new Map<SessionPraiseCategory, number>(
  * 칭찬 후보를 고른다. 후보 조건을 넘은 (회원, 분류)를 점수 높은 순으로 줄 세워 앞에서부터 뽑는다.
  * 한 회원은 한 장, 한 분류도 한 회원만이고 최대 3장이며, 결과도 점수 순이다.
  * 점수가 같으면 SESSION_PRAISE_CATEGORIES 순서, 같은 분류 안에서는 분류별 동점 규칙이다.
- * 세션 지배자는 세션 리포트 topRiser를 그대로 쓴다(dominatorId, 후보 입력에 없으면 건너뜀).
+ * 세션 지배자는 세션 리포트 topRiser를 그대로 쓴다(dominatorId, 후보 입력에 없으면 없음).
  */
 export const pickSessionPraiseCandidates = ({
   players,
@@ -369,35 +374,21 @@ export const pickSessionPraiseCandidates = ({
     input: SessionPraisePlayerInput;
   })[] = [];
   for (const input of players) {
-    if (input.playerId === dominatorId && input.ratingDelta > 0) {
-      entries.push({
-        input,
-        playerId: input.playerId,
-        category: "dominator",
-        value: input.ratingDelta,
-        score: input.ratingDelta / SESSION_PRAISE_DOMINATOR_POINT_UNIT,
-      });
-    }
-    for (const [category, rule] of Object.entries(CATEGORY_RULES) as [
-      Exclude<SessionPraiseCategory, "dominator">,
-      CategoryRule,
-    ][]) {
-      const result = rule.pick(input);
+    for (const category of SESSION_PRAISE_CATEGORIES) {
+      const result = CATEGORY_RULES[category].pick(input, dominatorId);
       if (result) {
         entries.push({ input, playerId: input.playerId, category, ...result });
       }
     }
   }
   entries.sort((left, right) => {
-    if (Math.abs(right.score - left.score) > EPSILON) {
+    if (Math.abs(right.score - left.score) > RATING_EPSILON) {
       return right.score - left.score;
     }
     if (left.category !== right.category) {
       return CATEGORY_ORDER.get(left.category)! - CATEGORY_ORDER.get(right.category)!;
     }
-    return left.category === "dominator"
-      ? 0
-      : CATEGORY_RULES[left.category].compare(left.input, right.input);
+    return CATEGORY_RULES[left.category].compare(left.input, right.input);
   });
 
   const picked: PickedSessionPraiseCandidate[] = [];

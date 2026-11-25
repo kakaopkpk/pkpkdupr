@@ -1,7 +1,6 @@
 import type {
   PendingSessionPraisesResponse,
   SessionPraiseCandidate,
-  SessionPraiseCategory,
   SessionPraiseRequest,
   SessionPraiseResponse,
 } from "@pkpkdupr/shared/sessionPraise";
@@ -41,65 +40,57 @@ export const praiseSessionPlayer = (
   );
 };
 
+/** 값 표기에 쓰는 후보 필드. 연승 수문장은 `streakBreaks`(저지 횟수)로 1번·2번 이상 표기를 고른다 */
+export type SessionPraiseValue = Pick<
+  SessionPraiseCandidate,
+  "category" | "value" | "streakBreaks"
+>;
+
+/** 분류별 값 표기. card는 팝업 카드의 큰 값·설명 줄, line은 한 줄 값이다 */
+const describeSessionPraiseValue = ({
+  category,
+  value,
+  streakBreaks = 1,
+}: SessionPraiseValue): { main: string; caption: string; line: string } => {
+  switch (category) {
+    case "dominator": {
+      const delta = formatRatingDelta(value);
+      return { main: delta, caption: "상승", line: `${delta} 상승` };
+    }
+    case "streakGuard":
+      return streakBreaks >= 2
+        ? { main: `${streakBreaks}회`, caption: "연승 저지", line: `연승 저지 ${streakBreaks}회` }
+        : { main: `${value}연승`, caption: "저지", line: `${value}연승 저지` };
+    case "rankJump":
+      return { main: `▲${value}`, caption: "순위 상승", line: `순위 상승 ▲${value}` };
+    case "mostWins":
+      return { main: `${value}승`, caption: "승리", line: `${value}승` };
+    case "mostPoints":
+      return { main: `${value}점`, caption: "득점", line: `${value}점 득점` };
+    case "clutch":
+      return { main: `${value}승`, caption: "듀스 승리", line: `듀스 ${value}승` };
+    case "underdog": {
+      const gap = `+${value.toFixed(2)}`;
+      return { main: gap, caption: "강팀 격파", line: `${gap} 강팀 격파` };
+    }
+    case "revenge":
+      return { main: `${value}회`, caption: "리벤지 성공", line: `리벤지 성공 ${value}회` };
+  }
+};
+
 /**
  * 칭찬 분류의 한 줄 값(세션 상세·홈 소식·세션 요약 공유 이미지).
  * "+0.106 상승"·"11연승 저지"·"연승 저지 2회"·"순위 상승 ▲9"·"5승"·"58점 득점"·"듀스 2승"·"+0.25 강팀 격파"·"리벤지 성공 1회"
  */
-export const formatSessionPraiseValue = (
-  category: SessionPraiseCategory,
-  value: number,
-  /** 연승 수문장의 저지 횟수(`SessionPraiseCandidate.streakBreaks`) */
-  streakBreaks = 1,
-): string => {
-  switch (category) {
-    case "dominator":
-      return `${formatRatingDelta(value)} 상승`;
-    case "streakGuard":
-      return streakBreaks >= 2 ? `연승 저지 ${streakBreaks}회` : `${value}연승 저지`;
-    case "rankJump":
-      return `순위 상승 ▲${value}`;
-    case "mostWins":
-      return `${value}승`;
-    case "mostPoints":
-      return `${value}점 득점`;
-    case "clutch":
-      return `듀스 ${value}승`;
-    case "underdog":
-      return `+${value.toFixed(2)} 강팀 격파`;
-    case "revenge":
-      return `리벤지 성공 ${value}회`;
-  }
-};
+export const formatSessionPraiseValue = (praise: SessionPraiseValue): string =>
+  describeSessionPraiseValue(praise).line;
 
 /** 칭찬 팝업 카드의 큰 값과 그 아래 설명 줄: "11연승"/"저지"·"2회"/"연승 저지"·"+0.33"/"강팀 격파" 등 */
-export const getSessionPraiseCardValue = ({
-  category,
-  value,
-  streakBreaks = 1,
-}: Pick<SessionPraiseCandidate, "category" | "value" | "streakBreaks">): {
-  main: string;
-  caption: string;
-} => {
-  switch (category) {
-    case "dominator":
-      return { main: formatRatingDelta(value), caption: "상승" };
-    case "streakGuard":
-      return streakBreaks >= 2
-        ? { main: `${streakBreaks}회`, caption: "연승 저지" }
-        : { main: `${value}연승`, caption: "저지" };
-    case "rankJump":
-      return { main: `▲${value}`, caption: "순위 상승" };
-    case "mostWins":
-      return { main: `${value}승`, caption: "승리" };
-    case "mostPoints":
-      return { main: `${value}점`, caption: "득점" };
-    case "clutch":
-      return { main: `${value}승`, caption: "듀스 승리" };
-    case "underdog":
-      return { main: `+${value.toFixed(2)}`, caption: "강팀 격파" };
-    case "revenge":
-      return { main: `${value}회`, caption: "리벤지 성공" };
-  }
+export const getSessionPraiseCardValue = (
+  praise: SessionPraiseValue,
+): { main: string; caption: string } => {
+  const { main, caption } = describeSessionPraiseValue(praise);
+  return { main, caption };
 };
 
 /**

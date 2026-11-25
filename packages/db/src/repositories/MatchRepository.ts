@@ -47,7 +47,7 @@ import {
 } from "../db/schema";
 import { generateEntityId, isEntityId } from "@pkpkdupr/shared/entityId";
 import type { SessionPraiseRecord } from "@pkpkdupr/shared/sessionPraise";
-import type { SpecialMatch } from "@pkpkdupr/shared/specialMatch";
+import type { SpecialMatch, SpecialMatchOutcome } from "@pkpkdupr/shared/specialMatch";
 import {
   IN_PROGRESS_MATCH_TIMEOUT_MS,
   REGULAR_SESSION_LOCATION,
@@ -169,8 +169,8 @@ export interface CompletedMatchOutcome {
   regularSession?: boolean;
   /** 대회 세션 경기인지(출사표 업적). 없으면 대회 세션이 아니다 */
   tournamentSession?: boolean;
-  /** 특수 매치 리벤지 성공(outcome revenge_success) 경기인지(세션 칭찬 복수자). 없으면 아니다 */
-  revengeSucceeded?: boolean;
+  /** 특수 매치 결과(`SpecialMatch.outcome`). 특수 매치가 아니거나 결과가 없으면 null */
+  specialMatchOutcome?: SpecialMatchOutcome | null;
 }
 
 export interface SessionWithParticipantIds {
@@ -1295,9 +1295,7 @@ export class MatchRepository {
       teamPlayerIds: teamsByMatchId.get(row.id) ?? [[], []],
       scores: scoresByMatchId.get(row.id) ?? [],
       ratingExcluded: row.ratingExcluded === true,
-      revengeSucceeded:
-        row.specialMatch?.kind === "revenge" &&
-        row.specialMatch.outcome === "revenge_success",
+      specialMatchOutcome: row.specialMatch?.outcome ?? null,
       ...toCompletedMatchSessionKind(row),
     }));
   }

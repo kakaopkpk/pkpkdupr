@@ -17,6 +17,7 @@ import {
   type SessionPraiseRecord,
 } from "@pkpkdupr/shared/sessionPraise";
 import { isEntityId } from "@pkpkdupr/shared/entityId";
+import type { SpecialMatchOutcome } from "@pkpkdupr/shared/specialMatch";
 import {
   getMatchTopLevelType,
   getWinningTeamIndex,
@@ -76,8 +77,8 @@ export interface RankingMatch {
   regularSession?: boolean;
   /** 대회 세션 경기인지(출사표 업적) */
   tournamentSession?: boolean;
-  /** 특수 매치 리벤지 성공 경기인지(세션 칭찬 복수자) */
-  revengeSucceeded?: boolean;
+  /** 특수 매치 결과(세션 칭찬 복수자). 특수 매치가 아니거나 결과가 없으면 null */
+  specialMatchOutcome?: SpecialMatchOutcome | null;
 }
 
 export interface RankingSession {

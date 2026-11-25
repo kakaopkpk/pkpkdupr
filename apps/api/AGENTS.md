@@ -186,7 +186,7 @@
     - 후보마다 분류 `category`와 값 `value`이고, 연승 수문장만 저지 횟수 `streakBreaks`가 붙는다(`value`는 끊은 가장 긴 연승).
   - 후보 계산은 세션 완료 경기 전체(게스트가 낀 평점 미반영 경기 포함)로 하고, 세션 지배자·평점 변화·순위는 세션 리포트와 같다.
     - 언더독만 평점 반영 경기로 세고, 경기 직전 평점은 세션 참가자 평점 변경 로그의 `previousRating`(업적 언더독과 같은 입력)이다.
-    - 복수자는 완료 경기 요약의 `revengeSucceeded`(`special_match`가 리벤지이고 결과 `revenge_success`)로 센다.
+    - 복수자는 완료 경기 요약의 특수 매치 결과 `specialMatchOutcome`(`special_match.outcome`)이 `revenge_success`인 경기로 센다.
   - `myTargetPlayerId`는 요청자가 칭찬한 회원(안 했으면 null). id 형식 오류 400, 없는 세션 404.
 - 칭찬하기 `POST /api/match-sessions/:sessionId/praise` `{ targetPlayerId }`: 200 `SessionPraiseResponse`(저장 반영)
   - 활성 회원 누구나(그 세션에서 경기하지 않았어도), 자기 자신도 된다.

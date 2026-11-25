@@ -1070,29 +1070,42 @@ export const WIN_STREAK_MIN = 3;
 export const UNDERDOG_MIN_RATING_GAP = 0.3;
 
 /** 평점 평균 비교의 부동소수 오차 허용치 */
-const RATING_EPSILON = 1e-9;
+export const RATING_EPSILON = 1e-9;
 
 /** 경기 직전 팀 평균 평점. 평점이 없는 선수는 DUPR_DEFAULT_RATING으로 친다 */
 const getTeamAverageRatingBefore = (
   ratingBefore: Readonly<Record<string, number | null>>,
-  team: AchievementTeam,
+  playerIds: readonly string[],
 ) =>
-  team.players.reduce(
-    (sum, player) => sum + (ratingBefore[player.id] ?? DUPR_DEFAULT_RATING),
+  playerIds.reduce(
+    (sum, playerId) => sum + (ratingBefore[playerId] ?? DUPR_DEFAULT_RATING),
     0,
-  ) / team.players.length;
+  ) / playerIds.length;
+
+/**
+ * 경기 직전 평점 차: 상대 팀 평균 − 우리 팀 평균(언더독 업적·세션 칭찬 언더독).
+ * 평점이 없는 선수는 DUPR_DEFAULT_RATING으로 치고, 빈 팀이 있으면 NaN이다
+ */
+export const getRatingGapBefore = (
+  ratingBefore: Readonly<Record<string, number | null>>,
+  mine: readonly string[],
+  theirs: readonly string[],
+) =>
+  getTeamAverageRatingBefore(ratingBefore, theirs) -
+  getTeamAverageRatingBefore(ratingBefore, mine);
 
 /** 평점 반영 경기에서 경기 직전 상대 팀 평균 평점이 우리 팀보다 UNDERDOG_MIN_RATING_GAP 이상 높았다 */
 const isUnderdogMatch = (match: AchievementMatch, teamIndex: 0 | 1) => {
   const ratingBefore = match.ratingBefore;
   if (!ratingBefore || match.ratingExcluded) return false;
-  const mine = getTeamAverageRatingBefore(ratingBefore, match.teams[teamIndex]);
-  const theirs = getTeamAverageRatingBefore(
-    ratingBefore,
-    match.teams[teamIndex === 0 ? 1 : 0],
+  const [mine, theirs] = [teamIndex, teamIndex === 0 ? 1 : 0].map((index) =>
+    match.teams[index].players.map((player) => player.id),
   );
-  // 빈 팀이면 평균이 NaN이라 비교가 거짓이 된다
-  return theirs - mine >= UNDERDOG_MIN_RATING_GAP - RATING_EPSILON;
+  // 빈 팀이면 NaN이라 비교가 거짓이 된다
+  return (
+    getRatingGapBefore(ratingBefore, mine, theirs) >=
+    UNDERDOG_MIN_RATING_GAP - RATING_EPSILON
+  );
 };
 
 /**

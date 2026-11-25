@@ -81,7 +81,7 @@ const matches: CompletedMatchOutcome[] = [
   singles(alice, bob),
   singles(alice, carol),
   singles(alice, bob),
-  { ...singles(bob, alice), revengeSucceeded: true },
+  { ...singles(bob, alice), specialMatchOutcome: "revenge_success" },
   { ...singles(carol, bob), scores: [{ scoreA: 12, scoreB: 10 }] },
   { ...singles(guest, carol), ratingExcluded: true },
 ];
