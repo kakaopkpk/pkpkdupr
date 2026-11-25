@@ -11,13 +11,17 @@ const createStorage = (initial: Record<string, string> = {}) => {
   };
 };
 
-// 숨김 상태를 모듈 안에도 기억하므로 테스트마다 새로 불러온다
+// 본 장·닫음을 모듈 안에도 기억하므로 테스트마다 새로 불러온다
 const loadModule = async () => {
   vi.resetModules();
   return import("./rulesGuide");
 };
 
 describe("rulesGuide", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
   it("keeps the home card count in sync with the guide cards", async () => {
     const { RULES_GUIDE_CARD_COUNT } = await loadModule();
     const { RULES_GUIDE_CARDS } = await import(
@@ -27,38 +31,76 @@ describe("rulesGuide", () => {
     expect(RULES_GUIDE_CARD_COUNT).toBe(RULES_GUIDE_CARDS.length);
   });
 
-
-  afterEach(() => {
-    vi.unstubAllGlobals();
-  });
-
-  it("dismisses the home card on this device", async () => {
+  it("keeps the home card until every card has been seen", async () => {
     const storage = createStorage();
     vi.stubGlobal("localStorage", storage);
     const {
-      RULES_GUIDE_DISMISSED_STORAGE_KEY,
-      dismissRulesGuideCard,
-      isRulesGuideCardDismissed,
+      RULES_GUIDE_CARD_COUNT,
+      RULES_GUIDE_SEEN_STORAGE_KEY,
+      getRulesGuideSeenCount,
+      isRulesGuideCardHidden,
+      markRulesGuideCardSeen,
     } = await loadModule();
-    expect(isRulesGuideCardDismissed()).toBe(false);
 
-    dismissRulesGuideCard();
+    markRulesGuideCardSeen(0);
+    markRulesGuideCardSeen(0);
+    markRulesGuideCardSeen(RULES_GUIDE_CARD_COUNT - 1);
+    expect(getRulesGuideSeenCount()).toBe(2);
+    expect(isRulesGuideCardHidden()).toBe(false);
+    expect(storage.values.get(RULES_GUIDE_SEEN_STORAGE_KEY)).toBe(
+      JSON.stringify([0, RULES_GUIDE_CARD_COUNT - 1]),
+    );
 
-    expect(isRulesGuideCardDismissed()).toBe(true);
-    expect(storage.values.get(RULES_GUIDE_DISMISSED_STORAGE_KEY)).toBe("1");
+    for (let index = 0; index < RULES_GUIDE_CARD_COUNT; index += 1) {
+      markRulesGuideCardSeen(index);
+    }
+    expect(getRulesGuideSeenCount()).toBe(RULES_GUIDE_CARD_COUNT);
+    expect(isRulesGuideCardHidden()).toBe(true);
   });
 
-  it("reads a dismissal saved earlier on this device", async () => {
+  it("hides the home card once it is closed", async () => {
+    const storage = createStorage();
+    vi.stubGlobal("localStorage", storage);
+    const {
+      RULES_GUIDE_CLOSED_STORAGE_KEY,
+      closeRulesGuideCard,
+      isRulesGuideCardHidden,
+    } = await loadModule();
+    expect(isRulesGuideCardHidden()).toBe(false);
+
+    closeRulesGuideCard();
+
+    expect(isRulesGuideCardHidden()).toBe(true);
+    expect(storage.values.get(RULES_GUIDE_CLOSED_STORAGE_KEY)).toBe("1");
+  });
+
+  it("reads progress saved earlier and ignores invalid card numbers", async () => {
     vi.stubGlobal(
       "localStorage",
-      createStorage({ "pkpkdupr:rules-guide-dismissed": "1" }),
+      createStorage({
+        "pkpkdupr:rules-guide-seen": JSON.stringify([0, 3, 3, 12, -1, 1.5, "2"]),
+        // 열기만 해도 써지던 옛 키는 읽지 않는다
+        "pkpkdupr:rules-guide-dismissed": "1",
+      }),
     );
-    const { isRulesGuideCardDismissed } = await loadModule();
+    const { getRulesGuideSeenCount, isRulesGuideCardHidden } =
+      await loadModule();
 
-    expect(isRulesGuideCardDismissed()).toBe(true);
+    expect(getRulesGuideSeenCount()).toBe(2);
+    expect(isRulesGuideCardHidden()).toBe(false);
   });
 
-  it("keeps the card dismissed for this run when storage is blocked", async () => {
+  it("treats broken saved progress as nothing seen", async () => {
+    vi.stubGlobal(
+      "localStorage",
+      createStorage({ "pkpkdupr:rules-guide-seen": "{" }),
+    );
+    const { getRulesGuideSeenCount } = await loadModule();
+
+    expect(getRulesGuideSeenCount()).toBe(0);
+  });
+
+  it("remembers progress for this run when storage is blocked", async () => {
     vi.stubGlobal("localStorage", {
       getItem: () => {
         throw new Error("blocked");
@@ -67,11 +109,17 @@ describe("rulesGuide", () => {
         throw new Error("blocked");
       },
     });
-    const { dismissRulesGuideCard, isRulesGuideCardDismissed } =
-      await loadModule();
-    expect(isRulesGuideCardDismissed()).toBe(false);
+    const {
+      closeRulesGuideCard,
+      getRulesGuideSeenCount,
+      isRulesGuideCardHidden,
+      markRulesGuideCardSeen,
+    } = await loadModule();
+    expect(isRulesGuideCardHidden()).toBe(false);
 
-    expect(() => dismissRulesGuideCard()).not.toThrow();
-    expect(isRulesGuideCardDismissed()).toBe(true);
+    expect(() => markRulesGuideCardSeen(1)).not.toThrow();
+    expect(getRulesGuideSeenCount()).toBe(1);
+    expect(() => closeRulesGuideCard()).not.toThrow();
+    expect(isRulesGuideCardHidden()).toBe(true);
   });
 });

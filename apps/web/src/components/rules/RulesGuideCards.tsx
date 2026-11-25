@@ -106,17 +106,13 @@ export const RULES_GUIDE_CARDS: readonly RulesGuideCard[] = [
     eyebrow: "규칙 1",
     title: "11점 먼저, 2점 차로",
     Figure: WinConditionFigure,
-    stillSeconds: 3.9,
+    stillSeconds: 3.6,
     body: (
       <RuleList>
         <RuleItem>
           <b>11점</b>을 먼저 내고 <b>2점 차 이상</b> 나면 이겨요.
         </RuleItem>
         <RuleItem>10:10이 되면 2점 차가 날 때까지 이어가요.</RuleItem>
-        <RuleItem>
-          피카피카는 <b>15점까지만</b> 쳐요. 14:14면 다음 점수를 낸 팀이
-          이겨요.
-        </RuleItem>
       </RuleList>
     ),
   },
@@ -124,7 +120,7 @@ export const RULES_GUIDE_CARDS: readonly RulesGuideCard[] = [
     eyebrow: "규칙 2",
     title: "점수는 공격팀만",
     Figure: ScoringFigure,
-    stillSeconds: 6,
+    stillSeconds: 4.9,
     body: (
       <RuleList>
         <RuleItem>

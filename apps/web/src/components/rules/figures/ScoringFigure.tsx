@@ -5,7 +5,7 @@ import { RuleFigure } from "../RulesGuideParts";
 export const ScoringFigure: React.FC = () => (
   <RuleFigure>
     <div className="scene" style={{ position: "absolute", inset: "0" }}>
-      <svg width="298" height="216" viewBox="0 0 298 216" role="img" aria-label="위에서 본 코트: 공격팀이 랠리를 이기면 1점을 얻는다. 공격팀은 서브 기회가 두 번이라, 지면 2번 서버가 서브하고, 2번도 지면 점수 없이 서브권이 상대 팀으로 넘어간다" style={{ position: "absolute", left: "0", top: "0" }}>
+      <svg width="298" height="216" viewBox="0 0 298 216" role="img" aria-label="위에서 본 코트: 공격팀이 랠리를 이기면 1점을 얻고 1번 서버가 계속 서브한다. 공격팀이 지면 점수는 그대로이고 2번 서버가 서브하며, 2번도 지면 서브권이 상대 팀으로 넘어간다" style={{ position: "absolute", left: "0", top: "0" }}>
         <rect x="17" y="46" width="264" height="120" fill="#2346a8" />
         <rect x="107" y="46" width="84" height="120" fill="#5a7bd6" />
         <rect x="17" y="46" width="264" height="120" fill="none" stroke="#ffffff" strokeWidth="2" />
@@ -36,13 +36,13 @@ export const ScoringFigure: React.FC = () => (
         <g transform="translate(0 -4)">
           <g transform="translate(272 80)">
             <circle r="11" fill="#152a5e" stroke="#ffffff" strokeWidth="1.5" />
-            <text y="4" fontSize="12" fontWeight="800" fill="#ffffff" textAnchor="middle">
+            <text className="c1-rn" y="4" fontSize="12" fontWeight="800" fill="#ffffff" textAnchor="middle">
               1
             </text>
           </g>
           <g transform="translate(272 140)">
             <circle r="11" fill="#152a5e" stroke="#ffffff" strokeWidth="1.5" />
-            <text y="4" fontSize="12" fontWeight="800" fill="#ffffff" textAnchor="middle">
+            <text className="c1-rn" y="4" fontSize="12" fontWeight="800" fill="#ffffff" textAnchor="middle">
               2
             </text>
           </g>
@@ -51,45 +51,39 @@ export const ScoringFigure: React.FC = () => (
           </g>
           <g className="c1-b">
             <circle r="11" fill="#ffffff" />
-            <text y="4" fontSize="12" fontWeight="800" fill="#2346a8" textAnchor="middle">
+            <text className="c1-ln" y="4" fontSize="12" fontWeight="800" fill="#2346a8" textAnchor="middle">
               1
             </text>
           </g>
           <g className="c1-c">
             <circle r="11" fill="#ffffff" />
-            <text y="4" fontSize="12" fontWeight="800" fill="#2346a8" textAnchor="middle">
+            <text className="c1-ln" y="4" fontSize="12" fontWeight="800" fill="#2346a8" textAnchor="middle">
               2
             </text>
           </g>
           <g transform="translate(236 86)">
             <circle className="pop c1-rp1" r="8" fill="none" stroke="#ffffff" strokeWidth="2" />
           </g>
-          <g transform="translate(80 118)">
-            <circle className="pop c1-rp2" r="8" fill="none" stroke="#ffffff" strokeWidth="2" />
-          </g>
-          <g transform="translate(230 140)">
-            <circle className="pop c1-rp3" r="8" fill="none" stroke="#ffffff" strokeWidth="2" />
-          </g>
           <g transform="translate(9 104)">
-            <circle className="pop c1-rp4" r="8" fill="none" stroke="#c2253d" strokeWidth="2.5" />
+            <circle className="pop c1-rp2" r="8" fill="none" stroke="#c2253d" strokeWidth="2.5" />
           </g>
           <g transform="translate(236 136)">
-            <circle className="pop c1-rp5" r="8" fill="none" stroke="#ffffff" strokeWidth="2" />
+            <circle className="pop c1-rp3" r="8" fill="none" stroke="#ffffff" strokeWidth="2" />
           </g>
           <g transform="translate(78 100)">
-            <circle className="pop c1-rp6" r="8" fill="none" stroke="#ffffff" strokeWidth="2" />
+            <circle className="pop c1-rp4" r="8" fill="none" stroke="#ffffff" strokeWidth="2" />
           </g>
           <g transform="translate(289 116)">
-            <circle className="pop c1-rp7" r="8" fill="none" stroke="#c2253d" strokeWidth="2.5" />
+            <circle className="pop c1-rp5" r="8" fill="none" stroke="#c2253d" strokeWidth="2.5" />
           </g>
           <g transform="translate(236 84)">
-            <circle className="pop c1-rp8" r="8" fill="none" stroke="#ffffff" strokeWidth="2" />
+            <circle className="pop c1-rp6" r="8" fill="none" stroke="#ffffff" strokeWidth="2" />
           </g>
           <g transform="translate(80 124)">
-            <circle className="pop c1-rp9" r="8" fill="none" stroke="#ffffff" strokeWidth="2" />
+            <circle className="pop c1-rp7" r="8" fill="none" stroke="#ffffff" strokeWidth="2" />
           </g>
           <g transform="translate(289 96)">
-            <circle className="pop c1-rp10" r="8" fill="none" stroke="#c2253d" strokeWidth="2.5" />
+            <circle className="pop c1-rp8" r="8" fill="none" stroke="#c2253d" strokeWidth="2.5" />
           </g>
           <circle className="c1-ball" r="5" fill="#ffd54a" stroke="#0f1726" strokeWidth="1" />
         </g>
