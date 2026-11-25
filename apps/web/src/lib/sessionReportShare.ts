@@ -59,7 +59,7 @@ export interface SessionSummaryShareTarget {
   matchCount: number;
   /** 평점이 오른 회원 상승폭 순 최대 3명. 없으면 섹션을 뺀다 */
   risers: SessionReportShareRiser[];
-  /** 마감 뒤 칭찬 후보 전부(후보 순서, 칭찬 0개 포함). 없으면 섹션을 뺀다 */
+  /** 칭찬 후보 전부(후보 순서, 칭찬 0개 포함). 수는 이미지를 만드는 때의 수다. 없으면 섹션을 뺀다 */
   praised: SessionReportSharePraise[];
 }
 
@@ -77,7 +77,7 @@ export interface MyRecordShareTarget {
   rankChange: number | null;
   wins: number;
   losses: number;
-  /** 마감 뒤 내가 후보이고 칭찬을 1개 이상 받았으면 그 후보 정보. 아니면 null이라 칭찬 상자를 뺀다 */
+  /** 내가 후보이고 칭찬을 1개 이상 받았으면 그 후보 정보. 아니면 null이라 칭찬 상자를 뺀다 */
   praise: Omit<SessionReportSharePraise, "player"> | null;
   /** 이 세션에서 받은 업적 id(받은 순서) */
   achievementIds: string[];
@@ -102,21 +102,19 @@ const toShareSession = (report: MatchSessionReportInfo): SessionReportShareSessi
 const roundDelta = (value: number) => Math.round(value * 1000) / 1000;
 
 /**
- * 마감 뒤 칭찬 후보 전부(칭찬 수와 상관없이 세션 상세 하이라이트와 같은 후보).
- * 마감 전이거나 칭찬하지 않는 세션(praise null)이면 빈 배열이다. 마감 전 수는 아직 바뀔 수 있어 공유 이미지에 넣지 않는다
+ * 칭찬 후보 전부(칭찬 수와 상관없이 세션 상세 하이라이트와 같은 후보). 마감 전이면 지금까지 받은 수로 넣는다.
+ * 칭찬하지 않는 세션(praise null)이면 빈 배열이다
  */
 export const getSharedPraisedCandidates = (
   praise: SessionPraiseResponse | null,
 ): SessionReportSharePraise[] =>
-  praise?.status === "closed"
-    ? praise.candidates.map((candidate) => ({
-        player: toSharePlayer(candidate.player),
-        category: candidate.category,
-        value: candidate.value,
-        streakBreaks: candidate.streakBreaks,
-        praiseCount: candidate.praiseCount,
-      }))
-    : [];
+  (praise?.candidates ?? []).map((candidate) => ({
+    player: toSharePlayer(candidate.player),
+    category: candidate.category,
+    value: candidate.value,
+    streakBreaks: candidate.streakBreaks,
+    praiseCount: candidate.praiseCount,
+  }));
 
 /** 평점이 오른 회원 상승폭 순 최대 3명. 리포트 players는 ratingDelta 내림차순이다 */
 const getTopRisers = (players: readonly SessionPlayerReport[]): SessionReportShareRiser[] =>
