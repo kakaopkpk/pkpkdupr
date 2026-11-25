@@ -39,6 +39,7 @@ import RecordMatchSheet from "@/components/record/RecordMatchSheet";
 import SessionReportDrawer from "@/components/records/SessionReportDrawer";
 import { CompleteSessionConfirmDialog } from "@/components/session/CompleteSessionConfirmDialog";
 import CreateSessionSheet from "@/components/session/CreateSessionSheet";
+import RulesGuideScreen from "@/components/rules/RulesGuideScreen";
 import SettingsDrawer from "@/components/settings/SettingsDrawer";
 import {
   type AchievementDetailRequest,
@@ -86,6 +87,7 @@ import {
   completeMatchSession,
   type MatchSessionDetailInfo,
 } from "@/lib/matchSessions";
+import { dismissRulesGuideCard } from "@/lib/rulesGuide";
 import { useDimmedThemeColor } from "@/lib/themeColor";
 import Home from "@/pages/Home";
 import Me from "@/pages/Me";
@@ -186,10 +188,11 @@ type GlobalScreenRoute =
       initialCategory?: MatchTopLevelType;
     }
   | { kind: "session-report"; sessionId: string }
-  | ({ kind: "achievements" } & AchievementsScreenRequest);
+  | ({ kind: "achievements" } & AchievementsScreenRequest)
+  | { kind: "rules-guide" };
 
 /**
- * 화면 위에 계속 쌓을 수 있는 전역 화면(경기 상세·회원 프로필·세션 상세·업적 전체 보기) 하나.
+ * 화면 위에 계속 쌓을 수 있는 전역 화면(경기 상세·회원 프로필·세션 상세·업적 전체 보기·규칙 안내) 하나.
  * id는 깊이 id로도 쓰며, 닫힌 뒤(isOpen=false)에도 닫히는 움직임이 끝날 때까지 남는다.
  */
 interface GlobalScreenEntry {
@@ -213,6 +216,8 @@ const isSameRoute = (a: GlobalScreenRoute, b: GlobalScreenRoute) => {
         a.playerId === b.playerId &&
         a.focusAchievementId === b.focusAchievementId
       );
+    case "rules-guide":
+      return b.kind === "rules-guide";
   }
 };
 
@@ -744,6 +749,11 @@ const BottomNavShell: React.FC = () => {
       openGlobalScreen({ kind: "session-report", sessionId }),
     [openGlobalScreen],
   );
+
+  const openRulesGuide = useCallback(() => {
+    dismissRulesGuideCard();
+    openGlobalScreen({ kind: "rules-guide" });
+  }, [openGlobalScreen]);
 
   const reloadLiveSession = liveSessionState.reload;
 
@@ -1293,6 +1303,7 @@ const BottomNavShell: React.FC = () => {
       openAchievementDetail,
       openAchievements,
       openSessionReport,
+      openRulesGuide,
     }),
     [
       openAchievementDetail,
@@ -1301,6 +1312,7 @@ const BottomNavShell: React.FC = () => {
       openMatchDetail,
       openMemberProfile,
       openRecordMatch,
+      openRulesGuide,
       openSessionReport,
       openSettings,
       selectTab,
@@ -1519,6 +1531,8 @@ const BottomNavShell: React.FC = () => {
                       {...screenProps}
                     />
                   );
+                case "rules-guide":
+                  return <RulesGuideScreen key={screen.id} {...screenProps} />;
               }
             })}
             <RecordMatchSheet

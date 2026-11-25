@@ -58,6 +58,11 @@ export const scrollCarouselToStart = (track: HTMLElement) => {
   scrollToSlide(track, 0, true);
 };
 
+/** index번째 카드로 부드럽게 넘긴다(이전·다음 버튼) */
+export const scrollCarouselToIndex = (track: HTMLElement, index: number) => {
+  scrollToSlide(track, clamp(index, 0, track.children.length - 1), true);
+};
+
 /**
  * 가로 스크롤 트랙(touch-action: pan-y)의 카드 넘기기. 손가락 가로 끌기는 브라우저 스크롤 대신 직접
  * 처리해, 놓을 때 거리·속도로 멈출 카드를 하나만 고른다(살짝 튕기기로 넘어가거나 관성으로 여러 장
