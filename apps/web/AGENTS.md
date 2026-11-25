@@ -99,7 +99,7 @@
         - 메타 줄은 홈 다음 세션 카드와 같은 `getSessionMetaLabel`(미래면 날짜까지).
       - 끝난 대회: `TournamentRankCard`(카드는 누를 수 없고 참여 줄은 읽기 전용 참여자 시트) → 세션 지배자(`TopRiserCard`)·내 평점(`LastSessionMeCard`)·하이라이트·평점 변화 → `TournamentBracketSection`.
       - 끝난 일반 세션: `RecordSessionCard`(`onPress` 없이 누를 수 없음, 메타 줄 앞에 날짜) → 세션 지배자·내 평점·하이라이트·평점 변화 → "경기" 섹션. 리포트가 없으면 버튼 없는 블루 카드("종료").
-        - 머리 카드에 `participants`·`onOpenParticipants`를 넘겨 메타 줄에서 인원을 빼고 맨 아래 참여자 줄(`session/SessionBlueCard`의 `ParticipantAvatars` + "N명 참여 ›")을 둔다. "종료" 블루 카드도 참여자 줄을 누를 수 있다.
+        - 머리 카드에 `participantsRow`를 넘겨 메타 줄에서 인원을 빼고 맨 아래 참여자 줄(블루 카드와 같은 `session/SessionBlueCard`의 `ParticipantsRow`, 흰 카드 색 `light`)을 둔다. "종료" 블루 카드도 참여자 줄을 누를 수 있다.
         - 끝난 세션(대회 포함)의 참여자 시트는 `isReadOnly`라 "수정"이 없다.
       - 세션 상세에는 내 새 업적 카드가 없다. 업적은 홈 소식·업적 축하·나 탭에서 본다.
       - 하이라이트는 칭찬 섹션 `praise/SessionPraiseSection`이다(섹션 제목만 "하이라이트"). 끝난 세션이 칭찬하는 세션(`isSessionPraiseEnabled`)이면 리포트와 함께 `GET /api/match-sessions/:sessionId/praise`를 읽고, 후보가 없으면 섹션이 없다. 칭찬을 못 읽으면 보이던 칭찬을 두고 화면은 그대로 그린다.

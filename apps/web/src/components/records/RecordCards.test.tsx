@@ -33,7 +33,7 @@ const participants = [
 ].map((username) => ({ id: `P${username}`, username })) as MatchSessionDetailInfo["participants"];
 
 describe("RecordSessionCard", () => {
-  it("participants가 없으면(일정 탭) 메타 줄에 인원을 두고 참여자 줄이 없다", () => {
+  it("participantsRow가 없으면(일정 탭) 메타 줄에 인원을 두고 참여자 줄이 없다", () => {
     const html = renderToStaticMarkup(
       <RecordSessionCard session={session} mine={null} />,
     );
@@ -41,14 +41,13 @@ describe("RecordSessionCard", () => {
     expect(html).not.toContain("명 참여");
   });
 
-  it("participants가 있으면(세션 상세 머리) 인원을 메타 줄에서 빼고 참여자 줄(아바타 4개 + 나머지 수)을 둔다", () => {
+  it("participantsRow가 있으면(세션 상세 머리) 인원을 메타 줄에서 빼고 참여자 줄(아바타 4개 + 나머지 수)을 둔다", () => {
     const html = renderToStaticMarkup(
       <RecordSessionCard
         session={session}
         mine={null}
         showDate
-        participants={participants}
-        onOpenParticipants={() => {}}
+        participantsRow={{ participants, onPress: () => {} }}
       />,
     );
     expect(html).toContain("야탑초등학교 · 3경기");

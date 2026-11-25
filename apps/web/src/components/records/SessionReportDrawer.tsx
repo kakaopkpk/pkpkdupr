@@ -271,6 +271,7 @@ export default function SessionReportDrawer({
 
   // 보는 동안 세션이 끝나면 리포트까지 다시 받는다
   const readySession = loadState.kind === "ready" ? loadState.session : null;
+  const isLoadedEnded = loadState.kind === "ready" && loadState.isEnded;
   const isLoadedBeforeEnd = loadState.kind === "ready" && !loadState.isEnded;
   const hasEndedSinceLoad =
     isLoadedBeforeEnd &&
@@ -296,6 +297,7 @@ export default function SessionReportDrawer({
   }, [closeDepth, depthId, onClose, tabKey]);
 
   const closePlayers = useCallback(() => setIsPlayersRequested(false), []);
+  const openParticipants = useCallback(() => setIsParticipantsOpen(true), []);
   const closeParticipants = useCallback(() => setIsParticipantsOpen(false), []);
   const closeShare = useCallback(() => setIsShareOpen(false), []);
 
@@ -388,11 +390,10 @@ export default function SessionReportDrawer({
           error={participation.getError(session.id)}
           onJoin={() => void participation.change(session.id, "join")}
           onLeave={() => void participation.change(session.id, "leave")}
-          onOpenParticipants={() => setIsParticipantsOpen(true)}
+          onOpenParticipants={openParticipants}
         />
       );
     }
-    const openParticipants = () => setIsParticipantsOpen(true);
     if (session.kind === "tournament") {
       return (
         <TournamentRankCard
@@ -409,8 +410,10 @@ export default function SessionReportDrawer({
           session={report.session}
           mine={null}
           showDate
-          participants={session.participants}
-          onOpenParticipants={openParticipants}
+          participantsRow={{
+            participants: session.participants,
+            onPress: openParticipants,
+          }}
         />
       );
     }
@@ -573,7 +576,7 @@ export default function SessionReportDrawer({
           lockedPlayerIds={busyPlayerIds}
           onClose={closeParticipants}
           onChanged={invalidateSessions}
-          isReadOnly={loadState.kind === "ready" && loadState.isEnded}
+          isReadOnly={isLoadedEnded}
         />
       ) : null}
     </>
