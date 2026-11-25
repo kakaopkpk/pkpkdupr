@@ -374,7 +374,7 @@ const ACHIEVEMENT_TABLE: readonly {
       condition: "복식 10경기 이상, 복식 평점 2.5 이하",
       badgeNumber: "2.5",
       target: 2.5,
-      points: 50,
+      points: 25,
     },
   },
   {
@@ -386,7 +386,7 @@ const ACHIEVEMENT_TABLE: readonly {
       condition: "복식 10경기 이상, 복식 평점 2.0 이하",
       badgeNumber: "2.0",
       target: 2,
-      points: 100,
+      points: 50,
     },
   },
   {
