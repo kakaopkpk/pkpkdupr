@@ -611,12 +611,13 @@ describe("buildNewsFeedPage 칭찬 줄", () => {
       ) as NewsFeedSessionItem;
       return item.lines;
     };
+    // 최다 연승은 누적 연승이라 지난 세션 승리(earlierMatch)까지 이어 4연승이다
     expect(build(closedAt)[0]).toEqual({
       kind: "praise",
       player: { id: ann.id, username: "ann", avatarUrl: undefined },
       praiseCount: 6,
       category: "winStreak",
-      value: 3,
+      value: 4,
     });
     expect(
       build(at("2026-12-03T13:59:00.000Z")).some(

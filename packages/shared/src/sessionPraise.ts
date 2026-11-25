@@ -1,4 +1,4 @@
-import { compareCountedMatches, sumPoints } from "./achievements.js";
+import { compareCountedMatches, sumPoints, WIN_STREAK_MIN } from "./achievements.js";
 import { getWinningTeamIndex, type MatchScore } from "./match.js";
 import type { RankingPlayer } from "./ranking.js";
 import type { MatchSessionKind } from "./session.js";
@@ -26,10 +26,6 @@ export const SESSION_PRAISE_CATEGORY_LABEL: Record<SessionPraiseCategory, string
 
 /** 한 세션의 칭찬 후보 수 상한 */
 export const SESSION_PRAISE_MAX_CANDIDATES = 3;
-/** 최다 연승 후보가 되는 세션 안 최소 연승 */
-export const SESSION_PRAISE_WIN_STREAK_MIN = 3;
-/** 연승 문지기: 이 연승 이상 중인 상대를 이기면 연승을 끊은 것으로 센다 */
-export const SESSION_PRAISE_GUARDED_STREAK_MIN = 2;
 /** 연승 문지기 후보가 되는 최소 연승 저지 횟수 */
 export const SESSION_PRAISE_STREAK_GUARD_MIN = 2;
 /** 순위 도약 후보가 되는 최소 상승 계단 수 */
@@ -53,17 +49,22 @@ export interface SessionPraiseMatch {
 export interface SessionPraisePlayerStats {
   matchCount: number;
   wins: number;
-  /** 세션 안 최고 연승. 승패가 갈리지 않은 경기는 연승을 끊는다 */
+  /** 세션 경기 직후 누적 연승(랭킹 연승과 같은 규칙, 지난 세션부터 이어짐)의 최댓값 */
   bestStreak: number;
-  /** 세션 안에서 SESSION_PRAISE_GUARDED_STREAK_MIN 연승 이상 중인 상대를 이긴 경기 수(경기마다 한 번) */
+  /** 세션 경기에서 경기 직전 누적 연승이 WIN_STREAK_MIN 이상인 상대를 이긴 경기 수(경기마다 한 번) */
   streakBreaks: number;
   pointsFor: number;
   pointsAgainst: number;
 }
 
-/** 세션 완료 경기로 선수별 세션 기록을 센다(완료 시각 순) */
+/**
+ * 세션 완료 경기로 선수별 세션 기록을 센다(완료 시각 순).
+ * 연승은 누적 연승이라 allMatches(세션 밖 경기 포함 전체 완료 경기)를 처음부터 훑어 잇고,
+ * 기록은 세션 경기에서만 쌓는다. 승패가 갈리지 않은 경기는 연승을 끊는다
+ */
 export const buildSessionPraisePlayerStats = (
-  matches: readonly SessionPraiseMatch[],
+  sessionMatches: readonly SessionPraiseMatch[],
+  allMatches: readonly SessionPraiseMatch[] = sessionMatches,
 ): Map<string, SessionPraisePlayerStats> => {
   const statsByPlayerId = new Map<string, SessionPraisePlayerStats>();
   const streakByPlayerId = new Map<string, number>();
@@ -83,18 +84,33 @@ export const buildSessionPraisePlayerStats = (
     return stats;
   };
 
-  for (const match of [...matches].sort(compareCountedMatches)) {
+  const sessionMatchIds = new Set(sessionMatches.map((match) => match.id));
+  const ordered = [...allMatches].sort(compareCountedMatches);
+  // 마지막 세션 경기 뒤 경기는 세션 기록에 영향이 없어 훑지 않는다
+  let remaining = sessionMatchIds.size;
+  for (const match of ordered) {
+    if (remaining === 0) break;
     const winner = getWinningTeamIndex(match);
     const teams = match.teamPlayerIds.map((team) => [...new Set(team)]) as [
       string[],
       string[],
     ];
+    if (!sessionMatchIds.has(match.id)) {
+      teams.forEach((team, teamIndex) => {
+        for (const playerId of team) {
+          streakByPlayerId.set(
+            playerId,
+            winner === teamIndex ? (streakByPlayerId.get(playerId) ?? 0) + 1 : 0,
+          );
+        }
+      });
+      continue;
+    }
+    remaining -= 1;
     const brokeStreak =
       winner !== null &&
       teams[winner === 0 ? 1 : 0].some(
-        (playerId) =>
-          (streakByPlayerId.get(playerId) ?? 0) >=
-          SESSION_PRAISE_GUARDED_STREAK_MIN,
+        (playerId) => (streakByPlayerId.get(playerId) ?? 0) >= WIN_STREAK_MIN,
       );
     teams.forEach((team, index) => {
       const teamIndex = index as 0 | 1;
@@ -179,7 +195,7 @@ const CATEGORY_RULES: Record<
   winStreak: {
     value: (input) => input.stats.bestStreak,
     isEligible: (input) =>
-      input.stats.bestStreak >= SESSION_PRAISE_WIN_STREAK_MIN,
+      input.stats.bestStreak >= WIN_STREAK_MIN,
     compare: (left, right) =>
       right.stats.bestStreak - left.stats.bestStreak ||
       getPointDiff(right) - getPointDiff(left) ||
