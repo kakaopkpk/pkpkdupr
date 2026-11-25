@@ -138,14 +138,20 @@ describe("getEmptySessionExpiresAt", () => {
     ).toBe("2026-11-09T15:00:00.000Z");
   });
 
-  it("자정을 넘기는 회원 세션은 다음 날 종료 시각, 같은 날 끝나면 다음 날 00:00 KST", () => {
+  it("회원 세션은 다음 날 00:00 KST와 자동 완료(종료 1시간 뒤) 중 늦은 시각에 만료된다", () => {
     const sessionDate = new Date("2026-11-09T00:00:00+09:00");
     expect(
       getEmptySessionExpiresAt("custom", sessionDate, {
         startTime: "23:30",
         endTime: "01:30",
       }),
-    ).toEqual(new Date("2026-11-10T01:30:00+09:00"));
+    ).toEqual(new Date("2026-11-10T02:30:00+09:00"));
+    expect(
+      getEmptySessionExpiresAt("custom", sessionDate, {
+        startTime: "22:00",
+        endTime: "23:30",
+      }),
+    ).toEqual(new Date("2026-11-10T00:30:00+09:00"));
     expect(
       getEmptySessionExpiresAt("custom", sessionDate, {
         startTime: "18:00",
@@ -415,26 +421,26 @@ describe("세션 시각", () => {
 describe("getSessionEndsAt", () => {
   const sessionDate = new Date("2026-11-09T00:00:00+09:00");
 
-  it("회원·대회 세션은 종료 시각에 끝난다", () => {
+  it("회원·대회 세션은 종료 1시간 뒤(자동 완료)에 끝난다", () => {
     const range = { startTime: "10:00", endTime: "12:00" };
     expect(getSessionEndsAt("custom", sessionDate, range)).toEqual(
-      new Date("2026-11-09T12:00:00+09:00"),
+      new Date("2026-11-09T13:00:00+09:00"),
     );
     expect(getSessionEndsAt("tournament", sessionDate, range)).toEqual(
-      new Date("2026-11-09T12:00:00+09:00"),
+      new Date("2026-11-09T13:00:00+09:00"),
     );
   });
 
-  it("자정을 넘기면 다음 날 종료 시각에 끝난다", () => {
+  it("자정을 넘기면 다음 날 종료 1시간 뒤에 끝난다", () => {
     expect(
       getSessionEndsAt("custom", sessionDate, {
         startTime: "23:30",
         endTime: "01:30",
       }),
-    ).toEqual(new Date("2026-11-10T01:30:00+09:00"));
+    ).toEqual(new Date("2026-11-10T02:30:00+09:00"));
   });
 
-  it("종료 시각이 없거나 정기 세션이면 만료 시각과 같다", () => {
+  it("종료 시각이 없으면 만료 시각, 정기 세션은 22:00이다", () => {
     expect(getSessionEndsAt("custom", sessionDate)).toEqual(
       new Date("2026-11-10T00:00:00+09:00"),
     );
@@ -462,9 +468,9 @@ describe("isSessionOnToday", () => {
     expect(isSessionOnToday(overnight, new Date("2026-11-12T10:00:00+09:00"))).toBe(true);
   });
 
-  it("자정을 넘긴 회원 세션은 다음 날 종료 시각 전까지만 오늘 세션이다", () => {
-    expect(isSessionOnToday(overnight, new Date("2026-11-13T01:29:59+09:00"))).toBe(true);
-    expect(isSessionOnToday(overnight, new Date("2026-11-13T01:30:00+09:00"))).toBe(false);
+  it("자정을 넘긴 회원 세션은 다음 날 자동 완료(종료 1시간 뒤) 전까지만 오늘 세션이다", () => {
+    expect(isSessionOnToday(overnight, new Date("2026-11-13T02:29:59+09:00"))).toBe(true);
+    expect(isSessionOnToday(overnight, new Date("2026-11-13T02:30:00+09:00"))).toBe(false);
   });
 
   it("같은 날 끝나는 세션과 정기 세션은 다음 날 오늘 세션이 아니다", () => {
@@ -531,12 +537,6 @@ describe("정기 세션 완료", () => {
         new Date("2026-11-12T21:30:00+09:00"),
       ),
     ).toBe(false);
-    expect(
-      isSessionCompletable(
-        { ...regular, kind: "custom" },
-        new Date("2026-11-12T21:30:00+09:00"),
-      ),
-    ).toBe(false);
   });
 
   it("완료한 정기 세션은 완료 시각에 끝나고 오늘 세션이 아니게 된다", () => {
@@ -575,11 +575,11 @@ describe("회원·대회 세션 완료", () => {
     completedAt: null,
   };
 
-  it("종료 10분 전부터 종료 시각 전까지 완료 전 세션을 완료할 수 있다", () => {
+  it("종료 10분 전부터 자동 완료(종료 1시간 뒤) 전까지 완료 전 세션을 완료할 수 있다", () => {
     expect(getSessionCompleteWindow("custom", sessionDate, custom)).toEqual({
       endAt: new Date("2026-11-12T14:00:00+09:00"),
       completableFrom: new Date("2026-11-12T13:50:00+09:00"),
-      autoCompleteAt: new Date("2026-11-12T14:00:00+09:00"),
+      autoCompleteAt: new Date("2026-11-12T15:00:00+09:00"),
     });
     expect(
       isSessionCompletable(custom, new Date("2026-11-12T13:49:59+09:00")),
@@ -590,11 +590,11 @@ describe("회원·대회 세션 완료", () => {
     expect(
       isSessionCompletable(
         { ...custom, kind: "tournament" },
-        new Date("2026-11-12T13:59:59+09:00"),
+        new Date("2026-11-12T14:59:59+09:00"),
       ),
     ).toBe(true);
     expect(
-      isSessionCompletable(custom, new Date("2026-11-12T14:00:00+09:00")),
+      isSessionCompletable(custom, new Date("2026-11-12T15:00:00+09:00")),
     ).toBe(false);
   });
 

@@ -38,8 +38,11 @@ describe("isMatchSessionToday", () => {
     );
   });
 
-  it("종료 시각이 지나면 오늘 세션이 아니다", () => {
-    expect(isMatchSessionToday(overnight, kst("2026-11-19T02:00:00"))).toBe(
+  it("자동 완료(종료 1시간 뒤)가 지나면 오늘 세션이 아니다", () => {
+    expect(isMatchSessionToday(overnight, kst("2026-11-19T02:59:00"))).toBe(
+      true,
+    );
+    expect(isMatchSessionToday(overnight, kst("2026-11-19T03:00:00"))).toBe(
       false,
     );
   });

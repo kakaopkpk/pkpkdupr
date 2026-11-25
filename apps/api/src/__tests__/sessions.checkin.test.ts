@@ -285,7 +285,8 @@ describe("public match sessions", () => {
       isToday: true,
     });
 
-    useNow(new Date("2026-11-13T01:30:00+09:00"));
+    // 자정을 넘긴 세션은 다음 날 종료 1시간 뒤(자동 완료)에 끝난다
+    useNow(new Date("2026-11-13T02:30:00+09:00"));
     const after = await request(app)
       .get("/api/match-sessions/today")
       .set("Authorization", "Bearer token");

@@ -80,7 +80,7 @@
 
 - 오늘 세션 `GET /api/match-sessions/today`: 전날 시작해 자정을 넘긴 회원 세션도 끝나기 전까지 오늘 세션이다(`isSessionOnToday`).
 - 다가오는 세션 `GET /api/match-sessions/upcoming`
-  - 끝나기 전(`getSessionEndsAt`, 회원·대회 세션은 종료 시각) 오늘·미래 세션, 날짜 키 오름차순·같은 날은 정기 세션 먼저.
+  - 끝나기 전(`getSessionEndsAt`, 종료 시각이 있으면 종료 1시간 뒤 자동 완료) 오늘·미래 세션, 날짜 키 오름차순·같은 날은 정기 세션 먼저.
   - 조회 때 공휴일·정기 쉬는 날을 건너뛴 다음 정기 회차를 find-or-create.
 - 오늘 정기 세션 열기 `POST /api/match-sessions/regular/today`: 정기 요일 22시 전만, 오늘이 공휴일·정기 쉬는 날이면 409
 - 회원 세션 생성 `POST /api/match-sessions`
@@ -92,7 +92,7 @@
 - 세션 응답의 `startTime`·`endTime`은 정기 세션이면 18:00~21:00, 시각 없이 만든 회원 세션이면 null
 - 세션 응답의 `completedAt`은 회원이 세션을 완료한 시각이고, 완료 전이면 null
 - 세션 완료 `POST /api/match-sessions/:sessionId/complete`: 200 `MatchSessionDetail`(대회 세션이면 `placements` 포함)
-  - 활성 회원 누구나, 완료할 수 있는 시간(`isSessionCompletable`, 정기 20:50~22:00, 종료 시각이 있는 회원·대회 세션은 종료 10분 전~종료 시각) 안의 완료 전 세션만 `completed_at`을 지금으로 쓴다.
+  - 활성 회원 누구나, 완료할 수 있는 시간(`isSessionCompletable`, 종료 10분 전~종료 1시간 뒤 자동 완료, 정기 20:50~22:00) 안의 완료 전 세션만 `completed_at`을 지금으로 쓴다.
   - 이미 완료된 세션이면 처음 완료 시각 그대로 200(동시에 눌러도 한 번만 쓴다).
   - 그 시간이 아니거나 시각 없는 회원·대회 세션이면 409, 없으면 404, id 형식 오류 400.
 - 세션 응답 `MatchSessionDetail`(상세·일정·오늘·다가오는 세션·참여자 변경)에는 대회 세션만 최종 순위 `placements`가 붙는다.

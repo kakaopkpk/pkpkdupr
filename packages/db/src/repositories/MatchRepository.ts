@@ -56,6 +56,7 @@ import {
   REGULAR_SESSION_START_HOUR,
   REGULAR_SESSION_START_TIME,
   getEmptySessionExpiryCutoff,
+  SESSION_AUTO_COMPLETE_DELAY_HOURS,
   isSessionCompletable,
   isMatchSessionKind,
   kstDateKeyToDate,
@@ -609,6 +610,8 @@ const OVERNIGHT_SESSION_SQL =
 /** 회원 세션 종료 시각("HH:MM")의 0시부터 분 */
 const SESSION_END_MINUTES_SQL =
   "(split_part(s.end_time, ':', 1)::int * 60 + split_part(s.end_time, ':', 2)::int)";
+/** 종료 시각이 있는 회원·대회 세션의 자동 완료 시각(Unix 초). 종료 1시간 뒤이고, 자정을 넘기면 다음 날 종료 시각 기준이다 */
+const SESSION_AUTO_COMPLETE_AT_SQL = `(s."date" + CASE WHEN ${OVERNIGHT_SESSION_SQL} THEN 86400 ELSE 0 END + ${SESSION_END_MINUTES_SQL} * 60 + ${SESSION_AUTO_COMPLETE_DELAY_HOURS * 3600})`;
 
 /**
  * MatchRepository - `packages/db`의 경기 저장소.
@@ -909,7 +912,7 @@ export class MatchRepository {
       // 같은 경기에 점수 입력(updateRecordedMatch)이 동시에 들어오면 FOR UPDATE 행 잠금으로 순서를 정한다.
       // 잠금을 기다린 행은 갱신된 버전으로 WHERE를 다시 평가하므로, 먼저 completed가 된 경기는 지우지 않는다.
       // 세션 만료의 KST 계산은 TS(getEmptySessionExpiryCutoff)에서 하고 epoch 초 기준값만 넘긴다.
-      // 자정을 넘기는 회원 세션만 date(그날 00:00 KST) + 하루 + 종료 시각으로 만료를 직접 계산한다.
+      // 종료 시각이 있는 회원·대회 세션은 다음 날 0시(date + 하루)와 자동 완료 중 늦은 시각으로 만료를 직접 계산한다.
       sql: `
         WITH expired_matches AS (
           SELECT m.id
@@ -949,13 +952,13 @@ export class MatchRepository {
               (s.regular_date_key IS NOT NULL AND s."date" < $2)
               OR (
                 s.regular_date_key IS NULL
-                AND NOT ${OVERNIGHT_SESSION_SQL}
+                AND s.end_time IS NULL
                 AND s."date" < $3
               )
               OR (
                 s.regular_date_key IS NULL
-                AND ${OVERNIGHT_SESSION_SQL}
-                AND s."date" + 86400 + ${SESSION_END_MINUTES_SQL} * 60 <= $4
+                AND s.end_time IS NOT NULL
+                AND GREATEST(s."date" + 86400, ${SESSION_AUTO_COMPLETE_AT_SQL}) <= $4
               )
             )
             AND NOT EXISTS (
