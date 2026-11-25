@@ -40,24 +40,32 @@ export const praiseSessionPlayer = (
   );
 };
 
-/** 칭찬 분류의 값: "+0.106"·"4연승"·"2번 저지"·"3승"·"▲4"·"58점" */
+/**
+ * 칭찬 분류의 한 줄 값(세션 상세·소식). 팝업 카드의 큰 값 + 설명 줄을 읽기 자연스러운 순서로 붙인다.
+ * "+0.106 상승"·"11연승 저지"·"연승 저지 2회"·"순위 상승 ▲9"·"5승"·"58점 득점"·"듀스 2승"·"+0.25 강팀 격파"·"리벤지 성공 1회"
+ */
 export const formatSessionPraiseValue = (
   category: SessionPraiseCategory,
   value: number,
+  streakBreaks = 1,
 ): string => {
   switch (category) {
     case "dominator":
-      return formatRatingDelta(value);
-    case "winStreak":
-      return `${value}연승`;
+      return `${formatRatingDelta(value)} 상승`;
     case "streakGuard":
-      return `${value}번 저지`;
+      return streakBreaks >= 2 ? `연승 저지 ${streakBreaks}회` : `${value}연승 저지`;
     case "mostWins":
       return `${value}승`;
     case "rankJump":
-      return `▲${value}`;
+      return `순위 상승 ▲${value}`;
     case "mostPoints":
-      return `${value}점`;
+      return `${value}점 득점`;
+    case "clutch":
+      return `듀스 ${value}승`;
+    case "underdog":
+      return `+${value.toFixed(2)} 강팀 격파`;
+    case "revenge":
+      return `리벤지 성공 ${value}회`;
   }
 };
 

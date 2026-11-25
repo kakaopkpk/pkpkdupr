@@ -160,20 +160,69 @@ const PraiseCard: React.FC<{
         <span className="relative mt-2 max-w-full truncate text-pk-15 font-extrabold max-[374px]:text-pk-13">
           {candidate.player.username}
         </span>
-        <span
-          className={cx(
-            "relative mt-1 text-pk-26 leading-none font-extrabold whitespace-nowrap tabular-nums max-[374px]:text-pk-22",
-            isSessionPraiseValueRising(candidate.category, candidate.value) &&
-              "text-pk-up-on-deep",
-          )}
-        >
-          {formatSessionPraiseValue(candidate.category, candidate.value)}
-        </span>
+        {(() => {
+          // 시안 전용: VITE_PRAISE_VARIANT A(긴 값 글자 줄이기)·B(큰 값 + 작은 설명 줄)
+          const variant = import.meta.env.VITE_PRAISE_VARIANT as string | undefined;
+          const text = formatSessionPraiseValue(candidate.category, candidate.value, candidate.streakBreaks);
+          const rising = isSessionPraiseValueRising(candidate.category, candidate.value);
+          if (variant === "B") {
+            const split = splitPraiseValue(candidate);
+            return (
+              <span className="relative mt-1 flex flex-col items-center gap-1">
+                <span className="text-pk-26 leading-none font-extrabold whitespace-nowrap tabular-nums max-[374px]:text-pk-22">
+                  {split.main}
+                </span>
+                {split.caption ? (
+                  <span className="text-pk-13 leading-none font-bold whitespace-nowrap text-white/75">{split.caption}</span>
+                ) : null}
+              </span>
+            );
+          }
+          const isLong = variant === "A" && [...text].length > 5;
+          return (
+            <span
+              className={cx(
+                "relative mt-1 text-pk-26 leading-none font-extrabold whitespace-nowrap tabular-nums max-[374px]:text-pk-22",
+                isLong && "text-pk-17 max-[374px]:text-pk-15",
+                rising && "text-pk-up-on-deep",
+              )}
+            >
+              {text}
+            </span>
+          );
+        })()}
         <PraiseCardButton mode={mode} count={count} countFrom={countFrom} />
         {isPicked ? <SheenOverlay delayMs={250} durationMs={800} /> : null}
       </button>
     </div>
   );
+};
+
+// 시안 전용: 값을 큰 값과 작은 설명 줄로 나눈다
+const splitPraiseValue = (candidate: SessionPraiseResponse["candidates"][number]) => {
+  const { category, value, streakBreaks = 1 } = candidate;
+  switch (category) {
+    case "streakGuard":
+      return streakBreaks >= 2
+        ? { main: `${streakBreaks}회`, caption: "연승 저지" }
+        : { main: `${value}연승`, caption: "저지" };
+    case "underdog":
+      return { main: `+${value.toFixed(2)}`, caption: "강팀 격파" };
+    case "clutch":
+      return { main: `${value}승`, caption: "듀스 승리" };
+    case "revenge":
+      return { main: `${value}회`, caption: "리벤지 성공" };
+    case "dominator":
+      return { main: formatSessionPraiseValue(category, value), caption: "상승" };
+    case "rankJump":
+      return { main: `▲${value}`, caption: "순위 상승" };
+    case "mostWins":
+      return { main: `${value}승`, caption: "승리" };
+    case "mostPoints":
+      return { main: `${value}점`, caption: "득점" };
+    default:
+      return { main: formatSessionPraiseValue(category, value), caption: null };
+  }
 };
 
 export interface SessionPraisePopupProps {
@@ -385,9 +434,16 @@ export default function SessionPraisePopup({
           </div>
           <div
             ref={cardsRef}
-            className="pointer-events-auto grid w-full gap-2 animate-pk-fade-up motion-reduce:animate-none max-[374px]:gap-1.5"
+            className={cx("pointer-events-auto grid w-full gap-[var(--praise-card-gap)] [--praise-card-gap:8px] animate-pk-fade-up motion-reduce:animate-none max-[374px]:[--praise-card-gap:6px]",
+              "justify-center",
+            )}
             style={{
-              gridTemplateColumns: `repeat(${shown.candidates.length}, minmax(0, 1fr))`,
+              // 카드 수와 상관없이 3장일 때 폭으로 고정하고 가운데 모은다
+              gridTemplateColumns: `repeat(${shown.candidates.length}, calc((100% - 2 * var(--praise-card-gap)) / 3))`,
+              // 2장이면 화면 양 끝(바깥 여백 16px 포함)과 카드 사이 간격을 같게 둔다
+              ...(shown.candidates.length === 2
+                ? { columnGap: "calc((100% + 32px - 2 * ((100% - 2 * var(--praise-card-gap)) / 3)) / 3)" }
+                : {}),
               animationDelay: ms(160),
               animationDuration: ms(380),
             }}
@@ -403,7 +459,7 @@ export default function SessionPraisePopup({
                     (before) => before.player.id === candidate.player.id,
                   )?.praiseCount ?? candidate.praiseCount
                 }
-                isWide={shown.candidates.length <= 2}
+                isWide={false}
                 onPress={() => void submit(candidate.player.id)}
               />
             ))}

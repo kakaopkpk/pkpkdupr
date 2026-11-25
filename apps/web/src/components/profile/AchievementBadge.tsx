@@ -58,7 +58,7 @@ type BadgeIconKind =
   | "laurel";
 
 /** 24 viewBox 선 아이콘. 글자는 아이콘 색(currentColor)으로 채운다 */
-const BADGE_ICON_PATHS: Record<BadgeIconKind, React.ReactNode> = {
+export const BADGE_ICON_PATHS: Record<BadgeIconKind, React.ReactNode> = {
   // 피클볼 공(구멍 뚫린 공)
   ball: (
     <>

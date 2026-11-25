@@ -277,7 +277,7 @@ const drawPraiseCategoryLine = (
     ["·", colors.muted],
     [
       formatSessionPraiseValue(category, value),
-      isSessionPraiseValueRising(category, value) ? colors.up : colors.sub,
+      colors.sub,
     ],
   ];
   parts.forEach(([text, color]) => {
@@ -387,7 +387,7 @@ const drawPraisePill = (draw: DrawContext, count: number, right: number, cy: num
 };
 
 /** "칭찬": 한 상자(`pk-bg`) 안 줄 목록. 아바타 44 + 엄지 배지 → 아이디·분류 줄 → 칭찬 알약 */
-const praisedBlock = (target: SessionSummaryShareTarget): Block => {
+const praisedBlockBoxed = (target: SessionSummaryShareTarget): Block => {
   const paddingY = 14;
   const paddingX = 16;
   const columnHeight = lineHeight(15) + 4 + lineHeight(13);
@@ -397,7 +397,7 @@ const praisedBlock = (target: SessionSummaryShareTarget): Block => {
     height: SECTION_LABEL_HEIGHT + 8 + boxHeight,
     draw: (draw, top) => {
       const { ctx, colors, avatars } = draw;
-      drawSectionLabel(draw, "칭찬", top);
+      drawSectionLabel(draw, "하이라이트", top);
       const boxTop = top + SECTION_LABEL_HEIGHT + 8;
       fillRoundRect(ctx, CONTENT_X, boxTop, CONTENT_WIDTH, boxHeight, BOX_RADIUS, colors.bg);
       target.praised.forEach((item, index) => {
@@ -413,6 +413,48 @@ const praisedBlock = (target: SessionSummaryShareTarget): Block => {
         const textMaxWidth = CONTENT_RIGHT - paddingX - pillWidth - 12 - textX;
         const columnTop = cy - columnHeight / 2;
         setText(ctx, 800, 15, colors.ink);
+        ctx.fillText(fitLine(ctx, item.player.username, textMaxWidth), textX, columnTop + lineHeight(15) / 2);
+        drawPraiseCategoryLine(draw, item, textX, columnTop + lineHeight(15) + 4 + lineHeight(13) / 2);
+      });
+    },
+  };
+};
+
+
+// 시안 전용: VITE_PRAISE_SHARE S1(상자만 없앰)·S2(TOP 3 줄 모양: 아바타 36·줄 56·오른쪽 엄지 + 수 글자)
+const praisedBlock = (target: SessionSummaryShareTarget): Block => {
+  const variant = import.meta.env.VITE_PRAISE_SHARE as string | undefined;
+  if (variant !== "S1" && variant !== "S2") return praisedBlockBoxed(target);
+  const avatarSize = variant === "S1" ? 44 : 36;
+  const columnHeight = lineHeight(15) + 4 + lineHeight(13);
+  const rowHeight = variant === "S1" ? 14 * 2 + Math.max(44, columnHeight) : Math.max(56, columnHeight + 16);
+  return {
+    height: SECTION_LABEL_HEIGHT + rowHeight * target.praised.length,
+    draw: (draw, top) => {
+      const { ctx, colors, avatars } = draw;
+      drawSectionLabel(draw, "하이라이트", top);
+      target.praised.forEach((item, index) => {
+        const rowTop = top + SECTION_LABEL_HEIGHT + rowHeight * index;
+        const cy = index === 0 ? rowTop + rowHeight / 2 : rowTop + 1 + (rowHeight - 1) / 2;
+        if (index > 0) fillDivider(draw, CONTENT_X, rowTop, CONTENT_WIDTH);
+        const avatarX = CONTENT_X;
+        drawShareAvatar(ctx, avatars, item.player, { cx: avatarX + avatarSize / 2, cy, size: avatarSize, ink: colors.ink });
+        drawPraiseBadge(draw, avatarX + avatarSize, cy + avatarSize / 2);
+        let rightWidth: number;
+        if (variant === "S1") {
+          rightWidth = drawPraisePill(draw, item.praiseCount, CONTENT_RIGHT, cy);
+        } else {
+          setText(ctx, 800, 17, colors.primary, "right");
+          const label = String(item.praiseCount);
+          const labelWidth = ctx.measureText(label).width;
+          ctx.fillText(label, CONTENT_RIGHT, cy);
+          drawIcon(draw, iconKey.thumbPill, CONTENT_RIGHT - labelWidth - 4 - THUMB_PILL_SIZE / 2, cy, THUMB_PILL_SIZE);
+          rightWidth = labelWidth + 4 + THUMB_PILL_SIZE;
+        }
+        const textX = avatarX + avatarSize + 12;
+        const textMaxWidth = CONTENT_RIGHT - rightWidth - 12 - textX;
+        const columnTop = cy - columnHeight / 2;
+        setText(ctx, variant === "S1" ? 800 : 700, 15, colors.ink);
         ctx.fillText(fitLine(ctx, item.player.username, textMaxWidth), textX, columnTop + lineHeight(15) / 2);
         drawPraiseCategoryLine(draw, item, textX, columnTop + lineHeight(15) + 4 + lineHeight(13) / 2);
       });

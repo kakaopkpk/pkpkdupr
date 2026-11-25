@@ -3,9 +3,10 @@ import {
   SESSION_PRAISE_CATEGORY_LABEL,
   type SessionPraiseCategory,
 } from "@pkpkdupr/shared/sessionPraise";
+import { BADGE_ICON_PATHS } from "@/components/profile/AchievementBadge";
 import {
   CrownIcon,
-  FlameIcon,
+  FIST_ICON_PATHS,
   SHIELD_CHECK_ICON_PATHS,
   TrophyIcon,
 } from "@/components/ui/Icons";
@@ -33,7 +34,7 @@ const StrokeIcon: React.FC<{
   </svg>
 );
 
-/** 칭찬 분류 아이콘: 왕관·불꽃·방패·트로피·오르는 화살표·공 */
+/** 칭찬 분류 아이콘: 주먹·개·반창고·방패·오르는 화살표·왕관·트로피·공 */
 export const SessionPraiseCategoryIcon: React.FC<{
   category: SessionPraiseCategory;
   size: number;
@@ -41,8 +42,26 @@ export const SessionPraiseCategoryIcon: React.FC<{
   switch (category) {
     case "dominator":
       return <CrownIcon className="shrink-0" size={size} />;
-    case "winStreak":
-      return <FlameIcon size={size} />;
+    case "revenge":
+      return (
+        <StrokeIcon size={size} strokeWidth={2.4}>
+          {FIST_ICON_PATHS.map((d) => (
+            <path key={d} d={d} />
+          ))}
+        </StrokeIcon>
+      );
+    case "underdog":
+      return (
+        <StrokeIcon size={size} strokeWidth={2.2}>
+          {BADGE_ICON_PATHS.dog}
+        </StrokeIcon>
+      );
+    case "clutch":
+      return (
+        <StrokeIcon size={size} strokeWidth={2.2}>
+          {BADGE_ICON_PATHS.bandage}
+        </StrokeIcon>
+      );
     case "streakGuard":
       return (
         <StrokeIcon size={size} strokeWidth={2.6}>

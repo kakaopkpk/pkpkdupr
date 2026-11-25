@@ -5,22 +5,26 @@ import type { MatchSessionKind } from "./session.js";
 
 /** 칭찬 후보 분류. 배열 순서가 우선순위다(위에서부터 최대 3장, 같은 사람은 높은 분류 한 장) */
 export const SESSION_PRAISE_CATEGORIES = [
-  "dominator",
-  "winStreak",
+  "revenge",
+  "underdog",
+  "clutch",
   "streakGuard",
-  "mostWins",
   "rankJump",
+  "dominator",
+  "mostWins",
   "mostPoints",
 ] as const;
 
 export type SessionPraiseCategory = (typeof SESSION_PRAISE_CATEGORIES)[number];
 
 export const SESSION_PRAISE_CATEGORY_LABEL: Record<SessionPraiseCategory, string> = {
-  dominator: "세션 지배자",
-  winStreak: "최다 연승",
-  streakGuard: "연승 문지기",
-  mostWins: "최다 승리",
+  revenge: "복수자",
+  underdog: "언더독",
+  clutch: "승부사",
+  streakGuard: "연승 수문장",
   rankJump: "순위 도약",
+  dominator: "세션 지배자",
+  mostWins: "최다 승리",
   mostPoints: "최다 득점",
 };
 
@@ -290,6 +294,8 @@ export interface SessionPraiseCandidate {
   player: RankingPlayer;
   category: SessionPraiseCategory;
   value: number;
+  /** 연승 수문장의 저지 횟수 */
+  streakBreaks?: number;
   /** 지금까지 받은 칭찬 수(실시간) */
   praiseCount: number;
 }
