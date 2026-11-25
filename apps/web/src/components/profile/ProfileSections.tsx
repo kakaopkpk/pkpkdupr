@@ -116,8 +116,10 @@ export const RecentMatchesSection: React.FC<{
   matches: readonly MatchInfo[];
   /** 보는 사람 id. 주면 그 사람이 뛴 경기에 "내 경기"를 붙인다 */
   viewerPlayerId?: string;
+  /** 목록 주인 id. 경기 줄을 이 회원 기준 승패(위 줄·색 띠)로 보인다 */
+  ownerPlayerId?: string;
   onViewAll: () => void;
-}> = ({ title, matches, viewerPlayerId, onViewAll }) => {
+}> = ({ title, matches, viewerPlayerId, ownerPlayerId, onViewAll }) => {
   const { openMatchDetail } = useAppNavigation();
   // 진행 중 경기는 빼고 보인다
   const recentMatches = matches
@@ -140,6 +142,7 @@ export const RecentMatchesSection: React.FC<{
               key={match.id}
               match={match}
               currentPlayerId={viewerPlayerId}
+              resultPlayerId={ownerPlayerId}
               timeLabel="weekday-time"
               onPress={() => openMatchDetail(match.id)}
             />

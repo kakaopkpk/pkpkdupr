@@ -319,6 +319,7 @@
   - 예외로 공유 이미지 canvas(`shareFont`)는 `sessionReportShareImage` 큰 평점 56, 특수 매치 캡션(15에서 한 줄에 안 들어가면 12까지 줄임), `lib/shareImageAvatar` 이니셜(지름×0.42)입니다.
 - Barlow Condensed(`font-num`)는 화면당 주인공 큰 숫자 하나에만 쓰고, 본문은 Pretendard입니다.
 - 경기 행은 팀 아바타 쌍을 넣고 이긴 쪽만 강조합니다(A·B팀 색 구분·승 배지 없음). 줄 맨 위 메타 줄에 시간을 두고 내 경기면 시간 뒤에 " · 내 경기" 글자만 붙으며(바탕 강조 없음), 시간 열은 따로 없고, 코트 번호는 어디에도 표시하지 않습니다.
+  - 예외로 한 사람의 경기 목록(나 탭·회원 프로필 "최근 경기", `PlayerMatchesDrawer`)은 `MatchRow`의 `resultPlayerId`로 그 사람 팀을 위에 두고 줄 왼쪽에 승(`pk-primary`)·패(`pk-down`) 색 띠를 붙입니다(`docs/design.md` "프로필").
 - 바텀시트는 고정 높이(화면의 약 3/4)이고 헤더·하단 버튼은 고정, 가운데만 스크롤합니다.
   - 예외로 업적 상세 시트(`AchievementDetailSheet`)는 내용 높이이고(최대 화면 높이 − 48px), 넘칠 때만 본문이 스크롤합니다.
   - 그랩바·헤더(위 56px) 또는 맨 위에서 시작한 본문을 아래로 끌어 닫을 수 있습니다(`hooks/useSheetDrag.ts`).
