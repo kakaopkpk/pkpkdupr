@@ -69,9 +69,6 @@ export const BounceVolleyFigure: React.FC = () => (
           </g>
         </g>
         <circle className="v-ball" r="5" fill="#ffd54a" stroke="#0f1726" strokeWidth="1" />
-        <text x="288" y="188" fontSize="11" fontWeight="700" fill="#4f5a70" textAnchor="middle">
-          밖
-        </text>
       </svg>
       <div className="cap v-cap1">
         <span>
