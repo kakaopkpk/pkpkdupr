@@ -143,7 +143,7 @@
     - `PendingSessionPraisePopup`: `BottomNav`가 렌더. 전역 화면·바텀시트·+ 메뉴·업적 축하가 없을 때 앱 진입·데이터 버전 변경·열린 화면이 모두 닫힐 때 `GET /api/me/session-praises/pending`을 조회해 첫 세션을 `SessionPraisePopup`으로 띄운다.
       - 조회 중·표시 중에는 `onBusyChange`로 알려 업적 축하가 기다린다(칭찬 팝업이 먼저).
       - 칭찬하지 않고 넘긴 세션은 `lib/sessionPraise`가 localStorage `pkpkdupr:session-praise-skipped`에 회원 id + 세션 id로 기억해 다시 띄우지 않는다. 칭찬한 세션은 서버가 뺀다.
-    - `SessionPraisePopup`: 후보 카드 팝업. 띄울 때 보던 탭에 `useLayerDepth` kind `dialog`를 쌓아 바깥 어두운 곳·뒤로가기·Esc로 넘기고, 카드를 누르면 칭찬 직후 연출 뒤 약 3초에 사라진다. 4xx 문구는 카드 아래, 네트워크 오류는 `showSaveFailure`다.
+    - `SessionPraisePopup`: 후보 카드 팝업. 띄울 때 보던 탭에 `useLayerDepth` kind `dialog`를 쌓아 뒤로가기·Esc로 넘기고(바깥 어두운 곳은 칭찬한 뒤에만 닫음), 카드를 누르면 칭찬 직후 연출 뒤 약 3초에 사라진다. 4xx 문구는 카드 아래, 네트워크 오류는 `showSaveFailure`다.
     - `SessionPraiseSection`: 세션 상세 "하이라이트" 섹션(내용은 칭찬 후보). 칭찬 전 줄 전체가 칭찬 버튼이고, 알약 상태는 `getSessionPraisePillState`다.
     - `SessionPraiseParts`: 분류 칩(앰버, 분류 아이콘)·분류 아이콘. 복수자 주먹은 `Icons.tsx`의 `FIST_ICON_PATHS`, 언더독·승부사는 업적 배지 `BADGE_ICON_PATHS`의 `dog`·`bandage`를 같이 쓴다.
     - 값 표기는 `lib/sessionPraise`가 맡는다. 팝업 카드는 큰 값 + 설명 줄 `getSessionPraiseCardValue`, 세션 상세·홈 소식·공유 이미지는 한 줄 `formatSessionPraiseValue`다.
