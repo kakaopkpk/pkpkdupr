@@ -69,34 +69,24 @@ const StreakRing: React.FC<{
 };
 
 /**
- * 연승 중(WIN_STREAK_MIN 이상)인 회원 아바타를 단계별 굵기의 하이라이트(앰버) 링(움직임 없음)으로 감싸고,
- * 아바타 아래 가운데에 앰버 바탕·잉크 글자의 불꽃 + 연승 태그를 붙인다. 연승이 모자라면 아바타만 그린다.
+ * 연승 중(WIN_STREAK_MIN 이상)인 회원 아바타를 하이라이트(앰버) 링(움직임 없음)으로 감싼다. 연승이 모자라면 아바타만 그린다.
+ * 태그가 있으면(기본) 아바타 아래 가운데에 앰버 바탕·잉크 글자의 불꽃 + 연승 태그를 붙이고 링은 연승 수에 따라 굵어진다
+ * (랭킹 줄·프로필 머리·세션 지배자 카드 연승 줄·추천 카드 연승 주인공).
+ * showTag가 false면 링만 가장 얇은 1단계로 두른다(진행 중 경기·추천 카드의 작은 경기 아바타)
  */
 export const WinStreakAvatarFrame: React.FC<{
   winStreak: number | null | undefined;
-  size: FrameSize;
-  children: React.ReactNode;
-}> = ({ winStreak, size, children }) => {
-  if (!isWinStreakShown(winStreak)) return <>{children}</>;
-  return (
-    <StreakRing size={size} tier={getStreakTier(winStreak)} winStreak={winStreak}>
-      {children}
-    </StreakRing>
-  );
-};
-
-/**
- * 진행 중 세션에서 세션 연승 중인 회원(getSessionWinStreaks가 고른 회원) 아바타의 앰버 링. winStreak이 없으면 아바타만 그린다.
- * 굵기는 랭킹 줄 링(sm 1단계)이고, showTag면 숫자 태그를 붙인다(세션 지배자 카드 연승 줄). 경기 아바타는 링만이다
- */
-export const SessionWinStreakFrame: React.FC<{
-  winStreak: number | undefined;
+  size?: FrameSize;
   showTag?: boolean;
   children: React.ReactNode;
-}> = ({ winStreak, showTag = false, children }) => {
-  if (winStreak === undefined) return <>{children}</>;
+}> = ({ winStreak, size = "sm", showTag = true, children }) => {
+  if (!isWinStreakShown(winStreak)) return <>{children}</>;
   return (
-    <StreakRing size="sm" tier={1} winStreak={showTag ? winStreak : undefined}>
+    <StreakRing
+      size={size}
+      tier={showTag ? getStreakTier(winStreak) : 1}
+      winStreak={showTag ? winStreak : undefined}
+    >
       {children}
     </StreakRing>
   );

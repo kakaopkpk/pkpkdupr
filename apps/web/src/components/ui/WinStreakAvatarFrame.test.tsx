@@ -23,8 +23,22 @@ describe("WinStreakAvatarFrame", () => {
     expect(render(null)).not.toContain("pk-streak-ring");
   });
 
-  it("3~9연승은 1단계, 10연승부터 굵은 링이다", () => {
+  it("태그가 있으면 3~9연승은 1단계, 10연승부터 굵은 링이다", () => {
     expect(render(9)).toContain("--pk-streak-ring:2.5px");
     expect(render(10)).toContain("--pk-streak-ring:3.5px");
+  });
+
+  it("태그 없이 쓰면 연승 수와 상관없이 1단계 링만 두른다", () => {
+    const renderTagless = (winStreak: number) =>
+      renderToStaticMarkup(
+        <WinStreakAvatarFrame winStreak={winStreak} showTag={false}>
+          <span>avatar</span>
+        </WinStreakAvatarFrame>,
+      );
+    const markup = renderTagless(22);
+    expect(markup).toContain("--pk-streak-ring:2px");
+    expect(markup).not.toContain("data-glow");
+    expect(markup).not.toContain("연승 중");
+    expect(renderTagless(2)).not.toContain("pk-streak-ring");
   });
 });

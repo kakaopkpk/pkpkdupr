@@ -17,7 +17,7 @@ import { CountUpText } from "@/components/ui/CountUpText";
 import { RankChange, RatingDelta } from "@/components/ui/Delta";
 import { PlayerAvatar } from "@/components/ui/PlayerAvatar";
 import { PraisedAvatarFrame } from "@/components/ui/PraisedAvatarFrame";
-import { SessionWinStreakFrame } from "@/components/ui/WinStreakAvatarFrame";
+import { WinStreakAvatarFrame } from "@/components/ui/WinStreakAvatarFrame";
 import { cx } from "@/components/ui/cx";
 import { useAppNavigation } from "@/context/AppNavigationContext";
 import { useCountUp } from "@/hooks/useCountUp";
@@ -173,11 +173,11 @@ export const PlayerLineButton: React.FC<{
     )}
   >
     <span className={cx("inline-flex shrink-0", hasFlameAura && "pk-flame-aura")}>
-      <SessionWinStreakFrame winStreak={sessionWinStreak} showTag>
+      <WinStreakAvatarFrame winStreak={sessionWinStreak}>
         <PraisedAvatarFrame praiseCount={praiseCount}>
           <PlayerAvatar player={player} size={36} />
         </PraisedAvatarFrame>
-      </SessionWinStreakFrame>
+      </WinStreakAvatarFrame>
     </span>
     <span className="flex min-w-0 flex-1 flex-col gap-0.5">{children}</span>
     {right}
