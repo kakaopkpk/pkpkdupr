@@ -14,10 +14,7 @@ import {
   type SessionWinStreakByPlayer,
 } from "@/components/ui/PlayerAvatar";
 import { SpecialMatchIcon } from "@/components/ui/SpecialMatchLabel";
-import {
-  SessionWinStreakFrame,
-  WinStreakAvatarFrame,
-} from "@/components/ui/WinStreakAvatarFrame";
+import { WinStreakAvatarFrame } from "@/components/ui/WinStreakAvatarFrame";
 import { cx } from "@/components/ui/cx";
 import { formatRating } from "@/utils/dupr";
 
@@ -92,9 +89,9 @@ const SessionAvatar: React.FC<{
   size: number;
   winStreak: number | undefined;
 }> = ({ player, size, winStreak }) => (
-  <SessionWinStreakFrame winStreak={winStreak}>
+  <WinStreakAvatarFrame winStreak={winStreak} showTag={false}>
     <PlayerAvatar player={player} size={size} />
-  </SessionWinStreakFrame>
+  </WinStreakAvatarFrame>
 );
 
 /**
@@ -125,7 +122,7 @@ const CellAvatars: React.FC<{
   const frontAvatar =
     cell.showsStreak ? (
       <span className="relative z-10 mb-1 inline-flex">
-        <WinStreakAvatarFrame winStreak={front.winStreak} size="sm">
+        <WinStreakAvatarFrame winStreak={front.winStreak}>
           <PlayerAvatar player={front} size={PROTAGONIST_AVATAR_SIZE} />
         </WinStreakAvatarFrame>
       </span>

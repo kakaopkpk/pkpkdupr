@@ -99,7 +99,7 @@ const PlayerNameCell: React.FC<{ player: RankingEntryPlayer }> = ({
 const RankingAvatar: React.FC<{
   entry: { player: RankingEntryPlayer; winStreak: number };
 }> = ({ entry }) => (
-  <WinStreakAvatarFrame winStreak={entry.winStreak} size="sm">
+  <WinStreakAvatarFrame winStreak={entry.winStreak}>
     <PlayerAvatar player={entry.player} size={32} />
   </WinStreakAvatarFrame>
 );
