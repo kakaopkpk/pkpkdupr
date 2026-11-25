@@ -326,7 +326,7 @@ const Home: React.FC = () => {
   /**
    * 진행 중 머리·내 경기 카드·남의 진행 중 경기 카드. 내 경기는 세션 밖 경기여도 맨 위에 온다.
    * 진행 중 세션이면 세션 연승 중인 회원 아바타에 링을 두른다(진행 중 세션이 없으면 연승도 없다).
-   * 남의 경기는 지금 5연승 이상 회원에게도 링을 두른다
+   * 남의 경기는 지금 연승 중인(WIN_STREAK_MIN 이상) 회원에게도 링을 두른다
    */
   const renderInProgress = (otherMatches: MatchInfo[]) => (
     <Section title="진행 중">

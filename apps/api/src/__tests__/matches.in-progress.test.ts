@@ -46,7 +46,7 @@ const inProgressMatch = {
   matchStartsAt: now,
   completedAt: null,
   teams: [
-    { id: "Tteam-a", name: "Team A", players: [makePlayer("Pstreak5"), makePlayer("Pstreak4")] },
+    { id: "Tteam-a", name: "Team A", players: [makePlayer("Pstreak3"), makePlayer("Pstreak2")] },
     { id: "Tteam-b", name: "Team B", players: [makePlayer("Pstreak7"), makePlayer("Pguest01", true)] },
   ],
 } as unknown as Match;
@@ -118,10 +118,10 @@ describe("GET /api/matches/in-progress", () => {
     });
   });
 
-  it("참가자 중 지금 5연승 이상인 정회원만 winStreaks에 연승 수를 싣는다", async () => {
+  it("참가자 중 지금 3연승(WIN_STREAK_MIN) 이상인 정회원만 winStreaks에 연승 수를 싣는다", async () => {
     findCompletedMatchOutcomes.mockResolvedValue([
-      ...winsFor("Pstreak5", 5),
-      ...winsFor("Pstreak4", 4),
+      ...winsFor("Pstreak3", 3),
+      ...winsFor("Pstreak2", 2),
       ...winsFor("Pstreak7", 7),
       ...winsFor("Pguest01", 6),
       // 진행 중 경기에 없는 회원은 연승이 길어도 싣지 않는다
@@ -133,7 +133,7 @@ describe("GET /api/matches/in-progress", () => {
       .set("Authorization", "Bearer token");
 
     expect(response.status).toBe(200);
-    expect(response.body.winStreaks).toEqual({ Pstreak5: 5, Pstreak7: 7 });
+    expect(response.body.winStreaks).toEqual({ Pstreak3: 3, Pstreak7: 7 });
   });
 
   it("연승 회원이 없으면 winStreaks는 빈 객체다", async () => {

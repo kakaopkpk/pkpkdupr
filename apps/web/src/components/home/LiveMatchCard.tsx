@@ -39,7 +39,7 @@ const LiveMatchHeader: React.FC<{
 };
 
 /**
- * 남의 경기 아바타 연승 링 대상. 세션 연승 회원에 더해, 이 경기 참가자 중 지금 WIN_STREAK_DISPLAY_MIN 이상
+ * 남의 경기 아바타 연승 링 대상. 세션 연승 회원에 더해, 이 경기 참가자 중 지금 WIN_STREAK_MIN 이상
  * 연승인 회원을 넣는다(특수 매치 여부와 상관없음). 둘 다면 세션 연승 값을 둔다.
  * 경기 아바타 링은 태그가 없어 연승 수 값은 보이지 않는다
  */
@@ -210,14 +210,14 @@ export const MyNextBracketMatchCard: React.FC<{
 
 /**
  * 진행 중인 남의 경기. 내 경기 카드에서 "내 경기" 칩·테두리·점수 입력 버튼을 뺀 모양이고, 누르면 경기 상세를 연다.
- * 지금 5연승 이상 회원(winStreaks)은 세션 연승이 아니어도 아바타에 연승 링(태그 없음)을 두른다
+ * 지금 연승 중인 회원(winStreaks, WIN_STREAK_MIN 이상)은 세션 연승이 아니어도 아바타에 연승 링(태그 없음)을 두른다
  */
 export const LiveMatchCard: React.FC<{
   match: MatchInfo;
   now: Date;
   /** 든 회원 아바타에 세션 연승 링을 두른다(홈 진행 중 세션) */
   sessionWinStreaks?: SessionWinStreakByPlayer;
-  /** 지금 WIN_STREAK_DISPLAY_MIN 이상 연승인 회원(GET /api/matches/in-progress의 winStreaks) */
+  /** 지금 WIN_STREAK_MIN 이상 연승인 회원(GET /api/matches/in-progress의 winStreaks) */
   winStreaks?: SessionWinStreakByPlayer;
   onOpenDetail: () => void;
 }> = ({ match, now, sessionWinStreaks, winStreaks, onOpenDetail }) => (
