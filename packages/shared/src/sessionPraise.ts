@@ -85,36 +85,30 @@ export const buildSessionPraisePlayerStats = (
   };
 
   const sessionMatchIds = new Set(sessionMatches.map((match) => match.id));
-  const ordered = [...allMatches].sort(compareCountedMatches);
   // 마지막 세션 경기 뒤 경기는 세션 기록에 영향이 없어 훑지 않는다
   let remaining = sessionMatchIds.size;
-  for (const match of ordered) {
+  for (const match of [...allMatches].sort(compareCountedMatches)) {
     if (remaining === 0) break;
+    const isSessionMatch = sessionMatchIds.has(match.id);
+    if (isSessionMatch) remaining -= 1;
     const winner = getWinningTeamIndex(match);
     const teams = match.teamPlayerIds.map((team) => [...new Set(team)]) as [
       string[],
       string[],
     ];
-    if (!sessionMatchIds.has(match.id)) {
-      teams.forEach((team, teamIndex) => {
-        for (const playerId of team) {
-          streakByPlayerId.set(
-            playerId,
-            winner === teamIndex ? (streakByPlayerId.get(playerId) ?? 0) + 1 : 0,
-          );
-        }
-      });
-      continue;
-    }
-    remaining -= 1;
     const brokeStreak =
+      isSessionMatch &&
       winner !== null &&
       teams[winner === 0 ? 1 : 0].some(
         (playerId) => (streakByPlayerId.get(playerId) ?? 0) >= WIN_STREAK_MIN,
       );
     teams.forEach((team, index) => {
       const teamIndex = index as 0 | 1;
+      const won = winner === teamIndex;
       for (const playerId of team) {
+        const streak = won ? (streakByPlayerId.get(playerId) ?? 0) + 1 : 0;
+        streakByPlayerId.set(playerId, streak);
+        if (!isSessionMatch) continue;
         const stats = getStats(playerId);
         stats.matchCount += 1;
         stats.pointsFor += sumPoints(match.scores, teamIndex);
@@ -122,14 +116,10 @@ export const buildSessionPraisePlayerStats = (
           match.scores,
           teamIndex === 0 ? 1 : 0,
         );
-        if (winner === teamIndex) {
+        if (won) {
           stats.wins += 1;
           if (brokeStreak) stats.streakBreaks += 1;
-          const streak = (streakByPlayerId.get(playerId) ?? 0) + 1;
-          streakByPlayerId.set(playerId, streak);
           stats.bestStreak = Math.max(stats.bestStreak, streak);
-        } else {
-          streakByPlayerId.set(playerId, 0);
         }
       }
     });
