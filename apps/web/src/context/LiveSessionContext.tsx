@@ -10,7 +10,7 @@ import React, {
 import {
   canOpenRegularSession,
   getEmptySessionExpiresAt,
-  getRegularSessionCompletableFrom,
+  getSessionCompleteWindow,
   getSessionEndsAt,
   isSessionCompletable,
   kstDateKeyTimeToDate,
@@ -41,7 +41,7 @@ export interface LiveSessionState {
    */
   recordingSession: MatchSessionDetailInfo | null;
   /**
-   * 지금 회원이 완료할 수 있는 오늘 정기 세션(`isSessionCompletable`, 종료 10분 전 20:50 ≤ 지금 < 자동 완료 22:00, 완료 전). 없으면 null.
+   * 지금 회원이 완료할 수 있는 오늘 세션(`isSessionCompletable`, 종료 10분 전 ≤ 지금 < 자동 완료(정기 22:00, 회원·대회는 종료 시각), 완료 전). 없으면 null.
    * 셸이 이 세션으로 하단 세션 완료 바를 띄운다
    */
   completableSession: MatchSessionDetailInfo | null;
@@ -115,7 +115,7 @@ export const pickCompletableSession = (
   ) ?? null;
 
 /**
- * 진행 중·기록·완료 가능 세션이 바뀔 수 있는 다음 시각. 오늘 세션들의 시작·종료·만료 시각과 정기 세션 완료 가능 시각(20:50),
+ * 진행 중·기록·완료 가능 세션이 바뀔 수 있는 다음 시각. 오늘 세션들의 시작·종료·만료 시각과 완료 가능 시각(종료 10분 전),
  * 오늘 정기 회차 시작(18:00),
  * 다음 날 KST 0시 중 now보다 늦은 가장 이른 시각이다.
  * 0시를 넣어 날짜가 바뀌면 새 날의 오늘 세션을 다시 읽고 그날 경계를 다시 잡는다.
@@ -127,14 +127,17 @@ export const getNextLiveSessionBoundary = (
   const todayKey = toKstDateKey(now);
   const candidates = sessions.flatMap((session) => {
     const sessionDate = new Date(session.date);
+    const completeWindow = getSessionCompleteWindow(
+      session.kind,
+      sessionDate,
+      session,
+    );
     return [
       getLiveSessionStartsAt(session),
       getSessionEndsAt(session.kind, sessionDate, session),
       getEmptySessionExpiresAt(session.kind, sessionDate, session),
-      // 정기 세션은 종료 10분 전부터 완료할 수 있다
-      ...(session.kind === "regular"
-        ? [getRegularSessionCompletableFrom(sessionDate)]
-        : []),
+      // 종료 10분 전부터 완료할 수 있다
+      ...(completeWindow ? [completeWindow.completableFrom] : []),
     ];
   });
   // 24시는 다음 날 0시다

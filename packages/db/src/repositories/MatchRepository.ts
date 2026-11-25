@@ -358,7 +358,7 @@ const toSessionKindAndTimes = (
       ? REGULAR_SESSION_START_TIME
       : (stored.startTime ?? null),
     endTime: isRegular ? REGULAR_SESSION_END_TIME : (stored.endTime ?? null),
-    completedAt: isRegular ? toDateOrNull(stored.completedAt) : null,
+    completedAt: toDateOrNull(stored.completedAt),
   };
 };
 
@@ -2654,12 +2654,12 @@ export class MatchRepository {
   }
 
   /**
-   * 정기 세션을 완료한다. 완료할 수 있는(`isSessionCompletable`, 20:50 ≤ now < 22:00) 정기 세션일 때만 completed_at을 now로 쓴다.
-   * 시간 조건은 읽은 세션으로 먼저 검사하고(쓰는 값이 그 now라 22:00 뒤 값이 되지 않는다),
+   * 세션을 완료한다. 완료할 수 있는(`isSessionCompletable`, 종료 10분 전 ≤ now < 자동 완료) 세션일 때만 completed_at을 now로 쓴다.
+   * 시간 조건은 읽은 세션으로 먼저 검사하고(쓰는 값이 그 now라 자동 완료 뒤 값이 되지 않는다),
    * UPDATE의 WHERE는 completed_at IS NULL만 다시 확인해 동시에 눌러도 처음 완료 시각만 남긴다.
    * 반환: 세션이 없으면 undefined, 있으면 이번에 완료했는지(updated)와 세션
    */
-  async completeRegularSession(
+  async completeSession(
     sessionId: string,
     now: Date,
   ): Promise<
@@ -2674,7 +2674,7 @@ export class MatchRepository {
       sql: `
         UPDATE match_sessions
         SET completed_at = $2, updated_at = $2
-        WHERE id = $1 AND kind = 'regular' AND completed_at IS NULL
+        WHERE id = $1 AND completed_at IS NULL
         RETURNING id
       `,
       args: [sessionId, toUnixTimestampSeconds(now)],
@@ -2735,7 +2735,8 @@ export class MatchRepository {
   /**
    * 세션 종류를 바꾸고 data의 필드도 같이 고친다(트랜잭션 하나). 없으면 false.
    * - 정기로 바꾸면 그 날짜의 직접 만든 정기 세션(18:00 KST, 시각은 정기 시각)이 된다. 이미 그날 정기 세션이 있거나 공휴일이면 RegularSessionConflictError
-   * - 직접 만든 정기에서 바꾸면 그날 00:00 KST·18:00~21:00 세션이 되고 완료 시각은 지우며, 정기 쉬는 날은 남기지 않는다
+   * - 종류가 바뀌면 완료 시각을 지운다
+   * - 직접 만든 정기에서 바꾸면 그날 00:00 KST·18:00~21:00 세션이 되고, 정기 쉬는 날은 남기지 않는다
    * - 자동 정기 세션은 다른 종류로 바꿀 수 없다(RegularSessionConflictError)
    * - data는 종류를 바꾼 뒤 적용한다
    * (name, date) 유니크 위반은 그대로 던진다
@@ -2798,7 +2799,8 @@ export class MatchRepository {
           sql: `
             UPDATE match_sessions
             SET kind = 'regular', regular_date_key = $2, auto_created = false,
-                "date" = $3, start_time = NULL, end_time = NULL, updated_at = $4
+                "date" = $3, start_time = NULL, end_time = NULL, completed_at = NULL,
+                updated_at = $4
             WHERE id = $1
           `,
           args: [
@@ -2830,7 +2832,7 @@ export class MatchRepository {
         });
       } else {
         await transaction.execute({
-          sql: "UPDATE match_sessions SET kind = $2, updated_at = $3 WHERE id = $1",
+          sql: "UPDATE match_sessions SET kind = $2, completed_at = NULL, updated_at = $3 WHERE id = $1",
           args: [sessionId, kind, updatedAt],
         });
       }

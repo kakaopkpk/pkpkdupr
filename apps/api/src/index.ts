@@ -2058,7 +2058,7 @@ app.post("/api/match-sessions/:sessionId/participants", async (req, res) => {
   }
 });
 
-// 정기 세션 완료: 종료 10분 전(20:50)부터 자동 완료(22:00) 전까지 활성 회원 누구나, 이미 완료됐으면 그대로 돌려준다
+// 세션 완료: 종료 10분 전부터 자동 완료(정기 22:00, 회원·대회는 종료 시각) 전까지 활성 회원 누구나, 이미 완료됐으면 그대로 돌려준다
 app.post("/api/match-sessions/:sessionId/complete", async (req, res) => {
   try {
     if (!(await getAuthPayload(req, res))) {
@@ -2070,11 +2070,13 @@ app.post("/api/match-sessions/:sessionId/complete", async (req, res) => {
     }
     const now = new Date();
     const [session, activePlayersById] = await Promise.all([
-      matchRepository.completeRegularSession(sessionId, now),
+      matchRepository.completeSession(sessionId, now),
       loadActivePlayersById(),
     ]);
-    // 정기 세션이라 대회 순위는 붙이지 않는다
-    res.json(toMatchSessionDetail(session, activePlayersById, now));
+    const [detail] = await attachTournamentPlacements([
+      toMatchSessionDetail(session, activePlayersById, now),
+    ]);
+    res.json(detail);
   } catch (err) {
     sendMatchSessionFailure(res, err);
   }

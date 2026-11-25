@@ -5,7 +5,7 @@ import {
   getEmptySessionExpiresAt,
   getEmptySessionExpiryCutoff,
   getSessionEndsAt,
-  getRegularSessionCompletableFrom,
+  getSessionCompleteWindow,
   getRegularSessionEndAt,
   isSessionCompletable,
   getNextRegularSessionDateKey,
@@ -511,9 +511,11 @@ describe("정기 세션 완료", () => {
     expect(getRegularSessionEndAt(sessionDate)).toEqual(
       new Date("2026-11-12T21:00:00+09:00"),
     );
-    expect(getRegularSessionCompletableFrom(sessionDate)).toEqual(
-      new Date("2026-11-12T20:50:00+09:00"),
-    );
+    expect(getSessionCompleteWindow("regular", sessionDate)).toEqual({
+      endAt: new Date("2026-11-12T21:00:00+09:00"),
+      completableFrom: new Date("2026-11-12T20:50:00+09:00"),
+      autoCompleteAt: new Date("2026-11-12T22:00:00+09:00"),
+    });
     expect(
       isSessionCompletable(regular, new Date("2026-11-12T20:49:59+09:00")),
     ).toBe(false);
@@ -560,5 +562,74 @@ describe("정기 세션 완료", () => {
     expect(getSessionEndsAt("regular", sessionDate, regular)).toEqual(
       new Date("2026-11-12T22:00:00+09:00"),
     );
+  });
+});
+
+describe("회원·대회 세션 완료", () => {
+  const sessionDate = new Date("2026-11-12T00:00:00+09:00");
+  const custom = {
+    kind: "custom" as const,
+    date: sessionDate,
+    startTime: "11:30",
+    endTime: "14:00",
+    completedAt: null,
+  };
+
+  it("종료 10분 전부터 종료 시각 전까지 완료 전 세션을 완료할 수 있다", () => {
+    expect(getSessionCompleteWindow("custom", sessionDate, custom)).toEqual({
+      endAt: new Date("2026-11-12T14:00:00+09:00"),
+      completableFrom: new Date("2026-11-12T13:50:00+09:00"),
+      autoCompleteAt: new Date("2026-11-12T14:00:00+09:00"),
+    });
+    expect(
+      isSessionCompletable(custom, new Date("2026-11-12T13:49:59+09:00")),
+    ).toBe(false);
+    expect(
+      isSessionCompletable(custom, new Date("2026-11-12T13:50:00+09:00")),
+    ).toBe(true);
+    expect(
+      isSessionCompletable(
+        { ...custom, kind: "tournament" },
+        new Date("2026-11-12T13:59:59+09:00"),
+      ),
+    ).toBe(true);
+    expect(
+      isSessionCompletable(custom, new Date("2026-11-12T14:00:00+09:00")),
+    ).toBe(false);
+  });
+
+  it("자정을 넘기는 세션은 다음 날 종료 10분 전부터 완료할 수 있다", () => {
+    const overnight = { ...custom, startTime: "22:00", endTime: "01:00" };
+    expect(
+      getSessionCompleteWindow("custom", sessionDate, overnight)?.completableFrom,
+    ).toEqual(new Date("2026-11-13T00:50:00+09:00"));
+    expect(
+      isSessionCompletable(overnight, new Date("2026-11-13T00:55:00+09:00")),
+    ).toBe(true);
+  });
+
+  it("시각 없는 세션은 완료할 수 없다", () => {
+    const timeless = { ...custom, startTime: null, endTime: null };
+    expect(getSessionCompleteWindow("custom", sessionDate, timeless)).toBeNull();
+    expect(
+      isSessionCompletable(timeless, new Date("2026-11-12T23:55:00+09:00")),
+    ).toBe(false);
+  });
+
+  it("완료한 세션은 완료 시각에 끝나고 오늘 세션이 아니게 된다", () => {
+    const completedAt = new Date("2026-11-12T13:52:00+09:00");
+    const completed = { ...custom, completedAt: completedAt.toISOString() };
+    expect(getSessionEndsAt("custom", sessionDate, completed)).toEqual(
+      completedAt,
+    );
+    expect(getEmptySessionExpiresAt("custom", sessionDate, completed)).toEqual(
+      completedAt,
+    );
+    expect(isSessionOnToday({ ...completed, date: sessionDate }, completedAt)).toBe(
+      false,
+    );
+    expect(
+      isSessionCompletable(completed, new Date("2026-11-12T13:55:00+09:00")),
+    ).toBe(false);
   });
 });

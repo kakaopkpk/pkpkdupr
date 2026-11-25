@@ -149,7 +149,7 @@ describe("getNextLiveSessionBoundary", () => {
     );
   });
 
-  it("회원 세션은 시작 시각이 아니라 세션 시각·종료 시각을 경계로 쓴다", () => {
+  it("회원 세션은 시작 시각이 아니라 세션 시각·완료 가능 시각·종료 시각을 경계로 쓴다", () => {
     const custom = makeSession({
       id: "C",
       kind: "custom",
@@ -159,6 +159,9 @@ describe("getNextLiveSessionBoundary", () => {
     });
 
     expect(getNextLiveSessionBoundary([custom], at("09:00"))).toEqual(
+      at("11:50"),
+    );
+    expect(getNextLiveSessionBoundary([custom], at("11:50"))).toEqual(
       at("12:00"),
     );
     // 종료 뒤 회원 세션 만료(다음 날 0시) 전 가장 이른 경계는 정기 회차 시작(목요일 18:00)이다
@@ -196,6 +199,50 @@ describe("정기 세션 완료", () => {
   it("정기 세션 완료 가능 시각(20:50)을 다음 경계로 쓴다", () => {
     expect(getNextLiveSessionBoundary([regular], at("20:00"))).toEqual(
       at("20:50"),
+    );
+  });
+});
+
+describe("회원·대회 세션 완료", () => {
+  const custom = makeSession({
+    id: "C",
+    kind: "custom",
+    date: at("00:00").toISOString(),
+    startTime: "11:30",
+    endTime: "14:00",
+    completedAt: null,
+  });
+
+  it("종료 10분 전부터 종료 시각 전까지 완료할 수 있다", () => {
+    expect(pickCompletableSession([custom], at("13:49"))).toBeNull();
+    expect(pickCompletableSession([custom], at("13:50"))?.id).toBe("C");
+    expect(
+      pickCompletableSession([{ ...custom, kind: "tournament" }], at("13:55"))
+        ?.id,
+    ).toBe("C");
+    expect(pickCompletableSession([custom], at("14:00"))).toBeNull();
+  });
+
+  it("시각 없는 세션은 완료할 수 없다", () => {
+    expect(
+      pickCompletableSession(
+        [{ ...custom, startTime: null, endTime: null }],
+        at("23:55"),
+      ),
+    ).toBeNull();
+  });
+
+  it("완료한 세션은 완료 시각부터 진행 중·기록 세션이 아니다", () => {
+    const completed = { ...custom, completedAt: at("13:52").toISOString() };
+
+    expect(pickCompletableSession([completed], at("13:53"))).toBeNull();
+    expect(pickLiveSession([completed], at("13:53"))).toBeNull();
+    expect(pickRecordingSession([completed], at("13:53"))).toBeNull();
+  });
+
+  it("완료 가능 시각(종료 10분 전)을 다음 경계로 쓴다", () => {
+    expect(getNextLiveSessionBoundary([custom], at("13:00"))).toEqual(
+      at("13:50"),
     );
   });
 });

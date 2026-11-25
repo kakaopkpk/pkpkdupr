@@ -464,15 +464,15 @@ export class MatchRepository {
   }
 
   /**
-   * 정기 세션을 완료한다. 완료할 수 없는 세션(정기 세션이 아니거나 종료 전·자동 완료 뒤)이면 409,
+   * 세션을 완료한다. 완료할 수 없는 세션(시각 없는 회원·대회 세션이거나 종료 10분 전 전·자동 완료 뒤)이면 409,
    * 이미 완료된 세션이면 그대로 돌려준다(동시에 눌러도 처음 완료 시각이 남는다). 없으면 404
    */
-  async completeRegularSession(
+  async completeSession(
     sessionId: string,
     now: Date,
   ): Promise<ManagedMatchSession> {
     const result = await this.run(
-      () => db.matches.completeRegularSession(sessionId, now),
+      () => db.matches.completeSession(sessionId, now),
       500,
     );
     if (!result) {
