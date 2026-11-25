@@ -30,8 +30,7 @@ export const MATCHMAKING_PENALTY_WEIGHTS = {
 export const MATCHMAKING_SAME_GENDER_COURT_BONUS = 2;
 /**
  * 같은 팀·맞대결 이력 감쇠 비율. 함께한 경기마다 0.5^k를 더하고, k는 그 경기 뒤 두 사람이 각각 뛴 경기 수 중 작은 값이다.
- * 횟수를 그대로 더하면 세션 후반에 반복 감점이 팀 평균 균형을 이겨 평균 차가 큰 대진을 고르므로,
- * 한 쌍의 감점이 직전 경기 감점의 2배를 넘지 않게 묶는다. 덜 뛴 사람 기준이라 쉬고 돌아온 사람에게는 직전 경기가 방금 일이다
+ * 한 쌍의 합이 2 미만으로 묶여 반복 감점이 팀 평균 균형을 계속 이기지 않는다(이유·거절한 안은 docs/product.md "세션·경기")
  */
 export const MATCHMAKING_REPEAT_DECAY = 0.5;
 export const MATCHMAKING_RANDOM_STARTS = 40;
