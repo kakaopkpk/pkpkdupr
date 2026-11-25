@@ -1,6 +1,6 @@
 import { getWinningTeamIndex, type Match } from "./match.js";
 import type { Player } from "./player.js";
-import { SPECIAL_MATCH_STREAK_MIN } from "./streak.js";
+import { WIN_STREAK_MIN } from "./streak.js";
 
 /**
  * 특수 매치 유형. 추천 매칭 카드로 시작한 경기(라이벌전·연승 매치·최강자전·남복 매치·여복 매치)와
@@ -159,7 +159,7 @@ type CandidateTeams = readonly [
 const TEAM_INDEXES = [0, 1] as const;
 
 /**
- * 팀에서 연승이 가장 긴 연승 회원(SPECIAL_MATCH_STREAK_MIN 이상). 같으면 먼저 나온 사람.
+ * 팀에서 연승이 가장 긴 연승 회원(WIN_STREAK_MIN 이상). 같으면 먼저 나온 사람.
  * 랭킹 연승은 정회원에게만 보이는 값이라 게스트는 winStreak과 상관없이 연승 회원이 아니다.
  */
 const findStreakLeader = (
@@ -168,7 +168,7 @@ const findStreakLeader = (
   team.reduce<SpecialMatchCandidatePlayer | null>(
     (leader, player) =>
       !player.isGuest &&
-      player.winStreak >= SPECIAL_MATCH_STREAK_MIN &&
+      player.winStreak >= WIN_STREAK_MIN &&
       (!leader || player.winStreak > leader.winStreak)
         ? player
         : leader,

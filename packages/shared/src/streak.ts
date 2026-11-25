@@ -1,17 +1,11 @@
 import { compareCountedMatches } from "./achievements.js";
 import { getWinningTeamIndex, type MatchScore } from "./match.js";
 
-/** 이 연승부터 랭킹·프로필 아바타에 앰버 링과 연승 태그를 붙인다 */
-export const WIN_STREAK_DISPLAY_MIN = 5;
-
 /**
- * 진행 중 세션에서 그 세션 경기를 뛴 회원의 지금 연승(랭킹 연승과 같은 누적 연승)이 이 수부터
- * 세션 지배자 카드·경기 아바타에 강조된다
+ * 연승 기준점. 누적 연승(`computeCurrentWinStreaks`)이 이 수 이상이면 연승 중이다.
+ * 연승 아바타 링·태그, 세션 연승 줄, 소식 연승 줄, 특수 매치 연승 회원, 업적 연승 저지가 모두 이 기준을 쓴다
  */
-export const SESSION_WIN_STREAK_DISPLAY_MIN = 3;
-
-/** 이 연승부터 특수 매치 연승 매치·최강자전의 연승 회원이다 */
-export const SPECIAL_MATCH_STREAK_MIN = 3;
+export const WIN_STREAK_MIN = 3;
 
 export interface WinStreakMatch {
   id: string;

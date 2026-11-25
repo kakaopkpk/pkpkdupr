@@ -371,7 +371,7 @@ describe("buildNewsFeedPage 세션 항목", () => {
     ]);
   });
 
-  it("연승 줄은 세션 마지막 경기까지 센 연승이 5 이상인 활성 정회원만이다", () => {
+  it("연승 줄은 세션 마지막 경기까지 센 연승이 3(WIN_STREAK_MIN) 이상인 활성 정회원만이다", () => {
     const streakLines = sessionItem(alice.id).lines.filter(
       (line) => line.kind === "winStreak",
     );

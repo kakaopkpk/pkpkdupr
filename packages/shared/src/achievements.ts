@@ -10,6 +10,8 @@ import {
   SECOND_ACHIEVEMENT_SET_COUNT_START,
   TOURNAMENT_ACHIEVEMENT_COUNT_START,
 } from "./achievementCountStart.js";
+// streak.ts도 이 파일을 import하는 순환이지만, WIN_STREAK_MIN은 함수 실행 때만 읽어 문제없다
+import { WIN_STREAK_MIN } from "./streak.js";
 import { DUPR_DEFAULT_RATING, roundDuprRating } from "./player.js";
 import { toKstDateKey } from "./session.js";
 
@@ -1062,9 +1064,6 @@ export const UNBEATEN_SESSION_MIN_MATCHES = 4;
 /** 언더독: 상대 팀 평균 평점이 우리 팀보다 이만큼 이상 높을 때 이기면 받는다 */
 export const UNDERDOG_MIN_RATING_GAP = 0.3;
 
-/** 연승 저지: 경기 직전 이 연승 이상이던 상대를 이기면 받는다 */
-export const STREAK_BREAKER_MIN_STREAK = 3;
-
 /** 평점 평균 비교의 부동소수 오차 허용치 */
 const RATING_EPSILON = 1e-9;
 
@@ -1418,7 +1417,8 @@ const computeProgressSince = (
           metrics.bestOpponentWins,
           increment(opponentWins, opponentId),
         );
-        if ((streaksBefore?.get(opponentId) ?? 0) >= STREAK_BREAKER_MIN_STREAK) {
+        // 연승 저지: 경기 직전 연승 기준점 이상이던 상대를 이기면 받는다
+        if ((streaksBefore?.get(opponentId) ?? 0) >= WIN_STREAK_MIN) {
           brokeStreak = true;
         }
       }

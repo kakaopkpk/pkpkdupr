@@ -69,7 +69,7 @@ export const startScheduledMatch = async (matchId: string): Promise<MatchInfo> =
   return (await res.json()) as MatchInfo;
 };
 
-/** 세션 밖 경기까지 포함한 모든 진행 중 경기와 그 참가자 중 5연승 이상 정회원의 연승 수 */
+/** 세션 밖 경기까지 포함한 모든 진행 중 경기와 그 참가자 중 연승 중인(WIN_STREAK_MIN 이상) 정회원의 연승 수 */
 export const fetchInProgressMatches = async (): Promise<InProgressMatchesInfo> => {
   const res = await apiFetch("/api/matches/in-progress");
   if (!res.ok) {

@@ -73,7 +73,7 @@ import {
 import { isEntityId } from "@pkpkdupr/shared/entityId";
 import {
   computeCurrentWinStreaks,
-  WIN_STREAK_DISPLAY_MIN,
+  WIN_STREAK_MIN,
   type WinStreakMatch,
 } from "@pkpkdupr/shared/streak";
 import {
@@ -2276,7 +2276,7 @@ app.post("/api/matches/:matchId/start", async (req, res) => {
   }
 });
 
-/** 진행 중 경기 참가자 중 지금 연승이 WIN_STREAK_DISPLAY_MIN 이상인 정회원의 연승 수(랭킹 winStreak과 같은 규칙) */
+/** 진행 중 경기 참가자 중 지금 연승이 WIN_STREAK_MIN 이상인 정회원의 연승 수(랭킹 winStreak과 같은 규칙) */
 const buildInProgressWinStreaks = (
   matches: readonly Match[],
   completedMatches: readonly WinStreakMatch[],
@@ -2287,7 +2287,7 @@ const buildInProgressWinStreaks = (
     for (const team of match.teams) {
       for (const player of team.players) {
         const streak = streaks.get(player.id) ?? 0;
-        if (!player.isGuest && streak >= WIN_STREAK_DISPLAY_MIN) {
+        if (!player.isGuest && streak >= WIN_STREAK_MIN) {
           winStreaks[player.id] = streak;
         }
       }
