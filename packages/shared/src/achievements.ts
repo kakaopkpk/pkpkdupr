@@ -10,8 +10,6 @@ import {
   SECOND_ACHIEVEMENT_SET_COUNT_START,
   TOURNAMENT_ACHIEVEMENT_COUNT_START,
 } from "./achievementCountStart.js";
-// streak.ts도 이 파일을 import하는 순환이지만, WIN_STREAK_MIN은 함수 실행 때만 읽어 문제없다
-import { WIN_STREAK_MIN } from "./streak.js";
 import { DUPR_DEFAULT_RATING, roundDuprRating } from "./player.js";
 import { toKstDateKey } from "./session.js";
 
@@ -1060,6 +1058,13 @@ const isHardWon = (scores: readonly MatchScore[], teamIndex: 0 | 1) =>
 
 /** 무패 세션에 필요한 한 세션 경기 수 */
 export const UNBEATEN_SESSION_MIN_MATCHES = 4;
+
+/**
+ * 연승 기준점. 누적 연승(`streak.ts`의 `computeCurrentWinStreaks`)이 이 수 이상이면 연승 중이다.
+ * 연승 아바타 링·태그, 세션 연승 줄, 소식 연승 줄, 특수 매치 연승 회원, 업적 연승 저지가 모두 이 기준을 쓴다.
+ * streak.ts가 이 파일을 import하므로 순환을 피하려고 여기 두고, 소비처는 `@pkpkdupr/shared/streak`에서 읽는다
+ */
+export const WIN_STREAK_MIN = 3;
 
 /** 언더독: 상대 팀 평균 평점이 우리 팀보다 이만큼 이상 높을 때 이기면 받는다 */
 export const UNDERDOG_MIN_RATING_GAP = 0.3;

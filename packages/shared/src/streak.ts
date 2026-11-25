@@ -1,11 +1,7 @@
-import { compareCountedMatches } from "./achievements.js";
+import { compareCountedMatches, WIN_STREAK_MIN } from "./achievements.js";
 import { getWinningTeamIndex, type MatchScore } from "./match.js";
 
-/**
- * 연승 기준점. 누적 연승(`computeCurrentWinStreaks`)이 이 수 이상이면 연승 중이다.
- * 연승 아바타 링·태그, 세션 연승 줄, 소식 연승 줄, 특수 매치 연승 회원, 업적 연승 저지가 모두 이 기준을 쓴다
- */
-export const WIN_STREAK_MIN = 3;
+export { WIN_STREAK_MIN };
 
 export interface WinStreakMatch {
   id: string;

@@ -7,7 +7,6 @@ import {
   specialMatchKindLabels,
   type SpecialMatch,
 } from "@pkpkdupr/shared/specialMatch";
-import { WIN_STREAK_MIN } from "@pkpkdupr/shared/streak";
 import { buttonPressClassName } from "@/components/ui/Button";
 import {
   PlayerAvatar,
@@ -121,10 +120,10 @@ const CellAvatars: React.FC<{
       </span>
     );
   }
-  // 연승 주인공은 연승 링 + 숫자 태그를 두르고 세션 연승 링을 겹쳐 두르지 않는다.
+  // 연승 주인공(서버가 WIN_STREAK_MIN 이상으로 고름)은 연승 링 + 숫자 태그를 두르고 세션 연승 링을 겹쳐 두르지 않는다.
   // 링 아래 숫자 태그만큼 띄워 뒤 아바타와 아래 끝을 맞춘다. 그 밖의 주인공은 세션 연승 링만 두른다
   const frontAvatar =
-    cell.showsStreak && front.winStreak >= WIN_STREAK_MIN ? (
+    cell.showsStreak ? (
       <span className="relative z-10 mb-1 inline-flex">
         <WinStreakAvatarFrame winStreak={front.winStreak} size="sm">
           <PlayerAvatar player={front} size={PROTAGONIST_AVATAR_SIZE} />
