@@ -52,7 +52,10 @@ export const buildSessionPraiseCandidates = (
     : buildSessionPlayerReports(context, session, sessionMatches);
   if (!reports) return [];
 
-  const statsByPlayerId = buildSessionPraisePlayerStats(sessionMatches);
+  const statsByPlayerId = buildSessionPraisePlayerStats(
+    sessionMatches,
+    context.matches,
+  );
   const praiseCounts = new Map<string, number>();
   for (const praise of session.praises ?? []) {
     praiseCounts.set(

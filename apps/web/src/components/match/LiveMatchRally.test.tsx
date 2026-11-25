@@ -181,7 +181,7 @@ describe("남의 진행 중 경기 카드 연승 링", () => {
   const countRings = (markup: string) =>
     markup.split('class="pk-streak-ring').length - 1;
 
-  it("특수 매치가 아니어도 지금 5연승 이상 회원 아바타에 태그 없는 연승 링을 두른다", () => {
+  it("특수 매치가 아니어도 지금 연승 중인 회원 아바타에 태그 없는 연승 링을 두른다", () => {
     const markup = renderOther({ winStreaks: new Map([["bob", 6], ["dave", 5]]) });
     expect(countRings(markup)).toBe(2);
     expect(markup).not.toContain("연승 중");

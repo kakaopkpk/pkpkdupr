@@ -1,5 +1,5 @@
 import React from "react";
-import { WIN_STREAK_DISPLAY_MIN } from "@pkpkdupr/shared/streak";
+import { WIN_STREAK_MIN } from "@pkpkdupr/shared/streak";
 import { FlameIcon } from "./Icons";
 import { cx } from "./cx";
 
@@ -15,9 +15,9 @@ const TAG_CLASS_NAME = {
 
 const isWinStreakShown = (
   winStreak: number | null | undefined,
-): winStreak is number => !!winStreak && winStreak >= WIN_STREAK_DISPLAY_MIN;
+): winStreak is number => !!winStreak && winStreak >= WIN_STREAK_MIN;
 
-/** 연승 단계: 5~9 → 1, 10~19 → 2, 20 이상 → 3. 단계가 오를수록 링이 굵어지고 3단계는 앰버 빛이 붙는다 */
+/** 연승 단계: 3~9 → 1, 10~19 → 2, 20 이상 → 3. 단계가 오를수록 링이 굵어지고 3단계는 앰버 빛이 붙는다 */
 const getStreakTier = (winStreak: number): StreakTier =>
   winStreak >= 20 ? 3 : winStreak >= 10 ? 2 : 1;
 
@@ -69,7 +69,7 @@ const StreakRing: React.FC<{
 };
 
 /**
- * 연승 중(WIN_STREAK_DISPLAY_MIN 이상)인 회원 아바타를 단계별 굵기의 하이라이트(앰버) 링(움직임 없음)으로 감싸고,
+ * 연승 중(WIN_STREAK_MIN 이상)인 회원 아바타를 단계별 굵기의 하이라이트(앰버) 링(움직임 없음)으로 감싸고,
  * 아바타 아래 가운데에 앰버 바탕·잉크 글자의 불꽃 + 연승 태그를 붙인다. 연승이 모자라면 아바타만 그린다.
  */
 export const WinStreakAvatarFrame: React.FC<{

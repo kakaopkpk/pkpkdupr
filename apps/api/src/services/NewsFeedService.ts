@@ -15,7 +15,7 @@ import {
   getSessionPraiseStatus,
   SESSION_PRAISE_HIGHLIGHT_MIN,
 } from "@pkpkdupr/shared/sessionPraise";
-import { WIN_STREAK_DISPLAY_MIN } from "@pkpkdupr/shared/streak";
+import { WIN_STREAK_MIN } from "@pkpkdupr/shared/streak";
 import {
   buildSessionPlayerReports,
   compareSessionsLatestFirst,
@@ -155,7 +155,7 @@ const buildSessionItem = ({
     .flatMap((player) => {
       const winStreak = streaks.get(player.id) ?? 0;
       return sessionPlayerIds.has(player.id) &&
-        winStreak >= WIN_STREAK_DISPLAY_MIN
+        winStreak >= WIN_STREAK_MIN
         ? [{ player, winStreak }]
         : [];
     })

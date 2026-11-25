@@ -52,7 +52,7 @@ export interface LiveSessionState {
   inProgressMatches: MatchInfo[];
   /** inProgressMatches 중 내가 든 경기. 세션 밖 경기일 수 있다 */
   myInProgressMatch: MatchInfo | null;
-  /** inProgressMatches 참가자 중 지금 연승이 WIN_STREAK_DISPLAY_MIN 이상인 정회원의 연승 수(선수 id → 연승) */
+  /** inProgressMatches 참가자 중 지금 연승이 WIN_STREAK_MIN 이상인 정회원의 연승 수(선수 id → 연승) */
   inProgressWinStreaks: ReadonlyMap<string, number>;
   reload: () => Promise<void>;
 }

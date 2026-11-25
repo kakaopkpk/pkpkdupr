@@ -58,7 +58,7 @@ const input = (
 });
 
 describe("buildSessionPraisePlayerStats", () => {
-  it("세션 안 연승·승·득실을 세고, 승패가 안 갈린 경기는 연승을 끊는다", () => {
+  it("세션 경기만 넘기면 세션 안 연승·승·득실을 세고, 승패가 안 갈린 경기는 연승을 끊는다", () => {
     const result = buildSessionPraisePlayerStats([
       match(["a"], ["b"], true),
       match(["a"], ["c"], true),
@@ -75,19 +75,48 @@ describe("buildSessionPraisePlayerStats", () => {
     });
   });
 
-  it("2연승 이상 중인 상대를 이기면 경기마다 한 번 연승 저지로 센다", () => {
+  it("경기 직전 3연승 이상인 상대를 이기면 경기마다 한 번 연승 저지로 센다", () => {
     const result = buildSessionPraisePlayerStats([
       match(["x", "y"], ["p", "q"], true),
       match(["x", "y"], ["r", "s"], true),
-      // x·y 둘 다 2연승 중: 한 경기라 한 번만 센다
-      match(["g", "h"], ["x", "y"], true),
+      // x·y 둘 다 2연승 중: 기준점(3연승) 전이라 저지가 아니다
+      match(["m", "n"], ["x", "y"], true),
       match(["x", "z"], ["t", "u"], true),
       match(["x", "z"], ["v", "w"], true),
-      match(["g", "k"], ["x", "z"], true),
+      match(["x", "z"], ["t", "w"], true),
+      // x·z 둘 다 3연승 중: 한 경기라 한 번만 센다
+      match(["g", "h"], ["x", "z"], true),
     ]);
-    expect(result.get("g")?.streakBreaks).toBe(2);
+    expect(result.get("m")?.streakBreaks).toBe(0);
+    expect(result.get("g")?.streakBreaks).toBe(1);
     expect(result.get("h")?.streakBreaks).toBe(1);
-    expect(result.get("p")?.streakBreaks).toBe(0);
+  });
+
+  it("연승은 세션 밖 경기까지 이어 센 누적 연승이고, 기록은 세션 경기만 쌓는다", () => {
+    const before = [
+      match(["a"], ["b"], true),
+      match(["a"], ["c"], true),
+      // b는 세션 전 3연승
+      match(["b"], ["d"], true),
+      match(["b"], ["d"], true),
+      match(["b"], ["d"], true),
+    ];
+    const first = match(["a"], ["b"], true);
+    // 세션 경기 사이 세션 밖 경기도 누적 연승에 든다
+    const outside = match(["a"], ["d"], true);
+    const second = match(["a"], ["c"], true);
+    const after = match(["a"], ["c"], true);
+    const result = buildSessionPraisePlayerStats(
+      [first, second],
+      [...before, first, outside, second, after],
+    );
+    expect(result.get("a")).toMatchObject({
+      matchCount: 2,
+      wins: 2,
+      bestStreak: 5,
+      streakBreaks: 1,
+    });
+    expect(result.has("d")).toBe(false);
   });
 });
 

@@ -306,6 +306,7 @@ export default function PlayerMatchesDrawer({
                       <MatchRow
                         key={match.id}
                         match={match}
+                        resultPlayerId={playerId ?? undefined}
                         onPress={() => openMatchDetail(match.id)}
                       />
                     ))}

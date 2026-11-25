@@ -237,6 +237,7 @@ export default function MemberProfileDrawer({
                 title="최근 경기"
                 matches={overview.summary.recentMatches}
                 viewerPlayerId={viewer?.id}
+                ownerPlayerId={playerId}
                 onViewAll={() => setIsMatchHistoryRequested(true)}
               />
             </>

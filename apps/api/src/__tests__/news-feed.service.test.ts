@@ -277,8 +277,8 @@ describe("buildNewsFeedPage 세션 항목", () => {
   const m2 = makeMatch("Mmatch02", m2At, [[alice.id, xavier.id], [bob.id, carol.id]], {
     sessionId: session.id,
   });
-  // 세션 전 alice 3연승(평점 로그 없이 승패만)
-  const prior = [1, 2, 3].map((day) =>
+  // 세션 전 alice 1연승(평점 로그 없이 승패만). 세션 두 경기로 기준점과 같은 3연승이 된다
+  const prior = [1].map((day) =>
     makeMatch(
       `Mprior0${day}`,
       at(`2026-10-0${day}T09:00:00.000Z`),
@@ -371,16 +371,16 @@ describe("buildNewsFeedPage 세션 항목", () => {
     ]);
   });
 
-  it("연승 줄은 세션 마지막 경기까지 센 연승이 5 이상인 활성 정회원만이다", () => {
+  it("연승 줄은 세션 마지막 경기까지 센 연승이 3(WIN_STREAK_MIN) 이상인 활성 정회원만이다", () => {
     const streakLines = sessionItem(alice.id).lines.filter(
       (line) => line.kind === "winStreak",
     );
-    // nina·xavier는 2연승, xavier는 비활성
+    // alice는 기준점과 같은 3연승, nina·xavier는 2연승, xavier는 비활성
     expect(streakLines).toEqual([
       {
         kind: "winStreak",
         player: { id: alice.id, username: "alice", avatarUrl: undefined },
-        winStreak: 5,
+        winStreak: 3,
       },
     ]);
   });
@@ -611,12 +611,13 @@ describe("buildNewsFeedPage 칭찬 줄", () => {
       ) as NewsFeedSessionItem;
       return item.lines;
     };
+    // 최다 연승은 누적 연승이라 지난 세션 승리(earlierMatch)까지 이어 4연승이다
     expect(build(closedAt)[0]).toEqual({
       kind: "praise",
       player: { id: ann.id, username: "ann", avatarUrl: undefined },
       praiseCount: 6,
       category: "winStreak",
-      value: 3,
+      value: 4,
     });
     expect(
       build(at("2026-12-03T13:59:00.000Z")).some(

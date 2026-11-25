@@ -71,7 +71,7 @@
   - `POST /api/matches/start`와 같은 advisory 잠금으로 직렬화한다.
 - 진행 중 경기 전부 `GET /api/matches/in-progress`: 응답 `InProgressMatchesResponse`
   - `/api/matches/:matchId`보다 먼저 등록, 대진 예정 경기 제외.
-  - `winStreaks`는 참가자 중 지금 연승(랭킹 `winStreak`과 같은 규칙)이 `WIN_STREAK_DISPLAY_MIN` 이상인 정회원의 선수 id → 연승 수이고, 없으면 빈 객체다.
+  - `winStreaks`는 참가자 중 지금 연승(랭킹 `winStreak`과 같은 규칙)이 `WIN_STREAK_MIN` 이상인 정회원의 선수 id → 연승 수이고, 없으면 빈 객체다.
   - 연승은 완료 경기 결과만 읽어 센다. 못 읽으면 `winStreaks`만 빈 객체로 응답하고, 진행 중 경기가 없으면 읽지 않는다.
 - `GET /api/match-feed`: 대진 예정 경기 제외
 - 세션 조회 API
@@ -166,7 +166,7 @@
   - 세션 항목의 `session`·`mine`(요청자 줄, 안 뛰었으면 null)·`topRiser`는 세션 리포트와 같은 값이다.
   - 세션 항목 `lines`는 지금 활성 정회원만, 칭찬 → 랭킹 → 연승 → 업적 순이다.
   - 랭킹 줄: 세션 참가자 중 복식 `rankAfter` ≤ 3이고 `rankBefore`가 null이거나 더 큰 회원, 순위 오름차순. `rankChange`는 `rankBefore - rankAfter`(`rankBefore` null이면 null).
-  - 연승 줄: 그 세션에서 경기(게스트가 낀 경기 포함)를 뛰었고, 세션 마지막 완료 경기까지 센 연승(랭킹 `winStreak` 규칙)이 `WIN_STREAK_DISPLAY_MIN` 이상인 회원. 연승 내림차순 → 아이디 순.
+  - 연승 줄: 그 세션에서 경기(게스트가 낀 경기 포함)를 뛰었고, 세션 마지막 완료 경기까지 센 연승(랭킹 `winStreak` 규칙)이 `WIN_STREAK_MIN` 이상인 회원. 연승 내림차순 → 아이디 순.
   - 칭찬 줄(`kind: 'praise'`): 칭찬 마감(`closed`) 뒤 칭찬을 5개 이상 받은 후보, 후보 순서. `lines` 맨 앞이다.
     - 이 세션으로 받은 칭찬 업적이 업적 줄에 보이는 회원은 칭찬 줄 대신 업적 줄만 나온다.
   - 업적 줄: 세션 리포트 `achievements` 중에서 최대 3개(`NEWS_FEED_ACHIEVEMENT_LINE_LIMIT`).

@@ -455,7 +455,7 @@ export interface StartMatchRequest {
 export interface InProgressMatchesResponse {
   matches: Match[];
   /**
-   * 진행 중 경기 참가자 중 지금 연승이 WIN_STREAK_DISPLAY_MIN 이상인 정회원의 연승 수(선수 id → 연승).
+   * 진행 중 경기 참가자 중 지금 연승이 WIN_STREAK_MIN 이상인 정회원의 연승 수(선수 id → 연승).
    * 랭킹 `winStreak`과 같은 규칙이고, 없거나 랭킹 원천을 못 읽으면 빈 객체
    */
   winStreaks: Record<string, number>;

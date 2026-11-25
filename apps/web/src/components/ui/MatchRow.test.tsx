@@ -110,3 +110,49 @@ describe("MatchRow 시간 표기", () => {
     ).toBe("21:40");
   });
 });
+
+/** 승패 띠 값과 팀 줄 이름 순서를 뽑는다 */
+const getResultView = (match: MatchInfo, resultPlayerId?: string) => {
+  const markup = renderToStaticMarkup(
+    <MatchRow match={match} resultPlayerId={resultPlayerId} />,
+  );
+  const result = /data-match-result="(win|lose)"/.exec(markup)?.[1] ?? null;
+  const teamLabels = [...markup.matchAll(/<span class="min-w-0 flex-1 truncate[^"]*">([^<]+)<\/span>/g)].map(
+    ([, label]) => label,
+  );
+  return { result, teamLabels };
+};
+
+describe("MatchRow 기준 회원 승패", () => {
+  it("기준 회원이 이긴 경기는 그 팀을 위에 두고 승 띠를 붙인다", () => {
+    expect(getResultView(makeMatch(false), "alice")).toEqual({
+      result: "win",
+      teamLabels: ["alice · bob", "carol · dave"],
+    });
+  });
+
+  it("기준 회원이 진 경기도 그 팀을 위에 두고 패 띠를 붙인다", () => {
+    expect(getResultView(makeMatch(false), "carol")).toEqual({
+      result: "lose",
+      teamLabels: ["carol · dave", "alice · bob"],
+    });
+  });
+
+  it("기준 회원이 없으면 지금처럼 이긴 팀이 위이고 띠가 없다", () => {
+    const loserFirst: MatchInfo = { ...makeMatch(false), scores: [{ scoreA: 7, scoreB: 11 }] };
+    expect(getResultView(loserFirst)).toEqual({
+      result: null,
+      teamLabels: ["carol · dave", "alice · bob"],
+    });
+    expect(getResultView(loserFirst, "erin").result).toBeNull();
+  });
+
+  it("점수가 없거나 승자가 없으면 띠가 없다", () => {
+    expect(
+      getResultView({ ...makeMatch(false), status: "created", scores: [], completedAt: null }, "carol"),
+    ).toEqual({ result: null, teamLabels: ["alice · bob", "carol · dave"] });
+    expect(
+      getResultView({ ...makeMatch(false), scores: [{ scoreA: 11, scoreB: 11 }] }, "carol").result,
+    ).toBeNull();
+  });
+});
