@@ -16,7 +16,7 @@ import { useSystemNotice } from "@/context/SystemNoticeContext";
 import { isNetworkError } from "@/lib/errors";
 import { RequestError } from "@/lib/rankings";
 import {
-  formatSessionPraiseValue,
+  getSessionPraiseCardValue,
   getSessionPraisePillState,
   praiseSessionPlayer,
   type SessionPraisePillState,
@@ -61,7 +61,10 @@ const getRowLabel = (
   return `${username}, 칭찬 ${candidate.praiseCount}개`;
 };
 
-/** 칭찬 후보 줄: 아바타 36 → 분류 칩(작게)·아이디 → 값 → 칭찬 알약. 칭찬 전에는 줄 전체가 칭찬 버튼이다 */
+/**
+ * 칭찬 후보 줄: 아바타 36 → 분류 칩(작게)·아이디 → 오른쪽 값 두 줄(큰 값·설명, 팝업 카드와 같은 표기) → 칭찬 알약.
+ * 칭찬 전에는 줄 전체가 칭찬 버튼이다
+ */
 const SessionPraiseRow: React.FC<{
   candidate: SessionPraiseCandidate;
   state: SessionPraisePillState;
@@ -70,6 +73,7 @@ const SessionPraiseRow: React.FC<{
   onPraise: () => void;
 }> = ({ candidate, state, isDisabled, drawCheck, onPraise }) => {
   const canPress = state === "open" && !isDisabled;
+  const value = getSessionPraiseCardValue(candidate);
   return (
     <button
       type="button"
@@ -90,8 +94,11 @@ const SessionPraiseRow: React.FC<{
           {candidate.player.username}
         </span>
       </span>
-      <span className="shrink-0 text-pk-15 font-semibold tabular-nums text-pk-ink">
-        {formatSessionPraiseValue(candidate)}
+      <span className="flex shrink-0 flex-col items-end gap-0.5">
+        <span className="text-pk-15 font-extrabold tabular-nums text-pk-ink">
+          {value.main}
+        </span>
+        <span className="text-pk-12 font-bold text-pk-sub">{value.caption}</span>
       </span>
       <SessionPraisePill
         state={state}
