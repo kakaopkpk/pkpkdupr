@@ -7,7 +7,10 @@ import { Card } from "@/components/ui/Card";
 import { ListRow } from "@/components/ui/Form";
 import { PlayerAvatar } from "@/components/ui/PlayerAvatar";
 import { Section } from "@/components/ui/Section";
-import { GLOBAL_LAYER } from "@/context/AppNavigationContext";
+import {
+  GLOBAL_LAYER,
+  useAppNavigation,
+} from "@/context/AppNavigationContext";
 import { useAppUpdate } from "@/context/AppUpdateContext";
 import { useAuth } from "@/context/AuthContext";
 import { useInvalidateData } from "@/context/DataSyncContext";
@@ -43,13 +46,14 @@ const SettingsGroup: React.FC<{
   </Section>
 );
 
-/** 전역 설정: 프로필·계정·앱 그룹과 로그아웃 */
+/** 전역 설정: 프로필·계정·피클볼·앱 그룹과 로그아웃 */
 export default function SettingsDrawer({
   isOpen,
   tabKey,
   onClose,
 }: SettingsDrawerProps): React.ReactElement {
   const { player, updateProfile, uploadAvatar, logout } = useAuth();
+  const { openRulesGuide } = useAppNavigation();
   const invalidateData = useInvalidateData();
   const { showSaveFailure } = useSystemNotice();
   const {
@@ -285,6 +289,10 @@ export default function SettingsDrawer({
               label="비밀번호 변경"
               onPress={() => setIsPasswordRequested(true)}
             />
+          </SettingsGroup>
+
+          <SettingsGroup label="피클볼">
+            <ListRow label="기본 규칙" onPress={openRulesGuide} />
           </SettingsGroup>
 
           <SettingsGroup label="앱">

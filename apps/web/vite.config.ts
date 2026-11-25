@@ -106,7 +106,7 @@ export default defineConfig({
         cleanupOutdatedCaches: true,
         inlineWorkboxRuntime: true,
         importScripts: [`${basePath}cleanup-outdated-caches.js`],
-        globPatterns: ["**/*.{js,css,html,ico,png,svg,webmanifest}"],
+        globPatterns: ["**/*.{js,css,html,ico,png,jpg,svg,webmanifest}"],
         navigateFallback: `${basePath}index.html`,
         navigateFallbackDenylist: [/^\/api\//, adminPathPattern],
         runtimeCaching: [

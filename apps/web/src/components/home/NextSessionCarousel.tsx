@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useState } from "react";
 import {
   ParticipationError,
   type ParticipationAction,
@@ -70,9 +70,9 @@ const NextSessionCarousel: React.FC<NextSessionCarouselProps> = ({
   onOpenParticipants,
   onOpenSession,
 }) => {
-  const trackRef = useRef<HTMLDivElement>(null);
+  const [track, setTrack] = useState<HTMLDivElement | null>(null);
   const count = sessions.length;
-  const activeIndex = useCarouselSwipe(trackRef, count);
+  const activeIndex = useCarouselSwipe(track, count);
 
   const { registerTabReset } = useTabNavigation();
 
@@ -80,9 +80,9 @@ const NextSessionCarousel: React.FC<NextSessionCarouselProps> = ({
   useEffect(
     () =>
       registerTabReset("home", () => {
-        if (trackRef.current) scrollCarouselToStart(trackRef.current);
+        if (track) scrollCarouselToStart(track);
       }),
-    [registerTabReset],
+    [registerTabReset, track],
   );
 
   const renderCard = (session: MatchSessionDetailInfo, className?: string) => (
@@ -110,7 +110,7 @@ const NextSessionCarousel: React.FC<NextSessionCarouselProps> = ({
           {/* 홈 본문 좌우 여백(px-4)까지 넓혀 카드가 화면 끝에서 들어오고 나가게 한다.
               relative는 카드 offsetLeft를 트랙 기준으로 재기 위해서고, scroll-px-4는 카드 맞춤 위치의 여백이다 */}
           <div
-            ref={trackRef}
+            ref={setTrack}
             role="region"
             aria-roledescription="carousel"
             aria-label="다가오는 세션"

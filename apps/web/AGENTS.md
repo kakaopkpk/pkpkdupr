@@ -38,6 +38,7 @@
         - 아래 위치 점은 10개까지, 넘으면 "n / N".
         - 어느 카드에서든 참여하기·참여 취소.
       - 진행 중 세션이 없으면 캐러셀(과 진행 중 경기) 아래 "소식" 피드 `home/NewsFeed`(`GET /api/news-feed`, 무한 스크롤, 데이터는 `home/useNewsFeed`)를 둔다. 카드 모양·누르면 가는 곳은 `docs/design.md` "홈"을 따른다.
+        - 소식 맨 위에는 규칙 안내 카드 `home/RulesGuideNewsCard`(누르면 `openRulesGuide`, X로 닫음)를 둔다. 보일지는 `lib/rulesGuide`의 `useIsRulesGuideCardDismissed`(기기별 localStorage `pkpkdupr:rules-guide-dismissed`)가 정하고, 안내 화면을 열거나 닫으면 다시 나오지 않는다.
       - 진행 중 일반 세션이면 블루 카드 아래 `records/SessionReportParts`의 `LiveSessionHighlightCard`(세션 지배자 줄 + 세션 연승 줄)를 둔다. 모양은 `docs/design.md` "홈".
         - 데이터는 `home/useLiveSessionHighlight`다. 지배자와 누적 연승은 `home/useLiveSessionReport`(세션 리포트 `topRiser`·`winStreaks`)가 받는다.
         - 연승 줄 대상·세션 전적은 셸의 세션 경기와 누적 연승으로 `lib/sessionWinStreak`의 `getSessionWinStreaks`가 고른다.
@@ -121,8 +122,15 @@
       - 공유 이미지(업적·특수 매치·세션 리포트)의 틀(캔버스·빛줄기·후광·아래 줄)은 `lib/shareImageCanvas`, 아바타 원은 `lib/shareImageAvatar`, 미리 만들어 두는 훅은 `hooks/usePreparedShareImage`, 공유·내려받기는 `lib/shareImage`가 같이 맡는다.
       - 이미지 만들기는 effect가 끝난 뒤(마이크로태스크)에 시작한다. 아이콘·배지를 `flushSync`로 SVG 문자열로 그리는데, effect 안에서 바로 부르면 그리지 못한다.
     - `session/`: 세션 만들기(일정 탭과 같은 `MonthCalendar`로 고르는 날짜, `minDateKey`로 지난 날·오늘이 든 달 앞은 막음, 표시는 `schedule/useScheduleMonthMarks`·시작·종료 시각 칩 `SessionSchedulePicker`, 오늘 이후 어느 날이든)·참여자 시트 `ParticipantsSheet`(열면 참여자 보기, 오른쪽 위 "수정"으로 같은 시트에서 전체 회원 체크·게스트 추가 수정 모드, 완료·취소·뒤로가기는 보기로 돌아감. `isReadOnly`면 보기 모드만 있고 "수정"이 없음)
-    - `settings/`: 설정·비밀번호 변경·상태메시지 편집·프로필 사진 조정 `AvatarCropScreen`
+    - `settings/`: 설정(프로필·계정·피클볼·앱 묶음, 피클볼의 "기본 규칙"은 `openRulesGuide`)·비밀번호 변경·상태메시지 편집·프로필 사진 조정 `AvatarCropScreen`
       - 고른 사진을 끌어 옮기고 핀치로 1~4배, 두 번 탭 2배↔1배, 원 안을 512px JPEG로 잘라 저장. 좌표 계산은 `utils/avatarCrop.ts`
+    - `rules/`: 피클볼 기본 규칙 안내 `RulesGuideScreen`(카드 12장 가로 넘기기, 넘기기는 홈 캐러셀의 `home/useCarouselSwipe`). 모양·그림 규칙은 `docs/design.md` "피클볼 기본 규칙".
+      - `BottomNav`가 `lazy`로 처음 열 때 받는다(그림 CSS를 첫 화면 CSS에서 빼려는 것). 홈 카드의 장 수는 이 모듈을 끌어오지 않도록 `lib/rulesGuide`의 `RULES_GUIDE_CARD_COUNT`를 쓴다.
+      - 화면이 열리면 `dismissRulesGuideCard`로 홈 규칙 안내 카드를 숨긴다.
+      - 카드 내용·순서는 `RulesGuideCards`, 공통 조각(그림 칸 `RuleFigure`·머리·점 목록·표 줄)은 `RulesGuideParts`, 카드별 그림은 `figures/`, 에티켓 사진은 `photos/`다.
+      - 그림은 298×220 고정 좌표이고 `RuleFigure`가 칸 폭에 맞춰 비율로 늘이거나 줄인다.
+      - 움직임은 `rulesGuide.css`(카드마다 `.pk-rules-cN` 범위 클래스와 `pk-rules-cN-` keyframes, 한 카드는 한 주기)다. 지금 카드가 아니면 `.pk-rules-paused`로 멈추고, 지금 카드가 되면 그림을 다시 그려 처음부터 재생한다. 움직임 줄이기면 카드의 `stillSeconds` 장면에서 멈춘다.
+      - 공 경로·링 keyframes는 디자인 확정본 생성 스크립트로 만든 값이라 손으로 고치지 않는다.
   - 탭 전용 조각: `home/`, `schedule/`, `records/`(세션 리포트 조각 `SessionReportParts`는 일정 탭·세션 상세·홈이 같이 씀, 끝난 세션·세션 없는 경기 카드 `RecordCards`), `ranking/`. 세션 블루 카드 틀·참여 버튼 `session/SessionBlueCard`(오른쪽 위 피클볼 장식 `session/PickleballIllustration`, 첫 줄은 종류 칩 "정기"/"회원"/"대회"와 남은 날 `getSessionDDayLabel`("D-1"·오늘이면 "D-Day"), 참여 중이면 "✓ 참여 중 … 취소" 버튼 하나, 진행 중 세션 카드 `LiveSessionCard`)는 홈 다음 세션·진행 중 세션 카드와 일정 탭 세션 카드가 같이 씀
     - `session.kind`가 대회면 카드 안에서 남색 바탕·금색 "트로피 + 대회" 칩·연한 트로피 장식 `session/TrophyIllustration`으로 그린다.
     - 선택 `onPress`는 카드 빈 곳(안의 버튼 제외) 누르기다.
@@ -156,7 +164,7 @@
 - `src/context/`
   - `AuthContext.tsx`: Supabase 세션 구독, `/api/me` 검증, `status`·`player`, 비밀번호 변경, `logout`
   - `TabNavigationContext.tsx`: 탭(`TabKey`: `home`·`schedule`·`ranking`·`me`)·깊이 스택(`pushDepth`/`closeDepth`, 브라우저 뒤로가기 연동)·스크롤 복원·당겨서 새로고침 등록
-  - `AppNavigationContext.tsx`: `useAppNavigation()`으로 전역 화면 열기(`openMatchDetail`, `openMemberProfile`(내 id면 나 탭. `initialCategory`로 평점 카드·통계가 처음 보일 종목을 정하고 없으면 복식, 랭킹 탭 단식 줄은 단식으로 연다), `openRecordMatch`, `openCreateSession`(`dateKey`로 날짜를 골라 둔 채 열고, 만든 뒤 `onCreated`를 부름. + 메뉴는 홈 탭으로, 일정 탭은 만든 날로 옮김), `openSettings`, `openSessionReport`(지금 탭 위에 세션 상세 화면), `openAchievementDetail`(업적 상세 시트, 경기 기록 시트보다 위 레이어. 여는 곳이 받은 여부 `earned`를 넘겨 배지를 불러오기 전에 바로 그림), `openAchievements`(지금 탭 위에 업적 전체 보기 화면, 내 id여도 나 탭으로 바꾸지 않음. `focusAchievementId`를 주면 진행도 준비 뒤 그 업적 줄 위쪽 끝을 스크롤 영역 높이 40%에 두고 카드 폭 가득 `pk-primary-soft` 바탕을 한 번 반짝임, 움직임 줄이기면 스크롤만)), 전역 화면 레이어 번호 `GLOBAL_LAYER`
+  - `AppNavigationContext.tsx`: `useAppNavigation()`으로 전역 화면 열기(`openMatchDetail`, `openMemberProfile`(내 id면 나 탭. `initialCategory`로 평점 카드·통계가 처음 보일 종목을 정하고 없으면 복식, 랭킹 탭 단식 줄은 단식으로 연다), `openRecordMatch`, `openCreateSession`(`dateKey`로 날짜를 골라 둔 채 열고, 만든 뒤 `onCreated`를 부름. + 메뉴는 홈 탭으로, 일정 탭은 만든 날로 옮김), `openSettings`, `openSessionReport`(지금 탭 위에 세션 상세 화면), `openAchievementDetail`(업적 상세 시트, 경기 기록 시트보다 위 레이어. 여는 곳이 받은 여부 `earned`를 넘겨 배지를 불러오기 전에 바로 그림), `openAchievements`(지금 탭 위에 업적 전체 보기 화면, 내 id여도 나 탭으로 바꾸지 않음. `focusAchievementId`를 주면 진행도 준비 뒤 그 업적 줄 위쪽 끝을 스크롤 영역 높이 40%에 두고 카드 폭 가득 `pk-primary-soft` 바탕을 한 번 반짝임, 움직임 줄이기면 스크롤만), `openRulesGuide`(지금 탭 위에 피클볼 기본 규칙 안내 화면, 열면 홈 규칙 안내 카드를 다시 보이지 않음)), 전역 화면 레이어 번호 `GLOBAL_LAYER`
   - `DataSyncContext.tsx`: 데이터 종류별 무효화와 재조회 신호. 셸(`BottomNav`)이 `DataSyncProvider`로 감싼다(아래 "데이터 재조회")
   - `LiveSessionContext.tsx`: `useLiveSession()`으로 오늘 진행 중 세션·그 경기, 세션과 상관없는 진행 중 경기(`GET /api/matches/in-progress`)와 그중 내 경기, 그 참가자 중 3연승 이상 회원의 연승 `inProgressWinStreaks`
     - 진행 중 세션 `liveSession`은 `getLiveSessionStartsAt` ≤ 지금 < 세션 끝 시각(`getSessionEndsAt`)인 세션(정기 우선)이다. 대회 세션만 시작 시각(`startTime`이 있으면 그날 그 시각)부터다.
@@ -179,11 +187,11 @@
 - 비밀번호 변경은 `supabase.auth.updateUser({ password })`로 하며 현재 비밀번호는 묻지 않습니다. 강제 변경은 이어서 `POST /api/me/password-changed`까지 성공해야 끝납니다.
 - `/api/me`가 403 `ACCOUNT_NOT_LINKED`면 로그아웃하고 로그인 화면에 안내합니다. 401·`SESSION_INVALID`만 로그아웃하고, 일시 오류(`SESSION_UNAVAILABLE`, 네트워크)는 세션을 유지한 채 재시도합니다.
 - 전역 화면(경기 상세·회원 프로필·세션 상세·경기 기록 시트·세션 만들기·설정)은 `BottomNav`가 렌더하는 래퍼(`components/{match,profile,records,record,session,settings}/`)이며, 열려 있는 동안 연 탭에 깊이를 쌓아 브라우저 뒤로가기로 닫힙니다. 탭 페이지는 래퍼를 직접 렌더하지 말고 `useAppNavigation()`으로 엽니다.
-- 보는 화면(경기 상세·회원 프로필·회원 경기 전체·세션 상세·세션 평점 변화 전체·설정·비밀번호 변경)은 `PushScreen`으로 엽니다.
+- 보는 화면(경기 상세·회원 프로필·회원 경기 전체·세션 상세·세션 평점 변화 전체·설정·비밀번호 변경·피클볼 기본 규칙)은 `PushScreen`으로 엽니다.
   - 하단 바(탭바·미니바·알림 바·+ 버튼)까지 덮고, 오른쪽에서 들어오며 뒤 화면(탭 셸 또는 아래 화면)은 왼쪽으로 30% 밀려 어두워집니다(320ms, 움직임 줄이기면 없음).
   - 헤더(‹ 뒤로·제목·`headerRight`)는 `PushScreen`이 그리고, 버튼은 `actions`로 탭바 자리 하단 고정 바에 둡니다.
   - 돌아가기는 ‹ 버튼과 기기 뒤로가기뿐이며(가장자리 끌기 없음) 맨 위 화면 하나씩 닫힙니다.
-  - 경기 상세·회원 프로필·세션 상세·업적 전체 보기(`profile/PlayerAchievementsDrawer`)는 화면 위에 계속 쌓을 수 있습니다(`BottomNav`의 화면 스택).
+  - 경기 상세·회원 프로필·세션 상세·업적 전체 보기(`profile/PlayerAchievementsDrawer`)·피클볼 기본 규칙(`rules/RulesGuideScreen`)은 화면 위에 계속 쌓을 수 있습니다(`BottomNav`의 화면 스택).
 - 짧은 입력은 바텀시트로 하며, 화면에서 연 시트는 `GLOBAL_LAYER.sheet` 이상 레이어로 그 화면 위에 뜹니다.
 - `?matchId=` 딥링크는 시작할 때 `openMatchDetail`로 경기 상세를 엽니다.
 
@@ -263,6 +271,7 @@
 ## 스타일링 규칙
 
 - CSS 파일 상단에는 `@import "tailwindcss";`를 사용합니다.
+  - 예외로 규칙 안내 그림 움직임 `components/rules/rulesGuide.css`는 Tailwind 없이 `RulesGuideScreen`이 불러오는 일반 CSS입니다(Tailwind를 다시 불러오면 유틸리티가 두 번 들어갑니다).
 - Tailwind v4 기준이라 별도 `tailwind.config.*` 없이 Vite 플러그인으로 동작합니다.
 - 모바일 중심 화면이므로 고정 폭/하단 탭/오버레이가 깨지지 않게 확인합니다.
 - 화면 확대(핀치·더블탭)는 모든 기기에서 막습니다.
@@ -286,6 +295,7 @@
   - transform·opacity만 움직이고 height·top·width·left는 애니메이션하지 않습니다.
   - 새 keyframes는 `@theme`에 `pk-` 접두로 추가하고 `cx.ts` 등록도 함께 고칩니다.
 - 여러 요소가 맞물려 끝없이 도는 장식(`pk-flame-aura`, 진행 중 경기 랠리 `pk-rally-*`, 칭찬 엄지 배지 `pk-praise-badge`)은 예외로 `index.css` utilities의 컴포넌트 클래스와 파일 끝 keyframes로 두고, 움직임 줄이기도 그 클래스의 `@media (prefers-reduced-motion: reduce)`에서 처리합니다.
+  - 규칙 안내 그림은 카드마다 keyframes가 많아 `components/rules/rulesGuide.css`에 따로 두고, 움직임 줄이기는 그 파일에서 대표 장면에 멈춥니다.
 - 움직임 줄이기는 소비처에서 `motion-reduce:`(`motion-reduce:animate-none`, `motion-reduce:transition-none`, 장식 요소는 `motion-reduce:hidden`)로 끄고 최종 상태를 바로 보입니다.
 - 화면 등장 연출(CSS 애니메이션·숫자 카운트업)은 화면이 보이게 될 때마다(처음 마운트 포함) 처음부터 한 번 재생합니다.
   - 보임은 `context/ScreenVisibilityContext.tsx` 기준입니다. 같은 보임 안의 데이터 재조회(`useDataVersion`)·리렌더·바텀시트 열고 닫기로는 다시 재생하지 않으며, 숨김 중이나 콘텐츠 준비 전(`isReady` false)에는 진행하지 않습니다.
@@ -300,6 +310,7 @@
 - 아래는 구현 규칙이고, 화면별 결정·다시 제안하지 않는 안·시안 작업 방식은 `docs/design.md`(루트 기준)를 함께 따릅니다.
 - 기본색은 블루 `pk-primary`(#2346a8)입니다. 버튼은 모두 블루 계열(채움, 연한 `pk-primary-soft` 바탕, `pk-primary-line` 테두리)이며 하이라이트 색을 버튼에 쓰지 않습니다. 시트 하단 왼쪽의 글자 너비만 한 작은 보조 버튼(취소·이전·다시 고르기·경기 시작)은 `soft`(`pk-primary-soft` 바탕·`pk-primary` 글자)입니다. 색 있는 버튼은 누를 수 있고 회색(`pk-neutral`)은 비활성이라는 구분을 지키기 위해, 보조 버튼에 회색 바탕을 쓰지 않습니다.
 - 테두리가 필요한 곳(진행 중인 내 경기 카드, 테두리 버튼)은 옅은 파랑 `pk-primary-line`입니다.
+- 예외로 규칙 안내 그림(`rules/figures/`·`rules/rulesGuide.css`) 안은 디자인 확정본의 그림 전용 색(코트 남색·논 발리 존 연파랑·공 노랑·아웃 빨강 등)을 16진수로 씁니다. 그림 밖(머리·본문·버튼)은 토큰을 씁니다.
 - 하이라이트 `pk-hl`(앰버 #ffb627)은 테두리 없이 LIVE 표시, 오늘의 급상승, 업적 축하 연출(`AchievementCelebration`)과 받은 업적 시트 머리의 배지 빛줄기·후광에만 씁니다. 예외로 경기 삭제 버튼의 길게 누르기 채움 앞 끝 선, 축하 연출·받은 업적 시트에서 한 번 퍼지는 고리, 연승 아바타(`WinStreakAvatarFrame`, `.pk-streak-ring`, 태그 있으면 단계 굵기·`showTag={false}`면 1단계 링만)의 링·태그와 진행 중 세션 "N연승" 칩(`SessionWinStreakBadge`)에 씁니다. 평점 추세선 끝점은 블루 점입니다.
   - 대회 세션 예외로 달력의 대회 날 점과 대진 진행 중 경기의 앰버 점("진행 중" 앞)에도 씁니다.
   - 특수 매치 큰 연출(`SpecialMatchCelebrationScreen`)과 그 공유 이미지 예외로 주인공 얼굴 뒤 빛줄기·후광, 연승 테두리·태그·이긴 쪽 테두리가 타오르는 빛·고리, 라이벌전 이긴 얼굴에서 퍼지는 고리와 설명 줄의 N연승 글자에도 씁니다.
@@ -320,6 +331,7 @@
   - 예외로 큰 제목은 `Login` 28입니다.
   - 예외로 특수 매치 최강자전 이름은 18입니다(`SpecialMatchCelebrationScenes`·`specialMatchShareImage`).
   - 예외로 그림 안 글자는 `PwaInstallPrompt` 10, `RatingTrendChart` 10·11, `AchievementBadge` 11, `PlayerAvatar` 이니셜(지름×0.42)입니다.
+  - 예외로 규칙 안내 그림(`rules/figures/`) 안 글자는 11~13이고, 그림 속 점수 숫자·말풍선만 15·17·18·22·26입니다.
   - 예외로 공유 이미지 canvas(`shareFont`)는 `sessionReportShareImage` 큰 평점 56, 특수 매치 캡션(15에서 한 줄에 안 들어가면 12까지 줄임), `lib/shareImageAvatar` 이니셜(지름×0.42)입니다.
 - Barlow Condensed(`font-num`)는 화면당 주인공 큰 숫자 하나에만 쓰고, 본문은 Pretendard입니다.
 - 경기 행은 팀 아바타 쌍을 넣고 이긴 쪽만 강조합니다(A·B팀 색 구분·승 배지 없음). 줄 맨 위 메타 줄에 시간을 두고 내 경기면 시간 뒤에 " · 내 경기" 글자만 붙으며(바탕 강조 없음), 시간 열은 따로 없고, 코트 번호는 어디에도 표시하지 않습니다.

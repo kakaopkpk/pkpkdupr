@@ -1,4 +1,6 @@
 import React, {
+  lazy,
+  Suspense,
   useCallback,
   useEffect,
   useMemo,
@@ -91,6 +93,11 @@ import Home from "@/pages/Home";
 import Me from "@/pages/Me";
 import Ranking from "@/pages/Ranking";
 import Schedule from "@/pages/Schedule";
+
+// 규칙 안내는 그림 움직임 CSS가 커서 처음 열 때 따로 받는다(PWA 사전 캐시에는 들어 있다)
+const RulesGuideScreen = lazy(
+  () => import("@/components/rules/RulesGuideScreen"),
+);
 
 const TAB_KEYS: TabKey[] = TAB_ITEMS.map((item) => item.key);
 // 탭 페이지는 props가 없으므로 memo로 감싸 셸 state가 바뀔 때 숨은 탭까지 다시 렌더링되지 않게 한다.
@@ -186,10 +193,11 @@ type GlobalScreenRoute =
       initialCategory?: MatchTopLevelType;
     }
   | { kind: "session-report"; sessionId: string }
-  | ({ kind: "achievements" } & AchievementsScreenRequest);
+  | ({ kind: "achievements" } & AchievementsScreenRequest)
+  | { kind: "rules-guide" };
 
 /**
- * 화면 위에 계속 쌓을 수 있는 전역 화면(경기 상세·회원 프로필·세션 상세·업적 전체 보기) 하나.
+ * 화면 위에 계속 쌓을 수 있는 전역 화면(경기 상세·회원 프로필·세션 상세·업적 전체 보기·규칙 안내) 하나.
  * id는 깊이 id로도 쓰며, 닫힌 뒤(isOpen=false)에도 닫히는 움직임이 끝날 때까지 남는다.
  */
 interface GlobalScreenEntry {
@@ -213,6 +221,8 @@ const isSameRoute = (a: GlobalScreenRoute, b: GlobalScreenRoute) => {
         a.playerId === b.playerId &&
         a.focusAchievementId === b.focusAchievementId
       );
+    case "rules-guide":
+      return b.kind === "rules-guide";
   }
 };
 
@@ -742,6 +752,11 @@ const BottomNavShell: React.FC = () => {
   const openSessionReport = useCallback(
     (sessionId: string) =>
       openGlobalScreen({ kind: "session-report", sessionId }),
+    [openGlobalScreen],
+  );
+
+  const openRulesGuide = useCallback(
+    () => openGlobalScreen({ kind: "rules-guide" }),
     [openGlobalScreen],
   );
 
@@ -1293,6 +1308,7 @@ const BottomNavShell: React.FC = () => {
       openAchievementDetail,
       openAchievements,
       openSessionReport,
+      openRulesGuide,
     }),
     [
       openAchievementDetail,
@@ -1301,6 +1317,7 @@ const BottomNavShell: React.FC = () => {
       openMatchDetail,
       openMemberProfile,
       openRecordMatch,
+      openRulesGuide,
       openSessionReport,
       openSettings,
       selectTab,
@@ -1518,6 +1535,12 @@ const BottomNavShell: React.FC = () => {
                       focusAchievementId={screen.route.focusAchievementId}
                       {...screenProps}
                     />
+                  );
+                case "rules-guide":
+                  return (
+                    <Suspense key={screen.id} fallback={null}>
+                      <RulesGuideScreen {...screenProps} />
+                    </Suspense>
                   );
               }
             })}
