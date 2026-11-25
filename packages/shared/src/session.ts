@@ -361,30 +361,28 @@ export const getSessionCompleteWindow = (
   sessionDate: Date,
   timeRange?: SessionTimeRange | null,
 ): SessionCompleteWindow | null => {
-  if (kind === "regular") {
-    const endAt = getRegularSessionEndAt(sessionDate);
-    return {
-      endAt,
-      completableFrom: new Date(
-        endAt.getTime() - SESSION_COMPLETE_LEAD_MINUTES * MINUTE_MS,
-      ),
-      autoCompleteAt: getEmptySessionExpiresAt(kind, sessionDate),
-    };
-  }
-  if (!timeRange?.startTime || !timeRange.endTime) return null;
-  const range = { startTime: timeRange.startTime, endTime: timeRange.endTime };
-  const endAt = getSessionEndsAt(kind, sessionDate, range);
-  // 10분보다 짧은 세션도 시작 전에는 완료하지 않는다
-  const startAt = kstDateKeyTimeToDate(toKstDateKey(sessionDate), range.startTime);
+  const isRegular = kind === "regular";
+  const startTime = isRegular ? REGULAR_SESSION_START_TIME : timeRange?.startTime;
+  const endTime = isRegular ? REGULAR_SESSION_END_TIME : timeRange?.endTime;
+  if (!startTime || !endTime) return null;
+  // 완료 시각을 넘기지 않아야 이미 완료한 세션도 원래 종료 시각으로 계산한다
+  const endAt = isRegular
+    ? getRegularSessionEndAt(sessionDate)
+    : getSessionEndsAt(kind, sessionDate, { startTime, endTime });
+  const startAt = kstDateKeyTimeToDate(toKstDateKey(sessionDate), startTime);
   return {
     endAt,
+    // 10분보다 짧은 세션도 시작 전에는 완료하지 않는다
     completableFrom: new Date(
       Math.max(
         endAt.getTime() - SESSION_COMPLETE_LEAD_MINUTES * MINUTE_MS,
         startAt.getTime(),
       ),
     ),
-    autoCompleteAt: endAt,
+    // 회원·대회 세션은 종료 시각에 저절로 끝난다
+    autoCompleteAt: isRegular
+      ? getEmptySessionExpiresAt(kind, sessionDate)
+      : endAt,
   };
 };
 
