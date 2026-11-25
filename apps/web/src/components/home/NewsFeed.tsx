@@ -327,7 +327,7 @@ const NewsFeedSkeleton: React.FC = () => (
 
 /**
  * 진행 중 세션이 없을 때 홈의 "소식" 피드. 최신 세션 카드부터, 새 회원 카드는 API 순서대로 그 사이에 끼운다.
- * 맨 위에는 규칙 안내 카드를 열거나 닫기 전까지 둔다.
+ * 맨 위에는 규칙 안내 카드를 열거나 닫기 전까지 둔다(소식을 못 불러와도 둔다).
  * 목록 끝에 다가가면 이전 세션을 이어 붙이고, 항목과 규칙 안내 카드가 모두 없으면 섹션 전체를 그리지 않는다
  */
 const NewsFeed: React.FC<{ feed: NewsFeedState }> = ({ feed }) => {
@@ -338,6 +338,7 @@ const NewsFeed: React.FC<{ feed: NewsFeedState }> = ({ feed }) => {
   if (status === "error") {
     return (
       <Section title="소식">
+        {showRulesGuide ? <RulesGuideNewsCard /> : null}
         <StateMessage
           kind="error"
           message={error ?? "소식을 불러오지 못했어요"}
