@@ -79,13 +79,13 @@ const describeSessionPraiseValue = ({
 };
 
 /**
- * 칭찬 분류의 한 줄 값(세션 상세·홈 소식·세션 요약 공유 이미지).
+ * 칭찬 분류의 한 줄 값(홈 소식·세션 요약 공유 이미지).
  * "+0.106 상승"·"11연승 저지"·"연승 저지 2회"·"순위 상승 ▲9"·"5승"·"58점 득점"·"듀스 2승"·"+0.25 강팀 격파"·"리벤지 성공 1회"
  */
 export const formatSessionPraiseValue = (praise: SessionPraiseValue): string =>
   describeSessionPraiseValue(praise).line;
 
-/** 칭찬 팝업 카드의 큰 값과 그 아래 설명 줄: "11연승"/"저지"·"2회"/"연승 저지"·"+0.33"/"강팀 격파" 등 */
+/** 칭찬 팝업 카드·세션 상세 하이라이트 줄의 큰 값과 그 아래 설명 줄: "11연승"/"저지"·"2회"/"연승 저지"·"+0.33"/"강팀 격파" 등 */
 export const getSessionPraiseCardValue = (
   praise: SessionPraiseValue,
 ): { main: string; caption: string } => {
