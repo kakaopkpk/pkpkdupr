@@ -1,9 +1,11 @@
 import React from "react";
-import { RULES_GUIDE_CARDS } from "@/components/rules/RulesGuideCards";
 import { buttonPressClassName, rowPressClassName } from "@/components/ui/Button";
 import { cx } from "@/components/ui/cx";
 import { useAppNavigation } from "@/context/AppNavigationContext";
-import { dismissRulesGuideCard } from "@/lib/rulesGuide";
+import {
+  dismissRulesGuideCard,
+  RULES_GUIDE_CARD_COUNT,
+} from "@/lib/rulesGuide";
 
 const BookIcon: React.FC = () => (
   <svg
@@ -68,7 +70,7 @@ const RulesGuideNewsCard: React.FC = () => {
           피클볼 기본 규칙
         </span>
         <span className="text-pk-13 text-pk-sub">
-          규칙 카드 {RULES_GUIDE_CARDS.length}장
+          규칙 카드 {RULES_GUIDE_CARD_COUNT}장
         </span>
       </div>
       <button type="button" onClick={openRulesGuide} className="sr-only">

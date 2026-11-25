@@ -3,6 +3,9 @@ import { useSyncExternalStore } from "react";
 /** 홈 소식 맨 위 규칙 안내 카드를 다시 보이지 않을 기기인지(안내 화면을 열었거나 X로 닫음) */
 export const RULES_GUIDE_DISMISSED_STORAGE_KEY = "pkpkdupr:rules-guide-dismissed";
 
+/** 안내 카드 장 수. 안내 화면 모듈(RULES_GUIDE_CARDS)을 홈에 끌어오지 않으려고 따로 둔다 */
+export const RULES_GUIDE_CARD_COUNT = 12;
+
 const listeners = new Set<() => void>();
 // 저장소에 쓰지 못하는 환경(사생활 보호 모드 등)에서도 이 실행 동안은 다시 보이지 않게 한다
 let dismissedInMemory = false;

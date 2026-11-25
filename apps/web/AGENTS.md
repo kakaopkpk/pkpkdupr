@@ -125,6 +125,8 @@
     - `settings/`: 설정(프로필·계정·피클볼·앱 묶음, 피클볼의 "기본 규칙"은 `openRulesGuide`)·비밀번호 변경·상태메시지 편집·프로필 사진 조정 `AvatarCropScreen`
       - 고른 사진을 끌어 옮기고 핀치로 1~4배, 두 번 탭 2배↔1배, 원 안을 512px JPEG로 잘라 저장. 좌표 계산은 `utils/avatarCrop.ts`
     - `rules/`: 피클볼 기본 규칙 안내 `RulesGuideScreen`(카드 12장 가로 넘기기, 넘기기는 홈 캐러셀의 `home/useCarouselSwipe`). 모양·그림 규칙은 `docs/design.md` "피클볼 기본 규칙".
+      - `BottomNav`가 `lazy`로 처음 열 때 받는다(그림 CSS를 첫 화면 CSS에서 빼려는 것). 홈 카드의 장 수는 이 모듈을 끌어오지 않도록 `lib/rulesGuide`의 `RULES_GUIDE_CARD_COUNT`를 쓴다.
+      - 화면이 열리면 `dismissRulesGuideCard`로 홈 규칙 안내 카드를 숨긴다.
       - 카드 내용·순서는 `RulesGuideCards`, 공통 조각(그림 칸 `RuleFigure`·머리·점 목록·표 줄)은 `RulesGuideParts`, 카드별 그림은 `figures/`, 에티켓 사진은 `photos/`다.
       - 그림은 298×220 고정 좌표이고 `RuleFigure`가 칸 폭에 맞춰 비율로 늘이거나 줄인다.
       - 움직임은 `rulesGuide.css`(카드마다 `.pk-rules-cN` 범위 클래스와 `pk-rules-cN-` keyframes, 한 카드는 한 주기)다. 지금 카드가 아니면 `.pk-rules-paused`로 멈추고, 지금 카드가 되면 그림을 다시 그려 처음부터 재생한다. 움직임 줄이기면 카드의 `stillSeconds` 장면에서 멈춘다.

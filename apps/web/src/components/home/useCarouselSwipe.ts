@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { prefersReducedMotion } from "@/hooks/useSheetDrag";
 import { getActiveSlideIndex, getSwipeTargetIndex } from "./carouselPosition";
 
@@ -67,17 +67,17 @@ export const scrollCarouselToIndex = (track: HTMLElement, index: number) => {
  * 가로 스크롤 트랙(touch-action: pan-y)의 카드 넘기기. 손가락 가로 끌기는 브라우저 스크롤 대신 직접
  * 처리해, 놓을 때 거리·속도로 멈출 카드를 하나만 고른다(살짝 튕기기로 넘어가거나 관성으로 여러 장
  * 지나치지 않게). 그 밖의 스크롤은 멈춘 뒤 가까운 카드에 맞추고, 폭이 바뀌면 보던 카드에 다시 맞춘다.
+ * 트랙은 콜백 ref로 받은 요소(state)라, 늦게 그려지는 트랙(열린 뒤 본문을 그리는 화면 등)에도 붙는다.
  * 지금 카드 번호를 돌려준다
  */
 export const useCarouselSwipe = (
-  trackRef: React.RefObject<HTMLElement | null>,
+  track: HTMLElement | null,
   /** 카드 수. 바뀌면 다시 맞춘다 */
   count: number,
 ) => {
   const [activeIndex, setActiveIndex] = useState(0);
 
   useEffect(() => {
-    const track = trackRef.current;
     if (!track) return;
 
     let state: SwipeState | null = null;
@@ -242,7 +242,7 @@ export const useCarouselSwipe = (
       clearSettleTimeout();
       setEdgeOffset(0, false);
     };
-  }, [trackRef, count]);
+  }, [track, count]);
 
   return activeIndex;
 };

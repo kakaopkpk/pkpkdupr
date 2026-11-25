@@ -18,6 +18,15 @@ const loadModule = async () => {
 };
 
 describe("rulesGuide", () => {
+  it("keeps the home card count in sync with the guide cards", async () => {
+    const { RULES_GUIDE_CARD_COUNT } = await loadModule();
+    const { RULES_GUIDE_CARDS } = await import(
+      "@/components/rules/RulesGuideCards"
+    );
+
+    expect(RULES_GUIDE_CARD_COUNT).toBe(RULES_GUIDE_CARDS.length);
+  });
+
 
   afterEach(() => {
     vi.unstubAllGlobals();

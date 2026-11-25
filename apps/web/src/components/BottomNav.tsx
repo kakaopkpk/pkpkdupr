@@ -1,4 +1,6 @@
 import React, {
+  lazy,
+  Suspense,
   useCallback,
   useEffect,
   useMemo,
@@ -39,7 +41,6 @@ import RecordMatchSheet from "@/components/record/RecordMatchSheet";
 import SessionReportDrawer from "@/components/records/SessionReportDrawer";
 import { CompleteSessionConfirmDialog } from "@/components/session/CompleteSessionConfirmDialog";
 import CreateSessionSheet from "@/components/session/CreateSessionSheet";
-import RulesGuideScreen from "@/components/rules/RulesGuideScreen";
 import SettingsDrawer from "@/components/settings/SettingsDrawer";
 import {
   type AchievementDetailRequest,
@@ -87,12 +88,16 @@ import {
   completeMatchSession,
   type MatchSessionDetailInfo,
 } from "@/lib/matchSessions";
-import { dismissRulesGuideCard } from "@/lib/rulesGuide";
 import { useDimmedThemeColor } from "@/lib/themeColor";
 import Home from "@/pages/Home";
 import Me from "@/pages/Me";
 import Ranking from "@/pages/Ranking";
 import Schedule from "@/pages/Schedule";
+
+// 규칙 안내는 그림 움직임 CSS가 커서 처음 열 때 따로 받는다(PWA 사전 캐시에는 들어 있다)
+const RulesGuideScreen = lazy(
+  () => import("@/components/rules/RulesGuideScreen"),
+);
 
 const TAB_KEYS: TabKey[] = TAB_ITEMS.map((item) => item.key);
 // 탭 페이지는 props가 없으므로 memo로 감싸 셸 state가 바뀔 때 숨은 탭까지 다시 렌더링되지 않게 한다.
@@ -750,10 +755,10 @@ const BottomNavShell: React.FC = () => {
     [openGlobalScreen],
   );
 
-  const openRulesGuide = useCallback(() => {
-    dismissRulesGuideCard();
-    openGlobalScreen({ kind: "rules-guide" });
-  }, [openGlobalScreen]);
+  const openRulesGuide = useCallback(
+    () => openGlobalScreen({ kind: "rules-guide" }),
+    [openGlobalScreen],
+  );
 
   const reloadLiveSession = liveSessionState.reload;
 
@@ -1532,7 +1537,11 @@ const BottomNavShell: React.FC = () => {
                     />
                   );
                 case "rules-guide":
-                  return <RulesGuideScreen key={screen.id} {...screenProps} />;
+                  return (
+                    <Suspense key={screen.id} fallback={null}>
+                      <RulesGuideScreen {...screenProps} />
+                    </Suspense>
+                  );
               }
             })}
             <RecordMatchSheet

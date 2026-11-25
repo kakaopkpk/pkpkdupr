@@ -57,10 +57,7 @@ export interface AppNavigationContextValue {
    * 끝난 세션만 세션 리포트를 함께 보인다(완료 경기가 없으면 리포트 없이)
    */
   openSessionReport: (sessionId: string) => void;
-  /**
-   * 지금 탭 위에 피클볼 기본 규칙 안내 화면을 쌓는다. 열면 그 기기에서 홈 소식의 규칙 안내 카드가
-   * 다시 나오지 않는다
-   */
+  /** 지금 탭 위에 피클볼 기본 규칙 안내 화면을 쌓는다 */
   openRulesGuide: () => void;
 }
 
