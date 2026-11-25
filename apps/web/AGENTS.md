@@ -97,8 +97,10 @@
         - 진행 중(`useLiveSession().liveSession?.id`가 이 세션)이면 D-day 대신 LIVE다. 대회도 진행 중에 모양이 같다.
         - 진행 중 일반 세션이면 카드와 "경기" 사이에 홈과 같은 `LiveSessionHighlightCard`(데이터도 홈과 같은 `home/useLiveSessionHighlight`)를 둔다.
         - 메타 줄은 홈 다음 세션 카드와 같은 `getSessionMetaLabel`(미래면 날짜까지).
-      - 끝난 대회: `TournamentRankCard`(누를 수 없음) → 세션 지배자(`TopRiserCard`)·내 평점(`LastSessionMeCard`)·하이라이트·평점 변화 → `TournamentBracketSection`.
+      - 끝난 대회: `TournamentRankCard`(카드는 누를 수 없고 참여 줄은 읽기 전용 참여자 시트) → 세션 지배자(`TopRiserCard`)·내 평점(`LastSessionMeCard`)·하이라이트·평점 변화 → `TournamentBracketSection`.
       - 끝난 일반 세션: `RecordSessionCard`(`onPress` 없이 누를 수 없음, 메타 줄 앞에 날짜) → 세션 지배자·내 평점·하이라이트·평점 변화 → "경기" 섹션. 리포트가 없으면 버튼 없는 블루 카드("종료").
+        - 머리 카드에 `participantsRow`를 넘겨 메타 줄에서 인원을 빼고 맨 아래 참여자 줄(블루 카드와 같은 `session/SessionBlueCard`의 `ParticipantsRow`, 흰 카드 색 `light`)을 둔다. "종료" 블루 카드도 참여자 줄을 누를 수 있다.
+        - 끝난 세션(대회 포함)의 참여자 시트는 `isReadOnly`라 "수정"이 없다.
       - 세션 상세에는 내 새 업적 카드가 없다. 업적은 홈 소식·업적 축하·나 탭에서 본다.
       - 하이라이트는 칭찬 섹션 `praise/SessionPraiseSection`이다(섹션 제목만 "하이라이트"). 끝난 세션이 칭찬하는 세션(`isSessionPraiseEnabled`)이면 리포트와 함께 `GET /api/match-sessions/:sessionId/praise`를 읽고, 후보가 없으면 섹션이 없다. 칭찬을 못 읽으면 보이던 칭찬을 두고 화면은 그대로 그린다.
       - 끝난 세션 머리 카드는 `mine`을 넘기지 않는다(내 기록 띠·줄 없음). 내 기록은 `LastSessionMeCard` 하나만 보인다.
@@ -118,7 +120,7 @@
       - 특수 매치 큰 연출(라이벌전 승리·연승 저지·최강자전 승리)의 "이미지로 공유"는 `hooks/useSpecialMatchShare`(이미지 `record/specialMatchShareImage`, 문구·파일 이름 `lib/specialMatchShare`)를 부른다.
       - 공유 이미지(업적·특수 매치·세션 리포트)의 틀(캔버스·빛줄기·후광·아래 줄)은 `lib/shareImageCanvas`, 아바타 원은 `lib/shareImageAvatar`, 미리 만들어 두는 훅은 `hooks/usePreparedShareImage`, 공유·내려받기는 `lib/shareImage`가 같이 맡는다.
       - 이미지 만들기는 effect가 끝난 뒤(마이크로태스크)에 시작한다. 아이콘·배지를 `flushSync`로 SVG 문자열로 그리는데, effect 안에서 바로 부르면 그리지 못한다.
-    - `session/`: 세션 만들기(일정 탭과 같은 `MonthCalendar`로 고르는 날짜, `minDateKey`로 지난 날·오늘이 든 달 앞은 막음, 표시는 `schedule/useScheduleMonthMarks`·시작·종료 시각 칩 `SessionSchedulePicker`, 오늘 이후 어느 날이든)·참여자 시트 `ParticipantsSheet`(열면 참여자 보기, 오른쪽 위 "수정"으로 같은 시트에서 전체 회원 체크·게스트 추가 수정 모드, 완료·취소·뒤로가기는 보기로 돌아감)
+    - `session/`: 세션 만들기(일정 탭과 같은 `MonthCalendar`로 고르는 날짜, `minDateKey`로 지난 날·오늘이 든 달 앞은 막음, 표시는 `schedule/useScheduleMonthMarks`·시작·종료 시각 칩 `SessionSchedulePicker`, 오늘 이후 어느 날이든)·참여자 시트 `ParticipantsSheet`(열면 참여자 보기, 오른쪽 위 "수정"으로 같은 시트에서 전체 회원 체크·게스트 추가 수정 모드, 완료·취소·뒤로가기는 보기로 돌아감. `isReadOnly`면 보기 모드만 있고 "수정"이 없음)
     - `settings/`: 설정·비밀번호 변경·상태메시지 편집·프로필 사진 조정 `AvatarCropScreen`
       - 고른 사진을 끌어 옮기고 핀치로 1~4배, 두 번 탭 2배↔1배, 원 안을 512px JPEG로 잘라 저장. 좌표 계산은 `utils/avatarCrop.ts`
   - 탭 전용 조각: `home/`, `schedule/`, `records/`(세션 리포트 조각 `SessionReportParts`는 일정 탭·세션 상세·홈이 같이 씀, 끝난 세션·세션 없는 경기 카드 `RecordCards`), `ranking/`. 세션 블루 카드 틀·참여 버튼 `session/SessionBlueCard`(오른쪽 위 피클볼 장식 `session/PickleballIllustration`, 첫 줄은 종류 칩 "정기"/"회원"/"대회"와 남은 날 `getSessionDDayLabel`("D-1"·오늘이면 "D-Day"), 참여 중이면 "✓ 참여 중 … 취소" 버튼 하나, 진행 중 세션 카드 `LiveSessionCard`)는 홈 다음 세션·진행 중 세션 카드와 일정 탭 세션 카드가 같이 씀
@@ -128,7 +130,7 @@
   - `tournament/`: 대회 대진·순위 조각. 세션 상세·홈·일정 탭이 같이 쓴다.
     - `TournamentBracketSection`: "대진" 섹션. 라운드마다 흰 카드(첫 줄 라운드 이름), 제목 줄 오른쪽 전체/내 경기 전환(`showFilter`).
     - `BracketMatchRow`: 끝난 경기는 `MatchRow` 그대로, 예정·진행 중은 `home/TeamBlock`의 `TeamsVersusWithAverages` 줄 모양(위 팀 평균, 아래 vs, 추천 매칭 카드와 별개). 진행 중은 오른쪽 앰버 점 + "진행 중".
-    - `TournamentRankCard`: 끝난 대회 순위 카드. 대회 카드 틀(D-day 자리 "종료", 참여 줄은 누를 수 없음)에 구분선(흰색 14%) → 1~3위 줄 → 구분선 → 내 기록 줄.
+    - `TournamentRankCard`: 끝난 대회 순위 카드. 대회 카드 틀(D-day 자리 "종료", 참여 줄은 `onOpenParticipants`가 있을 때만(세션 상세) 누를 수 있음)에 구분선(흰색 14%) → 1~3위 줄 → 구분선 → 내 기록 줄.
       - 순위 줄은 금·은·동 원 + 참가 단위 아바타(최대 4개)·이름(1명 아이디, 2명 "a · b", 3명 이상 "대표 외 N명") + 오른쪽 승패(`record`가 있을 때만)이고, 줄 높이는 같다.
       - 내 기록 줄은 "내 기록" + 승패 + 평점 변화(`pk-up-on-deep`·`pk-down-on-deep`, 0은 흐린 흰색, 세션 후 평점이 없으면 승패만).
       - 순위가 없으면 순위 줄, `mine`이 없으면 내 기록 줄을 그 위 구분선과 함께 뺀다. 카드 전체가 `onPress` 하나다.

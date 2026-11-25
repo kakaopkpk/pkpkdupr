@@ -17,37 +17,100 @@ const AVATAR_SIZE = 28;
 
 export type ParticipationAction = "join" | "leave";
 
-/** 블루 카드 위 참여자 아바타 최대 4개 + "+N". 테두리는 카드 바탕색과 같다 */
-const ParticipantAvatars: React.FC<{
+/** 참여자 줄 색. 블루·남색 카드는 카드 바탕색 링·흰 글자, 끝난 세션 흰 카드(세션 상세 머리)는 흰 링·회색 글자 */
+type ParticipantsRowTone = "primary" | "deep" | "light";
+
+const PARTICIPANTS_ROW_TONES: Record<
+  ParticipantsRowTone,
+  { ring: string; rest: string; label: string; chevron: string }
+> = {
+  primary: {
+    ring: "var(--color-pk-primary)",
+    rest: "bg-white/[0.22]",
+    label: "text-white/90",
+    chevron: "",
+  },
+  deep: {
+    ring: "var(--color-pk-deep)",
+    rest: "bg-white/[0.22]",
+    label: "text-white/90",
+    chevron: "",
+  },
+  light: {
+    ring: "var(--color-white)",
+    rest: "bg-pk-bg text-pk-sub",
+    label: "text-pk-sub",
+    chevron: "text-pk-quiet",
+  },
+};
+
+/**
+ * 참여자 줄: 아바타 최대 4개 + "+N" + 라벨. onPress가 있으면 눌러 참여자 시트를 열고 라벨 끝에 화살표가 붙는다.
+ * 블루 카드와 끝난 세션 흰 카드(세션 상세 머리)가 같이 쓴다
+ */
+export const ParticipantsRow: React.FC<{
   participants: MatchSessionDetailInfo["participants"];
-  isTournament: boolean;
-}> = ({ participants, isTournament }) => {
+  label: string;
+  tone: ParticipantsRowTone;
+  onPress?: () => void;
+  className?: string;
+}> = ({ participants, label, tone, onPress, className }) => {
+  const colors = PARTICIPANTS_ROW_TONES[tone];
   const visible = participants.slice(0, MAX_VISIBLE_AVATARS);
   const restCount = participants.length - visible.length;
-  const ring = `0 0 0 2px var(${
-    isTournament ? "--color-pk-deep" : "--color-pk-primary"
-  })`;
+  const ring = `0 0 0 2px ${colors.ring}`;
+  const content = (
+    <>
+      <span aria-hidden="true" className="inline-flex">
+        {visible.map((participant, index) => (
+          <span
+            key={participant.id}
+            className={cx("inline-flex rounded-full", index > 0 && "-ml-1.5")}
+            style={{ boxShadow: ring }}
+          >
+            <PlayerAvatar player={participant} size={AVATAR_SIZE} />
+          </span>
+        ))}
+        {restCount > 0 ? (
+          <span
+            className={cx(
+              "-ml-1.5 inline-flex size-7 items-center justify-center rounded-full text-pk-12 font-bold tabular-nums",
+              colors.rest,
+            )}
+            style={{ boxShadow: ring }}
+          >
+            +{restCount}
+          </span>
+        ) : null}
+      </span>
+      <span
+        className={cx(
+          "inline-flex items-center gap-0.5 text-pk-13 font-bold tabular-nums",
+          colors.label,
+        )}
+      >
+        {label}
+        {onPress ? (
+          <ChevronRightIcon className={cx("size-3.5 shrink-0", colors.chevron)} />
+        ) : null}
+      </span>
+    </>
+  );
+  const rowClassName = cx(
+    "flex min-h-11 items-center gap-2.5 text-left",
+    className,
+  );
 
-  return (
-    <span aria-hidden="true" className="inline-flex">
-      {visible.map((participant, index) => (
-        <span
-          key={participant.id}
-          className={cx("inline-flex rounded-full", index > 0 && "-ml-1.5")}
-          style={{ boxShadow: ring }}
-        >
-          <PlayerAvatar player={participant} size={AVATAR_SIZE} />
-        </span>
-      ))}
-      {restCount > 0 ? (
-        <span
-          className="-ml-1.5 inline-flex size-7 items-center justify-center rounded-full bg-white/[0.22] text-pk-12 font-bold tabular-nums"
-          style={{ boxShadow: ring }}
-        >
-          +{restCount}
-        </span>
-      ) : null}
-    </span>
+  return onPress ? (
+    <button
+      type="button"
+      onClick={onPress}
+      className={cx(rowClassName, rowPressClassName)}
+    >
+      {content}
+    </button>
+  ) : (
+    <div className={rowClassName}>{content}</div>
   );
 };
 
@@ -104,22 +167,6 @@ export const SessionBlueCard: React.FC<{
   className,
 }) => {
   const isTournament = session.kind === "tournament";
-  const participantsContent = (
-    <>
-      <ParticipantAvatars
-        participants={session.participants}
-        isTournament={isTournament}
-      />
-      <span className="inline-flex items-center gap-0.5 text-pk-13 font-bold text-white/90 tabular-nums">
-        {participantsLabel}
-        {onOpenParticipants ? (
-          <ChevronRightIcon className="size-3.5 shrink-0" />
-        ) : null}
-      </span>
-    </>
-  );
-  const participantsRowClassName =
-    "-my-1.5 flex min-h-11 items-center gap-2.5 text-left";
 
   return (
     <article
@@ -170,17 +217,13 @@ export const SessionBlueCard: React.FC<{
             {meta}
           </span>
         </div>
-        {onOpenParticipants ? (
-          <button
-            type="button"
-            onClick={onOpenParticipants}
-            className={cx(participantsRowClassName, rowPressClassName)}
-          >
-            {participantsContent}
-          </button>
-        ) : (
-          <div className={participantsRowClassName}>{participantsContent}</div>
-        )}
+        <ParticipantsRow
+          participants={session.participants}
+          label={participantsLabel}
+          tone={isTournament ? "deep" : "primary"}
+          onPress={onOpenParticipants}
+          className="-my-1.5"
+        />
         {children}
       </div>
     </article>

@@ -36,6 +36,8 @@ export interface ParticipantsSheetProps {
   onClose: () => void;
   /** 수정 모드에서 참여자를 바꾼 뒤 호출 */
   onChanged: () => void;
+  /** 끝난 세션처럼 참여자를 바꿀 수 없으면 보기 모드만 있고 "수정"이 없다 */
+  isReadOnly?: boolean;
 }
 
 const DEPTH_ID = "participants-sheet";
@@ -550,7 +552,8 @@ interface ParticipantsViewProps {
   session: MatchSessionDetailInfo;
   participants: readonly MatchSessionParticipant[];
   lockedPlayerIds: readonly string[];
-  onEdit: () => void;
+  /** 생략하면(읽기 전용) "수정"이 없다 */
+  onEdit?: () => void;
 }
 
 /** 보기 모드. 참여자만 보이고, 오른쪽 위 "수정"으로 수정 모드를 연다 */
@@ -582,13 +585,15 @@ const ParticipantsView: React.FC<ParticipantsViewProps> = ({
           title="참여자"
           sub={`${session.name} · ${participants.length}명`}
           right={
-            <button
-              type="button"
-              onClick={onEdit}
-              className={cx("inline-flex min-h-11 items-center px-2 text-pk-15 font-bold text-pk-primary", buttonPressClassName)}
-            >
-              수정
-            </button>
+            onEdit ? (
+              <button
+                type="button"
+                onClick={onEdit}
+                className={cx("inline-flex min-h-11 items-center px-2 text-pk-15 font-bold text-pk-primary", buttonPressClassName)}
+              >
+                수정
+              </button>
+            ) : undefined
           }
         />
       </BottomSheet.Header>
@@ -627,6 +632,7 @@ export default function ParticipantsSheet({
   lockedPlayerIds = EMPTY_IDS,
   onClose,
   onChanged,
+  isReadOnly = false,
 }: ParticipantsSheetProps): React.ReactElement {
   const { closeDepth, selectedTab } = useTabNavigation();
   const [isEditing, setIsEditing] = useState(false);
@@ -646,8 +652,10 @@ export default function ParticipantsSheet({
   const backToView = useCallback(() => {
     if (!isClosingRef.current) setIsEditing(false);
   }, []);
+  // 보는 중 세션이 끝나 읽기 전용이 되면 수정 모드도 닫는다
+  const isEditMode = isEditing && !isReadOnly;
   useLayerDepth({
-    isOpen: isOpen && isEditing,
+    isOpen: isOpen && isEditMode,
     tabKey,
     depthId: EDIT_DEPTH_ID,
     kind: "bottom-sheet",
@@ -673,13 +681,13 @@ export default function ParticipantsSheet({
 
   /** 배경 탭·끌어내리기. 수정 모드면 히스토리가 남지 않게 수정 깊이부터 닫는다 */
   const close = useCallback(() => {
-    if (isEditing) {
+    if (isEditMode) {
       isClosingRef.current = true;
       if (!closeDepth(tabKey, EDIT_DEPTH_ID, closeSheet)) closeSheet();
     } else {
       closeSheet();
     }
-  }, [closeDepth, closeSheet, isEditing, tabKey]);
+  }, [closeDepth, closeSheet, isEditMode, tabKey]);
 
   const startEditing = () => {
     isClosingRef.current = false;
@@ -708,7 +716,7 @@ export default function ParticipantsSheet({
       ariaLabel="참여자"
       layer={SHEET_LAYER}
     >
-      {isEditing ? (
+      {isEditMode ? (
         <ParticipantsEditForm
           key={session.id}
           tabKey={tabKey}
@@ -725,7 +733,7 @@ export default function ParticipantsSheet({
           session={session}
           participants={participants}
           lockedPlayerIds={lockedPlayerIds}
-          onEdit={startEditing}
+          onEdit={isReadOnly ? undefined : startEditing}
         />
       )}
     </BottomSheet>

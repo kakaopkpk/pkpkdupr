@@ -271,6 +271,7 @@ export default function SessionReportDrawer({
 
   // 보는 동안 세션이 끝나면 리포트까지 다시 받는다
   const readySession = loadState.kind === "ready" ? loadState.session : null;
+  const isLoadedEnded = loadState.kind === "ready" && loadState.isEnded;
   const isLoadedBeforeEnd = loadState.kind === "ready" && !loadState.isEnded;
   const hasEndedSinceLoad =
     isLoadedBeforeEnd &&
@@ -296,6 +297,7 @@ export default function SessionReportDrawer({
   }, [closeDepth, depthId, onClose, tabKey]);
 
   const closePlayers = useCallback(() => setIsPlayersRequested(false), []);
+  const openParticipants = useCallback(() => setIsParticipantsOpen(true), []);
   const closeParticipants = useCallback(() => setIsParticipantsOpen(false), []);
   const closeShare = useCallback(() => setIsShareOpen(false), []);
 
@@ -388,16 +390,32 @@ export default function SessionReportDrawer({
           error={participation.getError(session.id)}
           onJoin={() => void participation.change(session.id, "join")}
           onLeave={() => void participation.change(session.id, "leave")}
-          onOpenParticipants={() => setIsParticipantsOpen(true)}
+          onOpenParticipants={openParticipants}
         />
       );
     }
     if (session.kind === "tournament") {
-      return <TournamentRankCard session={session} mine={null} />;
+      return (
+        <TournamentRankCard
+          session={session}
+          mine={null}
+          onOpenParticipants={openParticipants}
+        />
+      );
     }
     if (report) {
       // 일정 탭과 달리 바깥 날짜 제목이 없어 날짜를 앞에 붙인다
-      return <RecordSessionCard session={report.session} mine={null} showDate />;
+      return (
+        <RecordSessionCard
+          session={report.session}
+          mine={null}
+          showDate
+          participantsRow={{
+            participants: session.participants,
+            onPress: openParticipants,
+          }}
+        />
+      );
     }
     return (
       <SessionBlueCard
@@ -405,6 +423,7 @@ export default function SessionReportDrawer({
         dDayLabel="종료"
         meta={formatSessionDateTimePlace(session)}
         participantsLabel={`${session.participants.length}명 참여`}
+        onOpenParticipants={openParticipants}
       />
     );
   };
@@ -557,6 +576,7 @@ export default function SessionReportDrawer({
           lockedPlayerIds={busyPlayerIds}
           onClose={closeParticipants}
           onChanged={invalidateSessions}
+          isReadOnly={isLoadedEnded}
         />
       ) : null}
     </>
