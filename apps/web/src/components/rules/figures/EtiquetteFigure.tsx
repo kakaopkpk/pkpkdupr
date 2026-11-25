@@ -24,7 +24,7 @@ export const EtiquetteFigure: React.FC = () => (
     </div>
     <div className="et-img et-i2">
       <img alt="" src={ballCallPhoto} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
-      <div className="et-bub et-q2a big" style={{ left: "134px", top: "36px", transformOrigin: "100% 12px" }}>
+      <div className="et-bub et-q2a big" style={{ left: "160px", top: "53px", transformOrigin: "100% 12px" }}>
         볼!
         <i style={{ right: "-4px", top: "12px" }} />
       </div>
