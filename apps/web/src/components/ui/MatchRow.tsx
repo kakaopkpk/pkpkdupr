@@ -6,6 +6,7 @@ import {
   formatKstTime,
   formatKstWeekdayTime,
 } from "@/lib/format";
+import { getMatchResultName } from "@/lib/matchResult";
 import { rowPressClassName } from "./Button";
 import { TeamAvatars } from "./PlayerAvatar";
 import { SpecialMatchLabel } from "./SpecialMatchLabel";
@@ -119,15 +120,12 @@ export const MatchRow: React.FC<{
     );
   const hasWinner = hasScores && scoreA !== scoreB;
   const isTeamAWinner = !hasWinner || scoreA > scoreB;
-  const resultTeamIndex = resultPlayerId
-    ? match.teams.findIndex((team) =>
-        team.players.some((player) => player.id === resultPlayerId),
-      )
-    : -1;
-  const showResult = hasWinner && resultTeamIndex >= 0;
-  const isResultWin = showResult && (resultTeamIndex === 0) === isTeamAWinner;
-  // 기본은 이긴 팀이 위, 승패 띠가 붙으면 기준 회원 팀이 위
-  const isTeamAFirst = showResult ? resultTeamIndex === 0 : isTeamAWinner;
+  // 경기 상세 결과 이름과 같은 기준의 승패. 경기하지 않았거나 승패가 갈리지 않으면 null
+  const result = resultPlayerId
+    ? getMatchResultName(match, resultPlayerId)
+    : null;
+  // 기본은 이긴 팀이 위, 승패 띠가 붙으면 기준 회원 팀(진 경기면 진 팀)이 위
+  const isTeamAFirst = result ? result.isWin === isTeamAWinner : isTeamAWinner;
   const lineA = { team: teamA, score: scoreA, isWinner: isTeamAWinner };
   const lineB = { team: teamB, score: scoreB, isWinner: !isTeamAWinner };
   const lines = isTeamAFirst ? [lineA, lineB] : [lineB, lineA];
@@ -159,35 +157,31 @@ export const MatchRow: React.FC<{
     </>
   );
 
-  if (!showResult) {
-    return (
-      <RowContainer
-        onPress={onPress}
-        className={cx(
-          "flex min-w-0 flex-col gap-1.5 py-3 text-pk-ink",
-          rowDividerClassName,
-        )}
-      >
-        {content}
-      </RowContainer>
-    );
-  }
-
   return (
     <RowContainer
       onPress={onPress}
-      className={cx("flex min-w-0 gap-3 py-3 text-pk-ink", rowDividerClassName)}
+      className={cx(
+        "flex min-w-0 py-3 text-pk-ink",
+        result ? "gap-3" : "flex-col gap-1.5",
+        rowDividerClassName,
+      )}
     >
-      <span
-        data-match-result={isResultWin ? "win" : "lose"}
-        className={cx(
-          "w-1 shrink-0 self-stretch rounded-full",
-          isResultWin ? "bg-pk-primary" : "bg-pk-down",
-        )}
-      >
-        <span className="sr-only">{isResultWin ? "승" : "패"}</span>
-      </span>
-      <div className="flex min-w-0 flex-1 flex-col gap-1.5">{content}</div>
+      {result ? (
+        <>
+          <span
+            data-match-result={result.isWin ? "win" : "lose"}
+            className={cx(
+              "w-1 shrink-0 self-stretch rounded-full",
+              result.isWin ? "bg-pk-primary" : "bg-pk-down",
+            )}
+          >
+            <span className="sr-only">{result.isWin ? "승" : "패"}</span>
+          </span>
+          <div className="flex min-w-0 flex-1 flex-col gap-1.5">{content}</div>
+        </>
+      ) : (
+        content
+      )}
     </RowContainer>
   );
 };
