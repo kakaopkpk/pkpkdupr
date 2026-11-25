@@ -78,9 +78,15 @@ const makePraise = (
 });
 
 describe("getSharedPraisedCandidates", () => {
-  it("마감 뒤 칭찬 5개 이상 받은 후보만 후보 순서대로 넣는다", () => {
-    const praise = makePraise([candidate("a", 4), candidate("b", 7), candidate("c", 5)]);
-    expect(getSharedPraisedCandidates(praise).map((item) => item.player.id)).toEqual(["b", "c"]);
+  it("마감 뒤 칭찬 수와 상관없이 후보 전부를 후보 순서대로 넣는다", () => {
+    const praise = makePraise([candidate("a", 4), candidate("b", 7), candidate("c", 0)]);
+    expect(
+      getSharedPraisedCandidates(praise).map((item) => [item.player.id, item.praiseCount]),
+    ).toEqual([
+      ["a", 4],
+      ["b", 7],
+      ["c", 0],
+    ]);
   });
 
   it("마감 전이거나 칭찬하지 않는 세션이면 비운다", () => {
@@ -158,7 +164,7 @@ describe("buildMyRecordShareTarget", () => {
     });
   });
 
-  it("마감 뒤 내가 5개 이상 받았을 때만 칭찬 상자를 넣는다", () => {
+  it("마감 뒤 내가 후보이고 1개 이상 받았을 때만 칭찬 상자를 넣는다", () => {
     const report = makeReport([playerReport("me")]);
     const praised = makePraise([
       candidate("me", 5, { category: "streakGuard", value: 4, streakBreaks: 2 }),
@@ -169,7 +175,11 @@ describe("buildMyRecordShareTarget", () => {
       streakBreaks: 2,
       praiseCount: 5,
     });
-    expect(buildMyRecordShareTarget(report, makePraise([candidate("me", 4)]), me)?.praise).toBeNull();
+    expect(buildMyRecordShareTarget(report, makePraise([candidate("me", 1)]), me)?.praise).toMatchObject({
+      praiseCount: 1,
+    });
+    expect(buildMyRecordShareTarget(report, makePraise([candidate("me", 0)]), me)?.praise).toBeNull();
+    expect(buildMyRecordShareTarget(report, makePraise([candidate("other", 3)]), me)?.praise).toBeNull();
     expect(
       buildMyRecordShareTarget(report, makePraise([candidate("me", 9)], "open"), me)?.praise,
     ).toBeNull();

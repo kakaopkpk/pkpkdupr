@@ -5,7 +5,10 @@ import {
   isLowRatingAchievement,
   type AchievementDefinition,
 } from "@pkpkdupr/shared/achievements";
-import { SESSION_PRAISE_CATEGORY_LABEL } from "@pkpkdupr/shared/sessionPraise";
+import {
+  SESSION_PRAISE_CATEGORY_LABEL,
+  SESSION_PRAISE_HIGHLIGHT_MIN,
+} from "@pkpkdupr/shared/sessionPraise";
 import { loadSvgImage, renderBadgeSvg } from "@/components/profile/achievementShareImage";
 import { ThumbUpIcon } from "@/components/ui/Icons";
 import { getAchievementDefinition } from "@/lib/achievements";
@@ -339,7 +342,7 @@ const risersBlock = (target: SessionSummaryShareTarget): Block => {
 
 /**
  * 칭찬 5개 이상 아바타 테두리(PraisedAvatarFrame과 같은 모양): 앰버 링 2와 링 바깥으로 번지는 앰버 빛(55%).
- * 공유 이미지의 칭찬 줄은 모두 5개 이상이라 늘 그린다. 아바타보다 먼저 그려 링이 아바타 바깥 2px로 보이게 한다
+ * 아바타보다 먼저 그려 링이 아바타 바깥 2px로 보이게 한다
  */
 const drawPraisedAvatarRing = (draw: DrawContext, cx: number, cy: number, size: number) => {
   const { ctx, colors } = draw;
@@ -362,7 +365,7 @@ const drawPraiseBadge = (draw: DrawContext, avatarRight: number, avatarBottom: n
 
 /**
  * "하이라이트": "평점 상승 TOP 3"와 같은 줄 목록(줄 높이 56, 줄 사이 구분선).
- * 아바타 36(앰버 링·빛 + 엄지 배지) → 아이디·분류 줄 → 블루 엄지 + 칭찬 수
+ * 아바타 36(칭찬 5개 이상이면 앰버 링·빛 + 엄지 배지) → 아이디·분류 줄 → 블루 엄지 + 칭찬 수
  */
 const praisedBlock = (target: SessionSummaryShareTarget): Block => {
   const avatarSize = 36;
@@ -379,9 +382,10 @@ const praisedBlock = (target: SessionSummaryShareTarget): Block => {
         const cy = index === 0 ? rowTop + rowHeight / 2 : rowTop + 1 + (rowHeight - 1) / 2;
         if (index > 0) fillDivider(draw, CONTENT_X, rowTop, CONTENT_WIDTH);
         const avatarCx = CONTENT_X + avatarSize / 2;
-        drawPraisedAvatarRing(draw, avatarCx, cy, avatarSize);
+        const highlighted = item.praiseCount >= SESSION_PRAISE_HIGHLIGHT_MIN;
+        if (highlighted) drawPraisedAvatarRing(draw, avatarCx, cy, avatarSize);
         drawShareAvatar(ctx, avatars, item.player, { cx: avatarCx, cy, size: avatarSize, ink: colors.ink });
-        drawPraiseBadge(draw, CONTENT_X + avatarSize, cy + avatarSize / 2);
+        if (highlighted) drawPraiseBadge(draw, CONTENT_X + avatarSize, cy + avatarSize / 2);
 
         setText(ctx, 800, 17, colors.primary, "right");
         const label = String(item.praiseCount);

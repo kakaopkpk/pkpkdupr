@@ -1,8 +1,5 @@
 import type { SessionPlayerReport } from "@pkpkdupr/shared/ranking";
-import {
-  SESSION_PRAISE_HIGHLIGHT_MIN,
-  type SessionPraiseResponse,
-} from "@pkpkdupr/shared/sessionPraise";
+import type { SessionPraiseResponse } from "@pkpkdupr/shared/sessionPraise";
 import { getAchievementDefinition } from "@/lib/achievements";
 import {
   formatKstFullDateWithWeekday,
@@ -49,7 +46,7 @@ export interface SessionReportShareRiser {
   wins: number;
 }
 
-/** 칭찬 SESSION_PRAISE_HIGHLIGHT_MIN개 이상 받은 후보 한 명. 분류·값은 후보 그대로다 */
+/** 칭찬 후보 한 명. 분류·값·칭찬 수는 후보 그대로다 */
 export interface SessionReportSharePraise extends SessionPraiseValue {
   player: SessionReportSharePlayer;
   praiseCount: number;
@@ -62,7 +59,7 @@ export interface SessionSummaryShareTarget {
   matchCount: number;
   /** 평점이 오른 회원 상승폭 순 최대 3명. 없으면 섹션을 뺀다 */
   risers: SessionReportShareRiser[];
-  /** 마감 뒤 칭찬 5개 이상 받은 후보(후보 순서). 없으면 섹션을 뺀다 */
+  /** 마감 뒤 칭찬 후보 전부(후보 순서, 칭찬 0개 포함). 없으면 섹션을 뺀다 */
   praised: SessionReportSharePraise[];
 }
 
@@ -80,7 +77,7 @@ export interface MyRecordShareTarget {
   rankChange: number | null;
   wins: number;
   losses: number;
-  /** 마감 뒤 내가 칭찬 5개 이상 받았으면 그 후보 정보. 아니면 null이라 칭찬 상자를 뺀다 */
+  /** 마감 뒤 내가 후보이고 칭찬을 1개 이상 받았으면 그 후보 정보. 아니면 null이라 칭찬 상자를 뺀다 */
   praise: Omit<SessionReportSharePraise, "player"> | null;
   /** 이 세션에서 받은 업적 id(받은 순서) */
   achievementIds: string[];
@@ -105,22 +102,20 @@ const toShareSession = (report: MatchSessionReportInfo): SessionReportShareSessi
 const roundDelta = (value: number) => Math.round(value * 1000) / 1000;
 
 /**
- * 마감 뒤 칭찬 5개 이상 받은 후보. 마감 전이거나 칭찬하지 않는 세션(praise null)이면 빈 배열이다.
- * 마감 전 수는 아직 바뀔 수 있어 공유 이미지에 넣지 않는다
+ * 마감 뒤 칭찬 후보 전부(칭찬 수와 상관없이 세션 상세 하이라이트와 같은 후보).
+ * 마감 전이거나 칭찬하지 않는 세션(praise null)이면 빈 배열이다. 마감 전 수는 아직 바뀔 수 있어 공유 이미지에 넣지 않는다
  */
 export const getSharedPraisedCandidates = (
   praise: SessionPraiseResponse | null,
 ): SessionReportSharePraise[] =>
   praise?.status === "closed"
-    ? praise.candidates
-        .filter((candidate) => candidate.praiseCount >= SESSION_PRAISE_HIGHLIGHT_MIN)
-        .map((candidate) => ({
-          player: toSharePlayer(candidate.player),
-          category: candidate.category,
-          value: candidate.value,
-          streakBreaks: candidate.streakBreaks,
-          praiseCount: candidate.praiseCount,
-        }))
+    ? praise.candidates.map((candidate) => ({
+        player: toSharePlayer(candidate.player),
+        category: candidate.category,
+        value: candidate.value,
+        streakBreaks: candidate.streakBreaks,
+        praiseCount: candidate.praiseCount,
+      }))
     : [];
 
 /** 평점이 오른 회원 상승폭 순 최대 3명. 리포트 players는 ratingDelta 내림차순이다 */
@@ -167,7 +162,7 @@ export const buildMyRecordShareTarget = (
   );
   if (!mine) return null;
   const myPraise = getSharedPraisedCandidates(praise).find(
-    (candidate) => candidate.player.id === player.id,
+    (candidate) => candidate.player.id === player.id && candidate.praiseCount > 0,
   );
   return {
     kind: "mine",
