@@ -177,7 +177,7 @@ export interface SessionPraisePopupProps {
   praise: SessionPraiseResponse;
   /** 뒤로가기로 닫히도록 깊이를 쌓을 탭(띄울 때 보던 탭) */
   tabKey: TabKey;
-  /** 칭찬하지 않고 닫았을 때(바깥 어두운 곳·뒤로가기·Esc) */
+  /** 칭찬하지 않고 닫았을 때(뒤로가기·Esc) */
   onSkip: () => void;
   /** 사라지는 움직임까지 끝났을 때 */
   onExited: () => void;
@@ -185,7 +185,7 @@ export interface SessionPraisePopupProps {
 
 /**
  * 세션이 끝난 뒤 칭찬 후보 카드를 띄우는 전체 화면 팝업. 닫기·확인 버튼이 없고
- * 바깥 어두운 곳·뒤로가기·Esc로 넘긴다. 카드를 누르면 칭찬을 저장하고 고른 카드 연출을 보인 뒤
+ * 칭찬하지 않고 넘기는 길은 뒤로가기·Esc뿐이다(바깥 어두운 곳은 칭찬한 뒤에만 닫는다). 카드를 누르면 칭찬을 저장하고 고른 카드 연출을 보인 뒤
  * 약 3초에 서서히 사라진다. 움직임 줄이기면 연출 없이 최종 상태를 보이고 같은 시각에 닫힌다
  */
 export default function SessionPraisePopup({
@@ -361,12 +361,12 @@ export default function SessionPraisePopup({
         }
       }}
     >
-      {/* 바깥 어두운 곳을 누르면 칭찬하지 않고 넘긴다 */}
+      {/* 바깥 어두운 곳은 칭찬한 뒤에만 눌러 바로 닫는다. 칭찬 전에는 눌러도 넘어가지 않는다 */}
       <div
         className="pk-celebration-dim absolute inset-0 animate-pk-fade-in motion-reduce:animate-none"
         style={{ animationDuration: ms(280) }}
         onClick={() => {
-          if (phaseRef.current !== "submitting") requestClose();
+          if (phaseRef.current === "praised") requestClose();
         }}
       />
       <div className="app-shell-width pointer-events-none absolute inset-y-0 right-0 left-0 mx-auto">
