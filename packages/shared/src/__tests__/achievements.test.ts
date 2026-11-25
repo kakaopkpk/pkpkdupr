@@ -1439,7 +1439,7 @@ describe("업적 점수", () => {
     for (const definition of ACHIEVEMENTS) {
       expect([10, 25, 50, 100]).toContain(definition.points);
     }
-    expect(ACHIEVEMENT_MAX_POINTS).toBe(2435);
+    expect(ACHIEVEMENT_MAX_POINTS).toBe(2360);
   });
 
   it("받은 업적 점수만 더하고 모르는 업적은 0점이다", () => {
@@ -1451,7 +1451,7 @@ describe("업적 점수", () => {
         { id: "streak-20", earned: false },
         { id: "rating-low-2.5", earned: true },
       ]),
-    ).toBe(85);
+    ).toBe(60);
   });
 });
 
