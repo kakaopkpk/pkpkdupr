@@ -608,6 +608,16 @@ describe("회원·대회 세션 완료", () => {
     ).toBe(true);
   });
 
+  it("10분보다 짧은 세션은 시작 시각부터 완료할 수 있다", () => {
+    const short = { ...custom, startTime: "13:55", endTime: "14:00" };
+    expect(
+      getSessionCompleteWindow("custom", sessionDate, short)?.completableFrom,
+    ).toEqual(new Date("2026-11-12T13:55:00+09:00"));
+    expect(
+      isSessionCompletable(short, new Date("2026-11-12T13:54:59+09:00")),
+    ).toBe(false);
+  });
+
   it("시각 없는 세션은 완료할 수 없다", () => {
     const timeless = { ...custom, startTime: null, endTime: null };
     expect(getSessionCompleteWindow("custom", sessionDate, timeless)).toBeNull();

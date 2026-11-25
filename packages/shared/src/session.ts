@@ -353,7 +353,7 @@ export interface SessionCompleteWindow {
 
 /**
  * 회원이 그 세션을 완료할 수 있는 시간. 완료 여부와 상관없이 정한다.
- * 정기 세션은 20:50~22:00, 종료 시각이 있는 회원·대회 세션은 종료 10분 전~종료 시각이다.
+ * 정기 세션은 20:50~22:00, 종료 시각이 있는 회원·대회 세션은 종료 10분 전(시작 시각보다 이르면 시작 시각)~종료 시각이다.
  * 시각 없는 회원·대회 세션은 종료 시각이 없어 null이다
  */
 export const getSessionCompleteWindow = (
@@ -361,23 +361,30 @@ export const getSessionCompleteWindow = (
   sessionDate: Date,
   timeRange?: SessionTimeRange | null,
 ): SessionCompleteWindow | null => {
-  let endAt: Date;
-  let autoCompleteAt: Date;
   if (kind === "regular") {
-    endAt = getRegularSessionEndAt(sessionDate);
-    autoCompleteAt = getEmptySessionExpiresAt(kind, sessionDate);
-  } else {
-    if (!timeRange?.startTime || !timeRange.endTime) return null;
-    const range = { startTime: timeRange.startTime, endTime: timeRange.endTime };
-    endAt = getSessionEndsAt(kind, sessionDate, range);
-    autoCompleteAt = endAt;
+    const endAt = getRegularSessionEndAt(sessionDate);
+    return {
+      endAt,
+      completableFrom: new Date(
+        endAt.getTime() - SESSION_COMPLETE_LEAD_MINUTES * MINUTE_MS,
+      ),
+      autoCompleteAt: getEmptySessionExpiresAt(kind, sessionDate),
+    };
   }
+  if (!timeRange?.startTime || !timeRange.endTime) return null;
+  const range = { startTime: timeRange.startTime, endTime: timeRange.endTime };
+  const endAt = getSessionEndsAt(kind, sessionDate, range);
+  // 10분보다 짧은 세션도 시작 전에는 완료하지 않는다
+  const startAt = kstDateKeyTimeToDate(toKstDateKey(sessionDate), range.startTime);
   return {
     endAt,
     completableFrom: new Date(
-      endAt.getTime() - SESSION_COMPLETE_LEAD_MINUTES * MINUTE_MS,
+      Math.max(
+        endAt.getTime() - SESSION_COMPLETE_LEAD_MINUTES * MINUTE_MS,
+        startAt.getTime(),
+      ),
     ),
-    autoCompleteAt,
+    autoCompleteAt: endAt,
   };
 };
 
@@ -426,7 +433,7 @@ export interface MatchSessionDetail {
   /** 시작·종료 시각("HH:MM", KST). 정기 세션은 18:00~21:00, 시각 없이 만든 회원 세션은 null. 종료 ≤ 시작이면 다음 날 종료 */
   startTime: string | null;
   endTime: string | null;
-  /** 회원이 정기 세션을 완료한 시각(`POST /api/match-sessions/:sessionId/complete`). 완료 전이거나 정기 세션이 아니면 null */
+  /** 회원이 세션을 완료한 시각(`POST /api/match-sessions/:sessionId/complete`). 완료 전이면 null */
   completedAt: Date | null;
   /**
    * 오늘(KST) 세션이면 true(`isSessionOnToday`, 전날 시작해 자정을 넘긴 회원 세션은 끝나기 전까지 포함).

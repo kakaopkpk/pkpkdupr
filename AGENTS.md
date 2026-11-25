@@ -188,7 +188,7 @@ pnpm lint
 - 세션 완료
   - 종료 10분 전(`SESSION_COMPLETE_LEAD_MINUTES`)부터 자동 완료 전까지 활성 회원 누구나 세션을 완료한다(`getSessionCompleteWindow`·`isSessionCompletable`, `POST /api/match-sessions/:sessionId/complete`).
     - 정기 세션은 20:50부터 22:00(`REGULAR_SESSION_AUTO_COMPLETE_HOUR`) 전까지다.
-    - 종료 시각이 있는 회원·대회 세션은 종료 10분 전부터 종료 시각(자정을 넘기면 다음 날 종료 시각) 전까지다. 종료 시각이 곧 자동 완료다.
+    - 종료 시각이 있는 회원·대회 세션은 종료 10분 전(시작 시각보다 이르면 시작 시각)부터 종료 시각(자정을 넘기면 다음 날 종료 시각) 전까지다. 종료 시각이 곧 자동 완료다.
     - 시각 없는 회원·대회 세션은 완료할 수 없다.
   - 완료 시각은 `match_sessions.completed_at`(`completedAt`)에 저장하고, 자동 완료는 저장하지 않고 시각으로 판정한다.
   - 완료하면 그 시각이 세션 만료 시각(`getEmptySessionExpiresAt`)·끝 시각이 되어 LIVE·오늘 세션(`isSessionOnToday`)에서 빠지고 세션 지배자·무패 세션이 확정된다.
