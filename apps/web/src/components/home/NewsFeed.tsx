@@ -126,7 +126,7 @@ const FeedLine: React.FC<{ entry: FeedLineEntry }> = ({ entry }) => {
         </span>
         <span className="text-pk-13 text-pk-sub tabular-nums">
           {SESSION_PRAISE_CATEGORY_LABEL[line.category]} ·{" "}
-          {formatSessionPraiseValue(line.category, line.value)}
+          {formatSessionPraiseValue(line)}
         </span>
       </PlayerLineButton>
     );

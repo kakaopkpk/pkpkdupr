@@ -317,7 +317,7 @@ export const ThumbUpIcon: React.FC<{
 /** 방패 선 모양(특수 매치 결과 이름의 방어 쪽) */
 export const SHIELD_ICON_PATH = "M12 3l7 3v5c0 4.5-3 8-7 10-4-2-7-5.5-7-10V6z";
 
-/** 체크가 든 방패(연승 문지기 칩·완벽한 승리 업적 배지) 선 모양 */
+/** 체크가 든 방패(연승 수문장 칩·완벽한 승리 업적 배지) 선 모양 */
 export const SHIELD_CHECK_ICON_PATHS = [SHIELD_ICON_PATH, "M9 12l2 2 4-4"] as const;
 
 /** 교차한 칼(라이벌전·라이벌 업적 배지) 선 모양 */

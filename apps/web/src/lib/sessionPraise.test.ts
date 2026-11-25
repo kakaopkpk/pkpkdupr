@@ -9,9 +9,9 @@ vi.mock("@/lib/api", () => ({ apiFetch: vi.fn() }));
 import {
   addSkippedSessionPraise,
   formatSessionPraiseValue,
+  getSessionPraiseCardValue,
   getSessionPraisePillState,
   getSkippedSessionPraiseKey,
-  isSessionPraiseValueRising,
   parseSkippedSessionPraises,
   pickPendingSessionPraise,
 } from "@/lib/sessionPraise";
@@ -36,22 +36,41 @@ const makePraise = (
 });
 
 describe("formatSessionPraiseValue", () => {
-  it("분류마다 값 표기를 붙인다", () => {
-    expect(formatSessionPraiseValue("dominator", 0.1064)).toBe("+0.106");
-    expect(formatSessionPraiseValue("winStreak", 4)).toBe("4연승");
-    expect(formatSessionPraiseValue("streakGuard", 2)).toBe("2번 저지");
-    expect(formatSessionPraiseValue("mostWins", 3)).toBe("3승");
-    expect(formatSessionPraiseValue("rankJump", 4)).toBe("▲4");
-    expect(formatSessionPraiseValue("mostPoints", 58)).toBe("58점");
+  it("분류마다 한 줄 값 표기를 붙인다", () => {
+    expect(formatSessionPraiseValue({ category: "dominator", value: 0.1064 })).toBe("+0.106 상승");
+    expect(formatSessionPraiseValue({ category: "streakGuard", value: 11 })).toBe("11연승 저지");
+    expect(formatSessionPraiseValue({ category: "streakGuard", value: 4, streakBreaks: 2 })).toBe("연승 저지 2회");
+    expect(formatSessionPraiseValue({ category: "rankJump", value: 9 })).toBe("순위 상승 ▲9");
+    expect(formatSessionPraiseValue({ category: "mostWins", value: 5 })).toBe("5승");
+    expect(formatSessionPraiseValue({ category: "mostPoints", value: 58 })).toBe("58점 득점");
+    expect(formatSessionPraiseValue({ category: "clutch", value: 2 })).toBe("듀스 2승");
+    expect(formatSessionPraiseValue({ category: "underdog", value: 0.25 })).toBe("+0.25 강팀 격파");
+    expect(formatSessionPraiseValue({ category: "revenge", value: 1 })).toBe("리벤지 성공 1회");
   });
 });
 
-describe("isSessionPraiseValueRising", () => {
-  it("세션 지배자·순위 도약의 양수만 상승색이다", () => {
-    expect(isSessionPraiseValueRising("dominator", 0.106)).toBe(true);
-    expect(isSessionPraiseValueRising("rankJump", 4)).toBe(true);
-    expect(isSessionPraiseValueRising("dominator", 0)).toBe(false);
-    expect(isSessionPraiseValueRising("mostWins", 3)).toBe(false);
+describe("getSessionPraiseCardValue", () => {
+  it("팝업 카드의 큰 값과 설명 줄로 나눈다", () => {
+    expect(getSessionPraiseCardValue({ category: "streakGuard", value: 11, streakBreaks: 1 })).toEqual({
+      main: "11연승",
+      caption: "저지",
+    });
+    expect(getSessionPraiseCardValue({ category: "streakGuard", value: 5, streakBreaks: 2 })).toEqual({
+      main: "2회",
+      caption: "연승 저지",
+    });
+    expect(getSessionPraiseCardValue({ category: "underdog", value: 0.33 })).toEqual({
+      main: "+0.33",
+      caption: "강팀 격파",
+    });
+    expect(getSessionPraiseCardValue({ category: "revenge", value: 1 })).toEqual({
+      main: "1회",
+      caption: "리벤지 성공",
+    });
+    expect(getSessionPraiseCardValue({ category: "dominator", value: 0.106 })).toEqual({
+      main: "+0.106",
+      caption: "상승",
+    });
   });
 });
 

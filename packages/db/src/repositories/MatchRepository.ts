@@ -47,7 +47,7 @@ import {
 } from "../db/schema";
 import { generateEntityId, isEntityId } from "@pkpkdupr/shared/entityId";
 import type { SessionPraiseRecord } from "@pkpkdupr/shared/sessionPraise";
-import type { SpecialMatch } from "@pkpkdupr/shared/specialMatch";
+import type { SpecialMatch, SpecialMatchOutcome } from "@pkpkdupr/shared/specialMatch";
 import {
   IN_PROGRESS_MATCH_TIMEOUT_MS,
   REGULAR_SESSION_LOCATION,
@@ -169,6 +169,8 @@ export interface CompletedMatchOutcome {
   regularSession?: boolean;
   /** 대회 세션 경기인지(출사표 업적). 없으면 대회 세션이 아니다 */
   tournamentSession?: boolean;
+  /** 특수 매치 결과(`SpecialMatch.outcome`). 특수 매치가 아니거나 결과가 없으면 null */
+  specialMatchOutcome?: SpecialMatchOutcome | null;
 }
 
 export interface SessionWithParticipantIds {
@@ -1218,6 +1220,7 @@ export class MatchRepository {
           matchStartsAt: matches.matchStartsAt,
           completedAt: matches.completedAt,
           ratingExcluded: matches.ratingExcluded,
+          specialMatch: matches.specialMatch,
           sessionKind: matchSessions.kind,
           regularDateKey: matchSessions.regularDateKey,
         })
@@ -1279,6 +1282,7 @@ export class MatchRepository {
         matchStartsAt: Date | string | number;
         completedAt: Date | string | number;
         ratingExcluded: boolean | null;
+        specialMatch: SpecialMatch | null;
         sessionKind: string | null;
         regularDateKey: string | null;
       }>
@@ -1291,6 +1295,7 @@ export class MatchRepository {
       teamPlayerIds: teamsByMatchId.get(row.id) ?? [[], []],
       scores: scoresByMatchId.get(row.id) ?? [],
       ratingExcluded: row.ratingExcluded === true,
+      specialMatchOutcome: row.specialMatch?.outcome ?? null,
       ...toCompletedMatchSessionKind(row),
     }));
   }

@@ -135,7 +135,7 @@
     - 묶기·라운드 이름·내 다음 경기·팀 평균은 `lib/tournament.ts`.
   - `ui/`: 새 디자인 공통 컴포넌트. 새 화면은 여기 것을 먼저 씁니다.
     - `Button.tsx`(`PkButton`, variant `primary`·`soft`·`outline`·`ghost`), `Card.tsx`, `SegmentedControl.tsx`, `MatchFilterControl.tsx`(섹션 제목 줄의 전체/내 경기 전환, 라벨에 경기 수), `Headers.tsx`(`TabHeader`·`DetailHeader`), `Form.tsx`(`TextField`·`ListRow`), `Section.tsx`(`Section`·`PreviewSection`·`TextLink`. 섹션 제목이 붙는 묶음은 `Section`으로 만든다), `SheetTitle.tsx`, `ConfirmDialog.tsx`(시트 위 가운데 확인 창. 바텀시트를 겹쳐 쌓지 않을 때 쓰고, 연 쪽이 `useLayerDepth` kind `dialog`로 뒤로가기에 묶는다)
-    - `MatchRow.tsx`(`MatchRow`), `PlayerAvatar.tsx`(`PlayerAvatar`·`TeamAvatars`), `Delta.tsx`(`RatingDelta`·`RankChange`), `RankBadge.tsx`, `Badges.tsx`(`LivePill`·`HighlightBadge`), `StatusMessageChip.tsx`, `StateMessage.tsx`(빈 상태 `empty`·불러오기 실패 `error`(항상 "다시 시도") 문구, size `panel` 탭·화면 전체·`inline` 카드·목록·시트 안), `CountUpText.tsx`(카운트업 숫자의 자리 폭을 최종 내용으로 고정), `PraisedAvatarFrame.tsx`(한 세션 칭찬 5개 이상 아바타의 앰버 링·빛·엄지 배지, 세션 상세 칭찬 줄·홈 소식 칭찬 줄), `SheenOverlay.tsx`(한 번 지나가는 흰 빛, 부모 `relative`·`overflow-hidden` 필요), `Icons.tsx`, `cx.ts`
+    - `MatchRow.tsx`(`MatchRow`), `PlayerAvatar.tsx`(`PlayerAvatar`·`TeamAvatars`), `Delta.tsx`(`RatingDelta`·`RankChange`), `RankBadge.tsx`, `Badges.tsx`(`LivePill`·`HighlightBadge`), `StatusMessageChip.tsx`, `StateMessage.tsx`(빈 상태 `empty`·불러오기 실패 `error`(항상 "다시 시도") 문구, size `panel` 탭·화면 전체·`inline` 카드·목록·시트 안), `CountUpText.tsx`(카운트업 숫자의 자리 폭을 최종 내용으로 고정), `PraisedAvatarFrame.tsx`(한 세션 칭찬 5개 이상 아바타의 앰버 링·빛·엄지 배지, 세션 상세 칭찬 줄·홈 소식 칭찬 줄. 세션 요약 공유 이미지는 `sessionReportShareImage`가 같은 모양을 canvas로 그린다), `SheenOverlay.tsx`(한 번 지나가는 흰 빛, 부모 `relative`·`overflow-hidden` 필요), `Icons.tsx`, `cx.ts`
       - `MatchRow`는 특수 매치(`Match.specialMatch`)면 메타 줄 오른쪽 끝에 `SpecialMatchLabel`로 유형 이름을 둔다(결과는 쓰지 않음).
       - `SpecialMatchLabel.tsx`: 특수 매치 유형 아이콘 `SpecialMatchIcon`(currentColor)과 아이콘 + 굵은 블루 이름 `SpecialMatchLabel`.
         - 손바닥·주먹·칼 선 모양은 `Icons.tsx`의 경로를 업적 배지와 같이 쓴다.
@@ -145,7 +145,9 @@
       - 칭찬하지 않고 넘긴 세션은 `lib/sessionPraise`가 localStorage `pkpkdupr:session-praise-skipped`에 회원 id + 세션 id로 기억해 다시 띄우지 않는다. 칭찬한 세션은 서버가 뺀다.
     - `SessionPraisePopup`: 후보 카드 팝업. 띄울 때 보던 탭에 `useLayerDepth` kind `dialog`를 쌓아 바깥 어두운 곳·뒤로가기·Esc로 넘기고, 카드를 누르면 칭찬 직후 연출 뒤 약 3초에 사라진다. 4xx 문구는 카드 아래, 네트워크 오류는 `showSaveFailure`다.
     - `SessionPraiseSection`: 세션 상세 "하이라이트" 섹션(내용은 칭찬 후보). 칭찬 전 줄 전체가 칭찬 버튼이고, 알약 상태는 `getSessionPraisePillState`다.
-    - `SessionPraiseParts`: 분류 칩(앰버, 분류 아이콘)·분류 아이콘. 값 표기는 `lib/sessionPraise`의 `formatSessionPraiseValue`다.
+    - `SessionPraiseParts`: 분류 칩(앰버, 분류 아이콘)·분류 아이콘. 복수자 주먹은 `Icons.tsx`의 `FIST_ICON_PATHS`, 언더독·승부사는 업적 배지 `BADGE_ICON_PATHS`의 `dog`·`bandage`를 같이 쓴다.
+    - 값 표기는 `lib/sessionPraise`가 맡는다. 팝업 카드는 큰 값 + 설명 줄 `getSessionPraiseCardValue`, 세션 상세·홈 소식·공유 이미지는 한 줄 `formatSessionPraiseValue`다.
+      - 두 함수는 후보의 `category`·`value`·`streakBreaks`(`SessionPraiseValue`)를 받는다. 연승 수문장은 `streakBreaks`(저지 횟수)로 1번(끊은 연승)과 2번 이상(횟수) 표기를 고른다.
   - `profile/UnseenAchievementCelebration.tsx`: `BottomNav`가 렌더. 전역 화면·바텀시트·+ 메뉴가 하나도 열려 있지 않을 때 앱 진입·업적 데이터 버전 변경(무효화·앱 복귀 TTL)·열린 화면이 모두 닫힐 때 `GET /api/me/achievements/unseen`을 조회해, 아직 보지 않은 내 업적(남이 입력한 경기·세션 지배자·관리자 정정 포함)을 `AchievementCelebration`으로 한 장씩 띄우고 닫으면 `POST /api/me/achievements/seen`. 미확인 조회(`fetchUnseenAchievements`)는 진행 중인 확인 처리 요청이 끝난 뒤 보내 방금 본 업적이 다시 뜨지 않는다
     - 칭찬 팝업이 조회·표시 중이면 기다리고, 축하 연출이 떠 있는 동안은 `onShowingChange`로 알려 칭찬 팝업이 기다린다.
   - 공용 레이어·상태: `BottomSheet.tsx`, `PushScreen.tsx`, `SkeletonBlock.tsx`, `TabPanelStatus.tsx`, `HoldToConfirmButton.tsx`, `SystemToast.tsx`, `OfflineBanner.tsx`, `PwaInstallPrompt.tsx`, `PwaUpdatePrompt.tsx`

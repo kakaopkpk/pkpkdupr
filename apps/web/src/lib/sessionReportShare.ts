@@ -1,7 +1,6 @@
 import type { SessionPlayerReport } from "@pkpkdupr/shared/ranking";
 import {
   SESSION_PRAISE_HIGHLIGHT_MIN,
-  type SessionPraiseCategory,
   type SessionPraiseResponse,
 } from "@pkpkdupr/shared/sessionPraise";
 import { getAchievementDefinition } from "@/lib/achievements";
@@ -10,6 +9,7 @@ import {
   formatKstShortDate,
 } from "@/lib/format";
 import type { MatchSessionReportInfo } from "@/lib/rankings";
+import type { SessionPraiseValue } from "@/lib/sessionPraise";
 import { toShareFileName } from "@/lib/shareImage";
 
 /*
@@ -49,11 +49,9 @@ export interface SessionReportShareRiser {
   wins: number;
 }
 
-/** 칭찬 SESSION_PRAISE_HIGHLIGHT_MIN개 이상 받은 후보 한 명 */
-export interface SessionReportSharePraise {
+/** 칭찬 SESSION_PRAISE_HIGHLIGHT_MIN개 이상 받은 후보 한 명. 분류·값은 후보 그대로다 */
+export interface SessionReportSharePraise extends SessionPraiseValue {
   player: SessionReportSharePlayer;
-  category: SessionPraiseCategory;
-  value: number;
   praiseCount: number;
 }
 
@@ -120,6 +118,7 @@ export const getSharedPraisedCandidates = (
           player: toSharePlayer(candidate.player),
           category: candidate.category,
           value: candidate.value,
+          streakBreaks: candidate.streakBreaks,
           praiseCount: candidate.praiseCount,
         }))
     : [];
@@ -188,6 +187,7 @@ export const buildMyRecordShareTarget = (
       ? {
           category: myPraise.category,
           value: myPraise.value,
+          streakBreaks: myPraise.streakBreaks,
           praiseCount: myPraise.praiseCount,
         }
       : null,

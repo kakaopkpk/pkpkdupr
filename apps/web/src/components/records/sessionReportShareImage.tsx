@@ -5,19 +5,12 @@ import {
   isLowRatingAchievement,
   type AchievementDefinition,
 } from "@pkpkdupr/shared/achievements";
-import {
-  SESSION_PRAISE_CATEGORY_LABEL,
-  type SessionPraiseCategory,
-} from "@pkpkdupr/shared/sessionPraise";
-import { SessionPraiseCategoryIcon } from "@/components/praise/SessionPraiseParts";
+import { SESSION_PRAISE_CATEGORY_LABEL } from "@pkpkdupr/shared/sessionPraise";
 import { loadSvgImage, renderBadgeSvg } from "@/components/profile/achievementShareImage";
 import { ThumbUpIcon } from "@/components/ui/Icons";
 import { getAchievementDefinition } from "@/lib/achievements";
 import { formatRatingDelta } from "@/lib/format";
-import {
-  formatSessionPraiseValue,
-  isSessionPraiseValueRising,
-} from "@/lib/sessionPraise";
+import { formatSessionPraiseValue, type SessionPraiseValue } from "@/lib/sessionPraise";
 import {
   formatRiserRecord,
   getSessionReportShareFileName,
@@ -52,7 +45,9 @@ import {
   SHARE_SCALE,
   SHARE_WIDTH,
   setLetterSpacing,
+  setShadow,
   shareFont,
+  withAlpha,
   wrapText,
 } from "@/lib/shareImageCanvas";
 import { formatRating } from "@/utils/dupr";
@@ -83,7 +78,6 @@ const COLOR_VARS = {
   up: "--color-pk-up",
   down: "--color-pk-down",
   primary: "--color-pk-primary",
-  primarySoft: "--color-pk-primary-soft",
   deep: "--color-pk-deep",
   amber: "--color-pk-hl",
   gold: "--color-pk-gold",
@@ -137,38 +131,25 @@ const renderIconSvg = (icon: React.ReactElement, size: number, color: string) =>
 };
 
 const THUMB_BADGE_SIZE = 11;
-const THUMB_PILL_SIZE = 15;
+const THUMB_BLUE_SIZE = 15;
 const THUMB_CIRCLE_SIZE = 18;
-const CATEGORY_ICON_SIZE = 11;
 const ACHIEVEMENT_BADGE_SIZE = 36;
 
 const iconKey = {
   thumbBadge: "thumb-badge",
-  thumbPill: "thumb-pill",
+  thumbBlue: "thumb-blue",
   thumbCircle: "thumb-circle",
-  category: (category: SessionPraiseCategory) => `category-${category}`,
   badge: (achievementId: string) => `badge-${achievementId}`,
 };
 
 const loadIcons = async (
   colors: Colors,
-  categories: SessionPraiseCategory[],
   achievements: AchievementDefinition[],
 ): Promise<Icons> => {
   const sources: [string, string][] = [
     [iconKey.thumbBadge, renderIconSvg(<ThumbUpIcon size={THUMB_BADGE_SIZE} strokeWidth={2.6} />, THUMB_BADGE_SIZE, colors.ink)],
-    [iconKey.thumbPill, renderIconSvg(<ThumbUpIcon size={THUMB_PILL_SIZE} />, THUMB_PILL_SIZE, colors.primary)],
+    [iconKey.thumbBlue, renderIconSvg(<ThumbUpIcon size={THUMB_BLUE_SIZE} />, THUMB_BLUE_SIZE, colors.primary)],
     [iconKey.thumbCircle, renderIconSvg(<ThumbUpIcon size={THUMB_CIRCLE_SIZE} strokeWidth={2.6} />, THUMB_CIRCLE_SIZE, colors.ink)],
-    ...[...new Set(categories)].map(
-      (category): [string, string] => [
-        iconKey.category(category),
-        renderIconSvg(
-          <SessionPraiseCategoryIcon category={category} size={CATEGORY_ICON_SIZE} />,
-          CATEGORY_ICON_SIZE,
-          colors.ink,
-        ),
-      ],
-    ),
     ...achievements.map(
       (definition): [string, string] => [
         iconKey.badge(definition.id),
@@ -261,24 +242,19 @@ const headerBlock = (
   };
 };
 
-/** 칭찬 분류 줄(13 굵게 `pk-sub`): 앰버 원 18 안 분류 아이콘 → 분류 이름 → · → 값. 세 조각 사이 6 */
+/** 칭찬 분류 줄(13 굵게 `pk-sub`): 분류 이름 → · → 값. 조각 사이 6 */
 const drawPraiseCategoryLine = (
   draw: DrawContext,
-  { category, value }: { category: SessionPraiseCategory; value: number },
+  praise: SessionPraiseValue,
   x: number,
   cy: number,
 ) => {
   const { ctx, colors } = draw;
-  fillCircle(ctx, x + 9, cy, 9, colors.amber);
-  drawIcon(draw, iconKey.category(category), x + 9, cy, CATEGORY_ICON_SIZE);
-  let cursor = x + 18 + 6;
+  let cursor = x;
   const parts: [string, string][] = [
-    [SESSION_PRAISE_CATEGORY_LABEL[category], colors.sub],
+    [SESSION_PRAISE_CATEGORY_LABEL[praise.category], colors.sub],
     ["·", colors.muted],
-    [
-      formatSessionPraiseValue(category, value),
-      isSessionPraiseValueRising(category, value) ? colors.up : colors.sub,
-    ],
+    [formatSessionPraiseValue(praise), colors.sub],
   ];
   parts.forEach(([text, color]) => {
     setText(ctx, 700, 13, color);
@@ -361,6 +337,20 @@ const risersBlock = (target: SessionSummaryShareTarget): Block => {
   };
 };
 
+/**
+ * 칭찬 5개 이상 아바타 테두리(PraisedAvatarFrame과 같은 모양): 앰버 링 2와 링 바깥으로 번지는 앰버 빛(55%).
+ * 공유 이미지의 칭찬 줄은 모두 5개 이상이라 늘 그린다. 아바타보다 먼저 그려 링이 아바타 바깥 2px로 보이게 한다
+ */
+const drawPraisedAvatarRing = (draw: DrawContext, cx: number, cy: number, size: number) => {
+  const { ctx, colors } = draw;
+  const glow = withAlpha(colors.amber, 0.55);
+  ctx.save();
+  setShadow(ctx, glow, 16);
+  fillCircle(ctx, cx, cy, size / 2 + 4, glow);
+  ctx.restore();
+  fillCircle(ctx, cx, cy, size / 2 + 2, colors.amber);
+};
+
 /** 아바타 오른쪽 아래 앰버 엄지 배지(지름 19, 흰 링 2). PraisedAvatarFrame과 같이 오른쪽 5·아래 4 밖으로 걸친다 */
 const drawPraiseBadge = (draw: DrawContext, avatarRight: number, avatarBottom: number) => {
   const cx = avatarRight + 5 - 19 / 2;
@@ -370,49 +360,40 @@ const drawPraiseBadge = (draw: DrawContext, avatarRight: number, avatarBottom: n
   drawIcon(draw, iconKey.thumbBadge, cx, cy, THUMB_BADGE_SIZE);
 };
 
-/** 칭찬 알약(높이 36, 최소 너비 56, 좌우 12): `pk-primary-soft` 바탕에 블루 엄지 15 + 수. right가 오른쪽 끝 */
-const drawPraisePill = (draw: DrawContext, count: number, right: number, cy: number) => {
-  const { ctx, colors } = draw;
-  setText(ctx, 800, 15, colors.primary);
-  const label = String(count);
-  const contentWidth = THUMB_PILL_SIZE + 4 + ctx.measureText(label).width;
-  const width = Math.max(56, contentWidth + 24);
-  const x = right - width;
-  fillRoundRect(ctx, x, cy - 18, width, 36, 18, colors.primarySoft);
-  const contentX = x + (width - contentWidth) / 2;
-  drawIcon(draw, iconKey.thumbPill, contentX + THUMB_PILL_SIZE / 2, cy, THUMB_PILL_SIZE);
-  setText(ctx, 800, 15, colors.primary);
-  ctx.fillText(label, contentX + THUMB_PILL_SIZE + 4, cy);
-  return width;
-};
-
-/** "칭찬": 한 상자(`pk-bg`) 안 줄 목록. 아바타 44 + 엄지 배지 → 아이디·분류 줄 → 칭찬 알약 */
+/**
+ * "하이라이트": "평점 상승 TOP 3"와 같은 줄 목록(줄 높이 56, 줄 사이 구분선).
+ * 아바타 36(앰버 링·빛 + 엄지 배지) → 아이디·분류 줄 → 블루 엄지 + 칭찬 수
+ */
 const praisedBlock = (target: SessionSummaryShareTarget): Block => {
-  const paddingY = 14;
-  const paddingX = 16;
+  const avatarSize = 36;
   const columnHeight = lineHeight(15) + 4 + lineHeight(13);
-  const rowHeight = paddingY * 2 + Math.max(44, columnHeight);
-  const boxHeight = rowHeight * target.praised.length + (target.praised.length - 1);
+  const rowHeight = Math.max(56, columnHeight + 16);
   return {
-    height: SECTION_LABEL_HEIGHT + 8 + boxHeight,
+    height: SECTION_LABEL_HEIGHT + rowHeight * target.praised.length,
     draw: (draw, top) => {
       const { ctx, colors, avatars } = draw;
-      drawSectionLabel(draw, "칭찬", top);
-      const boxTop = top + SECTION_LABEL_HEIGHT + 8;
-      fillRoundRect(ctx, CONTENT_X, boxTop, CONTENT_WIDTH, boxHeight, BOX_RADIUS, colors.bg);
+      drawSectionLabel(draw, "하이라이트", top);
       target.praised.forEach((item, index) => {
-        const rowTop = boxTop + (rowHeight + 1) * index;
-        if (index > 0) fillDivider(draw, CONTENT_X, rowTop - 1, CONTENT_WIDTH);
-        const cy = rowTop + rowHeight / 2;
-        const avatarX = CONTENT_X + paddingX;
-        drawShareAvatar(ctx, avatars, item.player, { cx: avatarX + 22, cy, size: 44, ink: colors.ink });
-        drawPraiseBadge(draw, avatarX + 44, cy + 22);
+        const rowTop = top + SECTION_LABEL_HEIGHT + rowHeight * index;
+        // 둘째 줄부터 위 테두리 1px만큼 내용이 내려간다
+        const cy = index === 0 ? rowTop + rowHeight / 2 : rowTop + 1 + (rowHeight - 1) / 2;
+        if (index > 0) fillDivider(draw, CONTENT_X, rowTop, CONTENT_WIDTH);
+        const avatarCx = CONTENT_X + avatarSize / 2;
+        drawPraisedAvatarRing(draw, avatarCx, cy, avatarSize);
+        drawShareAvatar(ctx, avatars, item.player, { cx: avatarCx, cy, size: avatarSize, ink: colors.ink });
+        drawPraiseBadge(draw, CONTENT_X + avatarSize, cy + avatarSize / 2);
 
-        const pillWidth = drawPraisePill(draw, item.praiseCount, CONTENT_RIGHT - paddingX, cy);
-        const textX = avatarX + 44 + 12;
-        const textMaxWidth = CONTENT_RIGHT - paddingX - pillWidth - 12 - textX;
+        setText(ctx, 800, 17, colors.primary, "right");
+        const label = String(item.praiseCount);
+        const labelWidth = ctx.measureText(label).width;
+        ctx.fillText(label, CONTENT_RIGHT, cy);
+        drawIcon(draw, iconKey.thumbBlue, CONTENT_RIGHT - labelWidth - 4 - THUMB_BLUE_SIZE / 2, cy, THUMB_BLUE_SIZE);
+        const rightWidth = labelWidth + 4 + THUMB_BLUE_SIZE;
+
+        const textX = CONTENT_X + avatarSize + 12;
+        const textMaxWidth = CONTENT_RIGHT - rightWidth - 12 - textX;
         const columnTop = cy - columnHeight / 2;
-        setText(ctx, 800, 15, colors.ink);
+        setText(ctx, 700, 15, colors.ink);
         ctx.fillText(fitLine(ctx, item.player.username, textMaxWidth), textX, columnTop + lineHeight(15) / 2);
         drawPraiseCategoryLine(draw, item, textX, columnTop + lineHeight(15) + 4 + lineHeight(13) / 2);
       });
@@ -652,20 +633,22 @@ const getPlayers = (target: SessionReportShareTarget): SessionReportSharePlayer[
     ? [...target.risers.map((riser) => riser.player), ...target.praised.map((item) => item.player)]
     : [];
 
-const getCategories = (target: SessionReportShareTarget): SessionPraiseCategory[] =>
-  target.kind === "summary"
-    ? target.praised.map((item) => item.category)
-    : target.praise
-      ? [target.praise.category]
-      : [];
+/** 칭찬 분류 줄 글자(분류 이름·값) */
+const getPraiseTexts = (target: SessionReportShareTarget): string[] =>
+  (target.kind === "summary" ? target.praised : target.praise ? [target.praise] : []).flatMap(
+    (item) => [
+      SESSION_PRAISE_CATEGORY_LABEL[item.category],
+      formatSessionPraiseValue(item),
+    ],
+  );
 
 /** 폰트 글자 묶음을 미리 받을 글자. 정확히 그릴 글자가 아니어도 같은 묶음이면 된다 */
 const getTexts = (target: SessionReportShareTarget, achievements: AchievementDefinition[]) => [
   target.session.name,
   getSessionShareMetaLabel(target.session),
   getSessionShareDateLabel(target.session),
-  "0123456789.+−–→·▲▼명참여경기평점상승TOP칭찬복식랭킹위승패개를받았어요새업적외",
-  ...getCategories(target).map((category) => SESSION_PRAISE_CATEGORY_LABEL[category]),
+  "0123456789.+−–→·▲▼명참여경기평점상승TOP칭찬복식랭킹위승패개를받았어요새업적외하이라트",
+  ...getPraiseTexts(target),
   ...getPlayers(target).map((player) => player.username),
   ...achievements.flatMap((definition) => [definition.name, definition.condition]),
   target.kind === "summary" ? SESSION_SHARE_CLUB_NAME : target.username,
@@ -682,7 +665,7 @@ export const createSessionReportShareImage = async (
   const colors = readTokenColors(COLOR_VARS);
   const achievements = getAchievementDefinitions(target);
   const [icons, avatars] = await Promise.all([
-    loadIcons(colors, getCategories(target), achievements),
+    loadIcons(colors, achievements),
     loadShareAvatars(getPlayers(target)),
     loadShareFonts(getTexts(target, achievements), [400, 700, 800]),
     loadNumFont("0123456789.–"),

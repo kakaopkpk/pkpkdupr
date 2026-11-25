@@ -18,7 +18,6 @@ import { RequestError } from "@/lib/rankings";
 import {
   formatSessionPraiseValue,
   getSessionPraisePillState,
-  isSessionPraiseValueRising,
   praiseSessionPlayer,
   type SessionPraisePillState,
 } from "@/lib/sessionPraise";
@@ -91,15 +90,8 @@ const SessionPraiseRow: React.FC<{
           {candidate.player.username}
         </span>
       </span>
-      <span
-        className={cx(
-          "shrink-0 text-pk-15 font-extrabold tabular-nums",
-          isSessionPraiseValueRising(candidate.category, candidate.value)
-            ? "text-pk-up"
-            : "text-pk-ink",
-        )}
-      >
-        {formatSessionPraiseValue(candidate.category, candidate.value)}
+      <span className="shrink-0 text-pk-15 font-semibold tabular-nums text-pk-ink">
+        {formatSessionPraiseValue(candidate)}
       </span>
       <SessionPraisePill
         state={state}

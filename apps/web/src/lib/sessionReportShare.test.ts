@@ -160,10 +160,13 @@ describe("buildMyRecordShareTarget", () => {
 
   it("마감 뒤 내가 5개 이상 받았을 때만 칭찬 상자를 넣는다", () => {
     const report = makeReport([playerReport("me")]);
-    const praised = makePraise([candidate("me", 5, { category: "winStreak", value: 3 })]);
+    const praised = makePraise([
+      candidate("me", 5, { category: "streakGuard", value: 4, streakBreaks: 2 }),
+    ]);
     expect(buildMyRecordShareTarget(report, praised, me)?.praise).toEqual({
-      category: "winStreak",
-      value: 3,
+      category: "streakGuard",
+      value: 4,
+      streakBreaks: 2,
       praiseCount: 5,
     });
     expect(buildMyRecordShareTarget(report, makePraise([candidate("me", 4)]), me)?.praise).toBeNull();

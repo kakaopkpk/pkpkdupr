@@ -29,10 +29,11 @@ import {
   readTokenColors,
   SHARE_CONTENT_BOTTOM,
   SHARE_EDGE,
-  SHARE_SCALE,
   SHARE_WIDTH,
   setLetterSpacing,
+  setShadow,
   shareFont,
+  withAlpha,
 } from "@/lib/shareImageCanvas";
 
 /*
@@ -100,27 +101,6 @@ const drawAvatar = (
   ctx.globalAlpha = alpha;
   drawShareAvatar(ctx, avatars, player, { cx, cy, size, ink: colors.ink, gray });
   ctx.restore();
-};
-
-/** #rrggbb 토큰 색에 알파만 입힌다. 그 밖의 표기는 그대로 둔다 */
-const withAlpha = (color: string, alpha: number) => {
-  const hex = /^#([0-9a-f]{6})$/i.exec(color.trim())?.[1];
-  if (!hex) return color;
-  const value = Number.parseInt(hex, 16);
-  return `rgba(${(value >> 16) & 255}, ${(value >> 8) & 255}, ${value & 255}, ${alpha})`;
-};
-
-/** 캔버스 그림자는 변환 배율을 받지 않아 3배 캔버스에서는 값에 배율을 곱한다 */
-const setShadow = (
-  ctx: CanvasRenderingContext2D,
-  color: string,
-  blur: number,
-  offsetY = 0,
-) => {
-  ctx.shadowColor = color;
-  ctx.shadowBlur = blur * SHARE_SCALE;
-  ctx.shadowOffsetX = 0;
-  ctx.shadowOffsetY = offsetY * SHARE_SCALE;
 };
 
 /** 바탕색 틈(BADGE_RING)을 두른 알약. 아바타 위에 걸친 태그·칩을 얼굴과 띄운다 */

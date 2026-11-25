@@ -17,6 +17,7 @@ import {
   type SessionPraiseRecord,
 } from "@pkpkdupr/shared/sessionPraise";
 import { isEntityId } from "@pkpkdupr/shared/entityId";
+import type { SpecialMatchOutcome } from "@pkpkdupr/shared/specialMatch";
 import {
   getMatchTopLevelType,
   getWinningTeamIndex,
@@ -76,6 +77,8 @@ export interface RankingMatch {
   regularSession?: boolean;
   /** 대회 세션 경기인지(출사표 업적) */
   tournamentSession?: boolean;
+  /** 특수 매치 결과(세션 칭찬 복수자). 특수 매치가 아니거나 결과가 없으면 null */
+  specialMatchOutcome?: SpecialMatchOutcome | null;
 }
 
 export interface RankingSession {
@@ -857,6 +860,13 @@ const buildMatchRatingInputs = (
   }
   return { doublesAfter, before };
 };
+
+/** 경기 id별 그 경기 직전 선수별 평점(그 경기 분류, 언더독 입력) */
+export const buildRatingBeforeByMatchId = (
+  logs: readonly PlayerRatingChangeLog[],
+  categoryByMatchId: ReadonlyMap<string, MatchTopLevelType>,
+): Map<string, Record<string, number>> =>
+  buildMatchRatingInputs(logs, categoryByMatchId).before;
 
 /** 경기 id별 그 경기 직후 선수별 복식 평점(평점 업적 입력) */
 export const buildDoublesRatingAfterByMatchId = (

@@ -26,8 +26,7 @@ import { isNetworkError } from "@/lib/errors";
 import { cycleFocusWithin } from "@/lib/focus";
 import {
   fetchSessionPraise,
-  formatSessionPraiseValue,
-  isSessionPraiseValueRising,
+  getSessionPraiseCardValue,
   praiseSessionPlayer,
 } from "@/lib/sessionPraise";
 import { useDimmedThemeColor } from "@/lib/themeColor";
@@ -103,16 +102,16 @@ const PraiseCardButton: React.FC<{
   </span>
 );
 
-/** 후보 카드: 블루 세션 카드 언어. 위에서부터 분류 칩 → 아바타 64 → 아이디 → 값 → 흰 버튼. 카드 전체가 버튼이다 */
+/** 후보 카드: 블루 세션 카드 언어. 위에서부터 분류 칩 → 아바타 64 → 아이디 → 큰 값·설명 줄 → 흰 버튼. 카드 전체가 버튼이다 */
 const PraiseCard: React.FC<{
   candidate: SessionPraiseCandidate;
   mode: CardMode;
   count: number;
   countFrom: number;
-  isWide: boolean;
   onPress: () => void;
-}> = ({ candidate, mode, count, countFrom, isWide, onPress }) => {
+}> = ({ candidate, mode, count, countFrom, onPress }) => {
   const isPicked = mode === "picked";
+  const cardValue = getSessionPraiseCardValue(candidate);
   return (
     // 고른 카드 묶음(빛줄기 포함)을 양옆 카드보다 위에 둬 빛줄기가 두 카드 위로 지나가게 한다
     <div className={cx("relative min-w-0", isPicked && "z-[3]")}>
@@ -142,8 +141,7 @@ const PraiseCard: React.FC<{
         aria-label={`${candidate.player.username} 칭찬, 지금 ${count}개`}
         onClick={onPress}
         className={cx(
-          "relative flex h-[268px] w-full min-w-0 flex-col items-center gap-1.5 overflow-hidden rounded-pk-lg bg-pk-primary pt-4 pb-2.5 text-white disabled:cursor-default motion-reduce:transition-none max-[374px]:px-1.5",
-          isWide ? "px-2.5" : "px-2",
+          "relative flex h-[276px] w-full min-w-0 flex-col items-center gap-1.5 overflow-hidden rounded-pk-lg bg-pk-primary px-2 pt-4 pb-2.5 text-white disabled:cursor-default motion-reduce:transition-none max-[374px]:px-1.5",
           CARD_MODE_CLASS_NAME[mode],
         )}
       >
@@ -160,14 +158,13 @@ const PraiseCard: React.FC<{
         <span className="relative mt-2 max-w-full truncate text-pk-15 font-extrabold max-[374px]:text-pk-13">
           {candidate.player.username}
         </span>
-        <span
-          className={cx(
-            "relative mt-1 text-pk-26 leading-none font-extrabold whitespace-nowrap tabular-nums max-[374px]:text-pk-22",
-            isSessionPraiseValueRising(candidate.category, candidate.value) &&
-              "text-pk-up-on-deep",
-          )}
-        >
-          {formatSessionPraiseValue(candidate.category, candidate.value)}
+        <span className="relative mt-1 flex flex-col items-center gap-1">
+          <span className="text-pk-26 leading-none font-extrabold whitespace-nowrap tabular-nums max-[374px]:text-pk-22">
+            {cardValue.main}
+          </span>
+          <span className="text-pk-13 leading-none font-bold whitespace-nowrap text-white/75">
+            {cardValue.caption}
+          </span>
         </span>
         <PraiseCardButton mode={mode} count={count} countFrom={countFrom} />
         {isPicked ? <SheenOverlay delayMs={250} durationMs={800} /> : null}
@@ -385,9 +382,14 @@ export default function SessionPraisePopup({
           </div>
           <div
             ref={cardsRef}
-            className="pointer-events-auto grid w-full gap-2 animate-pk-fade-up motion-reduce:animate-none max-[374px]:gap-1.5"
+            className="pointer-events-auto grid w-full justify-center gap-[var(--praise-card-gap)] animate-pk-fade-up [--praise-card-gap:8px] [--praise-card-width:calc((100%-2*var(--praise-card-gap))/3)] motion-reduce:animate-none max-[374px]:[--praise-card-gap:6px]"
             style={{
-              gridTemplateColumns: `repeat(${shown.candidates.length}, minmax(0, 1fr))`,
+              // 카드 폭은 후보 수와 상관없이 3장일 때 폭이다
+              gridTemplateColumns: `repeat(${shown.candidates.length}, var(--praise-card-width))`,
+              // 2장이면 화면 양 끝과 카드 사이 간격을 같게 둔다(바깥 여백 px-4 양쪽 32px 포함)
+              ...(shown.candidates.length === 2
+                ? { columnGap: "calc((100% + 32px - 2 * var(--praise-card-width)) / 3)" }
+                : {}),
               animationDelay: ms(160),
               animationDuration: ms(380),
             }}
@@ -403,7 +405,6 @@ export default function SessionPraisePopup({
                     (before) => before.player.id === candidate.player.id,
                   )?.praiseCount ?? candidate.praiseCount
                 }
-                isWide={shown.candidates.length <= 2}
                 onPress={() => void submit(candidate.player.id)}
               />
             ))}
