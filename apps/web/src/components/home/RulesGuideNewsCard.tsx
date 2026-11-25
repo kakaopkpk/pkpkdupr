@@ -1,10 +1,12 @@
 import React from "react";
 import { buttonPressClassName, rowPressClassName } from "@/components/ui/Button";
 import { cx } from "@/components/ui/cx";
+import { ProgressBar } from "@/components/ui/ProgressBar";
 import { useAppNavigation } from "@/context/AppNavigationContext";
 import {
-  dismissRulesGuideCard,
+  closeRulesGuideCard,
   RULES_GUIDE_CARD_COUNT,
+  useRulesGuideSeenCount,
 } from "@/lib/rulesGuide";
 
 const BookIcon: React.FC = () => (
@@ -41,11 +43,12 @@ const CloseIcon: React.FC = () => (
 );
 
 /**
- * 홈 소식 맨 위의 피클볼 기본 규칙 안내 카드. 누르면 안내 화면을 열고, X로 닫을 수 있다.
- * 어느 쪽이든 그 기기에서는 다시 나오지 않는다(보일지는 호출부가 useIsRulesGuideCardDismissed로 정함)
+ * 홈 소식 맨 위의 피클볼 기본 규칙 안내 카드. 누르면 안내 화면을 열고, 본 장 수를 진행률로 보인다.
+ * X로 닫거나 12장을 다 보면 그 기기에서는 다시 나오지 않는다(보일지는 호출부가 useIsRulesGuideCardHidden으로 정함)
  */
 const RulesGuideNewsCard: React.FC = () => {
   const { openRulesGuide } = useAppNavigation();
+  const seenCount = useRulesGuideSeenCount();
 
   return (
     <article
@@ -55,38 +58,44 @@ const RulesGuideNewsCard: React.FC = () => {
         openRulesGuide();
       }}
       className={cx(
-        "flex cursor-pointer items-center gap-3 rounded-pk-lg bg-white p-4",
+        "flex cursor-pointer flex-col gap-3 rounded-pk-lg bg-white p-4",
         rowPressClassName,
       )}
     >
-      <span
-        aria-hidden="true"
-        className="flex size-11 shrink-0 items-center justify-center rounded-full bg-pk-primary-soft text-pk-primary"
-      >
-        <BookIcon />
-      </span>
-      <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-        <span className="text-pk-15 font-bold text-pk-ink">
-          피클볼 기본 규칙
+      <div className="flex items-center gap-3">
+        <span
+          aria-hidden="true"
+          className="flex size-11 shrink-0 items-center justify-center rounded-full bg-pk-primary-soft text-pk-primary"
+        >
+          <BookIcon />
         </span>
-        <span className="text-pk-13 text-pk-sub">
-          규칙 카드 {RULES_GUIDE_CARD_COUNT}장
-        </span>
+        <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+          <span className="text-pk-15 font-bold text-pk-ink">
+            피클볼 기본 규칙
+          </span>
+          <span className="text-pk-13 text-pk-sub">
+            {RULES_GUIDE_CARD_COUNT}장 중 {seenCount}장 읽음
+          </span>
+        </div>
+        <button type="button" onClick={openRulesGuide} className="sr-only">
+          피클볼 기본 규칙 보기
+        </button>
+        <button
+          type="button"
+          aria-label="규칙 안내 닫기"
+          onClick={closeRulesGuideCard}
+          className={cx(
+            "flex size-8 shrink-0 items-center justify-center rounded-full text-pk-quiet",
+            buttonPressClassName,
+          )}
+        >
+          <CloseIcon />
+        </button>
       </div>
-      <button type="button" onClick={openRulesGuide} className="sr-only">
-        피클볼 기본 규칙 보기
-      </button>
-      <button
-        type="button"
-        aria-label="규칙 안내 닫기"
-        onClick={dismissRulesGuideCard}
-        className={cx(
-          "flex size-8 shrink-0 items-center justify-center rounded-full text-pk-quiet",
-          buttonPressClassName,
-        )}
-      >
-        <CloseIcon />
-      </button>
+      <ProgressBar
+        ratio={seenCount / RULES_GUIDE_CARD_COUNT}
+        className="h-1.5"
+      />
     </article>
   );
 };

@@ -8,7 +8,7 @@ import { PkButton } from "@/components/ui/Button";
 import { cx } from "@/components/ui/cx";
 import { type TabKey, useTabNavigation } from "@/context/TabNavigationContext";
 import { useLayerDepth } from "@/hooks/useLayerDepth";
-import { dismissRulesGuideCard } from "@/lib/rulesGuide";
+import { markRulesGuideCardSeen } from "@/lib/rulesGuide";
 import { RULES_GUIDE_CARDS } from "./RulesGuideCards";
 import { RuleHeading } from "./RulesGuideParts";
 import "./rulesGuide.css";
@@ -44,7 +44,7 @@ const PositionDots: React.FC<{ activeIndex: number }> = ({ activeIndex }) => (
 /**
  * 신입 회원용 피클볼 기본 규칙 안내. 카드 12장을 한 장씩 좌우로 넘기며(다음 카드가 오른쪽에 살짝 보임),
  * 지금 카드의 그림만 움직이고 카드로 넘어올 때마다 처음부터 재생한다.
- * 열면 그 기기에서 홈 소식의 규칙 안내 카드가 다시 나오지 않는다
+ * 지금 카드가 된 장을 그 기기의 본 장으로 남긴다(홈 규칙 안내 카드의 진행률)
  */
 export default function RulesGuideScreen({
   isOpen,
@@ -68,9 +68,10 @@ export default function RulesGuideScreen({
     saveScroll: true,
   });
 
+  // 지금 카드가 된 장을 본 장으로 센다. 12장을 다 보면 홈 규칙 안내 카드가 사라진다
   useEffect(() => {
-    if (isOpen) dismissRulesGuideCard();
-  }, [isOpen]);
+    if (isOpen) markRulesGuideCardSeen(activeIndex);
+  }, [activeIndex, isOpen]);
 
   const close = useCallback(() => {
     if (!closeDepth(tabKey, depthId)) onClose();
