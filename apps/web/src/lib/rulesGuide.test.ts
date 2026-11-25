@@ -47,7 +47,9 @@ describe("rulesGuide", () => {
     markRulesGuideCardSeen(RULES_GUIDE_CARD_COUNT - 1);
     expect(getRulesGuideSeenCount()).toBe(2);
     expect(isRulesGuideCardHidden()).toBe(false);
-    expect(storage.values.get(RULES_GUIDE_SEEN_STORAGE_KEY)).toBe("[0,11]");
+    expect(storage.values.get(RULES_GUIDE_SEEN_STORAGE_KEY)).toBe(
+      JSON.stringify([0, RULES_GUIDE_CARD_COUNT - 1]),
+    );
 
     for (let index = 0; index < RULES_GUIDE_CARD_COUNT; index += 1) {
       markRulesGuideCardSeen(index);

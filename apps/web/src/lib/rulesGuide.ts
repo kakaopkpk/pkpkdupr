@@ -18,9 +18,10 @@ const listeners = new Set<() => void>();
 let progress: RulesGuideProgress | null = null;
 
 const isCardIndex = (value: unknown): value is number =>
+  typeof value === "number" &&
   Number.isInteger(value) &&
-  (value as number) >= 0 &&
-  (value as number) < RULES_GUIDE_CARD_COUNT;
+  value >= 0 &&
+  value < RULES_GUIDE_CARD_COUNT;
 
 const readSeen = (): Set<number> => {
   try {

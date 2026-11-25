@@ -68,7 +68,6 @@ export default function RulesGuideScreen({
     saveScroll: true,
   });
 
-  // 지금 카드가 된 장을 본 장으로 센다. 12장을 다 보면 홈 규칙 안내 카드가 사라진다
   useEffect(() => {
     if (isOpen) markRulesGuideCardSeen(activeIndex);
   }, [activeIndex, isOpen]);
