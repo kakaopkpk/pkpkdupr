@@ -135,7 +135,7 @@
     - 묶기·라운드 이름·내 다음 경기·팀 평균은 `lib/tournament.ts`.
   - `ui/`: 새 디자인 공통 컴포넌트. 새 화면은 여기 것을 먼저 씁니다.
     - `Button.tsx`(`PkButton`, variant `primary`·`soft`·`outline`·`ghost`), `Card.tsx`, `SegmentedControl.tsx`, `MatchFilterControl.tsx`(섹션 제목 줄의 전체/내 경기 전환, 라벨에 경기 수), `Headers.tsx`(`TabHeader`·`DetailHeader`), `Form.tsx`(`TextField`·`ListRow`), `Section.tsx`(`Section`·`PreviewSection`·`TextLink`. 섹션 제목이 붙는 묶음은 `Section`으로 만든다), `SheetTitle.tsx`, `ConfirmDialog.tsx`(시트 위 가운데 확인 창. 바텀시트를 겹쳐 쌓지 않을 때 쓰고, 연 쪽이 `useLayerDepth` kind `dialog`로 뒤로가기에 묶는다)
-    - `MatchRow.tsx`(`MatchRow`), `PlayerAvatar.tsx`(`PlayerAvatar`·`TeamAvatars`), `Delta.tsx`(`RatingDelta`·`RankChange`), `RankBadge.tsx`, `Badges.tsx`(`LivePill`·`HighlightBadge`), `StatusMessageChip.tsx`, `StateMessage.tsx`(빈 상태 `empty`·불러오기 실패 `error`(항상 "다시 시도") 문구, size `panel` 탭·화면 전체·`inline` 카드·목록·시트 안), `CountUpText.tsx`(카운트업 숫자의 자리 폭을 최종 내용으로 고정), `PraisedAvatarFrame.tsx`(한 세션 칭찬 5개 이상 아바타의 앰버 링·엄지 배지, 세션 상세 칭찬 줄·홈 소식 칭찬 줄), `SheenOverlay.tsx`(한 번 지나가는 흰 빛, 부모 `relative`·`overflow-hidden` 필요), `Icons.tsx`, `cx.ts`
+    - `MatchRow.tsx`(`MatchRow`), `PlayerAvatar.tsx`(`PlayerAvatar`·`TeamAvatars`), `Delta.tsx`(`RatingDelta`·`RankChange`), `RankBadge.tsx`, `Badges.tsx`(`LivePill`·`HighlightBadge`), `StatusMessageChip.tsx`, `StateMessage.tsx`(빈 상태 `empty`·불러오기 실패 `error`(항상 "다시 시도") 문구, size `panel` 탭·화면 전체·`inline` 카드·목록·시트 안), `CountUpText.tsx`(카운트업 숫자의 자리 폭을 최종 내용으로 고정), `PraisedAvatarFrame.tsx`(한 세션 칭찬 5개 이상 아바타의 앰버 링·빛·엄지 배지, 세션 상세 칭찬 줄·홈 소식 칭찬 줄), `SheenOverlay.tsx`(한 번 지나가는 흰 빛, 부모 `relative`·`overflow-hidden` 필요), `Icons.tsx`, `cx.ts`
       - `MatchRow`는 특수 매치(`Match.specialMatch`)면 메타 줄 오른쪽 끝에 `SpecialMatchLabel`로 유형 이름을 둔다(결과는 쓰지 않음).
       - `SpecialMatchLabel.tsx`: 특수 매치 유형 아이콘 `SpecialMatchIcon`(currentColor)과 아이콘 + 굵은 블루 이름 `SpecialMatchLabel`.
         - 손바닥·주먹·칼 선 모양은 `Icons.tsx`의 경로를 업적 배지와 같이 쓴다.
@@ -299,7 +299,7 @@
 - 하이라이트 `pk-hl`(앰버 #ffb627)은 테두리 없이 LIVE 표시, 오늘의 급상승, 업적 축하 연출(`AchievementCelebration`)과 받은 업적 시트 머리의 배지 빛줄기·후광에만 씁니다. 예외로 경기 삭제 버튼의 길게 누르기 채움 앞 끝 선, 축하 연출·받은 업적 시트에서 한 번 퍼지는 고리, 연승 아바타(`WinStreakAvatarFrame`, `.pk-streak-ring`)의 링·태그, 진행 중 세션 연승 아바타(`SessionWinStreakFrame`)의 링·태그와 "N연승" 칩(`SessionWinStreakBadge`)에 씁니다. 평점 추세선 끝점은 블루 점입니다.
   - 대회 세션 예외로 달력의 대회 날 점과 대진 진행 중 경기의 앰버 점("진행 중" 앞)에도 씁니다.
   - 특수 매치 큰 연출(`SpecialMatchCelebrationScreen`)과 그 공유 이미지 예외로 주인공 얼굴 뒤 빛줄기·후광, 연승 테두리·태그·이긴 쪽 테두리가 타오르는 빛·고리, 라이벌전 이긴 얼굴에서 퍼지는 고리와 설명 줄의 N연승 글자에도 씁니다.
-  - 세션 칭찬 예외로 칭찬 팝업의 "세션 종료" 글자, 칭찬 분류 칩, 칭찬 직후 고른 카드의 링·빛줄기, 칭찬 5개 이상 아바타의 링·엄지 배지에도 씁니다(`docs/design.md` "세션 칭찬").
+  - 세션 칭찬 예외로 칭찬 팝업의 "세션 종료" 글자, 칭찬 분류 칩, 칭찬 직후 고른 카드의 링·빛줄기, 칭찬 5개 이상 아바타의 링·빛·엄지 배지에도 씁니다(`docs/design.md` "세션 칭찬").
 - 대회 세션 카드(대회 카드·순위 카드)는 짙은 남색 `pk-deep` 바탕입니다.
   - "트로피 + 대회" 칩은 `pk-gold` 바탕에 글자·트로피 아이콘 `pk-ink`이고, 오른쪽 위 원에 연한 금색 트로피 장식을 둡니다.
   - 남색 바탕 위 평점 상승은 `pk-up-on-deep`, 하락은 `pk-down-on-deep`입니다(`pk-up`·`pk-down`은 남색 위에서 읽히지 않음).
