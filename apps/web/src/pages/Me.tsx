@@ -110,6 +110,7 @@ const Me: React.FC = () => {
             <RecentMatchesSection
               title="최근 경기"
               matches={overview.summary.recentMatches}
+              ownerPlayerId={playerId ?? undefined}
               onViewAll={() => setIsMatchHistoryRequested(true)}
             />
           </>
