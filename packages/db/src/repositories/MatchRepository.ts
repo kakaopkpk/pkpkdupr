@@ -151,6 +151,8 @@ export interface UpdateSessionInput {
   date?: Date;
   startTime?: string | null;
   endTime?: string | null;
+  /** null이면 회원이 세션을 완료한 시각을 지운다 */
+  completedAt?: null;
 }
 
 /** 랭킹·세션 리포트 계산에 필요한 완료 경기 요약 */
@@ -2848,6 +2850,7 @@ export class MatchRepository {
         ],
         ["start_time", data.startTime],
         ["end_time", data.endTime],
+        ["completed_at", data.completedAt],
       ];
       const columns = values.filter(([, value]) => value !== undefined);
       if (columns.length) {

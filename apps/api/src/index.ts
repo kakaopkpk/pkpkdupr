@@ -2593,11 +2593,17 @@ app.patch(
       }
 
       // 정기가 아닌 세션 시각(date)은 생성 때처럼 고른 날 00:00 KST다
+      const scheduleChanged =
+        dateChanged ||
+        startTime !== session.startTime ||
+        endTime !== session.endTime;
       const input = {
         name,
         location,
         date: dateChanged ? kstDateKeyToDate(nextDateKey) : undefined,
         ...(timeProvided ? { startTime, endTime } : {}),
+        // 날짜·시각이 바뀌면 완료할 수 있는 시간도 바뀌므로 완료를 되돌린다
+        ...(scheduleChanged ? { completedAt: null } : {}),
       };
       // 종류를 보내면 저장소가 잠근 행의 지금 종류와 비교한다(위에서 읽은 뒤 다른 관리자가 바꿨을 수 있다).
       // 자동 정기 세션은 종류를 바꿀 수 없고(409), 직접 만든 정기 세션을 바꿔도 정기 쉬는 날은 남지 않는다
