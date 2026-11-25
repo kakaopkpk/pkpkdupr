@@ -16,9 +16,9 @@ export const MATCHMAKING_PLAYERS_PER_COURT = 4;
 export const MATCHMAKING_PENALTY_WEIGHTS = {
   /** 두 팀 평균 평점 차 1.0당 */
   teamAverageGap: 30,
-  /** 오늘 같은 팀이었던 두 사람이 다시 한 팀, 1회당 */
+  /** 오늘 같은 팀이었던 두 사람이 다시 한 팀, 감쇠 가중치(MATCHMAKING_REPEAT_DECAY) 1당 */
   repeatedPartner: 6,
-  /** 오늘 맞붙었던 두 사람이 다시 맞붙음, 그 쌍의 맞대결 1회당 */
+  /** 오늘 맞붙었던 두 사람이 다시 맞붙음, 그 쌍의 맞대결 감쇠 가중치 1당 */
   repeatedOpponent: 3,
   /** 한 코트 최고·최저 평점 차 1.0당 */
   courtRatingSpread: 5,
@@ -28,6 +28,11 @@ export const MATCHMAKING_PENALTY_WEIGHTS = {
  * 특수 유형 가산점(대진에서 가장 큰 코트 하나)과 달리 코트마다 더한다
  */
 export const MATCHMAKING_SAME_GENDER_COURT_BONUS = 2;
+/**
+ * 같은 팀·맞대결 이력 감쇠 비율. 함께한 경기마다 0.5^k를 더하고, k는 그 경기 뒤 두 사람이 각각 뛴 경기 수 중 작은 값이다.
+ * 한 쌍의 합이 2 미만으로 묶여 반복 감점이 팀 평균 균형을 계속 이기지 않는다(이유·거절한 안은 docs/product.md "세션·경기")
+ */
+export const MATCHMAKING_REPEAT_DECAY = 0.5;
 export const MATCHMAKING_RANDOM_STARTS = 40;
 /** 최저 감점 + 이 값 이하 대진을 후보로 모은다 */
 export const MATCHMAKING_CANDIDATE_PENALTY_MARGIN = 5;
@@ -57,7 +62,7 @@ export interface RecommendDoublesMatchesInput {
   participants: MatchmakingParticipant[];
   /** 진행 중 경기에 들어가 있어 이번 추천에서 빠지는 선수 id */
   busyPlayerIds: readonly string[];
-  /** 오늘 이 세션의 완료 경기. 경기 수·같은 팀·맞대결 집계 기준 */
+  /** 오늘 이 세션의 완료 경기, 완료 시각 오름차순. 경기 수·같은 팀·맞대결 집계 기준이고 감쇠가 이 순서를 쓴다 */
   completedMatches: MatchmakingPlayedMatch[];
   /** 요청 코트 수. 정수로 내리고 1~4로 자른다 */
   courts: number;
@@ -208,39 +213,52 @@ const increment = (counts: Map<string, number>, key: string): void => {
 
 interface TodayHistory {
   gamesPlayed: Map<string, number>;
-  partnerCounts: Map<string, number>;
-  opponentCounts: Map<string, number>;
+  /** 쌍별 같은 팀 감쇠 가중치 합. 오늘 한 번이라도 같은 팀이었으면 0보다 크다 */
+  partnerWeights: Map<string, number>;
+  /** 쌍별 맞대결 감쇠 가중치 합. 오늘 한 번이라도 맞붙었으면 0보다 크다 */
+  opponentWeights: Map<string, number>;
 }
 
+/** matches는 완료 시각 오름차순이다. 뒤에서부터 훑으며 각 경기 뒤에 선수마다 뛴 경기 수를 센다 */
 const collectTodayHistory = (
   matches: MatchmakingPlayedMatch[],
 ): TodayHistory => {
-  const gamesPlayed = new Map<string, number>();
-  const partnerCounts = new Map<string, number>();
-  const opponentCounts = new Map<string, number>();
+  const gamesAfter = new Map<string, number>();
+  const partnerWeights = new Map<string, number>();
+  const opponentWeights = new Map<string, number>();
+  const addDecayed = (
+    weights: Map<string, number>,
+    a: string,
+    b: string,
+  ): void => {
+    const age = Math.min(gamesAfter.get(a) ?? 0, gamesAfter.get(b) ?? 0);
+    const key = pairKey(a, b);
+    weights.set(key, (weights.get(key) ?? 0) + MATCHMAKING_REPEAT_DECAY ** age);
+  };
 
-  for (const match of matches) {
-    const [teamA, teamB] = match.teams.map((team) => [...new Set(team)]);
-    for (const id of new Set([...teamA, ...teamB])) {
-      increment(gamesPlayed, id);
-    }
+  for (let index = matches.length - 1; index >= 0; index -= 1) {
+    const [teamA, teamB] = matches[index].teams.map((team) => [...new Set(team)]);
     for (const team of [teamA, teamB]) {
       for (let i = 0; i < team.length; i += 1) {
         for (let j = i + 1; j < team.length; j += 1) {
-          increment(partnerCounts, pairKey(team[i], team[j]));
+          addDecayed(partnerWeights, team[i], team[j]);
         }
       }
     }
     for (const a of teamA) {
       for (const b of teamB) {
         if (a !== b) {
-          increment(opponentCounts, pairKey(a, b));
+          addDecayed(opponentWeights, a, b);
         }
       }
     }
+    for (const id of new Set([...teamA, ...teamB])) {
+      increment(gamesAfter, id);
+    }
   }
 
-  return { gamesPlayed, partnerCounts, opponentCounts };
+  // 모든 경기를 훑고 나면 각 선수의 '뒤에 뛴 경기 수'가 오늘 경기 수다
+  return { gamesPlayed: gamesAfter, partnerWeights, opponentWeights };
 };
 
 /** NR 대체값: 게스트를 뺀 참여자 non-null 평점의 중앙값, 전원 NR이면 고정값 */
@@ -366,10 +384,10 @@ export const recommendDoublesMatches = (
   const genderById = new Map(
     eligible.map((participant) => [participant.id, participant.gender]),
   );
-  const partnerCount = (a: string, b: string): number =>
-    history.partnerCounts.get(pairKey(a, b)) ?? 0;
-  const opponentCount = (a: string, b: string): number =>
-    history.opponentCounts.get(pairKey(a, b)) ?? 0;
+  const partnerWeight = (a: string, b: string): number =>
+    history.partnerWeights.get(pairKey(a, b)) ?? 0;
+  const opponentWeight = (a: string, b: string): number =>
+    history.opponentWeights.get(pairKey(a, b)) ?? 0;
   const selectedCount = courtCount * MATCHMAKING_PLAYERS_PER_COURT;
 
   const weights = MATCHMAKING_PENALTY_WEIGHTS;
@@ -378,12 +396,12 @@ export const recommendDoublesMatches = (
     const ratings = [a1, a2, b1, b2].map(ratingOf);
     const averageA = (ratings[0] + ratings[1]) / 2;
     const averageB = (ratings[2] + ratings[3]) / 2;
-    const repeatedPartners = partnerCount(a1, a2) + partnerCount(b1, b2);
+    const repeatedPartners = partnerWeight(a1, a2) + partnerWeight(b1, b2);
     const repeatedOpponents =
-      opponentCount(a1, b1) +
-      opponentCount(a1, b2) +
-      opponentCount(a2, b1) +
-      opponentCount(a2, b2);
+      opponentWeight(a1, b1) +
+      opponentWeight(a1, b2) +
+      opponentWeight(a2, b1) +
+      opponentWeight(a2, b2);
     const sameGenderBonus = getSameGenderCourtGender(
       [a1, a2, b1, b2].map((id) => genderById.get(id)),
     )
@@ -621,13 +639,13 @@ export const recommendDoublesMatches = (
       [a1, a2],
       [b1, b2],
     ] as const) {
-      if (partnerCount(x, y) > 0) {
+      if (partnerWeight(x, y) > 0) {
         repeatedPartnerPairs.push([x, y]);
       }
     }
     for (const x of [a1, a2]) {
       for (const y of [b1, b2]) {
-        if (opponentCount(x, y) > 0) {
+        if (opponentWeight(x, y) > 0) {
           repeatedOpponentPairs.push([x, y]);
         }
       }

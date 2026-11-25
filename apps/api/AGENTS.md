@@ -107,6 +107,10 @@
   - reroll이 10(`MATCHMAKING_REROLL_CYCLE`)을 넘으면 `((reroll - 1) mod 10) + 1`로 순환한다.
   - 탐색 난수 seed는 세션 id와 완료 경기 수(`getMatchmakingSeed`)이고 다시 추천 단계별 난수는 seed와 단계 번호로 만든다. 같은 상황·같은 reroll이면 누구에게나 같은 결과.
   - 선발은 오늘 경기 수 오름차순이고, 같은 경기 수끼리만 단계별 난수로 순서를 정한다(1판 차이도 뒤집히지 않는다).
+  - 대진 감점은 코트마다 팀 평균 차·같은 팀 반복·맞대결 반복·코트 평점 폭의 합이다(`MATCHMAKING_PENALTY_WEIGHTS`).
+  - 같은 팀·맞대결 반복은 오늘 그 쌍이 함께한 완료 경기마다 0.5^k(`MATCHMAKING_REPEAT_DECAY`)를 더한다. k는 그 경기 뒤 두 사람이 각각 뛴 완료 경기 수 중 작은 값이고, 맞대결은 맞은편 사람 대 사람 쌍마다 센다.
+  - 감쇠가 경기 순서를 쓰므로 세션 완료 경기를 완료 시각 오름차순으로 넘긴다.
+  - 응답 코트 `repeatedPartnerPairs`·`repeatedOpponentPairs`는 감쇠와 상관없이 오늘 한 번이라도 같은 팀·맞대결이었던 쌍이다.
   - 후보는 최저 감점 + 5(`MATCHMAKING_CANDIDATE_PENALTY_MARGIN`) 이내 대진뿐이다.
   - reroll 0은 후보 중 감점이 가장 낮은 대진(같으면 대진 키 순 첫 번째)이다.
   - reroll 1 이상은 직전 대진을 빼고, 직전 대진과 같은 코트(두 팀 구성이 같은 코트) 수가 가장 적은 후보 중 무작위로 고른다.

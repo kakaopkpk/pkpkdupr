@@ -2,6 +2,7 @@ import cors from "cors";
 import express from "express";
 import { randomUUID } from "crypto";
 import {
+  compareMatchesByRecordedAtDesc,
   getMatchTopLevelType,
   hasGuestPlayer,
   resolveRatingExcludedAfterEdit,
@@ -1945,8 +1946,10 @@ app.get("/api/match-sessions/:sessionId/recommendations", async (req, res) => {
           session.participants,
         )
       : undefined;
+    // 같은 팀·맞대결 감쇠가 경기 순서를 쓰므로 완료 시각 오름차순으로 넘긴다
     const completedMatches: MatchmakingPlayedMatch[] = sessionMatches
       .filter((match) => match.status === "completed")
+      .sort((a, b) => compareMatchesByRecordedAtDesc(b, a))
       .map((match) => ({
         teams: [
           match.teams[0].players.map((player) => player.id),
