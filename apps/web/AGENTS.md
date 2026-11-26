@@ -68,9 +68,9 @@
       - 달력 머리는 이전 달·"2026년 11월"(누르면 이번 달·오늘)·다음 달.
       - 달력은 달마다 6주(42칸, `schedule/monthGrid`의 `getMonthGridDateKeys`)이고, 이전·이번·다음 달 판을 이어 붙인 트랙에서 가운데 판만 보이며 옆 판은 `inert`다.
       - 달력 카드를 왼쪽으로 밀면 다음 달, 오른쪽이면 이전 달(버튼과 같은 이동)이다.
-        - `touch-pan-y` 카드에서 가로 끌기만 직접 처리해 세 판이 손가락을 따라오고 옆 달이 보인다(`schedule/useMonthSwipe`).
-        - 폭의 25% 이상 끌거나 40px 이상 빠르게 튕겨야 넘어간다(`schedule/monthSwipe`의 `getMonthSwipeStep`, 판정은 홈 캐러셀과 같은 `lib/swipe`의 `getSwipeStep`).
-        - 넘어가면 새 달이 렌더된 뒤에도 보던 자리에서 이어 들어온다. 버튼·다른 달 날짜로 옮길 때도 같은 슬라이드(`useMonthSwipe`가 돌려주는 `slideIn`)를 쓴다.
+        - `touch-pan-y` 카드에서 가로 끌기만 직접 처리해 세 판이 손가락을 따라오고 옆 달이 보인다(판 넘기기 공용 훅 `hooks/usePanelSwipe`, 규칙 안내와 같음).
+        - 폭의 25% 이상 끌거나 40px 이상 빠르게 튕겨야 넘어간다(`lib/swipe`의 `getPanelSwipeStep`, 판정 함수는 홈 캐러셀과 같은 `getSwipeStep`).
+        - 넘어가면 새 달이 렌더된 뒤에도 보던 자리에서 이어 들어온다. 버튼·다른 달 날짜로 옮길 때도 같은 슬라이드(`usePanelSwipe`가 돌려주는 `slideIn`)를 쓴다.
         - 머리 제목은 판이 멈춘 뒤(움직임 줄이기면 바로) 새 달로 바뀐다.
         - 끈 뒤 뗀 손가락은 날짜를 누르지 않는다.
       - 달을 옮겨도 고른 날은 그대로다. 다른 달 날짜를 누르면 그 날을 고르고 그 달로 옮긴다. 제목·탭 다시 누르기만 이번 달·오늘로 되돌린다.
@@ -132,7 +132,7 @@
     - `session/`: 세션 만들기(일정 탭과 같은 `MonthCalendar`로 고르는 날짜, `minDateKey`로 지난 날·오늘이 든 달 앞은 막음, 표시는 `schedule/useScheduleMonthMarks`·시작·종료 시각 칩 `SessionSchedulePicker`, 오늘 이후 어느 날이든)·참여자 시트 `ParticipantsSheet`(열면 참여자 보기, 오른쪽 위 "수정"으로 같은 시트에서 전체 회원 체크·게스트 추가 수정 모드, 완료·취소·뒤로가기는 보기로 돌아감. `isReadOnly`면 보기 모드만 있고 "수정"이 없음)
     - `settings/`: 설정(프로필·계정·피클볼·앱 묶음, 피클볼의 "기본 규칙"은 `openRulesGuide`)·비밀번호 변경·상태메시지 편집·프로필 사진 조정 `AvatarCropScreen`
       - 고른 사진을 끌어 옮기고 핀치로 1~4배, 두 번 탭 2배↔1배, 원 안을 512px JPEG로 잘라 저장. 좌표 계산은 `utils/avatarCrop.ts`
-    - `rules/`: 피클볼 기본 규칙 안내 `RulesGuideScreen`(카드 15장 가로 넘기기, 넘기기는 홈 캐러셀의 `home/useCarouselSwipe`). 모양·그림 규칙은 `docs/design.md` "피클볼 기본 규칙".
+    - `rules/`: 피클볼 기본 규칙 안내 `RulesGuideScreen`(카드 15장 가로 넘기기, 넘기기는 일정 달력과 같은 `hooks/usePanelSwipe`. 트랙 `translate`가 지금 카드를 보이고, 지금 카드는 손가락을 뗄 때만 바뀐다). 모양·그림 규칙은 `docs/design.md` "피클볼 기본 규칙".
       - `BottomNav`가 `lazy`로 처음 열 때 받는다(그림 CSS를 첫 화면 CSS에서 빼려는 것). 홈 카드의 장 수는 이 모듈을 끌어오지 않도록 `lib/rulesGuide`의 `RULES_GUIDE_CARD_COUNT`를 쓴다.
       - 지금 카드가 될 때마다 `markRulesGuideCardSeen`으로 그 장을 본 장으로 남긴다(15장을 다 보면 홈 규칙 안내 카드가 사라짐).
       - 15장을 다 본 채로 닫히면(`isOpen`이 false가 될 때) `lib/rulesGuideCompletion`의 `submitRulesGuideCompletion`으로 `POST /api/me/rules-guide/complete`를 보내고, 처음 남겼으면 `achievements`를 무효화한다(업적 모범생 축하).
@@ -187,7 +187,7 @@
   - `SystemNoticeContext.tsx`: `useSystemNotice().showSaveFailure({ onRetry })`로 저장 실패 토스트(네트워크 오류에만, 서버 4xx·5xx는 화면 인라인), `showToast({ message, actionLabel?, onAction?, durationMs? })`로 하단 바 위 알약 토스트(기본 5초, 동작 글자 하나)
   - `AppUpdateContext.tsx`: `useAppUpdate()`로 PWA 업데이트 확인·적용 상태
   - `ScreenVisibilityContext.tsx`: `useIsScreenVisible()`로 안쪽 화면이 지금 보이는지. 탭 패널(선택됨 && 탭 셸이 PushScreen에 덮이지 않음)과 PushScreen 본문(열림 && 활성 && 덮이지 않음)이 제공하고, 제공자 밖(바텀시트 등)은 언제나 보임
-- `src/hooks/`: `useSheetDrag.ts`(바텀시트 끌어 닫기·`prefersReducedMotion`), `useCountUp.ts`(화면이 보일 때마다 숫자 카운트업), `usePlayOnShow.ts`(화면이 보일 때마다 CSS 애니메이션 한 번 재생), `useLayerDepth.ts`, `usePullToRefresh.ts`, `usePlayers.ts`, `useOnlineStatus.ts`, `useStartedMatchToast.ts`, `useMinuteClock.ts`(1분마다 다시 그리는 현재 시각), `useIsMatchScheduled.ts`(예정 경기 판정. 관리자 예정 경기는 시작 시각에 바로 다시 판정)
+- `src/hooks/`: `useSheetDrag.ts`(바텀시트 끌어 닫기·`prefersReducedMotion`), `usePanelSwipe.ts`(좌우로 밀어 판 한 칸씩 넘기기, 일정 달력·규칙 안내), `useCountUp.ts`(화면이 보일 때마다 숫자 카운트업), `usePlayOnShow.ts`(화면이 보일 때마다 CSS 애니메이션 한 번 재생), `useLayerDepth.ts`, `usePullToRefresh.ts`, `usePlayers.ts`, `useOnlineStatus.ts`, `useStartedMatchToast.ts`, `useMinuteClock.ts`(1분마다 다시 그리는 현재 시각), `useIsMatchScheduled.ts`(예정 경기 판정. 관리자 예정 경기는 시작 시각에 바로 다시 판정)
 - `src/types/match.ts`: API JSON 응답 기준 경기 타입(`MatchInfo`, `MatchListResponse`)과 `getTeamResultScores`
 - `src/lib/`: API 호출(`api.ts`)·Supabase 클라이언트·도메인별 요청 함수·포맷터·오류 판정과 화면 문구(`errors.ts`의 `isNetworkError`·`getUserErrorMessage`, 불러오기 실패는 `err.message` 대신 이 문구), `src/utils/`: 평점(`dupr.ts`)·아바타 유틸
 - 도메인 타입은 `@pkpkdupr/shared/*`에서 import합니다. 웹 전용 응답 형태만 `src/types/`에 둡니다.
