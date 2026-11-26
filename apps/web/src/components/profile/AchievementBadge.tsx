@@ -4,6 +4,7 @@ import {
   type AchievementDefinition,
 } from "@pkpkdupr/shared/achievements";
 import {
+  BOOK_ICON_PATHS,
   CHALLENGE_FLAG_ICON_PATHS,
   CROSSED_SWORDS_ICON_PATHS,
   FIST_ICON_PATHS,
@@ -272,9 +273,9 @@ export const BADGE_ICON_PATHS: Record<BadgeIconKind, React.ReactNode> = {
   // 펼친 책(홈 규칙 안내 카드와 같은 모양)
   book: (
     <>
-      <path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v15H6.5A2.5 2.5 0 0 0 4 20.5z" />
-      <path d="M4 20.5A2.5 2.5 0 0 0 6.5 23H20v-5" />
-      <path d="M9 8h7M9 12h5" />
+      {BOOK_ICON_PATHS.map((d) => (
+        <path key={d} d={d} />
+      ))}
     </>
   ),
 };

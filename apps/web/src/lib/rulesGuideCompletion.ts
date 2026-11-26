@@ -2,8 +2,9 @@ import { apiFetch } from "@/lib/api";
 import { trackAchievementWrite } from "@/lib/achievements";
 import { isRulesGuideRead } from "@/lib/rulesGuide";
 
-/** 이 실행에서 서버에 완독을 남겼는지. 남긴 뒤에는 다시 보내지 않는다 */
+/** 이 실행에서 지금 회원(syncedPlayerId)의 완독이 서버에 있는지. 있으면 다시 보내지 않는다 */
 let isSubmitted = false;
+let syncedPlayerId: string | null = null;
 let pending: Promise<boolean> | null = null;
 
 const postRulesGuideComplete = async (): Promise<boolean> => {
@@ -35,9 +36,14 @@ export const submitRulesGuideCompletion = (): Promise<boolean> => {
  * serverCompletedAt은 /api/me 회원의 rulesGuideCompletedAt이다
  */
 export const syncRulesGuideCompletion = (
+  playerId: string,
   serverCompletedAt: unknown,
 ): Promise<boolean> => {
-  // 다른 회원으로 바뀌었을 수 있어 서버 값을 따른다(완독 저장은 멱등이라 다시 보내도 된다)
-  isSubmitted = !!serverCompletedAt;
+  // 다른 회원으로 바뀌면 그 회원의 서버 값부터 다시 따른다. 같은 회원이면 이 실행에서 보낸 기록을 지키되 서버 값으로 채운다
+  if (playerId !== syncedPlayerId) {
+    syncedPlayerId = playerId;
+    isSubmitted = false;
+  }
+  if (serverCompletedAt) isSubmitted = true;
   return submitRulesGuideCompletion();
 };

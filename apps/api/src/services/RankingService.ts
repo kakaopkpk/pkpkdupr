@@ -709,7 +709,7 @@ export const findEndedSessions = (
 const findRulesGuideCompletions = (context: RankingContext) =>
   new Map(
     [...context.playersById.values()].flatMap((player) =>
-      player.rulesGuideCompletedAt && !player.isGuest
+      player.rulesGuideCompletedAt && canEarnAchievements(context, player.id)
         ? [[player.id, player.rulesGuideCompletedAt] as const]
         : [],
     ),

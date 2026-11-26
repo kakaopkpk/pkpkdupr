@@ -4265,13 +4265,13 @@ app.get("/api/me/achievements/unseen", async (req, res) => {
       db.playerSeenAchievements.findByPlayerId(decoded.playerId),
     ]);
     // 게스트 본인은 업적을 받지 않는다
-    const earned = !canEarnAchievements(context, decoded.playerId)
-      ? []
-      : findPlayerEarnedAchievements(
+    const earned = canEarnAchievements(context, decoded.playerId)
+      ? findPlayerEarnedAchievements(
           toContextAchievementMatches(context),
           findEndedSessions(context, sessions, new Date()),
           decoded.playerId,
-        );
+        )
+      : [];
     const response: UnseenAchievementsResponse = {
       achievements: findUnseenAchievements(earned, seen),
       points: sumEarnedAchievementPoints(earned),

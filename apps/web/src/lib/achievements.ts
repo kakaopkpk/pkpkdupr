@@ -152,19 +152,20 @@ export const getAchievementProgressRatio = (
 };
 
 /**
- * 못 받은 업적 진행으로 보일 값. 모범생은 서버가 장 수를 모르므로
- * 내 업적이면 이 기기에서 본 장 수(rulesGuideSeenCount)로 바꾸고, 남의 업적이면 진행을 보이지 않는다(null)
+ * 못 받은 업적 진행으로 보일 값과 진행을 보일지. 모범생은 서버가 장 수를 모르므로
+ * 내 업적이면 이 기기에서 본 장 수(rulesGuideSeenCount)로 바꾸고, 남의 업적이면 진행을 보이지 않는다
  */
 export const getDisplayedAchievementProgress = (
   definition: AchievementDefinition,
   progress: AchievementProgressInfo | null | undefined,
   { isMine, rulesGuideSeenCount }: { isMine: boolean; rulesGuideSeenCount: number },
-): { progress: AchievementProgressInfo | null | undefined } | null => {
+): { progress: AchievementProgressInfo | null | undefined; showProgress: boolean } => {
   if (definition.id !== RULES_GUIDE_ACHIEVEMENT_ID || progress?.earned) {
-    return { progress };
+    return { progress, showProgress: true };
   }
-  if (!isMine) return null;
+  if (!isMine) return { progress, showProgress: false };
   return {
+    showProgress: true,
     progress: {
       id: definition.id,
       earned: false,

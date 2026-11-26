@@ -427,33 +427,29 @@ export default function AchievementsScreen({
                   }
                 >
                   <Card>
-                    {definitions.map((definition) => {
-                      const displayed = getDisplayedAchievementProgress(
-                        definition,
-                        progressById.get(definition.id),
-                        { isMine, rulesGuideSeenCount },
-                      );
-                      return (
-                        <AchievementRow
-                          key={definition.id}
-                          definition={definition}
-                          progress={displayed?.progress}
-                          showProgress={displayed !== null}
-                          rowIndex={unearnedIndexById.get(definition.id) ?? 0}
-                          isFlashing={flashingAchievementId === definition.id}
-                          onFlashEnd={handleFlashEnd}
-                          onPress={(earned) => {
-                            if (playerId) {
-                              openAchievementDetail({
-                                playerId,
-                                achievementId: definition.id,
-                                earned,
-                              });
-                            }
-                          }}
-                        />
-                      );
-                    })}
+                    {definitions.map((definition) => (
+                      <AchievementRow
+                        key={definition.id}
+                        definition={definition}
+                        {...getDisplayedAchievementProgress(
+                          definition,
+                          progressById.get(definition.id),
+                          { isMine, rulesGuideSeenCount },
+                        )}
+                        rowIndex={unearnedIndexById.get(definition.id) ?? 0}
+                        isFlashing={flashingAchievementId === definition.id}
+                        onFlashEnd={handleFlashEnd}
+                        onPress={(earned) => {
+                          if (playerId) {
+                            openAchievementDetail({
+                              playerId,
+                              achievementId: definition.id,
+                              earned,
+                            });
+                          }
+                        }}
+                      />
+                    ))}
                   </Card>
                 </Section>
               );

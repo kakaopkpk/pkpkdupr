@@ -88,11 +88,21 @@ describe("규칙 안내 완독 전송", () => {
     readAll(markRulesGuideCardSeen, RULES_GUIDE_CARD_COUNT);
 
     await expect(
-      syncRulesGuideCompletion("2026-11-26T09:00:00.000Z"),
+      syncRulesGuideCompletion("Palice01", "2026-11-26T09:00:00.000Z"),
     ).resolves.toBe(false);
     expect(apiFetch).not.toHaveBeenCalled();
 
-    await expect(syncRulesGuideCompletion(null)).resolves.toBe(true);
+    await expect(syncRulesGuideCompletion("Pbob0001", null)).resolves.toBe(true);
+    expect(apiFetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("보낸 뒤 같은 회원의 옛 회원 정보로 다시 불려도 또 보내지 않는다", async () => {
+    const { syncRulesGuideCompletion, markRulesGuideCardSeen, RULES_GUIDE_CARD_COUNT } =
+      await loadModules();
+    readAll(markRulesGuideCardSeen, RULES_GUIDE_CARD_COUNT);
+
+    await expect(syncRulesGuideCompletion("Palice01", null)).resolves.toBe(true);
+    await expect(syncRulesGuideCompletion("Palice01", null)).resolves.toBe(false);
     expect(apiFetch).toHaveBeenCalledTimes(1);
   });
 });

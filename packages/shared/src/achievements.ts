@@ -77,6 +77,9 @@ type AchievementMetric =
   | "podiumPlacements"
   | "championships";
 
+/** 모범생(규칙 안내 완독) 업적 id. 받은 경기가 없는 유일한 업적이다 */
+export const RULES_GUIDE_ACHIEVEMENT_ID = "rules-guide";
+
 /** 업적 정의와 진행도 지표를 한 행에 함께 둔 표(표 순서) */
 const ACHIEVEMENT_TABLE: readonly {
   metric: AchievementMetric;
@@ -85,7 +88,7 @@ const ACHIEVEMENT_TABLE: readonly {
   {
     metric: "rulesGuide",
     definition: {
-      id: "rules-guide",
+      id: RULES_GUIDE_ACHIEVEMENT_ID,
       category: "intro",
       name: "모범생",
       condition: `피클볼 기본 규칙 ${RULES_GUIDE_CARD_COUNT}장 모두 읽기`,
@@ -770,9 +773,6 @@ const ACHIEVEMENT_TABLE: readonly {
 
 export const ACHIEVEMENTS: readonly AchievementDefinition[] =
   ACHIEVEMENT_TABLE.map((row) => row.definition);
-
-/** 모범생(규칙 안내 완독) 업적 id. 받은 경기가 없는 유일한 업적이다 */
-export const RULES_GUIDE_ACHIEVEMENT_ID = "rules-guide";
 
 /** 칭찬 업적(이쁨받기·이 구역 사랑둥이) id */
 export const PRAISE_ACHIEVEMENT_IDS: ReadonlySet<string> = new Set(

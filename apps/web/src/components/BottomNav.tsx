@@ -306,7 +306,7 @@ const BottomNavShell: React.FC = () => {
   // 이 기기에서 규칙 안내를 다 읽었는데 서버에 완독이 없으면(전에 보내다 실패) 앱 진입 때 다시 보낸다
   useEffect(() => {
     if (!playerId) return;
-    void syncRulesGuideCompletion(rulesGuideCompletedAt).then((isSent) => {
+    void syncRulesGuideCompletion(playerId, rulesGuideCompletedAt).then((isSent) => {
       if (isSent) invalidateData(["achievements"]);
     });
   }, [invalidateData, playerId, rulesGuideCompletedAt]);

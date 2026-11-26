@@ -93,10 +93,8 @@ export const isRulesGuideRead = (): boolean =>
   getProgress().seen.size >= RULES_GUIDE_CARD_COUNT;
 
 /** 홈 규칙 안내 카드를 숨길지. X로 닫았거나 모든 장을 본 기기다 */
-export const isRulesGuideCardHidden = (): boolean => {
-  const { closed, seen } = getProgress();
-  return closed || seen.size >= RULES_GUIDE_CARD_COUNT;
-};
+export const isRulesGuideCardHidden = (): boolean =>
+  getProgress().closed || isRulesGuideRead();
 
 /** 안내 화면에서 index(0부터)번째 카드가 지금 카드가 되면 부른다 */
 export const markRulesGuideCardSeen = (index: number): void => {

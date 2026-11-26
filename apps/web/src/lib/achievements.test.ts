@@ -227,8 +227,8 @@ describe("모범생 진행 표시", () => {
       getDisplayedAchievementProgress(rulesGuide, unearned, {
         isMine: false,
         rulesGuideSeenCount: 7,
-      }),
-    ).toBeNull();
+      }).showProgress,
+    ).toBe(false);
   });
 
   it("받은 모범생과 다른 업적은 서버 진행 그대로다", () => {
@@ -238,7 +238,7 @@ describe("모범생 진행 표시", () => {
         isMine: false,
         rulesGuideSeenCount: 0,
       }),
-    ).toEqual({ progress: earned });
+    ).toEqual({ progress: earned, showProgress: true });
     const wins = ACHIEVEMENTS.find((item) => item.id === "wins-10")!;
     const winsProgress = { ...unearned, id: "wins-10", current: 3, target: 10 };
     expect(
@@ -246,7 +246,7 @@ describe("모범생 진행 표시", () => {
         isMine: false,
         rulesGuideSeenCount: 0,
       }),
-    ).toEqual({ progress: winsProgress });
+    ).toEqual({ progress: winsProgress, showProgress: true });
   });
 });
 

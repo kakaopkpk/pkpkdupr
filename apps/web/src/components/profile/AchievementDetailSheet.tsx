@@ -216,7 +216,7 @@ export default function AchievementDetailSheet({
   const { openRulesGuide } = useAppNavigation();
   const rulesGuideSeenCount = useRulesGuideSeenCount();
   const isMine = !!player && displayedRequest?.playerId === player.id;
-  // 남의 모범생이면 null이라 진행 줄을 보이지 않는다
+  // 남의 모범생이면 진행 줄을 보이지 않는다
   const displayed = definition
     ? getDisplayedAchievementProgress(definition, progress, {
         isMine,
@@ -289,7 +289,7 @@ export default function AchievementDetailSheet({
                 )}
               </DetailRow>
             ) : null}
-            {!isError && !earned && displayed ? (
+            {!isError && !earned && displayed?.showProgress ? (
               <div className="flex flex-col pb-4">
                 <DetailRow label="진행">
                   {ready ? (
