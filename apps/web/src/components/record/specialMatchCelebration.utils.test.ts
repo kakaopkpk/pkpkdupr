@@ -5,6 +5,7 @@ import {
   RIVAL_STEP_MS,
   RIVAL_PASS_MS,
   SCENE_START_MS,
+  getChallengeGroupWidth,
   getRivalCountSteps,
   getSceneBeatTimes,
   getSceneEndMs,
@@ -66,6 +67,35 @@ describe("getSceneBeatTimes·getSceneEndMs", () => {
     expect(getSceneBeatTimes(champions).slice(0, 2)).toEqual(getSceneBeatTimes(stopper));
     expect(getSceneBeatTimes(champions)).toHaveLength(3);
     expect(getSceneEndMs(champions)).toBeGreaterThan(getSceneEndMs(stopper));
+  });
+});
+
+describe("도전 성공 연출", () => {
+  const challenge: Extract<SpecialMatchCelebration, { kind: "challenge" }> = {
+    kind: "challenge",
+    defeated: [player("martin.bok"), player("sean.oh")],
+    ratingGap: 0.253,
+  };
+
+  it("박자는 연승 저지와 같은 도장 떨어짐·박힘이다", () => {
+    expect(getSceneBeatTimes(challenge)).toEqual(
+      getSceneBeatTimes({ kind: "streak_stopper", stopped: { player: player("s"), streakBefore: 3 } }),
+    );
+    expect(getSceneEndMs(challenge)).toBeGreaterThan(getSceneBeatTimes(challenge)[1]!);
+  });
+
+  it("얼굴 묶음 폭은 진 팀 인원으로 정한다(단식 104, 복식 184)", () => {
+    expect(getChallengeGroupWidth(1)).toBe(104);
+    expect(getChallengeGroupWidth(2)).toBe(184);
+  });
+
+  it("공유 대상은 진 팀 두 사람과 평점 차를 옮긴다", () => {
+    expect(toSpecialMatchShareTarget(challenge, match, "scarlett.yoon")).toMatchObject({
+      kind: "challenge-win",
+      username: "scarlett.yoon",
+      defeated: challenge.defeated,
+      ratingGap: 0.253,
+    });
   });
 });
 

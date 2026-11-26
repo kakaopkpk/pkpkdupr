@@ -54,6 +54,7 @@
         - 남의 경기는 특수 매치 여부와 상관없이 지금 3연승(`WIN_STREAK_MIN`) 이상 회원(`useLiveSession().inProgressWinStreaks`, 진행 중 경기 응답 `winStreaks`)도 세션 연승 회원처럼 아바타에 연승 링(태그 없음)을 두른다. 둘 다면 링은 하나다. 내 경기 카드는 세션 연승만이다.
       - 진행 중 일반 세션이면 "추천 매칭 · 대기 N명" 섹션(`home/RecommendationSection`)을 둔다. 추천 코트마다 `home/RecommendationCard` 한 장이고 모양은 `docs/design.md` "특수 매치"의 추천 매칭 카드다.
         - 주인공·지키는 쪽 팀은 `RecommendedCourt.specialMatch`의 `protagonistIds`·`defendingTeamIndex`로만 정하고 웹이 다시 판정하지 않는다. 지키는 쪽 팀을 왼쪽 칸에 둔다.
+        - 도전 매치 높은 팀 칸의 "평점 N 높음"은 서버가 준 `specialMatch.ratingGap`만 쓴다.
         - "경기 시작"은 `lib/matchSessions`의 `buildRecommendedMatchRequest`로 추천 응답 팀 순서 그대로 `startSessionMatch`를 부르고, 특수 유형 카드면 `recommendedSpecialKind`를 넘긴다(일반이면 생략).
       - 진행 중 일반 세션이면 추천 매칭 아래 "경기 기록" 섹션(세션의 끝난 경기, 제목 줄 오른쪽 전체/내 경기 전환 `ui/MatchFilterControl`)을 둔다.
       - 진행 중 세션이 대회 세션이면 진행 화면이 대회 카드(`LiveSessionCard`) → "내 경기" 섹션 → 라운드별 대진(`TournamentBracketSection`, `showFilter` false)이다.
@@ -124,7 +125,7 @@
         - 순위·연승 수는 응답 값만 쓰고 다시 계산하지 않는다. 내 새 업적 축하와 겹치면 이 연출이 먼저이고, 닫으면 업적 축하가 바로 이어진다.
         - 틀(딤·`useDimmedThemeColor`·확인/배경/Esc로 닫기·움직임 줄이기면 마지막 장면)은 `AchievementCelebration`과 같다. 장면 박자는 `getSceneBeatTimes`, 설명 줄은 장면이 끝나는 `getSceneEndMs`에 떠오른다.
         - 흰 카드 없이 그림(주인공 얼굴 뒤 빛줄기·후광) → 제목 → 설명 순서다. 빛줄기·후광은 튀어나오는 얼굴 묶음 밖에 두고, 도장 흔들림은 얼굴 묶음만 받는다.
-      - 특수 매치 큰 연출(라이벌전 승리·연승 저지·최강자전 승리)의 "이미지로 공유"는 `hooks/useSpecialMatchShare`(이미지 `record/specialMatchShareImage`, 문구·파일 이름 `lib/specialMatchShare`)를 부른다.
+      - 특수 매치 큰 연출(라이벌전 승리·연승 저지·최강자전 승리·도전 성공)의 "이미지로 공유"는 `hooks/useSpecialMatchShare`(이미지 `record/specialMatchShareImage`, 문구·파일 이름 `lib/specialMatchShare`)를 부른다.
       - 공유 이미지(업적·특수 매치·세션 리포트)의 틀(캔버스·빛줄기·후광·아래 줄)은 `lib/shareImageCanvas`, 아바타 원은 `lib/shareImageAvatar`, 미리 만들어 두는 훅은 `hooks/usePreparedShareImage`, 공유·내려받기는 `lib/shareImage`가 같이 맡는다.
       - 이미지 만들기는 effect가 끝난 뒤(마이크로태스크)에 시작한다. 아이콘·배지를 `flushSync`로 SVG 문자열로 그리는데, effect 안에서 바로 부르면 그리지 못한다.
     - `session/`: 세션 만들기(일정 탭과 같은 `MonthCalendar`로 고르는 날짜, `minDateKey`로 지난 날·오늘이 든 달 앞은 막음, 표시는 `schedule/useScheduleMonthMarks`·시작·종료 시각 칩 `SessionSchedulePicker`, 오늘 이후 어느 날이든)·참여자 시트 `ParticipantsSheet`(열면 참여자 보기, 오른쪽 위 "수정"으로 같은 시트에서 전체 회원 체크·게스트 추가 수정 모드, 완료·취소·뒤로가기는 보기로 돌아감. `isReadOnly`면 보기 모드만 있고 "수정"이 없음)
@@ -158,14 +159,14 @@
     - `MatchRow.tsx`(`MatchRow`), `PlayerAvatar.tsx`(`PlayerAvatar`·`TeamAvatars`), `Delta.tsx`(`RatingDelta`·`RankChange`), `RankBadge.tsx`, `Badges.tsx`(`LivePill`·`HighlightBadge`), `StatusMessageChip.tsx`, `StateMessage.tsx`(빈 상태 `empty`·불러오기 실패 `error`(항상 "다시 시도") 문구, size `panel` 탭·화면 전체·`inline` 카드·목록·시트 안), `CountUpText.tsx`(카운트업 숫자의 자리 폭을 최종 내용으로 고정), `PraisedAvatarFrame.tsx`(한 세션 칭찬 5개 이상 아바타의 앰버 링·빛·엄지 배지, 세션 상세 칭찬 줄·홈 소식 칭찬 줄. 세션 요약 공유 이미지는 `sessionReportShareImage`가 같은 모양을 canvas로 그린다), `SheenOverlay.tsx`(한 번 지나가는 흰 빛, 부모 `relative`·`overflow-hidden` 필요), `Icons.tsx`, `cx.ts`
       - `MatchRow`는 특수 매치(`Match.specialMatch`)면 메타 줄 오른쪽 끝에 `SpecialMatchLabel`로 유형 이름을 둔다(결과는 쓰지 않음).
       - `SpecialMatchLabel.tsx`: 특수 매치 유형 아이콘 `SpecialMatchIcon`(currentColor)과 아이콘 + 굵은 블루 이름 `SpecialMatchLabel`.
-        - 손바닥·주먹·칼 선 모양은 `Icons.tsx`의 경로를 업적 배지와 같이 쓴다.
+        - 손바닥·주먹·칼·깃발 선 모양은 `Icons.tsx`의 경로를 업적 배지와 같이 쓴다.
   - `praise/`: 세션 칭찬. 모양·연출은 `docs/design.md` "세션 칭찬".
     - `PendingSessionPraisePopup`: `BottomNav`가 렌더. 전역 화면·바텀시트·+ 메뉴·업적 축하가 없을 때 앱 진입·데이터 버전 변경·열린 화면이 모두 닫힐 때 `GET /api/me/session-praises/pending`을 조회해 첫 세션을 `SessionPraisePopup`으로 띄운다.
       - 조회 중·표시 중에는 `onBusyChange`로 알려 업적 축하가 기다린다(칭찬 팝업이 먼저).
       - 칭찬하지 않고 넘긴 세션은 `lib/sessionPraise`가 localStorage `pkpkdupr:session-praise-skipped`에 회원 id + 세션 id로 기억해 다시 띄우지 않는다. 칭찬한 세션은 서버가 뺀다.
     - `SessionPraisePopup`: 후보 카드 팝업. 띄울 때 보던 탭에 `useLayerDepth` kind `dialog`를 쌓아 뒤로가기·Esc로 넘기고(바깥 어두운 곳은 칭찬한 뒤에만 닫음), 카드를 누르면 칭찬 직후 연출 뒤 약 3초에 사라진다. 4xx 문구는 카드 아래, 네트워크 오류는 `showSaveFailure`다.
     - `SessionPraiseSection`: 세션 상세 "하이라이트" 섹션(내용은 칭찬 후보). 칭찬 전 줄 전체가 칭찬 버튼이고, 알약 상태는 `getSessionPraisePillState`다.
-    - `SessionPraiseParts`: 분류 칩(앰버, 분류 아이콘)·분류 아이콘. 복수자 주먹은 `Icons.tsx`의 `FIST_ICON_PATHS`, 언더독·승부사는 업적 배지 `BADGE_ICON_PATHS`의 `dog`·`bandage`를 같이 쓴다.
+    - `SessionPraiseParts`: 분류 칩(앰버, 분류 아이콘)·분류 아이콘. 복수자 주먹은 `Icons.tsx`의 `FIST_ICON_PATHS`, 도전자 깃발은 `CHALLENGE_FLAG_ICON_PATHS`(도전 매치 유형·업적 도전자 배지와 같음), 승부사는 업적 배지 `BADGE_ICON_PATHS`의 `bandage`를 같이 쓴다.
     - 값 표기는 `lib/sessionPraise`가 맡는다. 팝업 카드·세션 상세는 큰 값 + 설명 줄 `getSessionPraiseCardValue`, 홈 소식·공유 이미지는 한 줄 `formatSessionPraiseValue`다.
       - 두 함수는 후보의 `category`·`value`·`streakBreaks`(`SessionPraiseValue`)를 받는다. 연승 수문장은 `streakBreaks`(저지 횟수)로 1번(끊은 연승)과 2번 이상(횟수) 표기를 고른다.
   - 업적 전체 보기·업적 상세 시트의 못 받은 모범생 진행은 `lib/achievements`의 `getDisplayedAchievementProgress`로 정한다. 내 업적이면 이 기기에서 본 장 수, 남의 업적이면 진행 막대·줄이 없다. 내가 못 받은 모범생 상세 시트는 하단에 "규칙 읽기"(시트를 닫고 `openRulesGuide`)를 둔다.

@@ -34,7 +34,7 @@ const StrokeIcon: React.FC<{
   </svg>
 );
 
-/** 칭찬 분류 아이콘: 주먹·개·반창고·방패·오르는 화살표·왕관·트로피·공 */
+/** 칭찬 분류 아이콘: 주먹·깃발·반창고·방패·오르는 화살표·왕관·트로피·공 */
 export const SessionPraiseCategoryIcon: React.FC<{
   category: SessionPraiseCategory;
   size: number;
@@ -52,8 +52,8 @@ export const SessionPraiseCategoryIcon: React.FC<{
       );
     case "underdog":
       return (
-        <StrokeIcon size={size} strokeWidth={2.2}>
-          {BADGE_ICON_PATHS.dog}
+        <StrokeIcon size={size} strokeWidth={2.4}>
+          {BADGE_ICON_PATHS.challengeFlag}
         </StrokeIcon>
       );
     case "clutch":

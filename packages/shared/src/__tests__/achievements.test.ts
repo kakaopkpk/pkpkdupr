@@ -1443,7 +1443,7 @@ describe("업적 점수", () => {
     for (const definition of ACHIEVEMENTS) {
       expect([10, 25, 50, 100]).toContain(definition.points);
     }
-    expect(ACHIEVEMENT_MAX_POINTS).toBe(2370);
+    expect(ACHIEVEMENT_MAX_POINTS).toBe(2345);
   });
 
   it("받은 업적 점수만 더하고 모르는 업적은 0점이다", () => {
@@ -1459,10 +1459,18 @@ describe("업적 점수", () => {
   });
 });
 
-describe("언더독", () => {
-  const RATED = { [ME]: 3.0, partner: 3.0, "opp-1": 3.3, "opp-2": 3.3 };
+describe("도전자", () => {
+  const RATED = { [ME]: 3.0, partner: 3.0, "opp-1": 3.1, "opp-2": 3.1 };
 
-  it("경기 직전 상대 팀 평균 평점이 0.3 이상 높은데 이기면 받는다", () => {
+  it("이름은 도전자, 25점이다", () => {
+    expect(ACHIEVEMENTS.find((definition) => definition.id === "underdog")).toMatchObject({
+      name: "도전자",
+      condition: "평균 평점이 0.1 이상 높은 팀에게 승리",
+      points: 25,
+    });
+  });
+
+  it("경기 직전 상대 팀 평균 평점이 0.1 이상 높은데 이기면 받는다", () => {
     const match = makeMatch({ partnerId: "partner", ratingBefore: RATED });
     expect(progressOf(compute([match]), "underdog")).toMatchObject({
       earned: true,
@@ -1471,11 +1479,11 @@ describe("언더독", () => {
     });
   });
 
-  it("차이가 0.3보다 작거나, 지거나, 경기 직전 평점이 없으면 받지 않는다", () => {
+  it("차이가 0.1보다 작거나, 지거나, 경기 직전 평점이 없으면 받지 않는다", () => {
     const matches = [
       makeMatch({
         partnerId: "partner",
-        ratingBefore: { ...RATED, "opp-2": 3.28 },
+        ratingBefore: { ...RATED, "opp-2": 3.08 },
       }),
       makeMatch({ partnerId: "partner", won: false, ratingBefore: RATED }),
       makeMatch({ partnerId: "partner" }),
@@ -1489,23 +1497,29 @@ describe("언더독", () => {
   it("평점이 없는 선수는 3.0으로 친다", () => {
     const match = makeMatch({
       partnerId: "partner",
-      ratingBefore: { [ME]: null, "opp-1": 3.3, "opp-2": 3.3 },
+      ratingBefore: { [ME]: null, "opp-1": 3.1, "opp-2": 3.1 },
     });
     expect(progressOf(compute([match]), "underdog").earned).toBe(true);
   });
 
   it("단식은 두 선수 평점을 비교한다", () => {
-    const match = makeMatch({ ratingBefore: { [ME]: 2.9, "opp-1": 3.2 } });
+    const match = makeMatch({ ratingBefore: { [ME]: 2.9, "opp-1": 3.0 } });
     expect(progressOf(compute([match]), "underdog").earned).toBe(true);
   });
 
-  it("집계 시작 시각(2026-11-18 00:00 KST) 전 경기는 세지 않는다", () => {
-    const match = makeMatch({
+  it("집계 시작 시각(2026-11-25 00:00 KST) 전 경기는 세지 않는다", () => {
+    const before = makeMatch({
       partnerId: "partner",
       ratingBefore: RATED,
-      completedAt: new Date("2026-11-17T14:59:00.000Z"),
+      completedAt: new Date("2026-11-24T14:59:00.000Z"),
     });
-    expect(progressOf(compute([match]), "underdog").earned).toBe(false);
+    expect(progressOf(compute([before]), "underdog").earned).toBe(false);
+    const after = makeMatch({
+      partnerId: "partner",
+      ratingBefore: RATED,
+      completedAt: new Date("2026-11-24T15:00:00.000Z"),
+    });
+    expect(progressOf(compute([after]), "underdog").earned).toBe(true);
   });
   it("게스트가 낀 경기(평점 미반영)는 평점에 묶인 업적이라 세지 않는다", () => {
     const match = {

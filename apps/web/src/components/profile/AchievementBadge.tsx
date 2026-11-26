@@ -4,6 +4,7 @@ import {
   type AchievementDefinition,
 } from "@pkpkdupr/shared/achievements";
 import {
+  CHALLENGE_FLAG_ICON_PATHS,
   CROSSED_SWORDS_ICON_PATHS,
   FIST_ICON_PATHS,
   FLAME_ICON_PATH,
@@ -47,7 +48,7 @@ type BadgeIconKind =
   | "rocket"
   | "submarine"
   | "trench"
-  | "dog"
+  | "challengeFlag"
   | "stopHand"
   | "handshake"
   | "rosette"
@@ -207,16 +208,8 @@ export const BADGE_ICON_PATHS: Record<BadgeIconKind, React.ReactNode> = {
   ),
   // 해구 단면: 평평한 해저 가운데가 좁고 깊게 꺼진 선
   trench: <path d="M2.5 6.5h3.5l1.5 2.5 3 11.5h3l3-11.5 1.5-2.5h3.5" />,
-  // 오른쪽을 보는 처진 귀 개 얼굴 옆모습
-  dog: (
-    <>
-      <path d="M7 20c-1.8-3.3-2.7-7.6-1.5-11.5C6.5 5 9 3.5 12 3.5c2 0 3.5 1 4 3l3.5 1.5c1 .4 1.4 1.4 1.2 2.4l-.2 1.1c-.2.9-1 1.3-2 1.3H16c-.8 1.7-2 2.7-3.5 3.2L13 20" />
-      <path d="M10 4.5c-1.8 1.5-2.5 4.5-1.8 8.5.8-.2 1.7-.8 2.3-1.8" />
-      <path d="M16 12.8c.8-.2 1.6-.6 2-1.2" />
-      <circle cx="13.5" cy="7.5" r=".7" />
-      <circle cx="20.1" cy="9.3" r=".8" />
-    </>
-  ),
+  // 갈라진 꼬리 깃발(도전 매치 유형 아이콘과 같은 그림)
+  challengeFlag: CHALLENGE_FLAG_ICON_PATHS.map((d) => <path key={d} d={d} />),
   // 멈춤 손바닥
   stopHand: STOP_HAND_ICON_PATHS.map((d) => <path key={d} d={d} />),
   handshake: (
@@ -298,7 +291,7 @@ const BADGE_ICON_BY_ID: Partial<Record<string, BadgeIconKind>> = {
   "rival-20": "versus",
   "nemesis-10": "shark",
   "dojo-15": "target",
-  underdog: "dog",
+  underdog: "challengeFlag",
   welcome: "handshake",
   "streak-breaker": "stopHand",
   "streak-breaker-10": "stopHand",

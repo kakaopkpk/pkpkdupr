@@ -17,6 +17,7 @@ import { useDimmedThemeColor } from "@/lib/themeColor";
 import type { MatchInfo } from "@/types/match";
 import {
   RivalScene,
+  ChallengeScene,
   ChampionsScene,
   StreakStopperScene,
 } from "./SpecialMatchCelebrationScenes";
@@ -65,7 +66,7 @@ export interface SpecialMatchCelebrationScreenProps {
 }
 
 /**
- * 특수 매치(라이벌전 승리·연승 저지·최강자전 승리) 큰 연출. 틀은 업적 축하 연출과 같은 어두운 전체 화면이고,
+ * 특수 매치(라이벌전 승리·연승 저지·최강자전 승리·도전 성공) 큰 연출. 틀은 업적 축하 연출과 같은 어두운 전체 화면이고,
  * 흰 카드 없이 가운데에 그림(주인공 얼굴 뒤 빛줄기·후광) → 26 흰 제목 → 15 흰 78% 설명 한 줄을 둔다(docs/design.md "특수 매치").
  * 확인(또는 배경 누르기·Esc)으로만 닫히고, "이미지로 공유"는 지금 연출을 공유하며 닫지 않는다.
  * 움직임 줄이기면 연출 없이 마지막 장면을 바로 보인다.
@@ -166,6 +167,8 @@ export default function SpecialMatchCelebrationScreen({
             <RivalScene celebration={celebration} beatCount={beatCount} />
           ) : celebration.kind === "streak_stopper" ? (
             <StreakStopperScene celebration={celebration} beatCount={beatCount} />
+          ) : celebration.kind === "challenge" ? (
+            <ChallengeScene celebration={celebration} beatCount={beatCount} />
           ) : (
             <ChampionsScene celebration={celebration} beatCount={beatCount} />
           )}

@@ -59,7 +59,7 @@
     - 평점 잠금 밖에서 반영 직후 랭킹을 다시 읽어 정한다. 판정이 실패해도 응답은 200이고 결과는 그대로 둔다.
     - 결과가 null로 남은 completed 경기도 다음 수정 때 채운다(승패가 안 갈리면 그대로 null). 바뀐 결과는 저장하되 큰 연출은 결과가 처음 정해질 때만 싣는다.
     - 팀별 선수 구성이 바뀌는 저장은 `specialMatch`를 null로 지운다(팀 안 순서만 바뀌면 그대로).
-  - 응답 `RecordedMatchResponse.specialMatchCelebration`은 결과가 이번 저장으로 처음 `rival_overtaken`·`streak_stopped`·`champions_won`으로 정해졌을 때만 큰 연출 데이터(`SpecialMatchCelebration`)이고, 그 밖은 null이다. 기록한 회원이 이긴 팀인지와 상관없이 싣는다.
+  - 응답 `RecordedMatchResponse.specialMatchCelebration`은 결과가 이번 저장으로 처음 `rival_overtaken`·`streak_stopped`·`champions_won`·`challenge_success`로 정해졌을 때만 큰 연출 데이터(`SpecialMatchCelebration`)이고, 그 밖은 null이다. 기록한 회원이 이긴 팀인지와 상관없이 싣는다.
 - 삭제 `DELETE /api/matches/:matchId`
   - `isMatchRecordDeletable`, 이미 지워졌으면 404.
   - 선택적 `expectedUpdatedAt`이 서버 `updatedAt`과 다르면 409.
@@ -69,7 +69,8 @@
   - 요청 `sessionId`가 오늘 회원 세션이면 그 세션, 아니면 기록과 같은 시간 규칙을 따른다.
   - 선수가 이미 진행 중 경기에 있으면 409 "<아이디>님이 다른 경기 중이에요".
   - 확인·생성은 advisory 잠금으로 직렬화한다.
-  - 같은 멤버로 한 판 더의 `rematchOfMatchId`를 주면 `judgeRematchSpecialMatch`로 리벤지를 판정해 `specialMatch`에 저장한다. 원래 경기가 없거나·완료 전이거나·승패가 안 갈렸거나·멤버가 다르면 null로 시작한다.
+  - 같은 멤버로 한 판 더의 `rematchOfMatchId`를 주면 `judgeRematchSpecialMatch`로 리벤지를 판정해 `specialMatch`에 저장한다. 원래 경기가 없거나·완료 전이거나·승패가 안 갈렸거나·멤버가 다르면 리벤지가 아니다.
+  - 리벤지가 아니고 정해진 세션이 있으면(`rematchOfMatchId` 유무와 상관없이) 세션 시작 경기처럼 도전 매치만 판정해 저장한다(루트 `AGENTS.md` "특수 매치"). 세션이 없으면 null이다.
 - 대진 예정 경기 시작 `POST /api/matches/:matchId/start`: 200 `Match`
   - 활성 회원 누구나. `status`를 created로, `matchStartsAt`을 시작 시각으로 바꾼다.
   - 경기 없음 404, 예정 경기가 아니면 409, 세션이 오늘 세션이 아니면 409.
@@ -106,7 +107,7 @@
 - 상세 `GET /api/match-sessions/:sessionId`
 - 세션 경기 `GET /api/match-sessions/:sessionId/matches`: 대진 예정 경기(`scheduled`, `round` 포함)도 포함
 - 점수 없이 진행 중 경기 시작 `POST /api/match-sessions/:sessionId/matches`: `POST /api/matches/start`와 같은 처리, 오늘 세션만, 이미 진행 중인 선수 포함 시 409, 선수 자동 참여
-  - 추천 카드의 `recommendedSpecialKind`를 주면 지금 그 경기 종류 랭킹·연승으로 `judgeRecommendedSpecialMatch`를 다시 판정해 유형이 같을 때만 `specialMatch`에 저장하고, 다르거나 리벤지·모르는 값이면 null로 시작한다(요청은 실패하지 않는다).
+  - 지금 그 경기 종류 랭킹·연승으로 `judgeRecommendedSpecialMatch`를 다시 판정해, 추천 카드의 `recommendedSpecialKind`와 유형이 같거나 판정이 도전 매치면 `specialMatch`에 저장하고 그 밖은 null로 시작한다(`resolveSessionStartSpecialMatch`, 요청은 실패하지 않는다). 리벤지·모르는 값은 카드 유형이 없는 것으로 본다.
 - 복식 추천 매칭 `GET /api/match-sessions/:sessionId/recommendations?courts=N&reroll=R`
   - 오늘 세션만, courts 기본 3·1~4로 자름.
   - `reroll`은 다시 추천 횟수(기본 0)이고 0 이상 정수가 아니면 400 "reroll은 0 이상 정수여야 합니다.". 옛 `rank` 쿼리는 읽지 않는다(보내도 400이 아니고 결과에 영향 없음).
@@ -126,10 +127,10 @@
   - 진행 중 경기 선수 제외.
   - 게스트는 팀 나누기·응답 팀 `averageRating` 모두 2.5(`MATCHMAKING_GUEST_RATING`)로 치고, 응답 선수 `doublesRating`은 null이다.
   - 팀 나누기는 NR 정회원을 게스트를 뺀 참여자 평점 중앙값(전원 NR이면 3.5)으로 대체하고, 응답 팀 `averageRating`은 NR 정회원을 3.0으로 친 표시용 평균.
-  - 대진마다 코트를 복식 랭킹·연승·성별로 `judgeRecommendedSpecialMatch` 판정해, 가산점(`SPECIAL_MATCH_RECOMMENDATION_BONUS`, 최강자전 2, 라이벌전 1.5, 연승 매치·리벤지·남복·여복 매치 0)이 가장 큰 코트 하나의 가산점만 대진 감점에서 뺀다. 리벤지는 만들지 않는다.
+  - 대진마다 코트를 복식 랭킹·연승·성별로 `judgeRecommendedSpecialMatch` 판정해, 가산점(`SPECIAL_MATCH_RECOMMENDATION_BONUS`, 최강자전 2, 라이벌전 1.5, 연승 매치·리벤지·도전 매치·남복·여복 매치 0)이 가장 큰 코트 하나의 가산점만 대진 감점에서 뺀다. 리벤지는 만들지 않는다.
   - 네 명 성별이 모두 같은 코트(남복·여복, 성별 없는 게스트 제외)는 코트마다 2(`MATCHMAKING_SAME_GENDER_COURT_BONUS`)를 감점에서 뺀다. 랭킹 원천을 못 읽어도 적용한다.
   - 후보 줄 세우기·여유폭은 가산점을 뺀 감점으로 한다.
-  - 응답 코트 `specialMatch`는 코트 하나만 판정 결과(`outcome` null)이고 나머지 코트는 null이다. 가산점 코트(가장 큰 코트, 같으면 앞 코트)가 있으면 그 코트, 없으면 앞 연승 매치 코트, 그것도 없으면 앞 남복·여복 매치 코트다.
+  - 응답 코트 `specialMatch`는 코트 하나만 판정 결과(`outcome` null)이고 나머지 코트는 null이다. 가산점 코트(가장 큰 코트, 같으면 앞 코트)가 있으면 그 코트, 없으면 앞 연승 매치 코트, 그다음 앞 도전 매치 코트, 그것도 없으면 앞 남복·여복 매치 코트다(`SPECIAL_MATCH_RECOMMENDATION_DISPLAY_RANK`).
   - 응답 선수(`RecommendationPlayer`)에 복식 랭킹 순위 `doublesRank`(랭킹에 없으면 null)와 지금 연승 수 `winStreak`(랭킹과 같은 규칙).
   - 랭킹 원천을 못 읽으면 특수 유형 가산점 없이(남복·여복 가산점은 그대로) 추천하고, 코트 `specialMatch`는 모두 null, 선수 `doublesRank`는 null·`winStreak`는 0이다.
 - 참여자 한 명씩 추가 `POST /api/match-sessions/:sessionId/participants`·삭제 `DELETE /api/match-sessions/:sessionId/participants/:playerId`
@@ -200,7 +201,7 @@
   - `candidates`는 점수 순 최대 3명(지금 활성 정회원만)과 지금 받은 칭찬 수 `praiseCount`. 끝나기 전 세션과 `SESSION_PRAISE_START` 전에 끝난 세션은 빈 배열이다.
     - 후보마다 분류 `category`와 값 `value`이고, 연승 수문장만 저지 횟수 `streakBreaks`가 붙는다(`value`는 끊은 가장 긴 연승).
   - 후보 계산은 세션 완료 경기 전체(게스트가 낀 평점 미반영 경기 포함)로 하고, 세션 지배자·평점 변화·순위는 세션 리포트와 같다.
-    - 언더독만 평점 반영 경기로 세고, 경기 직전 평점은 세션 참가자 평점 변경 로그의 `previousRating`(업적 언더독과 같은 입력)이다.
+    - 도전자만 평점 반영 경기로 세고, 경기 직전 평점은 세션 참가자 평점 변경 로그의 `previousRating`(업적 도전자와 같은 입력)이다. 기준은 0.1(`CHALLENGE_MIN_RATING_GAP`), 점수는 3 + (차 − 0.1) × 100이다.
     - 복수자는 완료 경기 요약의 특수 매치 결과 `specialMatchOutcome`(`special_match.outcome`)이 `revenge_success`인 경기로 센다.
   - `myTargetPlayerId`는 요청자가 칭찬한 회원(안 했으면 null). id 형식 오류 400, 없는 세션 404.
 - 칭찬하기 `POST /api/match-sessions/:sessionId/praise` `{ targetPlayerId }`: 200 `SessionPraiseResponse`(저장 반영)
@@ -213,7 +214,7 @@
 
 저장 없이 완료 경기로 조회 시 계산합니다. 정의·계산은 `packages/shared/src/achievements.ts`입니다. 예외로 모범생은 회원의 규칙 안내 완독 시각으로 계산합니다.
 
-- 게스트가 낀 완료 경기도 센다. 평점 업적의 복식 경기 수·평점과 언더독만 평점 반영 경기로 센다.
+- 게스트가 낀 완료 경기도 센다. 평점 업적의 복식 경기 수·평점과 도전자만 평점 반영 경기로 센다.
 - 게스트 본인은 어느 응답에서도 업적을 받지 않는다(`newAchievements`·`achievementPoints`·`achievements`·holders 수, 게스트 프로필은 모두 미획득·진행도 0).
 - 점수
   - 업적 점수는 정의의 `points`(10·25·50·100점)이다.
@@ -223,7 +224,8 @@
   - 경기 수·승 수·출석은 이관 경기를 포함한 전체 기록을 센다.
   - 나머지 지표는 업적 기준 시각 `ACHIEVEMENT_COUNT_START`(2026-11-17 00:00 KST, `achievementCountStart.ts`) 뒤 완료 경기만 센다.
   - 새 지표를 쓰는 업적을 추가하면 그 지표는 추가 배포일 00:00 KST부터 센다.
-  - 언더독·연승 저지·환영 인사·개근상·천적 지표는 `SECOND_ACHIEVEMENT_SET_COUNT_START`(2026-11-18 00:00 KST)부터 센다.
+  - 연승 저지·환영 인사·개근상·천적 지표는 `SECOND_ACHIEVEMENT_SET_COUNT_START`(2026-11-18 00:00 KST)부터 센다.
+  - 도전자 지표(`underdogWins`)는 `CHALLENGER_ACHIEVEMENT_COUNT_START`(2026-11-25 00:00 KST, 기준을 0.1로 바꾼 날)부터 센다. 그 전 경기로만 받은 회원은 받지 않은 상태다.
   - 대회 업적 지표는 `TOURNAMENT_ACHIEVEMENT_COUNT_START`(2026-11-24 00:00 KST)부터 센다. 순위 업적은 받은 경기의 완료 시각으로 본다.
   - 기존 지표에 단계만 늘리는 업적(예: 1000경기 다음 5000경기)은 그 지표의 시작 시각을 따른다.
   - 기존 업적의 조건 수정은 원래 시작 시각부터 다시 계산한다.
@@ -245,7 +247,7 @@
   - `newAchievements`에는 나오지 않고, 세션이 만료된 뒤 미확인 업적으로 축하한다.
 - 무패 세션은 만료된 세션의 모든 경기가 전승이고 4경기 이상일 때 받으며, 받은 경기는 전승 4번째 경기다.
 - 다른 회원 기록이 필요한 업적(연승 저지·환영 인사·개근상)이 있어, 업적 계산에는 그 회원 경기가 아니라 동호회 전체 완료 경기를 넘긴다.
-- 언더독: 경기 직전 상대 팀 평균 평점이 우리 팀보다 0.3 이상 높은데 이긴 경기다.
+- 도전자(id `underdog`, 25점): 경기 직전 상대 팀 평균 평점이 우리 팀보다 0.1 이상(`CHALLENGE_MIN_RATING_GAP`) 높은데 이긴 경기다.
   - 경기 직전 평점은 그 경기 평점 변경 로그의 `previousRating`(경기 분류 평점, 업적 입력 `ratingBefore`)이고, 로그가 없는 선수는 3.0으로 친다.
 - 연승 저지: 경기 직전 3연승 이상이던 상대(상대 팀 중 누구든)를 이긴 경기다. 상대 연승은 전체 기록으로 랭킹 연승과 같은 규칙으로 센다.
 - 환영 인사: 같은 팀 파트너의 첫 완료 경기(게스트가 낀 경기 포함)에 함께 뛴 경기다(승패 무관).

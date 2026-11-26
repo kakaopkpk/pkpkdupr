@@ -1,4 +1,5 @@
 import {
+  CHALLENGE_MIN_RATING_GAP,
   compareCountedMatches,
   getRatingGapBefore,
   RATING_EPSILON,
@@ -28,7 +29,7 @@ export type SessionPraiseCategory = (typeof SESSION_PRAISE_CATEGORIES)[number];
 
 export const SESSION_PRAISE_CATEGORY_LABEL: Record<SessionPraiseCategory, string> = {
   revenge: "복수자",
-  underdog: "언더독",
+  underdog: "도전자",
   clutch: "승부사",
   streakGuard: "연승 수문장",
   rankJump: "순위 도약",
@@ -47,8 +48,6 @@ export const SESSION_PRAISE_MOST_WINS_MIN = 3;
 export const SESSION_PRAISE_MOST_POINTS_MIN = 40;
 /** 승부사의 듀스 승: 이긴 게임에서 이긴 팀 점수가 이 점수 이상 */
 export const SESSION_PRAISE_CLUTCH_MIN_POINTS = 12;
-/** 언더독 후보가 되는 최소 평점 차(경기 직전 상대 팀 평균 − 우리 팀 평균) */
-export const SESSION_PRAISE_UNDERDOG_MIN_GAP = 0.15;
 /** 세션 지배자 점수: 평점 상승 이만큼당 1점 */
 export const SESSION_PRAISE_DOMINATOR_POINT_UNIT = 0.012;
 /** 이 수 이상 칭찬받으면 세션 상세·소식에서 강조하고 칭찬 업적에 센다 */
@@ -64,7 +63,7 @@ export interface SessionPraiseMatch {
   completedAt: Date;
   teamPlayerIds: readonly [readonly string[], readonly string[]];
   scores: readonly MatchScore[];
-  /** 게스트가 낀 평점 미반영 경기. 언더독에서만 뺀다 */
+  /** 게스트가 낀 평점 미반영 경기. 도전자에서만 뺀다 */
   ratingExcluded?: boolean;
   /** 특수 매치 결과. revenge_success면 이긴 팀이 복수자 횟수를 센다 */
   specialMatchOutcome?: SpecialMatchOutcome | null;
@@ -114,7 +113,7 @@ const isClutchWin = (scores: readonly MatchScore[], teamIndex: 0 | 1) =>
  * 연승은 누적 연승이라 allMatches(세션 밖 경기 포함 전체 완료 경기)를 처음부터 훑어 잇고,
  * 기록은 세션 경기에서만 쌓는다. 승패가 갈리지 않은 경기는 연승을 끊는다.
  * ratingBeforeByMatchId는 경기 id별 경기 직전 선수별 평점(그 경기 분류, 평점 변경 로그의 previousRating)이고
- * 언더독에만 쓴다. 없는 경기는 언더독을 세지 않고, 값이 없는 선수는 DUPR_DEFAULT_RATING(3.0)으로 친다
+ * 도전자에만 쓴다. 없는 경기는 도전자를 세지 않고, 값이 없는 선수는 DUPR_DEFAULT_RATING(3.0)으로 친다
  */
 export const buildSessionPraisePlayerStats = (
   sessionMatches: readonly SessionPraiseMatch[],
@@ -275,12 +274,13 @@ const CATEGORY_RULES: Record<SessionPraiseCategory, CategoryRule> = {
         : null,
     compare: compareByPointDiff,
   },
+  // 도전자: 업적 "도전자"·도전 매치와 같은 기준(CHALLENGE_MIN_RATING_GAP) 이상 높은 팀을 이긴 회원
   underdog: {
     pick: ({ stats }) =>
-      stats.underdogGap >= SESSION_PRAISE_UNDERDOG_MIN_GAP - RATING_EPSILON
+      stats.underdogGap >= CHALLENGE_MIN_RATING_GAP - RATING_EPSILON
         ? {
             value: stats.underdogGap,
-            score: 3 + (stats.underdogGap - SESSION_PRAISE_UNDERDOG_MIN_GAP) * 100,
+            score: 3 + (stats.underdogGap - CHALLENGE_MIN_RATING_GAP) * 100,
           }
         : null,
     compare: compareByPointDiff,
