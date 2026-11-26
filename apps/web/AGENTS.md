@@ -43,7 +43,7 @@
         - 어느 카드에서든 참여하기·참여 취소.
       - 진행 중 세션이 없으면 캐러셀(과 진행 중 경기) 아래 "소식" 피드 `home/NewsFeed`(`GET /api/news-feed`, 무한 스크롤, 데이터는 `home/useNewsFeed`)를 둔다. 카드 모양·누르면 가는 곳은 `docs/design.md` "홈"을 따른다.
         - 소식 맨 위에는 규칙 안내 카드 `home/RulesGuideNewsCard`(누르면 `openRulesGuide`, X로 닫음, "15장 중 n장 읽음"과 진행률 막대)를 둔다.
-          - 보일지는 `lib/rulesGuide`의 `useIsRulesGuideCardHidden`, 읽은 장 수는 `useRulesGuideSeenCount`가 정한다(기기별 localStorage `pkpkdupr:rules-guide-seen`·`pkpkdupr:rules-guide-closed`).
+          - 보일지는 `lib/rulesGuide`의 `useIsRulesGuideCardHidden`, 읽은 장 수는 `useRulesGuideSeenCount`가 정한다(기기별 localStorage `pkpkdupr:rules-guide-seen-v2`·`pkpkdupr:rules-guide-closed-v2`, 그 전 키는 읽지 않고 지움).
           - X로 닫거나 15장을 다 보면 다시 나오지 않는다. 안내 화면을 열기만 해서는 사라지지 않는다.
       - 진행 중 일반 세션이면 블루 카드 아래 `records/SessionReportParts`의 `LiveSessionHighlightCard`(세션 지배자 줄 + 세션 연승 줄)를 둔다. 모양은 `docs/design.md` "홈".
         - 데이터는 `home/useLiveSessionHighlight`다. 지배자와 누적 연승은 `home/useLiveSessionReport`(세션 리포트 `topRiser`·`winStreaks`)가 받는다.
@@ -133,6 +133,9 @@
     - `rules/`: 피클볼 기본 규칙 안내 `RulesGuideScreen`(카드 15장 가로 넘기기, 넘기기는 홈 캐러셀의 `home/useCarouselSwipe`). 모양·그림 규칙은 `docs/design.md` "피클볼 기본 규칙".
       - `BottomNav`가 `lazy`로 처음 열 때 받는다(그림 CSS를 첫 화면 CSS에서 빼려는 것). 홈 카드의 장 수는 이 모듈을 끌어오지 않도록 `lib/rulesGuide`의 `RULES_GUIDE_CARD_COUNT`를 쓴다.
       - 지금 카드가 될 때마다 `markRulesGuideCardSeen`으로 그 장을 본 장으로 남긴다(15장을 다 보면 홈 규칙 안내 카드가 사라짐).
+      - 15장을 다 본 채로 닫히면(`isOpen`이 false가 될 때) `lib/rulesGuideCompletion`의 `submitRulesGuideCompletion`으로 `POST /api/me/rules-guide/complete`를 보내고, 처음 남겼으면 `achievements`를 무효화한다(업적 모범생 축하).
+        - 미확인 업적 조회(`fetchUnseenAchievements`)는 이 요청(`trackAchievementWrite`)이 끝난 뒤 보낸다.
+        - 실패하면 알리지 않고, 셸(`BottomNav`)이 앱 진입 때 `syncRulesGuideCompletion`으로 `/api/me` 회원의 `rulesGuideCompletedAt`이 없으면 다시 보낸다.
       - 카드 내용·순서·그림 범위 클래스(`scope`)는 `RulesGuideCards`, 공통 조각(그림 칸 `RuleFigure`·머리·점 목록·표 줄)은 `RulesGuideParts`, 카드별 그림은 `figures/`, 에티켓 사진은 `photos/`다.
       - 그림은 298×220 고정 좌표이고 `RuleFigure`가 칸 폭에 맞춰 비율로 늘이거나 줄인다.
       - 움직임은 `rulesGuide.css`(카드 `scope` 범위 안에서만 걸림, 한 카드는 한 주기)다. 위에서 본 코트·사진 그림은 `.pk-rules-cN` 범위(N은 장 번호가 아닌 범위 이름), 장면 방식 그림은 `.g2`(장면·캡션·줄 강조·진행 막대), 옆에서 본 그림의 공·사람·패들은 `.g3`와 `k` 접두 클래스다. 지금 카드가 아니면 `.pk-rules-paused`로 멈추고, 지금 카드가 되면 그림을 다시 그려 처음부터 재생한다. 움직임 줄이기면 카드의 `stillSeconds` 장면에서 멈춘다.
@@ -165,6 +168,7 @@
     - `SessionPraiseParts`: 분류 칩(앰버, 분류 아이콘)·분류 아이콘. 복수자 주먹은 `Icons.tsx`의 `FIST_ICON_PATHS`, 언더독·승부사는 업적 배지 `BADGE_ICON_PATHS`의 `dog`·`bandage`를 같이 쓴다.
     - 값 표기는 `lib/sessionPraise`가 맡는다. 팝업 카드·세션 상세는 큰 값 + 설명 줄 `getSessionPraiseCardValue`, 홈 소식·공유 이미지는 한 줄 `formatSessionPraiseValue`다.
       - 두 함수는 후보의 `category`·`value`·`streakBreaks`(`SessionPraiseValue`)를 받는다. 연승 수문장은 `streakBreaks`(저지 횟수)로 1번(끊은 연승)과 2번 이상(횟수) 표기를 고른다.
+  - 업적 전체 보기·업적 상세 시트의 못 받은 모범생 진행은 `lib/achievements`의 `getDisplayedAchievementProgress`로 정한다. 내 업적이면 이 기기에서 본 장 수, 남의 업적이면 진행 막대·줄이 없다. 내가 못 받은 모범생 상세 시트는 하단에 "규칙 읽기"(시트를 닫고 `openRulesGuide`)를 둔다.
   - `profile/UnseenAchievementCelebration.tsx`: `BottomNav`가 렌더. 전역 화면·바텀시트·+ 메뉴가 하나도 열려 있지 않을 때 앱 진입·업적 데이터 버전 변경(무효화·앱 복귀 TTL)·열린 화면이 모두 닫힐 때 `GET /api/me/achievements/unseen`을 조회해, 아직 보지 않은 내 업적(남이 입력한 경기·세션 지배자·관리자 정정 포함)을 `AchievementCelebration`으로 한 장씩 띄우고 닫으면 `POST /api/me/achievements/seen`. 미확인 조회(`fetchUnseenAchievements`)는 진행 중인 확인 처리 요청이 끝난 뒤 보내 방금 본 업적이 다시 뜨지 않는다
     - 칭찬 팝업이 조회·표시 중이면 기다리고, 축하 연출이 떠 있는 동안은 `onShowingChange`로 알려 칭찬 팝업이 기다린다.
   - 공용 레이어·상태: `BottomSheet.tsx`, `PushScreen.tsx`, `SkeletonBlock.tsx`, `TabPanelStatus.tsx`, `HoldToConfirmButton.tsx`, `SystemToast.tsx`, `OfflineBanner.tsx`, `PwaInstallPrompt.tsx`, `PwaUpdatePrompt.tsx`
