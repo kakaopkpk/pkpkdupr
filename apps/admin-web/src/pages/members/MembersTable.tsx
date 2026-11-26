@@ -6,7 +6,7 @@ import { SortHeader } from "../../components/ui/SortHeader";
 import { formatRating, formatRelativeDay } from "../../lib/format";
 import {
   KIND_LABEL,
-  getLastSignInLabel,
+  getLastActiveLabel,
   getMemberKind,
   type SortKey,
   type SortState,
@@ -68,8 +68,8 @@ export const MembersTable: React.FC<{
           <SortableHeader label="경기" sortKey="matches" sort={sort} onSort={onSort} />
           <SortableHeader label="최근 경기" sortKey="lastMatch" sort={sort} onSort={onSort} />
           <SortableHeader
-            label="최근 로그인"
-            sortKey="lastSignIn"
+            label="최근 접속"
+            sortKey="lastActive"
             sort={sort}
             onSort={onSort}
             className="pr-5"
@@ -132,10 +132,10 @@ export const MembersTable: React.FC<{
                 className={cx(
                   cellClassName,
                   "whitespace-nowrap pr-5 text-right tabular-nums",
-                  !inactive && !player.lastSignInAt && "text-pk-sub",
+                  !inactive && !player.lastActiveAt && "text-pk-sub",
                 )}
               >
-                {getLastSignInLabel(player)}
+                {getLastActiveLabel(player)}
               </td>
             </tr>
           );
