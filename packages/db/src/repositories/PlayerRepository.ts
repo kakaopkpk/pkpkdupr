@@ -8,7 +8,7 @@ import {
   type PlayerStatus,
   type StoredPlayerDupr,
 } from "@pkpkdupr/shared/player";
-import { and, desc, eq, isNull, sql } from "drizzle-orm";
+import { and, desc, eq, isNull, lte, or, sql } from "drizzle-orm";
 import { isEntityId } from "@pkpkdupr/shared/entityId";
 import { playerAdmins, players } from "../db/schema";
 import { firstRow, placeholders, type DbClient } from "../db/client";
@@ -292,14 +292,14 @@ export class PlayerRepository {
     now: Date,
     minIntervalSeconds: number,
   ): Promise<void> {
-    const threshold = Math.floor(now.getTime() / 1000) - minIntervalSeconds;
+    const threshold = new Date(now.getTime() - minIntervalSeconds * 1000);
     await this.db
       .update(players)
       .set({ lastActiveAt: now })
       .where(
         and(
           eq(players.id, id),
-          sql`(${players.lastActiveAt} IS NULL OR ${players.lastActiveAt} <= ${threshold})`,
+          or(isNull(players.lastActiveAt), lte(players.lastActiveAt, threshold)),
         ),
       );
   }

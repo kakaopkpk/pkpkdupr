@@ -18,7 +18,7 @@
 
 - 로그인과 비밀번호 변경은 클라이언트가 Supabase Auth로 직접 합니다.
 - `GET /api/me`
-  - 웹이 앱을 열거나 앱으로 돌아올 때 부르므로, 마지막 기록에서 5분이 지났으면 앱 진입 시각 `players.last_active_at`을 갱신한다. 기록이 실패해도 응답은 그대로다
+  - 웹·어드민이 앱을 열거나 앱으로 돌아올 때 부르므로, 마지막 기록에서 5분이 지났으면 앱 진입 시각 `players.last_active_at`을 갱신한다. 기록은 응답을 기다리게 하지 않고, 실패해도 응답은 그대로다
 - `POST /api/me/password-changed`: 첫 로그인 비밀번호 변경 완료
 - `PATCH /api/me/profile`
 - avatar API
