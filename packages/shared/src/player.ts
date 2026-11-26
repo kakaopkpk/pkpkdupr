@@ -468,6 +468,8 @@ export interface Player {
   statusMessageBackgroundColor?: string;
   /** 게스트가 정회원으로 승급된 시각. 승급 기록 이전 회원·일반 가입 회원·게스트는 null이거나 없다 */
   promotedAt?: Date | null;
+  /** 피클볼 기본 규칙 안내를 처음 끝까지 읽은 시각(업적 모범생). 읽지 않았으면 null이거나 없다 */
+  rulesGuideCompletedAt?: Date | null;
   createdAt: Date;
   updatedAt: Date;
 }

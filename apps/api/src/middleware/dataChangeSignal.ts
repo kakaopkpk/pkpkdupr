@@ -36,6 +36,12 @@ const SIGNAL_ROUTES: readonly SignalRoute[] = [
   // 본인에게만 영향이 있는 쓰기
   { method: "POST", pattern: /^\/api\/me\/password-changed$/i, kinds: [] },
   { method: "POST", pattern: /^\/api\/me\/achievements\/seen$/i, kinds: [] },
+  // 규칙 안내 완독은 모범생 업적(받은 회원 수·업적 랭킹)을 바꾼다
+  {
+    method: "POST",
+    pattern: /^\/api\/me\/rules-guide\/complete$/i,
+    kinds: ["achievements"],
+  },
   // 회원
   { method: "PATCH", pattern: /^\/api\/me\/profile$/i, kinds: ["players"] },
   { pattern: /^\/api\/me\/avatar$/i, kinds: ["players"] },

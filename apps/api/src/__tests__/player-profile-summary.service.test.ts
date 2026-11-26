@@ -183,7 +183,7 @@ describe("buildPlayerProfileSummary", () => {
     ]);
   });
 
-  it("업적 56개 진행 상태를 정의 순서로 넣고 진행 중 경기는 세지 않는다", () => {
+  it("업적 57개 진행 상태를 정의 순서로 넣고 진행 중 경기는 세지 않는다", () => {
     const completed = makeMatch({ id: "Mcomplet" });
     const inProgress = makeMatch({
       id: "Minprogr",
@@ -200,8 +200,8 @@ describe("buildPlayerProfileSummary", () => {
       now,
     );
 
-    expect(achievements).toHaveLength(56);
-    expect(achievements[0]).toEqual({
+    expect(achievements).toHaveLength(57);
+    expect(achievements.find((item) => item.id === "matches-1")).toEqual({
       id: "matches-1",
       earned: true,
       earnedAt: now,

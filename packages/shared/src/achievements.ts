@@ -11,14 +11,17 @@ import {
   TOURNAMENT_ACHIEVEMENT_COUNT_START,
 } from "./achievementCountStart.js";
 import { DUPR_DEFAULT_RATING, roundDuprRating } from "./player.js";
+import { RULES_GUIDE_CARD_COUNT } from "./rulesGuide.js";
 import { toKstDateKey } from "./session.js";
 
 /**
  * 업적. 따로 저장하지 않고 조회할 때 완료 경기로 계산한다.
  * 경기를 수정·삭제해 조건이 깨지면 다음 계산부터 받지 않은 상태가 된다.
+ * 예외로 모범생은 경기가 아니라 회원의 규칙 안내 완독 시각으로 정한다.
  */
 
 export type AchievementCategory =
+  | "intro"
   | "matches"
   | "wins"
   | "streak"
@@ -43,6 +46,7 @@ export interface AchievementDefinition {
 
 /** 진행도를 세는 지표. 업적마다 하나를 쓴다 */
 type AchievementMetric =
+  | "rulesGuide"
   | "matches"
   | "wins"
   | "bestStreak"
@@ -77,6 +81,18 @@ const ACHIEVEMENT_TABLE: readonly {
   metric: AchievementMetric;
   definition: AchievementDefinition;
 }[] = [
+  {
+    metric: "rulesGuide",
+    definition: {
+      id: "rules-guide",
+      category: "intro",
+      name: "모범생",
+      condition: `피클볼 기본 규칙 ${RULES_GUIDE_CARD_COUNT}장 모두 읽기`,
+      badgeNumber: null,
+      target: RULES_GUIDE_CARD_COUNT,
+      points: 10,
+    },
+  },
   {
     metric: "matches",
     definition: {
@@ -754,6 +770,9 @@ const ACHIEVEMENT_TABLE: readonly {
 export const ACHIEVEMENTS: readonly AchievementDefinition[] =
   ACHIEVEMENT_TABLE.map((row) => row.definition);
 
+/** 모범생(규칙 안내 완독) 업적 id. 받은 경기가 없는 유일한 업적이다 */
+export const RULES_GUIDE_ACHIEVEMENT_ID = "rules-guide";
+
 /** 칭찬 업적(이쁨받기·이 구역 사랑둥이) id */
 export const PRAISE_ACHIEVEMENT_IDS: ReadonlySet<string> = new Set(
   ACHIEVEMENT_TABLE.filter((row) => row.metric === "praisedSessions").map(
@@ -809,6 +828,8 @@ const ACHIEVEMENT_METRIC_BY_ID = new Map<string, AchievementMetric>(
  * 업적 계산은 시작 시각마다 따로 돌리므로, 지표를 추가할 때 계산 코드에서 시작 시각을 따로 확인하지 않는다.
  */
 const METRIC_COUNT_START: Record<AchievementMetric, Date | null> = {
+  // 경기 지표가 아니라 완독 시각으로 정한다
+  rulesGuide: null,
   matches: null,
   wins: null,
   attendedSessions: null,
@@ -865,6 +886,7 @@ export const isLowRatingAchievement = (achievementId: string) =>
 export const RATING_ACHIEVEMENT_MIN_DOUBLES_MATCHES = 10;
 
 export const ACHIEVEMENT_CATEGORY_LABEL: Record<AchievementCategory, string> = {
+  intro: "입문",
   matches: "경기 수",
   wins: "승리",
   streak: "연승",
@@ -900,14 +922,15 @@ export interface AchievementProgress {
 export interface EarnedAchievement {
   playerId: string;
   achievementId: string;
-  earnedMatchId: string;
+  /** 받은 경기. 경기와 무관한 업적(모범생)만 null이다 */
+  earnedMatchId: string | null;
   earnedAt: Date;
 }
 
-/** 회원이 확인한 업적 한 건. earnedMatchId는 확인할 때의 획득 경기다 */
+/** 회원이 확인한 업적 한 건. earnedMatchId는 확인할 때의 획득 경기다(모범생은 null) */
 export interface SeenAchievementRef {
   achievementId: string;
-  earnedMatchId: string;
+  earnedMatchId: string | null;
 }
 
 /** GET /api/me/achievements/unseen 응답. 받은 업적 중 확인하지 않은 것(받은 시각 → 업적 정의 순서) */
@@ -1226,6 +1249,11 @@ export type EndedSessions = ReadonlyMap<string, string | null> & {
    * 없으면 순위 업적은 받지 않은 상태다
    */
   readonly placedSessionsByPlayerId?: ReadonlyMap<string, readonly PlacedSession[]>;
+  /**
+   * 회원 id → 규칙 안내를 처음 끝까지 읽은 시각(모범생). 서버가 회원 정보로 붙인다.
+   * 없으면 모범생은 받지 않은 상태다
+   */
+  readonly rulesGuideCompletedAtByPlayerId?: ReadonlyMap<string, Date>;
 };
 
 /** 칭찬 업적 입력: 칭찬을 기준 수 이상 받은 세션 하나 */
@@ -1293,7 +1321,8 @@ const markReachedAchievements = (
     if (
       isSessionEventMetric(metric) ||
       isPlacementMetric(metric) ||
-      metric === "praisedSessions"
+      metric === "praisedSessions" ||
+      metric === "rulesGuide"
     ) {
       continue;
     }
@@ -1320,6 +1349,7 @@ const computeProgressSince = (
   facts: ClubFacts,
 ): AchievementProgress[] => {
   const metrics: Record<AchievementMetric, number> = {
+    rulesGuide: 0,
     matches: 0,
     wins: 0,
     bestStreak: 0,
@@ -1567,6 +1597,8 @@ const computeProgressSince = (
   for (const metric of PLACEMENT_METRICS) {
     metrics[metric] = placementSessions[metric].length;
   }
+  const rulesGuideCompletedAt =
+    endedSessions.rulesGuideCompletedAtByPlayerId?.get(playerId) ?? null;
 
   for (const item of progress) {
     const metric = ACHIEVEMENT_METRIC_BY_ID.get(item.id)!;
@@ -1592,6 +1624,12 @@ const computeProgressSince = (
       item.earnedAt = earnedSession.reachedAt;
       item.earnedMatchId = earnedSession.matchId;
     }
+    // 서버는 장 수를 모르므로 완독했으면 목표만큼, 아니면 0이다(받은 경기 없음)
+    if (metric === "rulesGuide" && rulesGuideCompletedAt) {
+      item.current = item.target;
+      item.earned = true;
+      item.earnedAt = rulesGuideCompletedAt;
+    }
   }
   return progress;
 };
@@ -1611,6 +1649,7 @@ const computeProgressSince = (
  * endedSessions를 넘기지 않으면 둘 다 받지 않은 상태다.
  * 출사표는 대회 세션(session.tournament)에서 한 첫 경기로 받는다. 포디움·우승·3관왕은 endedSessions의
  * 대회 순위(placedSessionsByPlayerId)로 세고, 그 대회에서 이 회원의 마지막 경기를 받은 경기로 정한다.
+ * 모범생은 endedSessions의 규칙 안내 완독 시각(rulesGuideCompletedAtByPlayerId)에 받고, 받은 경기는 없다.
  * 평점 업적은 평점 반영 복식 경기가 RATING_ACHIEVEMENT_MIN_DOUBLES_MATCHES개 이상인 뒤의 복식 경기 직후
  * 복식 평점(doublesRatingAfter)의 최고치(낮은 평점 업적은 최저치)로 세므로, 받은 뒤 평점이 바뀌어도 유지된다.
  * 복식 경기 수는 집계 시작 시각 전 경기도 센다. 평점은 집계 시작 시각 시점 평점(그 전 마지막
@@ -1655,7 +1694,7 @@ export const toEarnedAchievements = (
   progress: readonly AchievementProgress[],
 ): EarnedAchievement[] =>
   progress.flatMap((item) =>
-    item.earned && item.earnedAt && item.earnedMatchId
+    item.earned && item.earnedAt
       ? [
           {
             playerId,

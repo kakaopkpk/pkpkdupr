@@ -170,6 +170,9 @@ const hydratePlayer = (record: any): StoredPlayerRecord => {
     status: record.status === "deleted" ? "inactive" : record.status,
     promotedAt: record.promotedAt ? toDate(record.promotedAt) : null,
     lastActiveAt: record.lastActiveAt ? toDate(record.lastActiveAt) : null,
+    rulesGuideCompletedAt: record.rulesGuideCompletedAt
+      ? toDate(record.rulesGuideCompletedAt)
+      : null,
     createdAt: toDate(record.createdAt),
     updatedAt: toDate(record.updatedAt),
   };

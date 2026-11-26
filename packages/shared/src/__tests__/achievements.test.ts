@@ -11,7 +11,9 @@ import {
   isLowRatingAchievement,
   isRatingAchievement,
   RATING_ACHIEVEMENT_MIN_DOUBLES_MATCHES,
+  RULES_GUIDE_ACHIEVEMENT_ID,
   sumAchievementPoints,
+  toEarnedAchievements,
   type AchievementMatch,
   type AchievementProgress,
   type EarnedAchievement,
@@ -147,8 +149,9 @@ const endedSessions = (
   ]);
 
 describe("ACHIEVEMENTS", () => {
-  it("업적 52개를 표 순서로 정의한다", () => {
+  it("업적 57개를 표 순서로 정의한다", () => {
     expect(ACHIEVEMENTS.map((definition) => definition.id)).toEqual([
+      "rules-guide",
       "matches-1",
       "matches-10",
       "matches-50",
@@ -206,11 +209,12 @@ describe("ACHIEVEMENTS", () => {
       "tournament-champion-1",
       "tournament-champion-3",
     ]);
-    expect(new Set(ACHIEVEMENTS.map((item) => item.id)).size).toBe(56);
+    expect(new Set(ACHIEVEMENTS.map((item) => item.id)).size).toBe(57);
   });
 
-  it("분류 이름은 경기 수·승리·연승·평점·특별·세션·대회다", () => {
+  it("분류 이름은 입문·경기 수·승리·연승·평점·특별·세션·대회다", () => {
     expect(ACHIEVEMENT_CATEGORY_LABEL).toEqual({
+      intro: "입문",
       matches: "경기 수",
       wins: "승리",
       streak: "연승",
@@ -240,9 +244,9 @@ describe("isBestStreakAchievement", () => {
 });
 
 describe("computeAchievements", () => {
-  it("경기가 없으면 56개 모두 진행도 0으로 받지 않은 상태다", () => {
+  it("경기가 없으면 57개 모두 진행도 0으로 받지 않은 상태다", () => {
     const progress = compute([]);
-    expect(progress).toHaveLength(56);
+    expect(progress).toHaveLength(57);
     expect(progress.map((item) => item.id)).toEqual(
       ACHIEVEMENTS.map((definition) => definition.id),
     );
@@ -1439,7 +1443,7 @@ describe("업적 점수", () => {
     for (const definition of ACHIEVEMENTS) {
       expect([10, 25, 50, 100]).toContain(definition.points);
     }
-    expect(ACHIEVEMENT_MAX_POINTS).toBe(2360);
+    expect(ACHIEVEMENT_MAX_POINTS).toBe(2370);
   });
 
   it("받은 업적 점수만 더하고 모르는 업적은 0점이다", () => {
@@ -1860,5 +1864,90 @@ describe("대회 업적", () => {
         ["tournament-podium", "tournament-champion-1"].includes(item.achievementId),
       ),
     ).toBe(false);
+  });
+});
+
+describe("모범생(규칙 안내 완독)", () => {
+  const COMPLETED_AT = new Date("2026-11-26T09:00:00.000Z");
+  const withRulesGuide = (
+    completedAtByPlayerId: ReadonlyMap<string, Date>,
+  ): EndedSessions =>
+    Object.assign(new Map<string, string | null>(), {
+      rulesGuideCompletedAtByPlayerId: completedAtByPlayerId,
+    });
+
+  it("입문 분류 10점이고 목표는 15장이다", () => {
+    expect(
+      ACHIEVEMENTS.find((item) => item.id === RULES_GUIDE_ACHIEVEMENT_ID),
+    ).toMatchObject({
+      category: "intro",
+      name: "모범생",
+      condition: "피클볼 기본 규칙 15장 모두 읽기",
+      target: 15,
+      points: 10,
+    });
+  });
+
+  it("완독 시각이 있으면 경기 없이 그 시각에 받고 받은 경기는 없다", () => {
+    const progress = computeAchievements(
+      ME,
+      [],
+      withRulesGuide(new Map([[ME, COMPLETED_AT]])),
+    );
+    expect(progressOf(progress, RULES_GUIDE_ACHIEVEMENT_ID)).toMatchObject({
+      earned: true,
+      earnedAt: COMPLETED_AT,
+      earnedMatchId: null,
+      current: 15,
+    });
+    expect(toEarnedAchievements(ME, progress)).toEqual([
+      {
+        playerId: ME,
+        achievementId: RULES_GUIDE_ACHIEVEMENT_ID,
+        earnedMatchId: null,
+        earnedAt: COMPLETED_AT,
+      },
+    ]);
+  });
+
+  it("다른 회원의 완독이나 완독 기록이 없으면 받지 않는다", () => {
+    const progress = computeAchievements(
+      ME,
+      [makeMatch({})],
+      withRulesGuide(new Map([["player-other", COMPLETED_AT]])),
+    );
+    expect(progressOf(progress, RULES_GUIDE_ACHIEVEMENT_ID)).toMatchObject({
+      earned: false,
+      current: 0,
+    });
+  });
+
+  it("경기 저장으로 새로 받은 업적에는 나오지 않는다", () => {
+    const match = makeMatch({});
+    const earned = findNewAchievements({
+      playerIds: [ME],
+      before: [],
+      after: [match],
+    });
+    expect(earned.map((item) => item.achievementId)).not.toContain(
+      RULES_GUIDE_ACHIEVEMENT_ID,
+    );
+  });
+
+  it("받은 경기 없이(null) 확인하면 확인한 것이고, 확인 기록이 없으면 미확인이다", () => {
+    const earned: EarnedAchievement[] = [
+      {
+        playerId: ME,
+        achievementId: RULES_GUIDE_ACHIEVEMENT_ID,
+        earnedMatchId: null,
+        earnedAt: COMPLETED_AT,
+      },
+    ];
+    expect(findUnseenAchievements(earned, [])).toEqual(earned);
+    expect(
+      findUnseenAchievements(earned, [
+        { achievementId: RULES_GUIDE_ACHIEVEMENT_ID, earnedMatchId: null },
+      ]),
+    ).toEqual([]);
   });
 });
