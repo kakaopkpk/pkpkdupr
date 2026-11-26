@@ -298,8 +298,8 @@ const RULE_CARDS: readonly CardContent[] = [
             서브권도 잃어요.
           </RuleItem>
           <RuleItem row="r3">
-            서브권을 다 잃으면 상대 팀이 공격팀이 돼요. <b>사이드 아웃</b>
-            이라고 해요.
+            서브권을 다 잃으면 서브권이 상대 팀으로 넘어가 공수가 바뀌어요.
+            이 공수 전환을 <b>사이드 아웃</b>이라고 해요.
           </RuleItem>
         </RuleList>
         <RuleParagraph>
