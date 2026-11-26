@@ -82,7 +82,7 @@ const MyMatchCardFrame: React.FC<{
   now: Date;
   header: React.ReactNode;
   onOpenDetail: () => void;
-  footer: React.ReactNode;
+  footer?: React.ReactNode;
   sessionWinStreaks?: SessionWinStreakByPlayer;
 }> = ({ match, now, header, onOpenDetail, footer, sessionWinStreaks }) => {
   const isScheduled = useIsMatchScheduled(match, now);
@@ -117,7 +117,7 @@ const MyMatchCardFrame: React.FC<{
 };
 
 /**
- * 진행 중인 내 경기. 2px 연한 블루 테두리와 "점수 입력" 버튼. 버튼 위 본문을 누르면 경기 상세를 연다.
+ * 진행 중인 내 경기. 2px 연한 블루 테두리와 "점수 입력" 버튼(onEnterScore가 없는 게스트는 버튼 없음). 버튼 위 본문을 누르면 경기 상세를 연다.
  * 팀 줄은 경기 상세처럼 두 팀 사이로 공이 오가는 랠리를 그리고, 시작 전 예정 경기면 vs 글자만 둔다.
  * 머리는 "내 경기" 칩이고, 대회 홈 "내 경기" 섹션(isTournament)에서는 칩 대신 "진행 중 · N라운드" 글자다.
  */
@@ -128,7 +128,7 @@ export const MyLiveMatchCard: React.FC<{
   /** 든 회원 아바타에 세션 연승 링을 두른다(홈 진행 중 세션) */
   sessionWinStreaks?: SessionWinStreakByPlayer;
   onOpenDetail: () => void;
-  onEnterScore: () => void;
+  onEnterScore?: () => void;
 }> = ({
   match,
   now,
@@ -158,9 +158,11 @@ export const MyLiveMatchCard: React.FC<{
       />
     }
     footer={
-      <PkButton size="md" fullWidth className="h-12" onClick={onEnterScore}>
-        점수 입력
-      </PkButton>
+      onEnterScore ? (
+        <PkButton size="md" fullWidth className="h-12" onClick={onEnterScore}>
+          점수 입력
+        </PkButton>
+      ) : null
     }
   />
 );

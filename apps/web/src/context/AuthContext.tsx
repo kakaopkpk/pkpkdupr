@@ -30,6 +30,8 @@ export interface PlayerInfo {
   affiliations?: PlayerAffiliation[];
   statusMessage?: string;
   statusMessageBackgroundColor?: string;
+  /** 회원이 세션에서 추가한 게스트. 보기·본인 세션 참석·칭찬만 하고 경기 기록·세션 만들기는 못 한다 */
+  isGuest?: boolean;
 }
 
 /**
@@ -432,3 +434,6 @@ export const useAuth = (): AuthContextType => {
   if (!ctx) throw new Error("useAuth must be used within AuthProvider");
   return ctx;
 };
+
+/** 로그인한 사람이 게스트인지. 게스트는 경기 기록·시작·수정·삭제, 세션 만들기·완료, 남의 참여 변경을 못 한다 */
+export const useIsGuest = (): boolean => useAuth().player?.isGuest === true;

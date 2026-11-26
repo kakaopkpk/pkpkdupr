@@ -9,6 +9,9 @@ import PartnerRivalSections from "@/components/profile/PartnerRivalSections";
 import PlayerMatchesDrawer from "@/components/profile/PlayerMatchesDrawer";
 import ProfileHeader from "@/components/profile/ProfileHeader";
 import {
+  GuestBadge,
+  GuestLast7DaysTile,
+  GuestNoticeCard,
   Last7DaysTile,
   ProfileBodySkeleton,
   ProfileLoadError,
@@ -18,7 +21,7 @@ import {
 } from "@/components/profile/ProfileSections";
 import { useProfileOverview } from "@/components/profile/useProfileOverview";
 import { useAppNavigation } from "@/context/AppNavigationContext";
-import { useAuth } from "@/context/AuthContext";
+import { useAuth, useIsGuest } from "@/context/AuthContext";
 import { useTabNavigation } from "@/context/TabNavigationContext";
 
 const MATCH_HISTORY_DEPTH_ID = "me-match-history";
@@ -26,6 +29,7 @@ const ACHIEVEMENTS_DEPTH_ID = "me-achievements";
 
 const Me: React.FC = () => {
   const { player, isAuthenticated, refreshMe } = useAuth();
+  const isGuest = useIsGuest();
   const { openSettings } = useAppNavigation();
   const { registerPullToRefresh } = useTabNavigation();
   const playerId = isAuthenticated ? (player?.id ?? null) : null;
@@ -68,6 +72,7 @@ const Me: React.FC = () => {
         matchStats={overview?.summary.matchStats}
         winStreak={overview?.summary.winStreak}
         hideStats={hasError}
+        badge={isGuest ? <GuestBadge /> : null}
         right={
           <button
             type="button"
@@ -81,7 +86,28 @@ const Me: React.FC = () => {
       />
 
       <div className="flex flex-col gap-2.5 px-4">
-        {overview ? (
+        {overview && isGuest ? (
+          <>
+            {/* 게스트는 평점·업적이 없어 평점 카드 대신 안내를, 최근 7일은 경기 수를 보인다(복식 기준) */}
+            <GuestNoticeCard />
+            <div className="grid grid-cols-2 gap-2.5">
+              <WinRateTile overview={overview} category="doubles" />
+              <GuestLast7DaysTile overview={overview} category="doubles" />
+            </div>
+            <PartnerRivalSections
+              partners={overview.summary.partners}
+              rivals={overview.summary.rivals}
+              tabKey="me"
+              depthId="me"
+            />
+            <RecentMatchesSection
+              title="최근 경기"
+              matches={overview.summary.recentMatches}
+              ownerPlayerId={playerId ?? undefined}
+              onViewAll={() => setIsMatchHistoryRequested(true)}
+            />
+          </>
+        ) : overview ? (
           <>
             <ProfileRatingSection
               overview={overview}

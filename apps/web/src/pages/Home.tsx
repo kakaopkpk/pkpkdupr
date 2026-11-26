@@ -38,7 +38,7 @@ import {
 import { Section } from "@/components/ui/Section";
 import { SegmentSwitchFade } from "@/components/ui/SegmentedControl";
 import { useAppNavigation } from "@/context/AppNavigationContext";
-import { useAuth } from "@/context/AuthContext";
+import { useAuth, useIsGuest } from "@/context/AuthContext";
 import { useInvalidateData } from "@/context/DataSyncContext";
 import { useLiveSession } from "@/context/LiveSessionContext";
 import { useSystemNotice } from "@/context/SystemNoticeContext";
@@ -114,6 +114,7 @@ const INITIAL_BRACKET_START_STATE: BracketStartState = {
 const Home: React.FC = () => {
   const { player } = useAuth();
   const playerId = player?.id;
+  const isGuest = useIsGuest();
   const live = useLiveSession();
   const {
     openRecordMatch,
@@ -328,6 +329,12 @@ const Home: React.FC = () => {
    * 진행 중 세션이면 세션 연승 중인 회원 아바타에 링을 두른다(진행 중 세션이 없으면 연승도 없다).
    * 남의 경기는 지금 연승 중인(WIN_STREAK_MIN 이상) 회원에게도 링을 두른다
    */
+  const enterMyMatchScore = () => {
+    if (myInProgressMatch) {
+      openRecordMatch({ kind: "score", matchId: myInProgressMatch.id });
+    }
+  };
+
   const renderInProgress = (otherMatches: MatchInfo[]) => (
     <Section title="진행 중">
       {myInProgressMatch ? (
@@ -336,9 +343,7 @@ const Home: React.FC = () => {
           now={now}
           sessionWinStreaks={highlight.streakByPlayer}
           onOpenDetail={() => openMatchDetail(myInProgressMatch.id)}
-          onEnterScore={() =>
-            openRecordMatch({ kind: "score", matchId: myInProgressMatch.id })
-          }
+          onEnterScore={isGuest ? undefined : enterMyMatchScore}
         />
       ) : null}
       {otherMatches.length > 0 ? (
@@ -375,7 +380,8 @@ const Home: React.FC = () => {
           (match) => match.id !== myInProgressMatch?.id,
         ),
       )}
-      {isLiveParticipant ? (
+      {/* 게스트는 경기를 시작할 수 없어 추천 매칭을 보이지 않는다 */}
+      {isLiveParticipant && !isGuest ? (
         <RecommendationSection
           state={recommendations}
           waitingCount={waitingCount}
@@ -433,14 +439,13 @@ const Home: React.FC = () => {
             now={now}
             isTournament
             onOpenDetail={() => openMatchDetail(myInProgressMatch.id)}
-            onEnterScore={() =>
-              openRecordMatch({ kind: "score", matchId: myInProgressMatch.id })
-            }
+            onEnterScore={isGuest ? undefined : enterMyMatchScore}
           />
         </Section>
       );
     }
-    if (!myNextBracketMatch) return null;
+    // 게스트는 대진 경기를 시작할 수 없다
+    if (!myNextBracketMatch || isGuest) return null;
     const { startingMatchId, startedMatchId, error } = bracketStartState;
     return (
       <Section title="내 경기">

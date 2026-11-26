@@ -49,6 +49,8 @@ export interface ProfileHeaderProps {
   tabKey: TabKey;
   /** 오른쪽 슬롯(예: 나 탭 설정 버튼) */
   right?: React.ReactNode;
+  /** 상태메시지 줄 맨 앞에 붙는 표시(예: 나 탭 게스트 알약) */
+  badge?: React.ReactNode;
   /** 바깥 여백은 화면마다 정한다 */
   className?: string;
 }
@@ -71,6 +73,7 @@ const ProfileHeader: React.FC<ProfileHeaderProps> = ({
   headingAs: Heading = "h1",
   tabKey,
   right,
+  badge,
   className,
 }) => {
   const totalStats = matchStats ? getTotalMatchStats(matchStats) : null;
@@ -176,7 +179,8 @@ const ProfileHeader: React.FC<ProfileHeaderProps> = ({
           {right}
         </div>
       ) : null}
-      <div className="col-start-2 col-end-[-1] row-start-3 mt-[3px] flex h-5 min-w-0">
+      <div className="col-start-2 col-end-[-1] row-start-3 mt-[3px] flex h-5 min-w-0 gap-1.5">
+        {badge}
         {statusMessage ? (
           <StatusMessageChip
             message={statusMessage}

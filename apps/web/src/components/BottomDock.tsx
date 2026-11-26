@@ -136,14 +136,22 @@ export const NavPill: React.FC<{
   );
 };
 
-/** + 버튼과 그 위에 뜨는 "새로 만들기" 메뉴 */
+/** + 버튼과 그 위에 뜨는 "새로 만들기" 메뉴. isLocked(게스트)면 + 버튼이 회색 비활성이고 메뉴를 열지 않는다 */
 export const PlusMenu: React.FC<{
   isOpen: boolean;
   isDisabled: boolean;
+  isLocked?: boolean;
   onToggle: () => void;
   onRecordMatch: () => void;
   onCreateSession: () => void;
-}> = ({ isOpen, isDisabled, onToggle, onRecordMatch, onCreateSession }) => {
+}> = ({
+  isOpen,
+  isDisabled,
+  isLocked = false,
+  onToggle,
+  onRecordMatch,
+  onCreateSession,
+}) => {
   const firstItemRef = useRef<HTMLButtonElement | null>(null);
 
   useEffect(() => {
@@ -197,8 +205,13 @@ export const PlusMenu: React.FC<{
         aria-label={isOpen ? "닫기" : "경기 기록·세션 만들기"}
         aria-haspopup="menu"
         aria-expanded={isOpen}
+        disabled={isLocked}
         onClick={onToggle}
-        className={`flex size-[66px] shrink-0 items-center justify-center rounded-full bg-pk-primary text-white shadow-[0_8px_18px] shadow-pk-ink/18 touch-manipulation ${buttonPressClassName}`}
+        className={`flex size-[66px] shrink-0 items-center justify-center rounded-full touch-manipulation ${
+          isLocked
+            ? "bg-pk-neutral text-pk-muted"
+            : "bg-pk-primary text-white shadow-[0_8px_18px] shadow-pk-ink/18"
+        } ${buttonPressClassName}`}
       >
         {/* 열리면 +를 돌려 ×로 만든다 */}
         <span
@@ -221,7 +234,8 @@ const DockBar: React.FC<{
   actionLabel: string;
   isActionDisabled?: boolean;
   isExiting?: boolean;
-  onAction: () => void;
+  /** 없으면 버튼을 두지 않는다 */
+  onAction?: () => void;
   /** 주면 점·제목·설명 부분을 눌러 연다 */
   onPressContent?: () => void;
   role?: string;
@@ -277,14 +291,16 @@ const DockBar: React.FC<{
       ) : (
         content
       )}
-      <button
-        type="button"
-        disabled={isActionDisabled}
-        onClick={onAction}
-        className={`ml-auto flex h-[46px] shrink-0 items-center rounded-full bg-pk-primary px-[18px] text-pk-15 font-extrabold text-white disabled:bg-pk-neutral disabled:text-pk-muted ${buttonPressClassName}`}
-      >
-        {actionLabel}
-      </button>
+      {onAction ? (
+        <button
+          type="button"
+          disabled={isActionDisabled}
+          onClick={onAction}
+          className={`ml-auto flex h-[46px] shrink-0 items-center rounded-full bg-pk-primary px-[18px] text-pk-15 font-extrabold text-white disabled:bg-pk-neutral disabled:text-pk-muted ${buttonPressClassName}`}
+        >
+          {actionLabel}
+        </button>
+      ) : null}
     </div>
   );
 };
@@ -298,7 +314,8 @@ export const MyMatchBar: React.FC<{
   playerId: string;
   isActionDisabled: boolean;
   isExiting?: boolean;
-  onEnterScore: (matchId: string) => void;
+  /** 없으면(게스트) 점수 입력 버튼이 없다 */
+  onEnterScore?: (matchId: string) => void;
   onOpenDetail: (matchId: string) => void;
 }> = ({
   match,
@@ -330,7 +347,7 @@ export const MyMatchBar: React.FC<{
       actionLabel="점수 입력"
       isActionDisabled={isActionDisabled}
       isExiting={isExiting}
-      onAction={() => onEnterScore(match.id)}
+      onAction={onEnterScore ? () => onEnterScore(match.id) : undefined}
       onPressContent={() => onOpenDetail(match.id)}
     />
   );

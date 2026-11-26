@@ -110,6 +110,43 @@ export const Last7DaysTile: React.FC<{
   );
 };
 
+/** 나 탭 게스트 머리의 "게스트" 알약 */
+export const GuestBadge: React.FC = () => (
+  <span className="inline-flex h-5 shrink-0 items-center rounded-full bg-pk-neutral px-2 text-pk-12 font-bold text-pk-sub">
+    게스트
+  </span>
+);
+
+/** 나 탭 게스트의 평점 카드 자리. 게스트 경기는 평점에 반영되지 않는다는 안내 */
+export const GuestNoticeCard: React.FC = () => (
+  <Card className="flex flex-col gap-1 p-4">
+    <span className="text-pk-15 font-bold text-pk-ink">게스트로 참여하고 있어요</span>
+    <span className="text-pk-13 text-pk-sub">
+      게스트 경기는 평점에 반영되지 않아요. 정회원이 되면 그 뒤 경기부터 평점과 랭킹이 쌓여요.
+    </span>
+  </Card>
+);
+
+/** 나 탭 게스트의 최근 7일 타일. 평점 변화 대신 경기 수를 크게 보인다 */
+export const GuestLast7DaysTile: React.FC<{
+  overview: ProfileOverview;
+  category: MatchTopLevelType;
+}> = ({ overview, category }) => (
+  <ProfileStatTile
+    label="최근 7일"
+    value={
+      <>
+        <CountUpNumber
+          value={overview.summary.ratingDelta[category].last7DaysMatchCount}
+          {...COUNT_UP}
+        />
+        경기
+      </>
+    }
+    foot="평점 미반영"
+  />
+);
+
 /** 최근 완료 경기 3개와 "전체 보기" */
 export const RecentMatchesSection: React.FC<{
   title: string;

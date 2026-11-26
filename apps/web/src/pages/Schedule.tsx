@@ -20,7 +20,7 @@ import { TournamentRankCard } from "@/components/tournament/TournamentRankCard";
 import { Section } from "@/components/ui/Section";
 import { StateMessage } from "@/components/ui/StateMessage";
 import { useAppNavigation } from "@/context/AppNavigationContext";
-import { useAuth } from "@/context/AuthContext";
+import { useAuth, useIsGuest } from "@/context/AuthContext";
 import { useDataVersion, useInvalidateData } from "@/context/DataSyncContext";
 import { useLiveSession } from "@/context/LiveSessionContext";
 import { useTabNavigation } from "@/context/TabNavigationContext";
@@ -64,6 +64,7 @@ interface ParticipantsTarget {
  */
 const Schedule: React.FC = () => {
   const { player } = useAuth();
+  const isGuest = useIsGuest();
   const playerId = player?.id;
   const live = useLiveSession();
   const {
@@ -334,7 +335,7 @@ const Schedule: React.FC = () => {
         ) : (
           <EmptyDayCard
             canCreateSession={isSessionDateSelectable(selectedDateKey, todayKey)}
-            onCreateSession={handleCreateSession}
+            onCreateSession={isGuest ? undefined : handleCreateSession}
           />
         )}
       </>
