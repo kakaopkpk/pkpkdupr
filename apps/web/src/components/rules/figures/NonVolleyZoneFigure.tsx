@@ -3,11 +3,11 @@ import { RuleFigure } from "../RulesGuideParts";
 
 /**
  * 규칙 안내 5장 그림: 논 발리 존에선 발리 금지. 움직임은 rulesGuide.css의 .g2 .n3 .a6 범위다.
- * 장면: "논 발리 존 밖에서 발리 OK" → "논 발리 존 안에서 발리하면 폴트" → "논 발리 존에 바운스된 공은 안에서 OK"
+ * 장면: "논 발리 존 밖에서 발리 OK" → "논 발리 존 안에서 발리하면 폴트" → "한 번 바운스된 공은 논 발리 존 안에서 OK"
  */
 export const NonVolleyZoneFigure: React.FC = () => (
   <RuleFigure className="g3">
-    <svg className="loop" width="298" height="204" viewBox="0 0 298 204" role="img" aria-label="옆에서 본 코트: 논 발리 존 밖에서 발리는 괜찮고, 안에 들어가 발리하면 폴트, 논 발리 존에 바운스된 공은 들어가서 쳐도 된다" style={{ position: "absolute", left: "0px", top: "4px" }}>
+    <svg className="loop" width="298" height="204" viewBox="0 0 298 204" role="img" aria-label="옆에서 본 코트: 논 발리 존 밖에서 발리는 괜찮고, 안에 들어가 발리하면 폴트, 한 번 바운스된 공은 어디에 바운스됐든 논 발리 존에 들어가서 쳐도 된다" style={{ position: "absolute", left: "0px", top: "4px" }}>
       <rect x="0" y="164" width="298" height="8" fill="#a9b8e0" />
       <rect x="16" y="164" width="266" height="8" fill="#2346a8" />
       <rect x="107" y="164" width="84" height="8" fill="#5a7bd6" />
@@ -137,7 +137,7 @@ export const NonVolleyZoneFigure: React.FC = () => (
       <span>논 발리 존 안에서 발리하면 폴트</span>
     </div>
     <div className="cap sc s3">
-      <span>논 발리 존에 바운스된 공은 안에서 OK</span>
+      <span>한 번 바운스된 공은 논 발리 존 안에서 OK</span>
     </div>
     <div className="bars">
       <span className="bar b1">
