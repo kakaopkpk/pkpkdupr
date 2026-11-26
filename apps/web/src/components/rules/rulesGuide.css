@@ -706,10 +706,11 @@
 .g3 .pad{animation:g3-swingT 8.0s ease-out infinite}
 @keyframes g3-hitT{0%{opacity:1;transform:scale(.6)}8%,100%{opacity:0;transform:scale(1.6)}}
 .g3 .hitT{transform-box:fill-box;transform-origin:center;opacity:0;animation:g3-hitT 8.0s linear infinite}
+/* 선수별 타격 시각(0·2·4·6초)을 주기 안의 위상으로 준다. 양수 지연이면 첫 타격 전까지 멈춰 있어 테이크백 없이 휘두른다 */
 .g3 .at1{animation-delay:0.00s}
-.g3 .at3{animation-delay:2.00s}
-.g3 .at2{animation-delay:4.00s}
-.g3 .at4{animation-delay:6.00s}
+.g3 .at3{animation-delay:-6.00s}
+.g3 .at2{animation-delay:-4.00s}
+.g3 .at4{animation-delay:-2.00s}
 .g3 .bn1{animation-delay:1.44s}
 .g3 .bn2{animation-delay:3.44s}
 .g3 .bn3{animation-delay:5.44s}
