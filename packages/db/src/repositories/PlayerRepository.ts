@@ -158,8 +158,9 @@ export class PlayerRepository {
   }
 
   /**
-   * active 게스트를 정회원으로 바꾸고 성별을 저장하며 첫 로그인 비밀번호 변경을 켠다.
-   * authUserId를 주면 아직 Auth 사용자가 연결되지 않은 게스트에만 연결한다.
+   * active 게스트를 정회원으로 바꾸고 성별을 저장한다.
+   * authUserId를 주면 아직 Auth 사용자가 연결되지 않은 게스트에만 연결하고 첫 로그인 비밀번호 변경을 켠다.
+   * null이면 이미 연결된 계정과 첫 로그인 상태를 그대로 둔다.
    * 조건에 맞는 행이 없으면(이미 정회원·inactive·이미 연결됨) undefined다.
    */
   async promoteGuest(
@@ -181,8 +182,8 @@ export class PlayerRepository {
       .set({
         isGuest: false,
         gender,
-        isFirstLogin: true,
-        ...(authUserId ? { authUserId } : {}),
+        // 새로 발급한 계정만 첫 로그인 비밀번호 변경을 켠다. 게스트 때 받은 계정은 상태를 그대로 둔다
+        ...(authUserId ? { authUserId, isFirstLogin: true } : {}),
         promotedAt: now,
         updatedAt: now,
       })

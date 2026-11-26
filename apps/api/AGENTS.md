@@ -127,12 +127,17 @@
   - 응답 선수(`RecommendationPlayer`)에 복식 랭킹 순위 `doublesRank`(랭킹에 없으면 null)와 지금 연승 수 `winStreak`(랭킹과 같은 규칙).
   - 랭킹 원천을 못 읽으면 특수 유형 가산점 없이(남복·여복 가산점은 그대로) 추천하고, 코트 `specialMatch`는 모두 null, 선수 `doublesRank`는 null·`winStreak`는 0이다.
 - 참여자 한 명씩 추가 `POST /api/match-sessions/:sessionId/participants`·삭제 `DELETE /api/match-sessions/:sessionId/participants/:playerId`
-  - 활성 회원 누구나·대리 가능, 오늘·미래 세션만(지난 세션 403), 멱등.
+  - 활성 회원 누구나·대리 가능(게스트는 본인만), 오늘·미래 세션만(지난 세션 403), 멱등.
 - 게스트 추가 `POST /api/match-sessions/:sessionId/guests` `{ username }`
   - 그 아이디로 게스트를 만들고 세션 참여자로 넣어 201 `Player`.
+  - 같은 아이디로 Auth 계정(임시 비밀번호 `ADMIN_ISSUED_PASSWORD`, 첫 로그인 비밀번호 변경 강제)을 함께 만든다. DB 저장이 실패하면 만든 Auth 사용자를 지운다.
   - 세션 규칙은 참여자 추가와 같다.
-  - `isValidUsername` 실패 400, 대소문자 무시 중복 409.
+  - `isValidUsername` 실패 400, 대소문자 무시 중복(같은 이메일 Auth 사용자 포함) 409.
   - 추가한 회원·세션을 저장한다.
+- 게스트 세션의 쓰기 제한: 아래 요청은 로그인한 게스트면 403(`FORBIDDEN`, `GUEST_FORBIDDEN_MESSAGE`)이다.
+  - `POST /api/matches`, `POST /api/matches/start`, `POST /api/matches/:matchId/start`, `PUT·DELETE /api/matches/:matchId`
+  - `POST /api/match-sessions`, `POST /api/match-sessions/regular/today`, `POST /api/match-sessions/:sessionId/matches`, `POST /api/match-sessions/:sessionId/complete`, `POST /api/match-sessions/:sessionId/guests`
+  - 참여자 추가·삭제는 본인(`playerId`가 자기 id)만 되고 다른 회원이면 403이다.
 
 ## 랭킹·세션 리포트
 
@@ -296,14 +301,16 @@
 - 성별·상태 변경 `PATCH /api/admin/players/:playerId/gender|status`
 - 생성·상태 감사 로그 `GET /api/admin/player-creation-logs`·`player-status-logs`
 - 회원 추가 `POST /api/admin/register`
-- 비밀번호 초기화 `POST /api/admin/players/:playerId/password-reset`
+- 비밀번호 초기화 `POST /api/admin/players/:playerId/password-reset`: 게스트도 되고, 계정이 없으면 새로 만들어 연결한다
 - 아이디 변경 `PATCH /api/admin/players/:playerId/username`
 - 게스트 정회원 승급 `POST /api/admin/players/:playerId/promote`
-  - `{ gender }` 필수. 성별 저장과 로그인 계정 발급을 함께 하고 회원 추가 응답 형태로 돌려주며, 첫 로그인 비밀번호 변경을 강제한다.
+  - `{ gender }` 필수. 성별을 저장하고 응답 `AdminPromoteGuestResponse`(`player`·`initialPassword`)를 돌려준다.
+  - 게스트 때 받은 계정이 있으면 아이디·비밀번호·첫 로그인 상태를 그대로 두고 `initialPassword`는 null이다.
+  - 계정이 없으면 새로 발급하고(`initialPassword` `123qwe`) 첫 로그인 비밀번호 변경을 강제한다. 이때 아이디가 로그인 형식이 아니면 400.
   - 게스트 아님 409, 없는 회원 404, 성별 오류 400.
   - 승급 전 `ratingExcluded` 경기는 계속 미반영.
   - 성공하면 승급 시각을 `promotedAt`에 저장하고 응답 `player`와 회원 목록·`GET /api/players`가 내려준다. 승급 기록 전 회원은 null.
-- 회원 추가·승급·비밀번호 초기화의 임시 비밀번호는 `123qwe`(`ADMIN_ISSUED_PASSWORD`) 고정이다.
+- 회원 추가·게스트 추가·승급·비밀번호 초기화의 임시 비밀번호는 `123qwe`(`ADMIN_ISSUED_PASSWORD`) 고정이다.
 
 ### 경기
 

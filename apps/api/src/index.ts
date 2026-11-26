@@ -148,12 +148,13 @@ import {
   type ScheduleMonthResponse,
   type ScheduleSession,
 } from "@pkpkdupr/shared/schedule";
-import type {
-  AdminRegisterPlayerRequest,
-  AdminUpdateUsernameRequest,
-  AuthErrorCode,
-  AuthErrorResponse,
-  MeResponse,
+import {
+  GUEST_FORBIDDEN_MESSAGE,
+  type AdminRegisterPlayerRequest,
+  type AdminUpdateUsernameRequest,
+  type AuthErrorCode,
+  type AuthErrorResponse,
+  type MeResponse,
 } from "@pkpkdupr/shared/auth";
 import { assertRequiredEnv } from "./config/env";
 import {
@@ -1391,6 +1392,31 @@ const getAuthPayload = async (req: express.Request, res: express.Response) => {
   return session?.payload ?? null;
 };
 
+/**
+ * 게스트가 할 수 없는 쓰기(경기 기록·시작·수정·삭제, 세션 만들기·완료, 게스트 추가)용 인증. 게스트 세션이면 403이다.
+ * 게스트는 보기와 본인 세션 참석·빠지기, 칭찬, 내 프로필 수정만 한다.
+ */
+const getMemberAuthPayload = async (
+  req: express.Request,
+  res: express.Response,
+) => {
+  const session = await getAuthSession(req, res);
+  if (!session) {
+    return null;
+  }
+  if (session.player.isGuest) {
+    sendAuthError(res, "FORBIDDEN", GUEST_FORBIDDEN_MESSAGE);
+    return null;
+  }
+  return session.payload;
+};
+
+/** 게스트는 세션 참여자 추가·빼기를 본인에게만 한다 */
+const canGuestChangeParticipant = (
+  session: AuthenticatedSession,
+  playerId: string,
+) => !session.player.isGuest || session.payload.playerId === playerId;
+
 const requireAdmin = async (
   req: express.Request,
   res: express.Response,
@@ -1720,7 +1746,7 @@ app.get("/api/match-sessions/upcoming", async (req, res) => {
 
 app.post("/api/match-sessions/regular/today", async (req, res) => {
   try {
-    if (!(await getAuthPayload(req, res))) {
+    if (!(await getMemberAuthPayload(req, res))) {
       return;
     }
 
@@ -1814,7 +1840,7 @@ const parseCreateMatchSessionRequest = (
 
 app.post("/api/match-sessions", async (req, res) => {
   try {
-    if (!(await getAuthPayload(req, res))) {
+    if (!(await getMemberAuthPayload(req, res))) {
       return;
     }
 
@@ -2029,7 +2055,8 @@ app.get("/api/match-sessions/:sessionId/recommendations", async (req, res) => {
 
 app.post("/api/match-sessions/:sessionId/participants", async (req, res) => {
   try {
-    if (!(await getAuthPayload(req, res))) {
+    const session = await getAuthSession(req, res);
+    if (!session) {
       return;
     }
 
@@ -2040,6 +2067,9 @@ app.post("/api/match-sessions/:sessionId/participants", async (req, res) => {
       typeof body?.playerId === "string" ? body.playerId.trim() : "";
     if (!playerId) {
       throw new MatchSessionRequestError("참여할 회원이 필요합니다.", 400);
+    }
+    if (!canGuestChangeParticipant(session, playerId)) {
+      return sendAuthError(res, "FORBIDDEN", GUEST_FORBIDDEN_MESSAGE);
     }
 
     const sessionId = req.params.sessionId;
@@ -2064,7 +2094,7 @@ app.post("/api/match-sessions/:sessionId/participants", async (req, res) => {
 // 세션 완료: 종료 10분 전부터 자동 완료(정기 22:00, 회원·대회는 종료 시각) 전까지 활성 회원 누구나, 이미 완료됐으면 그대로 돌려준다
 app.post("/api/match-sessions/:sessionId/complete", async (req, res) => {
   try {
-    if (!(await getAuthPayload(req, res))) {
+    if (!(await getMemberAuthPayload(req, res))) {
       return;
     }
     const sessionId = req.params.sessionId;
@@ -2087,7 +2117,7 @@ app.post("/api/match-sessions/:sessionId/complete", async (req, res) => {
 
 app.post("/api/match-sessions/:sessionId/guests", async (req, res) => {
   try {
-    const decoded = await getAuthPayload(req, res);
+    const decoded = await getMemberAuthPayload(req, res);
     if (!decoded) {
       return;
     }
@@ -2118,11 +2148,15 @@ app.delete(
   "/api/match-sessions/:sessionId/participants/:playerId",
   async (req, res) => {
     try {
-      if (!(await getAuthPayload(req, res))) {
+      const session = await getAuthSession(req, res);
+      if (!session) {
         return;
       }
 
       const { sessionId, playerId } = req.params;
+      if (!canGuestChangeParticipant(session, playerId)) {
+        return sendAuthError(res, "FORBIDDEN", GUEST_FORBIDDEN_MESSAGE);
+      }
       const now = new Date();
       await matchRepository.cleanupExpired(now);
       await requireOpenSessionForParticipants(sessionId, now);
@@ -2135,7 +2169,7 @@ app.delete(
 );
 
 app.post("/api/match-sessions/:sessionId/matches", async (req, res) => {
-  const decoded = await getAuthPayload(req, res);
+  const decoded = await getMemberAuthPayload(req, res);
   if (!decoded) {
     return;
   }
@@ -2193,7 +2227,7 @@ app.post("/api/match-sessions/:sessionId/matches", async (req, res) => {
 });
 
 app.post("/api/matches/start", async (req, res) => {
-  const decoded = await getAuthPayload(req, res);
+  const decoded = await getMemberAuthPayload(req, res);
   if (!decoded) {
     return;
   }
@@ -2241,7 +2275,7 @@ app.post("/api/matches/start", async (req, res) => {
  * 상태·"다른 경기 중" 최종 판정은 진행 중 경기 시작과 같은 잠금 안에서 저장소가 한다.
  */
 app.post("/api/matches/:matchId/start", async (req, res) => {
-  const decoded = await getAuthPayload(req, res);
+  const decoded = await getMemberAuthPayload(req, res);
   if (!decoded) {
     return;
   }
@@ -2332,7 +2366,7 @@ app.get("/api/matches/in-progress", async (req, res) => {
 });
 
 app.post("/api/matches", async (req, res) => {
-  const decoded = await getAuthPayload(req, res);
+  const decoded = await getMemberAuthPayload(req, res);
   if (!decoded) {
     return;
   }
@@ -3382,7 +3416,7 @@ const getMatchDeleteForbiddenReason = (
  * 경기가 없어진 세션은 빈 세션 정리 규칙(조회 시점 cleanupExpired)을 그대로 따른다.
  */
 app.delete("/api/matches/:matchId", async (req, res) => {
-  const decoded = await getAuthPayload(req, res);
+  const decoded = await getMemberAuthPayload(req, res);
   if (!decoded) {
     return;
   }
@@ -3433,7 +3467,7 @@ app.delete("/api/matches/:matchId", async (req, res) => {
 });
 
 app.put("/api/matches/:matchId", async (req, res) => {
-  const decoded = await getAuthPayload(req, res);
+  const decoded = await getMemberAuthPayload(req, res);
   if (!decoded) {
     return;
   }

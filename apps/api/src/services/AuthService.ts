@@ -727,7 +727,7 @@ export class AuthService {
   /**
    * 관리자가 회원 비밀번호를 임시 비밀번호로 초기화한다. 연결된 Auth 사용자가 없으면 새로 만들어 연결한다(계정 발급).
    * 연결된 사용자의 이메일도 현재 아이디의 내부 이메일로 맞춰, 예전 방식으로 만든 계정도 아이디로 로그인하게 한다.
-   * 게스트는 정회원 승급(`promoteGuest`)으로만 계정을 받으므로 409로 거절한다.
+   * 게스트도 같다(계정 없이 만들어진 게스트에게 계정을 발급하거나 비밀번호를 되돌린다).
    */
   async resetPlayerPassword(
     playerId: string,
@@ -735,12 +735,6 @@ export class AuthService {
     const stored = await this.getStoredPlayerById(playerId);
     if (!stored) {
       throw new AccountRequestError(404, "사용자를 찾을 수 없습니다.");
-    }
-    if (stored.isGuest) {
-      throw new AccountRequestError(
-        409,
-        "게스트에게는 비밀번호를 발급할 수 없습니다. 정회원으로 승급해 계정을 발급해주세요.",
-      );
     }
     if (stored.status !== "active") {
       throw new AccountRequestError(
@@ -790,9 +784,10 @@ export class AuthService {
   }
 
   /**
-   * 관리자가 게스트를 정회원으로 승급한다. 성별을 저장하고 로그인 계정을 함께 발급하며(첫 로그인 비밀번호 변경 강제),
-   * 초기 비밀번호는 응답으로만 돌려준다. 이미 게스트로 뛴 ratingExcluded 경기는 그대로 미반영이다.
-   * 게스트가 아니면 409, 없으면 404, inactive거나 아이디가 로그인 형식이 아니면 400이다.
+   * 관리자가 게스트를 정회원으로 승급한다. 성별을 저장하고, 게스트 때 받은 로그인 계정이 있으면 아이디·비밀번호를 그대로 쓴다.
+   * 계정이 없으면 새로 발급하고(첫 로그인 비밀번호 변경 강제) 초기 비밀번호를 응답으로만 돌려준다.
+   * 이미 게스트로 뛴 ratingExcluded 경기는 그대로 미반영이다.
+   * 게스트가 아니면 409, 없으면 404, inactive면 400이다. 새로 발급할 때 아이디가 로그인 형식이 아니면 400이다.
    */
   async promoteGuest(
     playerId: string,
@@ -808,17 +803,10 @@ export class AuthService {
     if (stored.status !== "active") {
       throw new AccountRequestError(
         400,
-        "비활성 회원에게는 비밀번호를 발급할 수 없습니다. 먼저 활성화해주세요.",
-      );
-    }
-    if (!isValidUsername(stored.username)) {
-      throw new AccountRequestError(
-        400,
-        `현재 아이디로는 로그인 계정을 만들 수 없습니다. 먼저 아이디를 바꿔주세요. ${USERNAME_FORMAT_MESSAGE}`,
+        "비활성 회원은 승급할 수 없습니다. 먼저 활성화해주세요.",
       );
     }
 
-    const initialPassword = ADMIN_ISSUED_PASSWORD;
     const stateChangedError = () =>
       new AccountRequestError(
         409,
@@ -826,23 +814,23 @@ export class AuthService {
       );
 
     if (stored.authUserId) {
-      // 게스트에게 이미 Auth 사용자가 연결돼 있으면 새로 만들지 않고 비밀번호만 바꾼다.
-      // 승급을 먼저 확정해, 다른 요청이 먼저 승급한 경우 그 회원의 비밀번호를 덮어쓰지 않는다.
-      // Auth 갱신이 실패해도 첫 로그인 플래그가 켜져 있어 관리자가 비밀번호 초기화로 복구할 수 있다.
       const promoted = await db.players.promoteGuest(stored.id, gender, null);
       if (!promoted) {
         throw stateChangedError();
       }
-      await this.updateAuthUser(stored.authUserId, {
-        email: toInternalEmail(stored.username),
-        password: initialPassword,
-      });
       return {
         player: toPublicPlayer(hydratePlayer(promoted)),
-        initialPassword,
+        initialPassword: null,
       };
     }
 
+    if (!isValidUsername(stored.username)) {
+      throw new AccountRequestError(
+        400,
+        `현재 아이디로는 로그인 계정을 만들 수 없습니다. 먼저 아이디를 바꿔주세요. ${USERNAME_FORMAT_MESSAGE}`,
+      );
+    }
+    const initialPassword = ADMIN_ISSUED_PASSWORD;
     const authUserId = await this.createAuthUser(
       stored.username,
       initialPassword,
@@ -1239,9 +1227,10 @@ export class AuthService {
   }
 
   /**
-   * 세션에서 게스트를 만들고 그 세션의 참여자로 넣는다. Auth 계정 없이 active·성별 없음·NR로 만들고,
-   * 추가한 회원과 세션을 남긴다. 아이디 형식이 틀리면 400, 대소문자 무시로 이미 있으면 409다.
-   * 두 쓰기는 한 트랜잭션이라 참여자 추가가 실패하면 게스트도 남지 않아 같은 아이디로 다시 요청할 수 있다.
+   * 세션에서 게스트를 만들고 그 세션의 참여자로 넣는다. active·성별 없음·NR로 만들고, 추가한 회원과 세션을 남긴다.
+   * 같은 아이디로 로그인 계정(임시 비밀번호 `ADMIN_ISSUED_PASSWORD`, 첫 로그인 비밀번호 변경 강제)을 함께 발급한다.
+   * 아이디 형식이 틀리면 400, 대소문자 무시로 이미 있으면(Auth 이메일 포함) 409다.
+   * 두 DB 쓰기는 한 트랜잭션이라 참여자 추가가 실패하면 게스트도 남지 않고, 먼저 만든 Auth 사용자도 지워 같은 아이디로 다시 요청할 수 있다.
    */
   async createGuestPlayer(input: {
     username: string;
@@ -1256,14 +1245,21 @@ export class AuthService {
       throw new AccountRequestError(409, DUPLICATE_USERNAME_MESSAGE);
     }
 
+    const authUserId = await this.createAuthUser(
+      username,
+      ADMIN_ISSUED_PASSWORD,
+    );
     try {
       const created = await db.matches.createGuestParticipant(input.sessionId, {
         ...createPlayer({ username, gender: null, isGuest: true }),
         guestAddedByPlayerId: input.addedByPlayerId,
         guestAddedSessionId: input.sessionId,
+        authUserId,
+        isFirstLogin: true,
       });
       return toPublicPlayer(hydratePlayer(created));
     } catch (error) {
+      await this.deleteOrphanAuthUser(authUserId);
       // 동시 요청은 lower(username) 유니크 위반으로 걸러진다.
       if (isUniqueViolation(error)) {
         throw new AccountRequestError(409, DUPLICATE_USERNAME_MESSAGE);
