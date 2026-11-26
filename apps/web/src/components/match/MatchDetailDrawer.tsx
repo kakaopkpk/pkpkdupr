@@ -12,7 +12,7 @@ import PushScreen from "@/components/PushScreen";
 import { getErrorMessage } from "@/components/record/recordMatch.utils";
 import { StateMessage } from "@/components/ui/StateMessage";
 import { useAppNavigation } from "@/context/AppNavigationContext";
-import { useAuth } from "@/context/AuthContext";
+import { useAuth, useIsGuest } from "@/context/AuthContext";
 import {
   useDataVersion,
   useInvalidateData,
@@ -90,6 +90,7 @@ export default function MatchDetailDrawer({
   onExited,
 }: MatchDetailDrawerProps): React.ReactElement {
   const { isAuthenticated, player: viewer } = useAuth();
+  const isGuest = useIsGuest();
   const {
     openAchievementDetail,
     openMemberProfile,
@@ -379,6 +380,7 @@ export default function MatchDetailDrawer({
   // 오프라인이거나 지울 수 없는 경기면 "삭제"를 숨긴다. 24시간 창과 삭제 조건은 isMatchRecordDeletable이
   // 렌더 시점 기준으로 판단하고, 열어 둔 사이 기한이 지나거나 다른 회원이 먼저 바꾼 경우는 서버가 거절한다
   const canDelete =
+    !isGuest &&
     isOnline &&
     !!loadedMatch &&
     loadedMatch.status !== "scheduled" &&
@@ -494,7 +496,8 @@ export default function MatchDetailDrawer({
         headerRight={
           canDelete ? <DeleteMatchHeaderButton onPress={openDeleteSheet} /> : null
         }
-        actions={actions}
+        // 게스트는 경기 시작·점수 입력·수정·한 판 더를 할 수 없어 하단 버튼이 없다
+        actions={isGuest ? null : actions}
         onExited={handleExited}
         onPullToRefresh={handlePullToRefresh}
       >

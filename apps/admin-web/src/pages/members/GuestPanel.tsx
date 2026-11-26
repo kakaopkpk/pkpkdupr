@@ -12,6 +12,7 @@ import {
   DeleteMemberSection,
   FieldHint,
   GenderControl,
+  PasswordResetRow,
   UsernameEditor,
   useConfirm,
   type PanelCallbacks,
@@ -37,13 +38,16 @@ export const GuestPanel: React.FC<{
     const gender = genderDraft;
     requestConfirm({
       title: "정회원으로 승급",
-      description: `${player.username}를 정회원으로 승급할까요? 로그인 계정을 만들고 임시 비밀번호는 ${ADMIN_ISSUED_PASSWORD}예요.`,
+      // 게스트 계정이 있으면 그 아이디·비밀번호를 그대로 쓰고, 없으면 새로 발급한다
+      description: player.hasLoginAccount
+        ? `${player.username}를 정회원으로 승급할까요? 게스트 때 쓰던 아이디·비밀번호로 계속 로그인해요.`
+        : `${player.username}를 정회원으로 승급할까요? 로그인 계정을 만들고 임시 비밀번호는 ${ADMIN_ISSUED_PASSWORD}예요.`,
       confirmLabel: "승급",
       onConfirm: () =>
         runConfirmedAction(async () => {
-          await promoteGuest(player.id, { gender });
+          const { initialPassword } = await promoteGuest(player.id, { gender });
           showToast(`${player.username}를 정회원으로 승급했어요`);
-          callbacks.onIssued("created");
+          if (initialPassword) callbacks.onIssued("created");
           await callbacks.reload();
         }, showToast),
     });
@@ -73,13 +77,22 @@ export const GuestPanel: React.FC<{
         </p>
       </div>
 
-      <PanelSection title="아이디">
-        <UsernameEditor
-          player={player}
-          buttonLabel="변경"
-          hint="로그인 아이디 형식이 아니면 먼저 바꿔야 승급할 수 있어요."
-          reload={callbacks.reload}
-        />
+      <PanelSection title="계정">
+        <div className="space-y-4">
+          <UsernameEditor
+            player={player}
+            buttonLabel="변경"
+            hint="로그인 아이디 형식이 아니면 먼저 바꿔야 계정을 만들거나 승급할 수 있어요."
+            reload={callbacks.reload}
+          />
+          <PasswordResetRow
+            player={player}
+            subject="게스트는"
+            disabled={!usernameReady}
+            requestConfirm={requestConfirm}
+            callbacks={callbacks}
+          />
+        </div>
       </PanelSection>
 
       <PanelSection title="성별 (승급에 필요)">

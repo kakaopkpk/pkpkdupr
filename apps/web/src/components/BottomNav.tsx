@@ -51,7 +51,7 @@ import {
   type MemberProfileOpenOptions,
   type RecordMatchSheetRequest,
 } from "@/context/AppNavigationContext";
-import { useAuth } from "@/context/AuthContext";
+import { useAuth, useIsGuest } from "@/context/AuthContext";
 import {
   DataSyncProvider,
   useInvalidateData,
@@ -296,6 +296,7 @@ const BottomDockTint = React.memo<{ dockBarCount: number }>(
 
 const BottomNavShell: React.FC = () => {
   const { player } = useAuth();
+  const isGuest = useIsGuest();
   const invalidateData = useInvalidateData();
   const isOnline = useOnlineStatus();
   const liveSessionState = useLiveSessionState(player?.id);
@@ -916,7 +917,10 @@ const BottomNavShell: React.FC = () => {
   const dockBar = usePresence(dockBarItem, { key: dockBarItem?.kind });
 
   // 세션 완료 바는 어느 탭에서나 위 바와 별도로 뜨고, 함께 뜨면 그 위에 쌓인다
-  const completableSession = liveSessionState.completableSession;
+  // 게스트는 세션을 완료하지 않으므로 완료 바를 띄우지 않는다
+  const completableSession = isGuest
+    ? null
+    : liveSessionState.completableSession;
   const completeBarItem = useMemo(() => {
     if (!completableSession) return null;
     const completeWindow = getSessionCompleteWindow(
@@ -1441,8 +1445,10 @@ const BottomNavShell: React.FC = () => {
                     playerId={dockBar.item.playerId}
                     isActionDisabled={!isOnline}
                     isExiting={dockBar.isExiting}
-                    onEnterScore={(matchId) =>
-                      openRecordMatch({ kind: "score", matchId })
+                    onEnterScore={
+                      isGuest
+                        ? undefined
+                        : (matchId) => openRecordMatch({ kind: "score", matchId })
                     }
                     onOpenDetail={openMatchDetail}
                   />
@@ -1593,6 +1599,7 @@ const BottomNavShell: React.FC = () => {
                         <PlusMenu
                           isOpen={isGlobalMenuVisible}
                           isDisabled={!isOnline}
+                          isLocked={isGuest}
                           onToggle={() =>
                             isGlobalMenuVisible
                               ? closeGlobalMenu()

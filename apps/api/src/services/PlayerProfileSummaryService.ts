@@ -46,6 +46,9 @@ export type PlayerProfileRatingDelta = Record<
     last30Days: number;
     last90Days: number;
     last7DaysMatchCount: number;
+    /** 최근 7일 승패가 갈린 경기의 승·패 수(게스트 나 탭이 쓴다) */
+    last7DaysWins: number;
+    last7DaysLosses: number;
   }
 >;
 
@@ -107,12 +110,16 @@ const createEmptyRatingDelta = (): PlayerProfileRatingDelta => ({
     last30Days: 0,
     last90Days: 0,
     last7DaysMatchCount: 0,
+    last7DaysWins: 0,
+    last7DaysLosses: 0,
   },
   doubles: {
     last7Days: 0,
     last30Days: 0,
     last90Days: 0,
     last7DaysMatchCount: 0,
+    last7DaysWins: 0,
+    last7DaysLosses: 0,
   },
 });
 
@@ -207,6 +214,13 @@ export const buildPlayerProfileSummary = (
       now.getTime() - getMatchEndedAtMs(match) <= sevenDaysMs
     ) {
       ratingDelta[category].last7DaysMatchCount += 1;
+      if (winningTeamIndex !== null) {
+        if (playerTeamIndex === winningTeamIndex) {
+          ratingDelta[category].last7DaysWins += 1;
+        } else {
+          ratingDelta[category].last7DaysLosses += 1;
+        }
+      }
     }
 
     // 승패·파트너 궁합·천적·상대 전적은 승패가 갈린 경기만 센다.

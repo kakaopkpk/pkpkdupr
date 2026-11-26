@@ -23,7 +23,10 @@ import {
   AuthService,
   type AuthenticatedSession,
 } from "../services/AuthService";
-import { SupabaseAuthAdmin } from "../services/supabaseAuthAdmin";
+import {
+  AuthEmailExistsError,
+  SupabaseAuthAdmin,
+} from "../services/supabaseAuthAdmin";
 import type { RatingServiceContract } from "../services/RatingContract";
 import {
   buildRankingResponse,
@@ -129,11 +132,19 @@ describe("POST /api/match-sessions/:sessionId/guests", () => {
   let notifySessionsChanged: MockInstance<
     MatchRepository["notifySessionsChanged"]
   >;
+  let createAuthUser: MockInstance<SupabaseAuthAdmin["createUser"]>;
+  let deleteAuthUser: MockInstance<SupabaseAuthAdmin["deleteUser"]>;
 
   beforeEach(() => {
     useNow(thursdayMorning);
     sessionDate = new Date("2026-11-12T00:00:00+09:00");
     storedUsernames = new Set();
+    createAuthUser = vi
+      .spyOn(SupabaseAuthAdmin.prototype, "createUser")
+      .mockResolvedValue("auth-guest");
+    deleteAuthUser = vi
+      .spyOn(SupabaseAuthAdmin.prototype, "deleteUser")
+      .mockResolvedValue();
     vi.spyOn(
       AuthService.prototype,
       "authenticateAccessToken",
@@ -173,8 +184,8 @@ describe("POST /api/match-sessions/:sessionId/guests", () => {
           guestAddedByPlayerId: input.guestAddedByPlayerId ?? null,
           guestAddedSessionId: input.guestAddedSessionId ?? null,
           duprRating: null,
-          authUserId: null,
-          isFirstLogin: false,
+          authUserId: input.authUserId ?? null,
+          isFirstLogin: input.isFirstLogin ?? false,
         } as any;
       });
   });
@@ -185,7 +196,7 @@ describe("POST /api/match-sessions/:sessionId/guests", () => {
       .set("Authorization", "Bearer token")
       .send({ username });
 
-  it("게스트를 만들고 세션 참여자로 넣어 201로 돌려준다", async () => {
+  it("게스트를 만들고 세션 참여자로 넣어 201로 돌려준다(로그인 계정 함께 발급)", async () => {
     const response = await addGuest(" guest_kim ");
 
     expect(response.status).toBe(201);
@@ -213,8 +224,22 @@ describe("POST /api/match-sessions/:sessionId/guests", () => {
       guestAddedByPlayerId: requester.id,
       guestAddedSessionId: "Scustom1",
     });
-    expect(input.authUserId ?? null).toBeNull();
+    // 같은 아이디로 임시 비밀번호 계정을 만들고 첫 로그인 비밀번호 변경을 켠다
+    expect(createAuthUser).toHaveBeenCalledWith({
+      email: expect.stringMatching(/^guest_kim@/),
+      password: ADMIN_ISSUED_PASSWORD,
+    });
+    expect(input).toMatchObject({ authUserId: "auth-guest", isFirstLogin: true });
     expect(notifySessionsChanged).toHaveBeenCalledWith(["Scustom1"]);
+  });
+
+  it("같은 이메일의 Auth 사용자가 이미 있으면 409이고 게스트를 만들지 않는다", async () => {
+    createAuthUser.mockRejectedValueOnce(new AuthEmailExistsError("guest_kim@example.com"));
+
+    const response = await addGuest("guest_kim");
+
+    expect(response.status).toBe(409);
+    expect(createGuestParticipant).not.toHaveBeenCalled();
   });
 
   it("미래 세션에도 추가할 수 있다", async () => {
@@ -253,6 +278,7 @@ describe("POST /api/match-sessions/:sessionId/guests", () => {
 
     expect(response.status).toBe(409);
     expect(notifySessionsChanged).not.toHaveBeenCalled();
+    expect(deleteAuthUser).toHaveBeenCalledWith("auth-guest");
   });
 
   it("참여자 추가가 실패하면 500이고, 같은 아이디로 다시 요청하면 만들어진다", async () => {
@@ -264,6 +290,8 @@ describe("POST /api/match-sessions/:sessionId/guests", () => {
 
     expect(failed.status).toBe(500);
     expect(notifySessionsChanged).not.toHaveBeenCalled();
+    // 먼저 만든 Auth 사용자를 지워 같은 아이디로 다시 만들 수 있다
+    expect(deleteAuthUser).toHaveBeenCalledWith("auth-guest");
 
     const retried = await addGuest("guest_kim");
 
@@ -1039,8 +1067,7 @@ describe("POST /api/admin/players/:playerId/promote", () => {
         Object.assign(row, {
           isGuest: false,
           gender,
-          isFirstLogin: true,
-          ...(authUserId ? { authUserId } : {}),
+          ...(authUserId ? { authUserId, isFirstLogin: true } : {}),
           promotedAt: new Date(),
         });
         return row as any;
@@ -1131,6 +1158,26 @@ describe("POST /api/admin/players/:playerId/promote", () => {
 
     expect(response.status).toBe(403);
     expect(rows.get(guest.id)?.isGuest).toBe(true);
+  });
+
+  it("게스트 때 받은 계정이 있으면 새로 만들거나 비밀번호를 바꾸지 않고 initialPassword는 null이다", async () => {
+    Object.assign(rows.get(guest.id)!, {
+      authUserId: "auth-guest",
+      isFirstLogin: false,
+    });
+
+    const response = await promote(guest.id);
+
+    expect(response.status).toBe(200);
+    expect(response.body.initialPassword).toBeNull();
+    expect(createAuthUser).not.toHaveBeenCalled();
+    expect(SupabaseAuthAdmin.prototype.updateUser).not.toHaveBeenCalled();
+    expect(rows.get(guest.id)).toMatchObject({
+      isGuest: false,
+      gender: "F",
+      authUserId: "auth-guest",
+      isFirstLogin: false,
+    });
   });
 
   it("조회 뒤 다른 요청이 먼저 승급했으면 409이고 만든 Auth 사용자를 지운다", async () => {

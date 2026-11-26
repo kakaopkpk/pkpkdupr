@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ADMIN_ISSUED_PASSWORD } from "@pkpkdupr/shared/auth";
 import type { MatchSessionParticipant } from "@pkpkdupr/shared/match";
 import BottomSheet from "@/components/BottomSheet";
 import { PkButton, buttonPressClassName, rowPressClassName } from "@/components/ui/Button";
@@ -10,6 +11,7 @@ import { SearchField } from "@/components/ui/SearchField";
 import { SheetTitle } from "@/components/ui/SheetTitle";
 import { StateMessage } from "@/components/ui/StateMessage";
 import { cx } from "@/components/ui/cx";
+import { useIsGuest } from "@/context/AuthContext";
 import { useSystemNotice } from "@/context/SystemNoticeContext";
 import {
   type TabKey,
@@ -150,7 +152,7 @@ const ParticipantsEditForm: React.FC<ParticipantsEditFormProps> = ({
     error: playersError,
     reload: reloadPlayers,
   } = usePlayers();
-  const { showSaveFailure } = useSystemNotice();
+  const { showSaveFailure, showToast } = useSystemNotice();
   const { selectedTab } = useTabNavigation();
   const [query, setQuery] = useState("");
   const savedIds = useMemo(
@@ -330,6 +332,11 @@ const ParticipantsEditForm: React.FC<ParticipantsEditFormProps> = ({
         reportSavedParticipants(new Set(savedIds).add(guest.id), [guest]);
         void reloadPlayers();
         onChanged();
+        // 게스트 계정은 추가와 함께 만들어지므로 추가한 회원이 로그인 정보를 전해 준다
+        showToast({
+          message: `${guest.username ?? username} 아이디, 비밀번호 ${ADMIN_ISSUED_PASSWORD}로 로그인할 수 있어요`,
+          durationMs: 8000,
+        });
       } catch (err) {
         if (isNetworkError(err)) throw err;
         setError(getErrorMessage(err, "게스트를 추가하지 못했어요"));
@@ -337,7 +344,14 @@ const ParticipantsEditForm: React.FC<ParticipantsEditFormProps> = ({
         setIsAddingGuest(false);
       }
     },
-    [onChanged, reloadPlayers, reportSavedParticipants, savedIds, session.id],
+    [
+      onChanged,
+      reloadPlayers,
+      reportSavedParticipants,
+      savedIds,
+      session.id,
+      showToast,
+    ],
   );
 
   const handleAddGuest = async (username: string) => {
@@ -632,9 +646,12 @@ export default function ParticipantsSheet({
   lockedPlayerIds = EMPTY_IDS,
   onClose,
   onChanged,
-  isReadOnly = false,
+  isReadOnly: isReadOnlyProp = false,
 }: ParticipantsSheetProps): React.ReactElement {
   const { closeDepth, selectedTab } = useTabNavigation();
+  // 게스트는 남의 참여를 바꾸거나 게스트를 추가하지 않는다. 본인 참여는 세션 카드의 참여 버튼으로 한다
+  const isGuest = useIsGuest();
+  const isReadOnly = isReadOnlyProp || isGuest;
   const [isEditing, setIsEditing] = useState(false);
   // 이 시트에서 저장한 참여자. 셸이 넘기는 세션은 연 시점 값이라 저장 뒤에는 이 값을 보인다
   const [savedParticipants, setSavedParticipants] = useState<

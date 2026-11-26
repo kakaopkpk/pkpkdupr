@@ -1,7 +1,7 @@
 import React, { useState } from "react";
-import { isValidUsername } from "@pkpkdupr/shared/auth";
+import { ADMIN_ISSUED_PASSWORD, isValidUsername } from "@pkpkdupr/shared/auth";
 import type { AdminPlayer } from "@pkpkdupr/shared/player";
-import { deletePlayer, updatePlayerUsername } from "../../api/players";
+import { deletePlayer, resetPlayerPassword, updatePlayerUsername } from "../../api/players";
 import { Button } from "../../components/ui/Button";
 import { ConfirmDialog } from "../../components/ui/ConfirmDialog";
 import { InlineError } from "../../components/ui/InlineError";
@@ -138,6 +138,52 @@ export const UsernameEditor: React.FC<{
 };
 
 /** 경기 기록이 없는 회원만 지울 수 있다. 관리자 자신은 지울 수 없다 */
+/**
+ * 비밀번호 초기화(계정이 없으면 로그인 계정 만들기) 줄. 확인을 받고 임시 비밀번호로 초기화한 뒤 발급 카드를 띄운다.
+ * subject는 확인 문구의 주어와 조사("회원은"·"게스트는")다
+ */
+export const PasswordResetRow: React.FC<{
+  player: AdminPlayer;
+  subject: string;
+  disabled: boolean;
+  requestConfirm: (request: ConfirmRequest) => void;
+  callbacks: PanelCallbacks;
+}> = ({ player, subject, disabled, requestConfirm, callbacks }) => {
+  const { showToast } = useToast();
+  const label = player.hasLoginAccount ? "비밀번호 초기화" : "로그인 계정 만들기";
+
+  const requestReset = () =>
+    requestConfirm({
+      title: label,
+      description: player.hasLoginAccount
+        ? `${player.username} 비밀번호를 ${ADMIN_ISSUED_PASSWORD}로 초기화할까요? ${subject} 다음 로그인 때 비밀번호를 새로 정해요.`
+        : `${player.username} 로그인 계정을 만들까요? 임시 비밀번호는 ${ADMIN_ISSUED_PASSWORD}이고, ${subject} 첫 로그인 때 비밀번호를 새로 정해요.`,
+      confirmLabel: player.hasLoginAccount ? "초기화" : "만들기",
+      onConfirm: () =>
+        runConfirmedAction(async () => {
+          await resetPlayerPassword(player.id);
+          showToast(
+            player.hasLoginAccount
+              ? `${player.username} 비밀번호를 초기화했어요`
+              : `${player.username} 로그인 계정을 만들었어요`,
+          );
+          callbacks.onIssued(player.hasLoginAccount ? "reset" : "created");
+          await callbacks.reload();
+        }, showToast),
+    });
+
+  return (
+    <div className="flex items-center justify-between gap-3">
+      <span className="text-pk-13 text-pk-sub">
+        {player.hasLoginAccount ? "비밀번호를 잃어버렸을 때" : "로그인 계정이 없어요"}
+      </span>
+      <Button variant="outline" disabled={disabled} onClick={requestReset}>
+        {label}
+      </Button>
+    </div>
+  );
+};
+
 export const DeleteMemberSection: React.FC<{
   player: AdminPlayer;
   isSelf: boolean;

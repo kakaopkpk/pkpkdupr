@@ -691,21 +691,23 @@ describe("Supabase Auth 기반 인증", () => {
         expect(fixture.deleteAuthUser).toHaveBeenCalledOnce();
       });
 
-      it("게스트는 409로 거절하고 Auth 사용자와 연결을 만들지 않는다", async () => {
+      it("계정 없는 게스트에게도 Auth 사용자를 만들어 연결한다", async () => {
         fixture.addPlayer("Pguest01", "guest_member").isGuest = true;
 
         const response = await request(app)
           .post("/api/admin/players/Pguest01/password-reset")
           .set(bearer("admin"));
 
-        expect(response.status).toBe(409);
-        expect(response.body.error).toContain("승급");
-        expect(fixture.createAuthUser).not.toHaveBeenCalled();
-        expect(fixture.updateAuthUser).not.toHaveBeenCalled();
-        expect(fixture.linkAuthUser).not.toHaveBeenCalled();
+        expect(response.status).toBe(200);
+        expect(response.body.temporaryPassword).toBe(ADMIN_ISSUED_PASSWORD);
+        expect(fixture.createAuthUser).toHaveBeenCalledWith({
+          email: `guest_member@${INTERNAL_EMAIL_DOMAIN}`,
+          password: ADMIN_ISSUED_PASSWORD,
+        });
+        const authUserId = await fixture.createAuthUser.mock.results[0].value;
         expect(fixture.players.get("Pguest01")).toMatchObject({
-          authUserId: null,
-          isFirstLogin: false,
+          authUserId,
+          isFirstLogin: true,
         });
       });
 

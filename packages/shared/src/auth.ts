@@ -44,8 +44,12 @@ export const toInternalEmail = (username: string): string =>
 /** GET /api/me, POST /api/me/password-changed 응답. isFirstLogin이 true면 web이 비밀번호 변경을 강제한다 */
 export type MeResponse = Player & { isAdmin: boolean; isFirstLogin: boolean };
 
-/** 관리자가 회원 추가·게스트 정회원 승급·비밀번호 초기화로 발급하는 임시 비밀번호. 첫 로그인에서 바꾸게 한다 */
+/** 관리자 회원 추가·비밀번호 초기화와 회원의 게스트 추가가 발급하는 임시 비밀번호. 첫 로그인에서 바꾸게 한다 */
 export const ADMIN_ISSUED_PASSWORD = "123qwe";
+
+/** 게스트가 경기 기록·시작·수정·삭제, 세션 만들기·완료, 게스트·다른 회원 참여자 변경을 요청했을 때의 403 메시지 */
+export const GUEST_FORBIDDEN_MESSAGE =
+  "게스트는 경기를 기록하거나 세션을 바꿀 수 없어요.";
 
 /** POST /api/admin/register 요청 */
 export interface AdminRegisterPlayerRequest {
@@ -59,8 +63,14 @@ export interface AdminRegisterPlayerResponse {
   initialPassword: string;
 }
 
-/** POST /api/admin/players/:playerId/promote 응답. 게스트를 정회원으로 바꾸며 발급한 initialPassword는 이 응답에서만 보인다 */
-export type AdminPromoteGuestResponse = AdminRegisterPlayerResponse;
+/**
+ * POST /api/admin/players/:playerId/promote 응답. 로그인 계정이 없던 게스트에게 새로 발급했을 때만 initialPassword가 있고,
+ * 이미 게스트 계정이 있으면 그 아이디·비밀번호를 그대로 쓰므로 null이다.
+ */
+export interface AdminPromoteGuestResponse {
+  player: Player;
+  initialPassword: string | null;
+}
 
 /** POST /api/admin/players/:playerId/password-reset 응답. temporaryPassword는 이 응답에서만 보인다 */
 export interface AdminPasswordResetResponse {
