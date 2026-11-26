@@ -3,17 +3,11 @@ import React, { useId } from "react";
 const VIEW_SIZE = 190;
 const CENTER = VIEW_SIZE / 2;
 const CIRCLE_RADIUS = 92;
-/** 24 격자 트로피를 키우는 배율 */
-const TROPHY_SCALE = 3;
 /**
- * 트로피 중심. 카드 오른쪽 위 -top-[62px] -right-[54px]에 걸리므로
- * 카드 안에 보이는 원 부분(왼쪽 아래)으로 옮긴다
+ * 트로피(80×83 격자)를 놓는 자리와 기울기. 카드 오른쪽 위 -top-[62px] -right-[54px]에 걸리므로
+ * 카드 안에 보이는 원 부분(왼쪽 아래)에 두고 왼쪽으로 12° 기울인다
  */
-const TROPHY_CENTER_X = 82;
-const TROPHY_CENTER_Y = 112;
-const TROPHY_TRANSFORM = `translate(${TROPHY_CENTER_X - 12 * TROPHY_SCALE} ${
-  TROPHY_CENTER_Y - 12 * TROPHY_SCALE
-}) scale(${TROPHY_SCALE})`;
+const TROPHY_TRANSFORM = "translate(46 70) rotate(-12 40 50)";
 
 /**
  * 대회 세션 카드 오른쪽 위에 걸치는 장식. 피클볼 장식과 같은 자리·크기의 옅은 흰 구면 원(구멍 없음) 위에
@@ -38,21 +32,21 @@ const TrophyIllustration: React.FC<{ className?: string }> = ({
         </radialGradient>
       </defs>
       <circle cx={CENTER} cy={CENTER} r={CIRCLE_RADIUS} fill={`url(#${shadeId})`} />
-      <g
-        opacity={0.16}
-        transform={TROPHY_TRANSFORM}
-        className="fill-pk-gold stroke-pk-gold"
-        strokeWidth={1.8}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      >
-        <path d="M8 4h8v5a4 4 0 0 1-8 0z" />
-        <path
-          d="M8 6H5.5a2.5 2.5 0 0 0 2.5 4M16 6h2.5a2.5 2.5 0 0 1-2.5 4"
+      <g opacity={0.16} transform={TROPHY_TRANSFORM}>
+        <g className="fill-pk-gold">
+          <path d="M14 0h52v34a26 26 0 0 1-52 0z" />
+          <rect x={34} y={58} width={12} height={16} rx={2} />
+          <rect x={20} y={72} width={40} height={11} rx={3} />
+        </g>
+        <g
           fill="none"
-        />
-        <path d="M11 12.5h2V17h-2z" />
-        <path d="M8.5 18.5h7v2h-7z" />
+          className="stroke-pk-gold"
+          strokeWidth={7}
+          strokeLinecap="round"
+        >
+          <path d="M14 8H6a9 9 0 0 0 0 18h9" />
+          <path d="M66 8h8a9 9 0 0 1 0 18h-9" />
+        </g>
       </g>
     </svg>
   );
