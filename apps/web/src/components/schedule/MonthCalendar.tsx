@@ -1,13 +1,13 @@
-import React, { useRef, useState } from "react";
+import React, { useState } from "react";
 import { kstDateKeyToDate, WEEKDAY_LABELS } from "@pkpkdupr/shared/session";
 import { addScheduleMonths } from "@pkpkdupr/shared/schedule";
 import { buttonPressClassName } from "@/components/ui/Button";
 import { ChevronRightIcon } from "@/components/ui/Icons";
 import { cx } from "@/components/ui/cx";
+import { usePanelSwipe } from "@/hooks/usePanelSwipe";
 import { formatKstLongDate } from "@/lib/format";
 import type { ScheduleDayMark } from "@/lib/schedule";
 import { formatMonthTitle, getMonthGridDateKeys, toMonthKey } from "./monthGrid";
-import { useMonthSwipe } from "./useMonthSwipe";
 
 const MonthNavButton: React.FC<{
   label: string;
@@ -214,15 +214,12 @@ const MonthCalendar: React.FC<{
   onGoToday,
   minDateKey,
 }) => {
-  const areaRef = useRef<HTMLElement>(null);
-  const trackRef = useRef<HTMLDivElement>(null);
+  const [area, setArea] = useState<HTMLElement | null>(null);
+  const [track, setTrack] = useState<HTMLDivElement | null>(null);
   const canGoPrev = !minDateKey || monthKey > toMonthKey(minDateKey);
-  const { slideIn, isSliding } = useMonthSwipe(
-    areaRef,
-    trackRef,
-    onChangeMonth,
-    (step) => step === 1 || canGoPrev,
-  );
+  const { slideIn, isSliding } = usePanelSwipe(area, track, onChangeMonth, {
+    canSwipe: (step) => step === 1 || canGoPrev,
+  });
   // 머리 제목은 슬라이드가 멈출 때까지 옮기기 전 달에 둔다
   const [titleMonthKey, setTitleMonthKey] = useState(monthKey);
   if (!isSliding && titleMonthKey !== monthKey) setTitleMonthKey(monthKey);
@@ -250,7 +247,7 @@ const MonthCalendar: React.FC<{
     <div className="flex flex-col gap-1.5">
       <DayMarkLegend />
         <section
-        ref={areaRef}
+        ref={setArea}
         aria-label="달력"
         className="touch-pan-y touch-pinch-zoom overflow-hidden rounded-pk-lg bg-white px-2 pt-1 pb-2"
       >
@@ -288,7 +285,7 @@ const MonthCalendar: React.FC<{
         </div>
         {/* 판은 카드 안쪽 여백까지 차지해 옆 달이 카드 끝에서 잘린다. 트랙은 가운데 판을 기본 위치로 둔다 */}
         <div className="-mx-2 overflow-hidden">
-          <div ref={trackRef} className="flex w-[300%] -translate-x-1/3">
+          <div ref={setTrack} className="flex w-[300%] -translate-x-1/3">
             {panelMonthKeys.map((panelMonthKey) => (
               <MonthPanel
                 key={panelMonthKey}

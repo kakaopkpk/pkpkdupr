@@ -26,3 +26,17 @@ export const getSwipeStep = (
   if (!isDragged && !isFlicked) return 0;
   return deltaX < 0 ? 1 : -1;
 };
+
+/** 판 넘기기(달력 월 넘김·규칙 안내 카드)는 카드 캐러셀보다 짧게 밀어도 넘어간다 */
+export const PANEL_SWIPE_THRESHOLDS: SwipeThresholds = {
+  distanceRatio: 0.25,
+  flickMinDistancePx: 40,
+  flickMinVelocityPxPerMs: 0.4,
+};
+
+/** 판 넘기기에서 손가락을 놓았을 때 옮길 칸 수(1 다음, -1 이전, 0 그대로). 왼쪽으로 밀면(deltaX 음수) 다음이다 */
+export const getPanelSwipeStep = (input: {
+  deltaX: number;
+  velocityX: number;
+  width: number;
+}) => getSwipeStep(input, PANEL_SWIPE_THRESHOLDS);
