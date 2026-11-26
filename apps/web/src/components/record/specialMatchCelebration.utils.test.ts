@@ -5,6 +5,7 @@ import {
   RIVAL_STEP_MS,
   RIVAL_PASS_MS,
   SCENE_START_MS,
+  getChallengeGroupWidth,
   getRivalCountSteps,
   getSceneBeatTimes,
   getSceneEndMs,
@@ -81,6 +82,11 @@ describe("도전 성공 연출", () => {
       getSceneBeatTimes({ kind: "streak_stopper", stopped: { player: player("s"), streakBefore: 3 } }),
     );
     expect(getSceneEndMs(challenge)).toBeGreaterThan(getSceneBeatTimes(challenge)[1]!);
+  });
+
+  it("얼굴 묶음 폭은 진 팀 인원으로 정한다(단식 104, 복식 184)", () => {
+    expect(getChallengeGroupWidth(1)).toBe(104);
+    expect(getChallengeGroupWidth(2)).toBe(184);
   });
 
   it("공유 대상은 진 팀 두 사람과 평점 차를 옮긴다", () => {

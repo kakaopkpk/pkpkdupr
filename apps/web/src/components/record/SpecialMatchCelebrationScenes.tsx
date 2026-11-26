@@ -10,6 +10,9 @@ import { SpecialMatchIcon } from "@/components/ui/SpecialMatchLabel";
 import { cx } from "@/components/ui/cx";
 import { getChallengeDefeatedNames, STREAK_END_LABEL, VS_LABEL } from "@/lib/specialMatchShare";
 import {
+  CHALLENGE_AVATAR,
+  CHALLENGE_AVATAR_OVERLAP,
+  getChallengeGroupWidth,
   RIVAL_PASS_MS,
   STREAK_RING_FADE_MS,
   getRivalCountSteps,
@@ -445,13 +448,10 @@ export const ChampionsScene: React.FC<{
 
 // ------------------------------------------------------------------ 도전 성공 --
 
-const CHALLENGE_AVATAR = 104;
-const CHALLENGE_AVATAR_OVERLAP = 24;
 const CHALLENGE_STAMP = 72;
-const CHALLENGE_GROUP_WIDTH = CHALLENGE_AVATAR * 2 - CHALLENGE_AVATAR_OVERLAP;
 
 /**
- * 도전 성공: 진 높은 팀 두 얼굴(104, 겹침)과 이름 줄("a · b"). 빛줄기·후광은 두 얼굴 묶음 가운데가 중심이고,
+ * 도전 성공: 진 높은 팀 얼굴(104, 복식은 두 얼굴 겹침)과 이름 줄("a · b"). 빛줄기·후광은 두 얼굴 묶음 가운데가 중심이고,
  * 깃발 도장이 묶음 오른쪽 아래에 박히면 얼굴 묶음만 흔들린다(연승 저지와 같은 움직임)
  */
 export const ChallengeScene: React.FC<{
@@ -459,11 +459,12 @@ export const ChallengeScene: React.FC<{
   beatCount: number;
 }> = ({ celebration, beatCount }) => {
   const isLanded = beatCount >= 2;
+  const groupWidth = getChallengeGroupWidth(celebration.defeated.length);
   return (
     <div className="flex w-full flex-col items-center gap-[22px]">
       <span
         className="relative inline-flex"
-        style={{ width: CHALLENGE_GROUP_WIDTH, height: CHALLENGE_AVATAR }}
+        style={{ width: groupWidth, height: CHALLENGE_AVATAR }}
       >
         <SceneRays />
         <PopIn>
@@ -486,7 +487,7 @@ export const ChallengeScene: React.FC<{
                 ring: 4,
                 iconSize: 40,
                 // 묶음 오른쪽 끝에서 24 밖, 아래 끝에서 8 아래에 도장 끝이 온다
-                left: CHALLENGE_GROUP_WIDTH + 24 - CHALLENGE_STAMP,
+                left: groupWidth + 24 - CHALLENGE_STAMP,
                 top: CHALLENGE_AVATAR + 8 - CHALLENGE_STAMP,
                 phase: getStampPhase(beatCount),
               }}

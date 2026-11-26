@@ -36,6 +36,11 @@ import {
   shareFont,
   withAlpha,
 } from "@/lib/shareImageCanvas";
+import {
+  CHALLENGE_AVATAR,
+  CHALLENGE_AVATAR_OVERLAP,
+  getChallengeGroupWidth,
+} from "./specialMatchCelebration.utils";
 
 /*
  * 특수 매치 공유 이미지(4:5). 틀은 업적 공유 이미지와 같고, 가운데는 큰 연출 끝 화면 그대로
@@ -467,8 +472,6 @@ const kingWinScene = (
   };
 };
 
-const CHALLENGE_AVATAR = 104;
-const CHALLENGE_AVATAR_OVERLAP = 24;
 const CHALLENGE_STAMP = 72;
 const CHALLENGE_NAME_LINE = 22;
 
@@ -477,8 +480,7 @@ const challengeWinScene = (
   target: Extract<SpecialMatchShareTarget, { kind: "challenge-win" }>,
   colors: Colors,
 ): SceneLayout => {
-  const count = target.defeated.length;
-  const groupWidth = CHALLENGE_AVATAR * count - CHALLENGE_AVATAR_OVERLAP * (count - 1);
+  const groupWidth = getChallengeGroupWidth(target.defeated.length);
   const groupLeft = (SHARE_WIDTH - groupWidth) / 2;
   const names = getChallengeDefeatedNames(target.defeated);
   return {

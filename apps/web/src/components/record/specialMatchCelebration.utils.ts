@@ -22,6 +22,14 @@ export const STREAK_RING_FADE_MS = 500;
 const CHAMPIONS_FLARE_AFTER_IMPACT_MS = 600;
 const CHAMPIONS_FLARE_MS = 400;
 
+/** 도전 성공: 진 팀 얼굴 지름과 겹침. 큰 연출과 공유 이미지가 같이 쓴다 */
+export const CHALLENGE_AVATAR = 104;
+export const CHALLENGE_AVATAR_OVERLAP = 24;
+
+/** 도전 성공 얼굴 묶음 폭. 단식이면 얼굴 하나다 */
+export const getChallengeGroupWidth = (count: number) =>
+  CHALLENGE_AVATAR * count - CHALLENGE_AVATAR_OVERLAP * Math.max(0, count - 1);
+
 /** 도전 성공: 도장이 박힌 뒤 설명 줄이 떠오르기까지 */
 const CHALLENGE_IMPACT_SETTLE_MS = 500;
 
