@@ -41,6 +41,7 @@
 ## 경기
 
 - `GET /api/matches`: `playerId`와 함께 `category=singles|doubles`로 분류 필터, 대진 예정 경기(`scheduled`) 제외
+  - `playerId`가 있으면 경기마다 그 회원의 평점 변경 로그 `ratingChanges`(없으면 빈 배열)를 붙인다. 프로필 요약 `matches`도 같다. 웹 한 사람의 경기 목록이 경기별 평점 변화로 쓴다.
 - 경기 목록 정렬: `GET /api/matches`·`GET /api/match-feed`·세션 경기 목록은 기록 시각(`getMatchRecordedAt`, 완료 경기는 점수를 입력한 `completedAt`, 그 밖은 `matchStartsAt`) 최신순
 - 경기 기록 `POST /api/matches`: 직접 기록한 경기는 특수 매치가 아니라 `specialMatchCelebration`은 null
 - 수정 `PUT /api/matches/:matchId`
