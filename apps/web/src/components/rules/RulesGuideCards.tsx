@@ -205,16 +205,15 @@ const RULE_CARDS: readonly CardContent[] = [
     ),
   },
   {
-    title: "서브와 리턴은 바운스 뒤에",
+    title: "투바운스 룰",
     section: "치는 법",
-    scope: "g2 n3 d7",
+    scope: "g2 k6",
     Figure: TwoBounceFigure,
-    stillSeconds: 6,
+    stillSeconds: 9,
     body: (
       <>
         <RuleParagraph>
-          랠리가 시작되고 <b>두 번째 바운스 이후</b>부터 발리할 수 있어요.{" "}
-          <b>투 바운스 룰</b>이라고 해요.
+          랠리가 시작되고 <b>두 번째 바운스 이후</b>부터 발리할 수 있어요.
         </RuleParagraph>
         <RuleList>
           <RuleItem>
