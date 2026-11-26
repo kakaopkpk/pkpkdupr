@@ -153,7 +153,7 @@ export const GameWalkthroughFigure: React.FC = () => (
           </i>
         </span>
       </div>
-      <div className="call s10-x1">
+      <div className="call s10-x">
         <span>
           <b>
             "사이드 아웃!"
@@ -180,16 +180,6 @@ export const GameWalkthroughFigure: React.FC = () => (
           </b>
           <i>
             지면 남은 서브권으로 2번이 서브
-          </i>
-        </span>
-      </div>
-      <div className="call s10-x2">
-        <span>
-          <b>
-            "사이드 아웃!"
-          </b>
-          <i>
-            서브권이 없으면 공수 전환
           </i>
         </span>
       </div>
