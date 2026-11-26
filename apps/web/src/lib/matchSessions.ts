@@ -13,6 +13,10 @@ import type {
   UpcomingMatchSessionsResponse,
 } from "@pkpkdupr/shared/session";
 import { isRegularSessionTime } from "@pkpkdupr/shared/session";
+import type {
+  SpecialMatch,
+  SpecialMatchPreviewResponse,
+} from "@pkpkdupr/shared/specialMatch";
 import { apiFetch } from "@/lib/api";
 import type { MatchInfo } from "@/types/match";
 
@@ -256,3 +260,20 @@ export const getPrioritySessionMemberIds = (
           .filter((id) => id !== playerId),
       ),
   );
+
+/** 기록 시트 팀 구성의 특수 매치 미리보기(GET /api/special-match-preview). 저장 없이 서버가 판정한다 */
+export const fetchSpecialMatchPreview = async (
+  teams: readonly [readonly string[], readonly string[]],
+  sessionId: string | undefined,
+): Promise<SpecialMatch | null> => {
+  const params = new URLSearchParams({
+    teamA: teams[0].join(","),
+    teamB: teams[1].join(","),
+  });
+  if (sessionId) params.set("sessionId", sessionId);
+  const response = await requestJson<SpecialMatchPreviewResponse>(
+    `/api/special-match-preview?${params}`,
+    "특수 매치를 미리 보지 못했어요.",
+  );
+  return response.specialMatch;
+};

@@ -1459,11 +1459,11 @@ const computeProgressSince = (
     // 리벤지는 리벤지 매치에서 이긴 팀(revenge_success)으로 센다. REVENGE_MATCH_ACHIEVEMENT_COUNT_START 전 경기는
     // 옛 조건(같은 날 진 조합 그대로 이 회원의 바로 다음 경기에서 이김)으로 세어 기존 달성자를 지킨다.
     const revengeKey = `${toKstDateKey(match.completedAt)}|${getLineupKey(match, teamIndex)}`;
-    if (match.completedAt < REVENGE_MATCH_ACHIEVEMENT_COUNT_START) {
-      if (won && previousLossKey === revengeKey) metrics.revenges += 1;
-    } else if (won && match.specialMatchOutcome === "revenge_success") {
-      metrics.revenges += 1;
-    }
+    const isRevenge =
+      match.completedAt < REVENGE_MATCH_ACHIEVEMENT_COUNT_START
+        ? previousLossKey === revengeKey
+        : match.specialMatchOutcome === "revenge_success";
+    if (won && isRevenge) metrics.revenges += 1;
     previousLossKey = !won && winningTeamIndex !== null ? revengeKey : null;
 
     const opponentIds = new Set(

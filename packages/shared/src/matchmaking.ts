@@ -1,6 +1,5 @@
 import {
   getSameGenderCourtGender,
-  judgeRecommendedSpecialMatch,
   judgeSpecialMatch,
   SPECIAL_MATCH_RECOMMENDATION_BONUS,
   type SpecialMatch,
@@ -420,9 +419,11 @@ export const recommendDoublesMatches = (
   };
   // 특수 유형 판정. 판정 입력에 없는 선수가 있으면 그 코트는 특수 유형이 아니다
   const specialPlayers = input.specialPlayers;
+  // 가산점은 이력 없이(리벤지 없이) 판정하고, 표시는 세션 완료 경기 이력으로 리벤지까지 판정한다
   const judgeCourt = (
     arrangement: Arrangement,
     court: number,
+    history: readonly SpecialMatchHistoryMatch[] = [],
   ): SpecialMatch | null => {
     if (!specialPlayers) {
       return null;
@@ -434,10 +435,13 @@ export const recommendDoublesMatches = (
     if (!a1 || !a2 || !b1 || !b2) {
       return null;
     }
-    return judgeRecommendedSpecialMatch([
-      [a1, a2],
-      [b1, b2],
-    ]);
+    return judgeSpecialMatch(
+      [
+        [a1, a2],
+        [b1, b2],
+      ],
+      history,
+    );
   };
   // 유형은 팀 순서와 상관없으므로 코트 키로 가산점을 캐시한다(단계가 달라도 같은 코트면 같은 값)
   const bonusByCourtKey = new Map<string, number>();
@@ -629,24 +633,6 @@ export const recommendDoublesMatches = (
       winningTeamIndex: match.winningTeamIndex ?? null,
     }),
   );
-  const judgeDisplayedCourt = (court: number): SpecialMatch | null => {
-    if (!specialPlayers) {
-      return null;
-    }
-    const [a1, a2, b1, b2] = courtSlice(result.arrangement, court).map((id) =>
-      specialPlayers.get(id),
-    );
-    if (!a1 || !a2 || !b1 || !b2) {
-      return null;
-    }
-    return judgeSpecialMatch(
-      [
-        [a1, a2],
-        [b1, b2],
-      ],
-      specialHistory,
-    );
-  };
 
   const courts: RecommendedCourtPlan[] = [];
   for (let court = 0; court < courtCount; court += 1) {
@@ -679,7 +665,7 @@ export const recommendDoublesMatches = (
       ],
       repeatedPartnerPairs,
       repeatedOpponentPairs,
-      specialMatch: judgeDisplayedCourt(court),
+      specialMatch: judgeCourt(result.arrangement, court, specialHistory),
     });
   }
 

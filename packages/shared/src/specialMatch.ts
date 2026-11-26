@@ -3,7 +3,9 @@ import {
   getChallengeTeamAverageRating,
   RATING_EPSILON,
 } from "./achievements.js";
+import { getWinningTeamIndex, type MatchScore } from "./match.js";
 import type { Player } from "./player.js";
+import { toKstDateKey } from "./session.js";
 import { WIN_STREAK_MIN } from "./streak.js";
 
 export { CHALLENGE_MIN_RATING_GAP };
@@ -45,9 +47,6 @@ export const specialMatchKindLabels: Record<SpecialMatchKind, string> = {
 /** 결과(승리·저지 등)가 정해지는 유형인지. 남복·여복 매치는 결과·큰 연출이 없다 */
 export const hasSpecialMatchOutcome = (kind: SpecialMatchKind): boolean =>
   kind !== "men_doubles" && kind !== "women_doubles";
-
-export const isSpecialMatchKind = (value: unknown): value is SpecialMatchKind =>
-  specialMatchKindValues.includes(value as SpecialMatchKind);
 
 export type SpecialMatchOutcome =
   | "rival_overtaken"
@@ -381,6 +380,37 @@ const isSamePlayerSet = (
   );
 };
 
+/** 리벤지 판정에 볼 완료 경기 범위. 새 경기가 들어갈 세션, 세션이 없으면 그 KST 날의 세션 없는 경기다. empty는 볼 경기가 없음 */
+export type RevengeHistoryScope =
+  | { kind: "session"; sessionId: string }
+  | { kind: "day"; dateKey: string }
+  | { kind: "empty" };
+
+/** 완료 경기 요약에서 리벤지 범위의 경기를 완료 시각 오름차순 SpecialMatchHistoryMatch로 고른다 */
+export const selectRevengeHistory = (
+  matches: readonly {
+    sessionId: string | null;
+    completedAt: Date;
+    teamPlayerIds: readonly [readonly string[], readonly string[]];
+    scores?: readonly MatchScore[] | null;
+  }[],
+  scope: RevengeHistoryScope,
+): SpecialMatchHistoryMatch[] =>
+  scope.kind === "empty"
+    ? []
+    : matches
+        .filter((match) =>
+          scope.kind === "session"
+            ? match.sessionId === scope.sessionId
+            : match.sessionId == null &&
+              toKstDateKey(match.completedAt) === scope.dateKey,
+        )
+        .sort((a, b) => a.completedAt.getTime() - b.completedAt.getTime())
+        .map((match) => ({
+          teamPlayerIds: match.teamPlayerIds,
+          winningTeamIndex: getWinningTeamIndex(match),
+        }));
+
 /**
  * 리벤지 판정. 같은 두 팀(팀 순서·팀 안 순서 무관)이 이미 붙었으면 리벤지이고, 사이에 다른 경기가 있어도 된다.
  * 리벤지·방어는 그 대진의 가장 최근 경기에서 진 팀·이긴 팀이며, 지키는 팀은 그 경기에서 이긴 팀의 새 index다.
@@ -401,11 +431,9 @@ export const judgeRevengeMatch = (
     if (!sameOrder && !swapped) continue;
     // 가장 최근 같은 대진이 리벤지·방어를 정하므로 승패가 없으면 더 앞 경기를 보지 않는다
     if (previous.winningTeamIndex == null) return null;
-    const defendingTeamIndex: 0 | 1 = sameOrder
+    const defendingTeamIndex = sameOrder
       ? previous.winningTeamIndex
-      : previous.winningTeamIndex === 0
-        ? 1
-        : 0;
+      : ((1 - previous.winningTeamIndex) as 0 | 1);
     return {
       kind: "revenge",
       defendingTeamIndex,

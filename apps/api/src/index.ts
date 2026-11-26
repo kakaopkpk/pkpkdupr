@@ -81,6 +81,8 @@ import {
 import {
   hasSpecialMatchOutcome,
   judgeSpecialMatch,
+  selectRevengeHistory,
+  type RevengeHistoryScope,
   type SpecialMatch,
   type SpecialMatchCandidatePlayer,
   type SpecialMatchCelebration,
@@ -830,15 +832,6 @@ const toPlayerBusyError = (
   );
 };
 
-/**
- * 리벤지 판정에 쓸 완료 경기의 범위. 새 경기가 들어갈 세션이 있으면 그 세션, 없으면 같은 KST 날의 세션 없는 경기다.
- * empty는 아직 만들지 않은 세션에 들어갈 경기(미리보기)라 볼 경기가 없다.
- */
-type RevengeHistoryScope =
-  | { kind: "session"; sessionId: string }
-  | { kind: "day"; dateKey: string }
-  | { kind: "empty" };
-
 const toRevengeHistoryScope = (
   session: Pick<ManagedMatchSession, "id"> | undefined,
   now: Date,
@@ -871,21 +864,7 @@ const judgeSpecialMatchForLineup = async (
         }
         return candidate;
       });
-    const history =
-      scope.kind === "empty"
-        ? []
-        : context.matches
-            .filter((match) =>
-              scope.kind === "session"
-                ? match.sessionId === scope.sessionId
-                : match.sessionId == null &&
-                  toKstDateKey(match.completedAt) === scope.dateKey,
-            )
-            .sort((a, b) => a.completedAt.getTime() - b.completedAt.getTime())
-            .map((match) => ({
-              teamPlayerIds: match.teamPlayerIds,
-              winningTeamIndex: getWinningTeamIndex(match),
-            }));
+    const history = selectRevengeHistory(context.matches, scope);
     return judgeSpecialMatch(
       [toCandidates(lineup.teams[0]), toCandidates(lineup.teams[1])],
       history,
