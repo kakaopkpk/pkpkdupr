@@ -22,9 +22,6 @@ type MatchTeam = MatchInfo["teams"][number];
 export const rowDividerClassName =
   "not-last:shadow-[inset_0_-1px_0_var(--color-pk-divider)]";
 
-const getTeamLabel = (team: MatchTeam) =>
-  team.players.map((player) => player.username).join(" · ");
-
 /** 행을 누를 수 있으면 button, 아니면 div로 그린다 */
 const RowContainer: React.FC<{
   onPress?: () => void;
@@ -47,71 +44,34 @@ const RowContainer: React.FC<{
     <div className={className}>{children}</div>
   );
 
-/**
- * 한 사람의 경기 목록에서 팀 줄 강조. 기준 회원 팀(mine)은 이름 `pk-ink`에 기준 회원 아이디만 굵게,
- * 점수는 이기면 블루·지면 빨강이다. 상대 팀(opponent)은 이름 `pk-sub`, 점수 회색이다
- */
-type TeamPerspective = {
-  side: "mine" | "opponent";
-  playerId: string;
-  isWin: boolean;
-};
-
-const getScoreClassName = (
-  emphasis: "win" | "lose" | "none",
-  perspective?: TeamPerspective,
-) => {
-  if (perspective) {
-    if (perspective.side === "opponent") return "text-pk-muted";
-    return perspective.isWin ? "text-pk-primary" : "text-pk-down";
-  }
-  return emphasis === "win" ? "text-pk-primary" : "text-pk-muted";
-};
-
+/** 이름 묶음은 nameClassName, boldPlayerId가 있으면 그 회원 아이디만 굵게 그린다 */
 const TeamLine: React.FC<{
   team: MatchTeam;
   score?: number;
-  emphasis: "win" | "lose" | "none";
+  nameClassName: string;
+  scoreClassName: string;
+  boldPlayerId?: string;
   ringColor?: string;
-  perspective?: TeamPerspective;
-}> = ({ team, score, emphasis, ringColor, perspective }) => (
+}> = ({ team, score, nameClassName, scoreClassName, boldPlayerId, ringColor }) => (
   <div className="flex min-w-0 items-center gap-2.5">
     <TeamAvatars players={team.players} size={22} ringColor={ringColor} />
-    {perspective ? (
-      <span
-        className={cx(
-          "min-w-0 flex-1 truncate text-pk-15 font-medium",
-          perspective.side === "mine" ? "text-pk-ink" : "text-pk-sub",
-        )}
-      >
-        {team.players.map((player, index) => (
-          <React.Fragment key={player.id}>
-            {index > 0 ? " · " : null}
-            {player.id === perspective.playerId ? (
-              <span className="font-bold">{player.username}</span>
-            ) : (
-              player.username
-            )}
-          </React.Fragment>
-        ))}
-      </span>
-    ) : (
-      <span
-        className={cx(
-          "min-w-0 flex-1 truncate text-pk-15",
-          emphasis === "win" && "font-bold text-pk-ink",
-          emphasis === "lose" && "font-medium text-pk-sub",
-          emphasis === "none" && "font-medium text-pk-ink",
-        )}
-      >
-        {getTeamLabel(team)}
-      </span>
-    )}
+    <span className={cx("min-w-0 flex-1 truncate text-pk-15", nameClassName)}>
+      {team.players.map((player, index) => (
+        <React.Fragment key={player.id}>
+          {index > 0 ? " · " : null}
+          {player.id === boldPlayerId ? (
+            <span className="font-bold">{player.username}</span>
+          ) : (
+            player.username
+          )}
+        </React.Fragment>
+      ))}
+    </span>
     {score !== undefined ? (
       <span
         className={cx(
           "min-w-6 text-right text-pk-17 font-extrabold tabular-nums",
-          getScoreClassName(emphasis, perspective),
+          scoreClassName,
         )}
       >
         {score}
@@ -119,6 +79,34 @@ const TeamLine: React.FC<{
     ) : null}
   </div>
 );
+
+/**
+ * 팀 줄 강조. 기본은 이긴 팀 굵게·블루 점수, 진 팀 회색이다.
+ * 기준 회원 승패가 있으면 그 팀은 이름 `pk-ink`·점수 승 블루/패 빨강, 상대 팀은 이름 `pk-sub`·점수 회색이다
+ */
+const getTeamLineStyle = (
+  isWinner: boolean,
+  hasWinner: boolean,
+  result: { isWin: boolean } | null,
+) => {
+  if (result) {
+    const isResultTeam = isWinner === result.isWin;
+    return {
+      nameClassName: cx("font-medium", isResultTeam ? "text-pk-ink" : "text-pk-sub"),
+      scoreClassName: !isResultTeam
+        ? "text-pk-muted"
+        : result.isWin
+          ? "text-pk-primary"
+          : "text-pk-down",
+    };
+  }
+  if (!hasWinner) {
+    return { nameClassName: "font-medium text-pk-ink", scoreClassName: "text-pk-muted" };
+  }
+  return isWinner
+    ? { nameClassName: "font-bold text-pk-ink", scoreClassName: "text-pk-primary" }
+    : { nameClassName: "font-medium text-pk-sub", scoreClassName: "text-pk-muted" };
+};
 
 const timeLabelFormatters = {
   time: formatKstTime,
@@ -174,13 +162,11 @@ export const MatchRow: React.FC<{
   // 기본은 이긴 팀이 위, 기준 회원 승패가 있으면 기준 회원 팀(진 경기면 진 팀)이 위
   const isTeamAFirst = result ? result.isWin === isTeamAWinner : isTeamAWinner;
   // 평점 미반영 경기는 평점 변경 로그가 없어 변화도 없다
-  const ratingCategory =
-    getMatchTopLevelType(match.type) === "singles" ? "singles" : "doubles";
-  const resultRatingDelta =
-    result && resultPlayerId
-      ? (match.ratingChanges?.find((change) => change.playerId === resultPlayerId)
-          ?.delta[ratingCategory] ?? null)
-      : null;
+  const ratingCategory = getMatchTopLevelType(match.type);
+  const resultRatingDelta = result
+    ? (match.ratingChanges?.find((change) => change.playerId === resultPlayerId)
+        ?.delta[ratingCategory] ?? null)
+    : null;
   const lineA = { team: teamA, score: scoreA, isWinner: isTeamAWinner };
   const lineB = { team: teamB, score: scoreB, isWinner: !isTeamAWinner };
   const lines = isTeamAFirst ? [lineA, lineB] : [lineB, lineA];
@@ -207,22 +193,14 @@ export const MatchRow: React.FC<{
           </span>
         ) : null}
       </div>
-      {lines.map(({ team, score, isWinner }, index) => (
+      {lines.map(({ team, score, isWinner }) => (
         <TeamLine
           key={team.id}
           team={team}
           score={hasScores ? score : undefined}
-          emphasis={hasWinner ? (isWinner ? "win" : "lose") : "none"}
+          {...getTeamLineStyle(isWinner, hasWinner, result)}
+          boldPlayerId={result ? resultPlayerId : undefined}
           ringColor={avatarRingColor}
-          perspective={
-            result && resultPlayerId
-              ? {
-                  side: index === 0 ? "mine" : "opponent",
-                  playerId: resultPlayerId,
-                  isWin: result.isWin,
-                }
-              : undefined
-          }
         />
       ))}
       {result ? (
