@@ -199,7 +199,8 @@ const RULE_CARDS: readonly CardContent[] = [
           발리한 뒤에 밟아도 <b>폴트</b>예요.
         </RuleItem>
         <RuleItem>
-          공이 <b>바운스됐다면</b> 안에서 쳐도 돼요.
+          <b>한 번 바운스된 공</b>은 논 발리 존 안에서 쳐도 돼요. 어디에
+          바운스됐든 괜찮아요.
         </RuleItem>
       </RuleList>
     ),
