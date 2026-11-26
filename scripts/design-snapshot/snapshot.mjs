@@ -460,12 +460,17 @@ async function waitForShell(page) {
 }
 
 // 업적 축하 등 시작 때 뜨는 팝업을 닫는다.
+// 앱 진입 때 뜨는 팝업(공지 확인 창, 업적 축하, 세션 칭찬)을 닫는다.
+// 업적 축하는 장마다 "다음", 마지막 장 "확인"이고 버튼이 조금 늦게 나온다. 칭찬 팝업은 버튼이 없어 Esc로 넘긴다.
 async function dismissPopups(page) {
-  for (let i = 0; i < 10; i += 1) {
-    const confirm = page.getByRole("dialog").getByRole("button", { name: "확인" });
-    if (!(await confirm.first().isVisible().catch(() => false))) return;
-    await confirm.first().click();
-    await page.waitForTimeout(400);
+  for (let i = 0; i < 20; i += 1) {
+    const dialog = page.getByRole("dialog").first();
+    if (!(await dialog.isVisible().catch(() => false))) return;
+    await page.waitForTimeout(1000);
+    const button = dialog.getByRole("button", { name: /^(확인|다음)$/ }).first();
+    if (await button.isVisible().catch(() => false)) await button.click();
+    else await page.keyboard.press("Escape");
+    await page.waitForTimeout(600);
   }
 }
 
