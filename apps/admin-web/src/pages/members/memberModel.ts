@@ -14,7 +14,7 @@ import {
 
 export type MemberKind = Exclude<MemberKindFilter, "all">;
 export type Gender = "M" | "F";
-export type SortKey = "rating" | "matches" | "lastMatch" | "lastSignIn";
+export type SortKey = "rating" | "matches" | "lastMatch" | "lastActive";
 export type SortDirection = "asc" | "desc";
 
 export interface SortState {
@@ -49,30 +49,25 @@ export const isAwaitingFirstPasswordChange = (player: AdminPlayer): boolean =>
 const canSignIn = (player: AdminPlayer): boolean =>
   player.status !== "inactive" && player.hasLoginAccount;
 
-/** 회원 표 최근 로그인 칸. 로그인할 수 없는 회원은 그 이유를 쓴다 */
-export const getLastSignInLabel = (player: AdminPlayer): string => {
+/** 회원 표 최근 접속 칸. 로그인할 수 없는 회원은 그 이유를 쓴다 */
+export const getLastActiveLabel = (player: AdminPlayer): string => {
   if (!canSignIn(player)) {
     return player.status === "inactive" ? "로그인 막힘" : "계정 없음";
   }
-  // 필드가 없으면 서버가 Auth 조회에 실패해 모르는 것이다
-  if (player.lastSignInAt === undefined) return "–";
-  if (player.lastSignInAt === null) return "로그인 전";
-  return formatRelativeDay(player.lastSignInAt);
+  if (player.lastActiveAt === null) return "접속 전";
+  return formatRelativeDay(player.lastActiveAt);
 };
 
 /** 상세 패널 계정 상태 줄. 계정이 없으면 비밀번호 줄이 이미 알려 주므로 null */
 export const getAccountStatusText = (player: AdminPlayer): string | null => {
   if (!player.hasLoginAccount) return null;
-  const lastSignIn = describeLastSignIn(player.lastSignInAt);
+  const lastActive =
+    player.lastActiveAt === null
+      ? "접속한 적 없음"
+      : `마지막 접속 ${formatKstDateTime(player.lastActiveAt)}`;
   return isAwaitingFirstPasswordChange(player)
-    ? `${lastSignIn} · 첫 비밀번호 변경 전`
-    : lastSignIn;
-};
-
-const describeLastSignIn = (lastSignInAt: AdminPlayer["lastSignInAt"]): string => {
-  if (lastSignInAt === undefined) return "마지막 로그인을 불러오지 못했어요";
-  if (lastSignInAt === null) return "로그인한 적 없음";
-  return `마지막 로그인 ${formatKstDateTime(lastSignInAt)}`;
+    ? `${lastActive} · 첫 비밀번호 변경 전`
+    : lastActive;
 };
 
 export interface MemberFilters {
@@ -113,9 +108,9 @@ const sortValue = (player: AdminPlayer, key: SortKey): number | null => {
       return player.matchCount;
     case "lastMatch":
       return toTime(player.lastMatchStartsAt);
-    case "lastSignIn":
-      // 로그인할 수 없는 회원은 지난 로그인 시각이 있어도 값 없음(맨 아래)으로 보낸다
-      return canSignIn(player) ? toTime(player.lastSignInAt) : null;
+    case "lastActive":
+      // 로그인할 수 없는 회원은 지난 접속 시각이 있어도 값 없음(맨 아래)으로 보낸다
+      return canSignIn(player) ? toTime(player.lastActiveAt) : null;
   }
 };
 

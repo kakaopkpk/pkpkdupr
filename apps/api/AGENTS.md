@@ -18,6 +18,7 @@
 
 - 로그인과 비밀번호 변경은 클라이언트가 Supabase Auth로 직접 합니다.
 - `GET /api/me`
+  - 웹·어드민이 앱을 열거나 앱으로 돌아올 때 부르므로, 마지막 기록에서 5분이 지났으면 앱 진입 시각 `players.last_active_at`을 갱신한다. 기록은 응답을 기다리게 하지 않고, 실패해도 응답은 그대로다
 - `POST /api/me/password-changed`: 첫 로그인 비밀번호 변경 완료
 - `PATCH /api/me/profile`
 - avatar API
@@ -40,6 +41,7 @@
 ## 경기
 
 - `GET /api/matches`: `playerId`와 함께 `category=singles|doubles`로 분류 필터, 대진 예정 경기(`scheduled`) 제외
+  - `playerId`가 있으면 경기마다 그 회원의 평점 변경 로그 `ratingChanges`(없으면 빈 배열)를 붙인다. 프로필 요약 `matches`도 같다. 웹 한 사람의 경기 목록이 경기별 평점 변화로 쓴다.
 - 경기 목록 정렬: `GET /api/matches`·`GET /api/match-feed`·세션 경기 목록은 기록 시각(`getMatchRecordedAt`, 완료 경기는 점수를 입력한 `completedAt`, 그 밖은 `matchStartsAt`) 최신순
 - 경기 기록 `POST /api/matches`: 직접 기록한 경기는 특수 매치가 아니라 `specialMatchCelebration`은 null
 - 수정 `PUT /api/matches/:matchId`
@@ -296,7 +298,7 @@
   - 첫 로그인 비밀번호 변경 전 `isFirstLogin`
   - 로그인 계정 여부 `hasLoginAccount`
   - 경기 행 수 `matchCount`, 가장 늦은 경기 시각 `lastMatchStartsAt`
-  - Supabase Auth 마지막 로그인 시각 `lastSignInAt`(계정·기록 없음 null). Auth 조회가 실패해도 목록은 200이고 이 필드만 빠진다
+  - 마지막 앱 진입 시각 `lastActiveAt`(`GET /api/me` 기록, 들어온 적 없으면 null)
 - 경기 없는 회원 삭제 `DELETE /api/admin/players/:playerId`
 - 성별·상태 변경 `PATCH /api/admin/players/:playerId/gender|status`
 - 생성·상태 감사 로그 `GET /api/admin/player-creation-logs`·`player-status-logs`

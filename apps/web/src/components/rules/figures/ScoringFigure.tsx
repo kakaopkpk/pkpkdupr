@@ -1,128 +1,151 @@
 import React from "react";
 import { RuleFigure } from "../RulesGuideParts";
 
-/** 규칙 안내 2장 그림: 점수: 공격팀만 점수를 얻고 서브권이 두 번. 움직임은 rulesGuide.css의 .pk-rules-c2 */
+/**
+ * 규칙 안내 10장 그림: 점수는 공격팀만. 움직임은 rulesGuide.css의 .g2 .n3 .d65 범위다.
+ * 장면: "공격팀이 이기면 +1점" → "득점하면 좌우를 바꿔 또 서브" → "지면 서브권 하나를 잃어요"
+ */
 export const ScoringFigure: React.FC = () => (
-  <RuleFigure>
-    <div className="scene" style={{ position: "absolute", inset: "0" }}>
-      <svg width="298" height="216" viewBox="0 0 298 216" role="img" aria-label="위에서 본 코트: 공격팀이 랠리를 이기면 1점을 얻고 1번 서버가 계속 서브한다. 공격팀이 지면 점수는 그대로이고 2번 서버가 서브하며, 2번도 지면 서브권이 상대 팀으로 넘어간다" style={{ position: "absolute", left: "0", top: "0" }}>
-        <rect x="17" y="46" width="264" height="120" fill="#2346a8" />
-        <rect x="107" y="46" width="84" height="120" fill="#5a7bd6" />
-        <rect x="17" y="46" width="264" height="120" fill="none" stroke="#ffffff" strokeWidth="2" />
-        <path d="M107 46 V166 M191 46 V166 M17 106 H107 M191 106 H281" stroke="#ffffff" strokeWidth="2" fill="none" />
-        <line x1="149" y1="40" x2="149" y2="172" stroke="#0f1726" strokeWidth="3" strokeLinecap="round" />
-        <text className="c1-r1" x="17" y="190" fontSize="12" fontWeight="800" fill="#2346a8" textAnchor="start">
-          공격팀
-        </text>
-        <text className="c1-r2" x="17" y="190" fontSize="12" fontWeight="800" fill="#4f5a70" textAnchor="start">
-          수비팀
-        </text>
-        <text className="c1-r2" x="281" y="190" fontSize="12" fontWeight="800" fill="#2346a8" textAnchor="end">
-          공격팀
-        </text>
-        <text className="c1-r1" x="281" y="190" fontSize="12" fontWeight="800" fill="#4f5a70" textAnchor="end">
-          수비팀
-        </text>
-        <g className="c1-pipsL">
-          <circle cx="62" cy="186" r="5" fill="none" stroke="#e0a800" strokeWidth="1.5" />
-          <circle className="pop c1-p1" cx="62" cy="186" r="5" fill="#ffd54a" />
-          <circle cx="75" cy="186" r="5" fill="none" stroke="#e0a800" strokeWidth="1.5" />
-          <circle className="pop c1-p2" cx="75" cy="186" r="5" fill="#ffd54a" />
+  <RuleFigure className="g3">
+    <svg className="loop" width="298" height="206" viewBox="0 0 298 206" role="img" aria-label="위에서 본 코트: 공격팀이 랠리를 이기면 1점을 얻고, 파트너와 좌우를 바꿔 같은 사람이 왼쪽에서 또 서브한다. 지면 서브권 하나를 잃는다" style={{ position: "absolute", left: "0px", top: "0px" }}>
+      <rect x="17" y="46" width="264" height="120" fill="#2346a8" />
+      <rect x="107" y="46" width="84" height="120" fill="#5a7bd6" />
+      <rect x="17" y="46" width="264" height="120" fill="none" stroke="#ffffff" strokeWidth="2" />
+      <path d="M107 46 V166 M191 46 V166 M17 106 H107 M191 106 H281" stroke="#ffffff" strokeWidth="2" fill="none" />
+      <line x1="149" y1="40" x2="149" y2="172" stroke="#0f1726" strokeWidth="3" strokeLinecap="round" />
+      <g transform="translate(272 76) scale(-1 1)">
+        <g className="p10-swr1">
+          <path d="M5 0 L12 0" stroke="#0f1726" strokeWidth="2.5" strokeLinecap="round" />
+          <rect x="11" y="-5" width="11" height="10" rx="4" fill="#152a5e" stroke="#ffffff" strokeWidth="1.5" />
         </g>
-        <g className="c1-pipsR">
-          <circle cx="236" cy="186" r="5" fill="#ffd54a" />
-          <circle cx="223" cy="186" r="5" fill="#ffd54a" />
+      </g>
+      <g transform="translate(272 76)">
+        <circle r="11" fill="#152a5e" stroke="#ffffff" strokeWidth="1.5" />
+      </g>
+      <g transform="translate(272 136) scale(-1 1)">
+        <g className="p10-swr2">
+          <path d="M5 0 L12 0" stroke="#0f1726" strokeWidth="2.5" strokeLinecap="round" />
+          <rect x="11" y="-5" width="11" height="10" rx="4" fill="#152a5e" stroke="#ffffff" strokeWidth="1.5" />
         </g>
-        <g transform="translate(0 -4)">
-          <g transform="translate(272 80)">
-            <circle r="11" fill="#152a5e" stroke="#ffffff" strokeWidth="1.5" />
-            <text className="c1-rn" y="4" fontSize="12" fontWeight="800" fill="#ffffff" textAnchor="middle">
-              1
-            </text>
-          </g>
-          <g transform="translate(272 140)">
-            <circle r="11" fill="#152a5e" stroke="#ffffff" strokeWidth="1.5" />
-            <text className="c1-rn" y="4" fontSize="12" fontWeight="800" fill="#ffffff" textAnchor="middle">
-              2
-            </text>
-          </g>
-          <g className="c1-ring">
-            <circle r="16" fill="none" stroke="#ffd54a" strokeWidth="3" />
-          </g>
-          <g className="c1-b">
-            <circle r="11" fill="#ffffff" />
-            <text className="c1-ln" y="4" fontSize="12" fontWeight="800" fill="#2346a8" textAnchor="middle">
-              1
-            </text>
-          </g>
-          <g className="c1-c">
-            <circle r="11" fill="#ffffff" />
-            <text className="c1-ln" y="4" fontSize="12" fontWeight="800" fill="#2346a8" textAnchor="middle">
-              2
-            </text>
-          </g>
-          <g transform="translate(236 86)">
-            <circle className="pop c1-rp1" r="8" fill="none" stroke="#ffffff" strokeWidth="2" />
-          </g>
-          <g transform="translate(9 104)">
-            <circle className="pop c1-rp2" r="8" fill="none" stroke="#c2253d" strokeWidth="2.5" />
-          </g>
-          <g transform="translate(236 136)">
-            <circle className="pop c1-rp3" r="8" fill="none" stroke="#ffffff" strokeWidth="2" />
-          </g>
-          <g transform="translate(78 100)">
-            <circle className="pop c1-rp4" r="8" fill="none" stroke="#ffffff" strokeWidth="2" />
-          </g>
-          <g transform="translate(289 116)">
-            <circle className="pop c1-rp5" r="8" fill="none" stroke="#c2253d" strokeWidth="2.5" />
-          </g>
-          <g transform="translate(236 84)">
-            <circle className="pop c1-rp6" r="8" fill="none" stroke="#ffffff" strokeWidth="2" />
-          </g>
-          <g transform="translate(80 124)">
-            <circle className="pop c1-rp7" r="8" fill="none" stroke="#ffffff" strokeWidth="2" />
-          </g>
-          <g transform="translate(289 96)">
-            <circle className="pop c1-rp8" r="8" fill="none" stroke="#c2253d" strokeWidth="2.5" />
-          </g>
-          <circle className="c1-ball" r="5" fill="#ffd54a" stroke="#0f1726" strokeWidth="1" />
+      </g>
+      <g transform="translate(272 136)">
+        <circle r="11" fill="#152a5e" stroke="#ffffff" strokeWidth="1.5" />
+      </g>
+      <text className="" x="17" y="190" fontSize="12" fontWeight="800" fill="#2346a8" textAnchor="start">공격팀</text>
+      <text className="" x="281" y="190" fontSize="12" fontWeight="800" fill="#4f5a70" textAnchor="end">수비팀</text>
+      <circle cx="62" cy="186" r="5" fill="none" stroke="#e0a800" strokeWidth="1.5" />
+      <circle className="m-p1" cx="62" cy="186" r="5" fill="#ffd54a" />
+      <circle cx="75" cy="186" r="5" fill="none" stroke="#e0a800" strokeWidth="1.5" />
+      <circle className="" cx="75" cy="186" r="5" fill="#ffd54a" />
+      <text x="182" y="192" fontSize="22" fontWeight="800" fill="#4f5a70" textAnchor="middle">2</text>
+      <text x="149" y="189" fontSize="18" fontWeight="800" fill="#4f5a70" textAnchor="middle">:</text>
+      <text className="m-3" x="116" y="192" fontSize="22" fontWeight="800" fill="#2346a8" textAnchor="middle">3</text>
+      <text className="m-4" x="116" y="192" fontSize="22" fontWeight="800" fill="#2346a8" textAnchor="middle">4</text>
+      <g className="sc s1">
+        <g transform="translate(236 82)">
+          <circle className="ring ring25" r="8" fill="none" stroke="#ffffff" strokeWidth="2" />
         </g>
-        <g transform="translate(116 192)">
-          <text className="c1-s3" fontSize="22" fontWeight="800" fill="#2346a8" textAnchor="middle">
-            3
-          </text>
-          <text className="pop c1-s4" fontSize="22" fontWeight="800" fill="#2346a8" textAnchor="middle">
-            4
-          </text>
+        <g transform="translate(6 106)">
+          <circle className="pop pop47" r="8" fill="none" stroke="#c2253d" strokeWidth="2.5" />
         </g>
-        <text className="c1-plus" x="100" y="188" fontSize="12" fontWeight="800" fill="#2346a8" textAnchor="end">
-          +1
-        </text>
-        <text x="182" y="192" fontSize="22" fontWeight="800" fill="#4f5a70" textAnchor="middle">
-          2
-        </text>
-        <text x="149" y="189" fontSize="18" fontWeight="800" fill="#4f5a70" textAnchor="middle">
-          :
-        </text>
-        <text className="c1-same" x="149" y="208" fontSize="11" fontWeight="700" fill="#4f5a70" textAnchor="middle">
-          점수 그대로
-        </text>
-      </svg>
-      <div className="cap c1-cap1">
-        <span>
-          공격팀이 이기면 +1점
-        </span>
-      </div>
-      <div className="cap c1-cap2">
-        <span>
-          지면 점수 그대로, 2번이 서브
-        </span>
-      </div>
-      <div className="cap c1-cap3">
-        <span>
-          2번도 지면 서브권이 상대 팀에게
-        </span>
-      </div>
+        <g transform="translate(37 136)">
+          <circle className="tb-hit tb-hitD8" r="9" fill="none" stroke="#ffd54a" strokeWidth="2.5" />
+        </g>
+        <g transform="translate(259 76)">
+          <circle className="tb-hit tb-hitD31" r="9" fill="none" stroke="#ffd54a" strokeWidth="2.5" />
+        </g>
+        <g className="ke1-sh">
+          <ellipse rx="5" ry="3" fill="#0f1726" opacity=".3" />
+        </g>
+        <g className="ke1 tr2">
+          <circle r="5" fill="#ffd54a" opacity=".18" />
+        </g>
+        <g className="ke1 tr1">
+          <circle r="5" fill="#ffd54a" opacity=".38" />
+        </g>
+        <g className="ke1">
+          <circle r="5" fill="#ffd54a" stroke="#0f1726" strokeWidth="1" />
+        </g>
+        <text className="pop pop52" x="103" y="188" fontSize="12" fontWeight="800" fill="#2346a8" textAnchor="end">+1</text>
+      </g>
+      <g className="sc s2">
+        <g className="pop pop50">
+          <rect x="17" y="46" width="90" height="60" fill="#ffffff" opacity=".28" />
+          <rect x="191" y="106" width="90" height="60" fill="#ffffff" opacity=".28" />
+          <text x="72" y="62" fontSize="11" fontWeight="800" fill="#ffffff" textAnchor="middle">왼쪽</text>
+          <path d="M42 82 L222 125" stroke="#ffd54a" strokeWidth="2.5" strokeDasharray="5 5" strokeLinecap="round" fill="none" />
+          <polygon points="230,127 219.1,129.6 221.4,119.8" fill="#ffd54a" />
+        </g>
+      </g>
+      <g className="sc s3">
+        <g transform="translate(236 130)">
+          <circle className="ring ring25" r="8" fill="none" stroke="#ffffff" strokeWidth="2" />
+        </g>
+        <g transform="translate(80 118)">
+          <circle className="ring ring47" r="8" fill="none" stroke="#ffffff" strokeWidth="2" />
+        </g>
+        <g transform="translate(214 182)">
+          <circle className="pop pop68" r="8" fill="none" stroke="#c2253d" strokeWidth="2.5" />
+        </g>
+        <g transform="translate(37 76)">
+          <circle className="tb-hit tb-hitD8" r="9" fill="none" stroke="#ffd54a" strokeWidth="2.5" />
+        </g>
+        <g transform="translate(259 136)">
+          <circle className="tb-hit tb-hitD31" r="9" fill="none" stroke="#ffd54a" strokeWidth="2.5" />
+        </g>
+        <g transform="translate(37 136)">
+          <circle className="tb-hit tb-hitD53" r="9" fill="none" stroke="#ffd54a" strokeWidth="2.5" />
+        </g>
+        <g className="kh2-sh">
+          <ellipse rx="5" ry="3" fill="#0f1726" opacity=".3" />
+        </g>
+        <g className="kh2 tr2">
+          <circle r="5" fill="#ffd54a" opacity=".18" />
+        </g>
+        <g className="kh2 tr1">
+          <circle r="5" fill="#ffd54a" opacity=".38" />
+        </g>
+        <g className="kh2">
+          <circle r="5" fill="#ffd54a" stroke="#0f1726" strokeWidth="1" />
+        </g>
+      </g>
+      <g className="m2">
+        <g className="p10-swm2">
+          <path d="M5 0 L12 0" stroke="#0f1726" strokeWidth="2.5" strokeLinecap="round" />
+          <rect x="11" y="-5" width="11" height="10" rx="4" fill="#ffffff" stroke="#0f1726" strokeWidth="1.5" />
+        </g>
+        <circle r="11" fill="#ffffff" />
+        <text y="4" fontSize="12" fontWeight="800" fill="#2346a8" textAnchor="middle">2</text>
+      </g>
+      <g className="m1">
+        <g className="p10-swm1">
+          <path d="M5 0 L12 0" stroke="#0f1726" strokeWidth="2.5" strokeLinecap="round" />
+          <rect x="11" y="-5" width="11" height="10" rx="4" fill="#ffffff" stroke="#0f1726" strokeWidth="1.5" />
+        </g>
+        <circle r="16" fill="none" stroke="#ffd54a" strokeWidth="3" />
+        <circle r="11" fill="#ffffff" />
+        <text y="4" fontSize="12" fontWeight="800" fill="#2346a8" textAnchor="middle">1</text>
+      </g>
+    </svg>
+    <div className="cap sc s1">
+      <span>공격팀이 이기면 +1점</span>
+    </div>
+    <div className="cap sc s2">
+      <span>득점하면 좌우를 바꿔 또 서브</span>
+    </div>
+    <div className="cap sc s3">
+      <span>지면 서브권 하나를 잃어요</span>
+    </div>
+    <div className="bars">
+      <span className="bar b1">
+        <i />
+      </span>
+      <span className="bar b2">
+        <i />
+      </span>
+      <span className="bar b3">
+        <i />
+      </span>
     </div>
   </RuleFigure>
 );

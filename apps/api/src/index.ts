@@ -1449,6 +1449,9 @@ app.get("/api/me", async (req, res) => {
   if (!session) {
     return;
   }
+  // 앱 진입 기록은 응답을 기다리게 하지 않는다. 실패는 recordAppEntry가 로그로 남긴다.
+  const recording = authService.recordAppEntry(session.payload.playerId);
+  getRuntimeWaitUntil()?.(recording);
   res.json(toMeResponse(session));
 });
 

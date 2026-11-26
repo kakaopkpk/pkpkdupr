@@ -1,5 +1,8 @@
 import React from "react";
-import { getMatchRecordedAt } from "@pkpkdupr/shared/match";
+import {
+  getMatchRecordedAt,
+  getMatchTopLevelType,
+} from "@pkpkdupr/shared/match";
 import { getTeamResultScores, type MatchInfo } from "@/types/match";
 import {
   formatKstDateTime,
@@ -8,6 +11,7 @@ import {
 } from "@/lib/format";
 import { getMatchResultName } from "@/lib/matchResult";
 import { rowPressClassName } from "./Button";
+import { RatingDelta } from "./Delta";
 import { TeamAvatars } from "./PlayerAvatar";
 import { SpecialMatchLabel } from "./SpecialMatchLabel";
 import { cx } from "./cx";
@@ -17,9 +21,6 @@ type MatchTeam = MatchInfo["teams"][number];
 /** 목록 줄 사이 구분선. 마지막 줄에는 긋지 않는다 */
 export const rowDividerClassName =
   "not-last:shadow-[inset_0_-1px_0_var(--color-pk-divider)]";
-
-const getTeamLabel = (team: MatchTeam) =>
-  team.players.map((player) => player.username).join(" · ");
 
 /** 행을 누를 수 있으면 button, 아니면 div로 그린다 */
 const RowContainer: React.FC<{
@@ -43,29 +44,34 @@ const RowContainer: React.FC<{
     <div className={className}>{children}</div>
   );
 
+/** 이름 묶음은 nameClassName, boldPlayerId가 있으면 그 회원 아이디만 굵게 그린다 */
 const TeamLine: React.FC<{
   team: MatchTeam;
   score?: number;
-  emphasis: "win" | "lose" | "none";
+  nameClassName: string;
+  scoreClassName: string;
+  boldPlayerId?: string;
   ringColor?: string;
-}> = ({ team, score, emphasis, ringColor }) => (
+}> = ({ team, score, nameClassName, scoreClassName, boldPlayerId, ringColor }) => (
   <div className="flex min-w-0 items-center gap-2.5">
     <TeamAvatars players={team.players} size={22} ringColor={ringColor} />
-    <span
-      className={cx(
-        "min-w-0 flex-1 truncate text-pk-15",
-        emphasis === "win" && "font-bold text-pk-ink",
-        emphasis === "lose" && "font-medium text-pk-sub",
-        emphasis === "none" && "font-medium text-pk-ink",
-      )}
-    >
-      {getTeamLabel(team)}
+    <span className={cx("min-w-0 flex-1 truncate text-pk-15", nameClassName)}>
+      {team.players.map((player, index) => (
+        <React.Fragment key={player.id}>
+          {index > 0 ? " · " : null}
+          {player.id === boldPlayerId ? (
+            <span className="font-bold">{player.username}</span>
+          ) : (
+            player.username
+          )}
+        </React.Fragment>
+      ))}
     </span>
     {score !== undefined ? (
       <span
         className={cx(
           "min-w-6 text-right text-pk-17 font-extrabold tabular-nums",
-          emphasis === "win" ? "text-pk-primary" : "text-pk-muted",
+          scoreClassName,
         )}
       >
         {score}
@@ -73,6 +79,34 @@ const TeamLine: React.FC<{
     ) : null}
   </div>
 );
+
+/**
+ * 팀 줄 강조. 기본은 이긴 팀 굵게·블루 점수, 진 팀 회색이다.
+ * 기준 회원 승패가 있으면 그 팀은 이름 `pk-ink`·점수 승 블루/패 빨강, 상대 팀은 이름 `pk-sub`·점수 회색이다
+ */
+const getTeamLineStyle = (
+  isWinner: boolean,
+  hasWinner: boolean,
+  result: { isWin: boolean } | null,
+) => {
+  if (result) {
+    const isResultTeam = isWinner === result.isWin;
+    return {
+      nameClassName: cx("font-medium", isResultTeam ? "text-pk-ink" : "text-pk-sub"),
+      scoreClassName: !isResultTeam
+        ? "text-pk-muted"
+        : result.isWin
+          ? "text-pk-primary"
+          : "text-pk-down",
+    };
+  }
+  if (!hasWinner) {
+    return { nameClassName: "font-medium text-pk-ink", scoreClassName: "text-pk-muted" };
+  }
+  return isWinner
+    ? { nameClassName: "font-bold text-pk-ink", scoreClassName: "text-pk-primary" }
+    : { nameClassName: "font-medium text-pk-sub", scoreClassName: "text-pk-muted" };
+};
 
 const timeLabelFormatters = {
   time: formatKstTime,
@@ -85,7 +119,8 @@ const timeLabelFormatters = {
  * 줄 맨 위 메타 줄에 시간을 두고, 내 경기면 시간 뒤에 " · 내 경기" 글자만 붙는다(바탕 강조 없음).
  * 게스트가 낀 경기(ratingExcluded)는 메타 줄 끝에 " · 평점 미반영"을 붙인다.
  * 특수 매치면 메타 줄 오른쪽 끝(점수 열 위)에 유형 이름을 두고, 결과(라이벌전 승리 등)는 쓰지 않는다.
- * 한 사람의 경기 목록(resultPlayerId)이면 그 사람 팀을 위에 두고 줄 왼쪽에 승(블루)·패(빨강) 색 띠를 붙인다.
+ * 한 사람의 경기 목록(resultPlayerId)이면 그 사람 팀을 위에 두고 그 사람 아이디만 굵게, 그 팀 점수를 승(블루)·패(빨강)로 칠하고,
+ * 메타 줄 오른쪽 끝에 그 경기로 바뀐 그 사람 평점(ratingChanges)을 붙인다.
  * 코트 번호는 보이지 않는다.
  */
 export const MatchRow: React.FC<{
@@ -99,7 +134,7 @@ export const MatchRow: React.FC<{
   avatarRingColor?: string;
   /**
    * 한 사람의 경기 목록에서 승패 기준이 되는 회원. 이 회원이 든 승패가 갈린 경기면 그 팀을 위 줄에 두고
-   * 줄 왼쪽에 승패 색 띠를 붙인다. 점수가 없거나 승자가 없거나 이 회원이 없는 경기는 지금 모양 그대로다
+   * 이 회원 기준 강조·평점 변화를 보인다. 점수가 없거나 승자가 없거나 이 회원이 없는 경기는 지금 모양 그대로다
    */
   resultPlayerId?: string;
 }> = ({
@@ -124,8 +159,14 @@ export const MatchRow: React.FC<{
   const result = resultPlayerId
     ? getMatchResultName(match, resultPlayerId)
     : null;
-  // 기본은 이긴 팀이 위, 승패 띠가 붙으면 기준 회원 팀(진 경기면 진 팀)이 위
+  // 기본은 이긴 팀이 위, 기준 회원 승패가 있으면 기준 회원 팀(진 경기면 진 팀)이 위
   const isTeamAFirst = result ? result.isWin === isTeamAWinner : isTeamAWinner;
+  // 평점 미반영 경기는 평점 변경 로그가 없어 변화도 없다
+  const ratingCategory = getMatchTopLevelType(match.type);
+  const resultRatingDelta = result
+    ? (match.ratingChanges?.find((change) => change.playerId === resultPlayerId)
+        ?.delta[ratingCategory] ?? null)
+    : null;
   const lineA = { team: teamA, score: scoreA, isWinner: isTeamAWinner };
   const lineB = { team: teamB, score: scoreB, isWinner: !isTeamAWinner };
   const lines = isTeamAFirst ? [lineA, lineB] : [lineB, lineA];
@@ -141,8 +182,15 @@ export const MatchRow: React.FC<{
           ) : null}
           {match.ratingExcluded ? " · 평점 미반영" : null}
         </span>
-        {match.specialMatch ? (
-          <SpecialMatchLabel kind={match.specialMatch.kind} className="ml-auto" />
+        {match.specialMatch || resultRatingDelta !== null ? (
+          <span className="ml-auto flex shrink-0 items-center gap-2">
+            {match.specialMatch ? (
+              <SpecialMatchLabel kind={match.specialMatch.kind} />
+            ) : null}
+            {resultRatingDelta !== null ? (
+              <RatingDelta value={resultRatingDelta} className="text-pk-12 font-bold" />
+            ) : null}
+          </span>
         ) : null}
       </div>
       {lines.map(({ team, score, isWinner }) => (
@@ -150,10 +198,16 @@ export const MatchRow: React.FC<{
           key={team.id}
           team={team}
           score={hasScores ? score : undefined}
-          emphasis={hasWinner ? (isWinner ? "win" : "lose") : "none"}
+          {...getTeamLineStyle(isWinner, hasWinner, result)}
+          boldPlayerId={result ? resultPlayerId : undefined}
           ringColor={avatarRingColor}
         />
       ))}
+      {result ? (
+        <span className="sr-only" data-match-result={result.isWin ? "win" : "lose"}>
+          {result.isWin ? "승" : "패"}
+        </span>
+      ) : null}
     </>
   );
 
@@ -161,27 +215,11 @@ export const MatchRow: React.FC<{
     <RowContainer
       onPress={onPress}
       className={cx(
-        "flex min-w-0 py-3 text-pk-ink",
-        result ? "gap-3" : "flex-col gap-1.5",
+        "flex min-w-0 flex-col gap-1.5 py-3 text-pk-ink",
         rowDividerClassName,
       )}
     >
-      {result ? (
-        <>
-          <span
-            data-match-result={result.isWin ? "win" : "lose"}
-            className={cx(
-              "w-1 shrink-0 self-stretch rounded-full",
-              result.isWin ? "bg-pk-primary" : "bg-pk-down",
-            )}
-          >
-            <span className="sr-only">{result.isWin ? "승" : "패"}</span>
-          </span>
-          <div className="flex min-w-0 flex-1 flex-col gap-1.5">{content}</div>
-        </>
-      ) : (
-        content
-      )}
+      {content}
     </RowContainer>
   );
 };

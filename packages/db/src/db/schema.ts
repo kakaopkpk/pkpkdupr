@@ -63,6 +63,8 @@ export const players = pgTable("players", {
   isFirstLogin: boolean("is_first_login").notNull().default(false),
   /** 게스트가 정회원으로 승급된 시각. 승급 기록을 남기기 전 회원·일반 가입 회원·게스트는 null이다 */
   promotedAt: unixTimestamp("promoted_at"),
+  /** 마지막으로 앱에 들어온 시각(GET /api/me). 들어온 적 없으면 null이다 */
+  lastActiveAt: unixTimestamp("last_active_at"),
   createdAt: unixTimestamp("created_at").notNull(),
   updatedAt: unixTimestamp("updated_at").notNull(),
 });

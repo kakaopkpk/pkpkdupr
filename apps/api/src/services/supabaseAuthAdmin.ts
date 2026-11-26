@@ -24,8 +24,6 @@ const LIST_USERS_PAGE_SIZE = 1000;
 export interface AuthUserSummary {
   id: string;
   email: string | null;
-  /** 마지막 아이디·비밀번호 로그인 시각. 로그인한 적이 없으면 null */
-  lastSignInAt: Date | null;
 }
 
 /**
@@ -113,7 +111,6 @@ export class SupabaseAuthAdmin {
         ...data.users.map((user) => ({
           id: user.id,
           email: user.email ?? null,
-          lastSignInAt: user.last_sign_in_at ? new Date(user.last_sign_in_at) : null,
         })),
       );
       if (data.users.length < LIST_USERS_PAGE_SIZE) {
