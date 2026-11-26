@@ -55,7 +55,8 @@
       - 진행 중 일반 세션이면 "추천 매칭 · 대기 N명" 섹션(`home/RecommendationSection`)을 둔다. 추천 코트마다 `home/RecommendationCard` 한 장이고 모양은 `docs/design.md` "특수 매치"의 추천 매칭 카드다.
         - 주인공·지키는 쪽 팀은 `RecommendedCourt.specialMatch`의 `protagonistIds`·`defendingTeamIndex`로만 정하고 웹이 다시 판정하지 않는다. 지키는 쪽 팀을 왼쪽 칸에 둔다.
         - 도전 매치 높은 팀 칸의 "평점 N 높음"은 서버가 준 `specialMatch.ratingGap`만 쓴다.
-        - "경기 시작"은 `lib/matchSessions`의 `buildRecommendedMatchRequest`로 추천 응답 팀 순서 그대로 `startSessionMatch`를 부르고, 특수 유형 카드면 `recommendedSpecialKind`를 넘긴다(일반이면 생략).
+        - "경기 시작"은 `lib/matchSessions`의 `buildRecommendedMatchRequest`로 추천 응답 팀 순서 그대로 `startSessionMatch`를 부른다. 특수 유형은 서버가 같은 규칙으로 다시 판정해 저장하므로 넘기지 않는다.
+        - 특수 유형은 코트마다 붙어 여러 카드에 알약이 있을 수 있다. 리벤지 카드는 지키는 팀(직전 승자) 칸이 연한 파랑이다.
       - 진행 중 일반 세션이면 추천 매칭 아래 "경기 기록" 섹션(세션의 끝난 경기, 제목 줄 오른쪽 전체/내 경기 전환 `ui/MatchFilterControl`)을 둔다.
       - 진행 중 세션이 대회 세션이면 진행 화면이 대회 카드(`LiveSessionCard`) → "내 경기" 섹션 → 라운드별 대진(`TournamentBracketSection`, `showFilter` false)이다.
         - 세션 지배자·"진행 중" 섹션·추천 매칭·"경기 기록"은 없고, 남의 진행 중 경기는 대진 안 제자리에만 있다.
@@ -95,7 +96,7 @@
       - 예정 경기면 vs 글자만, 화면이 안 보이면 멈춘다. 공·패들·충격선은 `index.css`의 `pk-rally-*`, 움직임 줄이기면 공이 네트 위에 멈춘다.
       - 완료 경기는 평점 변화 아래 '이 경기로 받은 업적'(응답 `achievements`)을 기록 완료 띠와 같은 줄 `MatchAchievementRow`로 보인다.
       - 완료 경기 하단 "같은 멤버로 한 판 더"는 기록(`completedAt`, 없으면 시작 시각) 1시간 안에만 보인다(`isWithinRematchWindow`). 지나면 수정 버튼만 전체 너비로 남는다.
-      - 한 판 더(경기 상세·기록 완료)는 `startMatch`에 `rematchOfMatchId`(원래 경기 id)를 넘기고, 리벤지 매치 판정은 서버가 한다.
+      - 한 판 더(경기 상세·기록 완료)는 원래 경기의 팀·세션·장소로 `startMatch`를 부르고, 리벤지 매치 판정은 서버가 같은 대진의 가장 최근 경기로 한다.
       - 대진 예정 경기(`status: "scheduled"`)는 vs 글자만·시각 없이 보이고 점수 입력·수정·삭제·한 판 더가 없다. 세션 날짜가 오늘(KST)이면 하단 "경기 시작"(`startScheduledMatch`)만 있다.
     - `profile/`: 회원 프로필·경기 목록, 나 탭과 같이 쓰는 머리 `ProfileHeader`. 사진을 불러온 아바타를 누르면 그 자리에서 가운데 240px 원으로 커지는 확대 보기 `AvatarZoomViewer`(누르기·아래로 끌기·Escape·뒤로가기로 닫힘)
     - `records/`: 세션 상세 `SessionReportDrawer`와 그 위 평점 변화 전체 `SessionRatingChangesScreen`
@@ -113,7 +114,7 @@
       - 하이라이트는 칭찬 섹션 `praise/SessionPraiseSection`이다(섹션 제목만 "하이라이트"). 끝난 세션이 칭찬하는 세션(`isSessionPraiseEnabled`)이면 리포트와 함께 `GET /api/match-sessions/:sessionId/praise`를 읽고, 후보가 없으면 섹션이 없다. 칭찬을 못 읽으면 보이던 칭찬을 두고 화면은 그대로 그린다.
       - 끝난 세션 머리 카드는 `mine`을 넘기지 않는다(내 기록 띠·줄 없음). 내 기록은 `LastSessionMeCard` 하나만 보인다.
       - 리포트가 있는 끝난 세션은 머리 오른쪽 위 공유 아이콘으로 `records/SessionReportShareSheet`를 연다. 내용은 `lib/sessionReportShare`가 리포트·칭찬 응답으로 만들고(새 API 없음), 이미지는 `records/sessionReportShareImage`, 미리 만들기·공유는 `hooks/useSessionReportShare`다.
-    - `record/`: 경기 기록 시트. 완료 단계는 이 경기로 참가자 전원이 받은 업적을 띠(`match/MatchAchievementRow`)로 보이고, 그중 내 새 업적만 화면 전체 축하 연출 `AchievementCelebration`으로 띄우고 닫으면 확인 처리
+    - `record/`: 경기 기록 시트. 새 경기는 자리가 다 차면(`getSlotTeams`) `hooks/useSpecialMatchPreview`로 `GET /api/special-match-preview`를 물어, 선수 고르기 제목 줄 오른쪽에 `ui/SpecialMatchLabel`의 `SpecialMatchPill`, 점수 단계 제목 줄 오른쪽에 `SpecialMatchLabel`을 둔다. 같은 구성은 다시 묻지 않고, 응답 전·실패·고치는 경기면 없다. 완료 단계는 이 경기로 참가자 전원이 받은 업적을 띠(`match/MatchAchievementRow`)로 보이고, 그중 내 새 업적만 화면 전체 축하 연출 `AchievementCelebration`으로 띄우고 닫으면 확인 처리
       - 완료 단계 한 판 더 버튼은 내가 진 팀이면 "같은 멤버로 리벤지", 그 밖(경기하지 않은 기록자 포함)은 "같은 멤버로 한 판 더"다. 어느 쪽이든 요청은 같다.
       - 완료 단계와 경기 상세의 점수 아래 결과 이름은 `ui/MatchResultLabel`이고, 이름·아이콘·색은 `lib/matchResult`의 `getMatchResultName`이 보는 회원 팀 기준으로 정한다.
         - 보는 회원이 경기하지 않았거나 승패가 갈리지 않으면(점수 없음 포함) null이라 줄이 없다.
