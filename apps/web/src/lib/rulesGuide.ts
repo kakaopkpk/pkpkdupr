@@ -1,12 +1,22 @@
 import { useSyncExternalStore } from "react";
+import { RULES_GUIDE_CARD_COUNT } from "@pkpkdupr/shared/rulesGuide";
 
-/** 이 기기에서 본 안내 카드 번호(0부터) 배열(JSON) */
-export const RULES_GUIDE_SEEN_STORAGE_KEY = "pkpkdupr:rules-guide-seen";
+/**
+ * 이 기기에서 본 안내 카드 번호(0부터) 배열(JSON).
+ * 업적 모범생을 넣으며 키를 바꿔 그 전 기록(LEGACY_STORAGE_KEYS)은 읽지 않고 모두 처음부터 센다
+ */
+export const RULES_GUIDE_SEEN_STORAGE_KEY = "pkpkdupr:rules-guide-seen-v2";
 /** 홈 규칙 안내 카드를 X로 닫은 기기면 "1" */
-export const RULES_GUIDE_CLOSED_STORAGE_KEY = "pkpkdupr:rules-guide-closed";
+export const RULES_GUIDE_CLOSED_STORAGE_KEY = "pkpkdupr:rules-guide-closed-v2";
+/** 더는 읽지 않는 키. 처음 읽을 때 지운다 */
+const LEGACY_STORAGE_KEYS = [
+  "pkpkdupr:rules-guide-seen",
+  "pkpkdupr:rules-guide-closed",
+  "pkpkdupr:rules-guide-dismissed",
+];
 
-/** 안내 카드 장 수. 안내 화면 모듈(RULES_GUIDE_CARDS)을 홈에 끌어오지 않으려고 따로 둔다 */
-export const RULES_GUIDE_CARD_COUNT = 15;
+/** 안내 카드 장 수. 안내 화면 모듈(RULES_GUIDE_CARDS)을 홈에 끌어오지 않으려고 shared 값을 쓴다 */
+export { RULES_GUIDE_CARD_COUNT };
 
 interface RulesGuideProgress {
   closed: boolean;
@@ -42,8 +52,19 @@ const readClosed = (): boolean => {
   }
 };
 
+const removeLegacyKeys = () => {
+  try {
+    for (const key of LEGACY_STORAGE_KEYS) localStorage.removeItem(key);
+  } catch {
+    // 지우지 못해도 읽지 않으므로 그대로 둔다
+  }
+};
+
 const getProgress = (): RulesGuideProgress => {
-  progress ??= { closed: readClosed(), seen: readSeen() };
+  if (!progress) {
+    removeLegacyKeys();
+    progress = { closed: readClosed(), seen: readSeen() };
+  }
   return progress;
 };
 
@@ -66,6 +87,10 @@ const subscribe = (listener: () => void) => {
 
 /** 이 기기에서 본 안내 카드 장 수 */
 export const getRulesGuideSeenCount = (): number => getProgress().seen.size;
+
+/** 이 기기에서 모든 장을 봤는지(업적 모범생 조건) */
+export const isRulesGuideRead = (): boolean =>
+  getProgress().seen.size >= RULES_GUIDE_CARD_COUNT;
 
 /** 홈 규칙 안내 카드를 숨길지. X로 닫았거나 모든 장을 본 기기다 */
 export const isRulesGuideCardHidden = (): boolean => {

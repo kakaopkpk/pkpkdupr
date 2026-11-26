@@ -22,6 +22,7 @@ import { Section } from "@/components/ui/Section";
 import { StateMessage } from "@/components/ui/StateMessage";
 import { cx } from "@/components/ui/cx";
 import { useAppNavigation } from "@/context/AppNavigationContext";
+import { useAuth } from "@/context/AuthContext";
 import { useDataVersion } from "@/context/DataSyncContext";
 import {
   type TabKey,
@@ -34,6 +35,7 @@ import {
   type AchievementProgressInfo,
   formatAchievementProgress,
   getAchievementProgressRatio,
+  getDisplayedAchievementProgress,
   interpolateAchievementProgress,
 } from "@/lib/achievements";
 import {
@@ -42,6 +44,7 @@ import {
   formatKstNumericDate,
 } from "@/lib/format";
 import { fetchAchievementRanking } from "@/lib/rankings";
+import { useRulesGuideSeenCount } from "@/lib/rulesGuide";
 
 /** 분류별 업적 정의와 분류 만점(ACHIEVEMENT_CATEGORY_LABEL 순서) */
 const CATEGORY_SECTIONS = (
@@ -85,14 +88,24 @@ const AchievementRowPoints: React.FC<{ points: number; earned: boolean }> = ({
  */
 const AchievementRow: React.FC<{
   definition: AchievementDefinition;
-  progress: AchievementProgressInfo | undefined;
+  progress: AchievementProgressInfo | null | undefined;
+  /** false면 못 받은 업적이어도 진행 막대·숫자를 보이지 않는다(남의 모범생) */
+  showProgress: boolean;
   /** 못 받은 업적 줄 중 몇 번째인지. 세기 시작을 늦추는 데 쓴다 */
   rowIndex: number;
   /** true면 카드 폭 가득 연한 파랑 바탕이 한 번 반짝이고 사라진다 */
   isFlashing: boolean;
   onFlashEnd: () => void;
   onPress: (earned: boolean) => void;
-}> = ({ definition, progress, rowIndex, isFlashing, onFlashEnd, onPress }) => {
+}> = ({
+  definition,
+  progress,
+  showProgress,
+  rowIndex,
+  isFlashing,
+  onFlashEnd,
+  onPress,
+}) => {
   const earned = !!progress?.earned;
   // 받은 업적 줄은 움직이지 않아 세지 않는다
   const count = useCountUp(1, { ...getRowCountUp(rowIndex), isReady: !earned });
@@ -136,7 +149,7 @@ const AchievementRow: React.FC<{
             {formatKstNumericDate(progress.earnedAt)}
           </span>
         ) : null}
-        {!earned ? (
+        {!earned && showProgress ? (
           <span className="mt-1.5 flex items-center gap-2">
             <ProgressBar ratio={ratio} className="h-1.5 flex-1" />
             <CountUpText
@@ -247,6 +260,9 @@ export default function AchievementsScreen({
   onVisibleChange,
 }: AchievementsScreenProps): React.ReactElement {
   const { openAchievementDetail } = useAppNavigation();
+  const { player } = useAuth();
+  const isMine = !!playerId && playerId === player?.id;
+  const rulesGuideSeenCount = useRulesGuideSeenCount();
   // 순위는 PushScreen 본문 밖에서 받으므로 보임은 PushScreen이 알려 준 값을 쓴다
   const [isScreenVisible, setIsScreenVisible] = useState(false);
   const handleVisibleChange = useCallback(
@@ -411,25 +427,33 @@ export default function AchievementsScreen({
                   }
                 >
                   <Card>
-                    {definitions.map((definition) => (
-                      <AchievementRow
-                        key={definition.id}
-                        definition={definition}
-                        progress={progressById.get(definition.id)}
-                        rowIndex={unearnedIndexById.get(definition.id) ?? 0}
-                        isFlashing={flashingAchievementId === definition.id}
-                        onFlashEnd={handleFlashEnd}
-                        onPress={(earned) => {
-                          if (playerId) {
-                            openAchievementDetail({
-                              playerId,
-                              achievementId: definition.id,
-                              earned,
-                            });
-                          }
-                        }}
-                      />
-                    ))}
+                    {definitions.map((definition) => {
+                      const displayed = getDisplayedAchievementProgress(
+                        definition,
+                        progressById.get(definition.id),
+                        { isMine, rulesGuideSeenCount },
+                      );
+                      return (
+                        <AchievementRow
+                          key={definition.id}
+                          definition={definition}
+                          progress={displayed?.progress}
+                          showProgress={displayed !== null}
+                          rowIndex={unearnedIndexById.get(definition.id) ?? 0}
+                          isFlashing={flashingAchievementId === definition.id}
+                          onFlashEnd={handleFlashEnd}
+                          onPress={(earned) => {
+                            if (playerId) {
+                              openAchievementDetail({
+                                playerId,
+                                achievementId: definition.id,
+                                earned,
+                              });
+                            }
+                          }}
+                        />
+                      );
+                    })}
                   </Card>
                 </Section>
               );

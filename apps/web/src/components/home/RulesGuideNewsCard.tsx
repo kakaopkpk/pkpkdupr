@@ -1,6 +1,7 @@
 import React from "react";
 import { buttonPressClassName, rowPressClassName } from "@/components/ui/Button";
 import { cx } from "@/components/ui/cx";
+import { BookIcon } from "@/components/ui/Icons";
 import { ProgressBar } from "@/components/ui/ProgressBar";
 import { useAppNavigation } from "@/context/AppNavigationContext";
 import {
@@ -8,24 +9,6 @@ import {
   RULES_GUIDE_CARD_COUNT,
   useRulesGuideSeenCount,
 } from "@/lib/rulesGuide";
-
-const BookIcon: React.FC = () => (
-  <svg
-    width="22"
-    height="22"
-    viewBox="0 0 24 24"
-    aria-hidden="true"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  >
-    <path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v15H6.5A2.5 2.5 0 0 0 4 20.5z" />
-    <path d="M4 20.5A2.5 2.5 0 0 0 6.5 23H20v-5" />
-    <path d="M9 8h7M9 12h5" />
-  </svg>
-);
 
 const CloseIcon: React.FC = () => (
   <svg
@@ -67,7 +50,7 @@ const RulesGuideNewsCard: React.FC = () => {
           aria-hidden="true"
           className="flex size-11 shrink-0 items-center justify-center rounded-full bg-pk-primary-soft text-pk-primary"
         >
-          <BookIcon />
+          <BookIcon size={22} />
         </span>
         <div className="flex min-w-0 flex-1 flex-col gap-0.5">
           <span className="text-pk-15 font-bold text-pk-ink">

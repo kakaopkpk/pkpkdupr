@@ -7,6 +7,9 @@ const createStorage = (initial: Record<string, string> = {}) => {
     setItem: (key: string, value: string) => {
       values.set(key, value);
     },
+    removeItem: (key: string) => {
+      values.delete(key);
+    },
     values,
   };
 };
@@ -82,6 +85,19 @@ describe("rulesGuide", () => {
     expect(isRulesGuideCardHidden()).toBe(true);
   });
 
+  it("counts the guide as read only after every card has been seen", async () => {
+    vi.stubGlobal("localStorage", createStorage());
+    const { RULES_GUIDE_CARD_COUNT, isRulesGuideRead, markRulesGuideCardSeen } =
+      await loadModule();
+
+    markRulesGuideCardSeen(RULES_GUIDE_CARD_COUNT - 1);
+    expect(isRulesGuideRead()).toBe(false);
+    for (let index = 0; index < RULES_GUIDE_CARD_COUNT; index += 1) {
+      markRulesGuideCardSeen(index);
+    }
+    expect(isRulesGuideRead()).toBe(true);
+  });
+
   it("hides the home card once it is closed", async () => {
     const storage = createStorage();
     vi.stubGlobal("localStorage", storage);
@@ -102,9 +118,7 @@ describe("rulesGuide", () => {
     vi.stubGlobal(
       "localStorage",
       createStorage({
-        "pkpkdupr:rules-guide-seen": JSON.stringify([0, 3, 3, 15, -1, 1.5, "2"]),
-        // 열기만 해도 써지던 옛 키는 읽지 않는다
-        "pkpkdupr:rules-guide-dismissed": "1",
+        "pkpkdupr:rules-guide-seen-v2": JSON.stringify([0, 3, 3, 15, -1, 1.5, "2"]),
       }),
     );
     const { getRulesGuideSeenCount, isRulesGuideCardHidden } =
@@ -112,6 +126,24 @@ describe("rulesGuide", () => {
 
     expect(getRulesGuideSeenCount()).toBe(2);
     expect(isRulesGuideCardHidden()).toBe(false);
+  });
+
+  it("starts over from the first card, ignoring and removing records from before the achievement", async () => {
+    const storage = createStorage({
+      "pkpkdupr:rules-guide-seen": JSON.stringify(
+        Array.from({ length: 15 }, (_, index) => index),
+      ),
+      "pkpkdupr:rules-guide-closed": "1",
+      "pkpkdupr:rules-guide-dismissed": "1",
+    });
+    vi.stubGlobal("localStorage", storage);
+    const { getRulesGuideSeenCount, isRulesGuideCardHidden, isRulesGuideRead } =
+      await loadModule();
+
+    expect(getRulesGuideSeenCount()).toBe(0);
+    expect(isRulesGuideRead()).toBe(false);
+    expect(isRulesGuideCardHidden()).toBe(false);
+    expect([...storage.values.keys()]).toEqual([]);
   });
 
   it("treats broken saved progress as nothing seen", async () => {

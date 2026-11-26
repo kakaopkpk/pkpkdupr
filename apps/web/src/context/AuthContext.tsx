@@ -32,6 +32,8 @@ export interface PlayerInfo {
   statusMessageBackgroundColor?: string;
   /** 회원이 세션에서 추가한 게스트. 보기·본인 세션 참석·칭찬만 하고 경기 기록·세션 만들기는 못 한다 */
   isGuest?: boolean;
+  /** 규칙 안내를 처음 끝까지 읽은 시각(업적 모범생). 없으면 서버에 완독 기록이 없다 */
+  rulesGuideCompletedAt?: string | Date | null;
 }
 
 /**

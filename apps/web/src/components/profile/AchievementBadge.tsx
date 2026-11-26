@@ -55,7 +55,8 @@ type BadgeIconKind =
   | "thumbUp"
   | "flag"
   | "podium"
-  | "laurel";
+  | "laurel"
+  | "book";
 
 /** 24 viewBox 선 아이콘. 글자는 아이콘 색(currentColor)으로 채운다 */
 export const BADGE_ICON_PATHS: Record<BadgeIconKind, React.ReactNode> = {
@@ -275,6 +276,14 @@ export const BADGE_ICON_PATHS: Record<BadgeIconKind, React.ReactNode> = {
       <path d="M10.6 9.4l1.9-1.3V16" />
     </>
   ),
+  // 펼친 책(홈 규칙 안내 카드와 같은 모양)
+  book: (
+    <>
+      <path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v15H6.5A2.5 2.5 0 0 0 4 20.5z" />
+      <path d="M4 20.5A2.5 2.5 0 0 0 6.5 23H20v-5" />
+      <path d="M9 8h7M9 12h5" />
+    </>
+  ),
 };
 
 /** 특별·세션·평점 분류와 연승 저지는 업적마다 아이콘이 다르다 */
@@ -318,6 +327,7 @@ const BADGE_ICON_BY_CATEGORY: Record<
   AchievementDefinition["category"],
   BadgeIconKind
 > = {
+  intro: "book",
   matches: "ball",
   wins: "trophy",
   streak: "flame",

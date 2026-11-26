@@ -241,6 +241,29 @@ export const PlusIcon: React.FC<{ size?: number; strokeWidth?: number }> = ({
 );
 
 /** 상자에서 위로 나가는 화살표(공유) */
+/** 펼친 책. 규칙 안내 홈 카드·모범생 업적 상세의 "규칙 읽기"가 쓰고, 업적 배지 book과 같은 모양이다 */
+export const BookIcon: React.FC<{ size?: number; className?: string }> = ({
+  size = 18,
+  className,
+}) => (
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 24 24"
+    aria-hidden="true"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    className={cx("shrink-0", className)}
+  >
+    <path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v15H6.5A2.5 2.5 0 0 0 4 20.5z" />
+    <path d="M4 20.5A2.5 2.5 0 0 0 6.5 23H20v-5" />
+    <path d="M9 8h7M9 12h5" />
+  </svg>
+);
+
 export const ShareIcon: React.FC<{ size?: number; className?: string }> = ({
   size = 18,
   className,
