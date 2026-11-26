@@ -702,11 +702,14 @@ export const findEndedSessions = (
   });
 };
 
-/** 모범생 업적 입력: 회원 id → 규칙 안내를 처음 끝까지 읽은 시각 */
+/**
+ * 모범생 업적 입력: 회원 id → 규칙 안내를 처음 끝까지 읽은 시각.
+ * 게스트는 완독을 저장해도 업적을 받지 않으므로 넣지 않는다(정회원으로 승급하면 그 시각으로 받는다)
+ */
 const findRulesGuideCompletions = (context: RankingContext) =>
   new Map(
     [...context.playersById.values()].flatMap((player) =>
-      player.rulesGuideCompletedAt
+      player.rulesGuideCompletedAt && !player.isGuest
         ? [[player.id, player.rulesGuideCompletedAt] as const]
         : [],
     ),

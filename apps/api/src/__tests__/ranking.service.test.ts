@@ -644,6 +644,27 @@ describe("buildSessionReport", () => {
     );
   });
 
+  it("findEndedSessions는 정회원의 규칙 안내 완독 시각만 모범생 입력으로 붙인다", () => {
+    const completedAt = at("2026-11-20T09:00:00Z");
+    const context = createRankingContext(
+      [
+        makePlayer("Palice01", "alice", 3.5, { rulesGuideCompletedAt: completedAt }),
+        makePlayer("Pbob0001", "bob", 3.5),
+        makePlayer("Pguest01", "guest", null, {
+          isGuest: true,
+          rulesGuideCompletedAt: completedAt,
+        }),
+      ],
+      [],
+      [],
+    );
+
+    expect(
+      findEndedSessions(context, [], sessionEndsAt)
+        .rulesGuideCompletedAtByPlayerId,
+    ).toEqual(new Map([["Palice01", completedAt]]));
+  });
+
   it("무패 세션 업적은 세션이 만료된 뒤에만 전승 4번째 경기로 받는다", () => {
     const wins = [0, 1, 2, 3].map((index) =>
       makeMatch(

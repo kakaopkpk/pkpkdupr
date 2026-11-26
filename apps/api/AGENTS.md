@@ -20,6 +20,7 @@
 - `GET /api/me`
   - 웹·어드민이 앱을 열거나 앱으로 돌아올 때 부르므로, 마지막 기록에서 5분이 지났으면 앱 진입 시각 `players.last_active_at`을 갱신한다. 기록은 응답을 기다리게 하지 않고, 실패해도 응답은 그대로다
   - 회원 응답에 규칙 안내 완독 시각 `rulesGuideCompletedAt`(읽지 않았으면 null)이 있다. 웹이 완독 재전송 여부를 정한다.
+    - 공개 `Player` 필드라 회원 목록·프로필 등 다른 회원 응답에도 실린다(업적 모범생을 받은 시각과 같은 값이라 숨기지 않는다).
 - `POST /api/me/password-changed`: 첫 로그인 비밀번호 변경 완료
 - 규칙 안내 완독 `POST /api/me/rules-guide/complete`: 204(업적 모범생)
   - `players.rules_guide_completed_at`이 비어 있을 때만 지금 시각으로 쓰므로 여러 번 불러도 처음 시각이 남는다(멱등).
@@ -215,7 +216,7 @@
 저장 없이 완료 경기로 조회 시 계산합니다. 정의·계산은 `packages/shared/src/achievements.ts`입니다. 예외로 모범생은 회원의 규칙 안내 완독 시각으로 계산합니다.
 
 - 게스트가 낀 완료 경기도 센다. 평점 업적의 복식 경기 수·평점과 도전자만 평점 반영 경기로 센다.
-- 게스트 본인은 어느 응답에서도 업적을 받지 않는다(`newAchievements`·`achievementPoints`·`achievements`·holders 수, 게스트 프로필은 모두 미획득·진행도 0).
+- 게스트 본인은 어느 응답에서도 업적을 받지 않는다(`newAchievements`·`achievementPoints`·`achievements`·holders 수, 미확인 업적은 빈 목록·0점, 게스트 프로필은 모두 미획득·진행도 0).
 - 점수
   - 업적 점수는 정의의 `points`(10·25·50·100점)이다.
   - 회원 점수는 받은 업적 점수 합(`sumAchievementPoints`, 만점 `ACHIEVEMENT_MAX_POINTS`)이라 업적을 잃으면 점수도 빠진다.
@@ -231,7 +232,7 @@
   - 기존 업적의 조건 수정은 원래 시작 시각부터 다시 계산한다.
   - 업적 기준 시각 전 경기로 받은 업적은 받은 업적으로 치지만 세션 리포트·경기 상세 `achievements`와 `newAchievements`에는 나오지 않는다(`isEarnedByCountedMatch`).
 - 응답에 나오는 곳
-  - 프로필 요약의 `achievements`: 57개 진행 상태, 평점 업적은 평점 반영 복식 경기 수 `ratedDoublesMatches` 포함. 랭킹 원천(전체 완료 경기·평점 로그)으로 계산하고, 원천을 못 읽으면 그 회원 경기로만 계산하며 연승 저지·환영 인사·개근상·무패 세션·세션 지배자는 받지 않은 상태로 둔다.
+  - 프로필 요약의 `achievements`: 57개 진행 상태, 평점 업적은 평점 반영 복식 경기 수 `ratedDoublesMatches` 포함. 랭킹 원천(전체 완료 경기·평점 로그)으로 계산하고, 원천을 못 읽으면 그 회원 경기로만 계산하며 연승 저지·환영 인사·개근상·무패 세션·세션 지배자·모범생은 받지 않은 상태로 둔다.
   - 경기 기록·수정 응답의 `newAchievements`(이 저장으로 참가자 전원이 새로 받은 업적)와 `achievementPoints`(새 업적을 받은 참가자별 지금 업적 점수 합). 새 업적은 전체 완료 경기·전원의 평점 로그로 계산한다.
   - 세션 리포트의 `achievements`: 그 세션 경기로 받은 업적.
   - 경기 상세의 `achievements`: 그 경기로 참가자 전원이 받은 업적(세션 리포트와 같은 규칙, 세션 없는 경기 포함). 완료 경기가 아니면 빈 배열이고, 계산이 실패해도 빈 배열로 응답한다.
@@ -262,7 +263,7 @@
   - `newAchievements`에는 나오지 않고 미확인 업적으로 축하한다.
 - 모범생(분류 입문, `RULES_GUIDE_ACHIEVEMENT_ID` `rules-guide`)
   - `players.rules_guide_completed_at`(공개 `Player.rulesGuideCompletedAt`)이 있으면 그 시각에 받는다. 받은 경기 `earnedMatchId`는 null이다.
-  - `findEndedSessions`가 랭킹 원천 회원 정보로 업적 입력(`rulesGuideCompletedAtByPlayerId`)에 붙인다. 집계 시작 시각은 없다.
+  - `findEndedSessions`가 랭킹 원천 회원 정보로 업적 입력(`rulesGuideCompletedAtByPlayerId`)에 붙인다. 게스트는 넣지 않는다. 집계 시작 시각은 없다.
   - 진행도는 받았으면 목표(15장), 아니면 0이다. 장 수는 서버가 모른다.
   - 받은 경기가 없어 `newAchievements`·세션 리포트·경기 상세 `achievements`·소식 업적 줄에 나오지 않고 미확인 업적으로 축하한다.
 - 대회 업적

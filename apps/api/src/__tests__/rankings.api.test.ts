@@ -448,6 +448,22 @@ describe("랭킹·세션 리포트 API", () => {
     expect(holders.body.counts["rules-guide"]).toBe(0);
   });
 
+  it("GET /api/me/achievements/unseen은 게스트 본인이면 업적 없이 0점이다", async () => {
+    vi.spyOn(AuthService.prototype, "getAllPlayers").mockResolvedValue([
+      { ...alice, isGuest: true, rulesGuideCompletedAt: new Date(now) },
+      bob,
+    ]);
+    vi.spyOn(
+      PlayerSeenAchievementRepository.prototype,
+      "findByPlayerId",
+    ).mockResolvedValue([]);
+
+    const response = await authorized("/api/me/achievements/unseen");
+
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual({ achievements: [], points: 0 });
+  });
+
   it("POST /api/me/achievements/seen은 모범생을 받은 경기 null로 확인한다", async () => {
     const markSeen = vi
       .spyOn(PlayerSeenAchievementRepository.prototype, "markSeen")
