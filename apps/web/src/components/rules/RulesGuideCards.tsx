@@ -154,7 +154,7 @@ export const RULES_GUIDE_CARDS: readonly RulesGuideCard[] = [
           점수를 얻으면 파트너와 <b>좌우를 바꿔</b> 같은 사람이 계속 서브해요.
         </RuleItem>
         <RuleItem>
-          지면 <b>2번</b>이 그 자리에서, 2번도 지면 사이드 아웃이라{" "}
+          지면 <b>2번</b>이 그 자리에서, 2번도 지면 사이드 아웃으로{" "}
           <b>상대 팀</b>이 서브해요.
         </RuleItem>
       </RuleList>
