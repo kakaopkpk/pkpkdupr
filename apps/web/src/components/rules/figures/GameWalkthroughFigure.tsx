@@ -5,38 +5,39 @@ import { RuleFigure } from "../RulesGuideParts";
 export const GameWalkthroughFigure: React.FC = () => (
   <RuleFigure>
     <div className="scene" style={{ position: "absolute", inset: "0" }}>
-      <svg width="298" height="210" viewBox="0 0 298 210" role="img" aria-label="한 판 따라가기: 공격팀 옆 노란 공은 남은 서브권. 서브권 1개로 Zero Zero Two로 시작해 득점하면 자리를 바꾸고, 지면 상대 팀 서브, 상대 1번·2번이 지면 다시 우리 서브" style={{ position: "absolute", left: "0", top: "0" }}>
+      <svg width="298" height="210" viewBox="0 0 298 210" role="img" aria-label="한 판 따라가기: 공격팀 옆 노란 공은 남은 서브권. 처음 공격하는 팀은 서브권 1개로 Zero Zero Two로 시작하고, 득점하면 자리를 바꿔 같은 사람이 서브한다. 서브권이 없으면 사이드 아웃으로 공수가 바뀌고, 새 공격팀은 오른쪽 사람부터 서브한다" style={{ position: "absolute", left: "0", top: "0" }}>
         <rect x="17" y="54" width="264" height="120" fill="#2346a8" />
         <rect x="107" y="54" width="84" height="120" fill="#5a7bd6" />
         <rect x="17" y="54" width="264" height="120" fill="none" stroke="#ffffff" strokeWidth="2" />
         <path d="M107 54 V174 M191 54 V174 M17 114 H107 M191 114 H281" stroke="#ffffff" strokeWidth="2" fill="none" />
         <line x1="149" y1="48" x2="149" y2="178" stroke="#0f1726" strokeWidth="3" strokeLinecap="round" />
-        <text className="s10-ra" x="17" y="198" fontSize="12" fontWeight="800" fill="#2346a8" textAnchor="start">
+        <text className="pop s10-ra" x="17" y="198" fontSize="12" fontWeight="800" fill="#2346a8" textAnchor="start">
           공격팀
         </text>
-        <text className="s10-rd" x="17" y="198" fontSize="12" fontWeight="800" fill="#4f5a70" textAnchor="start">
+        <text className="pop s10-rd" x="17" y="198" fontSize="12" fontWeight="800" fill="#4f5a70" textAnchor="start">
           수비팀
         </text>
-        <text className="s10-rd" x="281" y="198" fontSize="12" fontWeight="800" fill="#2346a8" textAnchor="end">
+        <text className="pop s10-rd" x="281" y="198" fontSize="12" fontWeight="800" fill="#2346a8" textAnchor="end">
           공격팀
         </text>
-        <text className="s10-ra" x="281" y="198" fontSize="12" fontWeight="800" fill="#4f5a70" textAnchor="end">
+        <text className="pop s10-ra" x="281" y="198" fontSize="12" fontWeight="800" fill="#4f5a70" textAnchor="end">
           수비팀
         </text>
         <g className="s10-gA">
           <circle cx="62" cy="194" r="5" fill="none" stroke="#e0a800" strokeWidth="1.5" />
           <circle className="pop s10-pA" cx="62" cy="194" r="5" fill="#ffd54a" />
         </g>
-        <g className="s10-gR">
+        <g className="pop s10-gR">
           <circle cx="236" cy="194" r="5" fill="none" stroke="#e0a800" strokeWidth="1.5" />
           <circle className="pop s10-pR1" cx="236" cy="194" r="5" fill="#ffd54a" />
           <circle cx="223" cy="194" r="5" fill="none" stroke="#e0a800" strokeWidth="1.5" />
           <circle className="pop s10-pR2" cx="223" cy="194" r="5" fill="#ffd54a" />
         </g>
-        <g className="s10-gC">
+        <g className="pop s10-gC">
           <circle cx="62" cy="194" r="5" fill="#ffd54a" />
           <circle cx="75" cy="194" r="5" fill="#ffd54a" />
         </g>
+        <circle className="s10-fly" r="5" fill="#ffd54a" stroke="#e0a800" strokeWidth="1.5" />
         <g transform="translate(0 4)">
           <g transform="translate(272 80)">
             <circle r="11" fill="#152a5e" stroke="#ffffff" strokeWidth="1.5" />
@@ -148,7 +149,17 @@ export const GameWalkthroughFigure: React.FC = () => (
             "One, Zero, Two!"
           </b>
           <i>
-            득점하면 자리 바꿔 같은 사람이
+            득점하면 자리 바꿔 같은 사람이 서브
+          </i>
+        </span>
+      </div>
+      <div className="call s10-x1">
+        <span>
+          <b>
+            "사이드 아웃!"
+          </b>
+          <i>
+            서브권이 없으면 공수 전환
           </i>
         </span>
       </div>
@@ -158,7 +169,7 @@ export const GameWalkthroughFigure: React.FC = () => (
             "Zero, One, One!"
           </b>
           <i>
-            서브권이 1개라 지면 바로 상대 팀으로
+            공격팀은 오른쪽부터 서브 시작
           </i>
         </span>
       </div>
@@ -168,7 +179,17 @@ export const GameWalkthroughFigure: React.FC = () => (
             "Zero, One, Two!"
           </b>
           <i>
-            서브권 1개 남아 2번이 서브
+            지면 남은 서브권으로 2번이 서브
+          </i>
+        </span>
+      </div>
+      <div className="call s10-x2">
+        <span>
+          <b>
+            "사이드 아웃!"
+          </b>
+          <i>
+            서브권이 없으면 공수 전환
           </i>
         </span>
       </div>
@@ -178,7 +199,7 @@ export const GameWalkthroughFigure: React.FC = () => (
             "One, Zero, One!"
           </b>
           <i>
-            서브권 다 쓰면 우리 서브, 오른쪽이 1번
+            공격팀은 오른쪽부터 서브 시작
           </i>
         </span>
       </div>

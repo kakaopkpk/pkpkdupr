@@ -582,231 +582,237 @@
 @keyframes pk-rules-c5-c2rp3{0%,91.03%{opacity:0;transform:scale(.4)}91.15%{opacity:1;transform:scale(.5)}94.69%,100%{opacity:0;transform:scale(1.9)}}
 
 /* 6장 */
-.pk-rules-c6 .scene{animation:pk-rules-c6-scene 31s infinite}
-@keyframes pk-rules-c6-scene{0%{opacity:0}1.81%,96.48%{opacity:1}99.12%,100%{opacity:0}}
+.pk-rules-c6 .scene{animation:pk-rules-c6-scene 36.2s infinite}
+@keyframes pk-rules-c6-scene{0%{opacity:0}1.55%,96.99%{opacity:1}99.25%,100%{opacity:0}}
 .pk-rules-c6 .call{position:absolute;left:0;right:0;top:6px;display:flex;justify-content:center;opacity:0}
 .pk-rules-c6 .call>span{display:flex;flex-direction:column;align-items:center;background:#ffffff;padding:4px 14px;border-radius:12px}
 .pk-rules-c6 .call b{font-size:15px;font-weight:800;color:#2346a8;line-height:18px}
 .pk-rules-c6 .call i{font-style:normal;font-size:12px;font-weight:700;color:#4f5a70;line-height:16px}
-.pk-rules-c6 .s10-k1{animation:pk-rules-c6-s10-k1 31s infinite}
-.pk-rules-c6 .s10-k2{animation:pk-rules-c6-s10-k2 31s infinite}
-.pk-rules-c6 .s10-k3{animation:pk-rules-c6-s10-k3 31s infinite}
-.pk-rules-c6 .s10-k4{animation:pk-rules-c6-s10-k4 31s infinite}
-.pk-rules-c6 .s10-k5{animation:pk-rules-c6-s10-k5 31s infinite}
-@keyframes pk-rules-c6-s10-k1{0%{opacity:0}1.35%,17.82%{opacity:1}20.44%,100%{opacity:0}}
-@keyframes pk-rules-c6-s10-k2{0%,22.7%{opacity:0}24.05%,39.79%{opacity:1}41.15%,100%{opacity:0}}
-@keyframes pk-rules-c6-s10-k3{0%,42.5%{opacity:0}43.86%,58.7%{opacity:1}60.05%,100%{opacity:0}}
-@keyframes pk-rules-c6-s10-k4{0%,61.41%{opacity:0}62.76%,77.6%{opacity:1}78.95%,100%{opacity:0}}
-@keyframes pk-rules-c6-s10-k5{0%,80.31%{opacity:0}81.66%,100%{opacity:1}}
-.pk-rules-c6 .s10-pa{animation:pk-rules-c6-s10-pa 31s infinite}
-.pk-rules-c6 .s10-pb{animation:pk-rules-c6-s10-pb 31s infinite}
-@keyframes pk-rules-c6-s10-pa{0%,20.89%{transform:translate(24px,140px)}23.6%,97.36%{transform:translate(24px,80px)}98.24%,100%{transform:translate(24px,140px)}}
-@keyframes pk-rules-c6-s10-pb{0%,20.89%{transform:translate(24px,80px)}23.6%,97.36%{transform:translate(24px,140px)}98.24%,100%{transform:translate(24px,80px)}}
-.pk-rules-c6 .s10-ring{animation:pk-rules-c6-s10-ring 31s infinite}
-@keyframes pk-rules-c6-s10-ring{0%,20.89%{transform:translate(24px,140px)}23.6%,40.7%{transform:translate(24px,80px)}43.41%,59.6%{transform:translate(272px,80px)}62.31%,78.5%{transform:translate(272px,140px)}81.21%,97.36%{transform:translate(24px,140px)}98.24%,100%{transform:translate(24px,140px)}}
-.pk-rules-c6 .s10-ball{animation:pk-rules-c6-s10-ball 31s linear infinite}
-@keyframes pk-rules-c6-s10-ball{0%,2.62%{transform:translate(24px,140px);opacity:0}
-2.71%{transform:translate(24px,140px) scale(1.25);opacity:1}
-3.22%{transform:translate(54.29px,132px) scale(1.48)}
-3.72%{transform:translate(84.57px,124px) scale(1.63)}
-4.23%{transform:translate(114.86px,116px) scale(1.68)}
-4.74%{transform:translate(145.14px,108px) scale(1.65)}
-5.24%{transform:translate(175.43px,100px) scale(1.52)}
-5.75%{transform:translate(205.71px,92px) scale(1.31)}
-6.26%{transform:translate(236px,84px) scale(1)}
-6.69%{transform:translate(244.67px,82.67px) scale(1.26)}
-7.12%{transform:translate(253.33px,81.33px) scale(1.34)}
-7.55%{transform:translate(262px,80px) scale(1.25)}
-8.09%{transform:translate(231.67px,86.33px) scale(1.51)}
-8.62%{transform:translate(201.33px,92.67px) scale(1.66)}
-9.16%{transform:translate(171px,99px) scale(1.68)}
-9.7%{transform:translate(140.67px,105.33px) scale(1.57)}
-10.24%{transform:translate(110.33px,111.67px) scale(1.35)}
-10.77%{transform:translate(80px,118px) scale(1)}
-11.2%{transform:translate(63.33px,122.67px) scale(1.26)}
-11.63%{transform:translate(46.67px,127.33px) scale(1.34)}
-12.06%{transform:translate(30px,132px) scale(1.25)}
-12.87%{transform:translate(79px,134px) scale(1.6)}
-13.68%{transform:translate(128px,136px) scale(1.68)}
-14.48%{transform:translate(177px,138px) scale(1.48)}
-15.29%{transform:translate(226px,140px) scale(1)}
-15.94%{transform:translate(244px,140px) scale(1.32)}
-16.58%{transform:translate(262px,140px) scale(1.25)}
-17.65%{transform:translate(177.67px,126.67px) scale(1.66)}
-18.74%{transform:translate(93.33px,113.33px) scale(1.57)}
-19.81%{transform:translate(9px,100px) scale(1)}
-20.89%{transform:translate(9px,100px);opacity:1}
-21.34%,26.22%{transform:translate(24px,80px);opacity:0}
-26.31%{transform:translate(24px,80px) scale(1.25);opacity:1}
-26.82%{transform:translate(54.29px,88px) scale(1.48)}
-27.32%{transform:translate(84.57px,96px) scale(1.63)}
-27.83%{transform:translate(114.86px,104px) scale(1.68)}
-28.34%{transform:translate(145.14px,112px) scale(1.65)}
-28.84%{transform:translate(175.43px,120px) scale(1.52)}
-29.35%{transform:translate(205.71px,128px) scale(1.31)}
-29.86%{transform:translate(236px,136px) scale(1)}
-30.29%{transform:translate(244.67px,137.33px) scale(1.26)}
-30.72%{transform:translate(253.33px,138.67px) scale(1.34)}
-31.15%{transform:translate(262px,140px) scale(1.25)}
-31.69%{transform:translate(231.67px,133.33px) scale(1.51)}
-32.22%{transform:translate(201.33px,126.67px) scale(1.66)}
-32.76%{transform:translate(171px,120px) scale(1.68)}
-33.3%{transform:translate(140.67px,113.33px) scale(1.57)}
-33.84%{transform:translate(110.33px,106.67px) scale(1.35)}
-34.37%{transform:translate(80px,100px) scale(1)}
-34.8%{transform:translate(63.33px,95.33px) scale(1.26)}
-35.23%{transform:translate(46.67px,90.67px) scale(1.34)}
-35.66%{transform:translate(30px,86px) scale(1.25)}
-36.31%{transform:translate(81.8px,92.8px) scale(1.55)}
-36.95%{transform:translate(133.6px,99.6px) scale(1.68)}
-37.6%{transform:translate(185.4px,106.4px) scale(1.63)}
-38.25%{transform:translate(237.2px,113.2px) scale(1.4)}
-38.89%{transform:translate(289px,120px) scale(1)}
-40.7%{transform:translate(289px,120px);opacity:1}
-41.15%,45.12%{transform:translate(272px,80px);opacity:0}
-45.21%{transform:translate(272px,80px) scale(1.25);opacity:1}
-45.72%{transform:translate(242px,88.29px) scale(1.48)}
-46.23%{transform:translate(212px,96.57px) scale(1.63)}
-46.73%{transform:translate(182px,104.86px) scale(1.68)}
-47.24%{transform:translate(152px,113.14px) scale(1.65)}
-47.75%{transform:translate(122px,121.43px) scale(1.52)}
-48.25%{transform:translate(92px,129.71px) scale(1.31)}
-48.76%{transform:translate(62px,138px) scale(1)}
-49.19%{transform:translate(52px,138px) scale(1.26)}
-49.62%{transform:translate(42px,138px) scale(1.34)}
-50.05%{transform:translate(32px,138px) scale(1.25)}
-50.59%{transform:translate(64.33px,131.67px) scale(1.51)}
-51.13%{transform:translate(96.67px,125.33px) scale(1.66)}
-51.66%{transform:translate(129px,119px) scale(1.68)}
-52.2%{transform:translate(161.33px,112.67px) scale(1.57)}
-52.74%{transform:translate(193.67px,106.33px) scale(1.35)}
-53.28%{transform:translate(226px,100px) scale(1)}
-53.71%{transform:translate(238px,95.33px) scale(1.26)}
-54.14%{transform:translate(250px,90.67px) scale(1.34)}
-54.57%{transform:translate(262px,86px) scale(1.25)}
-55.21%{transform:translate(211.4px,92.8px) scale(1.55)}
-55.86%{transform:translate(160.8px,99.6px) scale(1.68)}
-56.5%{transform:translate(110.2px,106.4px) scale(1.63)}
-57.15%{transform:translate(59.6px,113.2px) scale(1.4)}
-57.79%{transform:translate(9px,120px) scale(1)}
-59.15%{transform:translate(9px,120px);opacity:1}
-59.6%,64.03%{transform:translate(272px,140px);opacity:0}
-64.12%{transform:translate(272px,140px) scale(1.25);opacity:1}
-64.62%{transform:translate(242px,131.71px) scale(1.48)}
-65.13%{transform:translate(212px,123.43px) scale(1.63)}
-65.64%{transform:translate(182px,115.14px) scale(1.68)}
-66.14%{transform:translate(152px,106.86px) scale(1.65)}
-66.65%{transform:translate(122px,98.57px) scale(1.52)}
-67.16%{transform:translate(92px,90.29px) scale(1.31)}
-67.66%{transform:translate(62px,82px) scale(1)}
-68.09%{transform:translate(52px,82.67px) scale(1.26)}
-68.52%{transform:translate(42px,83.33px) scale(1.34)}
-68.95%{transform:translate(32px,84px) scale(1.25)}
-69.49%{transform:translate(65px,91.67px) scale(1.51)}
-70.03%{transform:translate(98px,99.33px) scale(1.66)}
-70.57%{transform:translate(131px,107px) scale(1.68)}
-71.11%{transform:translate(164px,114.67px) scale(1.57)}
-71.64%{transform:translate(197px,122.33px) scale(1.35)}
-72.18%{transform:translate(230px,130px) scale(1)}
-72.61%{transform:translate(240.67px,132px) scale(1.26)}
-73.04%{transform:translate(251.33px,134px) scale(1.34)}
-73.47%{transform:translate(262px,136px) scale(1.25)}
-74.12%{transform:translate(211.4px,128px) scale(1.55)}
-74.76%{transform:translate(160.8px,120px) scale(1.68)}
-75.41%{transform:translate(110.2px,112px) scale(1.63)}
-76.05%{transform:translate(59.6px,104px) scale(1.4)}
-76.7%{transform:translate(9px,96px) scale(1)}
-78.05%{transform:translate(9px,96px);opacity:1}
-78.5%,82.93%{transform:translate(24px,140px);opacity:0}
-83.02%{transform:translate(24px,140px) scale(1.25);opacity:1}
-83.46%{transform:translate(50.5px,133px) scale(1.46)}
-83.91%{transform:translate(77px,126px) scale(1.6)}
-84.35%{transform:translate(103.5px,119px) scale(1.67)}
-84.79%{transform:translate(130px,112px) scale(1.68)}
-85.24%{transform:translate(156.5px,105px) scale(1.61)}
-85.68%{transform:translate(183px,98px) scale(1.48)}
-86.12%{transform:translate(209.5px,91px) scale(1.27)}
-86.57%{transform:translate(236px,84px) scale(1)}
-87%{transform:translate(244.67px,82.67px) scale(1.26)}
-87.43%{transform:translate(253.33px,81.33px) scale(1.34)}
-87.86%{transform:translate(262px,80px) scale(1.25)}
-88.32%{transform:translate(236.57px,85.43px) scale(1.48)}
-88.78%{transform:translate(211.14px,90.86px) scale(1.63)}
-89.24%{transform:translate(185.71px,96.29px) scale(1.68)}
-89.7%{transform:translate(160.29px,101.71px) scale(1.65)}
-90.16%{transform:translate(134.86px,107.14px) scale(1.52)}
-90.62%{transform:translate(109.43px,112.57px) scale(1.31)}
-91.08%{transform:translate(84px,118px) scale(1)}
-91.51%{transform:translate(66px,123.33px) scale(1.26)}
-91.94%{transform:translate(48px,128.67px) scale(1.34)}
-92.37%{transform:translate(30px,134px) scale(1.25)}
-92.84%{transform:translate(58.57px,128.57px) scale(1.48)}
-93.3%{transform:translate(87.14px,123.14px) scale(1.63)}
-93.76%{transform:translate(115.71px,117.71px) scale(1.68)}
-94.22%{transform:translate(144.29px,112.29px) scale(1.65)}
-94.68%{transform:translate(172.86px,106.86px) scale(1.52)}
-95.14%{transform:translate(201.43px,101.43px) scale(1.31)}
-95.6%{transform:translate(230px,96px) scale(1)}
+.pk-rules-c6 .s10-k1{animation:pk-rules-c6-s10-k1 36.2s infinite}
+.pk-rules-c6 .s10-k2{animation:pk-rules-c6-s10-k2 36.2s infinite}
+.pk-rules-c6 .s10-k3{animation:pk-rules-c6-s10-k3 36.2s infinite}
+.pk-rules-c6 .s10-k4{animation:pk-rules-c6-s10-k4 36.2s infinite}
+.pk-rules-c6 .s10-k5{animation:pk-rules-c6-s10-k5 36.2s infinite}
+@keyframes pk-rules-c6-s10-k1{0%{opacity:0}1.16%,15.26%{opacity:1}17.5%,100%{opacity:0}}
+@keyframes pk-rules-c6-s10-k2{0%,19.44%{opacity:0}20.6%,34.07%{opacity:1}35.24%,100%{opacity:0}}
+@keyframes pk-rules-c6-s10-k3{0%,43.58%{opacity:0}44.74%,57.45%{opacity:1}58.61%,100%{opacity:0}}
+@keyframes pk-rules-c6-s10-k4{0%,59.77%{opacity:0}60.93%,73.64%{opacity:1}74.79%,100%{opacity:0}}
+@keyframes pk-rules-c6-s10-k5{0%,83.14%{opacity:0}84.29%,100%{opacity:1}}
+.pk-rules-c6 .s10-pa{animation:pk-rules-c6-s10-pa 36.2s infinite}
+.pk-rules-c6 .s10-pb{animation:pk-rules-c6-s10-pb 36.2s infinite}
+@keyframes pk-rules-c6-s10-pa{0%,17.89%{transform:translate(24px,140px)}20.21%,97.74%{transform:translate(24px,80px)}98.49%,100%{transform:translate(24px,140px)}}
+@keyframes pk-rules-c6-s10-pb{0%,17.89%{transform:translate(24px,80px)}20.21%,97.74%{transform:translate(24px,140px)}98.49%,100%{transform:translate(24px,80px)}}
+.pk-rules-c6 .s10-ring{animation:pk-rules-c6-s10-ring 36.2s infinite}
+.pk-rules-c6 .s10-ball{animation:pk-rules-c6-s10-ball 36.2s linear infinite}
+@keyframes pk-rules-c6-s10-ball{0%,2.24%{transform:translate(24px,140px);opacity:0}
+2.32%{transform:translate(24px,140px) scale(1.25);opacity:1}
+2.76%{transform:translate(54.29px,132px) scale(1.48)}
+3.19%{transform:translate(84.57px,124px) scale(1.63)}
+3.62%{transform:translate(114.86px,116px) scale(1.68)}
+4.06%{transform:translate(145.14px,108px) scale(1.65)}
+4.49%{transform:translate(175.43px,100px) scale(1.52)}
+4.92%{transform:translate(205.71px,92px) scale(1.31)}
+5.36%{transform:translate(236px,84px) scale(1)}
+5.73%{transform:translate(244.67px,82.67px) scale(1.26)}
+6.1%{transform:translate(253.33px,81.33px) scale(1.34)}
+6.47%{transform:translate(262px,80px) scale(1.25)}
+6.93%{transform:translate(231.67px,86.33px) scale(1.51)}
+7.38%{transform:translate(201.33px,92.67px) scale(1.66)}
+7.84%{transform:translate(171px,99px) scale(1.68)}
+8.31%{transform:translate(140.67px,105.33px) scale(1.57)}
+8.77%{transform:translate(110.33px,111.67px) scale(1.35)}
+9.22%{transform:translate(80px,118px) scale(1)}
+9.59%{transform:translate(63.33px,122.67px) scale(1.26)}
+9.96%{transform:translate(46.67px,127.33px) scale(1.34)}
+10.33%{transform:translate(30px,132px) scale(1.25)}
+11.02%{transform:translate(79px,134px) scale(1.6)}
+11.71%{transform:translate(128px,136px) scale(1.68)}
+12.4%{transform:translate(177px,138px) scale(1.48)}
+13.09%{transform:translate(226px,140px) scale(1)}
+13.65%{transform:translate(244px,140px) scale(1.32)}
+14.2%{transform:translate(262px,140px) scale(1.25)}
+15.11%{transform:translate(177.67px,126.67px) scale(1.66)}
+16.05%{transform:translate(93.33px,113.33px) scale(1.57)}
+16.96%{transform:translate(9px,100px) scale(1)}
+17.89%{transform:translate(9px,100px);opacity:1}
+18.27%,22.45%{transform:translate(24px,80px);opacity:0}
+22.53%{transform:translate(24px,80px) scale(1.25);opacity:1}
+22.97%{transform:translate(54.29px,88px) scale(1.48)}
+23.4%{transform:translate(84.57px,96px) scale(1.63)}
+23.83%{transform:translate(114.86px,104px) scale(1.68)}
+24.27%{transform:translate(145.14px,112px) scale(1.65)}
+24.7%{transform:translate(175.43px,120px) scale(1.52)}
+25.13%{transform:translate(205.71px,128px) scale(1.31)}
+25.57%{transform:translate(236px,136px) scale(1)}
+25.94%{transform:translate(244.67px,137.33px) scale(1.26)}
+26.31%{transform:translate(253.33px,138.67px) scale(1.34)}
+26.68%{transform:translate(262px,140px) scale(1.25)}
+27.14%{transform:translate(231.67px,133.33px) scale(1.51)}
+27.59%{transform:translate(201.33px,126.67px) scale(1.66)}
+28.05%{transform:translate(171px,120px) scale(1.68)}
+28.52%{transform:translate(140.67px,113.33px) scale(1.57)}
+28.98%{transform:translate(110.33px,106.67px) scale(1.35)}
+29.43%{transform:translate(80px,100px) scale(1)}
+29.8%{transform:translate(63.33px,95.33px) scale(1.26)}
+30.17%{transform:translate(46.67px,90.67px) scale(1.34)}
+30.54%{transform:translate(30px,86px) scale(1.25)}
+31.09%{transform:translate(81.8px,92.8px) scale(1.55)}
+31.64%{transform:translate(133.6px,99.6px) scale(1.68)}
+32.2%{transform:translate(185.4px,106.4px) scale(1.63)}
+32.76%{transform:translate(237.2px,113.2px) scale(1.4)}
+33.3%{transform:translate(289px,120px) scale(1)}
+34.85%{transform:translate(289px,120px);opacity:1}
+35.24%,45.82%{transform:translate(272px,80px);opacity:0}
+45.9%{transform:translate(272px,80px) scale(1.25);opacity:1}
+46.33%{transform:translate(242px,88.29px) scale(1.48)}
+46.77%{transform:translate(212px,96.57px) scale(1.63)}
+47.2%{transform:translate(182px,104.86px) scale(1.68)}
+47.64%{transform:translate(152px,113.14px) scale(1.65)}
+48.07%{transform:translate(122px,121.43px) scale(1.52)}
+48.5%{transform:translate(92px,129.71px) scale(1.31)}
+48.94%{transform:translate(62px,138px) scale(1)}
+49.31%{transform:translate(52px,138px) scale(1.26)}
+49.67%{transform:translate(42px,138px) scale(1.34)}
+50.04%{transform:translate(32px,138px) scale(1.25)}
+50.51%{transform:translate(64.33px,131.67px) scale(1.51)}
+50.97%{transform:translate(96.67px,125.33px) scale(1.66)}
+51.42%{transform:translate(129px,119px) scale(1.68)}
+51.88%{transform:translate(161.33px,112.67px) scale(1.57)}
+52.35%{transform:translate(193.67px,106.33px) scale(1.35)}
+52.81%{transform:translate(226px,100px) scale(1)}
+53.18%{transform:translate(238px,95.33px) scale(1.26)}
+53.55%{transform:translate(250px,90.67px) scale(1.34)}
+53.91%{transform:translate(262px,86px) scale(1.25)}
+54.46%{transform:translate(211.4px,92.8px) scale(1.55)}
+55.02%{transform:translate(160.8px,99.6px) scale(1.68)}
+55.57%{transform:translate(110.2px,106.4px) scale(1.63)}
+56.12%{transform:translate(59.6px,113.2px) scale(1.4)}
+56.67%{transform:translate(9px,120px) scale(1)}
+57.84%{transform:translate(9px,120px);opacity:1}
+58.22%,62.01%{transform:translate(272px,140px);opacity:0}
+62.09%{transform:translate(272px,140px) scale(1.25);opacity:1}
+62.52%{transform:translate(242px,131.71px) scale(1.48)}
+62.96%{transform:translate(212px,123.43px) scale(1.63)}
+63.39%{transform:translate(182px,115.14px) scale(1.68)}
+63.82%{transform:translate(152px,106.86px) scale(1.65)}
+64.26%{transform:translate(122px,98.57px) scale(1.52)}
+64.7%{transform:translate(92px,90.29px) scale(1.31)}
+65.12%{transform:translate(62px,82px) scale(1)}
+65.49%{transform:translate(52px,82.67px) scale(1.26)}
+65.86%{transform:translate(42px,83.33px) scale(1.34)}
+66.23%{transform:translate(32px,84px) scale(1.25)}
+66.69%{transform:translate(65px,91.67px) scale(1.51)}
+67.15%{transform:translate(98px,99.33px) scale(1.66)}
+67.62%{transform:translate(131px,107px) scale(1.68)}
+68.08%{transform:translate(164px,114.67px) scale(1.57)}
+68.53%{transform:translate(197px,122.33px) scale(1.35)}
+68.99%{transform:translate(230px,130px) scale(1)}
+69.36%{transform:translate(240.67px,132px) scale(1.26)}
+69.73%{transform:translate(251.33px,134px) scale(1.34)}
+70.1%{transform:translate(262px,136px) scale(1.25)}
+70.66%{transform:translate(211.4px,128px) scale(1.55)}
+71.2%{transform:translate(160.8px,120px) scale(1.68)}
+71.76%{transform:translate(110.2px,112px) scale(1.63)}
+72.31%{transform:translate(59.6px,104px) scale(1.4)}
+72.86%{transform:translate(9px,96px) scale(1)}
+74.02%{transform:translate(9px,96px);opacity:1}
+74.41%,85.38%{transform:translate(24px,140px);opacity:0}
+85.46%{transform:translate(24px,140px) scale(1.25);opacity:1}
+85.84%{transform:translate(50.5px,133px) scale(1.46)}
+86.22%{transform:translate(77px,126px) scale(1.6)}
+86.6%{transform:translate(103.5px,119px) scale(1.67)}
+86.97%{transform:translate(130px,112px) scale(1.68)}
+87.36%{transform:translate(156.5px,105px) scale(1.61)}
+87.74%{transform:translate(183px,98px) scale(1.48)}
+88.11%{transform:translate(209.5px,91px) scale(1.27)}
+88.5%{transform:translate(236px,84px) scale(1)}
+88.87%{transform:translate(244.67px,82.67px) scale(1.26)}
+89.24%{transform:translate(253.33px,81.33px) scale(1.34)}
+89.6%{transform:translate(262px,80px) scale(1.25)}
+90%{transform:translate(236.57px,85.43px) scale(1.48)}
+90.39%{transform:translate(211.14px,90.86px) scale(1.63)}
+90.79%{transform:translate(185.71px,96.29px) scale(1.68)}
+91.18%{transform:translate(160.29px,101.71px) scale(1.65)}
+91.57%{transform:translate(134.86px,107.14px) scale(1.52)}
+91.97%{transform:translate(109.43px,112.57px) scale(1.31)}
+92.36%{transform:translate(84px,118px) scale(1)}
+92.73%{transform:translate(66px,123.33px) scale(1.26)}
+93.1%{transform:translate(48px,128.67px) scale(1.34)}
+93.47%{transform:translate(30px,134px) scale(1.25)}
+93.87%{transform:translate(58.57px,128.57px) scale(1.48)}
+94.26%{transform:translate(87.14px,123.14px) scale(1.63)}
+94.66%{transform:translate(115.71px,117.71px) scale(1.68)}
+95.05%{transform:translate(144.29px,112.29px) scale(1.65)}
+95.44%{transform:translate(172.86px,106.86px) scale(1.52)}
+95.84%{transform:translate(201.43px,101.43px) scale(1.31)}
+96.23%{transform:translate(230px,96px) scale(1)}
 100%{transform:translate(230px,96px);opacity:1}}
 .pk-rules-c6 .pop{transform-box:fill-box;transform-origin:center}
-.pk-rules-c6 .s10-ra{animation:pk-rules-c6-s10-ra 31s infinite}
-.pk-rules-c6 .s10-rd{animation:pk-rules-c6-s10-rd 31s infinite}
-@keyframes pk-rules-c6-s10-ra{0%,40.7%{opacity:.9}42.5%,78.5%{opacity:0}80.31%,100%{opacity:.9}}
-@keyframes pk-rules-c6-s10-rd{0%,40.7%{opacity:0}42.5%,78.5%{opacity:.9}80.31%,100%{opacity:0}}
-.pk-rules-c6 .s10-o0{animation:pk-rules-c6-s10-o0 31s infinite}
-.pk-rules-c6 .s10-o1{animation:pk-rules-c6-s10-o1 31s infinite}
-@keyframes pk-rules-c6-s10-o0{0%,19.06%{opacity:1}20.44%,100%{opacity:0}}
-@keyframes pk-rules-c6-s10-o1{0%,19.06%{opacity:0;transform:scale(1)}20.44%{opacity:1;transform:scale(1.5)}21.79%,100%{opacity:1;transform:scale(1)}}
-.pk-rules-c6 .s10-na{animation:pk-rules-c6-s10-na 31s infinite}
-.pk-rules-c6 .s10-nb{animation:pk-rules-c6-s10-nb 31s infinite}
-.pk-rules-c6 .s10-nt{animation:pk-rules-c6-s10-nt 31s infinite}
-@keyframes pk-rules-c6-s10-na{0%,40.7%{opacity:1}42.5%,79.41%{opacity:0}81.21%,100%{opacity:1}}
-@keyframes pk-rules-c6-s10-nb{0%,79.41%{opacity:0}81.21%,100%{opacity:1}}
-@keyframes pk-rules-c6-s10-nt{0%,40.7%{opacity:0}42.5%,79.41%{opacity:1}81.21%,100%{opacity:0}}
-.pk-rules-c6 .s10-gA{animation:pk-rules-c6-s10-gA 31s infinite}
-.pk-rules-c6 .s10-gR{animation:pk-rules-c6-s10-gR 31s infinite}
-.pk-rules-c6 .s10-gC{animation:pk-rules-c6-s10-gC 31s infinite}
-@keyframes pk-rules-c6-s10-gA{0%,40.7%{opacity:1}42.5%,100%{opacity:0}}
-@keyframes pk-rules-c6-s10-gR{0%,40.7%{opacity:0}42.5%,78.5%{opacity:1}80.31%,100%{opacity:0}}
-@keyframes pk-rules-c6-s10-gC{0%,79.41%{opacity:0}81.21%,100%{opacity:1}}
-.pk-rules-c6 .s10-pA{animation:pk-rules-c6-s10-pA 31s infinite}
-.pk-rules-c6 .s10-pR1{animation:pk-rules-c6-s10-pR1 31s infinite}
-.pk-rules-c6 .s10-pR2{animation:pk-rules-c6-s10-pR2 31s infinite}
-@keyframes pk-rules-c6-s10-pA{0%,38.89%{opacity:1;transform:scale(1)}39.79%{opacity:.3;transform:scale(1.4)}41.15%,100%{opacity:0;transform:scale(1)}}
-@keyframes pk-rules-c6-s10-pR1{0%,57.79%{opacity:1;transform:scale(1)}58.7%{opacity:.3;transform:scale(1.4)}60.05%,100%{opacity:0;transform:scale(1)}}
-@keyframes pk-rules-c6-s10-pR2{0%,76.7%{opacity:1;transform:scale(1)}77.6%{opacity:.3;transform:scale(1.4)}78.95%,100%{opacity:0;transform:scale(1)}}
-.pk-rules-c6 .s10-rp1{animation:pk-rules-c6-s10rp1 31s infinite}
-@keyframes pk-rules-c6-s10rp1{0%,6.16%{opacity:0;transform:scale(.4)}6.26%{opacity:1;transform:scale(.5)}10.24%,100%{opacity:0;transform:scale(1.9)}}
-.pk-rules-c6 .s10-rp2{animation:pk-rules-c6-s10rp2 31s infinite}
-@keyframes pk-rules-c6-s10rp2{0%,10.67%{opacity:0;transform:scale(.4)}10.77%{opacity:1;transform:scale(.5)}15.94%,100%{opacity:0;transform:scale(1.9)}}
-.pk-rules-c6 .s10-rp3{animation:pk-rules-c6-s10rp3 31s infinite}
-@keyframes pk-rules-c6-s10rp3{0%,15.13%{opacity:0;transform:scale(.4)}15.29%{opacity:1;transform:scale(.5)}21.34%,100%{opacity:0;transform:scale(1.9)}}
-.pk-rules-c6 .s10-rp4{animation:pk-rules-c6-s10rp4 31s infinite}
-@keyframes pk-rules-c6-s10rp4{0%,19.56%{opacity:0;transform:scale(.4)}19.81%{opacity:1;transform:scale(.6)}20.35%{opacity:1;transform:scale(1.5)}20.8%,20.89%{opacity:1;transform:scale(1)}21.34%,100%{opacity:0;transform:scale(1)}}
-.pk-rules-c6 .s10-rp5{animation:pk-rules-c6-s10rp5 31s infinite}
-@keyframes pk-rules-c6-s10rp5{0%,29.76%{opacity:0;transform:scale(.4)}29.86%{opacity:1;transform:scale(.5)}33.84%,100%{opacity:0;transform:scale(1.9)}}
-.pk-rules-c6 .s10-rp6{animation:pk-rules-c6-s10rp6 31s infinite}
-@keyframes pk-rules-c6-s10rp6{0%,34.27%{opacity:0;transform:scale(.4)}34.37%{opacity:1;transform:scale(.5)}38.89%,100%{opacity:0;transform:scale(1.9)}}
-.pk-rules-c6 .s10-rp7{animation:pk-rules-c6-s10rp7 31s infinite}
-@keyframes pk-rules-c6-s10rp7{0%,38.76%{opacity:0;transform:scale(.4)}38.89%{opacity:1;transform:scale(.6)}39.79%{opacity:1;transform:scale(1.5)}40.61%,40.7%{opacity:1;transform:scale(1)}41.15%,100%{opacity:0;transform:scale(1)}}
-.pk-rules-c6 .s10-rp8{animation:pk-rules-c6-s10rp8 31s infinite}
-@keyframes pk-rules-c6-s10rp8{0%,48.66%{opacity:0;transform:scale(.4)}48.76%{opacity:1;transform:scale(.5)}52.74%,100%{opacity:0;transform:scale(1.9)}}
-.pk-rules-c6 .s10-rp9{animation:pk-rules-c6-s10rp9 31s infinite}
-@keyframes pk-rules-c6-s10rp9{0%,53.17%{opacity:0;transform:scale(.4)}53.28%{opacity:1;transform:scale(.5)}57.79%,100%{opacity:0;transform:scale(1.9)}}
-.pk-rules-c6 .s10-rp10{animation:pk-rules-c6-s10rp10 31s infinite}
-@keyframes pk-rules-c6-s10rp10{0%,57.66%{opacity:0;transform:scale(.4)}57.79%{opacity:1;transform:scale(.6)}58.47%{opacity:1;transform:scale(1.5)}59.06%,59.15%{opacity:1;transform:scale(1)}59.6%,100%{opacity:0;transform:scale(1)}}
-.pk-rules-c6 .s10-rp11{animation:pk-rules-c6-s10rp11 31s infinite}
-@keyframes pk-rules-c6-s10rp11{0%,67.56%{opacity:0;transform:scale(.4)}67.66%{opacity:1;transform:scale(.5)}71.64%,100%{opacity:0;transform:scale(1.9)}}
-.pk-rules-c6 .s10-rp12{animation:pk-rules-c6-s10rp12 31s infinite}
-@keyframes pk-rules-c6-s10rp12{0%,72.07%{opacity:0;transform:scale(.4)}72.18%{opacity:1;transform:scale(.5)}76.7%,100%{opacity:0;transform:scale(1.9)}}
-.pk-rules-c6 .s10-rp13{animation:pk-rules-c6-s10rp13 31s infinite}
-@keyframes pk-rules-c6-s10rp13{0%,76.57%{opacity:0;transform:scale(.4)}76.7%{opacity:1;transform:scale(.6)}77.37%{opacity:1;transform:scale(1.5)}77.96%,78.05%{opacity:1;transform:scale(1)}78.5%,100%{opacity:0;transform:scale(1)}}
-.pk-rules-c6 .s10-rp14{animation:pk-rules-c6-s10rp14 31s infinite}
-@keyframes pk-rules-c6-s10rp14{0%,86.48%{opacity:0;transform:scale(.4)}86.57%{opacity:1;transform:scale(.5)}90.16%,100%{opacity:0;transform:scale(1.9)}}
-.pk-rules-c6 .s10-rp15{animation:pk-rules-c6-s10rp15 31s infinite}
-@keyframes pk-rules-c6-s10rp15{0%,90.99%{opacity:0;transform:scale(.4)}91.08%{opacity:1;transform:scale(.5)}94.68%,100%{opacity:0;transform:scale(1.9)}}
-.pk-rules-c6 .s10-rp16{animation:pk-rules-c6-s10rp16 31s infinite}
-@keyframes pk-rules-c6-s10rp16{0%,95.51%{opacity:0;transform:scale(.4)}95.6%{opacity:1;transform:scale(.5)}99.12%,100%{opacity:0;transform:scale(1.9)}}
+.pk-rules-c6 .s10-fly{animation:pk-rules-c6-s10-fly 36.2s infinite}
+.pk-rules-c6 .s10-x1{animation:pk-rules-c6-s10-x1 36.2s infinite}
+.pk-rules-c6 .s10-x2{animation:pk-rules-c6-s10-x2 36.2s infinite}
+@keyframes pk-rules-c6-s10-ring{0%,17.89%{transform:translate(24px,140px)}20.21%,36.9%{transform:translate(24px,80px)}37.36%{transform:translate(65.33px,73.33px)}37.82%{transform:translate(106.67px,69.33px)}38.28%{transform:translate(148px,68px)}38.74%{transform:translate(189.33px,69.33px)}39.2%{transform:translate(230.67px,73.33px)}39.66%,58.22%{transform:translate(272px,80px)}60.54%,76.45%{transform:translate(272px,140px)}76.91%{transform:translate(230.67px,151.11px)}77.37%{transform:translate(189.33px,157.78px)}77.83%{transform:translate(148px,160px)}78.29%{transform:translate(106.67px,157.78px)}78.75%{transform:translate(65.33px,151.11px)}79.21%,100%{transform:translate(24px,140px)}}
+@keyframes pk-rules-c6-s10-fly{0%,36.48%{transform:translate(62px,194px) scale(.4);opacity:0}36.9%{transform:translate(62px,194px) scale(1);opacity:1}37.36%{transform:translate(89.92px,164px) scale(1.3);opacity:1}37.82%{transform:translate(117.83px,146px) scale(1.3);opacity:1}38.28%{transform:translate(145.75px,140px) scale(1.5);opacity:1}38.74%{transform:translate(173.67px,146px) scale(1.3);opacity:1}39.2%{transform:translate(201.58px,164px) scale(1.3);opacity:1}39.66%{transform:translate(229.5px,194px) scale(1);opacity:1}40.07%{transform:translate(229.5px,194px) scale(1);opacity:0}76.03%{transform:translate(229.5px,194px) scale(.4);opacity:0}76.45%{transform:translate(229.5px,194px) scale(1);opacity:1}76.91%{transform:translate(202.67px,164px) scale(1.3);opacity:1}77.37%{transform:translate(175.83px,146px) scale(1.3);opacity:1}77.83%{transform:translate(149px,140px) scale(1.5);opacity:1}78.29%{transform:translate(122.17px,146px) scale(1.3);opacity:1}78.75%{transform:translate(95.33px,164px) scale(1.3);opacity:1}79.21%{transform:translate(68.5px,194px) scale(1);opacity:1}79.63%{transform:translate(68.5px,194px) scale(1);opacity:0}100%{transform:translate(68.5px,194px) scale(1);opacity:0}}
+@keyframes pk-rules-c6-s10-ra{0%,37.73%{opacity:.9;transform:scale(1)}38.55%{opacity:0;transform:scale(1)}78.11%{opacity:0;transform:scale(.6)}78.94%{opacity:.9;transform:scale(1.2)}79.63%{opacity:.9;transform:scale(1)}100%{opacity:.9;transform:scale(1)}}
+@keyframes pk-rules-c6-s10-rd{0%,38.55%{opacity:0;transform:scale(.6)}39.38%{opacity:.9;transform:scale(1.2)}40.07%,77.28%{opacity:.9;transform:scale(1)}78.11%,100%{opacity:0;transform:scale(1)}}
+@keyframes pk-rules-c6-s10-na{0%,36.62%{opacity:1}37.45%,79.21%{opacity:0}80.32%,100%{opacity:1}}
+@keyframes pk-rules-c6-s10-nb{0%,79.21%{opacity:0}80.32%,100%{opacity:1}}
+@keyframes pk-rules-c6-s10-nt{0%,39.66%{opacity:0}40.76%,76.17%{opacity:1}77%,100%{opacity:0}}
+@keyframes pk-rules-c6-s10-gA{0%,36.62%{opacity:1}37.45%,100%{opacity:0}}
+@keyframes pk-rules-c6-s10-gR{0%,39.66%{opacity:0;transform:scale(.6)}40.35%{opacity:1;transform:scale(1.35)}41.04%,76.17%{opacity:1;transform:scale(1)}77%,100%{opacity:0;transform:scale(1)}}
+@keyframes pk-rules-c6-s10-gC{0%,79.21%{opacity:0;transform:scale(.6)}79.9%{opacity:1;transform:scale(1.35)}80.59%,100%{opacity:1;transform:scale(1)}}
+@keyframes pk-rules-c6-s10-x1{0%,35.38%{opacity:0}36.34%,41.04%{opacity:1}42.01%,100%{opacity:0}}
+@keyframes pk-rules-c6-s10-x2{0%,74.93%{opacity:0}75.9%,80.59%{opacity:1}81.56%,100%{opacity:0}}
+.pk-rules-c6 .s10-ra{animation:pk-rules-c6-s10-ra 36.2s infinite}
+.pk-rules-c6 .s10-rd{animation:pk-rules-c6-s10-rd 36.2s infinite}
+.pk-rules-c6 .s10-o0{animation:pk-rules-c6-s10-o0 36.2s infinite}
+.pk-rules-c6 .s10-o1{animation:pk-rules-c6-s10-o1 36.2s infinite}
+@keyframes pk-rules-c6-s10-o0{0%,16.32%{opacity:1}17.5%,100%{opacity:0}}
+@keyframes pk-rules-c6-s10-o1{0%,16.32%{opacity:0;transform:scale(1)}17.5%{opacity:1;transform:scale(1.5)}18.66%,100%{opacity:1;transform:scale(1)}}
+.pk-rules-c6 .s10-na{animation:pk-rules-c6-s10-na 36.2s infinite}
+.pk-rules-c6 .s10-nb{animation:pk-rules-c6-s10-nb 36.2s infinite}
+.pk-rules-c6 .s10-nt{animation:pk-rules-c6-s10-nt 36.2s infinite}
+.pk-rules-c6 .s10-gA{animation:pk-rules-c6-s10-gA 36.2s infinite}
+.pk-rules-c6 .s10-gR{animation:pk-rules-c6-s10-gR 36.2s infinite}
+.pk-rules-c6 .s10-gC{animation:pk-rules-c6-s10-gC 36.2s infinite}
+.pk-rules-c6 .s10-pA{animation:pk-rules-c6-s10-pA 36.2s infinite}
+.pk-rules-c6 .s10-pR1{animation:pk-rules-c6-s10-pR1 36.2s infinite}
+.pk-rules-c6 .s10-pR2{animation:pk-rules-c6-s10-pR2 36.2s infinite}
+@keyframes pk-rules-c6-s10-pA{0%,33.3%{opacity:1;transform:scale(1)}34.07%{opacity:.3;transform:scale(1.4)}35.24%,100%{opacity:0;transform:scale(1)}}
+@keyframes pk-rules-c6-s10-pR1{0%,56.67%{opacity:1;transform:scale(1)}57.45%{opacity:.3;transform:scale(1.4)}58.61%,100%{opacity:0;transform:scale(1)}}
+@keyframes pk-rules-c6-s10-pR2{0%,72.86%{opacity:1;transform:scale(1)}73.64%{opacity:.3;transform:scale(1.4)}74.79%,100%{opacity:0;transform:scale(1)}}
+.pk-rules-c6 .s10-rp1{animation:pk-rules-c6-s10rp1 36.2s infinite}
+@keyframes pk-rules-c6-s10rp1{0%,5.28%{opacity:0;transform:scale(.4)}5.36%{opacity:1;transform:scale(.5)}8.77%,100%{opacity:0;transform:scale(1.9)}}
+.pk-rules-c6 .s10-rp2{animation:pk-rules-c6-s10rp2 36.2s infinite}
+@keyframes pk-rules-c6-s10rp2{0%,9.14%{opacity:0;transform:scale(.4)}9.22%{opacity:1;transform:scale(.5)}13.65%,100%{opacity:0;transform:scale(1.9)}}
+.pk-rules-c6 .s10-rp3{animation:pk-rules-c6-s10rp3 36.2s infinite}
+@keyframes pk-rules-c6-s10rp3{0%,12.96%{opacity:0;transform:scale(.4)}13.09%{opacity:1;transform:scale(.5)}18.27%,100%{opacity:0;transform:scale(1.9)}}
+.pk-rules-c6 .s10-rp4{animation:pk-rules-c6-s10rp4 36.2s infinite}
+@keyframes pk-rules-c6-s10rp4{0%,16.75%{opacity:0;transform:scale(.4)}16.96%{opacity:1;transform:scale(.6)}17.43%{opacity:1;transform:scale(1.5)}17.81%,17.89%{opacity:1;transform:scale(1)}18.27%,100%{opacity:0;transform:scale(1)}}
+.pk-rules-c6 .s10-rp5{animation:pk-rules-c6-s10rp5 36.2s infinite}
+@keyframes pk-rules-c6-s10rp5{0%,25.49%{opacity:0;transform:scale(.4)}25.57%{opacity:1;transform:scale(.5)}28.98%,100%{opacity:0;transform:scale(1.9)}}
+.pk-rules-c6 .s10-rp6{animation:pk-rules-c6-s10rp6 36.2s infinite}
+@keyframes pk-rules-c6-s10rp6{0%,29.35%{opacity:0;transform:scale(.4)}29.43%{opacity:1;transform:scale(.5)}33.3%,100%{opacity:0;transform:scale(1.9)}}
+.pk-rules-c6 .s10-rp7{animation:pk-rules-c6-s10rp7 36.2s infinite}
+@keyframes pk-rules-c6-s10rp7{0%,33.19%{opacity:0;transform:scale(.4)}33.3%{opacity:1;transform:scale(.6)}34.07%{opacity:1;transform:scale(1.5)}34.78%,34.85%{opacity:1;transform:scale(1)}35.24%,100%{opacity:0;transform:scale(1)}}
+.pk-rules-c6 .s10-rp8{animation:pk-rules-c6-s10rp8 36.2s infinite}
+@keyframes pk-rules-c6-s10rp8{0%,48.85%{opacity:0;transform:scale(.4)}48.94%{opacity:1;transform:scale(.5)}52.35%,100%{opacity:0;transform:scale(1.9)}}
+.pk-rules-c6 .s10-rp9{animation:pk-rules-c6-s10rp9 36.2s infinite}
+@keyframes pk-rules-c6-s10rp9{0%,52.71%{opacity:0;transform:scale(.4)}52.81%{opacity:1;transform:scale(.5)}56.67%,100%{opacity:0;transform:scale(1.9)}}
+.pk-rules-c6 .s10-rp10{animation:pk-rules-c6-s10rp10 36.2s infinite}
+@keyframes pk-rules-c6-s10rp10{0%,56.56%{opacity:0;transform:scale(.4)}56.67%{opacity:1;transform:scale(.6)}57.25%{opacity:1;transform:scale(1.5)}57.76%,57.84%{opacity:1;transform:scale(1)}58.22%,100%{opacity:0;transform:scale(1)}}
+.pk-rules-c6 .s10-rp11{animation:pk-rules-c6-s10rp11 36.2s infinite}
+@keyframes pk-rules-c6-s10rp11{0%,65.04%{opacity:0;transform:scale(.4)}65.12%{opacity:1;transform:scale(.5)}68.53%,100%{opacity:0;transform:scale(1.9)}}
+.pk-rules-c6 .s10-rp12{animation:pk-rules-c6-s10rp12 36.2s infinite}
+@keyframes pk-rules-c6-s10rp12{0%,68.9%{opacity:0;transform:scale(.4)}68.99%{opacity:1;transform:scale(.5)}72.86%,100%{opacity:0;transform:scale(1.9)}}
+.pk-rules-c6 .s10-rp13{animation:pk-rules-c6-s10rp13 36.2s infinite}
+@keyframes pk-rules-c6-s10rp13{0%,72.75%{opacity:0;transform:scale(.4)}72.86%{opacity:1;transform:scale(.6)}73.44%{opacity:1;transform:scale(1.5)}73.94%,74.02%{opacity:1;transform:scale(1)}74.41%,100%{opacity:0;transform:scale(1)}}
+.pk-rules-c6 .s10-rp14{animation:pk-rules-c6-s10rp14 36.2s infinite}
+@keyframes pk-rules-c6-s10rp14{0%,88.42%{opacity:0;transform:scale(.4)}88.5%{opacity:1;transform:scale(.5)}91.57%,100%{opacity:0;transform:scale(1.9)}}
+.pk-rules-c6 .s10-rp15{animation:pk-rules-c6-s10rp15 36.2s infinite}
+@keyframes pk-rules-c6-s10rp15{0%,92.28%{opacity:0;transform:scale(.4)}92.36%{opacity:1;transform:scale(.5)}95.44%,100%{opacity:0;transform:scale(1.9)}}
+.pk-rules-c6 .s10-rp16{animation:pk-rules-c6-s10rp16 36.2s infinite}
+@keyframes pk-rules-c6-s10rp16{0%,96.15%{opacity:0;transform:scale(.4)}96.23%{opacity:1;transform:scale(.5)}99.25%,100%{opacity:0;transform:scale(1.9)}}
 
 /* 7장 */
 .pk-rules-c7 .scene{animation:pk-rules-c7-scene 16s infinite}

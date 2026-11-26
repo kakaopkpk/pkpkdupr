@@ -133,6 +133,10 @@ export const RULES_GUIDE_CARDS: readonly RulesGuideCard[] = [
           공격팀은 <b>서브 기회가 2번</b>이에요(두 사람이 한 번씩). 둘 다 지면
           점수는 그대로, 서브권이 수비팀으로 넘어가요.
         </RuleItem>
+        <RuleItem>
+          서브권이 넘어가 공격팀과 수비팀이 바뀌는 걸 <b>사이드 아웃</b>이라고
+          해요.
+        </RuleItem>
       </RuleList>
     ),
   },
@@ -150,7 +154,8 @@ export const RULES_GUIDE_CARDS: readonly RulesGuideCard[] = [
           점수를 얻으면 파트너와 <b>좌우를 바꿔</b> 같은 사람이 계속 서브해요.
         </RuleItem>
         <RuleItem>
-          지면 <b>2번</b>이 그 자리에서, 2번도 지면 <b>상대 팀</b>이 서브해요.
+          지면 <b>2번</b>이 그 자리에서, 2번도 지면 사이드 아웃이라{" "}
+          <b>상대 팀</b>이 서브해요.
         </RuleItem>
       </RuleList>
     ),
@@ -208,15 +213,18 @@ export const RULES_GUIDE_CARDS: readonly RulesGuideCard[] = [
           서브 전에 <b>공격팀 점수 → 수비팀 점수 → 서버 번호</b>를 불러요.
         </RuleItem>
         <RuleItem>
-          경기 첫 서브는 <b>"Zero, Zero, Two"</b>로 시작해요. 처음 공격하는
-          팀은 <b>서브권이 1개</b>뿐이라 두 번째(Two)부터 시작해요.
+          처음 공격하는 팀은 <b>서브권이 1개</b>뿐이라 두 번째(Two)인{" "}
+          <b>"Zero, Zero, Two"</b>로 시작해요.
         </RuleItem>
         <RuleItem>
-          이기면 <b>+1점</b>, 자리 바꿔 같은 사람이 또 서브해요.
+          득점하면 <b>+1점</b>, 자리 바꿔 같은 사람이 또 서브해요.
         </RuleItem>
         <RuleItem>
-          지면 서브권이 하나 줄어 <b>2번</b>이, 서브권을 다 쓰면{" "}
-          <b>상대 팀</b>이 서브해요.
+          지면 서브권이 하나 줄고, 서브권이 없으면 <b>사이드 아웃</b>으로
+          공수가 바뀌어요.
+        </RuleItem>
+        <RuleItem>
+          새 공격팀은 <b>오른쪽</b> 자리 사람부터 서브해요.
         </RuleItem>
       </RuleList>
     ),
