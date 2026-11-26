@@ -20,9 +20,13 @@ import {
   RuleTableRow,
 } from "./RulesGuideParts";
 
+/** 카드 묶음. 규칙 12장은 개요 → 치는 법 → 서브 → 정리이고, 그 뒤에 부록이 온다 */
+type RulesGuideSection = "개요" | "치는 법" | "서브" | "정리" | "부록";
+
 /** 카드 한 장. 화면이 그림 → 머리(eyebrow·title) → body 순서로 그린다 */
 export interface RulesGuideCard {
-  /** 작은 머리 글자. 규칙은 "규칙 n/12", 부록은 "부록 n/3"이다 */
+  section: RulesGuideSection;
+  /** 작은 머리 글자. 묶음 이름과 묶음 안 순번("치는 법 2/4")이고, 한 장뿐인 묶음은 이름만이다 */
   eyebrow: string;
   title: string;
   /** 그림 움직임 범위 클래스(rulesGuide.css). 카드 article에 붙는다 */
@@ -99,10 +103,11 @@ const PIKAPIKA_ROWS: readonly { label: string; body: React.ReactNode }[] = [
   },
 ];
 
-/** 규칙 12장. 개요(1~3) → 치는 법(4~7) → 서브(8~11) → 정리(12) 순서다 */
+/** 규칙 12장 */
 const RULE_CARDS: readonly CardContent[] = [
   {
     title: "네트 너머로 공을 주고받아요",
+    section: "개요",
     scope: "g2",
     Figure: RallyFigure,
     stillSeconds: 1.25,
@@ -122,6 +127,7 @@ const RULE_CARDS: readonly CardContent[] = [
   },
   {
     title: "승리 조건",
+    section: "개요",
     scope: "pk-rules-c1",
     Figure: WinConditionFigure,
     stillSeconds: 3.6,
@@ -139,6 +145,7 @@ const RULE_CARDS: readonly CardContent[] = [
   },
   {
     title: "코트 용어 세 가지",
+    section: "개요",
     scope: "g2 n3 d4",
     Figure: CourtTermsFigure,
     stillSeconds: 2,
@@ -159,6 +166,7 @@ const RULE_CARDS: readonly CardContent[] = [
   },
   {
     title: "바운스 뒤에, 또는 바로",
+    section: "치는 법",
     scope: "g2 n2 a6",
     Figure: BounceVolleyFigure,
     stillSeconds: 3.6,
@@ -176,6 +184,7 @@ const RULE_CARDS: readonly CardContent[] = [
   },
   {
     title: "논 발리 존에선 발리 금지",
+    section: "치는 법",
     scope: "g2 n3 a6",
     Figure: NonVolleyZoneFigure,
     stillSeconds: 3.6,
@@ -197,6 +206,7 @@ const RULE_CARDS: readonly CardContent[] = [
   },
   {
     title: "서브와 리턴은 바운스 뒤에",
+    section: "치는 법",
     scope: "g2 n3 d7",
     Figure: TwoBounceFigure,
     stillSeconds: 6,
@@ -220,6 +230,7 @@ const RULE_CARDS: readonly CardContent[] = [
   },
   {
     title: "랠리는 이렇게 이기고 져요",
+    section: "치는 법",
     scope: "g2 n3 a6",
     Figure: RallyOutcomeFigure,
     stillSeconds: 3.6,
@@ -244,6 +255,7 @@ const RULE_CARDS: readonly CardContent[] = [
   },
   {
     title: "서브는 대각선 코트로",
+    section: "서브",
     scope: "pk-rules-c4",
     Figure: ServeFigure,
     stillSeconds: 12.6,
@@ -265,6 +277,7 @@ const RULE_CARDS: readonly CardContent[] = [
   },
   {
     title: "서브권: 서브할 권리",
+    section: "서브",
     scope: "g2 n3 d6",
     Figure: ServeRightFigure,
     stillSeconds: 4.5,
@@ -299,6 +312,7 @@ const RULE_CARDS: readonly CardContent[] = [
   },
   {
     title: "점수는 공격팀만",
+    section: "서브",
     scope: "g2 n3 d65",
     Figure: ScoringFigure,
     stillSeconds: 4.5,
@@ -324,6 +338,7 @@ const RULE_CARDS: readonly CardContent[] = [
   },
   {
     title: "서브 전에 점수 부르기",
+    section: "서브",
     scope: "pk-rules-c5",
     Figure: ScoreCallFigure,
     stillSeconds: 5.2,
@@ -343,6 +358,7 @@ const RULE_CARDS: readonly CardContent[] = [
   },
   {
     title: "경기 시뮬레이션",
+    section: "정리",
     scope: "pk-rules-c6",
     Figure: GameWalkthroughFigure,
     stillSeconds: 3.7,
@@ -374,6 +390,7 @@ const RULE_CARDS: readonly CardContent[] = [
 const APPENDIX_CARDS: readonly CardContent[] = [
   {
     title: "엣지 케이스",
+    section: "부록",
     scope: "g2 n4 d5",
     Figure: EdgeCaseFigure,
     stillSeconds: 3.5,
@@ -398,6 +415,7 @@ const APPENDIX_CARDS: readonly CardContent[] = [
   },
   {
     title: "함께 치는 매너",
+    section: "부록",
     scope: "pk-rules-c11",
     Figure: EtiquetteFigure,
     stillSeconds: 2,
@@ -418,6 +436,7 @@ const APPENDIX_CARDS: readonly CardContent[] = [
   },
   {
     title: "피카피카는 이렇게 쳐요",
+    section: "부록",
     scope: "pk-rules-c12",
     stillSeconds: 1,
     body: (
@@ -441,14 +460,18 @@ const APPENDIX_CARDS: readonly CardContent[] = [
 /** 규칙 장 수. 위치 점은 규칙과 부록 사이를 띄운다 */
 export const RULES_GUIDE_RULE_COUNT = RULE_CARDS.length;
 
-/** 신입 회원용 피클볼 기본 규칙 카드. 화면에서 규칙 12장 → 부록 3장 순서로 넘긴다 */
-export const RULES_GUIDE_CARDS: readonly RulesGuideCard[] = [
-  ...RULE_CARDS.map((card, index) => ({
-    ...card,
-    eyebrow: `규칙 ${index + 1}/${RULE_CARDS.length}`,
-  })),
-  ...APPENDIX_CARDS.map((card, index) => ({
-    ...card,
-    eyebrow: `부록 ${index + 1}/${APPENDIX_CARDS.length}`,
-  })),
-];
+const CARDS = [...RULE_CARDS, ...APPENDIX_CARDS];
+
+const eyebrowOf = (card: CardContent, index: number): string => {
+  const sameSection = CARDS.filter(({ section }) => section === card.section);
+  if (sameSection.length === 1) return card.section;
+  const position =
+    CARDS.slice(0, index).filter(({ section }) => section === card.section)
+      .length + 1;
+  return `${card.section} ${position}/${sameSection.length}`;
+};
+
+/** 신입 회원용 피클볼 기본 규칙 카드. 화면에서 이 순서대로 넘긴다 */
+export const RULES_GUIDE_CARDS: readonly RulesGuideCard[] = CARDS.map(
+  (card, index) => ({ ...card, eyebrow: eyebrowOf(card, index) }),
+);

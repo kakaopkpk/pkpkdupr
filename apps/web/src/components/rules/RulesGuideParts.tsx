@@ -55,7 +55,7 @@ export const RuleFigure: React.FC<{
   );
 };
 
-/** 작은 머리 글자("규칙 n/12"·"부록 n/3") + 제목 22 */
+/** 작은 머리 글자(묶음 이름과 순번, "치는 법 2/4") + 제목 22 */
 export const RuleHeading: React.FC<{ eyebrow: string; title: string }> = ({
   eyebrow,
   title,
