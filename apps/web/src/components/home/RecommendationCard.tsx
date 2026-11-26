@@ -45,6 +45,8 @@ interface CourtCell {
   rankChip: "defending" | "attacking" | null;
   /** 주인공 아바타에 연승 링을 두르고 평점을 숨긴다(연승 매치·최강자전) */
   showsStreak: boolean;
+  /** 이름 아래 "평점 N 높음" 줄의 평점 차. 도전 매치의 높은(지키는) 팀만 있다 */
+  higherRatingGap: number | null;
 }
 
 /**
@@ -76,6 +78,10 @@ const buildCells = (court: RecommendedCourt): [CourtCell, CourtCell] => {
           : null,
       showsStreak:
         special?.kind === "streak_stopper" || special?.kind === "champions",
+      higherRatingGap:
+        special?.kind === "challenge" && isDefending
+          ? (special.ratingGap ?? null)
+          : null,
     };
   };
   return special?.defendingTeamIndex === 1
@@ -202,14 +208,21 @@ const CourtCellContent: React.FC<{
           ) : null}
         </>
       ) : (
-        cell.players.map((player) => (
-          <span
-            key={player.id}
-            className="max-w-full truncate text-pk-15 font-bold text-pk-ink"
-          >
-            {player.username}
-          </span>
-        ))
+        <>
+          {cell.players.map((player) => (
+            <span
+              key={player.id}
+              className="max-w-full truncate text-pk-15 font-bold text-pk-ink"
+            >
+              {player.username}
+            </span>
+          ))}
+          {cell.higherRatingGap !== null ? (
+            <span className="text-pk-12 font-bold text-pk-primary tabular-nums">
+              평점 {formatRating(cell.higherRatingGap)} 높음
+            </span>
+          ) : null}
+        </>
       )}
     </div>
   );

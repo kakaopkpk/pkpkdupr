@@ -139,15 +139,18 @@ const evaluateSpecialMatch = (
     }
     case "streak_stopper":
     case "champions":
-    case "revenge": {
+    case "revenge":
+    case "challenge": {
       const defendingTeamLost = specialMatch.defendingTeamIndex === loserIndex;
       const outcomeByKind: Record<
-        "streak_stopper" | "champions" | "revenge",
+        "streak_stopper" | "champions" | "revenge" | "challenge",
         SpecialMatchOutcome
       > = {
         streak_stopper: defendingTeamLost ? "streak_stopped" : "streak_defended",
         champions: "champions_won",
         revenge: defendingTeamLost ? "revenge_success" : "revenge_defended",
+        // 낮은 팀이 이기면 도전 성공, 높은(지키는) 팀이 이기면 방어
+        challenge: defendingTeamLost ? "challenge_success" : "challenge_defended",
       };
       return {
         outcome: outcomeByKind[specialMatch.kind],
@@ -200,7 +203,7 @@ const computeWinStreaksBefore = (
   );
 
 /**
- * 결과와 큰 연출 데이터. 연출은 결과가 라이벌전 승리·연승 저지·최강자전 승리일 때만 만들고,
+ * 결과와 큰 연출 데이터. 연출은 결과가 라이벌전 승리·연승 저지·최강자전 승리·도전 성공일 때만 만들고,
  * 필요한 선수·순위를 찾지 못하면 null이다(결과는 그대로 정한다).
  */
 export const settleSpecialMatch = (
@@ -284,6 +287,15 @@ export const settleSpecialMatch = (
         winner: { player: winner, streakBefore: streaks.get(winner.id) ?? 0 },
         loser: { player: loser, streakBefore: streaks.get(loser.id) ?? 0 },
       };
+    }
+    if (outcome === "challenge_success") {
+      // 평점 차가 없는 옛 저장 형태면 설명을 만들 수 없어 연출하지 않는다
+      if (specialMatch.ratingGap == null) return null;
+      const defeated = match.teams[loserIndex].players.map(
+        ({ id, username, avatarUrl }) => ({ id, username, avatarUrl }),
+      );
+      if (defeated.length === 0) return null;
+      return { kind: "challenge", defeated, ratingGap: specialMatch.ratingGap };
     }
     return null;
   };

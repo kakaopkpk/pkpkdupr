@@ -8,8 +8,11 @@ import { FlameIcon } from "@/components/ui/Icons";
 import { PlayerAvatar } from "@/components/ui/PlayerAvatar";
 import { SpecialMatchIcon } from "@/components/ui/SpecialMatchLabel";
 import { cx } from "@/components/ui/cx";
-import { STREAK_END_LABEL, VS_LABEL } from "@/lib/specialMatchShare";
+import { getChallengeDefeatedNames, STREAK_END_LABEL, VS_LABEL } from "@/lib/specialMatchShare";
 import {
+  CHALLENGE_AVATAR,
+  CHALLENGE_AVATAR_OVERLAP,
+  getChallengeGroupWidth,
   RIVAL_PASS_MS,
   STREAK_RING_FADE_MS,
   getRivalCountSteps,
@@ -185,6 +188,8 @@ export const RivalScene: React.FC<{
 type StampPhase = "hidden" | "falling" | "landed";
 
 interface StampLayout {
+  /** 도장 그림. 연승 저지·최강자전은 손바닥, 도전 성공은 깃발이다 */
+  icon?: "streak_stopper" | "challenge";
   /** 블루 원 지름 */
   size: number;
   /** 흰 링 굵기 */
@@ -208,7 +213,7 @@ const TAG_HEIGHT = 24;
 // 태그 아래 끝이 아바타 아래 끝보다 이만큼 내려온다
 const TAG_DROP = 12;
 
-/** 글자 없는 꽉 찬 블루 원에 흰 손바닥(SpecialMatchIcon streak_stopper와 같은 그림). 박히는 순간 충격 고리가 퍼진다 */
+/** 글자 없는 꽉 찬 블루 원에 흰 손바닥·깃발(SpecialMatchIcon과 같은 그림). 박히는 순간 충격 고리가 퍼진다 */
 const StopStamp: React.FC<{ stamp: StampLayout }> = ({ stamp }) => {
   if (stamp.phase === "hidden") return null;
   const box: React.CSSProperties = {
@@ -243,7 +248,7 @@ const StopStamp: React.FC<{ stamp: StampLayout }> = ({ stamp }) => {
         }}
       >
         <span className="inline-flex -rotate-10">
-          <SpecialMatchIcon kind="streak_stopper" size={stamp.iconSize} />
+          <SpecialMatchIcon kind={stamp.icon ?? "streak_stopper"} size={stamp.iconSize} />
         </span>
       </span>
     </>
@@ -437,6 +442,63 @@ export const ChampionsScene: React.FC<{
         </PopIn>
         <SceneName name={loser.player.username} className={cx(CHAMPIONS_NAME_CLASS_NAME, "text-white/78")} />
       </div>
+    </div>
+  );
+};
+
+// ------------------------------------------------------------------ 도전 성공 --
+
+const CHALLENGE_STAMP = 72;
+
+/**
+ * 도전 성공: 진 높은 팀 얼굴(104, 복식은 두 얼굴 겹침)과 이름 줄("a · b"). 빛줄기·후광은 두 얼굴 묶음 가운데가 중심이고,
+ * 깃발 도장이 묶음 오른쪽 아래에 박히면 얼굴 묶음만 흔들린다(연승 저지와 같은 움직임)
+ */
+export const ChallengeScene: React.FC<{
+  celebration: Extract<SpecialMatchCelebration, { kind: "challenge" }>;
+  beatCount: number;
+}> = ({ celebration, beatCount }) => {
+  const isLanded = beatCount >= 2;
+  const groupWidth = getChallengeGroupWidth(celebration.defeated.length);
+  return (
+    <div className="flex w-full flex-col items-center gap-[22px]">
+      <span
+        className="relative inline-flex"
+        style={{ width: groupWidth, height: CHALLENGE_AVATAR }}
+      >
+        <SceneRays />
+        <PopIn>
+          <ShakeOnImpact isShaking={isLanded}>
+            <span className="relative inline-flex">
+              {celebration.defeated.map((player, index) => (
+                <span
+                  key={player.id}
+                  className="inline-flex"
+                  style={index > 0 ? { marginLeft: -CHALLENGE_AVATAR_OVERLAP } : undefined}
+                >
+                  <PlayerAvatar player={player} size={CHALLENGE_AVATAR} />
+                </span>
+              ))}
+            </span>
+            <StopStamp
+              stamp={{
+                icon: "challenge",
+                size: CHALLENGE_STAMP,
+                ring: 4,
+                iconSize: 40,
+                // 묶음 오른쪽 끝에서 24 밖, 아래 끝에서 8 아래에 도장 끝이 온다
+                left: groupWidth + 24 - CHALLENGE_STAMP,
+                top: CHALLENGE_AVATAR + 8 - CHALLENGE_STAMP,
+                phase: getStampPhase(beatCount),
+              }}
+            />
+          </ShakeOnImpact>
+        </PopIn>
+      </span>
+      <SceneName
+        name={getChallengeDefeatedNames(celebration.defeated)}
+        className="text-pk-15 leading-[22px] text-white"
+      />
     </div>
   );
 };

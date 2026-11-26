@@ -330,6 +330,57 @@ describe("특수 매치 결과 판정", () => {
     ).toEqual({ outcome: null, celebration: null });
   });
 
+  it("도전 매치는 낮은 팀이 이기면 도전 성공이고 진 높은 팀 두 사람과 평점 차를 싣는다, 높은 팀이 이기면 방어다", () => {
+    // 높은 팀 d1·d2(평균 3.66)가 지키고 낮은 팀 a1·a2(평균 3.34)가 도전한다
+    const challenge: SpecialMatch = {
+      kind: "challenge",
+      defendingTeamIndex: 1,
+      protagonistIds: [null, null],
+      rivalPairs: [],
+      ratingGap: 0.32,
+      outcome: null,
+    };
+    const context = buildContext(
+      { a1: 3.54, a2: 3.26, d1: 3.46, d2: 3.74 },
+      teamAWin,
+    );
+
+    expect(settleSpecialMatch(context, challenge, toTarget(teamAWin))).toEqual({
+      outcome: "challenge_success",
+      celebration: {
+        kind: "challenge",
+        defeated: [
+          { id: "d1", username: "d1", avatarUrl: "https://example.com/d1.png" },
+          { id: "d2", username: "d2", avatarUrl: "https://example.com/d2.png" },
+        ],
+        ratingGap: 0.32,
+      },
+    });
+    expect(settleSpecialMatch(context, challenge, toTarget(teamBWin))).toEqual({
+      outcome: "challenge_defended",
+      celebration: null,
+    });
+  });
+
+  it("평점 차가 없는 도전 매치는 결과만 정하고 연출하지 않는다", () => {
+    const challenge: SpecialMatch = {
+      kind: "challenge",
+      defendingTeamIndex: 1,
+      protagonistIds: [null, null],
+      rivalPairs: [],
+      outcome: null,
+    };
+    const context = buildContext(
+      { a1: 3.54, a2: 3.26, d1: 3.46, d2: 3.74 },
+      teamAWin,
+    );
+
+    expect(settleSpecialMatch(context, challenge, toTarget(teamAWin))).toEqual({
+      outcome: "challenge_success",
+      celebration: null,
+    });
+  });
+
   it("승패가 갈리지 않으면 결과가 null이다", () => {
     const context = buildContext({ a1: 3.48, a2: 3.2, d1: 3.52, d2: 3.8 }, []);
 

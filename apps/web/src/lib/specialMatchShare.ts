@@ -2,9 +2,10 @@ import type { MatchTopLevelType } from "@pkpkdupr/shared/match";
 import { formatKstFullDate, MATCH_CATEGORY_LABELS } from "@/lib/format";
 import { getObjectParticle } from "@/lib/korean";
 import { toShareFileName } from "@/lib/shareImage";
+import { formatRating } from "@/utils/dupr";
 
 /*
- * 특수 매치 큰 연출(라이벌전 승리·연승 저지·최강자전 승리)의 "이미지로 공유" 내용.
+ * 특수 매치 큰 연출(라이벌전 승리·연승 저지·최강자전 승리·도전 성공)의 "이미지로 공유" 내용.
  * 모양은 docs/design.md "특수 매치 공유"를 따른다. 리벤지 성공은 큰 연출이 없어 대상이 아니다.
  */
 
@@ -61,6 +62,13 @@ export type SpecialMatchShareTarget = SpecialMatchShareBase &
         loser: SpecialMatchSharePlayer;
         brokenStreak: number;
       }
+    | {
+        kind: "challenge-win";
+        /** 진 높은 팀 선수(팀 순서) */
+        defeated: SpecialMatchSharePlayer[];
+        /** 시작 때 두 팀 평균 평점 차 */
+        ratingGap: number;
+      }
   );
 
 export type SpecialMatchShareKind = SpecialMatchShareTarget["kind"];
@@ -76,7 +84,12 @@ const TITLES: Record<SpecialMatchShareKind, string> = {
   rival: "라이벌전 승리",
   "streak-break": "연승 저지",
   "king-win": "최강자전 승리",
+  "challenge-win": "도전 성공",
 };
+
+/** 도전 성공 이름 줄: 진 높은 팀 아이디를 " · "로 잇는다 */
+export const getChallengeDefeatedNames = (defeated: readonly SpecialMatchSharePlayer[]) =>
+  defeated.map((player) => player.username).join(" · ");
 
 export const getSpecialMatchShareTitle = (kind: SpecialMatchShareKind) => TITLES[kind];
 
@@ -108,12 +121,18 @@ export const getSpecialMatchCaptionParts = (
         { text: "을 끊고 " },
         { text: `${target.winnerStreak}연승`, highlight: "amber" },
       ];
+    case "challenge-win":
+      return [
+        { text: "평균 평점이 " },
+        { text: formatRating(target.ratingGap), highlight: "up" },
+        { text: " 높은 팀을 이겼어요" },
+      ];
   }
 };
 
 /**
  * 공유 시트에 함께 보내는 문구. 주어는 그 일을 한 회원이다
- * (라이벌전 승리·최강자전은 순위·연승의 주인, 연승 저지는 공유한 회원)
+ * (라이벌전 승리·최강자전은 순위·연승의 주인, 연승 저지·도전 성공은 공유한 회원)
  */
 export const getSpecialMatchShareText = (target: SpecialMatchShareTarget) => {
   switch (target.kind) {
@@ -125,6 +144,8 @@ export const getSpecialMatchShareText = (target: SpecialMatchShareTarget) => {
       return `${target.username}님이 ${target.loser.username}의 ${target.brokenStreak}연승을 끊었어요`;
     case "king-win":
       return `${target.winner.username}님이 ${target.loser.username}의 ${target.brokenStreak}연승을 끊고 ${target.winnerStreak}연승을 이어가요`;
+    case "challenge-win":
+      return `${target.username}님이 평균 평점이 ${formatRating(target.ratingGap)} 높은 팀을 이겼어요`;
   }
 };
 

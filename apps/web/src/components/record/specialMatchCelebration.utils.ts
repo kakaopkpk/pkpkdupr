@@ -22,6 +22,17 @@ export const STREAK_RING_FADE_MS = 500;
 const CHAMPIONS_FLARE_AFTER_IMPACT_MS = 600;
 const CHAMPIONS_FLARE_MS = 400;
 
+/** 도전 성공: 진 팀 얼굴 지름과 겹침. 큰 연출과 공유 이미지가 같이 쓴다 */
+export const CHALLENGE_AVATAR = 104;
+export const CHALLENGE_AVATAR_OVERLAP = 24;
+
+/** 도전 성공 얼굴 묶음 폭. 단식이면 얼굴 하나다 */
+export const getChallengeGroupWidth = (count: number) =>
+  CHALLENGE_AVATAR * count - CHALLENGE_AVATAR_OVERLAP * Math.max(0, count - 1);
+
+/** 도전 성공: 도장이 박힌 뒤 설명 줄이 떠오르기까지 */
+const CHALLENGE_IMPACT_SETTLE_MS = 500;
+
 /** 도장이 박히는 시각 */
 const STAMP_IMPACT_MS = SCENE_START_MS + STAMP_DROP_MS;
 const CHAMPIONS_FLARE_START_MS = STAMP_IMPACT_MS + CHAMPIONS_FLARE_AFTER_IMPACT_MS;
@@ -33,7 +44,7 @@ export const getRivalCountSteps = (
 
 /**
  * 장면 박자 시각. 라이벌전 승리는 한 칸씩 오르는 박자들 뒤 넘어서기 한 번(두 칩이 경기 뒤 순위가 됨),
- * 연승 저지는 도장 떨어지기 시작·박힘, 최강자전은 그 뒤 이긴 쪽 테두리 타오름이다
+ * 연승 저지·도전 성공은 도장 떨어지기 시작·박힘, 최강자전은 그 뒤 이긴 쪽 테두리 타오름이다
  */
 export const getSceneBeatTimes = (celebration: SpecialMatchCelebration): number[] => {
   switch (celebration.kind) {
@@ -42,6 +53,7 @@ export const getSceneBeatTimes = (celebration: SpecialMatchCelebration): number[
       return Array.from({ length: steps + 1 }, (_, index) => SCENE_START_MS + RIVAL_STEP_MS * index);
     }
     case "streak_stopper":
+    case "challenge":
       return [SCENE_START_MS, STAMP_IMPACT_MS];
     case "champions":
       return [SCENE_START_MS, STAMP_IMPACT_MS, CHAMPIONS_FLARE_START_MS];
@@ -57,6 +69,9 @@ export const getSceneEndMs = (celebration: SpecialMatchCelebration): number => {
       return lastBeat + RIVAL_PASS_MS;
     case "streak_stopper":
       return lastBeat + STREAK_RING_FADE_MS;
+    // 도전 성공은 흐려질 테두리가 없어 도장 충격 고리가 퍼지는 동안만 기다린다
+    case "challenge":
+      return lastBeat + CHALLENGE_IMPACT_SETTLE_MS;
     case "champions":
       return lastBeat + CHAMPIONS_FLARE_MS;
   }
@@ -73,7 +88,7 @@ export const isViewerOnWinningTeam = (
   return match.teams[winningTeamIndex].players.some((player) => player.id === viewerId);
 };
 
-/** 큰 연출 데이터를 "이미지로 공유" 대상으로 옮긴다. 순위·연승 수는 응답 값만 쓴다 */
+/** 큰 연출 데이터를 "이미지로 공유" 대상으로 옮긴다. 순위·연승 수·평점 차는 응답 값만 쓴다 */
 export const toSpecialMatchShareTarget = (
   celebration: SpecialMatchCelebration,
   match: Pick<MatchInfo, "id" | "type" | "completedAt" | "matchStartsAt" | "session">,
@@ -119,6 +134,13 @@ export const toSpecialMatchShareTarget = (
         winnerStreak: celebration.winner.streakBefore + 1,
         loser: celebration.loser.player,
         brokenStreak: celebration.loser.streakBefore,
+      };
+    case "challenge":
+      return {
+        ...base,
+        kind: "challenge-win",
+        defeated: celebration.defeated,
+        ratingGap: celebration.ratingGap,
       };
   }
 };

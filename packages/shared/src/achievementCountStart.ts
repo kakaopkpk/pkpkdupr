@@ -7,7 +7,7 @@
 export const ACHIEVEMENT_COUNT_START = new Date("2026-11-16T15:00:00.000Z");
 
 /**
- * 언더독·연승 저지·환영 인사·개근상·천적 지표의 집계 시작 시각(2026-11-18 00:00 KST, 이 업적들을 추가 배포한 날).
+ * 연승 저지·환영 인사·개근상·천적 지표의 집계 시작 시각(2026-11-18 00:00 KST, 이 업적들을 추가 배포한 날).
  * 새 지표라 그 전 경기로 업적이 한꺼번에 생기지 않게 한다.
  */
 export const SECOND_ACHIEVEMENT_SET_COUNT_START = new Date(
@@ -20,4 +20,12 @@ export const SECOND_ACHIEVEMENT_SET_COUNT_START = new Date(
  */
 export const TOURNAMENT_ACHIEVEMENT_COUNT_START = new Date(
   "2026-11-23T15:00:00.000Z",
+);
+
+/**
+ * 도전자 업적 지표의 집계 시작 시각(2026-11-25 00:00 KST). 기준을 평균 평점 차 0.1로 바꾸면서 이날 경기부터 센다.
+ * 그 전 경기로만 받았던 회원은 미달성이 된다.
+ */
+export const CHALLENGER_ACHIEVEMENT_COUNT_START = new Date(
+  "2026-11-24T15:00:00.000Z",
 );

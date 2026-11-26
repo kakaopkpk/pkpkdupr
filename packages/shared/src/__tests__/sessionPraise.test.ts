@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildSessionPraisePlayerStats,
   findPraiseReachedSessions,
+  SESSION_PRAISE_CATEGORY_LABEL,
   getSessionPraiseStatus,
   pickSessionPraiseCandidates,
   type SessionPraiseMatch,
@@ -133,7 +134,7 @@ describe("buildSessionPraisePlayerStats", () => {
     expect(result.get("b")?.clutchWins).toBe(1);
   });
 
-  it("언더독은 평점 반영 승리의 직전 평점 차 최댓값(0.01 내림)이고, 평점이 없으면 3.0이다", () => {
+  it("도전자는 평점 반영 승리의 직전 평점 차 최댓값(0.01 내림)이고, 평점이 없으면 3.0이다", () => {
     const rated = (
       ratingBefore: Record<string, number | null> | undefined,
       ratingExcluded = false,
@@ -235,14 +236,22 @@ describe("pickSessionPraiseCandidates", () => {
     expect(
       pick([
         input("clutch", { stats: { clutchWins: 2 } }),
-        input("underdog", { stats: { underdogGap: 0.25 } }),
+        input("underdog", { stats: { underdogGap: 0.2 } }),
         input("revenge", { stats: { revenges: 2 } }),
       ]),
     ).toEqual([
       { playerId: "revenge", category: "revenge", value: 2, score: 13 },
-      { playerId: "underdog", category: "underdog", value: 0.25, score: 13 },
+      // 도전자 점수는 3 + (차 − 0.1) × 100
+      { playerId: "underdog", category: "underdog", value: 0.2, score: 13 },
       { playerId: "clutch", category: "clutch", value: 2, score: 9 },
     ]);
+  });
+
+  it("도전자는 평균 평점 차 0.1부터 후보이고 0.1이면 3점이다", () => {
+    expect(pick([input("a", { stats: { underdogGap: 0.1 } })])).toEqual([
+      { playerId: "a", category: "underdog", value: 0.1, score: 3 },
+    ]);
+    expect(SESSION_PRAISE_CATEGORY_LABEL.underdog).toBe("도전자");
   });
 
   it("후보 조건을 넘지 못하면 그 분류는 후보가 아니다", () => {
@@ -251,7 +260,7 @@ describe("pickSessionPraiseCandidates", () => {
         input("a", {
           rankBefore: 9,
           rankAfter: 7,
-          stats: { wins: 2, pointsFor: 39, underdogGap: 0.14 },
+          stats: { wins: 2, pointsFor: 39, underdogGap: 0.09 },
         }),
       ]),
     ).toEqual([]);
