@@ -914,6 +914,7 @@ export const toAchievementMatch = (
   ratingExcluded: match.ratingExcluded ?? false,
   doublesRatingAfter,
   ratingBefore,
+  specialMatchOutcome: match.specialMatchOutcome ?? null,
 });
 
 /**

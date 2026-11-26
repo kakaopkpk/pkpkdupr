@@ -1,12 +1,12 @@
 import { describe, expect, it } from "vitest";
-import type { Match } from "../match.js";
 import {
   CHALLENGE_MIN_RATING_GAP,
   judgeChallengeMatch,
   judgeRecommendedSpecialMatch,
-  judgeRematchSpecialMatch,
-  resolveSessionStartSpecialMatch,
+  judgeRevengeMatch,
+  judgeSpecialMatch,
   type SpecialMatchCandidatePlayer,
+  type SpecialMatchHistoryMatch,
 } from "../specialMatch.js";
 
 const player = (
@@ -271,37 +271,28 @@ describe("judgeRecommendedSpecialMatch", () => {
   });
 });
 
-const previousMatch = (
+const played = (
   teams: [string[], string[]],
-  scores: Match["scores"],
-  status: Match["status"] = "completed",
-): Pick<Match, "status" | "teams" | "scores"> => ({
-  status,
-  teams: teams.map((ids, index) => ({
-    id: `t${index}`,
-    name: `팀 ${index}`,
-    players: ids.map((id) => ({ id }) as Match["teams"][number]["players"][number]),
-  })) as Match["teams"],
-  scores,
-});
+  winningTeamIndex: 0 | 1 | null,
+): SpecialMatchHistoryMatch => ({ teamPlayerIds: teams, winningTeamIndex });
 
-describe("judgeRematchSpecialMatch", () => {
-  const previous = previousMatch(
+describe("judgeRevengeMatch", () => {
+  const abWins = played(
     [
       ["a", "b"],
       ["c", "d"],
     ],
-    [{ scoreA: 11, scoreB: 7 }],
+    0,
   );
 
-  it("같은 멤버면 리벤지이고 원래 이긴 팀이 지킨다", () => {
+  it("같은 두 팀이 이미 붙었으면 리벤지이고 그 경기에서 이긴 팀이 지킨다", () => {
     expect(
-      judgeRematchSpecialMatch(
+      judgeRevengeMatch(
         [
           ["b", "a"],
           ["c", "d"],
         ],
-        previous,
+        [abWins],
       ),
     ).toEqual({
       kind: "revenge",
@@ -314,49 +305,103 @@ describe("judgeRematchSpecialMatch", () => {
 
   it("팀 순서가 바뀌면 지키는 팀 index도 따라간다", () => {
     expect(
-      judgeRematchSpecialMatch(
+      judgeRevengeMatch(
         [
           ["d", "c"],
           ["a", "b"],
         ],
-        previous,
+        [abWins],
       )?.defendingTeamIndex,
     ).toBe(1);
   });
 
-  it("멤버나 팀 구성이 다르면 null이다", () => {
+  it("사이에 다른 경기가 있어도 리벤지다(AB:CD → AC:BD → AB:CD)", () => {
     expect(
-      judgeRematchSpecialMatch(
+      judgeRevengeMatch(
+        [
+          ["a", "b"],
+          ["c", "d"],
+        ],
+        [
+          abWins,
+          played(
+            [
+              ["a", "c"],
+              ["b", "d"],
+            ],
+            1,
+          ),
+        ],
+      )?.defendingTeamIndex,
+    ).toBe(0);
+  });
+
+  it("가장 최근 같은 대진의 승패로 리벤지·방어를 정한다", () => {
+    const cdWins = played(
+      [
+        ["c", "d"],
+        ["a", "b"],
+      ],
+      0,
+    );
+    expect(
+      judgeRevengeMatch(
+        [
+          ["a", "b"],
+          ["c", "d"],
+        ],
+        [abWins, cdWins],
+      )?.defendingTeamIndex,
+    ).toBe(1);
+  });
+
+  it("팀 구성이 다르거나 처음 만나면 null이다", () => {
+    expect(
+      judgeRevengeMatch(
         [
           ["a", "c"],
           ["b", "d"],
         ],
-        previous,
+        [abWins],
       ),
     ).toBeNull();
     expect(
-      judgeRematchSpecialMatch(
+      judgeRevengeMatch(
         [
           ["a", "b"],
           ["c", "e"],
         ],
-        previous,
+        [abWins],
+      ),
+    ).toBeNull();
+    expect(
+      judgeRevengeMatch(
+        [
+          ["a", "b"],
+          ["c", "d"],
+        ],
+        [],
       ),
     ).toBeNull();
   });
 
-  it("원래 경기가 완료 전이거나 승패가 갈리지 않았으면 null이다", () => {
-    const teams: [string[], string[]] = [
-      ["a", "b"],
-      ["c", "d"],
-    ];
+  it("가장 최근 같은 대진의 승패가 갈리지 않았으면 더 앞 경기를 보지 않고 null이다", () => {
     expect(
-      judgeRematchSpecialMatch(teams, previousMatch(teams, [], "created")),
-    ).toBeNull();
-    expect(
-      judgeRematchSpecialMatch(
-        teams,
-        previousMatch(teams, [{ scoreA: 10, scoreB: 10 }]),
+      judgeRevengeMatch(
+        [
+          ["a", "b"],
+          ["c", "d"],
+        ],
+        [
+          abWins,
+          played(
+            [
+              ["a", "b"],
+              ["c", "d"],
+            ],
+            null,
+          ),
+        ],
       ),
     ).toBeNull();
   });
@@ -453,27 +498,48 @@ describe("도전 매치", () => {
   });
 });
 
-describe("resolveSessionStartSpecialMatch", () => {
-  const challenge = judgeChallengeMatch([
-    [player("a", { rating: 3.8 }), player("b", { rating: 3.6 })],
-    [player("c", { rating: 3.0 }), player("d", { rating: 3.0 })],
-  ]);
-  const streak = judgeRecommendedSpecialMatch([
-    [player("a", { winStreak: 3 }), player("b")],
-    [player("c"), player("d")],
-  ]);
+describe("judgeSpecialMatch", () => {
+  const history = [
+    played(
+      [
+        ["a", "b"],
+        ["c", "d"],
+      ],
+      1,
+    ),
+  ];
 
-  it("재판정 유형이 카드 유형과 같으면 그 유형이다", () => {
-    expect(resolveSessionStartSpecialMatch(streak, "streak_stopper")).toBe(streak);
+  it("리벤지가 연승·라이벌전·도전 매치보다 먼저다", () => {
+    const judged = judgeSpecialMatch(
+      [
+        [player("a", { winStreak: 5, rating: 3.8 }), player("b", { rating: 3.6 })],
+        [player("c", { rating: 3.0 }), player("d", { rating: 3.0 })],
+      ],
+      history,
+    );
+    expect(judged?.kind).toBe("revenge");
+    expect(judged?.defendingTeamIndex).toBe(1);
   });
 
-  it("카드 유형과 달라도 재판정이 도전 매치면 도전 매치다(카드 없이 시작한 경기 포함)", () => {
-    expect(resolveSessionStartSpecialMatch(challenge, "rival")).toBe(challenge);
-    expect(resolveSessionStartSpecialMatch(challenge, null)).toBe(challenge);
+  it("게스트가 있어도 리벤지다", () => {
+    expect(
+      judgeSpecialMatch(
+        [
+          [player("a"), player("b", { isGuest: true })],
+          [player("c"), player("d")],
+        ],
+        history,
+      )?.kind,
+    ).toBe("revenge");
   });
 
-  it("카드 없이 시작했는데 연승 매치 등 다른 유형이면 저장하지 않는다", () => {
-    expect(resolveSessionStartSpecialMatch(streak, null)).toBeNull();
-    expect(resolveSessionStartSpecialMatch(null, "challenge")).toBeNull();
+  it("리벤지가 아니면 팀 구성 판정(judgeRecommendedSpecialMatch)과 같다", () => {
+    const teams = [
+      [player("a", { winStreak: 3 }), player("e")],
+      [player("c"), player("d")],
+    ] as const;
+    expect(judgeSpecialMatch(teams, history)).toEqual(
+      judgeRecommendedSpecialMatch(teams),
+    );
   });
 });

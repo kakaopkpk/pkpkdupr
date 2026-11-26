@@ -29,3 +29,12 @@ export const TOURNAMENT_ACHIEVEMENT_COUNT_START = new Date(
 export const CHALLENGER_ACHIEVEMENT_COUNT_START = new Date(
   "2026-11-24T15:00:00.000Z",
 );
+
+/**
+ * 리벤지 업적이 리벤지 매치 결과(revenge_success)로 세기 시작하는 시각(2026-11-27 00:00 KST).
+ * 이 시각 전 경기는 옛 조건(같은 날 진 조합 그대로 바로 다음 경기에서 승리)으로 세어 기존 달성자를 지킨다.
+ * 그 전에는 리벤지 매치가 '같은 멤버로 한 판 더'로 시작한 경기에만 저장돼 새 조건으로 다시 세면 기존 달성이 사라진다.
+ */
+export const REVENGE_MATCH_ACHIEVEMENT_COUNT_START = new Date(
+  "2026-11-26T15:00:00.000Z",
+);

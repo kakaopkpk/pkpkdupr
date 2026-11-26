@@ -48,7 +48,15 @@
 - `GET /api/matches`: `playerId`와 함께 `category=singles|doubles`로 분류 필터, 대진 예정 경기(`scheduled`) 제외
   - `playerId`가 있으면 경기마다 그 회원의 평점 변경 로그 `ratingChanges`(없으면 빈 배열)를 붙인다. 프로필 요약 `matches`도 같다. 웹 한 사람의 경기 목록이 경기별 평점 변화로 쓴다.
 - 경기 목록 정렬: `GET /api/matches`·`GET /api/match-feed`·세션 경기 목록은 기록 시각(`getMatchRecordedAt`, 완료 경기는 점수를 입력한 `completedAt`, 그 밖은 `matchStartsAt`) 최신순
-- 경기 기록 `POST /api/matches`: 직접 기록한 경기는 특수 매치가 아니라 `specialMatchCelebration`은 null
+- 경기 기록 `POST /api/matches`
+  - 저장 전에 특수 매치를 판정해 `specialMatch`에 저장한다(루트 `AGENTS.md` "특수 매치", 판정 실패면 null).
+  - 평점 반영 뒤 `settleSpecialMatchForSavedMatch`로 결과를 정해 응답 `specialMatch.outcome`에 담고, 업적은 그 뒤 계산한다(리벤지 업적이 결과를 읽음).
+  - 응답 `specialMatchCelebration`은 수정 `PUT`과 같은 규칙이다(결과가 처음 `rival_overtaken`·`streak_stopped`·`champions_won`·`challenge_success`로 정해졌을 때만).
+- 특수 매치 미리보기 `GET /api/special-match-preview?teamA=&teamB=&type=&sessionId=`: 응답 `SpecialMatchPreviewResponse`
+  - `teamA`·`teamB`는 쉼표로 나눈 선수 id다. 팀 구성 검증은 기록과 같아 맞지 않으면 400이다.
+  - 기록·시작과 같은 판정(`judgeSpecialMatch`)을 저장 없이 돌려준다(`outcome` null). 판정 실패면 `specialMatch` null로 200이다.
+  - 리벤지 범위 세션은 시작(`resolveSessionForStartedMatch`)과 같은 규칙이지만 정기 세션을 만들지 않는다. 정기 시간대인데 오늘 정기 세션이 없으면 볼 경기가 없다.
+  - GET이라 데이터 변경 신호를 보내지 않는다.
 - 수정 `PUT /api/matches/:matchId`
   - 관리자는 24시간 검사 없이 고친다.
   - 관리자 전용 `sessionId`(문자열이면 그 세션으로 옮기고 null이면 세션에서 뺌)·`matchStartsAt`(완료 경기면 `completedAt`도 같은 만큼 옮김)으로 세션·경기 시각을 바꾼다. 회원이 이 둘을 보내면 403.
@@ -70,8 +78,7 @@
   - 요청 `sessionId`가 오늘 회원 세션이면 그 세션, 아니면 기록과 같은 시간 규칙을 따른다.
   - 선수가 이미 진행 중 경기에 있으면 409 "<아이디>님이 다른 경기 중이에요".
   - 확인·생성은 advisory 잠금으로 직렬화한다.
-  - 같은 멤버로 한 판 더의 `rematchOfMatchId`를 주면 `judgeRematchSpecialMatch`로 리벤지를 판정해 `specialMatch`에 저장한다. 원래 경기가 없거나·완료 전이거나·승패가 안 갈렸거나·멤버가 다르면 리벤지가 아니다.
-  - 리벤지가 아니고 정해진 세션이 있으면(`rematchOfMatchId` 유무와 상관없이) 세션 시작 경기처럼 도전 매치만 판정해 저장한다(루트 `AGENTS.md` "특수 매치"). 세션이 없으면 null이다.
+  - 정해진 세션(없으면 같은 날)으로 특수 매치를 판정해 `specialMatch`에 저장한다(루트 `AGENTS.md` "특수 매치"). 한 판 더도 같고, 옛 요청의 `rematchOfMatchId`는 읽지 않는다.
 - 대진 예정 경기 시작 `POST /api/matches/:matchId/start`: 200 `Match`
   - 활성 회원 누구나. `status`를 created로, `matchStartsAt`을 시작 시각으로 바꾼다.
   - 경기 없음 404, 예정 경기가 아니면 409, 세션이 오늘 세션이 아니면 409.
@@ -108,7 +115,7 @@
 - 상세 `GET /api/match-sessions/:sessionId`
 - 세션 경기 `GET /api/match-sessions/:sessionId/matches`: 대진 예정 경기(`scheduled`, `round` 포함)도 포함
 - 점수 없이 진행 중 경기 시작 `POST /api/match-sessions/:sessionId/matches`: `POST /api/matches/start`와 같은 처리, 오늘 세션만, 이미 진행 중인 선수 포함 시 409, 선수 자동 참여
-  - 지금 그 경기 종류 랭킹·연승으로 `judgeRecommendedSpecialMatch`를 다시 판정해, 추천 카드의 `recommendedSpecialKind`와 유형이 같거나 판정이 도전 매치면 `specialMatch`에 저장하고 그 밖은 null로 시작한다(`resolveSessionStartSpecialMatch`, 요청은 실패하지 않는다). 리벤지·모르는 값은 카드 유형이 없는 것으로 본다.
+  - 정해진 세션으로 특수 매치를 판정해 `specialMatch`에 저장한다(루트 `AGENTS.md` "특수 매치", 요청은 실패하지 않는다). 옛 요청의 `recommendedSpecialKind`는 읽지 않는다.
 - 복식 추천 매칭 `GET /api/match-sessions/:sessionId/recommendations?courts=N&reroll=R`
   - 오늘 세션만, courts 기본 3·1~4로 자름.
   - `reroll`은 다시 추천 횟수(기본 0)이고 0 이상 정수가 아니면 400 "reroll은 0 이상 정수여야 합니다.". 옛 `rank` 쿼리는 읽지 않는다(보내도 400이 아니고 결과에 영향 없음).
@@ -128,10 +135,11 @@
   - 진행 중 경기 선수 제외.
   - 게스트는 팀 나누기·응답 팀 `averageRating` 모두 2.5(`MATCHMAKING_GUEST_RATING`)로 치고, 응답 선수 `doublesRating`은 null이다.
   - 팀 나누기는 NR 정회원을 게스트를 뺀 참여자 평점 중앙값(전원 NR이면 3.5)으로 대체하고, 응답 팀 `averageRating`은 NR 정회원을 3.0으로 친 표시용 평균.
-  - 대진마다 코트를 복식 랭킹·연승·성별로 `judgeRecommendedSpecialMatch` 판정해, 가산점(`SPECIAL_MATCH_RECOMMENDATION_BONUS`, 최강자전 2, 라이벌전 1.5, 연승 매치·리벤지·도전 매치·남복·여복 매치 0)이 가장 큰 코트 하나의 가산점만 대진 감점에서 뺀다. 리벤지는 만들지 않는다.
+  - 대진마다 코트를 복식 랭킹·연승·성별로 `judgeRecommendedSpecialMatch` 판정해, 가산점(`SPECIAL_MATCH_RECOMMENDATION_BONUS`, 최강자전 2, 라이벌전 1.5, 연승 매치·리벤지·도전 매치·남복·여복 매치 0)이 가장 큰 코트 하나의 가산점만 대진 감점에서 뺀다. 가산점 판정에 리벤지는 넣지 않는다.
   - 네 명 성별이 모두 같은 코트(남복·여복, 성별 없는 게스트 제외)는 코트마다 2(`MATCHMAKING_SAME_GENDER_COURT_BONUS`)를 감점에서 뺀다. 랭킹 원천을 못 읽어도 적용한다.
   - 후보 줄 세우기·여유폭은 가산점을 뺀 감점으로 한다.
-  - 응답 코트 `specialMatch`는 코트 하나만 판정 결과(`outcome` null)이고 나머지 코트는 null이다. 가산점 코트(가장 큰 코트, 같으면 앞 코트)가 있으면 그 코트, 없으면 앞 연승 매치 코트, 그다음 앞 도전 매치 코트, 그것도 없으면 앞 남복·여복 매치 코트다(`SPECIAL_MATCH_RECOMMENDATION_DISPLAY_RANK`).
+  - 응답 코트 `specialMatch`는 코트마다 시작 때와 같은 `judgeSpecialMatch` 판정 결과(`outcome` null, 해당 없으면 null)이고, 여러 코트가 특수 유형일 수 있다.
+    - 리벤지는 세션 완료 경기의 승패(`MatchmakingPlayedMatch.winningTeamIndex`)로 판정한다.
   - 응답 선수(`RecommendationPlayer`)에 복식 랭킹 순위 `doublesRank`(랭킹에 없으면 null)와 지금 연승 수 `winStreak`(랭킹과 같은 규칙).
   - 랭킹 원천을 못 읽으면 특수 유형 가산점 없이(남복·여복 가산점은 그대로) 추천하고, 코트 `specialMatch`는 모두 null, 선수 `doublesRank`는 null·`winStreak`는 0이다.
 - 참여자 한 명씩 추가 `POST /api/match-sessions/:sessionId/participants`·삭제 `DELETE /api/match-sessions/:sessionId/participants/:playerId`
@@ -227,6 +235,7 @@
   - 새 지표를 쓰는 업적을 추가하면 그 지표는 추가 배포일 00:00 KST부터 센다.
   - 연승 저지·환영 인사·개근상·천적 지표는 `SECOND_ACHIEVEMENT_SET_COUNT_START`(2026-11-18 00:00 KST)부터 센다.
   - 도전자 지표(`underdogWins`)는 `CHALLENGER_ACHIEVEMENT_COUNT_START`(2026-11-25 00:00 KST, 기준을 0.1로 바꾼 날)부터 센다. 그 전 경기로만 받은 회원은 받지 않은 상태다.
+  - 리벤지 지표(`revenges`)는 `REVENGE_MATCH_ACHIEVEMENT_COUNT_START`(2026-11-27 00:00 KST)부터 리벤지 매치 결과로 세고, 그 전 경기는 옛 조건으로 센다(아래 "리벤지").
   - 대회 업적 지표는 `TOURNAMENT_ACHIEVEMENT_COUNT_START`(2026-11-24 00:00 KST)부터 센다. 순위 업적은 받은 경기의 완료 시각으로 본다.
   - 기존 지표에 단계만 늘리는 업적(예: 1000경기 다음 5000경기)은 그 지표의 시작 시각을 따른다.
   - 기존 업적의 조건 수정은 원래 시작 시각부터 다시 계산한다.
@@ -250,6 +259,8 @@
 - 다른 회원 기록이 필요한 업적(연승 저지·환영 인사·개근상)이 있어, 업적 계산에는 그 회원 경기가 아니라 동호회 전체 완료 경기를 넘긴다.
 - 도전자(id `underdog`, 25점): 경기 직전 상대 팀 평균 평점이 우리 팀보다 0.1 이상(`CHALLENGE_MIN_RATING_GAP`) 높은데 이긴 경기다.
   - 경기 직전 평점은 그 경기 평점 변경 로그의 `previousRating`(경기 분류 평점, 업적 입력 `ratingBefore`)이고, 로그가 없는 선수는 3.0으로 친다.
+- 리벤지(id `revenge`·`revenge-10`): 특수 매치 결과가 `revenge_success`인 경기의 이긴 팀이다(업적 입력 `specialMatchOutcome`, 완료 경기 요약의 `specialMatchOutcome`).
+  - `REVENGE_MATCH_ACHIEVEMENT_COUNT_START` 전 경기는 옛 조건(같은 KST 날 진 조합 그대로 그 회원의 바로 다음 경기에서 이김)으로 세어 기존 달성자를 지킨다.
 - 연승 저지: 경기 직전 3연승 이상이던 상대(상대 팀 중 누구든)를 이긴 경기다. 상대 연승은 전체 기록으로 랭킹 연승과 같은 규칙으로 센다.
 - 환영 인사: 같은 팀 파트너의 첫 완료 경기(게스트가 낀 경기 포함)에 함께 뛴 경기다(승패 무관).
 - 개근상: 경기가 열린 정기 세션 회차에 8번 연달아 경기한 것이다.

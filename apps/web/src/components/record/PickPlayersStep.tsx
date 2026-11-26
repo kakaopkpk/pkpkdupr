@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import type { SpecialMatchKind } from "@pkpkdupr/shared/specialMatch";
 import BottomSheet from "@/components/BottomSheet";
 import { PkButton, buttonPressClassName } from "@/components/ui/Button";
 import { GuestLabel } from "@/components/ui/GuestLabel";
@@ -6,6 +7,7 @@ import { InfoIcon } from "@/components/ui/Icons";
 import { PlayerAvatar, type AvatarPlayer } from "@/components/ui/PlayerAvatar";
 import { SearchField } from "@/components/ui/SearchField";
 import { SheetTitle } from "@/components/ui/SheetTitle";
+import { SpecialMatchPill } from "@/components/ui/SpecialMatchLabel";
 import { StateMessage } from "@/components/ui/StateMessage";
 import { getUserErrorMessage } from "@/lib/errors";
 import { cx } from "@/components/ui/cx";
@@ -54,6 +56,8 @@ export interface PickPlayersStepProps {
   onCancel: () => void;
   onNext: () => void;
   onStartMatch: () => void;
+  /** 자리가 다 찬 팀 구성의 특수 매치 미리보기 유형(useSpecialMatchPreview). 없으면 제목 줄에 아무것도 없다 */
+  specialMatchKind?: SpecialMatchKind | null;
 }
 
 /** 자리 아바타를 감싸는 원(아바타 44px + 링 안쪽 여백 3px) */
@@ -103,6 +107,7 @@ export default function PickPlayersStep({
   onCancel,
   onNext,
   onStartMatch,
+  specialMatchKind = null,
 }: PickPlayersStepProps): React.ReactElement {
   const [query, setQuery] = useState("");
   // 사용자가 누른 빈자리. 비어 있는 동안만 다음 자리가 된다
@@ -291,7 +296,19 @@ export default function PickPlayersStep({
   return (
     <>
       <BottomSheet.Header>
-        <SheetTitle title="플레이어 선택" />
+        <SheetTitle
+          title="플레이어 선택"
+          right={
+            specialMatchKind ? (
+              // 유형이 바뀌면 key로 다시 마운트해 pop을 재생한다. 제목 줄 안이라 아래 내용이 밀리지 않는다
+              <SpecialMatchPill
+                key={specialMatchKind}
+                kind={specialMatchKind}
+                className="animate-pk-pop motion-reduce:animate-none"
+              />
+            ) : undefined
+          }
+        />
         <div
           ref={slotRowRef}
           className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_30px_minmax(0,1fr)_minmax(0,1fr)] gap-1.5 pt-3"

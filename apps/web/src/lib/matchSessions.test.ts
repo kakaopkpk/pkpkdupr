@@ -28,16 +28,15 @@ const court = (
 });
 
 describe("buildRecommendedMatchRequest", () => {
-  it("일반 카드는 추천 팀 순서 그대로 보내고 recommendedSpecialKind를 생략한다", () => {
+  it("일반 카드는 추천 팀 순서 그대로 보낸다", () => {
     const request = buildRecommendedMatchRequest(court(null));
     expect(request.teams.map((team) => team.playerIds)).toEqual([
       ["a", "b"],
       ["c", "d"],
     ]);
-    expect("recommendedSpecialKind" in request).toBe(false);
   });
 
-  it("특수 유형 카드는 지키는 쪽이 오른쪽 팀이어도 팀 순서를 바꾸지 않고 유형을 넘긴다", () => {
+  it("특수 유형 카드는 지키는 쪽이 오른쪽 팀이어도 팀 순서를 바꾸지 않고 유형을 따로 넘기지 않는다", () => {
     const request = buildRecommendedMatchRequest(
       court({
         kind: "rival",
@@ -51,6 +50,6 @@ describe("buildRecommendedMatchRequest", () => {
       ["a", "b"],
       ["c", "d"],
     ]);
-    expect(request.recommendedSpecialKind).toBe("rival");
+    expect(Object.keys(request)).toEqual(["teams"]);
   });
 });

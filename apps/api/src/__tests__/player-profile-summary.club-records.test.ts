@@ -10,6 +10,8 @@ vi.mock("@pkpkdupr/shared/achievementCountStart", () => ({
   SECOND_ACHIEVEMENT_SET_COUNT_START: new Date(0),
   CHALLENGER_ACHIEVEMENT_COUNT_START: new Date(0),
   TOURNAMENT_ACHIEVEMENT_COUNT_START: new Date(0),
+  // 리벤지 업적은 이 파일에서 옛 조건(바로 다음 경기 승리)으로 센다
+  REVENGE_MATCH_ACHIEVEMENT_COUNT_START: new Date("2100-01-01T00:00:00.000Z"),
 }));
 
 const now = new Date("2026-11-12T12:00:00.000Z");

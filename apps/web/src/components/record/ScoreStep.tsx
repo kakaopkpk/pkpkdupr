@@ -1,4 +1,5 @@
 import React, { useLayoutEffect, useRef, useState } from "react";
+import type { SpecialMatchKind } from "@pkpkdupr/shared/specialMatch";
 import BottomSheet from "@/components/BottomSheet";
 import HoldToConfirmButton, {
   HOLD_TO_CONFIRM_DURATION_MS,
@@ -11,6 +12,7 @@ import {
 } from "@/components/ui/PlayerAvatar";
 import { ChevronRightIcon } from "@/components/ui/Icons";
 import { SheetTitle } from "@/components/ui/SheetTitle";
+import { SpecialMatchLabel } from "@/components/ui/SpecialMatchLabel";
 import { cx } from "@/components/ui/cx";
 import { isScoreTie, type ScoreDraft } from "./recordMatch.utils";
 import { FooterError } from "./RecordMatchParts";
@@ -37,6 +39,8 @@ export interface ScoreStepProps {
   /** 플레이어 선택으로 돌아간다. 고른 점수·장소는 그대로 남는다 */
   onBack: () => void;
   onSave: () => void;
+  /** 저장 전 미리 판정한 특수 매치 유형(useSpecialMatchPreview). 없으면 제목 줄에 아무것도 없다 */
+  specialMatchKind?: SpecialMatchKind | null;
 }
 
 export default function ScoreStep({
@@ -50,6 +54,7 @@ export default function ScoreStep({
   isSaving,
   onBack,
   onSave,
+  specialMatchKind = null,
 }: ScoreStepProps): React.ReactElement {
   const [isEditingLocation, setIsEditingLocation] = useState(false);
   const isTie = isScoreTie(score);
@@ -76,6 +81,11 @@ export default function ScoreStep({
       <BottomSheet.Header>
         <SheetTitle
           title="경기 기록"
+          right={
+            specialMatchKind ? (
+              <SpecialMatchLabel kind={specialMatchKind} />
+            ) : undefined
+          }
           sub={
             <button
               type="button"

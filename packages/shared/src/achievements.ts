@@ -8,12 +8,14 @@ import {
 import {
   ACHIEVEMENT_COUNT_START,
   CHALLENGER_ACHIEVEMENT_COUNT_START,
+  REVENGE_MATCH_ACHIEVEMENT_COUNT_START,
   SECOND_ACHIEVEMENT_SET_COUNT_START,
   TOURNAMENT_ACHIEVEMENT_COUNT_START,
 } from "./achievementCountStart.js";
 import { DUPR_DEFAULT_RATING, roundDuprRating } from "./player.js";
 import { RULES_GUIDE_CARD_COUNT } from "./rulesGuide.js";
 import { toKstDateKey } from "./session.js";
+import type { SpecialMatchOutcome } from "./specialMatch.js";
 
 /**
  * 업적. 따로 저장하지 않고 조회할 때 완료 경기로 계산한다.
@@ -559,7 +561,7 @@ const ACHIEVEMENT_TABLE: readonly {
       id: "revenge",
       category: "special",
       name: "리벤지",
-      condition: "패배한 조합 그대로 바로 다음 경기에서 승리",
+      condition: "리벤지 매치에서 승리",
       badgeNumber: null,
       target: 1,
       points: 10,
@@ -979,6 +981,8 @@ export interface AchievementMatch {
    * 없으면 이 경기로 도전자를 받지 않고, 값이 없는 선수는 DUPR_DEFAULT_RATING(3.0)으로 친다
    */
   ratingBefore?: Readonly<Record<string, number | null>>;
+  /** 특수 매치 결과(Match.specialMatch.outcome). 리벤지 업적이 revenge_success 경기의 이긴 팀으로 센다 */
+  specialMatchOutcome?: SpecialMatchOutcome | null;
 }
 
 export interface AchievementTeam {
@@ -1452,9 +1456,14 @@ const computeProgressSince = (
       streak = 0;
     }
 
-    // 리벤지는 같은 날 진 조합 그대로 이 회원의 바로 다음 경기에서 이길 때만 센다.
+    // 리벤지는 리벤지 매치에서 이긴 팀(revenge_success)으로 센다. REVENGE_MATCH_ACHIEVEMENT_COUNT_START 전 경기는
+    // 옛 조건(같은 날 진 조합 그대로 이 회원의 바로 다음 경기에서 이김)으로 세어 기존 달성자를 지킨다.
     const revengeKey = `${toKstDateKey(match.completedAt)}|${getLineupKey(match, teamIndex)}`;
-    if (won && previousLossKey === revengeKey) metrics.revenges += 1;
+    const isRevenge =
+      match.completedAt < REVENGE_MATCH_ACHIEVEMENT_COUNT_START
+        ? previousLossKey === revengeKey
+        : match.specialMatchOutcome === "revenge_success";
+    if (won && isRevenge) metrics.revenges += 1;
     previousLossKey = !won && winningTeamIndex !== null ? revengeKey : null;
 
     const opponentIds = new Set(

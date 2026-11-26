@@ -147,15 +147,19 @@ pnpm lint
 
 ### 특수 매치
 
-- 경기 시작 때 판정한 특수 매치는 `Match.specialMatch`(`matches.special_match` jsonb)에 저장한다. 판정 기준은 `docs/product.md` "특수 매치", 판정 함수는 `packages/shared/src/specialMatch.ts`다.
-  - 세션에서 시작한 경기는 서버가 지금 랭킹·연승으로 `judgeRecommendedSpecialMatch`를 다시 판정해, 추천 카드 유형(`recommendedSpecialKind`)과 같으면 그 유형, 아니면 도전 매치일 때만 저장한다(`resolveSessionStartSpecialMatch`). 카드 없이 시작한 경기도 같다.
-  - 한 판 더 출처 시작(`rematchOfMatchId`)은 리벤지가 먼저이고, 리벤지가 아니면 세션 경기일 때 위 규칙으로 도전 매치를 판정한다.
-  - 세션 없이 시작한 경기·직접 기록·관리자 생성·대진 시작은 null이다.
+- 회원이 기록·시작하는 경기(직접 기록 `POST /api/matches`, 직접 시작·한 판 더 `POST /api/matches/start`, 세션 시작·추천 카드 `POST /api/match-sessions/:sessionId/matches`)는 서버가 `judgeSpecialMatch`로 판정해 `Match.specialMatch`(`matches.special_match` jsonb)에 저장한다. 판정 기준은 `docs/product.md` "특수 매치", 판정 함수는 `packages/shared/src/specialMatch.ts`다.
+  - 판정 입력은 지금(이 경기 평점 반영 전) 그 경기 종류 랭킹·연승과, 리벤지용으로 새 경기가 들어갈 세션(세션이 없으면 같은 KST 날의 세션 없는 경기)의 완료 경기다(`apps/api/src/index.ts` `judgeSpecialMatchForLineup`).
+  - 우선순위는 리벤지(`judgeRevengeMatch`) > 연승 > 라이벌전 > 도전 매치 > 남복·여복이다. 리벤지가 아니면 `judgeRecommendedSpecialMatch`와 같다.
+  - 리벤지는 같은 두 팀(팀·팀 안 순서 무관)의 가장 최근 완료 경기가 있으면이고, 그 경기에서 이긴 팀이 `defendingTeamIndex`다. 승패가 없으면 리벤지가 아니다.
+  - 요청의 카드 유형·원래 경기 id는 받지 않는다. 판정 실패면 null로 저장하고 요청은 실패하지 않는다.
+  - 관리자 생성·일괄 등록·대진 예정·대진 시작은 null이다.
+- 기록 시트 미리보기 `GET /api/special-match-preview`는 같은 판정을 저장 없이 돌려준다. 정기 시간대에 아직 없는 정기 세션은 만들지 않고 볼 경기가 없는 것으로 본다.
+- 추천 매칭 코트마다 같은 `judgeSpecialMatch`(세션 완료 경기의 승패 포함)로 유형을 붙여 여러 코트가 특수 유형일 수 있다. 가산점은 리벤지를 뺀 `judgeRecommendedSpecialMatch`로 정한다.
 - 게스트가 낀 코트(`judgeRecommendedSpecialMatch`)
   - 정회원 연승 회원이 있으면 연승 매치·최강자전으로 판정하고, 결과·큰 연출도 게스트가 없는 경기와 같다(연출 연승 수는 게스트가 낀 경기 포함).
   - 게스트가 한 명이라도 있으면 라이벌전이 아니다. 결과 판정에서도 게스트가 있는 라이벌전은 결과 null·연출 없음이다.
   - 게스트는 `winStreak`과 상관없이 연승 주인공(`protagonistIds`)이 되지 않는다.
-  - 리벤지는 게스트가 있어도 된다. 이미 기록된 경기에는 소급하지 않는다.
+  - 리벤지는 게스트가 있어도 된다. 이미 기록된 경기에는 소급하지 않는다(새 판정 규칙도 앞으로 기록·시작하는 경기에만 붙는다).
   - 남복·여복 매치는 성별 없는 게스트가 끼면 아니고, 성별이 있는 게스트는 성별대로 센다.
 - 도전 매치(`challenge`)는 두 팀 평균 평점 차가 0.1 이상(`CHALLENGE_MIN_RATING_GAP`, 업적·칭찬 도전자와 같은 값)이고 연승 매치·최강자전·라이벌전이 아닐 때다(`judgeChallengeMatch`).
   - 팀 평점은 판정 입력 `rating`(그 경기 종류 랭킹)의 팀 평균이고, 평점 없는 정회원은 3.0으로 친다. 게스트가 있으면 아니다.

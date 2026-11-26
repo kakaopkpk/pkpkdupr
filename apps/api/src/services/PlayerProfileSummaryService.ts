@@ -390,5 +390,6 @@ const withDoublesRatingAfter = (
   return matches.map((match) => ({
     ...match,
     doublesRatingAfter: ratingsByMatchId.get(match.id),
+    specialMatchOutcome: match.specialMatch?.outcome ?? null,
   }));
 };

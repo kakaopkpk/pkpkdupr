@@ -296,65 +296,57 @@ describe("POST /api/matches/start", () => {
       });
     });
 
-    it("리벤지가 아닌 한 판 더도 세션 경기면 도전 매치다", async () => {
-      vi.spyOn(MatchRepository.prototype, "findById").mockResolvedValue(undefined);
-
-      const response = await startMatch({
-        teams: challengeTeams,
-        sessionId: "Scustom1",
-        rematchOfMatchId: "Mprevi01",
-      });
-
-      expect(response.status).toBe(201);
-      expect(createInProgress.mock.calls[0]![0].specialMatch?.kind).toBe("challenge");
-    });
-
-    it("세션 없이 시작한 경기는 도전 매치가 아니다", async () => {
+    it("세션 없이 시작한 경기도 도전 매치로 판정한다", async () => {
       const response = await startMatch({ teams: challengeTeams });
 
       expect(response.status).toBe(201);
       expect(createInProgress.mock.calls[0]![0].session).toBeUndefined();
-      expect(createInProgress.mock.calls[0]![0].specialMatch).toBeNull();
+      expect(createInProgress.mock.calls[0]![0].specialMatch?.kind).toBe("challenge");
     });
   });
 
-  describe("같은 멤버로 한 판 더(rematchOfMatchId)", () => {
-    const previousMatch = (overrides: Partial<Match> = {}): Match =>
-      ({
-        id: "Mprevi01",
-        type: "mixed-doubles",
-        source: "player_created",
-        creatorPlayerId: requester.id,
-        status: "completed",
-        teams: [
-          { id: "t0", name: "A", players: [playerA, playerB] },
-          { id: "t1", name: "B", players: [playerC, playerD] },
-        ],
-        scores: [{ scoreA: 11, scoreB: 7 }],
-        resultSubmittedByPlayerId: requester.id,
-        resultSubmittedAt: thursdayAfternoon,
-        location: "야탑초등학교",
-        matchStartsAt: thursdayAfternoon,
-        createdAt: thursdayAfternoon,
-        completedAt: thursdayAfternoon,
-        updatedAt: thursdayAfternoon,
-        ratingExcluded: false,
-        ...overrides,
-      }) as Match;
+  describe("리벤지(같은 세션, 세션 없으면 같은 날의 같은 대진)", () => {
+    const outcome = (
+      id: string,
+      teamPlayerIds: [string[], string[]],
+      scores: { scoreA: number; scoreB: number }[],
+      sessionId: string | null,
+      completedAt = thursdayAfternoon,
+    ) => ({
+      id,
+      type: "mixed-doubles" as const,
+      sessionId,
+      matchStartsAt: completedAt,
+      completedAt,
+      teamPlayerIds,
+      scores,
+      ratingExcluded: false,
+    });
+    const abVsCd: [string[], string[]] = [
+      [playerA.id, playerB.id],
+      [playerC.id, playerD.id],
+    ];
+    const mockOutcomes = (outcomes: ReturnType<typeof outcome>[]) =>
+      vi
+        .spyOn(MatchRepository.prototype, "findCompletedMatchOutcomes")
+        .mockResolvedValue(outcomes);
 
-    const mockPrevious = (match: Match | undefined) =>
-      vi.spyOn(MatchRepository.prototype, "findById").mockResolvedValue(match);
+    beforeEach(() => {
+      vi.spyOn(AuthService.prototype, "getAllPlayers").mockResolvedValue(activePlayers);
+      vi.spyOn(MatchRepository.prototype, "getAllRatingChangeLogs").mockResolvedValue([]);
+    });
 
-    it("같은 멤버면 리벤지로 저장하고 원래 이긴 팀의 새 index가 지킨다", async () => {
-      const findById = mockPrevious(previousMatch());
+    it("같은 세션에서 같은 두 팀이 붙었으면 리벤지이고 그 경기에서 이긴 팀의 새 index가 지킨다", async () => {
+      mockOutcomes([
+        outcome("Mprevi01", abVsCd, [{ scoreA: 11, scoreB: 7 }], "Scustom1"),
+      ]);
 
       const response = await startMatch({
         teams: [doublesTeams[1], doublesTeams[0]],
-        rematchOfMatchId: "Mprevi01",
+        sessionId: "Scustom1",
       });
 
       expect(response.status).toBe(201);
-      expect(findById).toHaveBeenCalledWith("Mprevi01");
       expect(createInProgress.mock.calls[0]![0].specialMatch).toEqual({
         kind: "revenge",
         defendingTeamIndex: 1,
@@ -365,38 +357,48 @@ describe("POST /api/matches/start", () => {
       expect(response.body.specialMatch.kind).toBe("revenge");
     });
 
-    it.each([
-      ["원래 경기가 없으면", undefined],
-      ["원래 경기가 완료 전이면", previousMatch({ status: "created", scores: [] })],
-      ["원래 경기 승패가 안 갈렸으면", previousMatch({ scores: [{ scoreA: 9, scoreB: 9 }] })],
-      [
-        "멤버가 다르면",
-        previousMatch({
-          teams: [
-            { id: "t0", name: "A", players: [playerA, playerC] },
-            { id: "t1", name: "B", players: [playerB, playerD] },
-          ],
-        }),
-      ],
-    ])("%s 특수 매치 없이 시작한다", async (_, previous) => {
-      mockPrevious(previous);
-
-      const response = await startMatch({
-        teams: doublesTeams,
-        rematchOfMatchId: "Mprevi01",
-      });
-
-      expect(response.status).toBe(201);
-      expect(createInProgress.mock.calls[0]![0].specialMatch).toBeNull();
-    });
-
-    it("rematchOfMatchId가 없으면 원래 경기를 찾지 않고 null이다", async () => {
-      const findById = mockPrevious(previousMatch());
+    it("세션 없는 경기는 같은 날 세션 없는 같은 대진으로 본다", async () => {
+      mockOutcomes([outcome("Mprevi01", abVsCd, [{ scoreA: 7, scoreB: 11 }], null)]);
 
       const response = await startMatch({ teams: doublesTeams });
 
       expect(response.status).toBe(201);
-      expect(findById).not.toHaveBeenCalled();
+      expect(createInProgress.mock.calls[0]![0].specialMatch).toMatchObject({
+        kind: "revenge",
+        defendingTeamIndex: 1,
+      });
+    });
+
+    it.each([
+      ["다른 세션 경기면", outcome("Mprevi01", abVsCd, [{ scoreA: 11, scoreB: 7 }], "Sother01")],
+      [
+        "다른 날 경기면",
+        outcome(
+          "Mprevi01",
+          abVsCd,
+          [{ scoreA: 11, scoreB: 7 }],
+          null,
+          new Date("2026-11-11T15:00:00+09:00"),
+        ),
+      ],
+      [
+        "팀 구성이 다르면",
+        outcome(
+          "Mprevi01",
+          [
+            [playerA.id, playerC.id],
+            [playerB.id, playerD.id],
+          ],
+          [{ scoreA: 11, scoreB: 7 }],
+          null,
+        ),
+      ],
+    ])("%s 리벤지가 아니다", async (_, previous) => {
+      mockOutcomes([previous]);
+
+      const response = await startMatch({ teams: doublesTeams });
+
+      expect(response.status).toBe(201);
       expect(createInProgress.mock.calls[0]![0].specialMatch).toBeNull();
     });
   });

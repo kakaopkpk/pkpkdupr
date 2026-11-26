@@ -25,6 +25,8 @@ vi.mock("@pkpkdupr/shared/achievementCountStart", () => ({
   SECOND_ACHIEVEMENT_SET_COUNT_START: new Date("2100-01-01T00:00:00.000Z"),
   CHALLENGER_ACHIEVEMENT_COUNT_START: new Date("2100-01-01T00:00:00.000Z"),
   TOURNAMENT_ACHIEVEMENT_COUNT_START: new Date("2100-01-01T00:00:00.000Z"),
+  // 리벤지 업적은 이 파일에서 옛 조건(바로 다음 경기 승리)으로 센다
+  REVENGE_MATCH_ACHIEVEMENT_COUNT_START: new Date("2100-01-01T00:00:00.000Z"),
 }));
 
 const now = new Date("2026-07-08T10:00:00.000Z");
@@ -451,6 +453,117 @@ describe("POST /api/matches", () => {
     expect(applyMatchResult).not.toHaveBeenCalled();
     },
   );
+
+  describe("특수 매치", () => {
+    // 2026-07-08(수) 19:00 KST라 정기 세션이 없어 같은 날 세션 없는 경기로 리벤지를 본다
+    const sameDayOutcome = (
+      teamPlayerIds: [string[], string[]],
+      scores: { scoreA: number; scoreB: number }[],
+    ): CompletedMatchOutcome => ({
+      id: "match-prev-001",
+      type: "mixed-doubles",
+      sessionId: null,
+      matchStartsAt: new Date(now.getTime() - 30 * 60_000),
+      completedAt: new Date(now.getTime() - 20 * 60_000),
+      teamPlayerIds,
+      scores,
+      ratingExcluded: false,
+    });
+    const abVsCd: [string[], string[]] = [
+      [creator.id, "player-f-1"],
+      ["player-m-1", "player-f-2"],
+    ];
+    let updateSpecialMatch: MockInstance<MatchRepository["updateSpecialMatch"]>;
+
+    beforeEach(() => {
+      vi.useFakeTimers({ toFake: ["Date"] });
+      vi.setSystemTime(now);
+      vi.spyOn(AuthService.prototype, "getAllPlayers").mockResolvedValue([
+        creator,
+        ...players,
+      ]);
+      updateSpecialMatch = vi
+        .spyOn(MatchRepository.prototype, "updateSpecialMatch")
+        .mockResolvedValue(undefined);
+    });
+
+    it("같은 날 같은 두 팀이 붙었으면 리벤지로 저장하고 기록 즉시 결과를 정해 응답한다", async () => {
+      findCompletedMatchOutcomes.mockResolvedValue([
+        sameDayOutcome(abVsCd, [{ scoreA: 7, scoreB: 11 }]),
+      ]);
+
+      const response = await postMatch(abVsCd);
+
+      expect(response.status).toBe(201);
+      expect(capturedCreatePayload?.specialMatch).toEqual({
+        kind: "revenge",
+        defendingTeamIndex: 1,
+        protagonistIds: [null, null],
+        rivalPairs: [],
+        outcome: null,
+      });
+      expect(response.body.specialMatch).toMatchObject({
+        kind: "revenge",
+        outcome: "revenge_success",
+      });
+      expect(updateSpecialMatch).toHaveBeenCalledWith(
+        "match-test-001",
+        expect.objectContaining({ outcome: "revenge_success" }),
+      );
+      // 리벤지 성공은 큰 연출이 없다
+      expect(response.body.specialMatchCelebration).toBeNull();
+    });
+
+    it("해당 유형이 없으면 특수 매치 없이 저장한다", async () => {
+      const response = await postMatch(abVsCd);
+
+      expect(response.status).toBe(201);
+      expect(capturedCreatePayload?.specialMatch).toBeNull();
+      expect(response.body.specialMatchCelebration).toBeNull();
+      expect(updateSpecialMatch).not.toHaveBeenCalled();
+    });
+
+    describe("GET /api/special-match-preview", () => {
+      const preview = (query: string) =>
+        request(app)
+          .get(`/api/special-match-preview?${query}`)
+          .set("Authorization", "Bearer test-token");
+
+      it("저장 없이 기록과 같은 판정을 돌려준다", async () => {
+        findCompletedMatchOutcomes.mockResolvedValue([
+          sameDayOutcome(abVsCd, [{ scoreA: 7, scoreB: 11 }]),
+        ]);
+
+        const response = await preview(
+          `teamA=${abVsCd[0].join(",")}&teamB=${abVsCd[1].join(",")}`,
+        );
+
+        expect(response.status).toBe(200);
+        expect(response.body.specialMatch).toMatchObject({
+          kind: "revenge",
+          defendingTeamIndex: 1,
+          outcome: null,
+        });
+        expect(capturedCreatePayload).toBeNull();
+        expect(findOrCreateRegularSession).not.toHaveBeenCalled();
+      });
+
+      it("해당 유형이 없으면 null이다", async () => {
+        const response = await preview(
+          `teamA=${abVsCd[0].join(",")}&teamB=${abVsCd[1].join(",")}`,
+        );
+
+        expect(response.status).toBe(200);
+        expect(response.body).toEqual({ specialMatch: null });
+      });
+
+      it("팀 구성이 맞지 않으면 400이다", async () => {
+        const response = await preview(`teamA=${creator.id}&teamB=`);
+
+        expect(response.status).toBe(400);
+      });
+    });
+  });
 
   describe("newAchievements", () => {
     const priorWin = (id: string, completedAt: Date): CompletedMatchOutcome => ({

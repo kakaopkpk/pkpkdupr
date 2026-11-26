@@ -24,6 +24,7 @@ import {
 } from "@/context/TabNavigationContext";
 import { useLayerDepth } from "@/hooks/useLayerDepth";
 import { usePlayers } from "@/hooks/usePlayers";
+import { useSpecialMatchPreview } from "@/hooks/useSpecialMatchPreview";
 import { useStartedMatchToast } from "@/hooks/useStartedMatchToast";
 import { apiFetch } from "@/lib/api";
 import {
@@ -208,6 +209,12 @@ export default function RecordMatchFlow({
   }
 
   const slotTeams = getSlotTeams(slots);
+  // 새 경기만 미리 보인다. 고치는 경기의 특수 매치는 이미 정해져 있다
+  const previewSpecialMatch = useSpecialMatchPreview(
+    !editingMatchId && step !== "done" ? slotTeams : null,
+    recordingSession?.id,
+  );
+  const previewSpecialKind = previewSpecialMatch?.kind ?? null;
   const teamPlayers = useMemo<[AvatarPlayer[], AvatarPlayer[]]>(() => {
     const resolve = (id: string | null): AvatarPlayer[] =>
       id ? [playerById.get(id) ?? { id, username: "…" }] : [];
@@ -347,7 +354,6 @@ export default function RecordMatchFlow({
               teams: toTeamRequests(getMatchTeamPlayerIds(recordedMatch)),
               sessionId: recordedMatch.session?.id,
               location: recordedMatch.location,
-              rematchOfMatchId: recordedMatch.id,
             },
             showStartedMatchToast,
           )
@@ -378,6 +384,7 @@ export default function RecordMatchFlow({
           if (!closeDepth(tabKey, SCORE_STEP_DEPTH_ID)) backToPick();
         }}
         onSave={handleSave}
+        specialMatchKind={previewSpecialKind}
       />
     );
   }
@@ -398,6 +405,7 @@ export default function RecordMatchFlow({
       busyIds={busyIds}
       currentPlayerId={currentPlayerId}
       footerMode={editingMatchId ? "edit" : "new"}
+      specialMatchKind={previewSpecialKind}
       isBusy={isBusy}
       error={error}
       onCancel={onClose}

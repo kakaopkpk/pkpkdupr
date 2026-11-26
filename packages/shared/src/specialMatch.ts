@@ -3,15 +3,16 @@ import {
   getChallengeTeamAverageRating,
   RATING_EPSILON,
 } from "./achievements.js";
-import { getWinningTeamIndex, type Match } from "./match.js";
+import { getWinningTeamIndex, type MatchScore } from "./match.js";
 import type { Player } from "./player.js";
+import { toKstDateKey } from "./session.js";
 import { WIN_STREAK_MIN } from "./streak.js";
 
 export { CHALLENGE_MIN_RATING_GAP };
 
 /**
- * 특수 매치 유형. 추천 매칭 카드로 시작한 경기(라이벌전·연승 매치·최강자전·남복 매치·여복 매치),
- * '같은 멤버로 한 판 더'로 시작한 경기(리벤지), 세션에서 시작한 경기(도전 매치)에만 붙는다(docs/product.md "특수 매치")
+ * 특수 매치 유형. 회원이 기록·시작한 경기(직접 기록·직접 시작·추천 카드·한 판 더)에 judgeSpecialMatch로 붙고,
+ * 관리자 생성·대진 경기에는 붙지 않는다(docs/product.md "특수 매치")
  */
 export type SpecialMatchKind =
   | "rival"
@@ -46,9 +47,6 @@ export const specialMatchKindLabels: Record<SpecialMatchKind, string> = {
 /** 결과(승리·저지 등)가 정해지는 유형인지. 남복·여복 매치는 결과·큰 연출이 없다 */
 export const hasSpecialMatchOutcome = (kind: SpecialMatchKind): boolean =>
   kind !== "men_doubles" && kind !== "women_doubles";
-
-export const isSpecialMatchKind = (value: unknown): value is SpecialMatchKind =>
-  specialMatchKindValues.includes(value as SpecialMatchKind);
 
 export type SpecialMatchOutcome =
   | "rival_overtaken"
@@ -146,7 +144,7 @@ export const RIVAL_MATCH_MAX_TEAM_AVERAGE_GAP = 0.1;
  * 추천 매칭에서 특수 유형 코트에 주는 가산점.
  * 연승 매치는 뛸 사람을 고른 뒤 대진을 탐색하므로 연승자가 뽑히면 모든 후보 대진에 생겨 후보를 가르지 못하고,
  * 대진 감점은 코트 최대 가산점 하나만 빼서 최강자전·라이벌전 가산점을 가리기 때문에 0이다.
- * 리벤지는 추천에서 만들지 않고, 도전 매치는 대진 균형(팀 평균 차 감점)을 거스르지 않게 0이다.
+ * 리벤지는 가산점으로 만들지 않고(가산점은 리벤지를 뺀 judgeRecommendedSpecialMatch로 판정), 도전 매치는 대진 균형(팀 평균 차 감점)을 거스르지 않게 0이다.
  * 남복·여복 매치는 코트마다 더하는 성별 가산점(matchmaking MATCHMAKING_SAME_GENDER_COURT_BONUS)으로 따로 주어 0이다.
  */
 export const SPECIAL_MATCH_RECOMMENDATION_BONUS = {
@@ -158,20 +156,6 @@ export const SPECIAL_MATCH_RECOMMENDATION_BONUS = {
   men_doubles: 0,
   women_doubles: 0,
 } as const satisfies Record<SpecialMatchKind, number>;
-
-/**
- * 추천 한 번에 특수 유형은 한 코트만 보인다. 이 순위가 큰 코트(같으면 앞 코트)를 보이고, null인 유형은 보이지 않는다.
- * 가산점 코트(최강자전 > 라이벌전) → 연승 매치 → 도전 매치 → 남복·여복 매치 순이다
- */
-export const SPECIAL_MATCH_RECOMMENDATION_DISPLAY_RANK = {
-  champions: 5,
-  rival: 4,
-  streak_stopper: 3,
-  challenge: 2,
-  men_doubles: 1,
-  women_doubles: 1,
-  revenge: null,
-} as const satisfies Record<SpecialMatchKind, number | null>;
 
 /** 평점 차를 소수 여섯째 자리에서 반올림해 3.55 - 3.5 같은 부동소수 오차가 판정·정렬을 흔들지 않게 한다 */
 const toRatingGap = (left: number, right: number) =>
@@ -361,7 +345,7 @@ const judgeSameGenderMatch = (teams: CandidateTeams): SpecialMatch | null => {
 };
 
 /**
- * 추천 카드 출처 경기 판정. 해당 없으면 null. outcome은 null.
+ * 리벤지를 뺀 팀 구성만의 판정. 해당 없으면 null. outcome은 null. 추천 가산점 계산에도 쓴다.
  * 우선순위는 연승(최강자전·연승 매치) > 라이벌전 > 도전 매치 > 남복·여복 매치다.
  * 라이벌전 팀 평균 조건(차 ≤ 0.1)과 도전 매치(차 ≥ 0.1)가 0.1에서 겹치면 라이벌전이다.
  * 게스트가 낀 코트도 정회원 연승 회원이 있으면 연승 매치·최강자전이고, 게스트는 연승 주인공이 되지 않는다.
@@ -379,18 +363,11 @@ export const judgeRecommendedSpecialMatch = (
   return judgeChallengeMatch(teams) ?? judgeSameGenderMatch(teams);
 };
 
-/**
- * 세션에서 시작한 경기에 저장할 특수 매치. judged는 서버가 지금 랭킹·연승으로 다시 판정한 결과(judgeRecommendedSpecialMatch)다.
- * 추천 카드가 보인 유형(requestedKind)과 같으면 그 유형이고, 아니면 도전 매치일 때만 저장한다.
- * 라이벌전·연승·남복·여복 매치는 추천 카드로 시작한 경기에만 붙고, 도전 매치는 세션에서 시작한 경기 전부에 붙는다
- */
-export const resolveSessionStartSpecialMatch = (
-  judged: SpecialMatch | null,
-  requestedKind: SpecialMatchKind | null,
-): SpecialMatch | null => {
-  if (!judged) return null;
-  return judged.kind === requestedKind || judged.kind === "challenge" ? judged : null;
-};
+/** 리벤지 판정에 쓰는 같은 세션(세션 없으면 같은 KST 날) 완료 경기 */
+export interface SpecialMatchHistoryMatch {
+  teamPlayerIds: readonly [readonly string[], readonly string[]];
+  winningTeamIndex: 0 | 1 | null;
+}
 
 const isSamePlayerSet = (
   left: readonly string[],
@@ -403,36 +380,89 @@ const isSamePlayerSet = (
   );
 };
 
+/** 리벤지 판정에 볼 완료 경기 범위. 새 경기가 들어갈 세션, 세션이 없으면 그 KST 날의 세션 없는 경기다. empty는 볼 경기가 없음 */
+export type RevengeHistoryScope =
+  | { kind: "session"; sessionId: string }
+  | { kind: "day"; dateKey: string }
+  | { kind: "empty" };
+
+/** 완료 경기 요약에서 리벤지 범위의 경기를 완료 시각 오름차순 SpecialMatchHistoryMatch로 고른다 */
+export const selectRevengeHistory = (
+  matches: readonly {
+    sessionId: string | null;
+    completedAt: Date;
+    teamPlayerIds: readonly [readonly string[], readonly string[]];
+    scores?: readonly MatchScore[] | null;
+  }[],
+  scope: RevengeHistoryScope,
+): SpecialMatchHistoryMatch[] =>
+  scope.kind === "empty"
+    ? []
+    : matches
+        .filter((match) =>
+          scope.kind === "session"
+            ? match.sessionId === scope.sessionId
+            : match.sessionId == null &&
+              toKstDateKey(match.completedAt) === scope.dateKey,
+        )
+        .sort((a, b) => a.completedAt.getTime() - b.completedAt.getTime())
+        .map((match) => ({
+          teamPlayerIds: match.teamPlayerIds,
+          winningTeamIndex: getWinningTeamIndex(match),
+        }));
+
 /**
- * 한 판 더 출처 경기 판정. 리벤지가 아니면 null.
- * 두 팀 선수 집합이 원래 경기와 같고(팀 순서는 상관없음) 원래 완료 경기의 승패가 갈렸을 때만 리벤지이고,
- * 지키는 팀은 원래 경기에서 이긴 팀의 새 index다. 게스트가 있어도 된다.
+ * 리벤지 판정. 같은 두 팀(팀 순서·팀 안 순서 무관)이 이미 붙었으면 리벤지이고, 사이에 다른 경기가 있어도 된다.
+ * 리벤지·방어는 그 대진의 가장 최근 경기에서 진 팀·이긴 팀이며, 지키는 팀은 그 경기에서 이긴 팀의 새 index다.
+ * history는 완료 시각 오름차순이다. 게스트가 있어도 된다.
  */
-export const judgeRematchSpecialMatch = (
-  teams: readonly [readonly string[], readonly string[]],
-  previous: Pick<Match, "status" | "teams" | "scores">,
+export const judgeRevengeMatch = (
+  teamPlayerIds: readonly [readonly string[], readonly string[]],
+  history: readonly SpecialMatchHistoryMatch[],
 ): SpecialMatch | null => {
-  if (previous.status !== "completed") return null;
-  const previousWinner = getWinningTeamIndex(previous);
-  if (previousWinner == null) return null;
-
-  const previousTeams = previous.teams.map((team) =>
-    team.players.map((player) => player.id),
-  );
-  const winnerIds = previousTeams[previousWinner];
-  const loserIds = previousTeams[previousWinner === 0 ? 1 : 0];
-  const defendingTeamIndex = TEAM_INDEXES.find(
-    (index) =>
-      isSamePlayerSet(teams[index], winnerIds) &&
-      isSamePlayerSet(teams[index === 0 ? 1 : 0], loserIds),
-  );
-  if (defendingTeamIndex === undefined) return null;
-
-  return {
-    kind: "revenge",
-    defendingTeamIndex,
-    protagonistIds: [null, null],
-    rivalPairs: [],
-    outcome: null,
-  };
+  for (let index = history.length - 1; index >= 0; index -= 1) {
+    const previous = history[index];
+    const sameOrder =
+      isSamePlayerSet(teamPlayerIds[0], previous.teamPlayerIds[0]) &&
+      isSamePlayerSet(teamPlayerIds[1], previous.teamPlayerIds[1]);
+    const swapped =
+      isSamePlayerSet(teamPlayerIds[0], previous.teamPlayerIds[1]) &&
+      isSamePlayerSet(teamPlayerIds[1], previous.teamPlayerIds[0]);
+    if (!sameOrder && !swapped) continue;
+    // 가장 최근 같은 대진이 리벤지·방어를 정하므로 승패가 없으면 더 앞 경기를 보지 않는다
+    if (previous.winningTeamIndex == null) return null;
+    const defendingTeamIndex = sameOrder
+      ? previous.winningTeamIndex
+      : ((1 - previous.winningTeamIndex) as 0 | 1);
+    return {
+      kind: "revenge",
+      defendingTeamIndex,
+      protagonistIds: [null, null],
+      rivalPairs: [],
+      outcome: null,
+    };
+  }
+  return null;
 };
+
+/**
+ * 회원이 기록·시작하는 경기와 추천 카드의 특수 매치 판정. 해당 없으면 null. outcome은 null.
+ * 우선순위는 리벤지 > 연승(최강자전·연승 매치) > 라이벌전 > 도전 매치 > 남복·여복 매치다.
+ * history는 리벤지 판정용 같은 세션(세션 없으면 같은 KST 날) 완료 경기, 완료 시각 오름차순이다.
+ */
+export const judgeSpecialMatch = (
+  teams: CandidateTeams,
+  history: readonly SpecialMatchHistoryMatch[],
+): SpecialMatch | null =>
+  judgeRevengeMatch(
+    [teams[0].map((player) => player.id), teams[1].map((player) => player.id)],
+    history,
+  ) ?? judgeRecommendedSpecialMatch(teams);
+
+/**
+ * GET /api/special-match-preview 응답. 기록 시트에서 선수를 다 고른 팀 구성을 저장 없이 판정한 결과(outcome null)다.
+ * 저장할 때 서버가 다시 판정하므로 저장된 유형과 다를 수 있다
+ */
+export interface SpecialMatchPreviewResponse {
+  specialMatch: SpecialMatch | null;
+}

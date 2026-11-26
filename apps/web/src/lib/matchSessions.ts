@@ -13,6 +13,10 @@ import type {
   UpcomingMatchSessionsResponse,
 } from "@pkpkdupr/shared/session";
 import { isRegularSessionTime } from "@pkpkdupr/shared/session";
+import type {
+  SpecialMatch,
+  SpecialMatchPreviewResponse,
+} from "@pkpkdupr/shared/specialMatch";
 import { apiFetch } from "@/lib/api";
 import type { MatchInfo } from "@/types/match";
 
@@ -192,7 +196,7 @@ export const startSessionMatch = async (
 
 /**
  * 추천 코트로 경기 시작 요청을 만든다. 팀 순서는 추천 응답 그대로이고(카드의 좌우 배치와 무관),
- * 특수 유형 카드면 그 유형을 recommendedSpecialKind로 넘긴다(일반 카드면 생략)
+ * 특수 유형은 서버가 시작 때 같은 규칙으로 다시 판정해 저장한다
  */
 export const buildRecommendedMatchRequest = (
   court: RecommendedCourt,
@@ -207,9 +211,6 @@ export const buildRecommendedMatchRequest = (
       playerIds: court.teams[1].players.map((player) => player.id),
     },
   ],
-  ...(court.specialMatch
-    ? { recommendedSpecialKind: court.specialMatch.kind }
-    : {}),
 });
 
 const SESSION_KIND_SHORT_LABELS: Record<MatchSessionDetailInfo["kind"], string> = {
@@ -259,3 +260,20 @@ export const getPrioritySessionMemberIds = (
           .filter((id) => id !== playerId),
       ),
   );
+
+/** 기록 시트 팀 구성의 특수 매치 미리보기(GET /api/special-match-preview). 저장 없이 서버가 판정한다 */
+export const fetchSpecialMatchPreview = async (
+  teams: readonly [readonly string[], readonly string[]],
+  sessionId: string | undefined,
+): Promise<SpecialMatch | null> => {
+  const params = new URLSearchParams({
+    teamA: teams[0].join(","),
+    teamB: teams[1].join(","),
+  });
+  if (sessionId) params.set("sessionId", sessionId);
+  const response = await requestJson<SpecialMatchPreviewResponse>(
+    `/api/special-match-preview?${params}`,
+    "특수 매치를 미리 보지 못했어요.",
+  );
+  return response.specialMatch;
+};
