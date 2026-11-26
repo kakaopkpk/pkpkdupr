@@ -6,7 +6,7 @@ export const RULES_GUIDE_SEEN_STORAGE_KEY = "pkpkdupr:rules-guide-seen";
 export const RULES_GUIDE_CLOSED_STORAGE_KEY = "pkpkdupr:rules-guide-closed";
 
 /** 안내 카드 장 수. 안내 화면 모듈(RULES_GUIDE_CARDS)을 홈에 끌어오지 않으려고 따로 둔다 */
-export const RULES_GUIDE_CARD_COUNT = 12;
+export const RULES_GUIDE_CARD_COUNT = 15;
 
 interface RulesGuideProgress {
   closed: boolean;
@@ -67,7 +67,7 @@ const subscribe = (listener: () => void) => {
 /** 이 기기에서 본 안내 카드 장 수 */
 export const getRulesGuideSeenCount = (): number => getProgress().seen.size;
 
-/** 홈 규칙 안내 카드를 숨길지. X로 닫았거나 12장을 모두 본 기기다 */
+/** 홈 규칙 안내 카드를 숨길지. X로 닫았거나 모든 장을 본 기기다 */
 export const isRulesGuideCardHidden = (): boolean => {
   const { closed, seen } = getProgress();
   return closed || seen.size >= RULES_GUIDE_CARD_COUNT;
@@ -96,6 +96,6 @@ export const closeRulesGuideCard = (): void => {
 export const useIsRulesGuideCardHidden = (): boolean =>
   useSyncExternalStore(subscribe, isRulesGuideCardHidden, () => true);
 
-/** 이 기기에서 본 안내 카드 장 수(홈 카드의 "12장 중 n장 읽음") */
+/** 이 기기에서 본 안내 카드 장 수(홈 카드의 "15장 중 n장 읽음") */
 export const useRulesGuideSeenCount = (): number =>
   useSyncExternalStore(subscribe, getRulesGuideSeenCount, () => 0);

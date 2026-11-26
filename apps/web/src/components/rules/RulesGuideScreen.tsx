@@ -9,7 +9,7 @@ import { cx } from "@/components/ui/cx";
 import { type TabKey, useTabNavigation } from "@/context/TabNavigationContext";
 import { useLayerDepth } from "@/hooks/useLayerDepth";
 import { markRulesGuideCardSeen } from "@/lib/rulesGuide";
-import { RULES_GUIDE_CARDS } from "./RulesGuideCards";
+import { RULES_GUIDE_CARDS, RULES_GUIDE_RULE_COUNT } from "./RulesGuideCards";
 import { RuleHeading } from "./RulesGuideParts";
 import "./rulesGuide.css";
 
@@ -26,7 +26,7 @@ export interface RulesGuideScreenProps {
   onExited: () => void;
 }
 
-/** 카드 아래 위치 점. 지금 카드는 블루로 길게, 나머지는 회색 작은 원 */
+/** 카드 아래 위치 점. 지금 카드는 블루로 길게, 나머지는 회색 작은 원이고, 규칙과 부록 사이를 띄운다 */
 const PositionDots: React.FC<{ activeIndex: number }> = ({ activeIndex }) => (
   <div aria-hidden="true" className="flex shrink-0 justify-center gap-1.5 pt-4">
     {RULES_GUIDE_CARDS.map((card, index) => (
@@ -35,6 +35,7 @@ const PositionDots: React.FC<{ activeIndex: number }> = ({ activeIndex }) => (
         className={cx(
           "h-1.5 rounded-full transition-colors duration-200 motion-reduce:transition-none",
           index === activeIndex ? "w-[18px] bg-pk-primary" : "w-1.5 bg-pk-quiet",
+          index === RULES_GUIDE_RULE_COUNT && "ml-2",
         )}
       />
     ))}
@@ -42,7 +43,7 @@ const PositionDots: React.FC<{ activeIndex: number }> = ({ activeIndex }) => (
 );
 
 /**
- * 신입 회원용 피클볼 기본 규칙 안내. 카드 12장을 한 장씩 좌우로 넘기며(다음 카드가 오른쪽에 살짝 보임),
+ * 신입 회원용 피클볼 기본 규칙 안내. 카드 15장(규칙 12장 + 부록 3장)을 한 장씩 좌우로 넘기며(다음 카드가 오른쪽에 살짝 보임),
  * 지금 카드의 그림만 움직이고 카드로 넘어올 때마다 처음부터 재생한다.
  * 지금 카드가 된 장을 그 기기의 본 장으로 남긴다(홈 규칙 안내 카드의 진행률)
  */
@@ -144,8 +145,8 @@ export default function RulesGuideScreen({
                   } as React.CSSProperties
                 }
                 className={cx(
-                  "pk-rules-card flex shrink-0 flex-col overflow-y-auto rounded-pk-lg bg-white",
-                  `pk-rules-c${index + 1}`,
+                  "pk-rules-card flex shrink-0 flex-col overflow-y-auto rounded-pk-lg bg-white break-keep",
+                  card.scope,
                   !isActive && "pk-rules-paused",
                   // 마지막 카드는 다음 카드가 없어 폭 가득이다
                   index === CARD_COUNT - 1 ? "w-full" : "w-[calc(100%-28px)]",

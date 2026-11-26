@@ -44,7 +44,7 @@ const CloseIcon: React.FC = () => (
 
 /**
  * 홈 소식 맨 위의 피클볼 기본 규칙 안내 카드. 누르면 안내 화면을 열고, 본 장 수를 진행률로 보인다.
- * X로 닫거나 12장을 다 보면 그 기기에서는 다시 나오지 않는다(보일지는 호출부가 useIsRulesGuideCardHidden으로 정함)
+ * X로 닫거나 모든 장을 다 보면 그 기기에서는 다시 나오지 않는다(보일지는 호출부가 useIsRulesGuideCardHidden으로 정함)
  */
 const RulesGuideNewsCard: React.FC = () => {
   const { openRulesGuide } = useAppNavigation();

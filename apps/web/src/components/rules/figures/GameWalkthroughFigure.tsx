@@ -1,28 +1,22 @@
 import React from "react";
 import { RuleFigure } from "../RulesGuideParts";
 
-/** 규칙 안내 6장 그림: 경기 시뮬레이션. 움직임은 rulesGuide.css의 .pk-rules-c6 */
+/**
+ * 규칙 안내 12장 그림: 경기 시뮬레이션. 움직임은 rulesGuide.css의 .pk-rules-c6 범위다
+ */
 export const GameWalkthroughFigure: React.FC = () => (
   <RuleFigure>
-    <div className="scene" style={{ position: "absolute", inset: "0" }}>
-      <svg width="298" height="210" viewBox="0 0 298 210" role="img" aria-label="한 판 따라가기: 공격팀 옆 노란 공은 남은 서브권. 처음 공격하는 팀은 서브권 1개로 Zero Zero Two로 시작하고, 득점하면 자리를 바꿔 같은 사람이 서브한다. 서브권이 없으면 사이드 아웃으로 공수가 바뀌고, 새 공격팀은 오른쪽 사람부터 서브한다" style={{ position: "absolute", left: "0", top: "0" }}>
+    <div className="scene" style={{ position: "absolute", inset: "0px" }}>
+      <svg width="298" height="210" viewBox="0 0 298 210" role="img" aria-label="경기 시뮬레이션: 공격팀 옆 노란 공은 남은 서브권. 처음 공격하는 팀은 서브권 1개로 Zero Zero Two로 시작하고, 득점하면 자리를 바꿔 같은 사람이 서브한다. 서브권이 없으면 사이드 아웃으로 공수가 바뀌고, 새 공격팀은 오른쪽 사람부터 서브한다" style={{ position: "absolute", left: "0px", top: "0px" }}>
         <rect x="17" y="54" width="264" height="120" fill="#2346a8" />
         <rect x="107" y="54" width="84" height="120" fill="#5a7bd6" />
         <rect x="17" y="54" width="264" height="120" fill="none" stroke="#ffffff" strokeWidth="2" />
         <path d="M107 54 V174 M191 54 V174 M17 114 H107 M191 114 H281" stroke="#ffffff" strokeWidth="2" fill="none" />
         <line x1="149" y1="48" x2="149" y2="178" stroke="#0f1726" strokeWidth="3" strokeLinecap="round" />
-        <text className="pop s10-ra" x="17" y="198" fontSize="12" fontWeight="800" fill="#2346a8" textAnchor="start">
-          공격팀
-        </text>
-        <text className="pop s10-rd" x="17" y="198" fontSize="12" fontWeight="800" fill="#4f5a70" textAnchor="start">
-          수비팀
-        </text>
-        <text className="pop s10-rd" x="281" y="198" fontSize="12" fontWeight="800" fill="#2346a8" textAnchor="end">
-          공격팀
-        </text>
-        <text className="pop s10-ra" x="281" y="198" fontSize="12" fontWeight="800" fill="#4f5a70" textAnchor="end">
-          수비팀
-        </text>
+        <text className="pop s10-ra" x="17" y="198" fontSize="12" fontWeight="800" fill="#2346a8" textAnchor="start">공격팀</text>
+        <text className="pop s10-rd" x="17" y="198" fontSize="12" fontWeight="800" fill="#4f5a70" textAnchor="start">수비팀</text>
+        <text className="pop s10-rd" x="281" y="198" fontSize="12" fontWeight="800" fill="#2346a8" textAnchor="end">공격팀</text>
+        <text className="pop s10-ra" x="281" y="198" fontSize="12" fontWeight="800" fill="#4f5a70" textAnchor="end">수비팀</text>
         <g className="s10-gA">
           <circle cx="62" cy="194" r="5" fill="none" stroke="#e0a800" strokeWidth="1.5" />
           <circle className="pop s10-pA" cx="62" cy="194" r="5" fill="#ffd54a" />
@@ -39,32 +33,48 @@ export const GameWalkthroughFigure: React.FC = () => (
         </g>
         <circle className="s10-fly" r="5" fill="#ffd54a" stroke="#e0a800" strokeWidth="1.5" />
         <g transform="translate(0 4)">
+          <g transform="translate(272 80) scale(-1 1)">
+            <g className="p13-swr1">
+              <path d="M5 0 L12 0" stroke="#0f1726" strokeWidth="2.5" strokeLinecap="round" />
+              <rect x="11" y="-5" width="11" height="10" rx="4" fill="#152a5e" stroke="#ffffff" strokeWidth="1.5" />
+            </g>
+            <circle className="p13-hrr1" cx="13" r="9" fill="none" stroke="#ffd54a" strokeWidth="2.5" />
+          </g>
           <g transform="translate(272 80)">
             <circle r="11" fill="#152a5e" stroke="#ffffff" strokeWidth="1.5" />
-            <text className="s10-nt" y="4" fontSize="12" fontWeight="800" fill="#ffffff" textAnchor="middle">
-              1
-            </text>
+            <text className="s10-nt" y="4" fontSize="12" fontWeight="800" fill="#ffffff" textAnchor="middle">1</text>
+          </g>
+          <g transform="translate(272 140) scale(-1 1)">
+            <g className="p13-swr2">
+              <path d="M5 0 L12 0" stroke="#0f1726" strokeWidth="2.5" strokeLinecap="round" />
+              <rect x="11" y="-5" width="11" height="10" rx="4" fill="#152a5e" stroke="#ffffff" strokeWidth="1.5" />
+            </g>
+            <circle className="p13-hrr2" cx="13" r="9" fill="none" stroke="#ffd54a" strokeWidth="2.5" />
           </g>
           <g transform="translate(272 140)">
             <circle r="11" fill="#152a5e" stroke="#ffffff" strokeWidth="1.5" />
-            <text className="s10-nt" y="4" fontSize="12" fontWeight="800" fill="#ffffff" textAnchor="middle">
-              2
-            </text>
+            <text className="s10-nt" y="4" fontSize="12" fontWeight="800" fill="#ffffff" textAnchor="middle">2</text>
           </g>
           <g className="s10-ring">
             <circle r="16" fill="none" stroke="#ffd54a" strokeWidth="3" />
           </g>
           <g className="s10-pa">
+            <g className="p13-sws10-pa">
+              <path d="M5 0 L12 0" stroke="#0f1726" strokeWidth="2.5" strokeLinecap="round" />
+              <rect x="11" y="-5" width="11" height="10" rx="4" fill="#ffffff" stroke="#0f1726" strokeWidth="1.5" />
+            </g>
+            <circle className="p13-hrs10-pa" cx="13" r="9" fill="none" stroke="#ffd54a" strokeWidth="2.5" />
             <circle r="11" fill="#ffffff" />
-            <text className="s10-na" y="4" fontSize="12" fontWeight="800" fill="#2346a8" textAnchor="middle">
-              2
-            </text>
+            <text className="s10-na" y="4" fontSize="12" fontWeight="800" fill="#2346a8" textAnchor="middle">2</text>
           </g>
           <g className="s10-pb">
+            <g className="p13-sws10-pb">
+              <path d="M5 0 L12 0" stroke="#0f1726" strokeWidth="2.5" strokeLinecap="round" />
+              <rect x="11" y="-5" width="11" height="10" rx="4" fill="#ffffff" stroke="#0f1726" strokeWidth="1.5" />
+            </g>
+            <circle className="p13-hrs10-pb" cx="13" r="9" fill="none" stroke="#ffd54a" strokeWidth="2.5" />
             <circle r="11" fill="#ffffff" />
-            <text className="s10-nb" y="4" fontSize="12" fontWeight="800" fill="#2346a8" textAnchor="middle">
-              1
-            </text>
+            <text className="s10-nb" y="4" fontSize="12" fontWeight="800" fill="#2346a8" textAnchor="middle">1</text>
           </g>
           <g transform="translate(236 84)">
             <circle className="pop s10-rp1" r="8" fill="none" stroke="#ffffff" strokeWidth="2" />
@@ -114,83 +124,60 @@ export const GameWalkthroughFigure: React.FC = () => (
           <g transform="translate(230 96)">
             <circle className="pop s10-rp16" r="8" fill="none" stroke="#ffffff" strokeWidth="2" />
           </g>
+          <g className="s10-ball-sh">
+            <ellipse rx="5" ry="3" fill="#0f1726" opacity=".3" />
+          </g>
+          <g className="s10-ball" style={{ animationDelay: ".14s" }}>
+            <circle r="5" fill="#ffd54a" opacity=".18" />
+          </g>
+          <g className="s10-ball" style={{ animationDelay: ".07s" }}>
+            <circle r="5" fill="#ffd54a" opacity=".38" />
+          </g>
           <circle className="s10-ball" r="5" fill="#ffd54a" stroke="#0f1726" strokeWidth="1" />
         </g>
         <g transform="translate(116 200)">
-          <text className="s10-o0" fontSize="22" fontWeight="800" fill="#2346a8" textAnchor="middle">
-            0
-          </text>
-          <text className="pop s10-o1" fontSize="22" fontWeight="800" fill="#2346a8" textAnchor="middle">
-            1
-          </text>
+          <text className="s10-o0" fontSize="22" fontWeight="800" fill="#2346a8" textAnchor="middle">0</text>
+          <text className="pop s10-o1" fontSize="22" fontWeight="800" fill="#2346a8" textAnchor="middle">1</text>
         </g>
-        <text x="149" y="197" fontSize="18" fontWeight="800" fill="#4f5a70" textAnchor="middle">
-          :
-        </text>
+        <text x="149" y="197" fontSize="18" fontWeight="800" fill="#4f5a70" textAnchor="middle">:</text>
         <g transform="translate(182 200)">
-          <text fontSize="22" fontWeight="800" fill="#4f5a70" textAnchor="middle">
-            0
-          </text>
+          <text fontSize="22" fontWeight="800" fill="#4f5a70" textAnchor="middle">0</text>
         </g>
       </svg>
       <div className="call s10-k1">
         <span>
-          <b>
-            "Zero, Zero, Two!"
-          </b>
-          <i>
-            처음 공격하는 팀은 서브권이 1개
-          </i>
+          <b>"Zero, Zero, Two!"</b>
+          <i>처음 공격하는 팀은 서브권이 1개</i>
         </span>
       </div>
       <div className="call s10-k2">
         <span>
-          <b>
-            "One, Zero, Two!"
-          </b>
-          <i>
-            득점하면 자리 바꿔 같은 사람이 서브
-          </i>
+          <b>"One, Zero, Two!"</b>
+          <i>득점하면 자리 바꿔 같은 사람이 서브</i>
         </span>
       </div>
       <div className="call s10-x">
         <span>
-          <b>
-            "사이드 아웃!"
-          </b>
-          <i>
-            서브권이 없으면 공수 전환
-          </i>
+          <b>"사이드 아웃!"</b>
+          <i>서브권이 없으면 공수 전환</i>
         </span>
       </div>
       <div className="call s10-k3">
         <span>
-          <b>
-            "Zero, One, One!"
-          </b>
-          <i>
-            공격팀은 오른쪽부터 서브 시작
-          </i>
+          <b>"Zero, One, One!"</b>
+          <i>공격팀은 오른쪽부터 서브 시작</i>
         </span>
       </div>
       <div className="call s10-k4">
         <span>
-          <b>
-            "Zero, One, Two!"
-          </b>
-          <i>
-            지면 남은 서브권으로 2번이 서브
-          </i>
+          <b>"Zero, One, Two!"</b>
+          <i>지면 남은 서브권으로 2번이 서브</i>
         </span>
       </div>
       <div className="call s10-k5">
         <span>
-          <b>
-            "One, Zero, One!"
-          </b>
-          <i>
-            공격팀은 오른쪽부터 서브 시작
-          </i>
+          <b>"One, Zero, One!"</b>
+          <i>공격팀은 오른쪽부터 서브 시작</i>
         </span>
       </div>
     </div>

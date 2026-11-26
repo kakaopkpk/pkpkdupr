@@ -78,7 +78,7 @@ describe("rulesGuide", () => {
     vi.stubGlobal(
       "localStorage",
       createStorage({
-        "pkpkdupr:rules-guide-seen": JSON.stringify([0, 3, 3, 12, -1, 1.5, "2"]),
+        "pkpkdupr:rules-guide-seen": JSON.stringify([0, 3, 3, 15, -1, 1.5, "2"]),
         // 열기만 해도 써지던 옛 키는 읽지 않는다
         "pkpkdupr:rules-guide-dismissed": "1",
       }),
