@@ -844,7 +844,7 @@ const judgeSessionStartSpecialMatchForLineup = async (
       ? requestedKind
       : null;
   try {
-    const { context } = await loadRankingSource();
+    const context = await loadRankingContext();
     const candidates = buildSpecialMatchCandidatePlayers(
       context,
       getMatchTopLevelType(lineup.type),
@@ -2254,10 +2254,13 @@ app.post("/api/matches/start", async (req, res) => {
     await matchRepository.cleanupExpired(now);
     const lineup = await prepareMatchLineup(type, teams, decoded.playerId);
     await assertPlayersNotInProgress(lineup, now);
-    const session = await resolveSessionForStartedMatch(requestedSessionId, now);
+    const [session, revenge] = await Promise.all([
+      resolveSessionForStartedMatch(requestedSessionId, now),
+      judgeRematchSpecialMatchForLineup(body?.rematchOfMatchId, lineup),
+    ]);
     // 리벤지가 먼저이고, 리벤지가 아니면 세션에서 시작한 경기만 도전 매치를 판정한다
     const specialMatch =
-      (await judgeRematchSpecialMatchForLineup(body?.rematchOfMatchId, lineup)) ??
+      revenge ??
       (session ? await judgeSessionStartSpecialMatchForLineup(null, lineup) : null);
     const match = await startInProgressMatch({
       requesterPlayerId: decoded.playerId,
@@ -3805,6 +3808,16 @@ const sendRankingFailure = (res: express.Response, error: unknown) => {
 };
 
 /** 랭킹·세션 리포트 계산 원천. 회원 약 20명 규모라 로그·경기·세션을 모두 메모리로 읽는다 */
+/** 랭킹 계산 원천만(세션 없이). 세션 시작마다 부르는 특수 매치 판정이 쓴다 */
+const loadRankingContext = async () => {
+  const [players, logs, matches] = await Promise.all([
+    authService.getAllPlayers(),
+    matchRepository.getAllRatingChangeLogs(),
+    matchRepository.findCompletedMatchOutcomes(),
+  ]);
+  return createRankingContext(players, logs, matches);
+};
+
 const loadRankingSource = async () => {
   const [players, logs, matches, sessions] = await Promise.all([
     authService.getAllPlayers(),

@@ -36,15 +36,13 @@ export const getSpecialMatchResultName = (
         : { label: isWin ? "연승 저지" : "저지 실패", icon: "streak_stopper" };
     case "champions":
       return { label: isWin ? "최강자전 승리" : "최강자전 패배", icon: "champions" };
+    // 지키는 쪽은 리벤지는 직전 경기에서 이긴 팀, 도전 매치는 평균 평점이 높은 팀이다
     case "revenge":
-      return isDefending
-        ? { label: isWin ? "방어 성공" : "방어 실패", icon: "shield" }
-        : { label: isWin ? "리벤지 성공" : "리벤지 실패", icon: "revenge" };
-    // 지키는 쪽은 평균 평점이 높은 팀이다
-    case "challenge":
-      return isDefending
-        ? { label: isWin ? "방어 성공" : "방어 실패", icon: "shield" }
-        : { label: isWin ? "도전 성공" : "도전 실패", icon: "challenge" };
+    case "challenge": {
+      if (isDefending) return { label: isWin ? "방어 성공" : "방어 실패", icon: "shield" };
+      const prefix = specialMatch.kind === "revenge" ? "리벤지" : "도전";
+      return { label: `${prefix} ${isWin ? "성공" : "실패"}`, icon: specialMatch.kind };
+    }
     // 남복·여복 매치는 결과가 없어 여기 오지 않는다
     case "men_doubles":
     case "women_doubles":

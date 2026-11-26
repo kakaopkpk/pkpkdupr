@@ -1,6 +1,10 @@
-import { CHALLENGE_MIN_RATING_GAP, RATING_EPSILON } from "./achievements.js";
+import {
+  CHALLENGE_MIN_RATING_GAP,
+  getChallengeTeamAverageRating,
+  RATING_EPSILON,
+} from "./achievements.js";
 import { getWinningTeamIndex, type Match } from "./match.js";
-import { DUPR_DEFAULT_RATING, type Player } from "./player.js";
+import type { Player } from "./player.js";
 import { WIN_STREAK_MIN } from "./streak.js";
 
 export { CHALLENGE_MIN_RATING_GAP };
@@ -307,11 +311,6 @@ const judgeRivalMatch = (teams: CandidateTeams): SpecialMatch | null => {
   };
 };
 
-/** 도전 매치 팀 평점: 선수 평점 평균이고, 평점 없는 정회원은 DUPR_DEFAULT_RATING(3.0)으로 친다 */
-const toChallengeTeamRating = (team: readonly SpecialMatchCandidatePlayer[]) =>
-  team.reduce((sum, player) => sum + (player.rating ?? DUPR_DEFAULT_RATING), 0) /
-  team.length;
-
 /**
  * 도전 매치: 두 팀 평균 평점 차가 CHALLENGE_MIN_RATING_GAP 이상이다. 높은 팀이 지키는 쪽이고 주인공은 없다.
  * 게스트가 낀 경기는 평점에 반영하지 않아 업적·칭찬 "도전자"와 기준이 어긋나므로 도전 매치가 아니다
@@ -320,7 +319,10 @@ export const judgeChallengeMatch = (teams: CandidateTeams): SpecialMatch | null 
   if (teams.some((team) => team.length === 0 || team.some((player) => player.isGuest))) {
     return null;
   }
-  const [ratingA, ratingB] = TEAM_INDEXES.map((index) => toChallengeTeamRating(teams[index]));
+  // 평점 없는 정회원은 업적·칭찬 "도전자"와 같이 3.0으로 친다
+  const [ratingA, ratingB] = TEAM_INDEXES.map((index) =>
+    getChallengeTeamAverageRating(teams[index].map((player) => player.rating)),
+  );
   const gap = toRatingGap(ratingA, ratingB);
   if (gap < CHALLENGE_MIN_RATING_GAP - RATING_EPSILON) return null;
   return {

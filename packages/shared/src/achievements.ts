@@ -1076,15 +1076,19 @@ export const CHALLENGE_MIN_RATING_GAP = 0.1;
 /** 평점 평균 비교의 부동소수 오차 허용치 */
 export const RATING_EPSILON = 1e-9;
 
-/** 경기 직전 팀 평균 평점. 평점이 없는 선수는 DUPR_DEFAULT_RATING으로 친다 */
+/**
+ * 도전 기준 팀 평균 평점. 평점이 없는 선수는 DUPR_DEFAULT_RATING으로 친다.
+ * 업적·칭찬 "도전자"와 특수 매치 도전 매치가 같이 쓴다. 빈 팀이면 NaN이다
+ */
+export const getChallengeTeamAverageRating = (ratings: readonly (number | null | undefined)[]) =>
+  ratings.reduce<number>((sum, rating) => sum + (rating ?? DUPR_DEFAULT_RATING), 0) /
+  ratings.length;
+
+/** 경기 직전 팀 평균 평점 */
 const getTeamAverageRatingBefore = (
   ratingBefore: Readonly<Record<string, number | null>>,
   playerIds: readonly string[],
-) =>
-  playerIds.reduce(
-    (sum, playerId) => sum + (ratingBefore[playerId] ?? DUPR_DEFAULT_RATING),
-    0,
-  ) / playerIds.length;
+) => getChallengeTeamAverageRating(playerIds.map((playerId) => ratingBefore[playerId]));
 
 /**
  * 경기 직전 평점 차: 상대 팀 평균 − 우리 팀 평균(업적·세션 칭찬 도전자).

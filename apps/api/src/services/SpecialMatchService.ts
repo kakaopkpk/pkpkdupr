@@ -291,10 +291,9 @@ export const settleSpecialMatch = (
     if (outcome === "challenge_success") {
       // 평점 차가 없는 옛 저장 형태면 설명을 만들 수 없어 연출하지 않는다
       if (specialMatch.ratingGap == null) return null;
-      const defeated = match.teams[loserIndex].players.flatMap((player) => {
-        const celebrationPlayer = toCelebrationPlayer(match, player.id);
-        return celebrationPlayer ? [celebrationPlayer] : [];
-      });
+      const defeated = match.teams[loserIndex].players.map(
+        ({ id, username, avatarUrl }) => ({ id, username, avatarUrl }),
+      );
       if (defeated.length === 0) return null;
       return { kind: "challenge", defeated, ratingGap: specialMatch.ratingGap };
     }

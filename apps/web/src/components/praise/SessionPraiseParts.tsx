@@ -5,7 +5,6 @@ import {
 } from "@pkpkdupr/shared/sessionPraise";
 import { BADGE_ICON_PATHS } from "@/components/profile/AchievementBadge";
 import {
-  CHALLENGE_FLAG_ICON_PATHS,
   CrownIcon,
   FIST_ICON_PATHS,
   SHIELD_CHECK_ICON_PATHS,
@@ -54,9 +53,7 @@ export const SessionPraiseCategoryIcon: React.FC<{
     case "underdog":
       return (
         <StrokeIcon size={size} strokeWidth={2.4}>
-          {CHALLENGE_FLAG_ICON_PATHS.map((d) => (
-            <path key={d} d={d} />
-          ))}
+          {BADGE_ICON_PATHS.challengeFlag}
         </StrokeIcon>
       );
     case "clutch":
