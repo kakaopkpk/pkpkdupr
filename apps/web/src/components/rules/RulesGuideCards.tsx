@@ -20,8 +20,8 @@ import {
   RuleTableRow,
 } from "./RulesGuideParts";
 
-/** 카드 묶음. 규칙 12장은 개요 → 치는 법 → 서브 → 정리이고, 그 뒤에 부록이 온다 */
-type RulesGuideSection = "개요" | "치는 법" | "서브" | "정리" | "부록";
+/** 카드 묶음. 규칙 12장은 개요 → 치는 법 → 서브와 경기 진행이고, 그 뒤에 부록이 온다 */
+type RulesGuideSection = "개요" | "치는 법" | "서브와 경기 진행" | "부록";
 
 /** 카드 한 장. 화면이 그림 → 머리(eyebrow·title) → body 순서로 그린다 */
 export interface RulesGuideCard {
@@ -254,7 +254,7 @@ const RULE_CARDS: readonly CardContent[] = [
   },
   {
     title: "서브는 대각선 코트로",
-    section: "서브",
+    section: "서브와 경기 진행",
     scope: "pk-rules-c4",
     Figure: ServeFigure,
     stillSeconds: 12.6,
@@ -276,7 +276,7 @@ const RULE_CARDS: readonly CardContent[] = [
   },
   {
     title: "서브권: 서브할 권리",
-    section: "서브",
+    section: "서브와 경기 진행",
     scope: "g2 n3 d6",
     Figure: ServeRightFigure,
     stillSeconds: 4.5,
@@ -311,7 +311,7 @@ const RULE_CARDS: readonly CardContent[] = [
   },
   {
     title: "점수는 공격팀만",
-    section: "서브",
+    section: "서브와 경기 진행",
     scope: "g2 n3 d65",
     Figure: ScoringFigure,
     stillSeconds: 4.5,
@@ -337,7 +337,7 @@ const RULE_CARDS: readonly CardContent[] = [
   },
   {
     title: "서브 전에 점수 부르기",
-    section: "서브",
+    section: "서브와 경기 진행",
     scope: "pk-rules-c5",
     Figure: ScoreCallFigure,
     stillSeconds: 5.2,
@@ -357,7 +357,7 @@ const RULE_CARDS: readonly CardContent[] = [
   },
   {
     title: "경기 시뮬레이션",
-    section: "정리",
+    section: "서브와 경기 진행",
     scope: "pk-rules-c6",
     Figure: GameWalkthroughFigure,
     stillSeconds: 3.7,
