@@ -18,7 +18,8 @@ description: pkpkdupr web·admin 화면의 디자인 시안·캔버스·목업�
 시안의 "지금" 보드는 손으로 그리지 않고 실제 앱을 렌더링한 결과에서 시작한다. 코드만 읽고 그리면 HeroUI 기본값·상속 글꼴·배치·장식(불꽃 후광, 랠리, 유리 탭바)이 실제와 달라진다.
 
 1. 처음 한 번 `pnpm install`과 `pnpm exec playwright install chromium`을 실행한다.
-2. `pnpm design:snapshot`을 실행한다. Docker도 `pnpm dev`도 필요 없다. 스크립트가 web(Vite)만 :8091에 직접 띄우고, 로그인·API·아바타 요청은 저장해 둔 응답(`scripts/design-snapshot/fixtures/responses.json`)으로 답하며, 브라우저 시계를 녹화 시각에 고정한다. 그래서 화면 모양은 지금 코드이고, 데이터는 녹화 때의 dev mock 데이터다. 인자 없이 실행하면 폴더를 비우고 전부 다시 찍고, 화면 이름을 주면(`pnpm design:snapshot home ranking`) 그 화면만 덮어쓴다. 결과는 `.design-snapshots/`에 쓴다(커밋하지 않는다).
+2. `pnpm design:snapshot`을 실행한다. Docker도 `pnpm dev`도 필요 없다. 스크립트가 web(Vite)만 빈 포트에 직접 띄우고(`DESIGN_SNAPSHOT_PORT`로 지정할 수 있다), 로그인·API·아바타 요청은 저장해 둔 응답(`scripts/design-snapshot/fixtures/responses.json`)으로 답하며, 브라우저 시계를 녹화 시각에 고정한다. 그래서 화면 모양은 지금 코드이고, 데이터는 녹화 때의 dev mock 데이터다. 인자 없이 실행하면 폴더를 비우고 전부 다시 찍고, 화면 이름을 주면(`pnpm design:snapshot home ranking`) 그 화면만 덮어쓴다. 결과는 `.design-snapshots/`에 쓴다(커밋하지 않는다).
+   - 여러 사람·워커가 같은 저장소에서 동시에 찍을 때는 실행마다 출력 폴더를 나눈다(`DESIGN_SNAPSHOT_OUT=.design-snapshots/<작업 이름> pnpm design:snapshot`). 포트는 실행마다 따로 잡히지만 폴더가 같으면 전체 실행이 다른 실행의 결과를 지운다.
    - `<화면>.png`: 실제 모습. 시안과 비교하는 기준이다.
    - `<화면>.html`: 실제 DOM(앱의 Tailwind 클래스 그대로). 같은 폴더의 `app.css`(앱 CSS 전체)를 붙이면 앱과 똑같이 렌더링된다.
    - `index.html`: 찍은 화면을 한눈에 보는 페이지
