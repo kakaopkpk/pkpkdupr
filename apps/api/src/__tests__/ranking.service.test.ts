@@ -27,6 +27,8 @@ vi.mock("@pkpkdupr/shared/achievementCountStart", () => ({
   CHALLENGER_ACHIEVEMENT_COUNT_START: new Date("2100-01-01T00:00:00.000Z"),
   // 대회 업적은 이 파일에서 순위 입력을 검증하므로 처음부터 센다.
   TOURNAMENT_ACHIEVEMENT_COUNT_START: new Date(0),
+  // 리벤지 업적은 이 파일에서 옛 조건(바로 다음 경기 승리)으로 센다
+  REVENGE_MATCH_ACHIEVEMENT_COUNT_START: new Date("2100-01-01T00:00:00.000Z"),
 }));
 
 const at = (iso: string) => new Date(iso);

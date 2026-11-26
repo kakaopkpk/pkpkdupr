@@ -447,8 +447,6 @@ export interface StartMatchRequest {
   type?: MatchType;
   /** 생략하면 세션 장소, 세션도 없으면 기본 장소 */
   location?: string;
-  /** 같은 멤버로 한 판 더의 원래 경기. 서버가 리벤지 여부를 판정해 저장한다 */
-  rematchOfMatchId?: string;
 }
 
 /** GET /api/matches/in-progress 응답 */

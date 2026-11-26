@@ -275,7 +275,7 @@ describe("POST /api/match-sessions/:sessionId/matches", () => {
     expect(createInProgress).not.toHaveBeenCalled();
   });
 
-  describe("추천 카드 특수 유형(recommendedSpecialKind)", () => {
+  describe("특수 매치 판정", () => {
     const rated = (player: Player, doubles: number): Player => ({
       ...player,
       duprRating: { singles: doubles, doubles },
@@ -324,12 +324,11 @@ describe("POST /api/match-sessions/:sessionId/matches", () => {
         ratingExcluded: false,
       }));
 
-    it("서버 재판정이 카드 유형과 같으면 그 특수 매치를 저장한다", async () => {
+    it("지금 랭킹으로 판정한 특수 매치(라이벌전)를 저장한다", async () => {
       mockRankingSource();
 
       const response = await startMatch("Scustom1", {
         ...doublesBody,
-        recommendedSpecialKind: "rival",
       });
 
       expect(response.status).toBe(201);
@@ -348,7 +347,6 @@ describe("POST /api/match-sessions/:sessionId/matches", () => {
 
       const response = await startMatch("Scustom1", {
         ...doublesBody,
-        recommendedSpecialKind: "streak_stopper",
       });
 
       expect(response.status).toBe(201);
@@ -375,8 +373,7 @@ describe("POST /api/match-sessions/:sessionId/matches", () => {
 
         const response = await startMatch("Scustom1", {
           ...doublesBody,
-          recommendedSpecialKind: "streak_stopper",
-        });
+          });
 
         expect(response.status).toBe(201);
         expect(createInProgress.mock.calls[0]![0].specialMatch).toMatchObject({
@@ -389,17 +386,14 @@ describe("POST /api/match-sessions/:sessionId/matches", () => {
       it("라이벌전 조건이어도 특수 매치는 null이다", async () => {
         mockRankingSource();
 
-        const response = await startMatch("Scustom1", {
-          ...doublesBody,
-          recommendedSpecialKind: "rival",
-        });
+        const response = await startMatch("Scustom1", doublesBody);
 
         expect(response.status).toBe(201);
         expect(createInProgress.mock.calls[0]![0].specialMatch).toBeNull();
       });
     });
 
-    it("재판정 유형이 카드 유형과 다르면 요청은 성공하고 특수 매치는 null이다", async () => {
+    it("요청에 카드 유형이 있어도 보지 않고 서버 판정을 저장한다", async () => {
       mockRankingSource(winsOfPlayerC(5));
 
       const response = await startMatch("Scustom1", {
@@ -408,22 +402,35 @@ describe("POST /api/match-sessions/:sessionId/matches", () => {
       });
 
       expect(response.status).toBe(201);
-      expect(createInProgress.mock.calls[0]![0].specialMatch).toBeNull();
+      expect(createInProgress.mock.calls[0]![0].specialMatch?.kind).toBe(
+        "streak_stopper",
+      );
     });
 
-    it("리벤지나 모르는 유형은 카드 유형 없이 본다(라이벌전 조건이면 null이다)", async () => {
-      mockRankingSource();
+    it("이 세션에서 같은 두 팀이 붙었으면 다른 조건보다 리벤지가 먼저다", async () => {
+      mockRankingSource([
+        {
+          id: "Mprevi01",
+          type: "mixed-doubles",
+          sessionId: "Scustom1",
+          matchStartsAt: new Date(Date.UTC(2026, 10, 12, 5)),
+          completedAt: new Date(Date.UTC(2026, 10, 12, 5)),
+          teamPlayerIds: [
+            [playerC.id, playerD.id],
+            [playerA.id, playerB.id],
+          ],
+          scores: [{ scoreA: 11, scoreB: 4 }],
+          ratingExcluded: false,
+        },
+      ]);
 
-      for (const recommendedSpecialKind of ["revenge", "unknown"]) {
-        const response = await startMatch("Scustom1", {
-          ...doublesBody,
-          recommendedSpecialKind,
-        });
-        expect(response.status).toBe(201);
-      }
-      expect(
-        createInProgress.mock.calls.map(([input]) => input.specialMatch),
-      ).toEqual([null, null]);
+      const response = await startMatch("Scustom1", doublesBody);
+
+      expect(response.status).toBe(201);
+      expect(createInProgress.mock.calls[0]![0].specialMatch).toMatchObject({
+        kind: "revenge",
+        defendingTeamIndex: 1,
+      });
     });
 
     // A+C(3.51) 대 B+D(2.95): 팀 평균 차 0.56이라 도전 매치다
@@ -434,7 +441,7 @@ describe("POST /api/match-sessions/:sessionId/matches", () => {
       ],
     };
 
-    it("카드 유형이 없어도 도전 매치면 저장한다", async () => {
+    it("도전 매치면 저장한다", async () => {
       mockRankingSource();
 
       const response = await startMatch("Scustom1", challengeBody);
@@ -450,25 +457,5 @@ describe("POST /api/match-sessions/:sessionId/matches", () => {
       });
     });
 
-    it("카드 유형과 달라도 재판정이 도전 매치면 도전 매치로 저장한다", async () => {
-      mockRankingSource();
-
-      const response = await startMatch("Scustom1", {
-        ...challengeBody,
-        recommendedSpecialKind: "rival",
-      });
-
-      expect(response.status).toBe(201);
-      expect(createInProgress.mock.calls[0]![0].specialMatch?.kind).toBe("challenge");
-    });
-
-    it("카드 유형이 없으면 도전 매치가 아닌 특수 매치 조건(라이벌전)은 null이다", async () => {
-      mockRankingSource();
-
-      const response = await startMatch("Scustom1");
-
-      expect(response.status).toBe(201);
-      expect(createInProgress.mock.calls[0]![0].specialMatch).toBeNull();
-    });
   });
 });

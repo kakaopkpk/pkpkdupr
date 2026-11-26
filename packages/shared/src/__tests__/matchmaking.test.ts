@@ -19,7 +19,6 @@ import {
 import {
   judgeRecommendedSpecialMatch,
   SPECIAL_MATCH_RECOMMENDATION_BONUS,
-  SPECIAL_MATCH_RECOMMENDATION_DISPLAY_RANK,
   type SpecialMatchCandidatePlayer,
 } from "../specialMatch";
 
@@ -484,16 +483,6 @@ describe("recommendDoublesMatches 특수 유형 가산점", () => {
     });
   });
 
-  it("표시 순위는 최강자전 > 라이벌전 > 연승 매치 > 도전 매치 > 남복·여복 매치다", () => {
-    const rank = SPECIAL_MATCH_RECOMMENDATION_DISPLAY_RANK;
-    expect(rank.champions).toBeGreaterThan(rank.rival);
-    expect(rank.rival).toBeGreaterThan(rank.streak_stopper);
-    expect(rank.streak_stopper).toBeGreaterThan(rank.challenge);
-    expect(rank.challenge).toBeGreaterThan(rank.men_doubles);
-    expect(rank.men_doubles).toBe(rank.women_doubles);
-    expect(rank.revenge).toBeNull();
-  });
-
   it("특수 유형 판정 입력이 없거나 아무도 해당하지 않으면 기존과 같은 결과이고 specialMatch는 모두 null이다", () => {
     const participants = players(10);
     const input = { participants, courts: 2, seed: 7 };
@@ -609,7 +598,7 @@ describe("recommendDoublesMatches 특수 유형 가산점", () => {
       return judgeRecommendedSpecialMatch([teamA, teamB]);
     });
 
-  it("여러 코트가 해당해도 특수 유형은 한 코트이고 가산점이 가장 큰 코트(없으면 앞 연승 매치 코트)가 보이며 가산점은 한 번만 뺀다", () => {
+  it("여러 코트가 해당하면 코트마다 판정한 유형이 보이고 가산점은 가장 큰 코트 하나만 뺀다", () => {
     const participants = players(12);
     const specialPlayers = toSpecialPlayers(participants, {
       p01: 5,
@@ -618,59 +607,53 @@ describe("recommendDoublesMatches 특수 유형 가산점", () => {
     });
     const input = { participants, courts: 3, seed: 3, specialPlayers };
     const base = basePenaltyByMatchup(input);
+    let multiple = 0;
     for (const plan of distinctPlans(input)) {
       const judged = judgeCourts(plan, specialPlayers);
       const bonus = expectedBonus(plan, specialPlayers);
-      const specialCourts = plan.courts.filter(
-        (court) => court.specialMatch !== null,
-      );
-      expect(specialCourts).toHaveLength(judged.some(Boolean) ? 1 : 0);
-      if (specialCourts[0]?.specialMatch) {
-        // 가산점 코트가 있으면 가산점이 가장 큰 앞 코트, 없으면 앞 연승 매치 코트
-        const bonuses = judged.map((match) =>
-          match ? getSpecialMatchRecommendationBonus(match.kind) : 0,
-        );
-        const expectedCourt =
-          bonus > 0 ? bonuses.indexOf(bonus) : judged.findIndex(Boolean);
-        expect(plan.courts[expectedCourt].specialMatch).not.toBeNull();
-        expect(
-          getSpecialMatchRecommendationBonus(specialCourts[0].specialMatch.kind),
-        ).toBe(bonus);
-      }
+      expect(plan.courts.map((court) => court.specialMatch)).toEqual(judged);
+      if (judged.filter(Boolean).length > 1) multiple += 1;
       const basePenalty = base.get(matchupKey(plan));
       if (basePenalty !== undefined) {
         expect(plan.penalty).toBeCloseTo(basePenalty - bonus);
       }
     }
+    expect(multiple).toBeGreaterThan(0);
   });
 
-  it("같은 대진에 연승 매치 코트와 최강자전·라이벌전 코트가 함께 있으면 가산점 코트가 표시된다", () => {
-    // p01·p02(5연승)·p07(6연승)을 연승 회원으로 두고, 연승 매치 코트와 최강자전·라이벌전 코트가 함께 나오는 대진을 모두 훑는다
-    const participants = players(12);
-    const specialPlayers = toSpecialPlayers(participants, {
-      p01: 5,
-      p02: 5,
-      p07: 6,
+  it("오늘 같은 두 팀이 붙었던 코트는 리벤지로 보이고, 가장 최근 그 경기에서 이긴 팀이 지킨다", () => {
+    // a·b와 c·d 팀만 평균이 같아(다른 나누기는 평균 차 1 이상) 반복 감점이 있어도 같은 대진을 고른다
+    const participants: MatchmakingParticipant[] = [
+      { id: "a", doublesRating: 5 },
+      { id: "b", doublesRating: 1 },
+      { id: "c", doublesRating: 4 },
+      { id: "d", doublesRating: 2 },
+    ];
+    const plan = recommend({
+      participants,
+      courts: 1,
+      specialPlayers: toSpecialPlayers(participants),
+      completedMatches: [
+        {
+          teams: [
+            ["c", "d"],
+            ["a", "b"],
+          ],
+          winningTeamIndex: 0,
+        },
+      ],
     });
-    const input = { participants, courts: 3, specialPlayers };
-    let mixed = 0;
-    for (const plan of distinctPlans(input)) {
-      const kinds = judgeCourts(plan, specialPlayers).map(
-        (match) => match?.kind ?? null,
-      );
-      if (
-        kinds.includes("streak_stopper") &&
-        (kinds.includes("champions") || kinds.includes("rival"))
-      ) {
-        mixed += 1;
-        const shown = plan.courts.findIndex(
-          (court) => court.specialMatch !== null,
-        );
-        expect(kinds[shown]).not.toBe("streak_stopper");
-        expect(plan.courts[shown].specialMatch?.kind).toBe(kinds[shown]);
-      }
-    }
-    expect(mixed).toBeGreaterThan(0);
+    const court = plan.courts[0];
+    expect(court.teams.map((team) => [...team].sort())).toEqual(
+      expect.arrayContaining([
+        ["a", "b"],
+        ["c", "d"],
+      ]),
+    );
+    expect(court.specialMatch?.kind).toBe("revenge");
+    expect(
+      [...court.teams[court.specialMatch!.defendingTeamIndex!]].sort(),
+    ).toEqual(["c", "d"]);
   });
 
   it("특수 유형 판정 입력이 있어도 같은 입력·같은 seed면 결과가 같다", () => {
@@ -740,7 +723,7 @@ describe("recommendDoublesMatches 남복·여복", () => {
     expect(recommend({ participants, courts: 1 }).penalty).toBeCloseTo(0);
   });
 
-  it("다른 특수 유형이 없으면 앞 남복·여복 코트 하나만 남복·여복 매치로 보인다", () => {
+  it("남복·여복 코트는 코트마다 남복·여복 매치로 보인다", () => {
     const participants = genderedPlayers(["M", "M", "M", "M", "F", "F", "F", "F"]);
     const plan = recommend({
       participants,
@@ -748,29 +731,30 @@ describe("recommendDoublesMatches 남복·여복", () => {
       specialPlayers: genderSpecialPlayers(participants),
     });
     const genders = courtGenders(plan, participants);
-    expect(plan.courts[0].specialMatch?.kind).toBe(
-      genders[0][0] === "M" ? "men_doubles" : "women_doubles",
-    );
-    expect(plan.courts[0].specialMatch).toMatchObject({
-      defendingTeamIndex: null,
-      protagonistIds: [null, null],
-      rivalPairs: [],
-      outcome: null,
+    plan.courts.forEach((court, index) => {
+      expect(court.specialMatch?.kind).toBe(
+        genders[index][0] === "M" ? "men_doubles" : "women_doubles",
+      );
+      expect(court.specialMatch).toMatchObject({
+        defendingTeamIndex: null,
+        protagonistIds: [null, null],
+        rivalPairs: [],
+        outcome: null,
+      });
     });
-    expect(plan.courts[1].specialMatch).toBeNull();
   });
 
-  it("연승 매치 코트가 있으면 남복·여복 코트보다 연승 매치 코트가 보인다", () => {
+  it("연승 매치 코트와 남복·여복 코트가 함께 보인다", () => {
     const participants = genderedPlayers(["M", "M", "M", "M", "F", "F", "F", "F"]);
     const plan = recommend({
       participants,
       courts: 2,
       specialPlayers: genderSpecialPlayers(participants, { g08: 4 }),
     });
-    const shown = plan.courts.filter((court) => court.specialMatch !== null);
-    expect(shown).toHaveLength(1);
-    expect(shown[0].specialMatch?.kind).toBe("streak_stopper");
-    expect(shown[0].teams.flat()).toContain("g08");
+    const streakCourt = plan.courts.find((court) => court.teams.flat().includes("g08"));
+    const otherCourt = plan.courts.find((court) => !court.teams.flat().includes("g08"));
+    expect(streakCourt?.specialMatch?.kind).toBe("streak_stopper");
+    expect(otherCourt?.specialMatch?.kind).toMatch(/^(men|women)_doubles$/);
   });
 });
 

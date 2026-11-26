@@ -674,9 +674,9 @@ describe("computeAchievements", () => {
     );
   });
 
-  describe("리벤지", () => {
-    /** KST 2026-12-03 hh:mm 완료 시각 */
-    const kst = (time: string, day = "2026-12-03") =>
+  describe("리벤지(리벤지 매치 기준 전, 옛 조건)", () => {
+    /** KST 2026-11-20 hh:mm 완료 시각. REVENGE_MATCH_ACHIEVEMENT_COUNT_START 전이라 옛 조건으로 센다 */
+    const kst = (time: string, day = "2026-11-20") =>
       kstDateKeyTimeToDate(day, time);
     const lineup = (
       won: boolean,
@@ -767,7 +767,7 @@ describe("computeAchievements", () => {
       expect(
         revengeOf([
           lineup(false, kst("23:50")),
-          lineup(true, kst("00:10", "2026-12-04")),
+          lineup(true, kst("00:10", "2026-11-21")),
         ]).earned,
       ).toBe(false);
     });
@@ -804,7 +804,7 @@ describe("computeAchievements", () => {
     it("뒤끝 작렬은 열 번째 리벤지 경기로 받는다", () => {
       const revenges = (count: number) =>
         Array.from({ length: count }, (_, index) => {
-          const day = `2026-12-${String(3 + index).padStart(2, "0")}`;
+          const day = `2026-11-${String(17 + index).padStart(2, "0")}`;
           return [
             lineup(false, kst("19:00", day)),
             lineup(true, kst("19:20", day)),
@@ -823,6 +823,43 @@ describe("computeAchievements", () => {
         earnedMatchId: ten[19].id,
         current: 10,
       });
+    });
+  });
+
+  describe("리벤지(리벤지 매치 기준)", () => {
+    /** KST 2026-12-03 hh:mm 완료 시각. REVENGE_MATCH_ACHIEVEMENT_COUNT_START 뒤 */
+    const kst = (time: string) => kstDateKeyTimeToDate("2026-12-03", time);
+    const lineup = (
+      won: boolean,
+      completedAt: Date,
+      specialMatchOutcome: AchievementMatch["specialMatchOutcome"] = null,
+    ): AchievementMatch => ({
+      ...makeMatch({ won, partnerId: "mate", opponentIds: ["opp-1", "opp-2"], completedAt }),
+      specialMatchOutcome,
+    });
+    const revengeOf = (matches: AchievementMatch[]) =>
+      progressOf(compute(matches), "revenge");
+
+    it("리벤지 매치에서 이기면(revenge_success) 받는다", () => {
+      const win = lineup(true, kst("19:40"), "revenge_success");
+      expect(
+        revengeOf([lineup(false, kst("19:00")), lineup(true, kst("19:20")), win]),
+      ).toMatchObject({ earned: true, earnedMatchId: win.id, current: 1 });
+    });
+
+    it("리벤지 매치가 아니면 진 조합 그대로 바로 다음 경기에서 이겨도 받지 않는다", () => {
+      expect(
+        revengeOf([lineup(false, kst("19:00")), lineup(true, kst("19:20"))]),
+      ).toMatchObject({ earned: false, current: 0 });
+    });
+
+    it("방어한 팀(revenge_defended)·리벤지 매치에서 진 팀은 받지 않는다", () => {
+      expect(
+        revengeOf([
+          lineup(true, kst("19:00"), "revenge_defended"),
+          lineup(false, kst("19:20"), "revenge_success"),
+        ]).current,
+      ).toBe(0);
     });
   });
 

@@ -209,11 +209,11 @@ describe("GET /api/match-sessions/:sessionId/recommendations", () => {
       ),
       winStreak: 0,
     });
-    // 참여자가 모두 남자라 두 코트 모두 남복이지만, 앞 코트는 팀 평균 차가 0.1 이상이라 도전 매치이고
-    // 특수 유형은 표시 순위가 높은 그 코트 하나만 보인다
+    // 참여자가 모두 남자라 두 코트 모두 남복이지만, 앞 코트는 팀 평균 차가 0.1 이상이라 도전 매치다.
+    // 특수 유형은 코트마다 붙는다
     expect(body.courts.map((court) => court.specialMatch?.kind ?? null)).toEqual([
       "challenge",
-      null,
+      "men_doubles",
     ]);
   });
 
@@ -241,7 +241,7 @@ describe("GET /api/match-sessions/:sessionId/recommendations", () => {
     expect(byId.get(playerIds[3])?.winStreak).toBe(0);
   });
 
-  it("연승 회원이 있는 코트 하나만 특수 유형으로 판정해 준다", async () => {
+  it("연승 회원이 있는 코트는 코트마다 특수 유형으로 판정해 준다", async () => {
     // 두 코트 모두에 연승 회원이 있을 수 있게 두 사람을 5연승으로 만든다
     findCompletedMatchOutcomes.mockResolvedValue([
       ...winsFor(playerIds[1], ["Pghost-a", "Pghost-b"], 5),
@@ -253,19 +253,17 @@ describe("GET /api/match-sessions/:sessionId/recommendations", () => {
 
     expect(response.status).toBe(200);
     const body = response.body as MatchSessionRecommendationResponse;
-    const specialCourts = body.courts.filter(
-      (court) => court.specialMatch !== null,
-    );
-    expect(specialCourts).toHaveLength(1);
-    const [court] = specialCourts;
-    expect(["streak_stopper", "champions"]).toContain(court.specialMatch?.kind);
-    expect(court.specialMatch?.outcome).toBeNull();
-    const courtIds = court.teams.flatMap((team) =>
-      team.players.map((player) => player.id),
-    );
-    expect(
-      courtIds.some((id) => id === playerIds[1] || id === playerIds[6]),
-    ).toBe(true);
+    for (const court of body.courts) {
+      const courtIds = court.teams.flatMap((team) =>
+        team.players.map((player) => player.id),
+      );
+      if (courtIds.some((id) => id === playerIds[1] || id === playerIds[6])) {
+        expect(["streak_stopper", "champions"]).toContain(court.specialMatch?.kind);
+        expect(court.specialMatch?.outcome).toBeNull();
+      } else {
+        expect(court.specialMatch?.kind).not.toBe("streak_stopper");
+      }
+    }
   });
 
   it("랭킹 원천을 못 읽으면 특수 유형·순위·연승 없이 추천한다", async () => {
@@ -396,7 +394,7 @@ describe("GET /api/match-sessions/:sessionId/recommendations", () => {
     expect(invalidRank.body).toEqual(first.body);
   });
 
-  it("세션 완료 경기를 완료 시각 오름차순으로 넘기고 완료 전 경기는 뺀다", async () => {
+  it("세션 완료 경기를 완료 시각 오름차순으로 승패와 함께 넘기고 완료 전 경기는 뺀다", async () => {
     const at = (minutes: number) =>
       new Date(thursdayEvening.getTime() - minutes * 60_000);
     const sessionMatch = (
@@ -404,12 +402,14 @@ describe("GET /api/match-sessions/:sessionId/recommendations", () => {
       status: Match["status"],
       completedAt: Date | null,
       ids: [string, string, string, string],
+      scores: Match["scores"] = [],
     ) =>
       ({
         id,
         status,
         matchStartsAt: at(120),
         completedAt,
+        scores,
         teams: [
           makeTeam("Team A", [ids[0], ids[1]]),
           makeTeam("Team B", [ids[2], ids[3]]),
@@ -423,18 +423,20 @@ describe("GET /api/match-sessions/:sessionId/recommendations", () => {
         playerIds[8],
         playerIds[9],
       ]),
-      sessionMatch("Mlate", "completed", at(10), [
-        playerIds[0],
-        playerIds[2],
-        playerIds[1],
-        playerIds[3],
-      ]),
-      sessionMatch("Mearly", "completed", at(40), [
-        playerIds[0],
-        playerIds[1],
-        playerIds[2],
-        playerIds[3],
-      ]),
+      sessionMatch(
+        "Mlate",
+        "completed",
+        at(10),
+        [playerIds[0], playerIds[2], playerIds[1], playerIds[3]],
+        [{ scoreA: 5, scoreB: 11 }],
+      ),
+      sessionMatch(
+        "Mearly",
+        "completed",
+        at(40),
+        [playerIds[0], playerIds[1], playerIds[2], playerIds[3]],
+        [{ scoreA: 11, scoreB: 9 }],
+      ),
     ]);
     const recommendSpy = vi.mocked(recommendDoublesMatches);
     recommendSpy.mockClear();
@@ -444,8 +446,14 @@ describe("GET /api/match-sessions/:sessionId/recommendations", () => {
     expect(response.status).toBe(200);
     expect(recommendSpy).toHaveBeenCalledTimes(1);
     expect(recommendSpy.mock.calls[0][0].completedMatches).toEqual([
-      { teams: [[playerIds[0], playerIds[1]], [playerIds[2], playerIds[3]]] },
-      { teams: [[playerIds[0], playerIds[2]], [playerIds[1], playerIds[3]]] },
+      {
+        teams: [[playerIds[0], playerIds[1]], [playerIds[2], playerIds[3]]],
+        winningTeamIndex: 0,
+      },
+      {
+        teams: [[playerIds[0], playerIds[2]], [playerIds[1], playerIds[3]]],
+        winningTeamIndex: 1,
+      },
     ]);
   });
 

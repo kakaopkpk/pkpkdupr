@@ -1,9 +1,10 @@
 import {
   getSameGenderCourtGender,
   judgeRecommendedSpecialMatch,
+  judgeSpecialMatch,
   SPECIAL_MATCH_RECOMMENDATION_BONUS,
-  SPECIAL_MATCH_RECOMMENDATION_DISPLAY_RANK,
   type SpecialMatch,
+  type SpecialMatchHistoryMatch,
   type SpecialMatchCandidatePlayer,
   type SpecialMatchKind,
 } from "./specialMatch.js";
@@ -55,6 +56,8 @@ export interface MatchmakingParticipant {
 /** 오늘 이 세션에서 완료된 경기의 팀 구성(선수 id) */
 export interface MatchmakingPlayedMatch {
   teams: [string[], string[]];
+  /** 이긴 팀. 코트의 리벤지 표시 판정에 쓰고, 없으면 승패 없는 경기로 본다 */
+  winningTeamIndex?: 0 | 1 | null;
 }
 
 export interface RecommendDoublesMatchesInput {
@@ -74,8 +77,8 @@ export interface RecommendDoublesMatchesInput {
    */
   reroll: number;
   /**
-   * 특수 유형 판정 입력 선수(복식 랭킹 기준). 주면 대진마다 특수 유형 코트 하나의 가산점을 총 감점에서 뺀다.
-   * 없으면 가산점이 없고 모든 코트의 specialMatch가 null이다
+   * 특수 유형 판정 입력 선수(복식 랭킹 기준). 주면 대진마다 특수 유형 코트 하나의 가산점을 총 감점에서 빼고,
+   * 고른 대진의 코트마다 특수 유형을 판정한다. 없으면 가산점이 없고 모든 코트의 specialMatch가 null이다
    */
   specialPlayers?: ReadonlyMap<string, SpecialMatchCandidatePlayer>;
 }
@@ -86,7 +89,7 @@ export interface RecommendedCourtPlan {
   teamAverages: [number, number];
   repeatedPartnerPairs: Array<[string, string]>;
   repeatedOpponentPairs: Array<[string, string]>;
-  /** 이 대진에서 가산점을 받은 특수 유형 코트면 판정 결과(outcome null), 아니면 null. 한 대진에 최대 한 코트다 */
+  /** 특수 유형 코트면 판정 결과(judgeSpecialMatch, outcome null), 아니면 null. 여러 코트에 붙을 수 있다 */
   specialMatch: SpecialMatch | null;
 }
 
@@ -125,7 +128,7 @@ export interface RecommendedCourt {
   teams: [RecommendedTeam, RecommendedTeam];
   repeatedPartnerPairs: Array<[string, string]>;
   repeatedOpponentPairs: Array<[string, string]>;
-  /** 특수 유형 코트면 판정 결과(outcome null), 아니면 null. 한 추천에 최대 한 코트다 */
+  /** 특수 유형 코트면 판정 결과(outcome null), 아니면 null. 여러 코트에 붙을 수 있다 */
   specialMatch: SpecialMatch | null;
 }
 
@@ -619,16 +622,31 @@ export const recommendDoublesMatches = (
     result = runStep(step, result);
   }
 
-  // 특수 유형으로 보이는 코트는 하나다. 표시 순위가 가장 큰 코트(같으면 앞 코트)다
-  let specialCourt: { court: number; match: SpecialMatch; rank: number } | null =
-    null;
-  for (let court = 0; court < courtCount; court += 1) {
-    const match = judgeCourt(result.arrangement, court);
-    const rank = match ? SPECIAL_MATCH_RECOMMENDATION_DISPLAY_RANK[match.kind] : null;
-    if (match && rank !== null && (!specialCourt || rank > specialCourt.rank)) {
-      specialCourt = { court, match, rank };
+  // 코트마다 시작 때 저장할 판정과 같은 규칙(리벤지 포함)으로 특수 유형을 붙인다
+  const specialHistory: SpecialMatchHistoryMatch[] = input.completedMatches.map(
+    (match) => ({
+      teamPlayerIds: match.teams,
+      winningTeamIndex: match.winningTeamIndex ?? null,
+    }),
+  );
+  const judgeDisplayedCourt = (court: number): SpecialMatch | null => {
+    if (!specialPlayers) {
+      return null;
     }
-  }
+    const [a1, a2, b1, b2] = courtSlice(result.arrangement, court).map((id) =>
+      specialPlayers.get(id),
+    );
+    if (!a1 || !a2 || !b1 || !b2) {
+      return null;
+    }
+    return judgeSpecialMatch(
+      [
+        [a1, a2],
+        [b1, b2],
+      ],
+      specialHistory,
+    );
+  };
 
   const courts: RecommendedCourtPlan[] = [];
   for (let court = 0; court < courtCount; court += 1) {
@@ -661,8 +679,7 @@ export const recommendDoublesMatches = (
       ],
       repeatedPartnerPairs,
       repeatedOpponentPairs,
-      specialMatch:
-        specialCourt?.court === court ? specialCourt.match : null,
+      specialMatch: judgeDisplayedCourt(court),
     });
   }
 
