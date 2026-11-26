@@ -94,6 +94,8 @@ describe("buildPlayerProfileSummary", () => {
     expect(summary.ratingDelta.doubles).toMatchObject({
       last7Days: 0,
       last7DaysMatchCount: 3,
+      last7DaysWins: 2,
+      last7DaysLosses: 1,
     });
     expect(summary.partners).toEqual([
       expect.objectContaining({

@@ -127,25 +127,26 @@ export const GuestNoticeCard: React.FC = () => (
   </Card>
 );
 
-/** 나 탭 게스트의 최근 7일 타일. 평점 변화 대신 경기 수를 크게 보인다 */
+/** 나 탭 게스트의 최근 7일 타일. 평점 변화 대신 경기 수를 크게, 아래에 그 기간 승패를 보인다 */
 export const GuestLast7DaysTile: React.FC<{
   overview: ProfileOverview;
   category: MatchTopLevelType;
-}> = ({ overview, category }) => (
-  <ProfileStatTile
-    label="최근 7일"
-    value={
-      <>
-        <CountUpNumber
-          value={overview.summary.ratingDelta[category].last7DaysMatchCount}
-          {...COUNT_UP}
-        />
-        경기
-      </>
-    }
-    foot="평점 미반영"
-  />
-);
+}> = ({ overview, category }) => {
+  const { last7DaysMatchCount, last7DaysWins = 0, last7DaysLosses = 0 } =
+    overview.summary.ratingDelta[category];
+  return (
+    <ProfileStatTile
+      label="최근 7일"
+      value={
+        <>
+          <CountUpNumber value={last7DaysMatchCount} {...COUNT_UP} />
+          경기
+        </>
+      }
+      foot={<WinLossCount wins={last7DaysWins} losses={last7DaysLosses} />}
+    />
+  );
+};
 
 /** 최근 완료 경기 3개와 "전체 보기" */
 export const RecentMatchesSection: React.FC<{

@@ -27,7 +27,7 @@
 - `GET /api/players`: active만
 - 프로필 요약 `GET /api/players/:playerId/profile-summary`
   - 회원 정보 `player`(비활성 회원 포함, 없는 회원 404)
-  - 승패·평점 변화·최근 7일 경기 수
+  - 승패·평점 변화·최근 7일 경기 수와 그 승패(`last7DaysWins`·`last7DaysLosses`)
   - 파트너 궁합(같은 팀 3경기 이상)
   - 천적(맞대결 3경기 이상·진 비율 50% 이상, 둘 다 조건에 맞는 회원 전부)
   - 요청자 기준 분류별 상대 전적과 그 경기들에서 바뀐 요청자 평점 합 `headToHead[분류].ratingDelta`

@@ -25,6 +25,9 @@ export interface PlayerProfileSummaryInfo {
       last30Days: number;
       last90Days: number;
       last7DaysMatchCount: number;
+      /** 배포 직후 이전 API 응답에는 없다 */
+      last7DaysWins?: number;
+      last7DaysLosses?: number;
     }
   >;
   ratingHistory: PlayerRatingHistory;

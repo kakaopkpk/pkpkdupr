@@ -54,6 +54,7 @@ import {
 import { useAuth, useIsGuest } from "@/context/AuthContext";
 import {
   DataSyncProvider,
+  useDataVersion,
   useInvalidateData,
 } from "@/context/DataSyncContext";
 import { ScreenVisibilityProvider } from "@/context/ScreenVisibilityContext";
@@ -294,14 +295,27 @@ const BottomDockTint = React.memo<{ dockBarCount: number }>(
   ),
 );
 
+const PLAYERS_KIND = ["players"] as const;
+
 const BottomNavShell: React.FC = () => {
-  const { player } = useAuth();
+  const { player, refreshMe } = useAuth();
   const isGuest = useIsGuest();
   const invalidateData = useInvalidateData();
   const isOnline = useOnlineStatus();
   const liveSessionState = useLiveSessionState(player?.id);
   // 남의 변경 신호를 받아 무효화한다
   useDataSyncRealtime(!!player);
+  // 로그인한 채 정회원으로 승급하면(회원 데이터 변경) 내 정보를 다시 받아 게스트 화면을 푼다
+  const playersVersion = useDataVersion(PLAYERS_KIND);
+  // refreshMe는 렌더마다 새로 만들어지므로 의존성에 넣지 않고 최신 값을 ref로 부른다
+  const refreshMeRef = useRef(refreshMe);
+  refreshMeRef.current = refreshMe;
+  useEffect(() => {
+    if (!isGuest || playersVersion === 0) return;
+    refreshMeRef.current().catch(() => {
+      // 다음 회원 데이터 변경·앱 재진입 때 다시 받는다
+    });
+  }, [isGuest, playersVersion]);
   const [selectedTab, setSelectedTab] = useState<TabKey>("home");
   const [visitedTabs, setVisitedTabs] =
     useState<Record<TabKey, boolean>>(initiallyVisitedTabs);
