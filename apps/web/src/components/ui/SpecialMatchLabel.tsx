@@ -71,3 +71,19 @@ export const SpecialMatchLabel: React.FC<{
     {specialMatchKindLabels[kind]}
   </span>
 );
+
+/** 연한 파랑 알약(아이콘 14 + 유형 이름 13 굵은 블루, 높이 28). 기록 시트 선수 고르기 제목 줄 오른쪽에 쓴다 */
+export const SpecialMatchPill: React.FC<{
+  kind: SpecialMatchKind;
+  className?: string;
+}> = ({ kind, className }) => (
+  <span
+    className={cx(
+      "inline-flex h-7 shrink-0 items-center gap-1 rounded-full bg-pk-primary-soft px-3 text-pk-13 font-bold whitespace-nowrap text-pk-primary",
+      className,
+    )}
+  >
+    <SpecialMatchIcon kind={kind} size={ICON_SIZE} />
+    {specialMatchKindLabels[kind]}
+  </span>
+);
