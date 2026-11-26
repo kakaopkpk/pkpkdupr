@@ -120,6 +120,11 @@ describe("POST /api/matches/start", () => {
     findInProgressPlayerIds = vi
       .spyOn(MatchRepository.prototype, "findInProgressPlayerIds")
       .mockResolvedValue([]);
+    // 세션 시작 경기는 도전 매치 판정에 랭킹 원천을 읽는다. 기본은 빈 원천이라 특수 매치가 없다
+    vi.spyOn(AuthService.prototype, "getAllPlayers").mockResolvedValue([]);
+    vi.spyOn(MatchRepository.prototype, "getAllRatingChangeLogs").mockResolvedValue([]);
+    vi.spyOn(MatchRepository.prototype, "findCompletedMatchOutcomes").mockResolvedValue([]);
+    vi.spyOn(MatchRepository.prototype, "findSessionsWithParticipantIds").mockResolvedValue([]);
     createInProgress = vi
       .spyOn(MatchRepository.prototype, "createInProgress")
       .mockImplementation(async (input) => ({
