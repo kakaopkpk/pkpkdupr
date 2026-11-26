@@ -31,6 +31,30 @@ describe("rulesGuide", () => {
     expect(RULES_GUIDE_CARD_COUNT).toBe(RULES_GUIDE_CARDS.length);
   });
 
+  it("labels each card with its section and position in the section", async () => {
+    const { RULES_GUIDE_CARDS } = await import(
+      "@/components/rules/RulesGuideCards"
+    );
+
+    expect(RULES_GUIDE_CARDS.map((card) => card.eyebrow)).toEqual([
+      "개요 1/3",
+      "개요 2/3",
+      "개요 3/3",
+      "치는 법 1/4",
+      "치는 법 2/4",
+      "치는 법 3/4",
+      "치는 법 4/4",
+      "서브 1/4",
+      "서브 2/4",
+      "서브 3/4",
+      "서브 4/4",
+      "정리",
+      "부록 1/3",
+      "부록 2/3",
+      "부록 3/3",
+    ]);
+  });
+
   it("keeps the home card until every card has been seen", async () => {
     const storage = createStorage();
     vi.stubGlobal("localStorage", storage);
@@ -78,7 +102,7 @@ describe("rulesGuide", () => {
     vi.stubGlobal(
       "localStorage",
       createStorage({
-        "pkpkdupr:rules-guide-seen": JSON.stringify([0, 3, 3, 12, -1, 1.5, "2"]),
+        "pkpkdupr:rules-guide-seen": JSON.stringify([0, 3, 3, 15, -1, 1.5, "2"]),
         // 열기만 해도 써지던 옛 키는 읽지 않는다
         "pkpkdupr:rules-guide-dismissed": "1",
       }),

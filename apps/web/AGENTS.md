@@ -42,9 +42,9 @@
         - 아래 위치 점은 10개까지, 넘으면 "n / N".
         - 어느 카드에서든 참여하기·참여 취소.
       - 진행 중 세션이 없으면 캐러셀(과 진행 중 경기) 아래 "소식" 피드 `home/NewsFeed`(`GET /api/news-feed`, 무한 스크롤, 데이터는 `home/useNewsFeed`)를 둔다. 카드 모양·누르면 가는 곳은 `docs/design.md` "홈"을 따른다.
-        - 소식 맨 위에는 규칙 안내 카드 `home/RulesGuideNewsCard`(누르면 `openRulesGuide`, X로 닫음, "12장 중 n장 읽음"과 진행률 막대)를 둔다.
+        - 소식 맨 위에는 규칙 안내 카드 `home/RulesGuideNewsCard`(누르면 `openRulesGuide`, X로 닫음, "15장 중 n장 읽음"과 진행률 막대)를 둔다.
           - 보일지는 `lib/rulesGuide`의 `useIsRulesGuideCardHidden`, 읽은 장 수는 `useRulesGuideSeenCount`가 정한다(기기별 localStorage `pkpkdupr:rules-guide-seen`·`pkpkdupr:rules-guide-closed`).
-          - X로 닫거나 12장을 다 보면 다시 나오지 않는다. 안내 화면을 열기만 해서는 사라지지 않는다.
+          - X로 닫거나 15장을 다 보면 다시 나오지 않는다. 안내 화면을 열기만 해서는 사라지지 않는다.
       - 진행 중 일반 세션이면 블루 카드 아래 `records/SessionReportParts`의 `LiveSessionHighlightCard`(세션 지배자 줄 + 세션 연승 줄)를 둔다. 모양은 `docs/design.md` "홈".
         - 데이터는 `home/useLiveSessionHighlight`다. 지배자와 누적 연승은 `home/useLiveSessionReport`(세션 리포트 `topRiser`·`winStreaks`)가 받는다.
         - 연승 줄 대상·세션 전적은 셸의 세션 경기와 누적 연승으로 `lib/sessionWinStreak`의 `getSessionWinStreaks`가 고른다.
@@ -130,12 +130,12 @@
     - `session/`: 세션 만들기(일정 탭과 같은 `MonthCalendar`로 고르는 날짜, `minDateKey`로 지난 날·오늘이 든 달 앞은 막음, 표시는 `schedule/useScheduleMonthMarks`·시작·종료 시각 칩 `SessionSchedulePicker`, 오늘 이후 어느 날이든)·참여자 시트 `ParticipantsSheet`(열면 참여자 보기, 오른쪽 위 "수정"으로 같은 시트에서 전체 회원 체크·게스트 추가 수정 모드, 완료·취소·뒤로가기는 보기로 돌아감. `isReadOnly`면 보기 모드만 있고 "수정"이 없음)
     - `settings/`: 설정(프로필·계정·피클볼·앱 묶음, 피클볼의 "기본 규칙"은 `openRulesGuide`)·비밀번호 변경·상태메시지 편집·프로필 사진 조정 `AvatarCropScreen`
       - 고른 사진을 끌어 옮기고 핀치로 1~4배, 두 번 탭 2배↔1배, 원 안을 512px JPEG로 잘라 저장. 좌표 계산은 `utils/avatarCrop.ts`
-    - `rules/`: 피클볼 기본 규칙 안내 `RulesGuideScreen`(카드 12장 가로 넘기기, 넘기기는 홈 캐러셀의 `home/useCarouselSwipe`). 모양·그림 규칙은 `docs/design.md` "피클볼 기본 규칙".
+    - `rules/`: 피클볼 기본 규칙 안내 `RulesGuideScreen`(카드 15장 가로 넘기기, 넘기기는 홈 캐러셀의 `home/useCarouselSwipe`). 모양·그림 규칙은 `docs/design.md` "피클볼 기본 규칙".
       - `BottomNav`가 `lazy`로 처음 열 때 받는다(그림 CSS를 첫 화면 CSS에서 빼려는 것). 홈 카드의 장 수는 이 모듈을 끌어오지 않도록 `lib/rulesGuide`의 `RULES_GUIDE_CARD_COUNT`를 쓴다.
-      - 지금 카드가 될 때마다 `markRulesGuideCardSeen`으로 그 장을 본 장으로 남긴다(12장을 다 보면 홈 규칙 안내 카드가 사라짐).
-      - 카드 내용·순서는 `RulesGuideCards`, 공통 조각(그림 칸 `RuleFigure`·머리·점 목록·표 줄)은 `RulesGuideParts`, 카드별 그림은 `figures/`, 에티켓 사진은 `photos/`다.
+      - 지금 카드가 될 때마다 `markRulesGuideCardSeen`으로 그 장을 본 장으로 남긴다(15장을 다 보면 홈 규칙 안내 카드가 사라짐).
+      - 카드 내용·순서·그림 범위 클래스(`scope`)는 `RulesGuideCards`, 공통 조각(그림 칸 `RuleFigure`·머리·점 목록·표 줄)은 `RulesGuideParts`, 카드별 그림은 `figures/`, 에티켓 사진은 `photos/`다.
       - 그림은 298×220 고정 좌표이고 `RuleFigure`가 칸 폭에 맞춰 비율로 늘이거나 줄인다.
-      - 움직임은 `rulesGuide.css`(카드마다 `.pk-rules-cN` 범위 클래스와 `pk-rules-cN-` keyframes, 한 카드는 한 주기)다. 지금 카드가 아니면 `.pk-rules-paused`로 멈추고, 지금 카드가 되면 그림을 다시 그려 처음부터 재생한다. 움직임 줄이기면 카드의 `stillSeconds` 장면에서 멈춘다.
+      - 움직임은 `rulesGuide.css`(카드 `scope` 범위 안에서만 걸림, 한 카드는 한 주기)다. 위에서 본 코트·사진 그림은 `.pk-rules-cN` 범위(N은 장 번호가 아닌 범위 이름), 장면 방식 그림은 `.g2`(장면·캡션·줄 강조·진행 막대), 옆에서 본 그림의 공·사람·패들은 `.g3`와 `k` 접두 클래스다. 지금 카드가 아니면 `.pk-rules-paused`로 멈추고, 지금 카드가 되면 그림을 다시 그려 처음부터 재생한다. 움직임 줄이기면 카드의 `stillSeconds` 장면에서 멈춘다.
       - 공 경로·링 keyframes는 디자인 확정본 생성 스크립트로 만든 값이라 손으로 고치지 않는다.
       - 공 경로 애니메이션은 `linear`다. 약 0.1초 간격 keyframes에 기본 `ease`가 걸리면 점마다 공이 멈춰 끊겨 보인다.
   - 탭 전용 조각: `home/`, `schedule/`, `records/`(세션 리포트 조각 `SessionReportParts`는 일정 탭·세션 상세·홈이 같이 씀, 끝난 세션·세션 없는 경기 카드 `RecordCards`), `ranking/`. 세션 블루 카드 틀·참여 버튼 `session/SessionBlueCard`(오른쪽 위 피클볼 장식 `session/PickleballIllustration`, 첫 줄은 종류 칩 "정기"/"회원"/"대회"와 남은 날 `getSessionDDayLabel`("D-1"·오늘이면 "D-Day"), 참여 중이면 "✓ 참여 중 … 취소" 버튼 하나, 진행 중 세션 카드 `LiveSessionCard`)는 홈 다음 세션·진행 중 세션 카드와 일정 탭 세션 카드가 같이 씀

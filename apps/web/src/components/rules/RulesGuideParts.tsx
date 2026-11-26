@@ -8,12 +8,14 @@ const STAGE_HEIGHT = 220;
 /**
  * 카드 위 그림 칸(연한 파랑 바탕). 고정 좌표 그림을 칸 폭에 맞춰 같은 비율로 늘이거나 줄이고,
  * 칸 높이도 그 비율을 따른다(390 화면에서 298×220).
- * label을 주면 칸 전체를 그림 하나로 읽힌다(안의 SVG가 스스로 설명을 가지면 생략)
+ * label을 주면 칸 전체를 그림 하나로 읽힌다(안의 SVG가 스스로 설명을 가지면 생략).
+ * className은 고정 좌표 그림 판에 붙는다(옆에서 본 그림의 움직임 범위 .g3)
  */
 export const RuleFigure: React.FC<{
   label?: string;
+  className?: string;
   children: React.ReactNode;
-}> = ({ label, children }) => {
+}> = ({ label, className, children }) => {
   const frameRef = useRef<HTMLDivElement>(null);
   const [scale, setScale] = useState(1);
 
@@ -40,7 +42,7 @@ export const RuleFigure: React.FC<{
       style={{ height: STAGE_HEIGHT * scale }}
     >
       <div
-        className="absolute top-0 left-0 origin-top-left"
+        className={cx("absolute top-0 left-0 origin-top-left", className)}
         style={{
           width: STAGE_WIDTH,
           height: STAGE_HEIGHT,
@@ -53,7 +55,7 @@ export const RuleFigure: React.FC<{
   );
 };
 
-/** 작은 머리 글자("규칙 n") + 제목 22 */
+/** 작은 머리 글자(묶음 이름과 순번, "치는 법 2/4") + 제목 22 */
 export const RuleHeading: React.FC<{ eyebrow: string; title: string }> = ({
   eyebrow,
   title,
@@ -64,16 +66,33 @@ export const RuleHeading: React.FC<{ eyebrow: string; title: string }> = ({
   </div>
 );
 
-export const RuleList: React.FC<{ children: React.ReactNode }> = ({
-  children,
-}) => <ul className="flex flex-col gap-2.5">{children}</ul>;
+/**
+ * 점 목록. 장면마다 한 줄씩 강조하는 장면 방식 카드(scene)는 줄에 강조 바탕 여백(.g2 .row)이 있어 줄 간격이 좁다
+ */
+export const RuleList: React.FC<{
+  scene?: boolean;
+  children: React.ReactNode;
+}> = ({ scene = false, children }) => (
+  <ul className={cx("flex flex-col", scene ? "gap-0.5" : "gap-2.5")}>
+    {children}
+  </ul>
+);
 
-/** 점 목록 한 줄. 폴트처럼 하면 안 되는 줄은 빨간 점(tone "fault")이다 */
+/**
+ * 점 목록 한 줄. 폴트처럼 하면 안 되는 줄은 빨간 점(tone "fault")이다.
+ * row를 주면 그 장면 동안 줄이 연한 파랑 바탕이 된다(rulesGuide.css의 .g2 .row .r{n})
+ */
 export const RuleItem: React.FC<{
   tone?: "default" | "fault";
+  row?: string;
   children: React.ReactNode;
-}> = ({ tone = "default", children }) => (
-  <li className="flex gap-2.5 text-pk-15 leading-[1.5] text-pk-ink">
+}> = ({ tone = "default", row, children }) => (
+  <li
+    className={cx(
+      "flex gap-2.5 text-pk-15 leading-[1.5] text-pk-ink",
+      row && `row ${row}`,
+    )}
+  >
     <span
       aria-hidden="true"
       className={cx(
@@ -84,6 +103,11 @@ export const RuleItem: React.FC<{
     <span>{children}</span>
   </li>
 );
+
+/** 점 없는 본문 문단 */
+export const RuleParagraph: React.FC<{ children: React.ReactNode }> = ({
+  children,
+}) => <p className="text-pk-15 leading-[1.5] text-pk-ink">{children}</p>;
 
 /** 왼쪽 64px 이름 칸 + 오른쪽 설명(에티켓·피카피카 방식 표) */
 export const RuleTableRow: React.FC<{
