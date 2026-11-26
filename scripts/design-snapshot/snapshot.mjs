@@ -7,15 +7,19 @@
 //   브라우저 시계는 녹화 시각에 고정한다.
 // 녹화(Docker 필요): pnpm dev가 떠 있는 상태에서 pnpm design:snapshot --record
 //   로컬 앱(dev mock)을 돌며 응답을 dev mock 아이디를 바꾼 상태로 fixtures/responses.json에 저장한다.
-// 환경 변수: DESIGN_SNAPSHOT_URL(녹화 대상, 기본 http://localhost:8080), DESIGN_SNAPSHOT_OUT(기본 .design-snapshots)
+// 환경 변수: DESIGN_SNAPSHOT_URL(녹화 대상, 기본 http://localhost:8080), DESIGN_SNAPSHOT_OUT(기본 .design-snapshots),
+//   DESIGN_SNAPSHOT_PORT(재생 web 포트, 기본은 빈 포트 자동 선택)
 import { spawn } from "node:child_process";
+import { createServer } from "node:net";
 import { mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { chromium } from "playwright";
 
 const RECORD_URL = process.env.DESIGN_SNAPSHOT_URL ?? "http://localhost:8080";
-const REPLAY_PORT = 8091;
+// 지정하지 않으면 실행마다 빈 포트를 골라 여러 실행이 동시에 돌 수 있다.
+// 녹화 응답은 경로로만 찾으므로(requestKey) 포트가 달라도 재생된다.
+const REPLAY_PORT = process.env.DESIGN_SNAPSHOT_PORT ? Number(process.env.DESIGN_SNAPSHOT_PORT) : null;
 const REPLAY_SUPABASE_URL = "http://127.0.0.1:54399";
 const OUT_DIR = path.resolve(process.env.DESIGN_SNAPSHOT_OUT ?? ".design-snapshots");
 const FIXTURE_FILE = path.join(path.dirname(fileURLToPath(import.meta.url)), "fixtures", "responses.json");
@@ -414,9 +418,34 @@ function sortFixtures(fixtures) {
 }
 
 // web(Vite)만 띄운다. Supabase 주소는 재생용 가짜 주소라 실제 연결은 없다.
+// 포트를 고른 뒤 Vite가 잡기 전에 다른 실행이 먼저 잡을 수 있으므로, 자동 선택이면 몇 번 다시 고른다.
 async function startVite() {
-  const baseUrl = `http://localhost:${REPLAY_PORT}`;
-  const child = spawn("pnpm", ["--filter", "@pkpkdupr/web", "exec", "vite", "--port", String(REPLAY_PORT), "--strictPort"], {
+  const attempts = REPLAY_PORT == null ? 3 : 1;
+  let lastError;
+  for (let i = 0; i < attempts; i += 1) {
+    try {
+      return await startViteOnPort(REPLAY_PORT ?? (await findFreePort()));
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  throw lastError;
+}
+
+function findFreePort() {
+  return new Promise((resolve, reject) => {
+    const server = createServer();
+    server.once("error", reject);
+    server.listen(0, "localhost", () => {
+      const { port } = server.address();
+      server.close(() => resolve(port));
+    });
+  });
+}
+
+async function startViteOnPort(port) {
+  const baseUrl = `http://localhost:${port}`;
+  const child = spawn("pnpm", ["--filter", "@pkpkdupr/web", "exec", "vite", "--port", String(port), "--strictPort"], {
     env: { ...process.env, VITE_SUPABASE_URL: REPLAY_SUPABASE_URL, VITE_SUPABASE_ANON_KEY: "design-snapshot", VITE_API_BASE_URL: "" },
     stdio: ["ignore", "pipe", "pipe"],
     detached: true,
@@ -435,14 +464,17 @@ async function startVite() {
     if (child.exitCode != null) break;
     try {
       // 이전 실행이 남긴 다른 서버가 응답한 것이 아닌지, 이번에 띄운 프로세스가 살아 있는지도 본다.
-      if ((await fetch(baseUrl)).ok && child.exitCode == null) return { baseUrl, stop };
+      if ((await fetch(baseUrl)).ok && child.exitCode == null) {
+        console.log(`web(Vite) ${baseUrl}`);
+        return { baseUrl, stop };
+      }
     } catch {
       // 아직 뜨는 중이다.
     }
     await new Promise((resolve) => setTimeout(resolve, 500));
   }
   await stop();
-  throw new Error(`web(Vite)을 :${REPLAY_PORT}에 띄우지 못했습니다.\n${output.slice(-2000)}`);
+  throw new Error(`web(Vite)을 :${port}에 띄우지 못했습니다.\n${output.slice(-2000)}`);
 }
 
 async function login(page, baseUrl) {
