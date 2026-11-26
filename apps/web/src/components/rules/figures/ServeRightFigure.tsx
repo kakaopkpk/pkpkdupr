@@ -3,11 +3,11 @@ import { RuleFigure } from "../RulesGuideParts";
 
 /**
  * 규칙 안내 9장 그림: 서브권: 서브할 권리. 움직임은 rulesGuide.css의 .g2 .n3 .d6 범위다.
- * 장면: "1번 서버가 지면 서브권 하나를 잃어요" → "2번 서버가 지면 남은 서브권도 잃어요" → "사이드 아웃: 상대 팀이 공격팀"
+ * 장면: "1번 서버가 지면 서브권 하나를 잃어요" → "2번 서버가 지면 남은 서브권도 잃어요" → "사이드 아웃: 공수 전환"
  */
 export const ServeRightFigure: React.FC = () => (
   <RuleFigure className="g3">
-    <svg className="loop" width="298" height="206" viewBox="0 0 298 206" role="img" aria-label="위에서 본 코트: 공격팀 1번이 서브해서 랠리를 지면 서브권 하나를 잃고, 2번도 지면 사이드 아웃으로 상대 팀이 공격팀이 된다. 노란 점은 남은 서브권" style={{ position: "absolute", left: "0px", top: "0px" }}>
+    <svg className="loop" width="298" height="206" viewBox="0 0 298 206" role="img" aria-label="위에서 본 코트: 공격팀 1번이 서브해서 랠리를 지면 서브권 하나를 잃고, 2번도 지면 서브권이 상대 팀으로 넘어가 공수가 바뀐다(사이드 아웃). 노란 점은 남은 서브권" style={{ position: "absolute", left: "0px", top: "0px" }}>
       <rect x="17" y="46" width="264" height="120" fill="#2346a8" />
       <rect x="107" y="46" width="84" height="120" fill="#5a7bd6" />
       <rect x="17" y="46" width="264" height="120" fill="none" stroke="#ffffff" strokeWidth="2" />
@@ -142,7 +142,7 @@ export const ServeRightFigure: React.FC = () => (
       <span>2번 서버가 지면 남은 서브권도 잃어요</span>
     </div>
     <div className="cap sc s3">
-      <span>사이드 아웃: 상대 팀이 공격팀</span>
+      <span>사이드 아웃: 공수 전환</span>
     </div>
     <div className="bars">
       <span className="bar b1">
