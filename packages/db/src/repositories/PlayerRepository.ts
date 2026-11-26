@@ -21,6 +21,8 @@ export interface StoredPlayerRecord extends Player {
   /** 게스트를 추가한 회원과 세션. 정회원은 null이다. API 공개 응답에는 내보내지 않는다. */
   guestAddedByPlayerId: string | null;
   guestAddedSessionId: string | null;
+  /** 마지막으로 앱에 들어온 시각. 관리자 회원 목록에만 내보낸다. */
+  lastActiveAt: Date | null;
 }
 
 export interface CreateStoredPlayerInput {
@@ -232,6 +234,7 @@ export class PlayerRepository {
       guestAddedByPlayerId: player.guestAddedByPlayerId ?? null,
       guestAddedSessionId: player.guestAddedSessionId ?? null,
       promotedAt: player.promotedAt ?? null,
+      lastActiveAt: player.lastActiveAt ?? null,
       affiliations,
       ...(statusMessage ? { statusMessage } : {}),
       ...(statusMessageBackgroundColor ? { statusMessageBackgroundColor } : {}),
@@ -278,6 +281,27 @@ export class PlayerRepository {
       .set({ status, updatedAt: new Date() })
       .where(eq(players.id, id));
     return await this.findById(id);
+  }
+
+  /**
+   * 앱 진입 시각을 기록한다. 마지막 기록이 minIntervalSeconds보다 최근이면 쓰지 않는다.
+   * 회원 정보 수정이 아니므로 updated_at은 바꾸지 않는다.
+   */
+  async recordLastActive(
+    id: string,
+    now: Date,
+    minIntervalSeconds: number,
+  ): Promise<void> {
+    const threshold = Math.floor(now.getTime() / 1000) - minIntervalSeconds;
+    await this.db
+      .update(players)
+      .set({ lastActiveAt: now })
+      .where(
+        and(
+          eq(players.id, id),
+          sql`(${players.lastActiveAt} IS NULL OR ${players.lastActiveAt} <= ${threshold})`,
+        ),
+      );
   }
 
   async updateFirstLogin(

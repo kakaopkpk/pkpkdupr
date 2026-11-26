@@ -1449,6 +1449,7 @@ app.get("/api/me", async (req, res) => {
   if (!session) {
     return;
   }
+  await authService.recordAppEntry(session.payload.playerId);
   res.json(toMeResponse(session));
 });
 

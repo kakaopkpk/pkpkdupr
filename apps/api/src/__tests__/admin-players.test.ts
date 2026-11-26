@@ -38,12 +38,17 @@ const storedPlayer = (
   isFirstLogin: false,
   guestAddedByPlayerId: null,
   guestAddedSessionId: null,
+  lastActiveAt: null,
   createdAt: NOW,
   updatedAt: NOW,
   ...overrides,
 });
 
-const admin = storedPlayer("Padmin01", { authUserId: "auth-admin" });
+const ADMIN_LAST_ACTIVE_AT = new Date("2026-11-17T08:30:00+09:00");
+const admin = storedPlayer("Padmin01", {
+  authUserId: "auth-admin",
+  lastActiveAt: ADMIN_LAST_ACTIVE_AT,
+});
 const member = storedPlayer("Pmember1", {
   authUserId: "auth-member",
   isFirstLogin: true,
@@ -91,11 +96,6 @@ describe("GET /api/admin/players", () => {
         [guest.id]: { matchCount: 1, lastMatchStartsAt },
       });
     vi.spyOn(db.matches, "findSessionById").mockResolvedValue(undefined);
-    const lastSignInAt = new Date("2026-11-17T08:30:00+09:00");
-    vi.spyOn(SupabaseAuthAdmin.prototype, "listUsers").mockResolvedValue([
-      { id: "auth-admin", email: null, lastSignInAt },
-      { id: "auth-member", email: null, lastSignInAt: null },
-    ]);
 
     const response = await request(app)
       .get("/api/admin/players")
@@ -114,43 +114,53 @@ describe("GET /api/admin/players", () => {
       hasLoginAccount: true,
       matchCount: 0,
       lastMatchStartsAt: null,
-      lastSignInAt: lastSignInAt.toISOString(),
+      lastActiveAt: ADMIN_LAST_ACTIVE_AT.toISOString(),
     });
     expect(byId.get(member.id)).toMatchObject({
       isFirstLogin: true,
       hasLoginAccount: true,
       matchCount: 3,
       lastMatchStartsAt: lastMatchStartsAt.toISOString(),
-      lastSignInAt: null,
+      lastActiveAt: null,
     });
     expect(byId.get(guest.id)).toMatchObject({
       hasLoginAccount: false,
       matchCount: 1,
       ratingExcludedMatchCount: 1,
-      lastSignInAt: null,
+      lastActiveAt: null,
     });
     expect(byId.get(member.id)).not.toHaveProperty("authUserId");
   });
+});
 
-  it("Auth 조회가 실패해도 마지막 로그인만 빼고 목록을 돌려준다", async () => {
-    vi.spyOn(db.players, "findAll").mockResolvedValue([admin, member]);
-    vi.spyOn(db.matches, "countRatingExcludedMatchesByPlayerId").mockResolvedValue({});
-    vi.spyOn(db.matches, "findMatchStatsByPlayerId").mockResolvedValue({});
-    vi.spyOn(SupabaseAuthAdmin.prototype, "listUsers").mockRejectedValue(
-      new Error("auth down"),
+describe("GET /api/me", () => {
+  it("앱 진입 시각을 5분 간격으로 기록한다", async () => {
+    session = sessionOf(member);
+    const recordLastActive = vi
+      .spyOn(db.players, "recordLastActive")
+      .mockResolvedValue();
+
+    const response = await request(app)
+      .get("/api/me")
+      .set("Authorization", "Bearer token");
+
+    expect(response.status).toBe(200);
+    expect(recordLastActive).toHaveBeenCalledWith(member.id, NOW, 5 * 60);
+  });
+
+  it("앱 진입 시각 기록이 실패해도 회원 정보를 돌려준다", async () => {
+    session = sessionOf(member);
+    vi.spyOn(db.players, "recordLastActive").mockRejectedValue(
+      new Error("db down"),
     );
     vi.spyOn(console, "error").mockImplementation(() => {});
 
     const response = await request(app)
-      .get("/api/admin/players")
+      .get("/api/me")
       .set("Authorization", "Bearer token");
 
     expect(response.status).toBe(200);
-    const body = response.body as Array<Record<string, unknown>>;
-    expect(body).toHaveLength(2);
-    for (const player of body) {
-      expect(player).not.toHaveProperty("lastSignInAt");
-    }
+    expect(response.body).toMatchObject({ id: member.id });
   });
 });
 

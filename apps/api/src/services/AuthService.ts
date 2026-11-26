@@ -82,6 +82,8 @@ interface StoredPlayerRecord extends Player {
   duprState: StoredPlayerDupr;
   guestAddedByPlayerId: string | null;
   guestAddedSessionId: string | null;
+  /** 마지막으로 앱에 들어온 시각. 관리자 회원 목록에만 내보낸다 */
+  lastActiveAt: Date | null;
 }
 
 export interface AuthenticatedSession {
@@ -149,6 +151,9 @@ const createPlayer = (
 
 const toDate = (value: string | Date) => new Date(value);
 
+/** 웹은 포커스·화면 복귀마다 /api/me를 부르므로, 마지막 기록에서 이만큼 지났을 때만 앱 진입 시각을 다시 쓴다 */
+const APP_ENTRY_RECORD_INTERVAL_SECONDS = 5 * 60;
+
 const hydratePlayer = (record: any): StoredPlayerRecord => {
   const duprState = normalizeStoredPlayerDupr(record.duprRating);
   return {
@@ -164,6 +169,7 @@ const hydratePlayer = (record: any): StoredPlayerRecord => {
     guestAddedSessionId: record.guestAddedSessionId ?? null,
     status: record.status === "deleted" ? "inactive" : record.status,
     promotedAt: record.promotedAt ? toDate(record.promotedAt) : null,
+    lastActiveAt: record.lastActiveAt ? toDate(record.lastActiveAt) : null,
     createdAt: toDate(record.createdAt),
     updatedAt: toDate(record.updatedAt),
   };
@@ -351,6 +357,7 @@ const toPublicPlayer = (stored: StoredPlayerRecord): Player => {
     duprState: _duprState,
     guestAddedByPlayerId: _guestAddedByPlayerId,
     guestAddedSessionId: _guestAddedSessionId,
+    lastActiveAt: _lastActiveAt,
     ...player
   } = stored;
   return player;
@@ -665,6 +672,21 @@ export class AuthService {
     }
 
     return this.buildSession(hydratePlayer(linked.player), linked.isAdmin);
+  }
+
+  /**
+   * 앱 진입 시각을 기록한다(GET /api/me). 기록에 실패해도 앱 진입은 막지 않으므로 로그만 남긴다.
+   */
+  async recordAppEntry(playerId: string, now = new Date()): Promise<void> {
+    try {
+      await db.players.recordLastActive(
+        playerId,
+        now,
+        APP_ENTRY_RECORD_INTERVAL_SECONDS,
+      );
+    } catch (err) {
+      console.error("[AUTH] 앱 진입 시각 기록 실패", err);
+    }
   }
 
   /**
@@ -1115,12 +1137,10 @@ export class AuthService {
       players,
       excludedMatchCountByPlayerId,
       matchStatsByPlayerId,
-      lastSignInAtByAuthUserId,
     ] = await Promise.all([
       db.players.findAll().then((records) => records.map(hydratePlayer)),
       db.matches.countRatingExcludedMatchesByPlayerId(),
       db.matches.findMatchStatsByPlayerId(),
-      this.loadLastSignInAtByAuthUserId(),
     ]);
     const usernameById = new Map(
       players.map((player) => [player.id, player.username]),
@@ -1169,24 +1189,9 @@ export class AuthService {
         matchCount: matchStatsByPlayerId[player.id]?.matchCount ?? 0,
         lastMatchStartsAt:
           matchStatsByPlayerId[player.id]?.lastMatchStartsAt ?? null,
-        ...(lastSignInAtByAuthUserId && {
-          lastSignInAt: player.authUserId
-            ? (lastSignInAtByAuthUserId.get(player.authUserId) ?? null)
-            : null,
-        }),
+        lastActiveAt: player.lastActiveAt,
       };
     });
-  }
-
-  /** Auth 사용자 id → 마지막 로그인 시각. 조회에 실패해도 회원 목록은 보여야 하므로 null(모름)을 돌려준다 */
-  private async loadLastSignInAtByAuthUserId(): Promise<Map<string, Date | null> | null> {
-    try {
-      const users = await this.authAdmin.listUsers();
-      return new Map(users.map((user) => [user.id, user.lastSignInAt]));
-    } catch (err) {
-      console.error("[ADMIN] Auth 마지막 로그인 조회 실패", err);
-      return null;
-    }
   }
 
   /**

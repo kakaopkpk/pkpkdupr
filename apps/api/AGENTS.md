@@ -18,6 +18,7 @@
 
 - 로그인과 비밀번호 변경은 클라이언트가 Supabase Auth로 직접 합니다.
 - `GET /api/me`
+  - 웹이 앱을 열거나 앱으로 돌아올 때 부르므로, 마지막 기록에서 5분이 지났으면 앱 진입 시각 `players.last_active_at`을 갱신한다. 기록이 실패해도 응답은 그대로다
 - `POST /api/me/password-changed`: 첫 로그인 비밀번호 변경 완료
 - `PATCH /api/me/profile`
 - avatar API
@@ -296,7 +297,7 @@
   - 첫 로그인 비밀번호 변경 전 `isFirstLogin`
   - 로그인 계정 여부 `hasLoginAccount`
   - 경기 행 수 `matchCount`, 가장 늦은 경기 시각 `lastMatchStartsAt`
-  - Supabase Auth 마지막 로그인 시각 `lastSignInAt`(계정·기록 없음 null). Auth 조회가 실패해도 목록은 200이고 이 필드만 빠진다
+  - 마지막 앱 진입 시각 `lastActiveAt`(`GET /api/me` 기록, 들어온 적 없으면 null)
 - 경기 없는 회원 삭제 `DELETE /api/admin/players/:playerId`
 - 성별·상태 변경 `PATCH /api/admin/players/:playerId/gender|status`
 - 생성·상태 감사 로그 `GET /api/admin/player-creation-logs`·`player-status-logs`

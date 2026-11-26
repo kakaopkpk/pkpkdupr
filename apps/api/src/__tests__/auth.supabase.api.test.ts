@@ -60,6 +60,7 @@ const setupAuthFixture = () => {
       duprRating: null,
       authUserId,
       isFirstLogin: false,
+      lastActiveAt: null,
       createdAt: NOW,
       updatedAt: NOW,
     };
