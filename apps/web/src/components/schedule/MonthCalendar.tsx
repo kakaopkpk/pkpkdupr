@@ -217,9 +217,12 @@ const MonthCalendar: React.FC<{
   const [area, setArea] = useState<HTMLElement | null>(null);
   const [track, setTrack] = useState<HTMLDivElement | null>(null);
   const canGoPrev = !minDateKey || monthKey > toMonthKey(minDateKey);
-  const { slideIn, isSliding } = usePanelSwipe(area, track, onChangeMonth, {
-    canSwipe: (step) => step === 1 || canGoPrev,
-  });
+  const { slideIn, isSliding } = usePanelSwipe(
+    area,
+    track,
+    onChangeMonth,
+    (step) => step === 1 || canGoPrev,
+  );
   // 머리 제목은 슬라이드가 멈출 때까지 옮기기 전 달에 둔다
   const [titleMonthKey, setTitleMonthKey] = useState(monthKey);
   if (!isSliding && titleMonthKey !== monthKey) setTitleMonthKey(monthKey);

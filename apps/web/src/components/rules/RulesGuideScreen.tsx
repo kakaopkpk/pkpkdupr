@@ -15,12 +15,6 @@ import "./rulesGuide.css";
 const TITLE = "피클볼 기본 규칙";
 const CARD_COUNT = RULES_GUIDE_CARDS.length;
 
-/** 한 장 넘길 때 트랙이 움직이는 거리. 옆 카드와의 거리라 카드 폭·사이 간격이 바뀌어도 맞는다 */
-const getCardStepWidth = (track: HTMLElement) => {
-  const [first, second] = Array.from(track.children) as HTMLElement[];
-  return second ? second.offsetLeft - first.offsetLeft : track.offsetWidth;
-};
-
 const canMoveFrom = (index: number) => (step: PanelSwipeStep) => {
   const next = index + step;
   return next >= 0 && next < CARD_COUNT;
@@ -70,13 +64,9 @@ export default function RulesGuideScreen({
   const [area, setArea] = useState<HTMLDivElement | null>(null);
   const [track, setTrack] = useState<HTMLDivElement | null>(null);
   const [activeIndex, setActiveIndex] = useState(0);
-  const move = (step: PanelSwipeStep) =>
-    setActiveIndex((index) => Math.max(0, Math.min(index + step, CARD_COUNT - 1)));
+  const move = (step: PanelSwipeStep) => setActiveIndex((index) => index + step);
   // 지금 카드는 손가락을 뗄 때만 바뀐다(끄는 도중 카드 내용이 다시 그려지면 손가락 아래 요소가 떨어져 터치를 놓친다)
-  const { slideIn } = usePanelSwipe(area, track, move, {
-    canSwipe: canMoveFrom(activeIndex),
-    getPanelWidth: getCardStepWidth,
-  });
+  const { slideIn } = usePanelSwipe(area, track, move, canMoveFrom(activeIndex));
   const isLastCard = activeIndex === CARD_COUNT - 1;
 
   const isLayerOpen = useLayerDepth({
@@ -157,7 +147,8 @@ export default function RulesGuideScreen({
       }
     >
       <div className="flex h-full flex-col">
-        {/* 바깥이 터치를 받고 카드 밖을 자른다. 트랙은 카드 폭(100%-28px)+간격(10px)씩 translate로 지금 카드를 보이고, 끄는 거리는 훅이 transform으로 더한다 */}
+        {/* 바깥이 터치를 받고 카드 밖을 자른다. 트랙은 한 장 거리(카드 폭 + 간격)씩 translate로 지금 카드를 보이고, 끄는 거리는 훅이 transform으로 더한다.
+            카드 폭·간격·한 장 거리는 트랙의 --rules-peek(다음 카드가 보이는 몫 + 간격)·--rules-gap 하나로 정한다 */}
         <div
           ref={setArea}
           role="region"
@@ -167,8 +158,14 @@ export default function RulesGuideScreen({
         >
           <div
             ref={setTrack}
-            className="flex w-full min-w-0 shrink-0 gap-2.5"
-            style={{ translate: `calc(${activeIndex} * (18px - 100%))` }}
+            className="flex w-full min-w-0 shrink-0 gap-(--rules-gap)"
+            style={
+              {
+                "--rules-peek": "28px",
+                "--rules-gap": "10px",
+                translate: `calc(${activeIndex} * (var(--rules-peek) - var(--rules-gap) - 100%))`,
+              } as React.CSSProperties
+            }
           >
             {RULES_GUIDE_CARDS.map((card, index) => {
               const isActive = index === activeIndex;
@@ -190,7 +187,7 @@ export default function RulesGuideScreen({
                     card.scope,
                     !isActive && "pk-rules-paused",
                     // 마지막 카드는 다음 카드가 없어 폭 가득이다
-                    index === CARD_COUNT - 1 ? "w-full" : "w-[calc(100%-28px)]",
+                    index === CARD_COUNT - 1 ? "w-full" : "w-[calc(100%-var(--rules-peek))]",
                     Figure ? "gap-4 p-4" : "gap-3 px-4 pt-5 pb-2",
                   )}
                 >

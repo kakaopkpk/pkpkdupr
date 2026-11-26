@@ -15,7 +15,7 @@ const BLOCKED_DRAG_RATIO = 0.2;
 
 export type PanelSwipeStep = 1 | -1;
 
-export interface PanelSwipeHandlers {
+interface PanelSwipeHandlers {
   /** 손가락을 놓아 넘기기로 정했을 때 부른다(1 다음, -1 이전). 끄는 도중에는 부르지 않는다 */
   onSwipe: (step: PanelSwipeStep) => void;
   /** false인 쪽은 조금만 끌리다 제자리로 돌아오고 넘어가지 않는다 */
@@ -219,8 +219,11 @@ export const attachPanelSwipe = (
   return { slideIn, detach };
 };
 
-/** 판 3장(이전·지금·다음)을 이어 붙인 트랙의 한 칸 폭 */
-const getThirdOfTrack = (track: HTMLElement) => track.offsetWidth / 3;
+/** 판 한 칸 폭은 첫 판에서 둘째 판까지의 거리라 판 폭·사이 간격이 바뀌어도 맞는다 */
+const getPanelStep = (track: HTMLElement) => {
+  const [first, second] = Array.from(track.children) as HTMLElement[];
+  return first && second ? second.offsetLeft - first.offsetLeft : track.offsetWidth;
+};
 
 /**
  * 판 넘기기 영역(touch-action: pan-y)의 좌우 밀기로 판을 옮긴다(달력 월 넘김·규칙 안내 카드).
@@ -237,17 +240,10 @@ export const usePanelSwipe = (
   area: HTMLElement | null,
   track: HTMLElement | null,
   onSwipe: (step: PanelSwipeStep) => void,
-  {
-    canSwipe = () => true,
-    getPanelWidth = getThirdOfTrack,
-  }: {
-    canSwipe?: (step: PanelSwipeStep) => boolean;
-    /** 기본은 판 3장 트랙의 한 칸(트랙 폭의 1/3)이다 */
-    getPanelWidth?: (track: HTMLElement) => number;
-  } = {},
+  canSwipe: (step: PanelSwipeStep) => boolean = () => true,
 ) => {
-  const handlersRef = useRef({ onSwipe, canSwipe, getPanelWidth });
-  handlersRef.current = { onSwipe, canSwipe, getPanelWidth };
+  const handlersRef = useRef({ onSwipe, canSwipe });
+  handlersRef.current = { onSwipe, canSwipe };
   const slideInRef = useRef<(step: PanelSwipeStep) => void>(() => {});
   const [isSliding, setIsSliding] = useState(false);
 
@@ -256,7 +252,7 @@ export const usePanelSwipe = (
     const { slideIn, detach } = attachPanelSwipe(area, track, {
       onSwipe: (step) => handlersRef.current.onSwipe(step),
       canSwipe: (step) => handlersRef.current.canSwipe(step),
-      getPanelWidth: (element) => handlersRef.current.getPanelWidth(element),
+      getPanelWidth: getPanelStep,
       onSlidingChange: setIsSliding,
     });
     slideInRef.current = slideIn;
