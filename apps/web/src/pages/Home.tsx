@@ -145,8 +145,9 @@ const Home: React.FC = () => {
   const newsFeed = useNewsFeed({ enabled: isPreSession });
   // 세션 지배자 카드와 경기·추천 매칭 아바타의 세션 연승 링
   const highlight = useLiveSessionHighlight(liveSession, live.matches);
+  // 게스트는 추천 매칭을 보지 않으므로 받지 않는다
   const recommendations = useSessionRecommendations(
-    isLiveParticipant && liveSession && !isTournamentLive
+    isLiveParticipant && liveSession && !isTournamentLive && !isGuest
       ? liveSession.id
       : null,
   );
@@ -329,11 +330,11 @@ const Home: React.FC = () => {
    * 진행 중 세션이면 세션 연승 중인 회원 아바타에 링을 두른다(진행 중 세션이 없으면 연승도 없다).
    * 남의 경기는 지금 연승 중인(WIN_STREAK_MIN 이상) 회원에게도 링을 두른다
    */
-  const enterMyMatchScore = () => {
-    if (myInProgressMatch) {
-      openRecordMatch({ kind: "score", matchId: myInProgressMatch.id });
-    }
-  };
+  // 게스트는 점수를 넣지 않아 내 경기 카드에 점수 입력 버튼이 없다
+  const enterMyMatchScore =
+    isGuest || !myInProgressMatch
+      ? undefined
+      : () => openRecordMatch({ kind: "score", matchId: myInProgressMatch.id });
 
   const renderInProgress = (otherMatches: MatchInfo[]) => (
     <Section title="진행 중">
@@ -343,7 +344,7 @@ const Home: React.FC = () => {
           now={now}
           sessionWinStreaks={highlight.streakByPlayer}
           onOpenDetail={() => openMatchDetail(myInProgressMatch.id)}
-          onEnterScore={isGuest ? undefined : enterMyMatchScore}
+          onEnterScore={enterMyMatchScore}
         />
       ) : null}
       {otherMatches.length > 0 ? (
@@ -439,7 +440,7 @@ const Home: React.FC = () => {
             now={now}
             isTournament
             onOpenDetail={() => openMatchDetail(myInProgressMatch.id)}
-            onEnterScore={isGuest ? undefined : enterMyMatchScore}
+            onEnterScore={enterMyMatchScore}
           />
         </Section>
       );

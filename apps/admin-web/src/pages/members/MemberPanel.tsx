@@ -1,13 +1,12 @@
 import React, { useState } from "react";
 import { Link } from "react-router-dom";
-import { ADMIN_ISSUED_PASSWORD } from "@pkpkdupr/shared/auth";
 import type {
   AdminPlayer,
   PlayerCreationLog,
   PlayerDuprCategory,
   PlayerStatusChangeLog,
 } from "@pkpkdupr/shared/player";
-import { resetPlayerPassword, updatePlayerGender, updatePlayerStatus } from "../../api/players";
+import { updatePlayerGender, updatePlayerStatus } from "../../api/players";
 import { Button } from "../../components/ui/Button";
 import { DetailPanel, PanelSection } from "../../components/ui/DetailPanel";
 import { InlineError } from "../../components/ui/InlineError";
@@ -30,6 +29,7 @@ import {
   DeleteMemberSection,
   FieldHint,
   GenderControl,
+  PasswordResetRow,
   UsernameEditor,
   useConfirm,
   type PanelCallbacks,
@@ -90,28 +90,6 @@ export const MemberPanel: React.FC<{
   ]
     .filter(Boolean)
     .join(" · ");
-
-  const resetLabel = player.hasLoginAccount ? "비밀번호 초기화" : "로그인 계정 만들기";
-
-  const requestPasswordReset = () =>
-    requestConfirm({
-      title: resetLabel,
-      description: player.hasLoginAccount
-        ? `${player.username} 비밀번호를 ${ADMIN_ISSUED_PASSWORD}로 초기화할까요? 회원은 다음 로그인 때 비밀번호를 새로 정해요.`
-        : `${player.username} 로그인 계정을 만들까요? 임시 비밀번호는 ${ADMIN_ISSUED_PASSWORD}이고, 회원은 첫 로그인 때 비밀번호를 새로 정해요.`,
-      confirmLabel: player.hasLoginAccount ? "초기화" : "만들기",
-      onConfirm: () =>
-        runConfirmedAction(async () => {
-          await resetPlayerPassword(player.id);
-          showToast(
-            player.hasLoginAccount
-              ? `${player.username} 비밀번호를 초기화했어요`
-              : `${player.username} 로그인 계정을 만들었어요`,
-          );
-          callbacks.onIssued(player.hasLoginAccount ? "reset" : "created");
-          await callbacks.reload();
-        }, showToast),
-    });
 
   const requestStatusChange = () => {
     const nextStatus = inactive ? "active" : "inactive";
@@ -175,14 +153,13 @@ export const MemberPanel: React.FC<{
             reload={callbacks.reload}
           />
           <div>
-            <div className="flex items-center justify-between gap-3">
-              <span className="text-pk-13 text-pk-sub">
-                {player.hasLoginAccount ? "비밀번호를 잃어버렸을 때" : "로그인 계정이 없어요"}
-              </span>
-              <Button variant="outline" disabled={inactive} onClick={requestPasswordReset}>
-                {resetLabel}
-              </Button>
-            </div>
+            <PasswordResetRow
+              player={player}
+              subject="회원은"
+              disabled={inactive}
+              requestConfirm={requestConfirm}
+              callbacks={callbacks}
+            />
             {inactive && (
               <FieldHint>먼저 활성화해야 비밀번호를 초기화할 수 있어요.</FieldHint>
             )}

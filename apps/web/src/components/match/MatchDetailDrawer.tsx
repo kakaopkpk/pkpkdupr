@@ -484,11 +484,6 @@ export default function MatchDetailDrawer({
     }
   }
 
-  // 게스트는 경기 시작·점수 입력·수정·한 판 더를 할 수 없어 하단 버튼이 없다
-  if (isGuest) {
-    actions = null;
-  }
-
   return (
     <>
       <PushScreen
@@ -501,7 +496,8 @@ export default function MatchDetailDrawer({
         headerRight={
           canDelete ? <DeleteMatchHeaderButton onPress={openDeleteSheet} /> : null
         }
-        actions={actions}
+        // 게스트는 경기 시작·점수 입력·수정·한 판 더를 할 수 없어 하단 버튼이 없다
+        actions={isGuest ? null : actions}
         onExited={handleExited}
         onPullToRefresh={handlePullToRefresh}
       >

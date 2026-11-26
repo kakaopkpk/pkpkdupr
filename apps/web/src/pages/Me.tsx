@@ -57,6 +57,8 @@ const Me: React.FC = () => {
   );
 
   const username = player?.username ?? "";
+  // 게스트는 분류 전환(평점 카드)이 없어 복식으로 고정한다
+  const statCategory: MatchTopLevelType = isGuest ? "doubles" : category;
   const achievements = overview?.summary.achievements ?? [];
 
   return (
@@ -86,39 +88,27 @@ const Me: React.FC = () => {
       />
 
       <div className="flex flex-col gap-2.5 px-4">
-        {overview && isGuest ? (
+        {overview ? (
           <>
-            {/* 게스트는 평점·업적이 없어 평점 카드 대신 안내를, 최근 7일은 경기 수를 보인다(복식 기준) */}
-            <GuestNoticeCard />
-            <div className="grid grid-cols-2 gap-2.5">
-              <WinRateTile overview={overview} category="doubles" />
-              <GuestLast7DaysTile overview={overview} category="doubles" />
-            </div>
-            <PartnerRivalSections
-              partners={overview.summary.partners}
-              rivals={overview.summary.rivals}
-              tabKey="me"
-              depthId="me"
-            />
-            <RecentMatchesSection
-              title="최근 경기"
-              matches={overview.summary.recentMatches}
-              ownerPlayerId={playerId ?? undefined}
-              onViewAll={() => setIsMatchHistoryRequested(true)}
-            />
-          </>
-        ) : overview ? (
-          <>
-            <ProfileRatingSection
-              overview={overview}
-              category={category}
-              onCategoryChange={setCategory}
-              fallbackRating={player?.duprRating?.[category] ?? null}
-            />
+            {/* 게스트는 평점·업적이 없어 평점 카드 대신 안내를, 최근 7일은 경기 수와 승패를 보인다(복식 기준) */}
+            {isGuest ? (
+              <GuestNoticeCard />
+            ) : (
+              <ProfileRatingSection
+                overview={overview}
+                category={category}
+                onCategoryChange={setCategory}
+                fallbackRating={player?.duprRating?.[category] ?? null}
+              />
+            )}
             {/* 분류를 바꾸면 key로 다시 마운트해 카운트업을 처음부터 재생한다 */}
-            <div key={category} className="grid grid-cols-2 gap-2.5">
-              <WinRateTile overview={overview} category={category} />
-              <Last7DaysTile overview={overview} category={category} />
+            <div key={statCategory} className="grid grid-cols-2 gap-2.5">
+              <WinRateTile overview={overview} category={statCategory} />
+              {isGuest ? (
+                <GuestLast7DaysTile overview={overview} category={statCategory} />
+              ) : (
+                <Last7DaysTile overview={overview} category={statCategory} />
+              )}
             </div>
             <PartnerRivalSections
               partners={overview.summary.partners}
@@ -126,7 +116,7 @@ const Me: React.FC = () => {
               tabKey="me"
               depthId="me"
             />
-            {playerId ? (
+            {playerId && !isGuest ? (
               <AchievementsSection
                 playerId={playerId}
                 progress={achievements}
