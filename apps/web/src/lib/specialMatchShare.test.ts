@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  getChallengeDefeatedNames,
   getSpecialMatchCaptionParts,
   getSpecialMatchShareDateLabel,
   getSpecialMatchShareFileName,
@@ -40,6 +41,36 @@ const kingWin: SpecialMatchShareTarget = {
   loser: { id: "p5", username: "colin.34" },
   brokenStreak: 7,
 };
+
+const challengeWin: SpecialMatchShareTarget = {
+  ...base,
+  username: "scarlett.yoon",
+  kind: "challenge-win",
+  defeated: [
+    { id: "p6", username: "martin.bok" },
+    { id: "p7", username: "sean.oh" },
+  ],
+  ratingGap: 0.253,
+};
+
+describe("도전 성공 공유", () => {
+  it("제목은 도전 성공이고 문구는 평점 차(소수점 셋째 자리)만 상승색이다", () => {
+    expect(getSpecialMatchShareTitle("challenge-win")).toBe("도전 성공");
+    expect(getSpecialMatchCaptionParts(challengeWin)).toEqual([
+      { text: "평균 평점이 " },
+      { text: "0.253", highlight: "up" },
+      { text: " 높은 팀을 이겼어요" },
+    ]);
+    expect(getSpecialMatchCaptionParts({ ...challengeWin, ratingGap: 0.1 })[1]?.text).toBe("0.100");
+  });
+
+  it("공유 문구는 공유한 회원이 주어이고, 이름 줄은 진 팀 아이디를 잇는다", () => {
+    expect(getSpecialMatchShareText(challengeWin)).toBe(
+      "scarlett.yoon님이 평균 평점이 0.253 높은 팀을 이겼어요",
+    );
+    expect(getChallengeDefeatedNames(challengeWin.defeated)).toBe("martin.bok · sean.oh");
+  });
+});
 
 describe("getSpecialMatchShareTitle", () => {
   it("연출 제목과 같다", () => {

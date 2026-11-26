@@ -209,9 +209,10 @@ describe("GET /api/match-sessions/:sessionId/recommendations", () => {
       ),
       winStreak: 0,
     });
-    // 참여자가 모두 남자라 두 코트 모두 남복이고, 특수 유형은 앞 코트 하나만 남복 매치로 보인다
+    // 참여자가 모두 남자라 두 코트 모두 남복이지만, 앞 코트는 팀 평균 차가 0.1 이상이라 도전 매치이고
+    // 특수 유형은 표시 순위가 높은 그 코트 하나만 보인다
     expect(body.courts.map((court) => court.specialMatch?.kind ?? null)).toEqual([
-      "men_doubles",
+      "challenge",
       null,
     ]);
   });

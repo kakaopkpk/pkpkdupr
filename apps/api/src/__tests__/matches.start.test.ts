@@ -256,6 +256,63 @@ describe("POST /api/matches/start", () => {
     expect(createInProgress).not.toHaveBeenCalled();
   });
 
+  describe("도전 매치", () => {
+    const rated = (player: Player, doubles: number): Player => ({
+      ...player,
+      duprRating: { singles: doubles, doubles },
+    });
+    // A+C(3.51) 대 B+D(2.95): 팀 평균 차 0.56
+    const challengeTeams = [
+      { playerIds: [playerA.id, playerC.id] },
+      { playerIds: [playerB.id, playerD.id] },
+    ];
+
+    beforeEach(() => {
+      vi.spyOn(AuthService.prototype, "getAllPlayers").mockResolvedValue([
+        requester,
+        rated(playerA, 3.5),
+        rated(playerB, 3.0),
+        rated(playerC, 3.52),
+        rated(playerD, 2.9),
+      ]);
+      vi.spyOn(MatchRepository.prototype, "getAllRatingChangeLogs").mockResolvedValue([]);
+      vi.spyOn(MatchRepository.prototype, "findCompletedMatchOutcomes").mockResolvedValue([]);
+      vi.spyOn(MatchRepository.prototype, "findSessionsWithParticipantIds").mockResolvedValue([]);
+    });
+
+    it("세션에서 시작한 경기는 도전 매치로 판정해 저장한다", async () => {
+      const response = await startMatch({ teams: challengeTeams, sessionId: "Scustom1" });
+
+      expect(response.status).toBe(201);
+      expect(createInProgress.mock.calls[0]![0].specialMatch).toMatchObject({
+        kind: "challenge",
+        defendingTeamIndex: 0,
+        ratingGap: 0.56,
+      });
+    });
+
+    it("리벤지가 아닌 한 판 더도 세션 경기면 도전 매치다", async () => {
+      vi.spyOn(MatchRepository.prototype, "findById").mockResolvedValue(undefined);
+
+      const response = await startMatch({
+        teams: challengeTeams,
+        sessionId: "Scustom1",
+        rematchOfMatchId: "Mprevi01",
+      });
+
+      expect(response.status).toBe(201);
+      expect(createInProgress.mock.calls[0]![0].specialMatch?.kind).toBe("challenge");
+    });
+
+    it("세션 없이 시작한 경기는 도전 매치가 아니다", async () => {
+      const response = await startMatch({ teams: challengeTeams });
+
+      expect(response.status).toBe(201);
+      expect(createInProgress.mock.calls[0]![0].session).toBeUndefined();
+      expect(createInProgress.mock.calls[0]![0].specialMatch).toBeNull();
+    });
+  });
+
   describe("같은 멤버로 한 판 더(rematchOfMatchId)", () => {
     const previousMatch = (overrides: Partial<Match> = {}): Match =>
       ({

@@ -69,6 +69,30 @@ describe("getSceneBeatTimes·getSceneEndMs", () => {
   });
 });
 
+describe("도전 성공 연출", () => {
+  const challenge: Extract<SpecialMatchCelebration, { kind: "challenge" }> = {
+    kind: "challenge",
+    defeated: [player("martin.bok"), player("sean.oh")],
+    ratingGap: 0.253,
+  };
+
+  it("박자는 연승 저지와 같은 도장 떨어짐·박힘이다", () => {
+    expect(getSceneBeatTimes(challenge)).toEqual(
+      getSceneBeatTimes({ kind: "streak_stopper", stopped: { player: player("s"), streakBefore: 3 } }),
+    );
+    expect(getSceneEndMs(challenge)).toBeGreaterThan(getSceneBeatTimes(challenge)[1]!);
+  });
+
+  it("공유 대상은 진 팀 두 사람과 평점 차를 옮긴다", () => {
+    expect(toSpecialMatchShareTarget(challenge, match, "scarlett.yoon")).toMatchObject({
+      kind: "challenge-win",
+      username: "scarlett.yoon",
+      defeated: challenge.defeated,
+      ratingGap: 0.253,
+    });
+  });
+});
+
 describe("isViewerOnWinningTeam", () => {
   const recorded = {
     teams: [{ players: [player("a"), player("b")] }, { players: [player("c"), player("d")] }],

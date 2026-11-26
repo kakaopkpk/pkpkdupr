@@ -1,8 +1,11 @@
 import { describe, expect, it } from "vitest";
 import type { Match } from "../match.js";
 import {
+  CHALLENGE_MIN_RATING_GAP,
+  judgeChallengeMatch,
   judgeRecommendedSpecialMatch,
   judgeRematchSpecialMatch,
+  resolveSessionStartSpecialMatch,
   type SpecialMatchCandidatePlayer,
 } from "../specialMatch.js";
 
@@ -79,8 +82,8 @@ describe("judgeRecommendedSpecialMatch", () => {
   it("해당 유형이 없으면 null이다", () => {
     expect(
       judgeRecommendedSpecialMatch([
-        [player("a", { rank: 1, rating: 4 }), player("b", { winStreak: 2 })],
-        [player("c", { rank: 5, rating: 3.5 }), player("d")],
+        [player("a", { rank: 1, rating: 3.1 }), player("b", { winStreak: 2 })],
+        [player("c", { rank: 5, rating: 3.05 }), player("d")],
       ]),
     ).toBeNull();
   });
@@ -148,13 +151,13 @@ describe("judgeRecommendedSpecialMatch", () => {
     ).toBeNull();
   });
 
-  it("두 팀 평균 평점 차가 0.1을 넘으면 개인 평점이 비슷해도 라이벌전이 아니다", () => {
+  it("두 팀 평균 평점 차가 0.1을 넘으면 개인 평점이 비슷해도 라이벌전이 아니다(도전 매치가 된다)", () => {
     expect(
       judgeRecommendedSpecialMatch([
         [player("a", { rank: 4, rating: 3.5 }), player("b", { rank: 10, rating: 3.2 })],
         [player("c", { rank: 3, rating: 3.51 }), player("d", { rank: 12, rating: 2.9 })],
-      ]),
-    ).toBeNull();
+      ])?.kind,
+    ).toBe("challenge");
   });
 
   it("평점 없는 선수가 있으면 팀 평균을 알 수 없어 라이벌전이 아니다", () => {
@@ -356,5 +359,121 @@ describe("judgeRematchSpecialMatch", () => {
         previousMatch(teams, [{ scoreA: 10, scoreB: 10 }]),
       ),
     ).toBeNull();
+  });
+});
+
+describe("도전 매치", () => {
+  it("기준은 평균 평점 차 0.1이다", () => {
+    expect(CHALLENGE_MIN_RATING_GAP).toBe(0.1);
+  });
+
+  it("두 팀 평균 평점 차가 0.1 이상이면 도전 매치이고 높은 팀이 지키며 주인공은 없다", () => {
+    expect(
+      judgeRecommendedSpecialMatch([
+        [player("a", { rank: 9, rating: 2.947 }), player("b", { rank: 8, rating: 2.979 })],
+        [player("c", { rank: 1, rating: 3.272 }), player("d", { rank: 3, rating: 3.044 })],
+      ]),
+    ).toEqual({
+      kind: "challenge",
+      defendingTeamIndex: 1,
+      protagonistIds: [null, null],
+      rivalPairs: [],
+      ratingGap: 0.195,
+      outcome: null,
+    });
+  });
+
+  it("부동소수 오차가 있어도 차가 정확히 0.1이면 도전 매치다", () => {
+    const judged = judgeChallengeMatch([
+      [player("a", { rating: 3.55 }), player("b", { rating: 3.25 })],
+      [player("c", { rating: 3.3 }), player("d", { rating: 3.3 })],
+    ]);
+    expect(judged?.defendingTeamIndex).toBe(0);
+    expect(judged?.ratingGap).toBe(0.1);
+  });
+
+  it("차가 0.1보다 작으면 도전 매치가 아니다", () => {
+    expect(
+      judgeChallengeMatch([
+        [player("a", { rating: 3.2 }), player("b", { rating: 3.0 })],
+        [player("c", { rating: 3.1 }), player("d", { rating: 2.91 })],
+      ]),
+    ).toBeNull();
+  });
+
+  it("평점 없는 정회원은 3.0으로 친다", () => {
+    expect(
+      judgeChallengeMatch([
+        [player("a"), player("b")],
+        [player("c", { rating: 3.2 }), player("d")],
+      ])?.ratingGap,
+    ).toBe(0.1);
+  });
+
+  it("단식은 두 사람 평점 차로 본다", () => {
+    expect(
+      judgeChallengeMatch([[player("a", { rating: 3.5 })], [player("b", { rating: 3.3 })]]),
+    ).toMatchObject({ kind: "challenge", defendingTeamIndex: 0, ratingGap: 0.2 });
+  });
+
+  it("게스트가 한 명이라도 있으면 도전 매치가 아니다", () => {
+    expect(
+      judgeRecommendedSpecialMatch([
+        [player("a", { rating: 3.8 }), player("b", { rating: 3.6 })],
+        [player("c", { rating: 3.0 }), player("g", { isGuest: true })],
+      ]),
+    ).toBeNull();
+  });
+
+  it("연승 매치가 도전 매치보다 먼저다", () => {
+    expect(
+      judgeRecommendedSpecialMatch([
+        [player("a", { rating: 3.8 }), player("b", { rating: 3.6 })],
+        [player("c", { rating: 3.0, winStreak: 3 }), player("d", { rating: 3.0 })],
+      ])?.kind,
+    ).toBe("streak_stopper");
+  });
+
+  it("팀 평균 차가 정확히 0.1이고 라이벌 쌍이 있으면 라이벌전이 먼저다", () => {
+    expect(
+      judgeRecommendedSpecialMatch([
+        [player("a", { rank: 4, rating: 3.5 }), player("b", { rank: 10, rating: 3.3 })],
+        [player("c", { rank: 3, rating: 3.51 }), player("d", { rank: 12, rating: 3.09 })],
+      ])?.kind,
+    ).toBe("rival");
+  });
+
+  it("도전 매치가 남복·여복 매치보다 먼저다", () => {
+    expect(
+      judgeRecommendedSpecialMatch([
+        [player("a", { rating: 3.8, gender: "M" }), player("b", { rating: 3.6, gender: "M" })],
+        [player("c", { rating: 3.0, gender: "M" }), player("d", { rating: 3.0, gender: "M" })],
+      ])?.kind,
+    ).toBe("challenge");
+  });
+});
+
+describe("resolveSessionStartSpecialMatch", () => {
+  const challenge = judgeChallengeMatch([
+    [player("a", { rating: 3.8 }), player("b", { rating: 3.6 })],
+    [player("c", { rating: 3.0 }), player("d", { rating: 3.0 })],
+  ]);
+  const streak = judgeRecommendedSpecialMatch([
+    [player("a", { winStreak: 3 }), player("b")],
+    [player("c"), player("d")],
+  ]);
+
+  it("재판정 유형이 카드 유형과 같으면 그 유형이다", () => {
+    expect(resolveSessionStartSpecialMatch(streak, "streak_stopper")).toBe(streak);
+  });
+
+  it("카드 유형과 달라도 재판정이 도전 매치면 도전 매치다(카드 없이 시작한 경기 포함)", () => {
+    expect(resolveSessionStartSpecialMatch(challenge, "rival")).toBe(challenge);
+    expect(resolveSessionStartSpecialMatch(challenge, null)).toBe(challenge);
+  });
+
+  it("카드 없이 시작했는데 연승 매치 등 다른 유형이면 저장하지 않는다", () => {
+    expect(resolveSessionStartSpecialMatch(streak, null)).toBeNull();
+    expect(resolveSessionStartSpecialMatch(null, "challenge")).toBeNull();
   });
 });

@@ -1,5 +1,6 @@
-import { FLAME_ICON_PATH, STOP_HAND_ICON_PATHS } from "@/components/ui/Icons";
+import { CHALLENGE_FLAG_ICON_PATHS, FLAME_ICON_PATH, STOP_HAND_ICON_PATHS } from "@/components/ui/Icons";
 import {
+  getChallengeDefeatedNames,
   getSpecialMatchCaptionParts,
   getSpecialMatchShareDateLabel,
   getSpecialMatchShareFileName,
@@ -84,6 +85,8 @@ const getPlayers = (target: SpecialMatchShareTarget): SpecialMatchSharePlayer[] 
       return [target.loser];
     case "king-win":
       return [target.winner, target.loser];
+    case "challenge-win":
+      return target.defeated;
   }
 };
 
@@ -172,10 +175,17 @@ const drawTag = (
   ctx.restore();
 };
 
-/** 손바닥 도장: 흰 링 두른 블루 원에 흰 손바닥, -10도 기울임 */
+/** 도장: 흰 링 두른 블루 원에 흰 손바닥(연승 저지·최강자전)이나 깃발(도전 성공), -10도 기울임 */
 const drawStamp = (
   ctx: CanvasRenderingContext2D,
-  { cx, cy, size, iconSize, ring }: { cx: number; cy: number; size: number; iconSize: number; ring: number },
+  {
+    cx,
+    cy,
+    size,
+    iconSize,
+    ring,
+    iconPaths = STOP_HAND_ICON_PATHS,
+  }: { cx: number; cy: number; size: number; iconSize: number; ring: number; iconPaths?: readonly string[] },
   colors: Colors,
 ) => {
   ctx.save();
@@ -193,7 +203,7 @@ const drawStamp = (
   ctx.lineWidth = 2.2;
   ctx.lineCap = "round";
   ctx.lineJoin = "round";
-  STOP_HAND_ICON_PATHS.forEach((d) => ctx.stroke(new Path2D(d)));
+  iconPaths.forEach((d) => ctx.stroke(new Path2D(d)));
   ctx.restore();
 };
 
@@ -457,6 +467,56 @@ const kingWinScene = (
   };
 };
 
+const CHALLENGE_AVATAR = 104;
+const CHALLENGE_AVATAR_OVERLAP = 24;
+const CHALLENGE_STAMP = 72;
+const CHALLENGE_NAME_LINE = 22;
+
+/** 도전 성공: 진 높은 팀 두 얼굴(104, 24 겹침) + 묶음 오른쪽 아래 깃발 도장(72) + 이름 줄 15("a · b"). 빛줄기 중심은 두 얼굴 가운데다 */
+const challengeWinScene = (
+  target: Extract<SpecialMatchShareTarget, { kind: "challenge-win" }>,
+  colors: Colors,
+): SceneLayout => {
+  const count = target.defeated.length;
+  const groupWidth = CHALLENGE_AVATAR * count - CHALLENGE_AVATAR_OVERLAP * (count - 1);
+  const groupLeft = (SHARE_WIDTH - groupWidth) / 2;
+  const names = getChallengeDefeatedNames(target.defeated);
+  return {
+    height: CHALLENGE_AVATAR + NAME_GAP + CHALLENGE_NAME_LINE,
+    texts: [names],
+    hero: { cx: SHARE_WIDTH / 2, cy: CHALLENGE_AVATAR / 2 },
+    draw: (ctx, top, avatars) => {
+      const cy = top + CHALLENGE_AVATAR / 2;
+      const avatarBottom = top + CHALLENGE_AVATAR;
+      target.defeated.forEach((player, index) => {
+        // 큰 연출처럼 뒤 얼굴이 앞 얼굴을 덮는다
+        const avatarCx = groupLeft + CHALLENGE_AVATAR / 2 + index * (CHALLENGE_AVATAR - CHALLENGE_AVATAR_OVERLAP);
+        drawAvatar(ctx, avatars, player, avatarCx, cy, CHALLENGE_AVATAR, colors);
+      });
+      // 묶음 오른쪽 끝에서 24 밖, 아래 끝에서 8 아래에 도장 끝이 오도록
+      drawStamp(
+        ctx,
+        {
+          cx: groupLeft + groupWidth + 24 - CHALLENGE_STAMP / 2,
+          cy: avatarBottom + 8 - CHALLENGE_STAMP / 2,
+          size: CHALLENGE_STAMP,
+          iconSize: 40,
+          ring: 4,
+          iconPaths: CHALLENGE_FLAG_ICON_PATHS,
+        },
+        colors,
+      );
+      drawName(ctx, names, {
+        cx: SHARE_WIDTH / 2,
+        cy: avatarBottom + NAME_GAP + CHALLENGE_NAME_LINE / 2,
+        size: 15,
+        maxWidth: CONTENT_WIDTH,
+        color: colors.white,
+      });
+    },
+  };
+};
+
 const getSceneLayout = (target: SpecialMatchShareTarget, colors: Colors) => {
   switch (target.kind) {
     case "rival":
@@ -465,6 +525,8 @@ const getSceneLayout = (target: SpecialMatchShareTarget, colors: Colors) => {
       return streakBreakScene(target, colors);
     case "king-win":
       return kingWinScene(target, colors);
+    case "challenge-win":
+      return challengeWinScene(target, colors);
   }
 };
 

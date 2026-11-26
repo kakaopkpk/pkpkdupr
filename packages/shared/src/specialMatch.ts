@@ -1,16 +1,20 @@
+import { CHALLENGE_MIN_RATING_GAP, RATING_EPSILON } from "./achievements.js";
 import { getWinningTeamIndex, type Match } from "./match.js";
-import type { Player } from "./player.js";
+import { DUPR_DEFAULT_RATING, type Player } from "./player.js";
 import { WIN_STREAK_MIN } from "./streak.js";
 
+export { CHALLENGE_MIN_RATING_GAP };
+
 /**
- * 특수 매치 유형. 추천 매칭 카드로 시작한 경기(라이벌전·연승 매치·최강자전·남복 매치·여복 매치)와
- * '같은 멤버로 한 판 더'로 시작한 경기(리벤지)에만 붙는다(docs/product.md "특수 매치")
+ * 특수 매치 유형. 추천 매칭 카드로 시작한 경기(라이벌전·연승 매치·최강자전·남복 매치·여복 매치),
+ * '같은 멤버로 한 판 더'로 시작한 경기(리벤지), 세션에서 시작한 경기(도전 매치)에만 붙는다(docs/product.md "특수 매치")
  */
 export type SpecialMatchKind =
   | "rival"
   | "streak_stopper"
   | "champions"
   | "revenge"
+  | "challenge"
   | "men_doubles"
   | "women_doubles";
 
@@ -19,6 +23,7 @@ export const specialMatchKindValues = [
   "streak_stopper",
   "champions",
   "revenge",
+  "challenge",
   "men_doubles",
   "women_doubles",
 ] as const satisfies readonly SpecialMatchKind[];
@@ -29,6 +34,7 @@ export const specialMatchKindLabels: Record<SpecialMatchKind, string> = {
   streak_stopper: "연승 매치",
   champions: "최강자전",
   revenge: "리벤지 매치",
+  challenge: "도전 매치",
   men_doubles: "남복 매치",
   women_doubles: "여복 매치",
 };
@@ -47,7 +53,9 @@ export type SpecialMatchOutcome =
   | "streak_defended"
   | "champions_won"
   | "revenge_success"
-  | "revenge_defended";
+  | "revenge_defended"
+  | "challenge_success"
+  | "challenge_defended";
 
 export interface SpecialMatchRivalPair {
   /** 순위가 낮은(공격하는) 선수 */
@@ -60,17 +68,22 @@ export interface SpecialMatchRivalPair {
 export interface SpecialMatch {
   kind: SpecialMatchKind;
   /**
-   * 지키는 쪽 팀 index. 라이벌전 방어 쪽, 연승 매치 연승 회원 팀, 리벤지 직전 경기에서 이긴 팀.
+   * 지키는 쪽 팀 index. 라이벌전 방어 쪽, 연승 매치 연승 회원 팀, 리벤지 직전 경기에서 이긴 팀, 도전 매치 평균 평점이 높은 팀.
    * 최강자전과 양쪽 다 공격인 라이벌전은 null
    */
   defendingTeamIndex: 0 | 1 | null;
   /**
    * 팀별 주인공 선수 id(카드에서 40px로 앞세우는 사람). 라이벌전은 대표 라이벌 쌍의 두 사람,
-   * 연승 매치는 연승 회원 팀만, 최강자전은 양쪽 연승 회원, 리벤지는 둘 다 null
+   * 연승 매치는 연승 회원 팀만, 최강자전은 양쪽 연승 회원, 리벤지·도전 매치는 둘 다 null
    */
   protagonistIds: [string | null, string | null];
   /** 라이벌전의 라이벌 쌍(대표 쌍이 첫 번째). 다른 유형은 빈 배열 */
   rivalPairs: SpecialMatchRivalPair[];
+  /**
+   * 도전 매치의 시작 때 두 팀 평균 평점 차(높은 팀 − 낮은 팀, 소수 여섯째 자리 반올림).
+   * 다른 유형은 없다(도전 매치 전에 저장한 경기에도 없다)
+   */
+  ratingGap?: number;
   /** 완료 전이거나 승패가 갈리지 않으면 null */
   outcome: SpecialMatchOutcome | null;
 }
@@ -78,7 +91,7 @@ export interface SpecialMatch {
 export type SpecialMatchCelebrationPlayer = Pick<Player, "id" | "username" | "avatarUrl">;
 
 /**
- * 기록 완료 화면 큰 연출 데이터. 라이벌전 승리·연승 저지·최강자전 승리가 그 저장으로 처음 정해졌을 때만 기록 응답에 실린다.
+ * 기록 완료 화면 큰 연출 데이터. 라이벌전 승리·연승 저지·최강자전 승리·도전 성공이 그 저장으로 처음 정해졌을 때만 기록 응답에 실린다.
  * 순위는 그 경기 종류 랭킹, 연승 수는 이 경기 직전까지 센 랭킹 연승 규칙이다
  */
 export type SpecialMatchCelebration =
@@ -97,13 +110,20 @@ export type SpecialMatchCelebration =
       kind: "champions";
       winner: { player: SpecialMatchCelebrationPlayer; streakBefore: number };
       loser: { player: SpecialMatchCelebrationPlayer; streakBefore: number };
+    }
+  | {
+      kind: "challenge";
+      /** 진 높은 팀 선수(팀 순서) */
+      defeated: SpecialMatchCelebrationPlayer[];
+      /** 시작 때 두 팀 평균 평점 차(SpecialMatch.ratingGap) */
+      ratingGap: number;
     };
 
 /** 판정 입력 선수. rank·rating은 그 경기 종류 랭킹(복식 경기면 복식, 단식이면 단식) 기준 */
 export interface SpecialMatchCandidatePlayer {
   id: string;
   isGuest: boolean;
-  /** 랭킹에 없으면(게스트·평점 없음·비활성) null */
+  /** 랭킹에 없으면(게스트·평점 없음·비활성) null. 도전 매치는 정회원의 null을 DUPR_DEFAULT_RATING(3.0)으로 친다 */
   rank: number | null;
   rating: number | null;
   /** 지금 연승 수(computeCurrentWinStreak 규칙) */
@@ -122,7 +142,7 @@ export const RIVAL_MATCH_MAX_TEAM_AVERAGE_GAP = 0.1;
  * 추천 매칭에서 특수 유형 코트에 주는 가산점.
  * 연승 매치는 뛸 사람을 고른 뒤 대진을 탐색하므로 연승자가 뽑히면 모든 후보 대진에 생겨 후보를 가르지 못하고,
  * 대진 감점은 코트 최대 가산점 하나만 빼서 최강자전·라이벌전 가산점을 가리기 때문에 0이다.
- * 리벤지는 추천에서 만들지 않아 0이다.
+ * 리벤지는 추천에서 만들지 않고, 도전 매치는 대진 균형(팀 평균 차 감점)을 거스르지 않게 0이다.
  * 남복·여복 매치는 코트마다 더하는 성별 가산점(matchmaking MATCHMAKING_SAME_GENDER_COURT_BONUS)으로 따로 주어 0이다.
  */
 export const SPECIAL_MATCH_RECOMMENDATION_BONUS = {
@@ -130,18 +150,20 @@ export const SPECIAL_MATCH_RECOMMENDATION_BONUS = {
   streak_stopper: 0,
   champions: 2,
   revenge: 0,
+  challenge: 0,
   men_doubles: 0,
   women_doubles: 0,
 } as const satisfies Record<SpecialMatchKind, number>;
 
 /**
  * 추천 한 번에 특수 유형은 한 코트만 보인다. 이 순위가 큰 코트(같으면 앞 코트)를 보이고, null인 유형은 보이지 않는다.
- * 가산점 코트(최강자전 > 라이벌전) → 연승 매치 → 남복·여복 매치 순이다
+ * 가산점 코트(최강자전 > 라이벌전) → 연승 매치 → 도전 매치 → 남복·여복 매치 순이다
  */
 export const SPECIAL_MATCH_RECOMMENDATION_DISPLAY_RANK = {
-  champions: 4,
-  rival: 3,
-  streak_stopper: 2,
+  champions: 5,
+  rival: 4,
+  streak_stopper: 3,
+  challenge: 2,
   men_doubles: 1,
   women_doubles: 1,
   revenge: null,
@@ -285,6 +307,32 @@ const judgeRivalMatch = (teams: CandidateTeams): SpecialMatch | null => {
   };
 };
 
+/** 도전 매치 팀 평점: 선수 평점 평균이고, 평점 없는 정회원은 DUPR_DEFAULT_RATING(3.0)으로 친다 */
+const toChallengeTeamRating = (team: readonly SpecialMatchCandidatePlayer[]) =>
+  team.reduce((sum, player) => sum + (player.rating ?? DUPR_DEFAULT_RATING), 0) /
+  team.length;
+
+/**
+ * 도전 매치: 두 팀 평균 평점 차가 CHALLENGE_MIN_RATING_GAP 이상이다. 높은 팀이 지키는 쪽이고 주인공은 없다.
+ * 게스트가 낀 경기는 평점에 반영하지 않아 업적·칭찬 "도전자"와 기준이 어긋나므로 도전 매치가 아니다
+ */
+export const judgeChallengeMatch = (teams: CandidateTeams): SpecialMatch | null => {
+  if (teams.some((team) => team.length === 0 || team.some((player) => player.isGuest))) {
+    return null;
+  }
+  const [ratingA, ratingB] = TEAM_INDEXES.map((index) => toChallengeTeamRating(teams[index]));
+  const gap = toRatingGap(ratingA, ratingB);
+  if (gap < CHALLENGE_MIN_RATING_GAP - RATING_EPSILON) return null;
+  return {
+    kind: "challenge",
+    defendingTeamIndex: ratingA > ratingB ? 0 : 1,
+    protagonistIds: [null, null],
+    rivalPairs: [],
+    ratingGap: gap,
+    outcome: null,
+  };
+};
+
 /** 네 명(복식) 성별이 모두 같은 코트의 성별. 성별 없는 선수가 있거나 섞이면 null */
 export const getSameGenderCourtGender = (
   genders: readonly (Player["gender"] | undefined)[],
@@ -312,7 +360,8 @@ const judgeSameGenderMatch = (teams: CandidateTeams): SpecialMatch | null => {
 
 /**
  * 추천 카드 출처 경기 판정. 해당 없으면 null. outcome은 null.
- * 우선순위는 연승(최강자전·연승 매치) > 라이벌전 > 남복·여복 매치다.
+ * 우선순위는 연승(최강자전·연승 매치) > 라이벌전 > 도전 매치 > 남복·여복 매치다.
+ * 라이벌전 팀 평균 조건(차 ≤ 0.1)과 도전 매치(차 ≥ 0.1)가 0.1에서 겹치면 라이벌전이다.
  * 게스트가 낀 코트도 정회원 연승 회원이 있으면 연승 매치·최강자전이고, 게스트는 연승 주인공이 되지 않는다.
  * 라이벌전은 평점 반영 뒤 순위 역전으로 결과가 정해지는데 게스트가 낀 경기는 평점에 반영하지 않으므로,
  * 게스트가 한 명이라도 있으면 같은 코트 정회원끼리도 라이벌전이 아니다.
@@ -325,7 +374,20 @@ export const judgeRecommendedSpecialMatch = (
   const hasGuest = teams.some((team) => team.some((player) => player.isGuest));
   const rivalMatch = hasGuest ? null : judgeRivalMatch(teams);
   if (rivalMatch) return rivalMatch;
-  return judgeSameGenderMatch(teams);
+  return judgeChallengeMatch(teams) ?? judgeSameGenderMatch(teams);
+};
+
+/**
+ * 세션에서 시작한 경기에 저장할 특수 매치. judged는 서버가 지금 랭킹·연승으로 다시 판정한 결과(judgeRecommendedSpecialMatch)다.
+ * 추천 카드가 보인 유형(requestedKind)과 같으면 그 유형이고, 아니면 도전 매치일 때만 저장한다.
+ * 라이벌전·연승·남복·여복 매치는 추천 카드로 시작한 경기에만 붙고, 도전 매치는 세션에서 시작한 경기 전부에 붙는다
+ */
+export const resolveSessionStartSpecialMatch = (
+  judged: SpecialMatch | null,
+  requestedKind: SpecialMatchKind | null,
+): SpecialMatch | null => {
+  if (!judged) return null;
+  return judged.kind === requestedKind || judged.kind === "challenge" ? judged : null;
 };
 
 const isSamePlayerSet = (

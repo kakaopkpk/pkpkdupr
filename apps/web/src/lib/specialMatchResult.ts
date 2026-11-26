@@ -40,6 +40,11 @@ export const getSpecialMatchResultName = (
       return isDefending
         ? { label: isWin ? "방어 성공" : "방어 실패", icon: "shield" }
         : { label: isWin ? "리벤지 성공" : "리벤지 실패", icon: "revenge" };
+    // 지키는 쪽은 평균 평점이 높은 팀이다
+    case "challenge":
+      return isDefending
+        ? { label: isWin ? "방어 성공" : "방어 실패", icon: "shield" }
+        : { label: isWin ? "도전 성공" : "도전 실패", icon: "challenge" };
     // 남복·여복 매치는 결과가 없어 여기 오지 않는다
     case "men_doubles":
     case "women_doubles":

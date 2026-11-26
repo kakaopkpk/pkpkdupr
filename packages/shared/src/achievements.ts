@@ -7,6 +7,7 @@ import {
 } from "./match.js";
 import {
   ACHIEVEMENT_COUNT_START,
+  CHALLENGER_ACHIEVEMENT_COUNT_START,
   SECOND_ACHIEVEMENT_SET_COUNT_START,
   TOURNAMENT_ACHIEVEMENT_COUNT_START,
 } from "./achievementCountStart.js";
@@ -526,11 +527,11 @@ const ACHIEVEMENT_TABLE: readonly {
     definition: {
       id: "underdog",
       category: "special",
-      name: "언더독",
-      condition: "평균 평점이 0.3 이상 높은 팀에게 승리",
+      name: "도전자",
+      condition: "평균 평점이 0.1 이상 높은 팀에게 승리",
       badgeNumber: null,
       target: 1,
-      points: 50,
+      points: 25,
     },
   },
   {
@@ -830,7 +831,7 @@ const METRIC_COUNT_START: Record<AchievementMetric, Date | null> = {
   praisedSessions: null,
   peakDoublesRating: ACHIEVEMENT_COUNT_START,
   lowestDoublesRating: ACHIEVEMENT_COUNT_START,
-  underdogWins: SECOND_ACHIEVEMENT_SET_COUNT_START,
+  underdogWins: CHALLENGER_ACHIEVEMENT_COUNT_START,
   streakBreaks: SECOND_ACHIEVEMENT_SET_COUNT_START,
   welcomes: SECOND_ACHIEVEMENT_SET_COUNT_START,
   bestRegularSessionStreak: SECOND_ACHIEVEMENT_SET_COUNT_START,
@@ -942,7 +943,7 @@ export interface AchievementMatch {
   session?: { id: string; regular?: boolean; tournament?: boolean } | null;
   /**
    * 게스트가 낀 경기(Match.ratingExcluded). 업적에는 세고, 평점 값에 묶인 것(평점 업적의 복식 경기 수·
-   * 평점 진행도, 언더독)에만 넣지 않는다
+   * 평점 진행도, 도전자)에만 넣지 않는다
    */
   ratingExcluded?: boolean;
   /**
@@ -951,8 +952,8 @@ export interface AchievementMatch {
    */
   doublesRatingAfter?: Readonly<Record<string, number>>;
   /**
-   * 이 경기 직전 선수별 평점(그 경기 분류, 평점 변경 로그의 previousRating). 언더독에 쓴다.
-   * 없으면 이 경기로 언더독을 받지 않고, 값이 없는 선수는 DUPR_DEFAULT_RATING(3.0)으로 친다
+   * 이 경기 직전 선수별 평점(그 경기 분류, 평점 변경 로그의 previousRating). 도전자에 쓴다.
+   * 없으면 이 경기로 도전자를 받지 않고, 값이 없는 선수는 DUPR_DEFAULT_RATING(3.0)으로 친다
    */
   ratingBefore?: Readonly<Record<string, number | null>>;
 }
@@ -1066,8 +1067,11 @@ export const UNBEATEN_SESSION_MIN_MATCHES = 4;
  */
 export const WIN_STREAK_MIN = 3;
 
-/** 언더독: 상대 팀 평균 평점이 우리 팀보다 이만큼 이상 높을 때 이기면 받는다 */
-export const UNDERDOG_MIN_RATING_GAP = 0.3;
+/**
+ * 도전 기준 평점 차. 특수 매치 도전 매치(두 팀 평균 차), 업적 "도전자"(상대 팀 평균이 이만큼 이상 높을 때 이기면 받음),
+ * 세션 칭찬 "도전자" 후보가 같은 값을 쓴다. specialMatch.ts가 이 파일을 import하므로 순환을 피하려고 여기 둔다
+ */
+export const CHALLENGE_MIN_RATING_GAP = 0.1;
 
 /** 평점 평균 비교의 부동소수 오차 허용치 */
 export const RATING_EPSILON = 1e-9;
@@ -1083,7 +1087,7 @@ const getTeamAverageRatingBefore = (
   ) / playerIds.length;
 
 /**
- * 경기 직전 평점 차: 상대 팀 평균 − 우리 팀 평균(언더독 업적·세션 칭찬 언더독).
+ * 경기 직전 평점 차: 상대 팀 평균 − 우리 팀 평균(업적·세션 칭찬 도전자).
  * 평점이 없는 선수는 DUPR_DEFAULT_RATING으로 치고, 빈 팀이 있으면 NaN이다
  */
 export const getRatingGapBefore = (
@@ -1094,8 +1098,8 @@ export const getRatingGapBefore = (
   getTeamAverageRatingBefore(ratingBefore, theirs) -
   getTeamAverageRatingBefore(ratingBefore, mine);
 
-/** 평점 반영 경기에서 경기 직전 상대 팀 평균 평점이 우리 팀보다 UNDERDOG_MIN_RATING_GAP 이상 높았다 */
-const isUnderdogMatch = (match: AchievementMatch, teamIndex: 0 | 1) => {
+/** 평점 반영 경기에서 경기 직전 상대 팀 평균 평점이 우리 팀보다 CHALLENGE_MIN_RATING_GAP 이상 높았다 */
+const isChallengerMatch = (match: AchievementMatch, teamIndex: 0 | 1) => {
   const ratingBefore = match.ratingBefore;
   if (!ratingBefore || match.ratingExcluded) return false;
   const [mine, theirs] = [teamIndex, teamIndex === 0 ? 1 : 0].map((index) =>
@@ -1104,7 +1108,7 @@ const isUnderdogMatch = (match: AchievementMatch, teamIndex: 0 | 1) => {
   // 빈 팀이면 NaN이라 비교가 거짓이 된다
   return (
     getRatingGapBefore(ratingBefore, mine, theirs) >=
-    UNDERDOG_MIN_RATING_GAP - RATING_EPSILON
+    CHALLENGE_MIN_RATING_GAP - RATING_EPSILON
   );
 };
 
@@ -1409,7 +1413,7 @@ const computeProgressSince = (
       if (isDeuceGame(scores)) metrics.deuceWins += 1;
       if (isHardWon(scores, teamIndex)) metrics.hardWonWins += 1;
       if (!isDoublesMatchType(match.type)) metrics.singlesWins += 1;
-      if (isUnderdogMatch(match, teamIndex)) metrics.underdogWins += 1;
+      if (isChallengerMatch(match, teamIndex)) metrics.underdogWins += 1;
     } else {
       streak = 0;
     }
@@ -1600,7 +1604,7 @@ const computeProgressSince = (
  * 한 회원의 업적 진행 상태(ACHIEVEMENTS 순서).
  * 완료 경기만(진행 중·취소 제외) 완료 시각 순으로 훑어, 진행도가 목표에 처음 닿은
  * 경기를 받게 된 경기로, 그 경기 완료 시각을 받은 날로 정한다.
- * 게스트가 낀 경기(ratingExcluded)도 세고, 평점 값에 묶인 평점 업적(복식 경기 수·평점)과 언더독만 평점 반영 경기로 센다.
+ * 게스트가 낀 경기(ratingExcluded)도 세고, 평점 값에 묶인 평점 업적(복식 경기 수·평점)과 도전자만 평점 반영 경기로 센다.
  * 각 업적은 자기 지표의 집계 시작 시각(METRIC_COUNT_START) 이후 경기만 센다. 시작 시각마다
  * computeProgressSince를 따로 돌려, 지표를 추가할 때 시작 시각만 적으면 되게 한다.
  * 승패가 갈리지 않은 경기는 승리에는 세지 않고 연승·콤비 연승·무패 세션·리벤지는 끊는다.
@@ -1619,7 +1623,7 @@ const computeProgressSince = (
  * 연승 저지(상대의 경기 직전 연승)·환영 인사(파트너의 첫 경기)·개근상(정기 회차 순서)은 다른 회원의 기록이
  * 필요하므로 matches에는 동호회 전체 완료 경기를 넘긴다. 이 회원의 경기만 넘길 수밖에 없으면
  * clubMatches를 false로 주고, 그 업적들은 잘못 받지 않도록 세지 않는다.
- * 언더독은 경기 직전 평점(ratingBefore)이 있는 경기만 센다.
+ * 도전자는 경기 직전 평점(ratingBefore)이 있는 경기만 센다.
  */
 export function computeAchievements(
   playerId: string,

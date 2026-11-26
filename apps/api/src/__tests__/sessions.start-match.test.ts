@@ -406,7 +406,7 @@ describe("POST /api/match-sessions/:sessionId/matches", () => {
       expect(createInProgress.mock.calls[0]![0].specialMatch).toBeNull();
     });
 
-    it("리벤지나 모르는 유형은 판정하지 않고 null이다", async () => {
+    it("리벤지나 모르는 유형은 카드 유형 없이 본다(라이벌전 조건이면 null이다)", async () => {
       mockRankingSource();
 
       for (const recommendedSpecialKind of ["revenge", "unknown"]) {
@@ -419,10 +419,45 @@ describe("POST /api/match-sessions/:sessionId/matches", () => {
       expect(
         createInProgress.mock.calls.map(([input]) => input.specialMatch),
       ).toEqual([null, null]);
-      expect(AuthService.prototype.getAllPlayers).not.toHaveBeenCalled();
     });
 
-    it("카드 유형이 없으면 특수 매치 조건이어도 null이다", async () => {
+    // A+C(3.51) 대 B+D(2.95): 팀 평균 차 0.56이라 도전 매치다
+    const challengeBody = {
+      teams: [
+        { playerIds: [playerA.id, playerC.id] },
+        { playerIds: [playerB.id, playerD.id] },
+      ],
+    };
+
+    it("카드 유형이 없어도 도전 매치면 저장한다", async () => {
+      mockRankingSource();
+
+      const response = await startMatch("Scustom1", challengeBody);
+
+      expect(response.status).toBe(201);
+      expect(createInProgress.mock.calls[0]![0].specialMatch).toEqual({
+        kind: "challenge",
+        defendingTeamIndex: 0,
+        protagonistIds: [null, null],
+        rivalPairs: [],
+        ratingGap: 0.56,
+        outcome: null,
+      });
+    });
+
+    it("카드 유형과 달라도 재판정이 도전 매치면 도전 매치로 저장한다", async () => {
+      mockRankingSource();
+
+      const response = await startMatch("Scustom1", {
+        ...challengeBody,
+        recommendedSpecialKind: "rival",
+      });
+
+      expect(response.status).toBe(201);
+      expect(createInProgress.mock.calls[0]![0].specialMatch?.kind).toBe("challenge");
+    });
+
+    it("카드 유형이 없으면 도전 매치가 아닌 특수 매치 조건(라이벌전)은 null이다", async () => {
       mockRankingSource();
 
       const response = await startMatch("Scustom1");

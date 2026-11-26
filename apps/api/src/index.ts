@@ -82,6 +82,7 @@ import {
   isSpecialMatchKind,
   judgeRecommendedSpecialMatch,
   judgeRematchSpecialMatch,
+  resolveSessionStartSpecialMatch,
   type SpecialMatch,
   type SpecialMatchCandidatePlayer,
   type SpecialMatchCelebration,
@@ -829,17 +830,19 @@ const toPlayerBusyError = (
 };
 
 /**
- * 추천 카드 출처 경기의 특수 매치. 서버가 지금 랭킹·연승으로 팀 구성을 다시 판정해 카드가 보여 준 유형과 같을 때만
- * 돌려주고, 다르거나 판정하지 못하면 null이다(시작 요청은 실패시키지 않는다).
+ * 세션에서 시작한 경기의 특수 매치. 서버가 지금 랭킹·연승으로 팀 구성을 다시 판정해 추천 카드가 보여 준 유형(requestedKind)과
+ * 같으면 그 유형, 아니면 도전 매치일 때만 돌려준다(resolveSessionStartSpecialMatch). 카드 없이 시작한 경기는 requestedKind가 없다.
+ * 판정하지 못하면 null이다(시작 요청은 실패시키지 않는다).
  */
-const judgeRecommendedSpecialMatchForLineup = async (
+const judgeSessionStartSpecialMatchForLineup = async (
   requestedKind: unknown,
   lineup: PreparedMatchLineup,
 ): Promise<SpecialMatch | null> => {
-  // 리벤지는 추천에서 만들지 않는다
-  if (!isSpecialMatchKind(requestedKind) || requestedKind === "revenge") {
-    return null;
-  }
+  // 리벤지는 추천에서 만들지 않고, 모르는 값은 카드 유형이 없는 것으로 본다
+  const cardKind =
+    isSpecialMatchKind(requestedKind) && requestedKind !== "revenge"
+      ? requestedKind
+      : null;
   try {
     const { context } = await loadRankingSource();
     const candidates = buildSpecialMatchCandidatePlayers(
@@ -860,9 +863,9 @@ const judgeRecommendedSpecialMatchForLineup = async (
       toCandidates(lineup.teams[0]),
       toCandidates(lineup.teams[1]),
     ]);
-    return judged?.kind === requestedKind ? judged : null;
+    return resolveSessionStartSpecialMatch(judged, cardKind);
   } catch (error) {
-    console.error("[MATCH] 추천 특수 매치 판정 실패", error);
+    console.error("[MATCH] 세션 시작 특수 매치 판정 실패", error);
     return null;
   }
 };
@@ -2209,7 +2212,7 @@ app.post("/api/match-sessions/:sessionId/matches", async (req, res) => {
     }
 
     const lineup = await prepareMatchLineup(type, teams, decoded.playerId);
-    const specialMatch = await judgeRecommendedSpecialMatchForLineup(
+    const specialMatch = await judgeSessionStartSpecialMatchForLineup(
       recommendedSpecialKind,
       lineup,
     );
@@ -2251,11 +2254,11 @@ app.post("/api/matches/start", async (req, res) => {
     await matchRepository.cleanupExpired(now);
     const lineup = await prepareMatchLineup(type, teams, decoded.playerId);
     await assertPlayersNotInProgress(lineup, now);
-    const specialMatch = await judgeRematchSpecialMatchForLineup(
-      body?.rematchOfMatchId,
-      lineup,
-    );
     const session = await resolveSessionForStartedMatch(requestedSessionId, now);
+    // 리벤지가 먼저이고, 리벤지가 아니면 세션에서 시작한 경기만 도전 매치를 판정한다
+    const specialMatch =
+      (await judgeRematchSpecialMatchForLineup(body?.rematchOfMatchId, lineup)) ??
+      (session ? await judgeSessionStartSpecialMatchForLineup(null, lineup) : null);
     const match = await startInProgressMatch({
       requesterPlayerId: decoded.playerId,
       lineup,

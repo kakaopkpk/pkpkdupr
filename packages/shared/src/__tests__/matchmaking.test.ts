@@ -19,6 +19,7 @@ import {
 import {
   judgeRecommendedSpecialMatch,
   SPECIAL_MATCH_RECOMMENDATION_BONUS,
+  SPECIAL_MATCH_RECOMMENDATION_DISPLAY_RANK,
   type SpecialMatchCandidatePlayer,
 } from "../specialMatch";
 
@@ -467,7 +468,7 @@ describe("recommendDoublesMatches 특수 유형 가산점", () => {
       }),
     );
 
-  it("유형별 가산점은 최강자전 2, 라이벌전 1.5, 연승 매치·리벤지 0이다", () => {
+  it("유형별 가산점은 최강자전 2, 라이벌전 1.5, 연승 매치·리벤지·도전 매치 0이다", () => {
     expect(getSpecialMatchRecommendationBonus("champions")).toBe(2);
     expect(getSpecialMatchRecommendationBonus("rival")).toBe(1.5);
     expect(getSpecialMatchRecommendationBonus("streak_stopper")).toBe(0);
@@ -477,9 +478,20 @@ describe("recommendDoublesMatches 특수 유형 가산점", () => {
       streak_stopper: 0,
       champions: 2,
       revenge: 0,
+      challenge: 0,
       men_doubles: 0,
       women_doubles: 0,
     });
+  });
+
+  it("표시 순위는 최강자전 > 라이벌전 > 연승 매치 > 도전 매치 > 남복·여복 매치다", () => {
+    const rank = SPECIAL_MATCH_RECOMMENDATION_DISPLAY_RANK;
+    expect(rank.champions).toBeGreaterThan(rank.rival);
+    expect(rank.rival).toBeGreaterThan(rank.streak_stopper);
+    expect(rank.streak_stopper).toBeGreaterThan(rank.challenge);
+    expect(rank.challenge).toBeGreaterThan(rank.men_doubles);
+    expect(rank.men_doubles).toBe(rank.women_doubles);
+    expect(rank.revenge).toBeNull();
   });
 
   it("특수 유형 판정 입력이 없거나 아무도 해당하지 않으면 기존과 같은 결과이고 specialMatch는 모두 null이다", () => {

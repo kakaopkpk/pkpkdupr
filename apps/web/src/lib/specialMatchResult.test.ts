@@ -78,6 +78,21 @@ describe("getSpecialMatchResultName", () => {
     });
   });
 
+  describe("도전 매치(팀 1이 평균 평점이 높은 팀)", () => {
+    const success = { kind: "challenge", defendingTeamIndex: 1, outcome: "challenge_success" } as const;
+    const defended = { kind: "challenge", defendingTeamIndex: 1, outcome: "challenge_defended" } as const;
+
+    it("낮은 팀이 이기면 도전 성공(깃발), 높은 팀은 방어 실패(방패)", () => {
+      expect(name(success, teamAWins, "a1")).toEqual({ label: "도전 성공", icon: "challenge", isWin: true });
+      expect(name(success, teamAWins, "b1")).toEqual({ label: "방어 실패", icon: "shield", isWin: false });
+    });
+
+    it("높은 팀이 이기면 방어 성공, 낮은 팀은 도전 실패", () => {
+      expect(name(defended, teamBWins, "b2")).toEqual({ label: "방어 성공", icon: "shield", isWin: true });
+      expect(name(defended, teamBWins, "a2")).toEqual({ label: "도전 실패", icon: "challenge", isWin: false });
+    });
+  });
+
   it("보는 회원이 경기하지 않았으면 null", () => {
     const streakStopped = { kind: "streak_stopper", defendingTeamIndex: 0, outcome: "streak_stopped" } as const;
     expect(name(streakStopped, teamBWins, "z")).toBeNull();

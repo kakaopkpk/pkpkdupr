@@ -5,6 +5,7 @@ import {
 } from "@pkpkdupr/shared/sessionPraise";
 import { BADGE_ICON_PATHS } from "@/components/profile/AchievementBadge";
 import {
+  CHALLENGE_FLAG_ICON_PATHS,
   CrownIcon,
   FIST_ICON_PATHS,
   SHIELD_CHECK_ICON_PATHS,
@@ -34,7 +35,7 @@ const StrokeIcon: React.FC<{
   </svg>
 );
 
-/** 칭찬 분류 아이콘: 주먹·개·반창고·방패·오르는 화살표·왕관·트로피·공 */
+/** 칭찬 분류 아이콘: 주먹·깃발·반창고·방패·오르는 화살표·왕관·트로피·공 */
 export const SessionPraiseCategoryIcon: React.FC<{
   category: SessionPraiseCategory;
   size: number;
@@ -52,8 +53,10 @@ export const SessionPraiseCategoryIcon: React.FC<{
       );
     case "underdog":
       return (
-        <StrokeIcon size={size} strokeWidth={2.2}>
-          {BADGE_ICON_PATHS.dog}
+        <StrokeIcon size={size} strokeWidth={2.4}>
+          {CHALLENGE_FLAG_ICON_PATHS.map((d) => (
+            <path key={d} d={d} />
+          ))}
         </StrokeIcon>
       );
     case "clutch":
