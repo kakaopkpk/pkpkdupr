@@ -235,6 +235,7 @@ export class PlayerRepository {
       guestAddedSessionId: player.guestAddedSessionId ?? null,
       promotedAt: player.promotedAt ?? null,
       lastActiveAt: player.lastActiveAt ?? null,
+      rulesGuideCompletedAt: player.rulesGuideCompletedAt ?? null,
       affiliations,
       ...(statusMessage ? { statusMessage } : {}),
       ...(statusMessageBackgroundColor ? { statusMessageBackgroundColor } : {}),
@@ -302,6 +303,17 @@ export class PlayerRepository {
           or(isNull(players.lastActiveAt), lte(players.lastActiveAt, threshold)),
         ),
       );
+  }
+
+  /**
+   * 규칙 안내를 끝까지 읽은 시각을 남긴다. 이미 남겼으면 처음 시각을 그대로 둔다(멱등).
+   * 회원 정보 수정이 아니므로 updated_at은 바꾸지 않는다.
+   */
+  async markRulesGuideCompleted(id: string, now: Date): Promise<void> {
+    await this.db
+      .update(players)
+      .set({ rulesGuideCompletedAt: now })
+      .where(and(eq(players.id, id), isNull(players.rulesGuideCompletedAt)));
   }
 
   async updateFirstLogin(

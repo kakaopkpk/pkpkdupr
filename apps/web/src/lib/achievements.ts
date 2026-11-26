@@ -12,6 +12,7 @@ import {
   isLowRatingAchievement,
   isRatingAchievement,
   RATING_ACHIEVEMENT_MIN_DOUBLES_MATCHES,
+  RULES_GUIDE_ACHIEVEMENT_ID,
 } from "@pkpkdupr/shared/achievements";
 import { DUPR_DEFAULT_RATING } from "@pkpkdupr/shared/player";
 import { apiFetch } from "@/lib/api";
@@ -150,6 +151,33 @@ export const getAchievementProgressRatio = (
   return target > 0 ? clampRatio(current / target) : 0;
 };
 
+/**
+ * 못 받은 업적 진행으로 보일 값과 진행을 보일지. 모범생은 서버가 장 수를 모르므로
+ * 내 업적이면 이 기기에서 본 장 수(rulesGuideSeenCount)로 바꾸고, 남의 업적이면 진행을 보이지 않는다
+ */
+export const getDisplayedAchievementProgress = (
+  definition: AchievementDefinition,
+  progress: AchievementProgressInfo | null | undefined,
+  { isMine, rulesGuideSeenCount }: { isMine: boolean; rulesGuideSeenCount: number },
+): { progress: AchievementProgressInfo | null | undefined; showProgress: boolean } => {
+  if (definition.id !== RULES_GUIDE_ACHIEVEMENT_ID || progress?.earned) {
+    return { progress, showProgress: true };
+  }
+  if (!isMine) return { progress, showProgress: false };
+  return {
+    showProgress: true,
+    progress: {
+      id: definition.id,
+      earned: false,
+      earnedAt: null,
+      earnedMatchId: null,
+      target: definition.target,
+      ...progress,
+      current: Math.min(rulesGuideSeenCount, definition.target),
+    },
+  };
+};
+
 export const fetchAchievementHolders =
   async (): Promise<AchievementHoldersResponse> => {
     const res = await apiFetch("/api/achievements/holders");
@@ -205,10 +233,20 @@ export const pickPlayerEarnedAchievements = (
   });
 
 /**
- * 진행 중인 확인 처리 요청. 미확인 조회는 이 요청들이 끝난 뒤 보내,
- * 방금 본 업적이 확인 저장 전에 조회돼 다시 뜨지 않게 한다.
+ * 진행 중인 업적 쓰기 요청(확인 처리·규칙 안내 완독). 미확인 조회는 이 요청들이 끝난 뒤 보내,
+ * 방금 본 업적이 확인 저장 전에 조회돼 다시 뜨거나 방금 받은 업적이 저장 전에 조회돼 빠지지 않게 한다.
  */
-const pendingSeenRequests = new Set<Promise<void>>();
+const pendingSeenRequests = new Set<Promise<unknown>>();
+
+/** 업적을 바꾸는 요청을 미확인 조회가 기다리게 한다. 요청 결과를 그대로 돌려준다 */
+export const trackAchievementWrite = async <T>(request: Promise<T>): Promise<T> => {
+  pendingSeenRequests.add(request);
+  try {
+    return await request;
+  } finally {
+    pendingSeenRequests.delete(request);
+  }
+};
 
 /** 내가 받은 업적 중 아직 축하 연출로 보지 않은 것(받은 시각 → 업적 정의 순서) */
 export interface UnseenAchievementsResult {
@@ -260,13 +298,7 @@ export const markAchievementsSeen = async (
   items: readonly SeenAchievementRef[],
 ): Promise<void> => {
   if (items.length === 0) return;
-  const request = postAchievementsSeen(items);
-  pendingSeenRequests.add(request);
-  try {
-    await request;
-  } finally {
-    pendingSeenRequests.delete(request);
-  }
+  await trackAchievementWrite(postAchievementsSeen(items));
 };
 
 /**

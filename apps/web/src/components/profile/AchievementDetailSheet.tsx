@@ -1,17 +1,19 @@
 import React, { useCallback, useEffect, useState } from "react";
-import type {
-  AchievementDefinition,
-  AchievementHoldersResponse,
+import {
+  RULES_GUIDE_ACHIEVEMENT_ID,
+  type AchievementDefinition,
+  type AchievementHoldersResponse,
 } from "@pkpkdupr/shared/achievements";
 import BottomSheet from "@/components/BottomSheet";
 import SkeletonBlock from "@/components/SkeletonBlock";
 import { AchievementBadge } from "@/components/profile/AchievementBadge";
 import { PkButton } from "@/components/ui/Button";
-import { LockIcon, ShareIcon } from "@/components/ui/Icons";
+import { BookIcon, LockIcon, ShareIcon } from "@/components/ui/Icons";
 import { ProgressBar } from "@/components/ui/ProgressBar";
 import {
   GLOBAL_LAYER,
   type AchievementDetailRequest,
+  useAppNavigation,
 } from "@/context/AppNavigationContext";
 import { useAuth } from "@/context/AuthContext";
 import {
@@ -26,12 +28,14 @@ import {
   formatAchievementProgress,
   getAchievementDefinition,
   getAchievementProgressRatio,
+  getDisplayedAchievementProgress,
 } from "@/lib/achievements";
 import {
   formatAchievementPointsLabel,
   formatKstLongDate,
 } from "@/lib/format";
 import { fetchPlayerProfileSummary } from "@/lib/playerProfile";
+import { useRulesGuideSeenCount } from "@/lib/rulesGuide";
 
 const DEPTH_ID = "global-achievement-detail";
 const BADGE_SIZE = 96;
@@ -209,10 +213,22 @@ export default function AchievementDetailSheet({
   // 불러오기 전에는 여는 곳이 넘긴 값을 쓰고, 불러오면 받은 결과를 따른다
   const earned = ready ? !!progress?.earned : !!displayedRequest?.earned;
   const { player } = useAuth();
+  const { openRulesGuide } = useAppNavigation();
+  const rulesGuideSeenCount = useRulesGuideSeenCount();
+  const isMine = !!player && displayedRequest?.playerId === player.id;
+  // 남의 모범생이면 진행 줄을 보이지 않는다
+  const displayed = definition
+    ? getDisplayedAchievementProgress(definition, progress, {
+        isMine,
+        rulesGuideSeenCount,
+      })
+    : null;
+  // 내가 아직 받지 않은 모범생이면 규칙 안내로 바로 간다
+  const canOpenRulesGuide =
+    !isError && !earned && isMine && definition?.id === RULES_GUIDE_ACHIEVEMENT_ID;
   // 공유는 내가 받은 업적만이다. 버튼은 처음부터 두고(불러오는 동안 비활성), 받은 날을 불러온 뒤 이미지를 만든다.
   // 닫히는 애니메이션 동안에도 내용(displayedRequest)과 같이 남긴다
-  const canOfferShare =
-    !isError && earned && !!player && displayedRequest?.playerId === player.id;
+  const canOfferShare = !isError && earned && isMine;
   const shareState = useAchievementShare(
     canOfferShare && ready && definition && player?.username
       ? { definition, username: player.username, earnedAt: progress?.earnedAt ?? null }
@@ -273,18 +289,20 @@ export default function AchievementDetailSheet({
                 )}
               </DetailRow>
             ) : null}
-            {!isError && !earned ? (
+            {!isError && !earned && displayed?.showProgress ? (
               <div className="flex flex-col pb-4">
                 <DetailRow label="진행">
                   {ready ? (
-                    formatAchievementProgress(definition, progress)
+                    formatAchievementProgress(definition, displayed.progress)
                   ) : (
                     <ValueSkeleton />
                   )}
                 </DetailRow>
                 <ProgressBar
                   ratio={
-                    ready ? getAchievementProgressRatio(definition, progress) : 0
+                    ready
+                      ? getAchievementProgressRatio(definition, displayed.progress)
+                      : 0
                   }
                   className="h-1.5"
                 />
@@ -315,6 +333,16 @@ export default function AchievementDetailSheet({
               >
                 <ShareIcon />
                 공유
+              </PkButton>
+            ) : null}
+            {canOpenRulesGuide ? (
+              <PkButton
+                variant="soft"
+                size="lg"
+                onClick={() => close(openRulesGuide)}
+              >
+                <BookIcon />
+                규칙 읽기
               </PkButton>
             ) : null}
             <PkButton size="lg" className="flex-1" onClick={() => close()}>

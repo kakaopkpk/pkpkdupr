@@ -20,7 +20,8 @@ export class PlayerSeenAchievementRepository {
     });
     return result.rows.map((row) => ({
       achievementId: String(row.achievementId),
-      earnedMatchId: String(row.earnedMatchId),
+      earnedMatchId:
+        row.earnedMatchId == null ? null : String(row.earnedMatchId),
     }));
   }
 

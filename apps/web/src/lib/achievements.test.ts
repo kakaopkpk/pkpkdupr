@@ -5,9 +5,11 @@ import {
   fetchUnseenAchievements,
   formatAchievementProgress,
   getAchievementProgressRatio,
+  getDisplayedAchievementProgress,
   getCelebrationPointSteps,
   interpolateAchievementProgress,
   markAchievementsSeen,
+  trackAchievementWrite,
 } from "@/lib/achievements";
 
 vi.mock("@/lib/api", () => ({ apiFetch: vi.fn() }));
@@ -195,5 +197,81 @@ describe("축하 연출 업적 점수", () => {
       { before: 75, after: 75 },
       { before: 75, after: 100 },
     ]);
+  });
+});
+
+describe("모범생 진행 표시", () => {
+  const rulesGuide = ACHIEVEMENTS.find((item) => item.id === "rules-guide")!;
+  const unearned = {
+    id: "rules-guide",
+    earned: false,
+    earnedAt: null,
+    earnedMatchId: null,
+    current: 0,
+    target: 15,
+  };
+
+  it("내 업적이면 이 기기에서 본 장 수로 보인다", () => {
+    const displayed = getDisplayedAchievementProgress(rulesGuide, unearned, {
+      isMine: true,
+      rulesGuideSeenCount: 7,
+    });
+    expect(displayed?.progress?.current).toBe(7);
+    expect(formatAchievementProgress(rulesGuide, displayed?.progress)).toBe(
+      "7/15",
+    );
+  });
+
+  it("남의 못 받은 모범생은 진행을 보이지 않는다", () => {
+    expect(
+      getDisplayedAchievementProgress(rulesGuide, unearned, {
+        isMine: false,
+        rulesGuideSeenCount: 7,
+      }).showProgress,
+    ).toBe(false);
+  });
+
+  it("받은 모범생과 다른 업적은 서버 진행 그대로다", () => {
+    const earned = { ...unearned, earned: true, current: 15 };
+    expect(
+      getDisplayedAchievementProgress(rulesGuide, earned, {
+        isMine: false,
+        rulesGuideSeenCount: 0,
+      }),
+    ).toEqual({ progress: earned, showProgress: true });
+    const wins = ACHIEVEMENTS.find((item) => item.id === "wins-10")!;
+    const winsProgress = { ...unearned, id: "wins-10", current: 3, target: 10 };
+    expect(
+      getDisplayedAchievementProgress(wins, winsProgress, {
+        isMine: false,
+        rulesGuideSeenCount: 0,
+      }),
+    ).toEqual({ progress: winsProgress, showProgress: true });
+  });
+});
+
+describe("업적 쓰기 뒤 미확인 조회", () => {
+  beforeEach(() => {
+    vi.mocked(apiFetch).mockReset();
+    vi.mocked(apiFetch).mockResolvedValue(
+      Response.json({ achievements: [], points: 0 }),
+    );
+  });
+
+  it("규칙 안내 완독 같은 업적 쓰기가 끝난 뒤에 미확인을 조회한다", async () => {
+    let finishWrite: () => void = () => {};
+    const write = trackAchievementWrite(
+      new Promise<void>((resolve) => {
+        finishWrite = resolve;
+      }),
+    );
+    const fetching = fetchUnseenAchievements();
+    await Promise.resolve();
+    expect(apiFetch).not.toHaveBeenCalled();
+
+    finishWrite();
+    await write;
+    await fetching;
+    expect(apiFetch).toHaveBeenCalledWith("/api/me/achievements/unseen");
   });
 });

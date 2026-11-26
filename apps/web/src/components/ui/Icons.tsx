@@ -341,6 +341,36 @@ export const STOP_HAND_ICON_PATHS = [
 /** 갈라진 꼬리 깃발(도전 매치 특수 매치·칭찬 도전자 칩·도전자 업적 배지·도전 성공 도장) 선 모양, 24 viewBox */
 export const CHALLENGE_FLAG_ICON_PATHS = ["M5 21V4", "M5 4.5h12l-2.5 4 2.5 4H5"] as const;
 
+/** 펼친 책(규칙 안내 홈 카드·"규칙 읽기"·모범생 업적 배지) 선 모양, 24 viewBox */
+export const BOOK_ICON_PATHS = [
+  "M4 5.5A2.5 2.5 0 0 1 6.5 3H20v15H6.5A2.5 2.5 0 0 0 4 20.5z",
+  "M4 20.5A2.5 2.5 0 0 0 6.5 23H20v-5",
+  "M9 8h7M9 12h5",
+] as const;
+
+/** 펼친 책. 규칙 안내 홈 카드·모범생 업적 상세의 "규칙 읽기"가 쓴다 */
+export const BookIcon: React.FC<{ size?: number; className?: string }> = ({
+  size = 18,
+  className,
+}) => (
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 24 24"
+    aria-hidden="true"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    className={cx("shrink-0", className)}
+  >
+    {BOOK_ICON_PATHS.map((d) => (
+      <path key={d} d={d} />
+    ))}
+  </svg>
+);
+
 /** 주먹(리벤지 특수 매치·업적 배지) 선 모양 */
 export const FIST_ICON_PATHS = [
   "M6 10.5V8.2a1.7 1.7 0 0 1 3.4 0v1.8M9.4 9.6V7.2a1.7 1.7 0 0 1 3.4 0v2.4M12.8 9.6V7.6a1.7 1.7 0 0 1 3.4 0V10M16.2 10.2V9a1.7 1.7 0 0 1 3.4 0v4.3a6.6 6.6 0 0 1-6.6 6.6h-.4A6.6 6.6 0 0 1 6 13.3v-2.8",

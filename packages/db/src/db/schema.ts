@@ -65,6 +65,8 @@ export const players = pgTable("players", {
   promotedAt: unixTimestamp("promoted_at"),
   /** 마지막으로 앱에 들어온 시각(GET /api/me). 들어온 적 없으면 null이다 */
   lastActiveAt: unixTimestamp("last_active_at"),
+  /** 피클볼 기본 규칙 안내를 처음 끝까지 읽은 시각(업적 모범생). 읽지 않았으면 null이다 */
+  rulesGuideCompletedAt: unixTimestamp("rules_guide_completed_at"),
   createdAt: unixTimestamp("created_at").notNull(),
   updatedAt: unixTimestamp("updated_at").notNull(),
 });
@@ -329,13 +331,13 @@ export const matchEditLogs = pgTable(
   }),
 );
 
-/** 회원이 확인한 업적. 업적별로 확인할 때의 획득 경기(earnedMatchId)를 남긴다 */
+/** 회원이 확인한 업적. 업적별로 확인할 때의 획득 경기(earnedMatchId, 경기와 무관한 업적은 null)를 남긴다 */
 export const playerSeenAchievements = pgTable(
   "player_seen_achievements",
   {
     playerId: id("player_id").notNull(),
     achievementId: varchar("achievement_id", { length: 64 }).notNull(),
-    earnedMatchId: id("earned_match_id").notNull(),
+    earnedMatchId: id("earned_match_id"),
     seenAt: unixTimestamp("seen_at").notNull(),
   },
   (table) => ({

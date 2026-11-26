@@ -340,7 +340,7 @@ describe("랭킹·세션 리포트 API", () => {
     const response = await authorized("/api/achievements/holders");
 
     expect(response.status).toBe(200);
-    expect(Object.keys(response.body.counts)).toHaveLength(56);
+    expect(Object.keys(response.body.counts)).toHaveLength(57);
     expect(response.body.counts).toMatchObject({
       "matches-1": 2,
       "wins-1": 1,
@@ -395,6 +395,94 @@ describe("랭킹·세션 리포트 API", () => {
     expect(response.body.points).toBe(45);
   });
 
+  it("모범생은 규칙 안내 완독 시각에 받은 경기 없이 받고, 받은 경기 null로 확인한 뒤에는 미확인이 아니다", async () => {
+    const rulesGuideCompletedAt = new Date("2026-11-11T12:00:00.000Z");
+    vi.spyOn(AuthService.prototype, "getAllPlayers").mockResolvedValue([
+      { ...alice, rulesGuideCompletedAt },
+      bob,
+    ]);
+    const findSeen = vi
+      .spyOn(PlayerSeenAchievementRepository.prototype, "findByPlayerId")
+      .mockResolvedValue([
+        { achievementId: "matches-1", earnedMatchId: match.id },
+        { achievementId: "wins-1", earnedMatchId: match.id },
+        { achievementId: "dominator-1", earnedMatchId: match.id },
+      ]);
+
+    const unseen = await authorized("/api/me/achievements/unseen");
+
+    expect(unseen.status).toBe(200);
+    expect(unseen.body.achievements).toEqual([
+      {
+        playerId: alice.id,
+        achievementId: "rules-guide",
+        earnedMatchId: null,
+        earnedAt: rulesGuideCompletedAt.toISOString(),
+      },
+    ]);
+    // 첫 경기 10 + 첫 승리 10 + 세션 지배자 25 + 모범생 10
+    expect(unseen.body.points).toBe(55);
+
+    const holders = await authorized("/api/achievements/holders");
+    expect(holders.body.counts["rules-guide"]).toBe(1);
+
+    findSeen.mockResolvedValue([
+      { achievementId: "rules-guide", earnedMatchId: null },
+    ]);
+    const afterSeen = await authorized("/api/me/achievements/unseen");
+    expect(
+      afterSeen.body.achievements.map(
+        (item: { achievementId: string }) => item.achievementId,
+      ),
+    ).not.toContain("rules-guide");
+  });
+
+  it("게스트는 규칙 안내를 다 읽어도 모범생을 받지 않는다", async () => {
+    vi.spyOn(AuthService.prototype, "getAllPlayers").mockResolvedValue([
+      alice,
+      { ...bob, isGuest: true, rulesGuideCompletedAt: new Date(now) },
+    ]);
+
+    const holders = await authorized("/api/achievements/holders");
+
+    expect(holders.body.counts["rules-guide"]).toBe(0);
+  });
+
+  it("GET /api/me/achievements/unseen은 게스트 본인이면 업적 없이 0점이다", async () => {
+    vi.spyOn(AuthService.prototype, "getAllPlayers").mockResolvedValue([
+      { ...alice, isGuest: true, rulesGuideCompletedAt: new Date(now) },
+      bob,
+    ]);
+    vi.spyOn(
+      PlayerSeenAchievementRepository.prototype,
+      "findByPlayerId",
+    ).mockResolvedValue([]);
+
+    const response = await authorized("/api/me/achievements/unseen");
+
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual({ achievements: [], points: 0 });
+  });
+
+  it("POST /api/me/achievements/seen은 모범생을 받은 경기 null로 확인한다", async () => {
+    const markSeen = vi
+      .spyOn(PlayerSeenAchievementRepository.prototype, "markSeen")
+      .mockResolvedValue();
+    const achievements = [{ achievementId: "rules-guide", earnedMatchId: null }];
+
+    const response = await request(app)
+      .post("/api/me/achievements/seen")
+      .set("Authorization", "Bearer test-token")
+      .send({ achievements });
+
+    expect(response.status).toBe(204);
+    expect(markSeen).toHaveBeenCalledWith(
+      alice.id,
+      achievements,
+      expect.any(Date),
+    );
+  });
+
   it("POST /api/me/achievements/seen은 요청자의 확인 기록을 남기고 204다", async () => {
     const markSeen = vi
       .spyOn(PlayerSeenAchievementRepository.prototype, "markSeen")
@@ -419,6 +507,8 @@ describe("랭킹·세션 리포트 API", () => {
   it.each([
     { achievements: [{ achievementId: "unknown", earnedMatchId: match.id }] },
     { achievements: [{ achievementId: "wins-1", earnedMatchId: "" }] },
+    { achievements: [{ achievementId: "wins-1", earnedMatchId: null }] },
+    { achievements: [{ achievementId: "rules-guide", earnedMatchId: match.id }] },
     { achievements: "wins-1" },
     {},
   ])("POST /api/me/achievements/seen은 형식이 틀리면 400이다 (%j)", async (body) => {

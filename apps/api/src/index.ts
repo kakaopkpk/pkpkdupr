@@ -94,6 +94,7 @@ import {
 } from "@pkpkdupr/shared/tournament";
 import {
   ACHIEVEMENTS,
+  RULES_GUIDE_ACHIEVEMENT_ID,
   findNewAchievements,
   findUnseenAchievements,
   sumEarnedAchievementPoints,
@@ -204,6 +205,7 @@ import {
   buildRecordsPage,
   buildSessionHistory,
   buildSessionReport,
+  canEarnAchievements,
   countAchievementHolders,
   createRankingContext,
   findAchievementsEarnedByMatches,
@@ -4229,7 +4231,17 @@ const parseSeenAchievements = (body: unknown): SeenAchievementRef[] | null => {
     >;
     if (
       typeof achievementId !== "string" ||
-      !ACHIEVEMENT_IDS.has(achievementId) ||
+      !ACHIEVEMENT_IDS.has(achievementId)
+    ) {
+      return null;
+    }
+    // 받은 경기가 없는 모범생만 null이고, 나머지는 경기 id다
+    if (achievementId === RULES_GUIDE_ACHIEVEMENT_ID) {
+      if (earnedMatchId !== null) return null;
+      parsed.push({ achievementId, earnedMatchId: null });
+      continue;
+    }
+    if (
       typeof earnedMatchId !== "string" ||
       earnedMatchId.length === 0 ||
       earnedMatchId.length > MAX_ID_LENGTH
@@ -4252,11 +4264,14 @@ app.get("/api/me/achievements/unseen", async (req, res) => {
       loadRankingSource(),
       db.playerSeenAchievements.findByPlayerId(decoded.playerId),
     ]);
-    const earned = findPlayerEarnedAchievements(
-      toContextAchievementMatches(context),
-      findEndedSessions(context, sessions, new Date()),
-      decoded.playerId,
-    );
+    // 게스트 본인은 업적을 받지 않는다
+    const earned = canEarnAchievements(context, decoded.playerId)
+      ? findPlayerEarnedAchievements(
+          toContextAchievementMatches(context),
+          findEndedSessions(context, sessions, new Date()),
+          decoded.playerId,
+        )
+      : [];
     const response: UnseenAchievementsResponse = {
       achievements: findUnseenAchievements(earned, seen),
       points: sumEarnedAchievementPoints(earned),
@@ -4264,6 +4279,22 @@ app.get("/api/me/achievements/unseen", async (req, res) => {
     res.json(response);
   } catch (err) {
     sendRankingFailure(res, err);
+  }
+});
+
+/** 규칙 안내를 끝까지 읽음(모범생). 처음 시각만 남기므로 여러 번 불러도 같다 */
+app.post("/api/me/rules-guide/complete", async (req, res) => {
+  try {
+    const decoded = await getAuthPayload(req, res);
+    if (!decoded) {
+      return;
+    }
+
+    await db.players.markRulesGuideCompleted(decoded.playerId, new Date());
+    res.status(204).end();
+  } catch (err) {
+    console.error("[RULES_GUIDE] 완독 저장 실패", err);
+    res.status(500).json({ error: "규칙 안내 완독을 저장하지 못했습니다." });
   }
 });
 

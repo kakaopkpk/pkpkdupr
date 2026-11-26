@@ -112,6 +112,7 @@ export type RankingSourcePlayer = Pick<
   | "isGuest"
   | "statusMessage"
   | "statusMessageBackgroundColor"
+  | "rulesGuideCompletedAt"
 >;
 
 /** 시점 평점·순위 계산에 쓰는 데이터 묶음 */
@@ -697,8 +698,22 @@ export const findEndedSessions = (
   return Object.assign(endedSessions, {
     praisedSessionsByPlayerId: findPraisedSessions(matchesBySession, sessions),
     placedSessionsByPlayerId: findPlacedSessions(matchesBySession, sessions),
+    rulesGuideCompletedAtByPlayerId: findRulesGuideCompletions(context),
   });
 };
+
+/**
+ * 모범생 업적 입력: 회원 id → 규칙 안내를 처음 끝까지 읽은 시각.
+ * 게스트는 완독을 저장해도 업적을 받지 않으므로 넣지 않는다(정회원으로 승급하면 그 시각으로 받는다)
+ */
+const findRulesGuideCompletions = (context: RankingContext) =>
+  new Map(
+    [...context.playersById.values()].flatMap((player) =>
+      player.rulesGuideCompletedAt && canEarnAchievements(context, player.id)
+        ? [[player.id, player.rulesGuideCompletedAt] as const]
+        : [],
+    ),
+  );
 
 /** 그 세션에서 그 회원의 마지막 완료 경기(게스트가 낀 경기 포함). 없으면 undefined */
 const findLastSessionMatch = (
@@ -973,11 +988,13 @@ export const findAchievementsEarnedByMatches = (
 export const selectAchievementsEarnedByMatches = (
   earned: readonly EarnedAchievement[],
   matchIds: ReadonlySet<string>,
-): EarnedAchievement[] =>
+): (EarnedAchievement & { earnedMatchId: string })[] =>
   earned
     .filter(
-      (item) =>
-        matchIds.has(item.earnedMatchId) && isEarnedByCountedMatch(item),
+      (item): item is EarnedAchievement & { earnedMatchId: string } =>
+        item.earnedMatchId != null &&
+        matchIds.has(item.earnedMatchId) &&
+        isEarnedByCountedMatch(item),
     )
     .sort(
       (left, right) =>
